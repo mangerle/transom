@@ -87,6 +87,10 @@ pub(crate) enum ModalKind {
     ContainerFileRename,
     /// 容器新建目录。
     ContainerFileNewDir,
+    /// 远端镜像市场探索与搜索。
+    ContainerHub,
+    /// 镜像推送到远端仓库。
+    ContainerPush,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -158,6 +162,8 @@ impl ModalKind {
         ModalKind::ContainerExportConfig,
         ModalKind::ContainerFileRename,
         ModalKind::ContainerFileNewDir,
+        ModalKind::ContainerHub,
+        ModalKind::ContainerPush,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -235,6 +241,14 @@ impl ModalKind {
             ModalKind::ContainerFileNewDir => (
                 Some(crate::theme::tokens::dialog::INPUT),
                 "container-file-new-dir",
+            ),
+            ModalKind::ContainerHub => (
+                Some(crate::theme::tokens::dialog::AUDIT),
+                "container-hub",
+            ),
+            ModalKind::ContainerPush => (
+                Some(crate::theme::tokens::dialog::FILTER),
+                "container-push",
             ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
@@ -357,6 +371,24 @@ impl ModalKind {
             ModalKind::ContainerFileNewDir => {
                 shell.render_container_file_new_dir_dialog_body(app, cx, p)
             }
+            ModalKind::ContainerHub => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                {
+                    shell.render_container_hub_dialog_body(tab_id, app, window, cx, p)
+                } else {
+                    div().into_any_element()
+                }
+            }
+            ModalKind::ContainerPush => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                {
+                    shell.render_container_push_dialog_body(tab_id, app, window, cx, p)
+                } else {
+                    div().into_any_element()
+                }
+            }
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -407,6 +439,8 @@ mod tests {
         ModalKind::ContainerExportConfig,
         ModalKind::ContainerFileRename,
         ModalKind::ContainerFileNewDir,
+        ModalKind::ContainerHub,
+        ModalKind::ContainerPush,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

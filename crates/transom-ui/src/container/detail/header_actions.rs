@@ -7,8 +7,7 @@
 use super::*;
 use gpui_kit::assets::IconName;
 use transom_core::{
-    ComposeAction, ComposeProject, ContainerCommand, ContainerImageSummary,
-    ContainerNetworkSummary, ContainerRequestId, TabId,
+    ComposeAction, ComposeProject, ContainerImageSummary, ContainerNetworkSummary, TabId,
 };
 
 pub(super) fn compose_header_actions(
@@ -130,24 +129,10 @@ pub(super) fn image_header_actions(
             .icon(IconName::Upload)
             .label(rust_i18n::t!("container.action.push").to_string())
             .on_click(cx.listener({
+                let image_id = image_id.clone();
                 let push_ref = push_ref.clone();
-                move |this, _, _, cx| {
-                    let request_id = ContainerRequestId::new();
-                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                        workspace.busy = true;
-                    }
-                    this.send_tracked(
-                        tab_id,
-                        request_id,
-                        ContainerCommand::PushImage {
-                            tab_id,
-                            request_id,
-                            image: push_ref.clone(),
-                            tag: None,
-                            auth: None,
-                        },
-                    );
-                    cx.notify();
+                move |this, _, window, cx| {
+                    this.open_container_push_dialog(tab_id, image_id.clone(), push_ref.clone(), window, cx);
                 }
             }))
             .into_any_element(),

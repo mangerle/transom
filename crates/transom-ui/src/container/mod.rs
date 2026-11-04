@@ -9,11 +9,15 @@ mod events;
 mod export;
 mod files_actions;
 mod form;
+mod hub_dialog;
 mod lifecycle;
 mod list;
 mod logs_actions;
 mod modals;
 mod network_connect;
+mod pull_drawer;
+mod pull_manager;
+mod push_dialog;
 mod rename;
 mod sidebar;
 mod stats;
@@ -25,10 +29,11 @@ mod types;
 mod update;
 mod view;
 
+pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
     ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
-    ContainerSection, ContainerTerminalState, ContainerUiState, ContainerWorkspaceState,
-    ContainerWorkspaceStatus, RowAction, RowTarget,
+    ContainerHubDialog, ContainerPushDialog, ContainerSection, ContainerTerminalState,
+    ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};

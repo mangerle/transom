@@ -391,6 +391,20 @@ impl Engine {
         }
     }
 
+    /// 在远端镜像仓库中检索镜像。
+    pub async fn search_images(
+        &self,
+        term: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<transom_core::ImageSearchResult>, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.search_images(term, limit).await,
+            EngineBackend::Cli(_) => Err(ContainerError::Unsupported {
+                operation: "检索远端镜像（需要引擎 REST 接口）".to_string(),
+            }),
+        }
+    }
+
     /// 拉取镜像；HTTP 后端上报进度，CLI 后端只在结束时返回。
     pub async fn pull_image(
         &self,
@@ -399,6 +413,22 @@ impl Engine {
     ) -> Result<(), ContainerError> {
         match &self.backend {
             EngineBackend::Http(api) => api.pull_image(reference, progress).await,
+            EngineBackend::Cli(cli) => cli.pull_image(reference).await,
+        }
+    }
+
+    /// 带任务追踪与分层进度的镜像拉取。
+    pub async fn pull_image_task(
+        &self,
+        reference: &str,
+        auth: Option<&ContainerRegistryAuth>,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        progress: &mut (dyn FnMut(String, Option<transom_core::ImageLayerProgress>) + Send),
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => {
+                api.pull_image_task(reference, auth, cancel, progress).await
+            }
             EngineBackend::Cli(cli) => cli.pull_image(reference).await,
         }
     }

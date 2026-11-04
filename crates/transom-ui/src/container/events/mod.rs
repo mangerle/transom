@@ -1,5 +1,6 @@
 //! 容器事件分发：按事件类别交给各自处理函数。
 
+mod pull;
 mod result;
 mod terminal;
 
@@ -450,31 +451,13 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::VolumesPruned { request_id, report } => {
-                self.handle_prune_report(
-                    request_id,
-                    report.deleted.len(),
-                    ContainerPruneTarget::Volumes,
-                    window,
-                    cx,
-                );
+                self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Volumes, window, cx);
             }
             ContainerAppEvent::ImagesPruned { request_id, report } => {
-                self.handle_prune_report(
-                    request_id,
-                    report.deleted.len(),
-                    ContainerPruneTarget::Images,
-                    window,
-                    cx,
-                );
+                self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Images, window, cx);
             }
             ContainerAppEvent::NetworksPruned { request_id, report } => {
-                self.handle_prune_report(
-                    request_id,
-                    report.deleted.len(),
-                    ContainerPruneTarget::Networks,
-                    window,
-                    cx,
-                );
+                self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Networks, window, cx);
             }
             ContainerAppEvent::ActionFinished { request_id, error } => {
                 self.on_container_action_finished(request_id, error, window, cx)
@@ -484,6 +467,15 @@ impl AppShell {
             }
             ContainerAppEvent::Failed { request_id, error } => {
                 self.on_container_failed(request_id, error, window, cx)
+            }
+            ContainerAppEvent::ImagesSearched { request_id, results } => {
+                self.on_container_images_searched(request_id, results, window, cx)
+            }
+            ContainerAppEvent::PullTaskProgress { task_id, status, layers } => {
+                self.on_container_pull_task_progress(task_id, status, layers, window, cx)
+            }
+            ContainerAppEvent::PullTaskFinished { task_id, error } => {
+                self.on_container_pull_task_finished(task_id, error, window, cx)
             }
         }
         cx.notify();

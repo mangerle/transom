@@ -5798,3 +5798,139 @@ container:
     active:
       en: This workspace is displayed in fullscreen.
       zh-CN: 该工作区正在全屏显示。
+  hub:
+    search_placeholder:
+      en: Search image keywords, e.g. nginx, redis, ubuntu
+      zh-CN: 输入镜像关键词搜索，例如 nginx、redis、ubuntu
+    docker_hub_default:
+      en: Docker Hub (Official)
+      zh-CN: Docker Hub (官方)
+    searching:
+      en: Searching...
+      zh-CN: 检索中...
+    search:
+      en: Search
+      zh-CN: 搜索
+    searching_hint:
+      en: Searching registry for images...
+      zh-CN: 正在向镜像中心检索镜像...
+    empty_hint:
+      en: Search official or private registry images, supports one-click queuing
+      zh-CN: 输入镜像名搜索官方镜像或私有源镜像，支持一键入队下载
+    no_description:
+      en: No description available
+      zh-CN: 暂无描述信息
+    official:
+      en: Official
+      zh-CN: 官方认证
+    stars:
+      en: '%{count} Stars'
+      zh-CN: '%{count} 星标'
+    pull:
+      en: Pull
+      zh-CN: 下载
+    close:
+      en: Close
+      zh-CN: 关闭
+    pull_started:
+      en: 'Started pull task for image %{reference}'
+      zh-CN: '已启动镜像 %{reference} 的拉取任务'
+    pull_queued:
+      en: 'Image %{reference} queued for download'
+      zh-CN: '镜像 %{reference} 已加入排队等待槽位'
+  pull_manager:
+    indicator:
+      en: 'Downloads (%{count})'
+      zh-CN: '下载 (%{count})'
+    drawer_collapse:
+      en: Collapse downloads
+      zh-CN: 收起下载中心
+    drawer_expand:
+      en: View download tasks
+      zh-CN: 查看下载任务
+    explore_market:
+      en: 'Explore Market (Docker Hub / Private)'
+      zh-CN: '探索镜像市场 (Docker Hub / 私有源)'
+    center_title:
+      en: Image Download Center
+      zh-CN: 镜像下载中心
+    summary_counts:
+      en: 'Downloading: %{pulling} · Queued: %{queued}'
+      zh-CN: '下载中: %{pulling} · 排队: %{queued}'
+    clear_finished:
+      en: Clear finished tasks
+      zh-CN: 清空已完成任务
+    close_drawer:
+      en: Close drawer
+      zh-CN: 关闭抽屉
+    empty_tasks:
+      en: 'No active downloads. Pull or explore market to add tasks.'
+      zh-CN: '当前暂无下载任务，可通过「拉取镜像」或「探索市场」添加'
+    downloading_percent:
+      en: 'Downloading %{percent}%'
+      zh-CN: '下载中 %{percent}%'
+    cancel:
+      en: Cancel
+      zh-CN: 取消
+    status_queued:
+      en: Queued
+      zh-CN: 排队中
+    status_pulling:
+      en: Downloading
+      zh-CN: 下载中
+    status_success:
+      en: Finished
+      zh-CN: 已完成
+    status_failed:
+      en: 'Failed: %{msg}'
+      zh-CN: '失败: %{msg}'
+    status_cancelled:
+      en: Cancelled
+      zh-CN: 已取消
+    task_cancelled:
+      en: Pull cancelled
+      zh-CN: 拉取已取消
+    task_failed:
+      en: 'Image %{reference} download failed: %{error}'
+      zh-CN: '镜像 %{reference} 下载失败: %{error}'
+    task_finished:
+      en: 'Image %{reference} download finished'
+      zh-CN: '镜像 %{reference} 下载完成'
+  push:
+    target_repo_placeholder:
+      en: 'Target repository, e.g. harbor.internal.com/team/app'
+      zh-CN: '输入目标仓库名，例如 harbor.internal.com/team/app'
+    target_tag_placeholder:
+      en: 'Target tag, e.g. latest, v1.0'
+      zh-CN: '输入目标 Tag，例如 latest、v1.0'
+    repo_and_tag_required:
+      en: Target repository and tag cannot be empty
+      zh-CN: 目标仓库名称与 Tag 不能为空
+    pushing_notice:
+      en: 'Pushing image %{reference} to remote registry...'
+      zh-CN: '正在推送镜像 %{reference} 到远端仓库...'
+    auth_user_hint:
+      en: 'Will use credentials of user "%{user}" for authentication'
+      zh-CN: '将使用用户「%{user}」的凭证进行推送鉴权'
+    auth_anonymous_hint:
+      en: No credentials configured; attempting anonymous push
+      zh-CN: 当前仓库未配置凭据，将尝试匿名/免密推送
+    source_image:
+      en: Source Image
+      zh-CN: 源镜像
+    target_registry:
+      en: Target Registry
+      zh-CN: 目标仓库源
+    target_path:
+      en: Target Repository
+      zh-CN: 目标仓库路径
+    target_tag:
+      en: Target Tag
+      zh-CN: 目标 Tag
+    cancel:
+      en: Cancel
+      zh-CN: 取消
+    submit:
+      en: Start Push
+      zh-CN: 开始推送
+

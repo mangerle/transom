@@ -1022,9 +1022,16 @@ pub struct ExecInspectResponse {
     pub running: bool,
 }
 
-/// 镜像拉取事件；只用于识别流中的错误。
+/// 镜像拉取事件；包含分层与整体进度。
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ImagePullEvent {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub progress: Option<String>,
     #[serde(default)]
     pub error: Option<String>,
     #[serde(rename = "errorDetail", default)]
@@ -1045,6 +1052,33 @@ pub struct ProgressDetail {
     pub current: Option<u64>,
     #[serde(default)]
     pub total: Option<u64>,
+}
+
+/// 远端镜像检索项（Docker Engine API GET /images/search 响应）。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ImageSearchItem {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub is_official: bool,
+    #[serde(default)]
+    pub is_automated: bool,
+    #[serde(default)]
+    pub star_count: u64,
+}
+
+impl From<ImageSearchItem> for transom_core::ImageSearchResult {
+    fn from(item: ImageSearchItem) -> Self {
+        Self {
+            name: item.name,
+            description: item.description,
+            is_official: item.is_official,
+            is_automated: item.is_automated,
+            star_count: item.star_count,
+        }
+    }
 }
 
 #[cfg(test)]

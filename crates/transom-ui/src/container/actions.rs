@@ -283,22 +283,7 @@ impl AppShell {
                             .map(|item| item.display_name())
                     })
                     .unwrap_or_else(|| id.clone());
-                let request_id = ContainerRequestId::new();
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                    workspace.busy = true;
-                }
-                self.send_tracked(
-                    tab_id,
-                    request_id,
-                    ContainerCommand::PushImage {
-                        tab_id,
-                        request_id,
-                        image: reference,
-                        tag: None,
-                        auth: None,
-                    },
-                );
-                cx.notify();
+                self.open_container_push_dialog(tab_id, id, reference, window, cx);
             }
             RowAction::Save => {
                 let RowTarget::Image(id) = target else {

@@ -398,6 +398,22 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         error: Option<AppError>,
     },
+    /// 远端镜像检索完成。
+    ImagesSearched {
+        request_id: ContainerRequestId,
+        results: Vec<crate::model::container::ImageSearchResult>,
+    },
+    /// 镜像拉取任务分层进度更新。
+    PullTaskProgress {
+        task_id: String,
+        status: String,
+        layers: Vec<crate::model::container::ImageLayerProgress>,
+    },
+    /// 镜像拉取任务结束；`error` 为 `None` 表示成功。
+    PullTaskFinished {
+        task_id: String,
+        error: Option<AppError>,
+    },
     /// 列表、发现、预览等非传输类操作失败。
     Failed {
         request_id: ContainerRequestId,

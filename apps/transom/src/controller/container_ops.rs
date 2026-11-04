@@ -109,10 +109,13 @@ pub(super) fn handle_container_command(
         | ContainerCommand::ListComposeProjects { .. }
         | ContainerCommand::PruneVolumes { .. }
         | ContainerCommand::PruneImages { .. }
-        | ContainerCommand::PruneNetworks { .. } => query::handle(state, ctx, command),
+        | ContainerCommand::PruneNetworks { .. }
+        | ContainerCommand::SearchImages { .. } => query::handle(state, ctx, command),
         ContainerCommand::RunCompose { .. }
         | ContainerCommand::Lifecycle { .. }
         | ContainerCommand::PullImage { .. }
+        | ContainerCommand::PullImageTask { .. }
+        | ContainerCommand::CancelPullTask { .. }
         | ContainerCommand::RemoveImage { .. }
         | ContainerCommand::TagImage { .. }
         | ContainerCommand::PushImage { .. }

@@ -147,6 +147,14 @@ pub(crate) struct ContainerWorkspaceState {
     /// 待确认的删除动作。
     pub(crate) confirm: Option<ContainerConfirm>,
     /// 已按下一次「清理」、等待第二次确认的目标。
+    /// 镜像下载管理器：有界队列与分层进度。
+    pub(crate) pull_manager: crate::container::pull_manager::ImagePullManager,
+    /// 下载管理抽屉是否展开。
+    pub(crate) pull_drawer_open: bool,
+    /// 镜像市场探索弹窗状态。
+    pub(crate) hub_dialog: Option<ContainerHubDialog>,
+    /// 镜像推送到远端仓库弹窗状态。
+    pub(crate) push_dialog: Option<ContainerPushDialog>,
     pub(crate) prune_armed: Option<ContainerPruneTarget>,
     /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
     pub(crate) notice: Option<String>,
@@ -247,6 +255,10 @@ impl ContainerWorkspaceState {
                 ..ContainerFilesState::default()
             },
             confirm: None,
+            pull_manager: crate::container::pull_manager::ImagePullManager::new(),
+            pull_drawer_open: false,
+            hub_dialog: None,
+            push_dialog: None,
             prune_armed: None,
             notice: None,
             busy: false,

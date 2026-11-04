@@ -46,8 +46,8 @@ pub use model::container::{
     ContainerFileKind, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,
     ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
     ContainerNetworkSpec, ContainerNetworkSummary, ContainerPort, ContainerPortPublish,
-    ContainerProcess, ContainerPruneReport, ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary,
-    ContainerVolumeDetails, ContainerVolumeSummary, ContainerUpdateSpec, TlsConfig, compose_projects,
+    ContainerProcess, ContainerPruneReport, ContainerRegistry, ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary,
+    ContainerVolumeDetails, ContainerVolumeSummary, ContainerUpdateSpec, ImageLayerProgress, ImageSearchResult, TlsConfig, compose_projects,
     generate_docker_compose, generate_docker_run, is_valid_container_name, short_id,
 };
 pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};

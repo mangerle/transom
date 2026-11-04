@@ -16,6 +16,8 @@ use transom_core::{ContainerEngineProfile, ContainerRequestId};
 pub struct ContainerService {
     /// 进行中的可取消操作：关闭页签/工作区时置位，长任务轮询检查。
     cancels: Mutex<HashMap<ContainerRequestId, Arc<AtomicBool>>>,
+    /// 进行中的镜像拉取等长任务取消表（按任务 ID 索引）。
+    task_cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
 impl ContainerService {
@@ -84,6 +86,46 @@ impl ContainerService {
             .and_then(|cancels| {
                 cancels
                     .get(&request_id)
+                    .map(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            })
+            .unwrap_or(false)
+    }
+
+    /// 登记一个具名任务（如镜像拉取任务）的取消标志。
+    pub fn register_task_cancel(&self, task_id: &str) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        if let Ok(mut cancels) = self.task_cancels.lock() {
+            cancels.insert(task_id.to_string(), Arc::clone(&flag));
+        }
+        flag
+    }
+
+    /// 置位指定任务的取消标志；任务不存在时返回 `false`。
+    pub fn cancel_task(&self, task_id: &str) -> bool {
+        match self.task_cancels.lock() {
+            Ok(cancels) => cancels.get(task_id).is_some_and(|flag| {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                true
+            }),
+            Err(_) => false,
+        }
+    }
+
+    /// 任务完成后移除登记。
+    pub fn finish_task(&self, task_id: &str) {
+        if let Ok(mut cancels) = self.task_cancels.lock() {
+            cancels.remove(task_id);
+        }
+    }
+
+    /// 检查指定任务是否已被取消。
+    pub fn is_task_cancelled(&self, task_id: &str) -> bool {
+        self.task_cancels
+            .lock()
+            .ok()
+            .and_then(|cancels| {
+                cancels
+                    .get(task_id)
                     .map(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
             })
             .unwrap_or(false)

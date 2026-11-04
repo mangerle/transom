@@ -248,6 +248,25 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         local_path: std::path::PathBuf,
     },
+    /// 在远端镜像仓库搜索镜像（Docker Hub 或私有 Registry）。
+    SearchImages {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        term: String,
+        limit: Option<u32>,
+    },
+    /// 带任务追踪与分层进度的镜像拉取指令。
+    PullImageTask {
+        tab_id: TabId,
+        task_id: String,
+        reference: String,
+        auth: Option<ContainerRegistryAuth>,
+    },
+    /// 取消正在进行的镜像拉取任务。
+    CancelPullTask {
+        tab_id: TabId,
+        task_id: String,
+    },
     ListVolumes {
         tab_id: TabId,
         request_id: ContainerRequestId,

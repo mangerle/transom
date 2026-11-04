@@ -38,6 +38,12 @@ impl ModalKind {
                     ws.files.new_dir_open && ws.files.new_dir_input.is_some()
                 })
                 .is_some(),
+            ModalKind::ContainerHub => shell
+                .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                .is_some(),
+            ModalKind::ContainerPush => shell
+                .find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                .is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -118,6 +124,28 @@ impl ModalKind {
                     shell.find_container_modal_tab(|ws| ws.files.new_dir_input.is_some())
                 {
                     shell.cancel_container_file_new_dir(tab_id, cx);
+                }
+                Some(true)
+            }
+            ModalKind::ContainerHub => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                {
+                    if let Some(ws) = shell.state.container_workspace_mut(tab_id) {
+                        ws.hub_dialog = None;
+                    }
+                    cx.notify();
+                }
+                Some(true)
+            }
+            ModalKind::ContainerPush => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                {
+                    if let Some(ws) = shell.state.container_workspace_mut(tab_id) {
+                        ws.push_dialog = None;
+                    }
+                    cx.notify();
                 }
                 Some(true)
             }
@@ -207,6 +235,22 @@ impl ModalKind {
                 }
                 Some(())
             }
+            ModalKind::ContainerHub => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                {
+                    shell.execute_hub_search(tab_id, cx);
+                }
+                Some(())
+            }
+            ModalKind::ContainerPush => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                {
+                    shell.submit_container_push_dialog(tab_id, cx);
+                }
+                Some(())
+            }
             _ => None,
         }
     }
@@ -248,6 +292,16 @@ impl ModalKind {
                 .find_container_modal_tab(|ws| ws.files.new_dir_input.is_some())
                 .and_then(|(_, ws)| ws.files.new_dir_input.as_ref())
                 .map(|input| ModalFocus::Input(input.clone()))
+                .unwrap_or(ModalFocus::None),
+            ModalKind::ContainerHub => shell
+                .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                .and_then(|(_, ws)| ws.hub_dialog.as_ref())
+                .map(|hub| ModalFocus::Input(hub.search_input.clone()))
+                .unwrap_or(ModalFocus::None),
+            ModalKind::ContainerPush => shell
+                .find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                .and_then(|(_, ws)| ws.push_dialog.as_ref())
+                .map(|push| ModalFocus::Input(push.target_repo.clone()))
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerConfirm | ModalKind::ContainerExportConfig => ModalFocus::None,
             _ => return None,
@@ -307,6 +361,21 @@ impl ModalKind {
                 .find_container_modal_tab(|ws| ws.files.new_dir_input.is_some())
                 .and_then(|(_, ws)| ws.files.new_dir_input.as_ref())
                 .map(|input| vec![input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            ModalKind::ContainerHub => shell
+                .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                .and_then(|(_, ws)| ws.hub_dialog.as_ref())
+                .map(|hub| vec![hub.search_input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            ModalKind::ContainerPush => shell
+                .find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                .and_then(|(_, ws)| ws.push_dialog.as_ref())
+                .map(|push| {
+                    vec![
+                        push.target_repo.read(cx).value().to_string(),
+                        push.target_tag.read(cx).value().to_string(),
+                    ]
+                })
                 .unwrap_or_default(),
             ModalKind::ContainerConfirm | ModalKind::ContainerExportConfig => Vec::new(),
             _ => return None,

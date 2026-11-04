@@ -54,12 +54,16 @@ impl AppShell {
             )
             .child(resizable_panel().min_w_0().child(detail));
 
+        let pull_drawer = self.render_container_pull_drawer(tab_id, cx, p);
+
         v_flex()
+            .relative()
             .size_full()
             .overflow_hidden()
             .bg(p.background)
             .child(header)
             .child(div().flex_1().min_w_0().min_h_0().child(list_and_detail))
+            .child(pull_drawer)
             .into_any_element()
     }
 
@@ -243,6 +247,9 @@ impl AppShell {
             return div().into_any_element();
         };
         let busy = workspace.busy;
+        let pulling_count = workspace.pull_manager.pulling_count();
+        let drawer_open = workspace.pull_drawer_open;
+        let has_tasks = !workspace.pull_manager.tasks.is_empty();
         let fullscreen = self.state.containers.fullscreen == Some(tab_id);
 
         h_flex()
@@ -255,6 +262,31 @@ impl AppShell {
                         .small()
                         .text_color(p.muted_foreground),
                 )
+            })
+            .when(has_tasks || pulling_count > 0, |this| {
+                let btn = if pulling_count > 0 {
+                    Button::new("container-pull-drawer-btn")
+                        .primary()
+                        .xsmall()
+                        .icon(IconName::Download)
+                        .label(rust_i18n::t!("container.pull_manager.indicator", count = pulling_count))
+                } else {
+                    Button::new("container-pull-drawer-btn")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Download)
+                        .tooltip(if drawer_open {
+                            rust_i18n::t!("container.pull_manager.drawer_collapse")
+                        } else {
+                            rust_i18n::t!("container.pull_manager.drawer_expand")
+                        })
+                };
+                this.child(btn.on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                        ws.pull_drawer_open = !ws.pull_drawer_open;
+                    }
+                    cx.notify();
+                })))
             })
             .child(
                 Button::new("container-refresh")

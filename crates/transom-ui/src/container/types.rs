@@ -23,6 +23,7 @@ use transom_terminal::TerminalView;
 
 mod dialogs;
 mod engine_form;
+mod hub;
 mod rows;
 mod run_form;
 mod section;
@@ -30,6 +31,7 @@ mod workspace;
 
 pub(crate) use dialogs::*;
 pub(crate) use engine_form::*;
+pub(crate) use hub::*;
 pub(crate) use rows::*;
 pub(crate) use run_form::*;
 pub(crate) use section::*;

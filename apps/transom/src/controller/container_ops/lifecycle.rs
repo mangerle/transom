@@ -118,6 +118,69 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 .await;
             });
         }
+        ContainerCommand::PullImageTask {
+            tab_id,
+            task_id,
+            reference,
+            auth,
+        } => {
+            let Some(engine) = state
+                .container_workspaces
+                .get(&tab_id)
+                .map(|w| w.engine.clone())
+            else {
+                let _ = ctx.event_tx.try_send(
+                    ContainerAppEvent::PullTaskFinished {
+                        task_id,
+                        error: Some(AppError::with_detail(
+                            ErrorCode::ContainerUnavailable,
+                            "工作区未连接",
+                        )),
+                    }
+                    .into(),
+                );
+                return;
+            };
+            let cancel = ctx.container.register_task_cancel(&task_id);
+            let event_tx = ctx.event_tx.clone();
+            let container_service = Arc::clone(&ctx.container);
+            let tid = task_id.clone();
+            tokio::spawn(async move {
+                let mut layers_map: std::collections::HashMap<String, transom_core::ImageLayerProgress> =
+                    std::collections::HashMap::with_capacity(16);
+                let mut progress = |status: String, layer_opt: Option<transom_core::ImageLayerProgress>| {
+                    if let Some(layer) = layer_opt {
+                        layers_map.insert(layer.id.clone(), layer);
+                    }
+                    let layers: Vec<transom_core::ImageLayerProgress> =
+                        layers_map.values().cloned().collect();
+                    let _ = event_tx.try_send(
+                        ContainerAppEvent::PullTaskProgress {
+                            task_id: tid.clone(),
+                            status,
+                            layers,
+                        }
+                        .into(),
+                    );
+                };
+                let error = engine
+                    .pull_image_task(&reference, auth.as_ref(), cancel, &mut progress)
+                    .await
+                    .err()
+                    .map(AppError::from);
+                container_service.finish_task(&tid);
+                let _ = event_tx.try_send(
+                    ContainerAppEvent::PullTaskFinished {
+                        task_id: tid,
+                        error,
+                    }
+                    .into(),
+                );
+            });
+        }
+        ContainerCommand::CancelPullTask { tab_id: _, task_id } => {
+            ctx.container.cancel_task(&task_id);
+        }
         ContainerCommand::RemoveImage {
             tab_id,
             request_id,

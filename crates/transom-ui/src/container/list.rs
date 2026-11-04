@@ -221,16 +221,27 @@ impl AppShell {
         }
         if params.section == ContainerSection::Images {
             let tab_id = params.tab_id;
-            controls = controls.child(
-                Button::new("container-image-load")
-                    .xsmall()
-                    .ghost()
-                    .icon(IconName::Upload)
-                    .tooltip(rust_i18n::t!("container.action.load_image").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.load_image(tab_id, cx);
-                    })),
-            );
+            controls = controls
+                .child(
+                    Button::new("container-image-hub")
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::Globe)
+                        .tooltip(rust_i18n::t!("container.pull_manager.explore_market").to_string())
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_container_hub_dialog(tab_id, window, cx);
+                        })),
+                )
+                .child(
+                    Button::new("container-image-load")
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::Upload)
+                        .tooltip(rust_i18n::t!("container.action.load_image").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.load_image(tab_id, cx);
+                        })),
+                );
         }
         // 卷、镜像与网络都有「清理」视角：清未使用或悬空条目。
         let prune_target = match params.section {

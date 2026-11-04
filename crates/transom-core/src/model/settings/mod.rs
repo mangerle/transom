@@ -98,6 +98,13 @@ pub struct AppSettings {
     /// 主机监控板块折叠/展开偏好设置；旧配置缺省时使用默认布局。
     #[serde(default)]
     pub monitor: MonitorSettings,
+    /// 容器镜像仓库（Registries）配置列表；缺省时预置官方 Docker Hub。
+    #[serde(default = "default_container_registries")]
+    pub container_registries: Vec<crate::model::container::ContainerRegistry>,
+}
+
+fn default_container_registries() -> Vec<crate::model::container::ContainerRegistry> {
+    vec![crate::model::container::ContainerRegistry::docker_hub()]
 }
 
 fn default_allow_sha1_publickey_auth() -> bool {
@@ -190,6 +197,7 @@ impl Default for AppSettings {
             block_view: BlockViewSettings::default(),
             allow_sha1_publickey_auth: default_allow_sha1_publickey_auth(),
             monitor: MonitorSettings::default(),
+            container_registries: default_container_registries(),
         }
     }
 }

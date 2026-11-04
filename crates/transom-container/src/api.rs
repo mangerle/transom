@@ -9,7 +9,7 @@ use crate::http::{self, RawResponse};
 use crate::models::{
     ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
     ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
-    NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
+    ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
     VolumeListResponse, VolumePruneResponse,
 };
 use crate::transport::EngineTransport;
@@ -943,6 +943,66 @@ impl DockerApi {
         consume_pull_stream(response.body, progress).await
     }
 
+    /// 在远端镜像仓库中检索镜像。
+    pub async fn search_images(
+        &self,
+        term: &str,
+        limit: Option<u32>,
+    ) -> Result<Vec<transom_core::ImageSearchResult>, ContainerError> {
+        let mut path = format!("/images/search?term={}", http::percent_encode(term));
+        if let Some(limit) = limit {
+            path.push_str(&format!("&limit={limit}"));
+        }
+        let response = self.send(Method::GET, &path, None, "检索远端镜像").await?;
+        let status = response.status;
+        let body = http::read_body_text(response.body, 131_072).await;
+        http::ensure_success(status, "检索远端镜像", body.clone(), Some(term))?;
+        let items: Vec<ImageSearchItem> = serde_json::from_str(&body).map_err(|error| {
+            ContainerError::Decode {
+                operation: "反序列化镜像检索结果".to_string(),
+                message: error.to_string(),
+            }
+        })?;
+        Ok(items.into_iter().map(Into::into).collect())
+    }
+
+    /// 带任务追踪、分层进度与中止令牌的镜像拉取。
+    pub async fn pull_image_task(
+        &self,
+        reference: &str,
+        auth: Option<&ContainerRegistryAuth>,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        progress: &mut (dyn FnMut(String, Option<transom_core::ImageLayerProgress>) + Send),
+    ) -> Result<(), ContainerError> {
+        let (image, tag) = split_reference(reference);
+        let mut path = format!("/images/create?fromImage={}", http::percent_encode(&image));
+        if let Some(tag) = tag {
+            path.push_str(&format!("&tag={}", http::percent_encode(&tag)));
+        }
+        let auth_header = crate::auth::resolve_auth_header(&image, auth);
+        let mut extra_headers = Vec::new();
+        if let Some(h) = auth_header.as_deref() {
+            extra_headers.push(("X-Registry-Auth", h));
+        }
+        let full_path = self.path(&path);
+        let response = http::request_with_headers(
+            &self.transport,
+            Method::POST,
+            &full_path,
+            Bytes::new(),
+            None,
+            &extra_headers,
+        )
+        .await
+        .inspect_err(|error| log_request_error("拉取镜像任务", error))?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, "拉取镜像任务", body, reference));
+        }
+        consume_pull_task_stream(response.body, cancel, progress).await
+    }
+
     /// 推送镜像；支持自动或显式鉴权，流式上报进度。
     pub async fn push_image(
         &self,
@@ -1274,6 +1334,92 @@ fn handle_pull_line(
     }
     if let Some(detail) = event.progress_detail {
         progress(detail.current.unwrap_or(0), detail.total);
+    }
+    Ok(None)
+}
+
+async fn consume_pull_task_stream(
+    body: hyper::body::Incoming,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    progress: &mut (dyn FnMut(String, Option<transom_core::ImageLayerProgress>) + Send),
+) -> Result<(), ContainerError> {
+    let mut body = std::pin::pin!(body);
+    let mut buffer: Vec<u8> = Vec::with_capacity(8192);
+    while let Some(frame) = body.frame().await {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(ContainerError::Cancelled);
+        }
+        let frame = frame.map_err(|error| ContainerError::Http {
+            operation: "读取镜像分层进度".to_string(),
+            message: error.to_string(),
+        })?;
+        let Ok(data) = frame.into_data() else {
+            continue;
+        };
+        buffer.extend_from_slice(&data);
+        while let Some(newline) = buffer.iter().position(|byte| *byte == b'\n') {
+            let line: Vec<u8> = buffer.drain(..=newline).collect();
+            if let Some(error) = handle_pull_task_line(&line, progress)? {
+                return Err(ContainerError::Api {
+                    operation: "拉取镜像".to_string(),
+                    status: 500,
+                    body: error,
+                });
+            }
+        }
+    }
+    if !buffer.is_empty()
+        && let Some(error) = handle_pull_task_line(&buffer, progress)?
+    {
+        return Err(ContainerError::Api {
+            operation: "拉取镜像".to_string(),
+            status: 500,
+            body: error,
+        });
+    }
+    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+    Ok(())
+}
+
+fn handle_pull_task_line(
+    line: &[u8],
+    progress: &mut (dyn FnMut(String, Option<transom_core::ImageLayerProgress>) + Send),
+) -> Result<Option<String>, ContainerError> {
+    let text = String::from_utf8_lossy(line);
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let event: ImagePullEvent = match serde_json::from_str(text) {
+        Ok(event) => event,
+        Err(error) => {
+            log::debug!("镜像分层进度行解析跳过，内容: {text}，原因: {error}");
+            return Ok(None);
+        }
+    };
+    if let Some(detail) = event.error_detail.and_then(|detail| detail.message) {
+        return Ok(Some(detail));
+    }
+    if let Some(error) = event.error {
+        return Ok(Some(error));
+    }
+    let status_desc = event.status.clone().unwrap_or_default();
+    if let Some(id) = event.id {
+        let (current, total) = event
+            .progress_detail
+            .map(|detail| (detail.current.unwrap_or(0), detail.total.unwrap_or(0)))
+            .unwrap_or((0, 0));
+        let layer_prog = transom_core::ImageLayerProgress {
+            id,
+            status: status_desc.clone(),
+            current,
+            total,
+        };
+        progress(status_desc, Some(layer_prog));
+    } else if !status_desc.is_empty() {
+        progress(status_desc, None);
     }
     Ok(None)
 }
