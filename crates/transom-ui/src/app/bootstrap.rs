@@ -312,6 +312,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         dialog_hint: None,
         containers: crate::container::ContainerUiState::default(),
         toast_seq: 0,
+        last_toast: None,
     }
 }
 

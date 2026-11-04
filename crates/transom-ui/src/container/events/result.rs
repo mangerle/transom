@@ -16,10 +16,9 @@ impl AppShell {
         };
         let mut refresh = false;
         let toast = match &error {
-            Some(error) => Some((
-                toast_failed(label.as_deref(), &localized_error(error)),
-                false,
-            )),
+            Some(error) => {
+                label.map(|label| (toast_failed(Some(&label), &localized_error(error)), false))
+            }
             None => {
                 refresh = true;
                 label.map(|label| (toast_succeeded(&label), true))
@@ -104,7 +103,7 @@ impl AppShell {
         let Some(tab_id) = self.state.containers.take_tab(request_id) else {
             return;
         };
-        let message = toast_failed(label.as_deref(), &localized_error(&error));
+        let err_desc = localized_error(&error);
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.busy = false;
             workspace.files.loading = false;
@@ -115,12 +114,12 @@ impl AppShell {
             }
             if workspace.stats_request == Some(request_id) {
                 workspace.stats_request = None;
-                workspace.stats_error = Some(message.clone());
+                workspace.stats_error = Some(err_desc.clone());
             }
             if workspace.stats_processes_request == Some(request_id) {
                 workspace.stats_processes_request = None;
                 workspace.stats_processes_loading = false;
-                workspace.stats_processes_error = Some(message.clone());
+                workspace.stats_processes_error = Some(err_desc.clone());
             }
             if workspace.files.request == Some(request_id) {
                 workspace.files.request = None;
@@ -134,6 +133,11 @@ impl AppShell {
                 workspace.terminal_request = None;
             }
         }
-        self.show_toast(message, false, window, cx);
+        // 只有明确具备动作意图的用户操作（label 为 Some）失败时才向右上角弹提示；
+        // 后台静默采样、列表查询等只读请求失败只记录内部状态，杜绝弹窗轰炸。
+        if let Some(label) = label {
+            let message = toast_failed(Some(&label), &err_desc);
+            self.show_toast(message, false, window, cx);
+        }
     }
 }

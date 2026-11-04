@@ -77,8 +77,85 @@ impl ContainerError {
             Self::File { .. } => ErrorCode::Io,
             Self::Cancelled => ErrorCode::Cancelled,
         };
-        AppError::with_detail(code, self.to_string())
+        AppError::with_detail(code, self.user_friendly_detail())
     }
+
+    /// 面向用户的友好错误详情，去除裸 JSON、内部状态码等非必要技术细节。
+    pub fn user_friendly_detail(&self) -> String {
+        match self {
+            Self::Api { operation, status, body } => {
+                humanize_api_error(operation, *status, body)
+            }
+            _ => self.to_string(),
+        }
+    }
+}
+
+/// 解析并提炼容器引擎 API 错误为直观易懂的中文诊断说明。
+fn humanize_api_error(operation: &str, status: u16, body: &str) -> String {
+    let raw_msg = if let Ok(v) = serde_json::from_str::<serde_json::Value>(body) {
+        v.get("message")
+            .and_then(|m| m.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| body.trim().to_string())
+    } else {
+        body.trim().to_string()
+    };
+
+    // 常见容器冲突与错误场景模式匹配
+    if raw_msg.contains("image is being used by running container") {
+        if let Some(pos) = raw_msg.find("running container ") {
+            let rest = &raw_msg[pos + "running container ".len()..];
+            let id = rest.split_whitespace().next().unwrap_or(rest).trim_matches('"');
+            let short = if id.len() > 12 { &id[..12] } else { id };
+            return format!("镜像正被运行中的容器 ({short}) 使用，无法删除");
+        }
+        return "镜像正被运行中的容器使用，无法删除".to_string();
+    }
+    if raw_msg.contains("image is being used by stopped container") {
+        if let Some(pos) = raw_msg.find("stopped container ") {
+            let rest = &raw_msg[pos + "stopped container ".len()..];
+            let id = rest.split_whitespace().next().unwrap_or(rest).trim_matches('"');
+            let short = if id.len() > 12 { &id[..12] } else { id };
+            return format!("镜像正被已停止的容器 ({short}) 使用，请先删除容器或强制删除");
+        }
+        return "镜像正被已停止的容器使用，请先删除容器或强制删除".to_string();
+    }
+    if raw_msg.contains("cannot remove a running container")
+        || raw_msg.contains("Stop the container before attempting removal")
+    {
+        return "容器正在运行中，无法直接删除，请先停止容器或强制删除".to_string();
+    }
+    if raw_msg.contains("is already in use") {
+        return "该资源已被其它容器或服务使用，无法删除".to_string();
+    }
+    if raw_msg.contains("port is already allocated") {
+        return "指定的端口已被占用，请修改端口映射配置".to_string();
+    }
+    if raw_msg.contains("has active endpoints") {
+        return "该网络下仍有活跃容器连接，无法删除".to_string();
+    }
+    if raw_msg.contains("No such container") {
+        return "目标容器不存在或已被删除".to_string();
+    }
+    if raw_msg.contains("No such image") {
+        return "目标镜像不存在或已被删除".to_string();
+    }
+    if raw_msg.contains("No such volume") {
+        return "目标数据卷不存在或已被删除".to_string();
+    }
+    if raw_msg.contains("No such network") {
+        return "目标网络不存在或已被删除".to_string();
+    }
+
+    if !raw_msg.is_empty() {
+        if status == 409 {
+            return format!("操作冲突：{raw_msg}");
+        }
+        return raw_msg;
+    }
+
+    format!("容器引擎返回错误（操作: {operation}，状态码: {status}）")
 }
 
 impl From<ContainerError> for AppError {
@@ -128,5 +205,20 @@ mod tests {
             reason: "必须是绝对路径".into(),
         };
         assert_eq!(error.to_app_error().code, ErrorCode::Configuration);
+    }
+
+    #[test]
+    fn humanizes_docker_image_conflict_message() {
+        let raw_json = r#"{"message":"conflict: unable to delete d9e853e87e55 (cannot be forced) - image is being used by running container ab0dd73ed23d"}"#;
+        let error = ContainerError::Api {
+            operation: "删除镜像".into(),
+            status: 409,
+            body: raw_json.into(),
+        };
+        let app_error = error.to_app_error();
+        assert_eq!(app_error.code, ErrorCode::ContainerConflict);
+        let detail = app_error.detail.unwrap_or_default();
+        assert!(detail.contains("镜像正被运行中的容器"));
+        assert!(detail.contains("ab0dd73ed23d"));
     }
 }

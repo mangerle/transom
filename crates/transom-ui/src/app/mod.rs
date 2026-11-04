@@ -185,10 +185,18 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let msg = message.into();
+        let now = std::time::Instant::now();
+        if let Some((last_msg, last_time)) = &self.state.last_toast {
+            if last_msg == &msg && now.duration_since(*last_time).as_millis() < 1200 {
+                return;
+            }
+        }
+        self.state.last_toast = Some((msg.clone(), now));
         let notification = if success {
-            Notification::success(message.into())
+            Notification::success(msg)
         } else {
-            Notification::error(message.into())
+            Notification::error(msg)
         };
         self.push_toast(notification, window, cx);
     }
@@ -200,7 +208,15 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.push_toast(Notification::info(message.into()), window, cx);
+        let msg = message.into();
+        let now = std::time::Instant::now();
+        if let Some((last_msg, last_time)) = &self.state.last_toast {
+            if last_msg == &msg && now.duration_since(*last_time).as_millis() < 1200 {
+                return;
+            }
+        }
+        self.state.last_toast = Some((msg.clone(), now));
+        self.push_toast(Notification::info(msg), window, cx);
     }
 
     fn push_toast(

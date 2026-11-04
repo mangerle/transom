@@ -19,13 +19,16 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             container, action, ..
         } => Some(verb_object(lifecycle_verb_key(action), container)),
         C::PullImage { reference, .. } => Some(verb_object("container.pull", reference)),
-        C::RemoveImage { image, .. } => Some(verb_object("common.delete", image)),
+        C::RemoveImage { image, .. } => {
+            Some(verb_object("common.delete", &transom_core::short_id(image)))
+        }
         C::TagImage { image, repo, tag, .. } => {
             let target = match tag {
                 Some(t) if !t.is_empty() => format!("{repo}:{t}"),
                 _ => repo.clone(),
             };
-            Some(verb_object("container.action.tag", &format!("{image} -> {target}")))
+            let short_image = transom_core::short_id(image);
+            Some(verb_object("container.action.tag", &format!("{short_image} -> {target}")))
         }
         C::PushImage { image, tag, .. } => {
             let target = match tag {
@@ -39,7 +42,7 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             Some(verb_object("container.action.build", &target))
         }
         C::SaveImage { image, .. } => {
-            Some(verb_object("container.action.save_image", image))
+            Some(verb_object("container.action.save_image", &transom_core::short_id(image)))
         }
         C::LoadImage { local_path, .. } => {
             let name = local_path

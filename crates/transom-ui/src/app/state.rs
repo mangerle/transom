@@ -102,6 +102,8 @@ pub(crate) struct AppState {
     pub(in crate::app) dialog_hint: Option<String>,
     /// 右上角操作结果提示的自增序号：用作通知 key，定时关闭时只关自己那一条。
     pub(in crate::app) toast_seq: u64,
+    /// 上一条 Toast 提示的内容与时间戳，用于短时间内的相同通知防抖去重。
+    pub(in crate::app) last_toast: Option<(String, std::time::Instant)>,
 }
 
 impl AppState {
