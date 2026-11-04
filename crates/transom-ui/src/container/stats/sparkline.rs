@@ -29,21 +29,29 @@ fn render_percent_bars(
     color: Hsla,
     muted_color: Hsla,
 ) -> AnyElement {
-    let padding_count = SPARKLINE_SLOTS.saturating_sub(history.len());
-    let mut slots = Vec::with_capacity(SPARKLINE_SLOTS);
-
-    for _ in 0..padding_count {
-        slots.push(
-            div()
-                .flex_1()
-                .min_w_0()
-                .h(px(1.5))
-                .rounded_full()
-                .bg(muted_color.opacity(0.2)),
-        );
+    let data_len = history.len().min(SPARKLINE_SLOTS);
+    if data_len == 0 {
+        return h_flex()
+            .h(px(height_px))
+            .w_full()
+            .items_end()
+            .p_1p5()
+            .rounded_sm()
+            .bg(muted_color.opacity(0.18))
+            .border_1()
+            .border_color(muted_color.opacity(0.3))
+            .child(
+                div()
+                    .w_full()
+                    .h(px(1.5))
+                    .rounded_full()
+                    .bg(muted_color.opacity(0.2)),
+            )
+            .into_any_element();
     }
 
-    let start_idx = history.len().saturating_sub(SPARKLINE_SLOTS);
+    let start_idx = history.len() - data_len;
+    let mut slots = Vec::with_capacity(data_len);
     for &val in &history[start_idx..] {
         let fraction = (val / 100.0).clamp(0.0, 1.0);
         let bar_h = (height_px * fraction).max(2.0);
@@ -119,28 +127,25 @@ fn paint_percent_line(
     let baseline_y = bounds.origin.y + h - pad_y;
     let effective_h = (h - pad_y * 2.0).max(px(1.0));
 
-    if history.is_empty() {
+    let data_len = history.len().min(SPARKLINE_SLOTS);
+    if data_len <= 1 {
         let line_rect = Bounds::new(point(bounds.origin.x, baseline_y), size(w, px(1.0)));
         window.paint_quad(fill(line_rect, muted_color.opacity(0.2)));
+        if data_len == 1 {
+            let val = history[0];
+            let fraction = (val / 100.0).clamp(0.0, 1.0);
+            let y = baseline_y - effective_h * fraction;
+            let single_rect = Bounds::new(point(bounds.origin.x, y), size(w, px(1.5)));
+            window.paint_quad(fill(single_rect, color));
+        }
         return;
     }
 
-    let data_len = history.len().min(SPARKLINE_SLOTS);
-    let padding_slots = SPARKLINE_SLOTS.saturating_sub(data_len);
-    let step_x = w / ((SPARKLINE_SLOTS.max(1) - 1) as f32);
-
-    // 未采样时段绘制基线底座
-    if padding_slots > 0 {
-        let pad_w = step_x * (padding_slots as f32);
-        let line_rect = Bounds::new(point(bounds.origin.x, baseline_y), size(pad_w, px(1.0)));
-        window.paint_quad(fill(line_rect, muted_color.opacity(0.2)));
-    }
-
-    let start_idx = history.len().saturating_sub(SPARKLINE_SLOTS);
+    let start_idx = history.len() - data_len;
+    let step_x = w / ((data_len - 1) as f32);
     let mut points = Vec::with_capacity(data_len);
     for (i, &val) in history[start_idx..].iter().enumerate() {
-        let slot_idx = padding_slots + i;
-        let x = bounds.origin.x + step_x * (slot_idx as f32);
+        let x = bounds.origin.x + step_x * (i as f32);
         let fraction = (val / 100.0).clamp(0.0, 1.0);
         let y = baseline_y - effective_h * fraction;
         points.push(point(x, y));
@@ -234,21 +239,29 @@ fn render_network_bars(
     let peak = rx_peak.max(tx_peak);
 
     let len = rx_history.len().max(tx_history.len());
-    let padding_count = SPARKLINE_SLOTS.saturating_sub(len);
-    let mut slots = Vec::with_capacity(SPARKLINE_SLOTS);
-
-    for _ in 0..padding_count {
-        slots.push(
-            div()
-                .flex_1()
-                .min_w_0()
-                .h(px(1.5))
-                .rounded_full()
-                .bg(muted_color.opacity(0.2)),
-        );
+    let data_len = len.min(SPARKLINE_SLOTS);
+    if data_len == 0 {
+        return h_flex()
+            .h(px(height_px))
+            .w_full()
+            .items_end()
+            .p_1p5()
+            .rounded_sm()
+            .bg(muted_color.opacity(0.18))
+            .border_1()
+            .border_color(muted_color.opacity(0.3))
+            .child(
+                div()
+                    .w_full()
+                    .h(px(1.5))
+                    .rounded_full()
+                    .bg(muted_color.opacity(0.2)),
+            )
+            .into_any_element();
     }
 
-    let start_idx = len.saturating_sub(SPARKLINE_SLOTS);
+    let mut slots = Vec::with_capacity(data_len);
+    let start_idx = len - data_len;
     for i in start_idx..len {
         let rx = rx_history.get(i).copied().unwrap_or(0);
         let tx = tx_history.get(i).copied().unwrap_or(0);
@@ -365,29 +378,20 @@ fn paint_network_lines(
     let peak = rx_peak.max(tx_peak);
 
     let len = rx_history.len().max(tx_history.len());
-    if len == 0 {
+    let data_len = len.min(SPARKLINE_SLOTS);
+    if data_len <= 1 {
         let line_rect = Bounds::new(point(bounds.origin.x, baseline_y), size(w, px(1.0)));
         window.paint_quad(fill(line_rect, muted_color.opacity(0.2)));
         return;
     }
 
-    let data_len = len.min(SPARKLINE_SLOTS);
-    let padding_slots = SPARKLINE_SLOTS.saturating_sub(data_len);
-    let step_x = w / ((SPARKLINE_SLOTS.max(1) - 1) as f32);
-
-    if padding_slots > 0 {
-        let pad_w = step_x * (padding_slots as f32);
-        let line_rect = Bounds::new(point(bounds.origin.x, baseline_y), size(pad_w, px(1.0)));
-        window.paint_quad(fill(line_rect, muted_color.opacity(0.2)));
-    }
-
-    let start_idx = len.saturating_sub(SPARKLINE_SLOTS);
+    let start_idx = len - data_len;
+    let step_x = w / ((data_len - 1) as f32);
     let mut rx_points = Vec::with_capacity(data_len);
     let mut tx_points = Vec::with_capacity(data_len);
 
     for (offset, i) in (start_idx..len).enumerate() {
-        let slot_idx = padding_slots + offset;
-        let x = bounds.origin.x + step_x * (slot_idx as f32);
+        let x = bounds.origin.x + step_x * (offset as f32);
 
         let rx = rx_history.get(i).copied().unwrap_or(0);
         let tx = tx_history.get(i).copied().unwrap_or(0);

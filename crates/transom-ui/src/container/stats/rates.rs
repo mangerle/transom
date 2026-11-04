@@ -14,6 +14,7 @@ pub(crate) fn stat_card(
         .id(id)
         .flex_1()
         .min_w_0()
+        .min_h(px(160.0))
         .rounded(p.radius.md)
         .bg(p.muted.opacity(0.12))
         .border_1()

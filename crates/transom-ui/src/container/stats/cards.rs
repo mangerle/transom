@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// 统计走势波形图的标准高度，提供更开阔的波形视觉呈现。
+pub(crate) const STAT_SPARKLINE_HEIGHT: f32 = 72.0;
+
 pub(crate) fn cpu_card(
     stats: &ContainerStats,
     history: &[f32],
@@ -57,7 +60,7 @@ pub(crate) fn cpu_card(
         ))
         .child(render_percent_sparkline(
             &display_history,
-            44.0,
+            STAT_SPARKLINE_HEIGHT,
             color,
             p.muted,
             chrome.chart,
@@ -139,7 +142,7 @@ pub(crate) fn memory_card(
         ))
         .child(render_percent_sparkline(
             &display_history,
-            44.0,
+            STAT_SPARKLINE_HEIGHT,
             color,
             p.muted,
             chrome.chart,
@@ -207,7 +210,7 @@ pub(crate) fn network_card(
         .child(render_network_dual_sparkline(
             rx_rates,
             tx_rates,
-            44.0,
+            STAT_SPARKLINE_HEIGHT,
             p.primary,
             p.sidebar_accent_foreground,
             p.muted,
@@ -396,7 +399,7 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
         .child(render_network_dual_sparkline(
             read_rates,
             write_rates,
-            44.0,
+            STAT_SPARKLINE_HEIGHT,
             p.primary,
             p.warning,
             p.muted,
