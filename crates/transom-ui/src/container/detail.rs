@@ -26,6 +26,7 @@ mod files;
 mod header;
 mod header_actions;
 mod image;
+mod image_history;
 mod logs;
 mod network;
 mod overview;
@@ -39,7 +40,8 @@ use files::ContainerFilesView;
 pub(super) use files::render_files;
 use header::ContainerHeaderView;
 pub(super) use header::detail_icon;
-pub(super) use image::render_image_detail;
+pub(crate) use image::render_image_detail;
+pub(crate) use image_history::clean_dockerfile_instruction;
 use logs::ContainerLogsView;
 pub(super) use logs::render_logs;
 pub(super) use network::render_network_detail;
@@ -303,9 +305,14 @@ impl AppShell {
             (ContainerSection::Compose, _) => {
                 render_compose_detail(tab_id, selected_compose.as_ref(), &containers, p, cx)
             }
-            (ContainerSection::Images, _) => {
-                render_image_detail(selected_image.as_ref(), image_details.as_ref(), p)
-            }
+            (ContainerSection::Images, _) => render_image_detail(
+                selected_image.as_ref(),
+                image_details.as_ref(),
+                overview_raw,
+                detail_tab,
+                p,
+                cx,
+            ),
             (ContainerSection::Volumes, _) => render_volume_detail(
                 tab_id,
                 selected_volume.as_ref(),
@@ -320,6 +327,9 @@ impl AppShell {
                 p,
                 cx,
             ),
+            (ContainerSection::Containers, _) => {
+                render_container_overview(details.as_ref(), overview_raw, &browser_host, p)
+            }
         };
 
         v_flex()

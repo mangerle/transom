@@ -155,9 +155,25 @@ impl AppShell {
                         .selected
                         .as_deref()
                         .is_some_and(|id| workspace.images.iter().any(|item| item.id == id));
+                    let mut inspect_id = None;
                     if !valid {
                         workspace.selected = workspace.images.first().map(|item| item.id.clone());
                         workspace.image_details = None;
+                    }
+                    if workspace.image_details.is_none() {
+                        inspect_id = workspace.selected.clone();
+                    }
+                    if let Some(id) = inspect_id {
+                        let request_id = ContainerRequestId::new();
+                        self.send_tracked(
+                            tab_id,
+                            request_id,
+                            ContainerCommand::InspectImage {
+                                tab_id,
+                                request_id,
+                                image: id,
+                            },
+                        );
                     }
                 }
             }

@@ -180,3 +180,21 @@ fn query_matches_any_field_case_insensitively() {
     assert!(matches_query("", &["anything".to_string()]));
     assert!(!matches_query("x", &[] as &[String]));
 }
+
+#[test]
+fn test_clean_dockerfile_instruction() {
+    use crate::container::detail::clean_dockerfile_instruction;
+    assert_eq!(
+        clean_dockerfile_instruction("/bin/sh -c #(nop) CMD [\"/bin/sh\"]"),
+        "CMD [\"/bin/sh\"]"
+    );
+    assert_eq!(
+        clean_dockerfile_instruction("/bin/sh -c apk add --no-cache curl"),
+        "RUN apk add --no-cache curl"
+    );
+    assert_eq!(
+        clean_dockerfile_instruction("ADD file:123 in /"),
+        "ADD file:123 in /"
+    );
+    assert_eq!(clean_dockerfile_instruction(""), "<empty layer>");
+}

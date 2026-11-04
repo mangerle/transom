@@ -280,6 +280,33 @@ impl AppShell {
             }
             ContainerSection::Images => {
                 if let Some(image) = image {
+                    if detail_tab == ContainerDetailTab::Overview {
+                        let raw = overview_raw;
+                        actions = actions.child(
+                            Button::new("image-raw-inspect")
+                                .xsmall()
+                                .ghost()
+                                .icon(IconName::Braces)
+                                .selected(raw)
+                                .tooltip(
+                                    rust_i18n::t!(if raw {
+                                        "container.detail.overview"
+                                    } else {
+                                        "container.field.inspect"
+                                    })
+                                    .to_string(),
+                                )
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(workspace) =
+                                        this.state.container_workspace_mut(tab_id)
+                                    {
+                                        workspace.overview_raw = !raw;
+                                        workspace.detail_tab = ContainerDetailTab::Overview;
+                                    }
+                                    cx.notify();
+                                })),
+                        );
+                    }
                     actions = actions.children(super::header_actions::image_header_actions(
                         tab_id, image, cx,
                     ));
@@ -353,5 +380,6 @@ pub(crate) fn detail_icon(tab: ContainerDetailTab) -> IconName {
         ContainerDetailTab::Terminal => IconName::Terminal,
         ContainerDetailTab::Stats => IconName::Gauge,
         ContainerDetailTab::Files => IconName::FolderOpen,
+        ContainerDetailTab::History => IconName::Clock,
     }
 }

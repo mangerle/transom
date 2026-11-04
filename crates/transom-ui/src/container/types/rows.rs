@@ -30,6 +30,7 @@ pub(crate) enum RowAction {
     Tag,
     Push,
     Save,
+    History,
     Rename,
     ExportConfig,
     Commit,
@@ -57,6 +58,7 @@ impl RowAction {
             Self::Tag => "container.action.tag",
             Self::Push => "container.action.push",
             Self::Save => "container.action.save_image",
+            Self::History => "container.detail.history",
             Self::Rename => "container.action.rename",
             Self::ExportConfig => "container.action.export_config",
             Self::Commit => "container.action.commit",
@@ -85,6 +87,7 @@ impl RowAction {
             Self::Tag => IconName::TagPlus,
             Self::Push => IconName::Upload,
             Self::Save => IconName::Download,
+            Self::History => IconName::Clock,
             Self::Rename => IconName::Pen,
             Self::ExportConfig => IconName::FileText,
             Self::Commit => IconName::Layers,
@@ -122,8 +125,10 @@ impl RowAction {
                 target,
                 RowTarget::Container { .. } | RowTarget::Image(_) | RowTarget::Network(_)
             ),
-            // 只有镜像能「跑起来」、打标签、推送与导出为归档；卷与网络没有对应语义。
-            Self::Run | Self::Tag | Self::Push | Self::Save => matches!(target, RowTarget::Image(_)),
+            // 只有镜像能「跑起来」、打标签、推送、导出与查看构建历史；卷与网络没有对应语义。
+            Self::Run | Self::Tag | Self::Push | Self::Save | Self::History => {
+                matches!(target, RowTarget::Image(_))
+            }
             Self::Overview | Self::Remove | Self::CopyName => true,
         }
     }

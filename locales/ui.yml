@@ -4829,6 +4829,42 @@ container:
     files:
       en: Files
       zh-CN: 文件
+    history:
+      en: History
+      zh-CN: 构建历史
+    copy_inspect:
+      en: Copy Inspect JSON
+      zh-CN: 复制 Inspect JSON
+    inspect_bytes:
+      en: 'Inspect JSON (%{bytes} bytes)'
+      zh-CN: 'Inspect JSON (%{bytes} 字节)'
+    layer_count:
+      en: '%{count} layers'
+      zh-CN: '%{count} 层'
+    loading_metadata:
+      en: Loading full image layers and metadata…
+      zh-CN: 正在载入完整镜像分层与元数据…
+    loading_history:
+      en: Loading image build history…
+      zh-CN: 正在加载镜像构建历史…
+    history_total:
+      en: 'Total %{count} build layers'
+      zh-CN: '共 %{count} 层构建历史'
+    total_size:
+      en: 'Total size: %{size}'
+      zh-CN: '总大小: %{size}'
+    copy_instruction:
+      en: Copy build instruction
+      zh-CN: 复制构建指令
+    history_fallback_hint:
+      en: Build instruction metadata not available for this image; falling back to RootFS diff hashes.
+      zh-CN: 当前镜像未提供构建指令历史元数据，已自动降级展示 RootFS 分层散列（Diff IDs）指纹层。
+    copy_layer_digest:
+      en: Copy layer SHA256 digest
+      zh-CN: 复制分层 SHA256 指纹
+    no_history_info:
+      en: No layer history recorded for this image
+      zh-CN: 该镜像未记录分层历史信息
     no_selection:
       en: Nothing selected
       zh-CN: 未选择项目

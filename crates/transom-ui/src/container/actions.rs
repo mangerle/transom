@@ -337,6 +337,16 @@ impl AppShell {
                 };
                 self.save_image(tab_id, id, cx);
             }
+            RowAction::History => {
+                let RowTarget::Image(id) = target else {
+                    return;
+                };
+                self.select_image_item(tab_id, id.clone());
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                    workspace.detail_tab = ContainerDetailTab::History;
+                }
+                cx.notify();
+            }
             RowAction::EditComposeYaml => {
                 let RowTarget::Compose(name) = target else {
                     return;
@@ -416,7 +426,7 @@ impl AppShell {
             }
             ContainerDetailTab::Files => self.ensure_container_files(tab_id),
             ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
-            ContainerDetailTab::Overview => {}
+            ContainerDetailTab::Overview | ContainerDetailTab::History => {}
         }
         cx.notify();
     }

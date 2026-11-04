@@ -51,7 +51,7 @@ impl ContainerSection {
                 ContainerDetailTab::Files,
             ],
             Self::Compose => &[ContainerDetailTab::Overview, ContainerDetailTab::Logs],
-            Self::Images => &[ContainerDetailTab::Overview],
+            Self::Images => &[ContainerDetailTab::Overview, ContainerDetailTab::History],
             Self::Volumes => &[ContainerDetailTab::Overview, ContainerDetailTab::Files],
             Self::Networks => &[ContainerDetailTab::Overview],
         }
@@ -66,6 +66,7 @@ pub(crate) enum ContainerDetailTab {
     Terminal,
     Stats,
     Files,
+    History,
 }
 
 impl ContainerDetailTab {
@@ -76,6 +77,7 @@ impl ContainerDetailTab {
             Self::Terminal => "container.detail.terminal",
             Self::Stats => "container.detail.stats",
             Self::Files => "container.detail.files",
+            Self::History => "container.detail.history",
         }
     }
 }
