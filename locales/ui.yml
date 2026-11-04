@@ -5603,6 +5603,15 @@ container:
     not_running:
       en: The container is not running, so stats cannot be sampled
       zh-CN: 容器未运行，无法采样统计
+    not_running_short:
+      en: Container is not running
+      zh-CN: 容器未运行
+    container_stopped:
+      en: Container has stopped running
+      zh-CN: 容器已停止运行
+    process_not_running:
+      en: Container is not running, no process data
+      zh-CN: 容器未运行，暂无进程数据
     waiting:
       en: Collecting stats…
       zh-CN: 正在采样统计…

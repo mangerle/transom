@@ -1,6 +1,7 @@
 //! 容器进程列表。
 
 use super::*;
+use gpui_kit::component::Disableable;
 
 pub(crate) fn processes_card(
     tab_id: TabId,
@@ -15,7 +16,7 @@ pub(crate) fn processes_card(
     let refresh_tooltip = if is_running {
         rust_i18n::t!("container.stats.process_refresh").to_string()
     } else {
-        rust_i18n::t!("container.stats.not_running").to_string()
+        rust_i18n::t!("container.stats.not_running_short").to_string()
     };
     let summary = h_flex()
         .gap_1p5()
@@ -37,10 +38,13 @@ pub(crate) fn processes_card(
                 .ghost()
                 .xsmall()
                 .icon(IconName::RefreshCw)
+                .disabled(!is_running)
                 .tooltip(refresh_tooltip)
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.ensure_container_processes(tab_id);
-                    cx.notify();
+                    if is_running {
+                        this.ensure_container_processes(tab_id);
+                        cx.notify();
+                    }
                 })),
         )
         .into_any_element();
@@ -54,7 +58,7 @@ pub(crate) fn processes_card(
         div()
             .text_xs()
             .text_color(p.muted_foreground)
-            .child(rust_i18n::t!("container.stats.not_running").to_string())
+            .child(rust_i18n::t!("container.stats.process_not_running").to_string())
             .into_any_element()
     } else if processes.is_empty() {
         div()

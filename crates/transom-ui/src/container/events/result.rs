@@ -120,7 +120,7 @@ impl AppShell {
                 workspace.stats_processes_request = None;
                 workspace.stats_processes_loading = false;
                 let friendly_err = if err_desc.to_lowercase().contains("is not running") {
-                    rust_i18n::t!("container.stats.not_running").to_string()
+                    rust_i18n::t!("container.stats.container_stopped").to_string()
                 } else {
                     err_desc.clone()
                 };
