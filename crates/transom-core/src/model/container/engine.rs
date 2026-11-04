@@ -227,6 +227,44 @@ impl ContainerEndpoint {
             _ => Ok(()),
         }
     }
+
+    /// 获取唤起系统浏览器访问端口时的主机地址（Host）。
+    ///
+    /// 本地 Unix Socket、命名管道或 Auto 默认返回 "localhost"；
+    /// 远端 TCP 端点提取其主机名或 IP；
+    /// 远端 SSH 端点提取其 host；
+    /// WSL 默认返回 "localhost"。
+    pub fn browser_host(&self) -> String {
+        match self {
+            Self::Tcp { url, .. } => {
+                let trimmed = url.trim();
+                let without_scheme = if let Some(rest) = trimmed.strip_prefix("tcp://") {
+                    rest
+                } else if let Some(rest) = trimmed.strip_prefix("http://") {
+                    rest
+                } else if let Some(rest) = trimmed.strip_prefix("https://") {
+                    rest
+                } else {
+                    trimmed
+                };
+                let host = without_scheme.split([':', '/']).next().unwrap_or("").trim();
+                if host != "0.0.0.0" && !host.is_empty() {
+                    host.to_string()
+                } else {
+                    "localhost".to_string()
+                }
+            }
+            Self::Ssh { host, .. } => {
+                let h = host.trim();
+                if h != "0.0.0.0" && !h.is_empty() {
+                    h.to_string()
+                } else {
+                    "localhost".to_string()
+                }
+            }
+            _ => "localhost".to_string(),
+        }
+    }
 }
 
 /// 去掉 Windows 命名管道前缀里的反斜杠转义，只用于展示。
@@ -252,6 +290,11 @@ impl ContainerEngineRef {
 
     pub fn explicit(kind: ContainerEngineKind, endpoint: ContainerEndpoint) -> Self {
         Self { kind, endpoint }
+    }
+
+    /// 获取宿主浏览器访问端口时的目标主机地址。
+    pub fn browser_host(&self) -> String {
+        self.endpoint.browser_host()
     }
 
     /// 界面摘要：`Docker（自动发现）`、`Podman（unix:///run/...）`。
@@ -340,3 +383,47 @@ impl ContainerEngineInfo {
         format!("{} {}", self.engine.kind.label(), self.version)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_browser_host() {
+        assert_eq!(ContainerEndpoint::Auto.browser_host(), "localhost");
+        assert_eq!(
+            ContainerEndpoint::Unix {
+                path: PathBuf::from("/var/run/docker.sock")
+            }
+            .browser_host(),
+            "localhost"
+        );
+        assert_eq!(
+            ContainerEndpoint::Tcp {
+                url: "tcp://192.168.1.120:2375".to_string(),
+                tls: None,
+            }
+            .browser_host(),
+            "192.168.1.120"
+        );
+        assert_eq!(
+            ContainerEndpoint::Tcp {
+                url: "tcp://0.0.0.0:2375".to_string(),
+                tls: None,
+            }
+            .browser_host(),
+            "localhost"
+        );
+        assert_eq!(
+            ContainerEndpoint::Ssh {
+                host: "remote.server.org".to_string(),
+                port: Some(22),
+                user: Some("root".to_string()),
+                identity_file: None,
+            }
+            .browser_host(),
+            "remote.server.org"
+        );
+    }
+}
+

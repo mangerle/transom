@@ -2,7 +2,11 @@
 
 use super::*;
 
-pub(crate) fn ports_card(details: Option<&ContainerDetails>, chrome: &StatsChrome) -> AnyElement {
+pub(crate) fn ports_card(
+    details: Option<&ContainerDetails>,
+    browser_host: &str,
+    chrome: &StatsChrome,
+) -> AnyElement {
     let p = chrome.p;
     let Some(details) = details else {
         return stat_card(
@@ -28,6 +32,7 @@ pub(crate) fn ports_card(details: Option<&ContainerDetails>, chrome: &StatsChrom
         );
     }
     if !details.ports.is_empty() {
+        let host_for_ports = browser_host.to_string();
         rows = rows.child(
             v_flex()
                 .gap_0p5()
@@ -38,21 +43,47 @@ pub(crate) fn ports_card(details: Option<&ContainerDetails>, chrome: &StatsChrom
                         .child(rust_i18n::t!("container.stats.published").to_string()),
                 )
                 .children(details.ports.iter().map(|port| {
-                    let mapping = match port.public_port {
+                    match port.public_port {
                         Some(public) => {
-                            format!("{public} -> {}/{}", port.private_port, port.protocol)
+                            let url = format!("http://{host_for_ports}:{public}");
+                            let mapping = format!("{public} -> {}/{}", port.private_port, port.protocol);
+                            let open_url = url.clone();
+                            h_flex()
+                                .gap_1p5()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_family(p.mono_font_family.clone())
+                                        .text_color(p.foreground)
+                                        .child(mapping),
+                                )
+                                .child(
+                                    Button::new(format!("btn-stats-open-port-{public}"))
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(IconName::ExternalLink)
+                                        .tooltip(url)
+                                        .on_click(move |_, _, _| {
+                                            let _ = open::that_detached(&open_url);
+                                        }),
+                                )
+                                .into_any_element()
                         }
-                        None => rust_i18n::t!(
-                            "container.stats.unpublished_port",
-                            port = format!("{}/{}", port.private_port, port.protocol)
-                        )
-                        .to_string(),
-                    };
-                    div()
-                        .text_xs()
-                        .font_family(p.mono_font_family.clone())
-                        .text_color(p.foreground)
-                        .child(mapping)
+                        None => {
+                            let text = rust_i18n::t!(
+                                "container.stats.unpublished_port",
+                                port = format!("{}/{}", port.private_port, port.protocol)
+                            )
+                            .to_string();
+                            div()
+                                .text_xs()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(p.foreground)
+                                .child(text)
+                                .into_any_element()
+                        }
+                    }
                 })),
         );
     }

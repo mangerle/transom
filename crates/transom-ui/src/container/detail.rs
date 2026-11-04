@@ -118,6 +118,7 @@ impl AppShell {
         let confirm = workspace.confirm.clone();
         let detail_tab = workspace.detail_tab;
         let overview_raw = workspace.overview_raw;
+        let browser_host = workspace.browser_host();
         let containers = workspace.containers.clone();
         let details = workspace.details.clone();
         let image_details = workspace.image_details.clone();
@@ -221,7 +222,7 @@ impl AppShell {
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
-                render_container_overview(details.as_ref(), overview_raw, p)
+                render_container_overview(details.as_ref(), overview_raw, &browser_host, p)
             }
             (ContainerSection::Containers | ContainerSection::Compose, ContainerDetailTab::Logs) => render_logs(
                 ContainerLogsView {
@@ -248,6 +249,7 @@ impl AppShell {
                         interval: stats_interval,
                         error: stats_error.as_deref(),
                         details: details.as_ref(),
+                        browser_host: &browser_host,
                         processes: &stats_processes,
                         processes_loading: stats_processes_loading,
                         processes_error: stats_processes_error.as_deref(),

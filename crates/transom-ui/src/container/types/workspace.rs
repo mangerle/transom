@@ -241,6 +241,11 @@ impl ContainerWorkspaceState {
         }
     }
 
+    /// 获取当前引擎端点唤起浏览器所访问的目标主机地址。
+    pub(crate) fn browser_host(&self) -> String {
+        self.profile.engine.browser_host()
+    }
+
     pub(crate) fn selected_container(&self) -> Option<&ContainerSummary> {
         let id = self.selected.as_deref()?;
         self.containers.iter().find(|item| item.id == id)

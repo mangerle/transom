@@ -44,6 +44,7 @@ pub(crate) struct ContainerStatsView<'a> {
     pub(crate) interval: SampleIntervalMode,
     pub(crate) error: Option<&'a str>,
     pub(crate) details: Option<&'a ContainerDetails>,
+    pub(crate) browser_host: &'a str,
     pub(crate) processes: &'a [ContainerProcess],
     pub(crate) processes_loading: bool,
     pub(crate) processes_error: Option<&'a str>,
@@ -64,6 +65,7 @@ pub(crate) fn render_container_stats(
         interval,
         error,
         details,
+        browser_host,
         processes,
         processes_loading,
         processes_error,
@@ -167,7 +169,7 @@ pub(crate) fn render_container_stats(
         },
         &chrome,
     );
-    let ports_card = ports_card(details, &chrome);
+    let ports_card = ports_card(details, browser_host, &chrome);
     let processes_card = processes_card(
         tab_id,
         processes,

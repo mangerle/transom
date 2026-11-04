@@ -8593,6 +8593,7 @@ dependencies = [
  "image",
  "log",
  "notify-rust",
+ "open",
  "parking_lot",
  "rand 0.10.3",
  "regex",

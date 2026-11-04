@@ -10,6 +10,7 @@ use super::*;
 pub(crate) fn render_container_overview(
     details: Option<&ContainerDetails>,
     raw: bool,
+    browser_host: &str,
     p: &Palette,
 ) -> AnyElement {
     let Some(details) = details else {
@@ -95,16 +96,50 @@ pub(crate) fn render_container_overview(
                 .map(|code| code.to_string())
                 .unwrap_or_default(),
         ));
-    let ports = details
-        .ports
-        .iter()
-        .map(|port| match port.public_port {
-            Some(public) => format!("{public}->{}/{}", port.private_port, port.protocol),
-            None => format!("{}/{}", port.private_port, port.protocol),
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    rows = rows.child(kv(p, rust_i18n::t!("container.field.ports"), ports));
+    if details.ports.is_empty() {
+        rows = rows.child(kv(p, rust_i18n::t!("container.field.ports"), "—".to_string()));
+    } else {
+        let host_for_ports = browser_host.to_string();
+        let port_children = details.ports.iter().map(|port| {
+            match port.public_port {
+                Some(public) => {
+                    let url = format!("http://{host_for_ports}:{public}");
+                    let label = format!("{public}->{}/{}", port.private_port, port.protocol);
+                    let open_url = url.clone();
+                    Button::new(format!("btn-open-port-{public}"))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::ExternalLink)
+                        .label(label)
+                        .tooltip(url)
+                        .on_click(move |_, _, _| {
+                            let _ = open::that_detached(&open_url);
+                        })
+                        .into_any_element()
+                }
+                None => {
+                    let label = format!("{}/{}", port.private_port, port.protocol);
+                    div()
+                        .text_xs()
+                        .font_family(p.mono_font_family.clone())
+                        .text_color(p.muted_foreground)
+                        .child(label)
+                        .into_any_element()
+                }
+            }
+        });
+        rows = rows.child(
+            v_flex()
+                .gap_0p5()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.field.ports").to_string()),
+                )
+                .child(h_flex().gap_2().flex_wrap().children(port_children)),
+        );
+    }
     let mounts = details
         .mounts
         .iter()
