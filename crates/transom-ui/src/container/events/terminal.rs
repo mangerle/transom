@@ -19,14 +19,15 @@ impl AppShell {
         }
         let (terminal, subscription) = self.create_container_terminal(io, tab_id, window, cx);
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            let user = workspace
+            let (user, shell) = workspace
                 .terminal_request
                 .take()
-                .map(|(_, user)| user)
-                .unwrap_or(None);
+                .map(|(_, user, shell)| (user, shell))
+                .unwrap_or((None, None));
             workspace.terminal = Some(ContainerTerminalState {
                 view: terminal,
                 user,
+                shell,
                 _subscription: subscription,
             });
             workspace.detail_tab = ContainerDetailTab::Terminal;

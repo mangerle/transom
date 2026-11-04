@@ -3,24 +3,25 @@
 use super::*;
 
 impl AppShell {
-    /// 切到终端页签并按指定用户建立会话。
+    /// 切到终端页签并按指定用户与 Shell 建立会话。
     ///
-    /// 同一容器只保留一个终端：换了用户（root ↔ 镜像默认）就结束旧会话重建，
-    /// 选的是同一个用户则只切页签，避免无谓地杀掉一次已经在用的 shell。
+    /// 同一容器只保留一个终端：换了用户（root ↔ 镜像默认）或 Shell 就结束旧会话重建，
+    /// 选的是同一个用户与 Shell 则只切页签，避免无谓地杀掉一次已经在用的 shell。
     pub(crate) fn open_container_terminal_as(
         &mut self,
         tab_id: TabId,
         user: Option<String>,
+        shell: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return;
         };
-        let same_user = workspace
+        let same_target = workspace
             .terminal
             .as_ref()
-            .is_some_and(|terminal| terminal.user == user);
-        if same_user {
+            .is_some_and(|terminal| terminal.user == user && terminal.shell == shell);
+        if same_target {
             if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
                 workspace.detail_tab = ContainerDetailTab::Terminal;
             }
@@ -30,7 +31,7 @@ impl AppShell {
         let pending = workspace
             .terminal_request
             .as_ref()
-            .map(|(request_id, _)| *request_id);
+            .map(|(request_id, _, _)| *request_id);
         if let Some(request_id) = pending {
             self.cancel_container_request(tab_id, request_id);
         }
@@ -40,18 +41,16 @@ impl AppShell {
             workspace.terminal_request = None;
             workspace.detail_tab = ContainerDetailTab::Terminal;
         }
-        self.ensure_container_terminal(tab_id, user, cx);
+        self.ensure_container_terminal(tab_id, user, shell, cx);
         cx.notify();
     }
 
-    /// 建立终端会话；`user` 为 `None` 表示镜像默认用户，`Some("root")` 表示提权进入。
-    ///
-    /// 建立 exec 是异步的：真机上连点页签会在结果回来前重复下发，一次会话变出一串
-    /// shell。`terminal_request` 在发出时占位，结果（成功或失败）回来才清空。
+    /// 建立终端会话；`user` 为 `None` 表示镜像默认用户，`shell` 为 `None` 表示默认 shell。
     pub(crate) fn ensure_container_terminal(
         &mut self,
         tab_id: TabId,
         user: Option<String>,
+        shell: Option<String>,
         _cx: &mut Context<Self>,
     ) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
@@ -64,9 +63,12 @@ impl AppShell {
             return;
         };
         let request_id = ContainerRequestId::new();
-        workspace.terminal_request = Some((request_id, user.clone()));
+        workspace.terminal_request = Some((request_id, user.clone(), shell.clone()));
         let mut options = ContainerConnection::new(container);
         options.user = user;
+        if let Some(s) = shell {
+            options.command = Some(vec![s]);
+        }
         self.send_tracked(
             tab_id,
             request_id,

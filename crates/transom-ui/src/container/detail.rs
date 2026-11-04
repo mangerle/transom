@@ -152,7 +152,17 @@ impl AppShell {
                 workspace
                     .terminal_request
                     .as_ref()
-                    .map(|(_, user)| user.clone())
+                    .map(|(_, user, _)| user.clone())
+            });
+        let terminal_shell = workspace
+            .terminal
+            .as_ref()
+            .map(|terminal| terminal.shell.clone())
+            .or_else(|| {
+                workspace
+                    .terminal_request
+                    .as_ref()
+                    .map(|(_, _, shell)| shell.clone())
             });
         let files = (
             workspace.files.path.clone(),
@@ -244,7 +254,7 @@ impl AppShell {
                 cx,
             ),
             (ContainerSection::Containers, ContainerDetailTab::Terminal) => {
-                render_terminal(tab_id, terminal, terminal_user, p, cx)
+                render_terminal(tab_id, terminal, terminal_user, terminal_shell, p, cx)
             }
             (ContainerSection::Containers, ContainerDetailTab::Stats) => {
                 super::stats::render_container_stats(
@@ -353,7 +363,7 @@ impl AppShell {
                         workspace
                             .terminal_request
                             .as_ref()
-                            .map(|(_, user)| user.clone())
+                            .map(|(_, user, _)| user.clone())
                     })
             });
         let user_tooltip = match &current_user {
@@ -386,9 +396,6 @@ impl AppShell {
                     // 终端页签带一个下拉：root 与镜像默认用户的会话是两回事，
                     // 点主按钮仍走默认用户，避免改变原有肌肉记忆。主按钮与
                     // 三角共用一个外框，视觉上是一枚分体按钮而不是两枚。
-                    let root_app = app.clone();
-                    let default_app = app.clone();
-                    let menu_user = current_user.clone();
                     h_flex()
                         .items_center()
                         .flex_none()
@@ -415,42 +422,11 @@ impl AppShell {
                                 .ghost()
                                 .icon(IconName::ChevronDown)
                                 .tooltip(user_tooltip.clone())
-                                .dropdown_menu(move |menu, _, _| {
-                                    let root_app = root_app.clone();
-                                    let default_app = default_app.clone();
-                                    menu.item(
-                                        PopupMenuItem::new(
-                                            rust_i18n::t!("container.terminal.as_root").to_string(),
-                                        )
-                                        .icon(IconName::Terminal)
-                                        .checked(
-                                            matches!(&menu_user, Some(Some(user)) if user == "root"),
-                                        )
-                                        .on_click(move |_, _, cx| {
-                                            let app = root_app.clone();
-                                            app.update(cx, |this, cx| {
-                                                this.open_container_terminal_as(
-                                                    tab_id,
-                                                    Some("root".to_string()),
-                                                    cx,
-                                                );
-                                            });
-                                        }),
-                                    )
-                                    .item(
-                                        PopupMenuItem::new(
-                                            rust_i18n::t!("container.terminal.as_default")
-                                                .to_string(),
-                                        )
-                                        .icon(IconName::Terminal)
-                                        .checked(matches!(&menu_user, Some(None)))
-                                        .on_click(move |_, _, cx| {
-                                            let app = default_app.clone();
-                                            app.update(cx, |this, cx| {
-                                                this.open_container_terminal_as(tab_id, None, cx);
-                                            });
-                                        }),
-                                    )
+                                .dropdown_menu({
+                                    let app = app.clone();
+                                    move |menu, _, _| {
+                                        terminal::populate_terminal_menu(menu, tab_id, app.clone())
+                                    }
                                 }),
                         )
                         .into_any_element()

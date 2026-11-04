@@ -122,7 +122,7 @@ impl AppShell {
             if workspace
                 .terminal_request
                 .as_ref()
-                .is_some_and(|(pending, _)| *pending == request_id)
+                .is_some_and(|(pending, ..)| *pending == request_id)
             {
                 workspace.terminal_request = None;
             }

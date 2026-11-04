@@ -17,6 +17,8 @@ pub(crate) struct ContainerTerminalState {
     /// 建立时选择的执行用户：`None` 是镜像默认用户。切换用户要重建会话，
     /// 因此必须记住当前会话用的是谁。
     pub(crate) user: Option<String>,
+    /// 建立时选择的 Shell；`None` 是引擎默认（通常为 /bin/sh）。
+    pub(crate) shell: Option<String>,
     pub(crate) _subscription: Subscription,
 }
 
@@ -120,8 +122,8 @@ pub(crate) struct ContainerWorkspaceState {
     /// 采样失败原因：没有它，页签会永远停在「正在采样统计…」不给任何出口。
     pub(crate) stats_error: Option<String>,
     pub(crate) terminal: Option<ContainerTerminalState>,
-    /// 正在建立的终端会话与所选用户：建立前连点页签会重复创建 exec，必须占位拦住。
-    pub(crate) terminal_request: Option<(ContainerRequestId, Option<String>)>,
+    /// 正在建立的终端会话与所选 (用户, Shell)：建立前连点页签会重复创建 exec，必须占位拦住。
+    pub(crate) terminal_request: Option<(ContainerRequestId, Option<String>, Option<String>)>,
     pub(crate) files: ContainerFilesState,
     /// 容器改名条：容器 ID 与输入框；`None` 表示不显示。
     pub(crate) rename_container: Option<(String, Entity<InputState>)>,

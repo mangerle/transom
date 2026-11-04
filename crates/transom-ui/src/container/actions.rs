@@ -345,7 +345,7 @@ impl AppShell {
         let terminal = workspace
             .terminal_request
             .as_ref()
-            .map(|(request_id, _)| *request_id);
+            .map(|(request_id, ..)| *request_id);
 
         if previous == ContainerDetailTab::Logs
             && tab != ContainerDetailTab::Logs
@@ -396,7 +396,7 @@ impl AppShell {
                 self.ensure_container_processes(tab_id);
             }
             ContainerDetailTab::Files => self.ensure_container_files(tab_id),
-            ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, cx),
+            ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
             ContainerDetailTab::Overview => {}
         }
         cx.notify();

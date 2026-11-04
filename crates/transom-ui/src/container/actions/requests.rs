@@ -73,7 +73,7 @@ impl AppShell {
         let terminal = workspace
             .terminal_request
             .take()
-            .map(|(request_id, _)| request_id);
+            .map(|(request_id, ..)| request_id);
         workspace.terminal = None;
         for request_id in [logs, stats, processes, files, terminal]
             .into_iter()

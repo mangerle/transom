@@ -5417,6 +5417,30 @@ container:
     as_default:
       en: Open as the image default user
       zh-CN: 以镜像默认用户进入
+    switch_user:
+      en: Switch User / Shell
+      zh-CN: 切换身份 / Shell
+    as_root_bash:
+      en: Root (/bin/bash)
+      zh-CN: 以 root 身份 (/bin/bash)
+    as_root_sh:
+      en: Root (/bin/sh)
+      zh-CN: 以 root 身份 (/bin/sh)
+    as_default_bash:
+      en: Default user (/bin/bash)
+      zh-CN: 以默认用户 (/bin/bash)
+    as_default_sh:
+      en: Default user (/bin/sh)
+      zh-CN: 以默认用户 (/bin/sh)
+    session_info:
+      en: "User: %{user} · Shell: %{shell}"
+      zh-CN: "用户：%{user} · Shell：%{shell}"
+    default_user_name:
+      en: default
+      zh-CN: 镜像默认
+    default_shell_name:
+      en: default shell
+      zh-CN: 默认 Shell
     closed:
       en: Terminal session ended
       zh-CN: 终端会话已结束
