@@ -248,6 +248,7 @@ mod tests {
             finished_at: None,
             exit_code: None,
             health: None,
+            health_details: None,
             restart_policy: Some("always".to_string()),
             ports: vec![ContainerPort {
                 private_port: 6379,

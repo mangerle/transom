@@ -147,11 +147,15 @@ pub(crate) fn render_container_overview(
         .collect::<Vec<_>>()
         .join("\n");
     rows = rows.child(kv(p, rust_i18n::t!("container.field.mounts"), mounts));
-    rows = rows.child(kv(
-        p,
-        rust_i18n::t!("container.field.health"),
-        details.health_label(),
-    ));
+    if let Some(health_diag) = &details.health_details {
+        rows = rows.child(render_health_diagnostic(health_diag, p));
+    } else {
+        rows = rows.child(kv(
+            p,
+            rust_i18n::t!("container.field.health"),
+            details.health_label(),
+        ));
+    }
     if !details.env.is_empty() {
         rows = rows.child(kv(
             p,
@@ -271,3 +275,109 @@ pub(crate) fn format_unix(seconds: i64) -> String {
 pub(crate) fn short(id: &str) -> String {
     transom_core::short_id(id)
 }
+
+fn render_health_diagnostic(
+    health: &transom_core::ContainerHealthDetails,
+    p: &Palette,
+) -> AnyElement {
+    let status_color = if health.status == "healthy" {
+        p.success
+    } else if health.status == "unhealthy" {
+        p.danger
+    } else {
+        p.warning
+    };
+
+    let mut block = v_flex()
+        .gap_1()
+        .p_2()
+        .rounded(p.radius.md)
+        .bg(p.muted.opacity(0.15))
+        .border_1()
+        .border_color(p.border.opacity(0.4));
+
+    let header = h_flex()
+        .justify_between()
+        .items_center()
+        .child(
+            h_flex()
+                .gap_1p5()
+                .items_center()
+                .child(div().size_2().rounded_full().bg(status_color))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(rust_i18n::t!("container.field.health").to_string()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(status_color)
+                        .child(health.status.clone()),
+                ),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(format!(
+                    "{}: {}",
+                    rust_i18n::t!("container.health.failing_streak"),
+                    health.failing_streak
+                )),
+        );
+
+    block = block.child(header);
+
+    if !health.log.is_empty() {
+        let mut log_list = v_flex().gap_1().pt_1();
+        for item in health.log.iter().rev().take(5) {
+            let exit_color = if item.exit_code == 0 {
+                p.success
+            } else {
+                p.danger
+            };
+            let mut item_row = v_flex()
+                .gap_0p5()
+                .p_1p5()
+                .rounded(p.radius.sm)
+                .bg(p.background)
+                .border_1()
+                .border_color(p.border.opacity(0.2))
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(p.muted_foreground)
+                                .child(item.start.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(exit_color)
+                                .child(format!("{}: {}", rust_i18n::t!("container.health.exit_code"), item.exit_code)),
+                        ),
+                );
+            if !item.output.trim().is_empty() {
+                item_row = item_row.child(
+                    div()
+                        .text_xs()
+                        .font_family(p.mono_font_family.clone())
+                        .text_color(p.foreground.opacity(0.85))
+                        .child(item.output.trim().to_string()),
+                );
+            }
+            log_list = log_list.child(item_row);
+        }
+        block = block.child(log_list);
+    }
+
+    block.into_any_element()
+}
+

@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde::de::Deserializer;
 use std::collections::HashMap;
 use transom_core::{
-    ContainerBlockDeviceIo, ContainerDetails, ContainerImageDetails, ContainerImageLayer,
-    ContainerImageSummary, ContainerInterfaceIo, ContainerMount, ContainerNetworkAttachment,
-    ContainerNetworkDetails, ContainerNetworkSummary, ContainerPort, ContainerProcess,
-    ContainerState, ContainerStats, ContainerSummary, ContainerVolumeSummary, short_id,
+    ContainerBlockDeviceIo, ContainerDetails, ContainerHealthDetails, ContainerHealthLog,
+    ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,
+    ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails, ContainerNetworkSummary,
+    ContainerPort, ContainerProcess, ContainerState, ContainerStats, ContainerSummary,
+    ContainerVolumeSummary, short_id,
 };
 
 /// 把线格式里的 `null` 收敛成空集合。
@@ -328,6 +329,44 @@ pub struct InspectState {
 pub struct HealthInfo {
     #[serde(rename = "Status", default)]
     pub status: Option<String>,
+    #[serde(rename = "FailingStreak", default)]
+    pub failing_streak: i64,
+    #[serde(rename = "Log", default)]
+    pub log: Vec<HealthLogItem>,
+}
+
+/// 健康检查单次执行日志。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct HealthLogItem {
+    #[serde(rename = "Start", default)]
+    pub start: String,
+    #[serde(rename = "End", default)]
+    pub end: String,
+    #[serde(rename = "ExitCode", default)]
+    pub exit_code: i64,
+    #[serde(rename = "Output", default)]
+    pub output: String,
+}
+
+impl HealthInfo {
+    pub fn into_health_details(self) -> Option<ContainerHealthDetails> {
+        let status = self.status.filter(|s| !s.is_empty())?;
+        let log = self
+            .log
+            .into_iter()
+            .map(|item| ContainerHealthLog {
+                start: item.start,
+                end: item.end,
+                exit_code: item.exit_code,
+                output: item.output,
+            })
+            .collect();
+        Some(ContainerHealthDetails {
+            status,
+            failing_streak: self.failing_streak,
+            log,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -428,6 +467,7 @@ impl ContainerInspect {
                 .as_ref()
                 .and_then(|health| health.status.clone())
                 .filter(|status| !status.is_empty()),
+            health_details: state.health.and_then(HealthInfo::into_health_details),
             created: parse_rfc3339_secs(self.created.as_deref()).unwrap_or(0),
             started_at: state.started_at,
             finished_at: state.finished_at,
@@ -1084,7 +1124,7 @@ impl From<ImageSearchItem> for transom_core::ImageSearchResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        ContainerInspect, ContainerListItem, ImageListItem, ImagePruneResponse, NetworkItem,
+        ContainerInspect, ContainerListItem, HealthInfo, ImageListItem, ImagePruneResponse, NetworkItem,
         NetworkSettings, StatsResponse, TopResponse, VersionResponse, VolumeItem,
         VolumePruneResponse,
     };
@@ -1271,5 +1311,31 @@ mod tests {
         let settings: NetworkSettings =
             serde_json::from_str(r#"{"Ports":null}"#).expect("空端口必须能反序列化");
         assert!(settings.ports.is_empty());
+    }
+
+    #[test]
+    fn health_info_deserialization_and_details_conversion() {
+        let json = r#"{
+            "Status": "unhealthy",
+            "FailingStreak": 3,
+            "Log": [
+                {
+                    "Start": "2026-11-04T12:00:00Z",
+                    "End": "2026-11-04T12:00:01Z",
+                    "ExitCode": 1,
+                    "Output": "curl: (7) Failed to connect"
+                }
+            ]
+        }"#;
+        let health: HealthInfo = serde_json::from_str(json).expect("健康信息必须能反序列化");
+        assert_eq!(health.status.as_deref(), Some("unhealthy"));
+        assert_eq!(health.failing_streak, 3);
+        assert_eq!(health.log.len(), 1);
+
+        let details = health.into_health_details().expect("必须能转成健康诊断详情");
+        assert_eq!(details.status, "unhealthy");
+        assert_eq!(details.failing_streak, 3);
+        assert_eq!(details.log[0].exit_code, 1);
+        assert_eq!(details.log[0].output, "curl: (7) Failed to connect");
     }
 }

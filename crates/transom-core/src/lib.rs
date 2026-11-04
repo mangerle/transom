@@ -43,7 +43,7 @@ pub use model::container::{
     ComposeAction, ComposeProject, ContainerBlockDeviceIo, ContainerBuildSpec, ContainerConnection,
     ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
     ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
-    ContainerFileKind, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,
+    ContainerFileKind, ContainerHealthDetails, ContainerHealthLog, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,
     ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
     ContainerNetworkSpec, ContainerNetworkSummary, ContainerPort, ContainerPortPublish,
     ContainerProcess, ContainerPruneReport, ContainerRegistry, ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary,

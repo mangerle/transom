@@ -5126,9 +5126,16 @@ container:
     wslc:
       en: WSLC
       zh-CN: WSLC
-    cli:
-      en: Custom CLI
-      zh-CN: 自定义 CLI
+  health:
+    failing_streak:
+      en: Failing streak
+      zh-CN: 连续失败次数
+    logs:
+      en: Health check logs
+      zh-CN: 健康检查日志
+    exit_code:
+      en: Exit code
+      zh-CN: 退出码
   field:
     context_path:
       en: Context path

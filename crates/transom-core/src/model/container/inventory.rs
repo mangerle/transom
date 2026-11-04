@@ -204,6 +204,9 @@ pub struct ContainerDetails {
     /// 健康检查结果（`starting`/`healthy`/`unhealthy`）；镜像没写 HEALTHCHECK 时为 `None`。
     #[serde(default)]
     pub health: Option<String>,
+    /// 健康检查诊断详情（状态、连续失败次数与检查日志）。
+    #[serde(default)]
+    pub health_details: Option<ContainerHealthDetails>,
     #[serde(default)]
     pub restart_policy: Option<String>,
     #[serde(default)]
@@ -227,6 +230,29 @@ pub struct ContainerDetails {
     /// 原始 inspect JSON（格式化后），用于“高级信息”折叠区。
     #[serde(default)]
     pub inspect: String,
+}
+
+/// 容器健康检查单次执行日志。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContainerHealthLog {
+    #[serde(default)]
+    pub start: String,
+    #[serde(default)]
+    pub end: String,
+    #[serde(default)]
+    pub exit_code: i64,
+    #[serde(default)]
+    pub output: String,
+}
+
+/// 容器健康检查诊断详情。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContainerHealthDetails {
+    pub status: String,
+    #[serde(default)]
+    pub failing_streak: i64,
+    #[serde(default)]
+    pub log: Vec<ContainerHealthLog>,
 }
 
 impl ContainerDetails {
