@@ -90,6 +90,100 @@ impl ContainerRunForm {
         }
     }
 
+    /// 从已有容器详情生成运行表单，用于「克隆容器」时反向预填。
+    pub(crate) fn from_details(
+        tab_id: TabId,
+        details: &transom_core::ContainerDetails,
+        window: &mut Window,
+        cx: &mut Context<crate::app::AppShell>,
+    ) -> Self {
+        let name_hint = if details.name.is_empty() {
+            None
+        } else {
+            Some(format!("{}-clone", details.name))
+        };
+        let image_hint = if details.image.is_empty() {
+            None
+        } else {
+            Some(details.image.clone())
+        };
+        let command_hint = if details.command.is_empty() {
+            None
+        } else {
+            Some(details.command.clone())
+        };
+        let ports_hint = {
+            let parts: Vec<String> = details
+                .ports
+                .iter()
+                .filter_map(|port| {
+                    port.public_port.map(|pub_p| {
+                        let proto = if port.protocol.is_empty() || port.protocol == "tcp" {
+                            String::new()
+                        } else {
+                            format!("/{}", port.protocol)
+                        };
+                        format!("{pub_p}:{}{proto}", port.private_port)
+                    })
+                })
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join(", "))
+            }
+        };
+        let binds_hint = {
+            let parts: Vec<String> = details
+                .mounts
+                .iter()
+                .filter(|m| !m.source.is_empty() && !m.destination.is_empty())
+                .map(|m| {
+                    let ro = if !m.rw { ":ro" } else { "" };
+                    format!("{}:{}{ro}", m.source, m.destination)
+                })
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join(", "))
+            }
+        };
+        let env_hint = {
+            let parts: Vec<String> = details
+                .env
+                .iter()
+                .filter(|e| !e.starts_with("PATH="))
+                .cloned()
+                .collect();
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts.join(", "))
+            }
+        };
+        Self {
+            tab_id,
+            name: run_input("container.run.name_placeholder", name_hint, window, cx),
+            image: run_input("container.run.image_placeholder", image_hint, window, cx),
+            command: run_input("container.run.command_placeholder", command_hint, window, cx),
+            ports: run_input("container.run.ports_placeholder", ports_hint, window, cx),
+            binds: run_input("container.run.binds_placeholder", binds_hint, window, cx),
+            env: run_input("container.run.env_placeholder", env_hint, window, cx),
+            health: run_input("container.run.health_placeholder", None, window, cx),
+            health_interval: run_input(
+                "container.run.health_interval_placeholder",
+                None,
+                window,
+                cx,
+            ),
+            memory: run_input("container.run.memory_placeholder", None, window, cx),
+            cpus: run_input("container.run.cpus_placeholder", None, window, cx),
+            restart: details.restart_policy.clone(),
+            error: None,
+        }
+    }
+
     /// 读取输入并解析成 spec；解析与校验错误直接返回中文提示。
     ///
     /// # Errors
@@ -170,4 +264,35 @@ pub(crate) fn parse_ports(text: &str) -> Result<Vec<ContainerPortPublish>, Strin
         });
     }
     Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_cores, parse_ports, split_argv, split_list};
+
+    #[test]
+    fn test_split_helpers() {
+        assert_eq!(split_list("a=1, b=2, , c=3"), vec!["a=1", "b=2", "c=3"]);
+        assert_eq!(split_argv("nginx -g 'daemon off;'"), vec!["nginx", "-g", "'daemon", "off;'"]);
+    }
+
+    #[test]
+    fn test_parse_ports() {
+        let ports = parse_ports("8080:80, 8443:443/udp").expect("端口映射应合法");
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[0].host, 8080);
+        assert_eq!(ports[0].container, 80);
+        assert_eq!(ports[0].protocol, "tcp");
+        assert_eq!(ports[1].host, 8443);
+        assert_eq!(ports[1].container, 443);
+        assert_eq!(ports[1].protocol, "udp");
+    }
+
+    #[test]
+    fn test_parse_cores() {
+        assert_eq!(parse_cores("1.5"), Some(1_500_000_000));
+        assert_eq!(parse_cores("0"), None);
+        assert_eq!(parse_cores("-1"), None);
+        assert_eq!(parse_cores("invalid"), None);
+    }
 }

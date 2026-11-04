@@ -263,6 +263,12 @@ impl AppShell {
                 };
                 self.open_container_commit(tab_id, name, window, cx);
             }
+            RowAction::Clone => {
+                let RowTarget::Container { id, name } = target else {
+                    return;
+                };
+                self.clone_container(tab_id, &id, &name, window, cx);
+            }
             RowAction::Tag => {
                 let RowTarget::Image(id) = target else {
                     return;

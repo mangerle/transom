@@ -5350,6 +5350,9 @@ container:
     commit:
       en: Commit as Image
       zh-CN: 提交为镜像
+    clone:
+      en: Clone Container
+      zh-CN: 克隆容器
     start_all:
       en: Start all
       zh-CN: 全部启动

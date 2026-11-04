@@ -34,6 +34,7 @@ pub(crate) enum RowAction {
     Rename,
     ExportConfig,
     Commit,
+    Clone,
     EditComposeYaml,
     Remove,
     CopyId,
@@ -62,6 +63,7 @@ impl RowAction {
             Self::Rename => "container.action.rename",
             Self::ExportConfig => "container.action.export_config",
             Self::Commit => "container.action.commit",
+            Self::Clone => "container.action.clone",
             Self::EditComposeYaml => "container.compose.edit_yaml",
             Self::Remove => "common.delete",
             Self::CopyId => "container.row.copy_id",
@@ -91,6 +93,7 @@ impl RowAction {
             Self::Rename => IconName::Pen,
             Self::ExportConfig => IconName::FileText,
             Self::Commit => IconName::Layers,
+            Self::Clone => IconName::Copy,
             Self::EditComposeYaml => IconName::FilePen,
             Self::Remove => IconName::Trash,
             Self::CopyId => IconName::Copy,
@@ -116,7 +119,8 @@ impl RowAction {
             | Self::Kill
             | Self::Rename
             | Self::ExportConfig
-            | Self::Commit => {
+            | Self::Commit
+            | Self::Clone => {
                 matches!(target, RowTarget::Container { .. })
             }
             Self::EditComposeYaml => matches!(target, RowTarget::Compose(_)),

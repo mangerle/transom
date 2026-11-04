@@ -248,6 +248,19 @@ impl AppShell {
                                 })),
                         )
                         .child(
+                            Button::new("container-clone")
+                                .xsmall()
+                                .icon(IconName::Copy)
+                                .label(rust_i18n::t!("container.action.clone").to_string())
+                                .on_click(cx.listener({
+                                    let id = container.id.clone();
+                                    let name = name.clone();
+                                    move |this, _, window, cx| {
+                                        this.clone_container(tab_id, &id, &name, window, cx);
+                                    }
+                                })),
+                        )
+                        .child(
                             Button::new("container-remove")
                             .danger()
                             .xsmall()
