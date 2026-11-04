@@ -81,9 +81,17 @@ impl AppShell {
         if workspace.stats_processes_request.is_some() {
             return;
         }
-        let Some(container) = workspace.selected_container().map(|item| item.name.clone()) else {
+        let Some(container) = workspace.selected_container() else {
             return;
         };
+        // 停掉的容器查不到进程（引擎直接报 409 Conflict 操作冲突）；直接置空，避免发出无效请求。
+        if !container.state.is_running() {
+            workspace.stats_processes.clear();
+            workspace.stats_processes_loading = false;
+            workspace.stats_processes_error = None;
+            return;
+        }
+        let container = container.name.clone();
         let request_id = ContainerRequestId::new();
         workspace.stats_processes_request = Some(request_id);
         workspace.stats_processes_loading = true;

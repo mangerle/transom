@@ -23,7 +23,7 @@ impl AppShell {
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Connected;
                 }
-                self.refresh_container_section(tab_id);
+                self.refresh_container_workspace_all(tab_id);
             }
             ContainerAppEvent::ConnectFailed { tab_id, error } => {
                 let message = localized_error(&error);
@@ -450,43 +450,31 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::VolumesPruned { request_id, report } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
-                    return;
-                };
-                let target = ContainerPruneTarget::Volumes;
-                let message = if report.deleted.is_empty() {
-                    rust_i18n::t!(target.none_key()).to_string()
-                } else {
-                    rust_i18n::t!(target.done_key(), count = report.deleted.len()).to_string()
-                };
-                self.show_toast(message, true, window, cx);
-                self.refresh_container_section(tab_id);
+                self.handle_prune_report(
+                    request_id,
+                    report.deleted.len(),
+                    ContainerPruneTarget::Volumes,
+                    window,
+                    cx,
+                );
             }
             ContainerAppEvent::ImagesPruned { request_id, report } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
-                    return;
-                };
-                let target = ContainerPruneTarget::Images;
-                let message = if report.deleted.is_empty() {
-                    rust_i18n::t!(target.none_key()).to_string()
-                } else {
-                    rust_i18n::t!(target.done_key(), count = report.deleted.len()).to_string()
-                };
-                self.show_toast(message, true, window, cx);
-                self.refresh_container_section(tab_id);
+                self.handle_prune_report(
+                    request_id,
+                    report.deleted.len(),
+                    ContainerPruneTarget::Images,
+                    window,
+                    cx,
+                );
             }
             ContainerAppEvent::NetworksPruned { request_id, report } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
-                    return;
-                };
-                let target = ContainerPruneTarget::Networks;
-                let message = if report.deleted.is_empty() {
-                    rust_i18n::t!(target.none_key()).to_string()
-                } else {
-                    rust_i18n::t!(target.done_key(), count = report.deleted.len()).to_string()
-                };
-                self.show_toast(message, true, window, cx);
-                self.refresh_container_section(tab_id);
+                self.handle_prune_report(
+                    request_id,
+                    report.deleted.len(),
+                    ContainerPruneTarget::Networks,
+                    window,
+                    cx,
+                );
             }
             ContainerAppEvent::ActionFinished { request_id, error } => {
                 self.on_container_action_finished(request_id, error, window, cx)

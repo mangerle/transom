@@ -48,6 +48,7 @@ pub(crate) struct ContainerStatsView<'a> {
     pub(crate) processes: &'a [ContainerProcess],
     pub(crate) processes_loading: bool,
     pub(crate) processes_error: Option<&'a str>,
+    pub(crate) is_running: bool,
     /// 是否已选中容器：没有选中时统计页只给提示，不画空卡片。
     pub(crate) has_selection: bool,
 }
@@ -69,6 +70,7 @@ pub(crate) fn render_container_stats(
         processes,
         processes_loading,
         processes_error,
+        is_running,
         has_selection,
     } = view;
 
@@ -175,6 +177,7 @@ pub(crate) fn render_container_stats(
         processes,
         processes_loading,
         processes_error,
+        is_running,
         &chrome,
         cx,
     );

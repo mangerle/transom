@@ -7,10 +7,16 @@ pub(crate) fn processes_card(
     processes: &[ContainerProcess],
     loading: bool,
     error: Option<&str>,
+    is_running: bool,
     chrome: &StatsChrome,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let p = chrome.p;
+    let refresh_tooltip = if is_running {
+        rust_i18n::t!("container.stats.process_refresh").to_string()
+    } else {
+        rust_i18n::t!("container.stats.not_running").to_string()
+    };
     let summary = h_flex()
         .gap_1p5()
         .items_center()
@@ -20,6 +26,8 @@ pub(crate) fn processes_card(
                 .text_color(p.muted_foreground)
                 .child(if loading {
                     rust_i18n::t!("container.stats.process_loading").to_string()
+                } else if !is_running {
+                    "-".to_string()
                 } else {
                     processes.len().to_string()
                 }),
@@ -29,7 +37,7 @@ pub(crate) fn processes_card(
                 .ghost()
                 .xsmall()
                 .icon(IconName::RefreshCw)
-                .tooltip(rust_i18n::t!("container.stats.process_refresh").to_string())
+                .tooltip(refresh_tooltip)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.ensure_container_processes(tab_id);
                     cx.notify();
@@ -41,6 +49,12 @@ pub(crate) fn processes_card(
             .text_xs()
             .text_color(p.muted_foreground)
             .child(error.to_string())
+            .into_any_element()
+    } else if !is_running {
+        div()
+            .text_xs()
+            .text_color(p.muted_foreground)
+            .child(rust_i18n::t!("container.stats.not_running").to_string())
             .into_any_element()
     } else if processes.is_empty() {
         div()

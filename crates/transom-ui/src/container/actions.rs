@@ -3,6 +3,7 @@
 use super::*;
 
 mod image_archive;
+mod refresh;
 mod requests;
 
 impl AppShell {
@@ -17,38 +18,6 @@ impl AppShell {
         self.state.containers.track(request_id, tab_id, label);
         if !self.state.send_command(command) {
             self.state.containers.requests.remove(&request_id);
-        }
-    }
-
-    /// 刷新当前分类的列表。
-    pub(crate) fn refresh_container_section(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let section = workspace.section;
-        workspace.busy = true;
-        let request_id = ContainerRequestId::new();
-        let command = match section {
-            ContainerSection::Containers | ContainerSection::Compose => {
-                ContainerCommand::ListContainers { tab_id, request_id }
-            }
-            ContainerSection::Images => ContainerCommand::ListImages { tab_id, request_id },
-            ContainerSection::Volumes => ContainerCommand::ListVolumes { tab_id, request_id },
-            ContainerSection::Networks => ContainerCommand::ListNetworks { tab_id, request_id },
-        };
-        self.send_tracked(tab_id, request_id, command);
-        // 卷分类要同时拉容器列表：「在用 / 空闲」与「仅未使用卷」都靠容器的挂载
-        // 明细算，缺了这份数据会把在用卷说成空闲，用户据此删除就是事故。
-        if section == ContainerSection::Volumes {
-            let usage_request = ContainerRequestId::new();
-            self.send_tracked(
-                tab_id,
-                usage_request,
-                ContainerCommand::ListContainers {
-                    tab_id,
-                    request_id: usage_request,
-                },
-            );
         }
     }
 

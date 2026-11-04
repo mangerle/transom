@@ -119,7 +119,12 @@ impl AppShell {
             if workspace.stats_processes_request == Some(request_id) {
                 workspace.stats_processes_request = None;
                 workspace.stats_processes_loading = false;
-                workspace.stats_processes_error = Some(err_desc.clone());
+                let friendly_err = if err_desc.to_lowercase().contains("is not running") {
+                    rust_i18n::t!("container.stats.not_running").to_string()
+                } else {
+                    err_desc.clone()
+                };
+                workspace.stats_processes_error = Some(friendly_err);
             }
             if workspace.files.request == Some(request_id) {
                 workspace.files.request = None;
@@ -139,5 +144,25 @@ impl AppShell {
             let message = toast_failed(Some(&label), &err_desc);
             self.show_toast(message, false, window, cx);
         }
+    }
+
+    pub(super) fn handle_prune_report(
+        &mut self,
+        request_id: ContainerRequestId,
+        deleted_count: usize,
+        target: ContainerPruneTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        let message = if deleted_count == 0 {
+            rust_i18n::t!(target.none_key()).to_string()
+        } else {
+            rust_i18n::t!(target.done_key(), count = deleted_count).to_string()
+        };
+        self.show_toast(message, true, window, cx);
+        self.refresh_container_section(tab_id);
     }
 }

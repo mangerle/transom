@@ -262,7 +262,7 @@ impl AppShell {
                     .xsmall()
                     .icon(IconName::RefreshCw)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.refresh_container_section(tab_id);
+                        this.refresh_container_workspace_all(tab_id);
                         cx.notify();
                     })),
             )

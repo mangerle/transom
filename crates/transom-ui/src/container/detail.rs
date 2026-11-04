@@ -91,6 +91,10 @@ impl AppShell {
         let stats_processes_loading = workspace.stats_processes_loading;
         let stats_processes_error = workspace.stats_processes_error.clone();
         let stats_error = workspace.stats_error.clone();
+        let stats_is_running = workspace
+            .selected_container()
+            .map(|c| c.state.is_running())
+            .unwrap_or(false);
         let terminal = workspace
             .terminal
             .as_ref()
@@ -216,6 +220,7 @@ impl AppShell {
                         processes: &stats_processes,
                         processes_loading: stats_processes_loading,
                         processes_error: stats_processes_error.as_deref(),
+                        is_running: stats_is_running,
                         has_selection: selected.is_some(),
                     },
                     p,
