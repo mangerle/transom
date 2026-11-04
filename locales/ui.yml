@@ -5523,6 +5523,9 @@ container:
     trend:
       en: 'Trend (%{window})'
       zh-CN: '走势（%{window}）'
+    peak:
+      en: 'Peak: %{value}'
+      zh-CN: '峰值: %{value}'
     window_40s:
       en: 40 seconds
       zh-CN: 40 秒

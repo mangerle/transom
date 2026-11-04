@@ -41,10 +41,22 @@ pub(crate) fn cpu_card(
                 ),
         );
     }
+    let mut display_history = history.to_vec();
+    if !chrome.waiting {
+        display_history.push(stats.cpu_percent);
+    }
+    let peak_cpu = display_history
+        .iter()
+        .copied()
+        .fold(0.0f32, f32::max)
+        .max(stats.cpu_percent);
     content = content
-        .child(trend_label(chrome))
+        .child(trend_label_with_peak(
+            chrome,
+            if chrome.waiting { None } else { Some(peak_cpu) },
+        ))
         .child(render_percent_sparkline(
-            history,
+            &display_history,
             44.0,
             color,
             p.muted,
@@ -111,10 +123,22 @@ pub(crate) fn memory_card(
             crate::format::format_size(bytes)
         }
     };
+    let mut display_history = history.to_vec();
+    if !chrome.waiting {
+        display_history.push(stats.memory_percent);
+    }
+    let peak_mem = display_history
+        .iter()
+        .copied()
+        .fold(0.0f32, f32::max)
+        .max(stats.memory_percent);
     let content = content
-        .child(trend_label(chrome))
+        .child(trend_label_with_peak(
+            chrome,
+            if chrome.waiting { None } else { Some(peak_mem) },
+        ))
         .child(render_percent_sparkline(
-            history,
+            &display_history,
             44.0,
             color,
             p.muted,
@@ -240,11 +264,29 @@ pub(crate) fn trend_window(_interval: SampleIntervalMode) -> String {
 }
 
 pub(crate) fn trend_label(chrome: &StatsChrome) -> AnyElement {
-    div()
-        .text_xs()
-        .text_color(chrome.p.muted_foreground)
-        .child(rust_i18n::t!("container.stats.trend", window = chrome.trend).to_string())
-        .into_any_element()
+    trend_label_with_peak(chrome, None)
+}
+
+pub(crate) fn trend_label_with_peak(chrome: &StatsChrome, peak: Option<f32>) -> AnyElement {
+    let trend_text = rust_i18n::t!("container.stats.trend", window = chrome.trend).to_string();
+    if let Some(peak_val) = peak {
+        let peak_text = rust_i18n::t!("container.stats.peak", value = format!("{:.1}%", peak_val)).to_string();
+        h_flex()
+            .gap_2()
+            .items_center()
+            .text_xs()
+            .text_color(chrome.p.muted_foreground)
+            .child(trend_text)
+            .child(div().child("·"))
+            .child(peak_text)
+            .into_any_element()
+    } else {
+        div()
+            .text_xs()
+            .text_color(chrome.p.muted_foreground)
+            .child(trend_text)
+            .into_any_element()
+    }
 }
 
 /// 磁盘卡片数据：字段多且都是借用，收敛为结构体避免长参数列表。

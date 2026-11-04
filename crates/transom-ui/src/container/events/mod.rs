@@ -289,16 +289,16 @@ impl AppShell {
                 if let Some(workspace) = self.state.container_workspace_mut(tab_id)
                     && workspace.stats_request == Some(request_id)
                 {
+                    workspace.stats = Some(stats.clone());
                     let due = workspace
                         .stats_last_append
                         .is_none_or(|last| last.elapsed() >= workspace.stats_interval.interval());
                     if due {
                         workspace.stats_last_append = Some(std::time::Instant::now());
-                        workspace.stats_history.push_back(stats.clone());
+                        workspace.stats_history.push_back(stats);
                         while workspace.stats_history.len() > STATS_HISTORY_LIMIT {
                             workspace.stats_history.pop_front();
                         }
-                        workspace.stats = Some(stats);
                     }
                     workspace.stats_error = None;
                 }
