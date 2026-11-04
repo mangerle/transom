@@ -12,80 +12,38 @@ use super::image_history::{copy_button, render_image_history};
 
 /// 渲染镜像详情的主入口调度器。
 pub(crate) fn render_image_detail(
+    tab_id: TabId,
     summary: Option<&transom_core::ContainerImageSummary>,
     details: Option<&ContainerImageDetails>,
     overview_raw: bool,
     detail_tab: ContainerDetailTab,
+    search_input: &Entity<InputState>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     match detail_tab {
         ContainerDetailTab::History => render_image_history(summary, details, p, cx),
-        _ => render_image_overview(summary, details, overview_raw, p, cx),
+        _ => render_image_overview(tab_id, summary, details, overview_raw, search_input, p, cx),
     }
 }
 
 /// 渲染镜像基础信息（Overview）页签。
 fn render_image_overview(
+    tab_id: TabId,
     summary: Option<&transom_core::ContainerImageSummary>,
     details: Option<&ContainerImageDetails>,
     raw: bool,
+    search_input: &Entity<InputState>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if let Some(details) = details {
-        let mut rows = v_flex().gap_2();
-
         // 原始 Inspect JSON 视图
         if raw {
-            let body: AnyElement = if details.inspect.is_empty() {
-                div()
-                    .text_sm()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("container.detail.no_inspect").to_string())
-                    .into_any_element()
-            } else {
-                let inspect_text = details.inspect.clone();
-                let copy_inspect = copy_button(
-                    ElementId::Name("image-copy-inspect".into()),
-                    inspect_text.clone(),
-                    rust_i18n::t!("container.detail.copy_inspect").to_string(),
-                    cx,
-                );
-                v_flex()
-                    .gap_1p5()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(
-                                        rust_i18n::t!(
-                                            "container.detail.inspect_bytes",
-                                            bytes = inspect_text.len()
-                                        )
-                                        .to_string(),
-                                    ),
-                            )
-                            .child(copy_inspect),
-                    )
-                    .child(
-                        div()
-                            .p_2()
-                            .rounded(p.radius.md)
-                            .bg(p.muted.opacity(0.3))
-                            .font_family(p.mono_font_family.clone())
-                            .text_size(p.mono_font_size)
-                            .child(inspect_text),
-                    )
-                    .into_any_element()
-            };
-            rows = rows.child(body);
-            return scroll_body(rows, p).into_any_element();
+            return render_raw_inspect(tab_id, &details.inspect, search_input, p, cx);
         }
+
+        let mut rows = v_flex().gap_2();
 
         // 结构化基础元数据
         let id_copy = copy_button(

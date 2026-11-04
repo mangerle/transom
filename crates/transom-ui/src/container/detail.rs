@@ -30,11 +30,13 @@ mod image_history;
 mod logs;
 mod network;
 mod overview;
+mod raw_inspect;
 mod terminal;
 mod volume;
 
 pub(super) use compose::render_compose_detail;
 pub(super) use confirm::delete_button;
+pub(super) use raw_inspect::render_raw_inspect;
 pub(crate) use file_bars::parent_path;
 use file_bars::mode_label;
 use files::ContainerFilesView;
@@ -83,6 +85,7 @@ impl AppShell {
         let logs_reversed = workspace.logs_reversed;
         let logs_search = workspace.logs_search.clone();
         let logs_filter = workspace.logs_search_query(cx);
+        let inspect_search = workspace.inspect_search.clone();
         let stats = workspace.stats.clone();
         let stats_history: Vec<ContainerStats> = workspace.stats_history.iter().cloned().collect();
         let stats_chart = workspace.stats_chart;
@@ -187,7 +190,15 @@ impl AppShell {
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
-                render_container_overview(details.as_ref(), overview_raw, &browser_host, p)
+                render_container_overview(
+                    tab_id,
+                    details.as_ref(),
+                    overview_raw,
+                    &inspect_search,
+                    &browser_host,
+                    p,
+                    cx,
+                )
             }
             (ContainerSection::Containers | ContainerSection::Compose, ContainerDetailTab::Logs) => render_logs(
                 ContainerLogsView {
@@ -249,10 +260,12 @@ impl AppShell {
                 render_compose_detail(tab_id, selected_compose.as_ref(), &containers, p, cx)
             }
             (ContainerSection::Images, _) => render_image_detail(
+                tab_id,
                 selected_image.as_ref(),
                 image_details.as_ref(),
                 overview_raw,
                 detail_tab,
+                &inspect_search,
                 p,
                 cx,
             ),
@@ -260,6 +273,8 @@ impl AppShell {
                 tab_id,
                 selected_volume.as_ref(),
                 volume_details.as_ref(),
+                overview_raw,
+                &inspect_search,
                 p,
                 cx,
             ),
@@ -267,11 +282,21 @@ impl AppShell {
                 tab_id,
                 selected_network.as_ref(),
                 network_details.as_ref(),
+                overview_raw,
+                &inspect_search,
                 p,
                 cx,
             ),
             (ContainerSection::Containers, _) => {
-                render_container_overview(details.as_ref(), overview_raw, &browser_host, p)
+                render_container_overview(
+                    tab_id,
+                    details.as_ref(),
+                    overview_raw,
+                    &inspect_search,
+                    &browser_host,
+                    p,
+                    cx,
+                )
             }
         };
 

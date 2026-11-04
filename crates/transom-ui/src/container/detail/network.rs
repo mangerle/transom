@@ -7,9 +7,16 @@ pub(crate) fn render_network_detail(
     tab_id: TabId,
     summary: Option<&transom_core::ContainerNetworkSummary>,
     details: Option<&ContainerNetworkDetails>,
+    overview_raw: bool,
+    search_input: &Entity<InputState>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    if overview_raw {
+        let inspect_text = details.map(|d| d.inspect.as_str()).unwrap_or_default();
+        return render_raw_inspect(tab_id, inspect_text, search_input, p, cx);
+    }
+
     let (id, name, driver, scope, subnet, gateway, connected) = if let Some(details) = details {
         (
             details.summary.id.clone(),

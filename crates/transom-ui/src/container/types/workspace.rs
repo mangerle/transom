@@ -91,6 +91,9 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) detail_tab: ContainerDetailTab,
     /// 基础信息页签是否切到原始 inspect：两者数据重叠，同一时刻只给一种视图。
     pub(crate) overview_raw: bool,
+    /// 原始 inspect 搜索框与订阅。
+    pub(crate) inspect_search: Entity<InputState>,
+    pub(crate) _inspect_search_subscription: Subscription,
     pub(crate) details: Option<ContainerDetails>,
     pub(crate) image_details: Option<ContainerImageDetails>,
     pub(crate) volume_details: Option<ContainerVolumeDetails>,
@@ -199,6 +202,16 @@ impl ContainerWorkspaceState {
                 cx.notify();
             }
         });
+        let inspect_search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.inspect.search_placeholder").to_string())
+        });
+        let inspect_search_subscription =
+            cx.subscribe(&inspect_search, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
         Self {
             profile,
             status: ContainerWorkspaceStatus::Connecting,
@@ -266,6 +279,8 @@ impl ContainerWorkspaceState {
             _create_subscription: create_subscription,
             logs_search,
             _logs_search_subscription: logs_search_subscription,
+            inspect_search,
+            _inspect_search_subscription: inspect_search_subscription,
         }
     }
 

@@ -8,35 +8,21 @@ use super::*;
 /// 用户要滚很久才能确认「下面没有别的信息」。切换按钮让同一屏只保留一种视图，
 /// 想看原始 JSON 时不必离开页签。
 pub(crate) fn render_container_overview(
+    tab_id: TabId,
     details: Option<&ContainerDetails>,
     raw: bool,
+    search_input: &Entity<InputState>,
     browser_host: &str,
     p: &Palette,
+    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some(details) = details else {
         return centered_hint(rust_i18n::t!("container.detail.loading").to_string(), p);
     };
-    let mut rows = v_flex().gap_1p5();
     if raw {
-        let body: AnyElement = if details.inspect.is_empty() {
-            div()
-                .text_sm()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.detail.no_inspect").to_string())
-                .into_any_element()
-        } else {
-            div()
-                .p_2()
-                .rounded(p.radius.md)
-                .bg(p.muted.opacity(0.3))
-                .font_family(p.mono_font_family.clone())
-                .text_size(p.mono_font_size)
-                .child(details.inspect.clone())
-                .into_any_element()
-        };
-        rows = rows.child(body);
-        return scroll_body(rows, p).into_any_element();
+        return render_raw_inspect(tab_id, &details.inspect, search_input, p, cx);
     }
+    let mut rows = v_flex().gap_1p5();
     rows = rows
         .child(kv(
             p,

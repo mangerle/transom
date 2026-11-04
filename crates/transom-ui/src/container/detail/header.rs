@@ -314,6 +314,30 @@ impl AppShell {
             }
             ContainerSection::Volumes => {
                 if let Some(volume) = volume {
+                    let raw = overview_raw;
+                    actions = actions.child(
+                        Button::new("volume-raw-inspect")
+                            .xsmall()
+                            .ghost()
+                            .icon(IconName::Braces)
+                            .selected(raw)
+                            .tooltip(
+                                rust_i18n::t!(if raw {
+                                    "container.detail.overview"
+                                } else {
+                                    "container.field.inspect"
+                                })
+                                .to_string(),
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(workspace) =
+                                    this.state.container_workspace_mut(tab_id)
+                                {
+                                    workspace.overview_raw = !raw;
+                                }
+                                cx.notify();
+                            })),
+                    );
                     actions = actions.child(delete_button(
                         "volume-delete",
                         cx,
@@ -324,6 +348,30 @@ impl AppShell {
             }
             ContainerSection::Networks => {
                 if let Some(network) = network {
+                    let raw = overview_raw;
+                    actions = actions.child(
+                        Button::new("network-raw-inspect")
+                            .xsmall()
+                            .ghost()
+                            .icon(IconName::Braces)
+                            .selected(raw)
+                            .tooltip(
+                                rust_i18n::t!(if raw {
+                                    "container.detail.overview"
+                                } else {
+                                    "container.field.inspect"
+                                })
+                                .to_string(),
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(workspace) =
+                                    this.state.container_workspace_mut(tab_id)
+                                {
+                                    workspace.overview_raw = !raw;
+                                }
+                                cx.notify();
+                            })),
+                    );
                     actions = actions.children(super::header_actions::network_header_actions(
                         tab_id, network, cx,
                     ));

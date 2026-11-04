@@ -5136,6 +5136,10 @@ container:
     exit_code:
       en: Exit code
       zh-CN: 退出码
+  inspect:
+    search_placeholder:
+      en: Search JSON keys or values...
+      zh-CN: 搜索 JSON 键名或参数值...
   field:
     context_path:
       en: Context path
