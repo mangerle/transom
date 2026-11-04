@@ -4539,6 +4539,16 @@ container:
     failed:
       en: '%{action} failed: %{error}'
       zh-CN: '%{action} 失败：%{error}'
+  changes:
+    search_placeholder:
+      en: Filter change path…
+      zh-CN: 过滤变更路径…
+    loading:
+      en: Inspecting file system changes…
+      zh-CN: 正在检查文件系统变更…
+    no_changes:
+      en: No file system changes compared to base image
+      zh-CN: 该容器与基础镜像相比暂无文件系统变更
   notice:
     dismiss:
       en: Dismiss
@@ -4841,6 +4851,15 @@ container:
     history:
       en: History
       zh-CN: 构建历史
+    changes:
+      en: Changes
+      zh-CN: 文件变更
+    copy_path:
+      en: Copy Path
+      zh-CN: 复制路径
+    copied:
+      en: Copied to clipboard
+      zh-CN: 已复制到剪贴板
     copy_inspect:
       en: Copy Inspect JSON
       zh-CN: 复制 Inspect JSON

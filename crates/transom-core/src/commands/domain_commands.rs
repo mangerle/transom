@@ -188,6 +188,12 @@ pub enum ContainerCommand {
         comment: Option<String>,
         author: Option<String>,
     },
+    /// 检查容器文件系统变更（Diff）。
+    DiffContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+    },
     /// 在容器内打开交互式终端；容器与执行参数都在 `options` 里。
     ExecTerminal {
         tab_id: TabId,

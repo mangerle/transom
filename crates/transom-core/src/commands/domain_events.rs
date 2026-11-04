@@ -12,7 +12,7 @@ use crate::error::AppError;
 use crate::ids::{ConnectionId, ContainerRequestId, SessionId, TabId, TransferId};
 use crate::model::container::{
     ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
-    ContainerFileEntry, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
+    ContainerFileEntry, ContainerFileSystemChange, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
     ContainerNetworkSummary, ContainerProcess, ContainerPruneReport, ContainerStats,
     ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
 };
@@ -291,6 +291,12 @@ pub enum ContainerAppEvent {
     ContainerInspected {
         request_id: ContainerRequestId,
         details: Box<ContainerDetails>,
+    },
+    /// 容器文件系统变更（Diff）结果。
+    ContainerDiffed {
+        request_id: ContainerRequestId,
+        container: String,
+        changes: Vec<ContainerFileSystemChange>,
     },
     ImagesListed {
         request_id: ContainerRequestId,

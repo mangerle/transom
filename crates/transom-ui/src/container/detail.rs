@@ -18,6 +18,7 @@ use transom_core::{
     ContainerNetworkDetails, ContainerStats, ContainerSummary, ContainerVolumeDetails, TabId,
 };
 
+mod changes;
 mod compose;
 mod confirm;
 mod file_bars;
@@ -86,6 +87,9 @@ impl AppShell {
         let logs_search = workspace.logs_search.clone();
         let logs_filter = workspace.logs_search_query(cx);
         let inspect_search = workspace.inspect_search.clone();
+        let changes = workspace.changes.clone();
+        let changes_loading = workspace.changes_loading;
+        let changes_search = workspace.changes_search.clone();
         let stats = workspace.stats.clone();
         let stats_history: Vec<ContainerStats> = workspace.stats_history.iter().cloned().collect();
         let stats_chart = workspace.stats_chart;
@@ -252,6 +256,17 @@ impl AppShell {
                         scroll: &files.10,
                         readonly: is_volume,
                     },
+                    p,
+                    cx,
+                )
+            }
+            (ContainerSection::Containers, ContainerDetailTab::Changes) => {
+                changes::render_container_changes(
+                    tab_id,
+                    selected.as_deref(),
+                    changes.as_ref(),
+                    changes_loading,
+                    &changes_search,
                     p,
                     cx,
                 )

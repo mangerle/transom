@@ -100,6 +100,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::Discover { .. } => engine::handle(state, ctx, command),
         ContainerCommand::ListContainers { .. }
         | ContainerCommand::InspectContainer { .. }
+        | ContainerCommand::DiffContainer { .. }
         | ContainerCommand::ListImages { .. }
         | ContainerCommand::InspectImage { .. }
         | ContainerCommand::ListVolumes { .. }

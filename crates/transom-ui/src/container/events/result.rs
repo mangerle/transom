@@ -130,6 +130,10 @@ impl AppShell {
                 workspace.files.request = None;
                 workspace.files.loading = false;
             }
+            if workspace.changes_request == Some(request_id) {
+                workspace.changes_request = None;
+                workspace.changes_loading = false;
+            }
             if workspace
                 .terminal_request
                 .as_ref()

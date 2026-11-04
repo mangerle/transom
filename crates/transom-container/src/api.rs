@@ -7,7 +7,7 @@
 use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
-    ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
+    ChangeItem, ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
     ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
     ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
     VolumeListResponse, VolumePruneResponse,
@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use transom_core::ContainerEngineKind;
 use transom_core::{
-    ContainerDetails, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
+    ContainerDetails, ContainerFileSystemChange, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
     ContainerRegistryAuth, ContainerStats, ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails,
     ContainerVolumeSummary,
@@ -233,6 +233,19 @@ impl DockerApi {
                 message: error.to_string(),
             })?;
         Ok(inspect.into_details(raw))
+    }
+
+    /// 查询容器文件系统变更（Diff）。
+    ///
+    /// # Errors
+    /// 容器不存在或引擎返回异常时返回 [`ContainerError`]。
+    pub async fn container_changes(
+        &self,
+        container: &str,
+    ) -> Result<Vec<ContainerFileSystemChange>, ContainerError> {
+        let suffix = format!("/containers/{}/changes", http::percent_encode(container));
+        let items: Vec<ChangeItem> = self.get_json(&suffix, "查询容器文件系统变更").await?;
+        Ok(items.into_iter().map(ChangeItem::into_change).collect())
     }
 
     /// 镜像详情。

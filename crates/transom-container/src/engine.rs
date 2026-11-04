@@ -136,6 +136,16 @@ impl Engine {
         }
     }
 
+    pub async fn container_changes(
+        &self,
+        container: &str,
+    ) -> Result<Vec<transom_core::ContainerFileSystemChange>, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.container_changes(container).await,
+            EngineBackend::Cli(cli) => cli.container_changes(container).await,
+        }
+    }
+
     pub async fn inspect_image(
         &self,
         image: &str,

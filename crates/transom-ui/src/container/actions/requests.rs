@@ -68,14 +68,16 @@ impl AppShell {
         let stats = workspace.stats_request.take();
         let processes = workspace.stats_processes_request.take();
         let files = workspace.files.request.take();
+        let changes = workspace.changes_request.take();
         workspace.files.loading = false;
+        workspace.changes_loading = false;
         workspace.stats_processes_loading = false;
         let terminal = workspace
             .terminal_request
             .take()
             .map(|(request_id, ..)| request_id);
         workspace.terminal = None;
-        for request_id in [logs, stats, processes, files, terminal]
+        for request_id in [logs, stats, processes, files, changes, terminal]
             .into_iter()
             .flatten()
         {

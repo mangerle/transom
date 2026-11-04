@@ -128,6 +128,11 @@ pub(crate) struct ContainerWorkspaceState {
     /// 正在建立的终端会话与所选 (用户, Shell)：建立前连点页签会重复创建 exec，必须占位拦住。
     pub(crate) terminal_request: Option<(ContainerRequestId, Option<String>, Option<String>)>,
     pub(crate) files: ContainerFilesState,
+    pub(crate) changes: Option<(String, Vec<transom_core::ContainerFileSystemChange>)>,
+    pub(crate) changes_loading: bool,
+    pub(crate) changes_request: Option<ContainerRequestId>,
+    pub(crate) changes_search: Entity<InputState>,
+    pub(crate) _changes_search_subscription: Subscription,
     /// 容器改名条：容器 ID 与输入框；`None` 表示不显示。
     pub(crate) rename_container: Option<(String, Entity<InputState>)>,
     /// 容器配置更新条：容器名与 (内存MB输入框, CPU输入框)；`None` 表示不显示。
@@ -212,6 +217,16 @@ impl ContainerWorkspaceState {
                     cx.notify();
                 }
             });
+        let changes_search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.changes.search_placeholder").to_string())
+        });
+        let changes_search_subscription =
+            cx.subscribe(&changes_search, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
         Self {
             profile,
             status: ContainerWorkspaceStatus::Connecting,
@@ -281,6 +296,11 @@ impl ContainerWorkspaceState {
             _logs_search_subscription: logs_search_subscription,
             inspect_search,
             _inspect_search_subscription: inspect_search_subscription,
+            changes: None,
+            changes_loading: false,
+            changes_request: None,
+            changes_search,
+            _changes_search_subscription: changes_search_subscription,
         }
     }
 

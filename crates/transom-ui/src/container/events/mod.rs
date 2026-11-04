@@ -477,6 +477,21 @@ impl AppShell {
             ContainerAppEvent::PullTaskFinished { task_id, error } => {
                 self.on_container_pull_task_finished(task_id, error, window, cx)
             }
+            ContainerAppEvent::ContainerDiffed {
+                request_id,
+                container,
+                changes,
+            } => {
+                if let Some(tab_id) = self.state.containers.take_tab(request_id)
+                    && let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                {
+                    if workspace.changes_request == Some(request_id) {
+                        workspace.changes_request = None;
+                    }
+                    workspace.changes_loading = false;
+                    workspace.changes = Some((container, changes));
+                }
+            }
         }
         cx.notify();
     }

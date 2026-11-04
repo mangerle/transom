@@ -255,6 +255,31 @@ pub struct ContainerHealthDetails {
     pub log: Vec<ContainerHealthLog>,
 }
 
+/// 容器文件系统变更类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerPathChangeKind {
+    Modified,
+    Added,
+    Deleted,
+}
+
+impl ContainerPathChangeKind {
+    pub fn badge_char(self) -> &'static str {
+        match self {
+            Self::Added => "A",
+            Self::Deleted => "D",
+            Self::Modified => "C",
+        }
+    }
+}
+
+/// 容器单条文件系统变更记录。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContainerFileSystemChange {
+    pub path: String,
+    pub kind: ContainerPathChangeKind,
+}
+
 impl ContainerDetails {
     /// 健康状态展示文本；没有健康检查时给「未配置」，避免界面留白看不出新。
     pub fn health_label(&self) -> String {

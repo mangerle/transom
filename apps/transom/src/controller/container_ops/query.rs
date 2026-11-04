@@ -30,6 +30,25 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 details: Box::new(details),
             },
         ),
+        ContainerCommand::DiffContainer {
+            tab_id,
+            request_id,
+            container,
+        } => {
+            let container_id = container.clone();
+            one_shot(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                move |engine| async move { engine.container_changes(&container).await },
+                move |request_id, changes| ContainerAppEvent::ContainerDiffed {
+                    request_id,
+                    container: container_id,
+                    changes,
+                },
+            )
+        }
         ContainerCommand::ListImages { tab_id, request_id } => one_shot(
             state,
             ctx,

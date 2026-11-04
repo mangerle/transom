@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod changes;
 mod image_archive;
 mod refresh;
 mod requests;
@@ -380,6 +381,7 @@ impl AppShell {
             }
             ContainerDetailTab::Files => self.ensure_container_files(tab_id),
             ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
+            ContainerDetailTab::Changes => self.ensure_container_changes(tab_id),
             ContainerDetailTab::Overview | ContainerDetailTab::History => {}
         }
         cx.notify();

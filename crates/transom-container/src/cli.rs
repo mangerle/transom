@@ -338,6 +338,17 @@ impl CliBackend {
         Ok(inspect.into_details(raw))
     }
 
+    /// 查询容器文件系统变更（Diff）。
+    pub async fn container_changes(
+        &self,
+        container: &str,
+    ) -> Result<Vec<transom_core::ContainerFileSystemChange>, ContainerError> {
+        let output = self
+            .run(&["diff".to_string(), container.to_string()])
+            .await?;
+        Ok(parse_diff_output(&output.stdout))
+    }
+
     pub async fn inspect_image(
         &self,
         image: &str,
@@ -957,9 +968,42 @@ fn parse_size_pair(value: &str) -> (u64, u64) {
     (first, second)
 }
 
+/// 解析 docker diff 输出行。
+pub(crate) fn parse_diff_output(stdout: &str) -> Vec<transom_core::ContainerFileSystemChange> {
+    let mut changes = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.len() < 3 {
+            continue;
+        }
+        let (kind_char, path) = line.split_at(1);
+        let path = path.trim().to_string();
+        let kind = match kind_char {
+            "A" => transom_core::ContainerPathChangeKind::Added,
+            "D" => transom_core::ContainerPathChangeKind::Deleted,
+            _ => transom_core::ContainerPathChangeKind::Modified,
+        };
+        changes.push(transom_core::ContainerFileSystemChange { path, kind });
+    }
+    changes
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_cli_ports, parse_human_size, parse_size_pair};
+    use super::{parse_cli_ports, parse_diff_output, parse_human_size, parse_size_pair};
+
+    #[test]
+    fn parses_diff_output_lines() {
+        let output = "C /etc\nA /etc/app.conf\nD /var/log/test.log\n";
+        let changes = parse_diff_output(output);
+        assert_eq!(changes.len(), 3);
+        assert_eq!(changes[0].kind, transom_core::ContainerPathChangeKind::Modified);
+        assert_eq!(changes[0].path, "/etc");
+        assert_eq!(changes[1].kind, transom_core::ContainerPathChangeKind::Added);
+        assert_eq!(changes[1].path, "/etc/app.conf");
+        assert_eq!(changes[2].kind, transom_core::ContainerPathChangeKind::Deleted);
+        assert_eq!(changes[2].path, "/var/log/test.log");
+    }
 
     #[test]
     fn parses_port_summaries() {
