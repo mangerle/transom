@@ -2,7 +2,7 @@
 
 use crate::app::AppShell;
 use crate::container::types::{
-    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_TAIL_CHOICES, log_lines,
+    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_TAIL_CHOICES, filtered_log_lines,
 };
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -130,6 +130,8 @@ impl AppShell {
         let logs_tail = workspace.logs_tail;
         let logs_timestamps = workspace.logs_timestamps;
         let logs_reversed = workspace.logs_reversed;
+        let logs_search = workspace.logs_search.clone();
+        let logs_filter = workspace.logs_search_query(cx);
         let stats = workspace.stats.clone();
         let stats_history: Vec<ContainerStats> = workspace.stats_history.iter().cloned().collect();
         let stats_chart = workspace.stats_chart;
@@ -235,6 +237,8 @@ impl AppShell {
                     tail: logs_tail,
                     timestamps: logs_timestamps,
                     reversed: logs_reversed,
+                    search: &logs_search,
+                    filter: &logs_filter,
                 },
                 p,
                 cx,

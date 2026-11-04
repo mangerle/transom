@@ -113,4 +113,53 @@ impl AppShell {
         }
         self.restart_container_logs(tab_id);
     }
+
+    /// 将当前日志缓冲导出为本地 .log 文件。
+    pub(crate) fn export_container_logs(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (name, text) = match self.state.container_workspace(tab_id) {
+            Some(workspace) => {
+                let name = if workspace.section == ContainerSection::Compose {
+                    workspace
+                        .selected_compose()
+                        .map(|p| p.name.clone())
+                        .unwrap_or_else(|| "compose".to_string())
+                } else {
+                    workspace
+                        .selected_container_name()
+                        .unwrap_or_else(|| "container".to_string())
+                };
+                (name, workspace.logs.clone())
+            }
+            None => return,
+        };
+        if text.is_empty() {
+            return;
+        }
+
+        let default_name = format!("{name}.log");
+        let Some(local_path) = rfd::FileDialog::new()
+            .set_file_name(&default_name)
+            .add_filter("Log", &["log", "txt"])
+            .save_file()
+        else {
+            return;
+        };
+
+        if let Err(e) = std::fs::write(&local_path, text.as_bytes()) {
+            log::error!("写入容器日志文件失败: {e}");
+        } else {
+            let path_str = local_path.display().to_string();
+            self.show_toast(
+                rust_i18n::t!("container.logs.export_success", path = path_str),
+                true,
+                window,
+                cx,
+            );
+        }
+    }
 }

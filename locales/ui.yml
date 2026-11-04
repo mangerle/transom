@@ -5380,6 +5380,18 @@ container:
     empty:
       en: No log output yet
       zh-CN: 暂无日志
+    search_placeholder:
+      en: Filter logs…
+      zh-CN: 过滤日志…
+    export:
+      en: Export
+      zh-CN: 导出
+    export_success:
+      en: Logs exported to %{path}
+      zh-CN: 日志已导出至 %{path}
+    matched_lines:
+      en: "%{matched}/%{total} lines"
+      zh-CN: "%{matched}/%{total} 行"
   terminal:
     hint:
       en: Open an interactive shell inside this container.

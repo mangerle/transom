@@ -10,6 +10,37 @@ pub(crate) struct ContainerLogsView<'a> {
     pub(super) tail: usize,
     pub(super) timestamps: bool,
     pub(super) reversed: bool,
+    pub(super) search: &'a Entity<InputState>,
+    pub(super) filter: &'a str,
+}
+
+/// 渲染单行日志，并在存在搜索关键字时对命中部分进行背景高亮。
+fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
+    let filter = filter.trim();
+    if filter.is_empty() {
+        return div().child(line.to_string()).into_any_element();
+    }
+    let filter_lower = filter.to_lowercase();
+    let line_lower = line.to_lowercase();
+    let mut spans = Vec::new();
+    let mut last_end = 0;
+    for (start, _) in line_lower.match_indices(&filter_lower) {
+        if start > last_end {
+            spans.push(div().child(line[last_end..start].to_string()));
+        }
+        let end = start + filter.len();
+        spans.push(
+            div()
+                .bg(p.sidebar_accent.opacity(0.55))
+                .rounded_xs()
+                .child(line[start..end].to_string()),
+        );
+        last_end = end;
+    }
+    if last_end < line.len() {
+        spans.push(div().child(line[last_end..].to_string()));
+    }
+    h_flex().gap_0().children(spans).into_any_element()
 }
 
 pub(crate) fn render_logs(
@@ -24,6 +55,8 @@ pub(crate) fn render_logs(
         tail,
         timestamps,
         reversed,
+        search,
+        filter,
     } = view;
     let mut tails = h_flex().gap_0p5().items_center();
     for choice in LOG_TAIL_CHOICES {
@@ -45,7 +78,12 @@ pub(crate) fn render_logs(
             })),
         );
     }
-    let toolbar = h_flex()
+
+    let all_lines_count = logs.lines().count();
+    let lines = filtered_log_lines(logs, filter, reversed);
+    let matched_count = lines.len();
+
+    let mut toolbar = h_flex()
         .gap_2()
         .p_2()
         .items_center()
@@ -90,6 +128,16 @@ pub(crate) fn render_logs(
                 })),
         )
         .child(
+            Button::new("container-logs-export")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Download)
+                .label(rust_i18n::t!("container.logs.export").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.export_container_logs(tab_id, window, cx);
+                })),
+        )
+        .child(
             Button::new("container-logs-follow")
                 .xsmall()
                 .icon(IconName::ScrollText)
@@ -112,15 +160,34 @@ pub(crate) fn render_logs(
                     }
                     cx.notify();
                 })),
+        )
+        .child(
+            div()
+                .w(px(160.0))
+                .child(Input::new(search).small()),
         );
+
+    if !filter.trim().is_empty() {
+        toolbar = toolbar.child(
+            div()
+                .text_xs()
+                .text_color(p.muted)
+                .child(rust_i18n::t!(
+                    "container.logs.matched_lines",
+                    matched = matched_count.to_string(),
+                    total = all_lines_count.to_string()
+                )),
+        );
+    }
+
     let body = if logs.is_empty() {
         centered_hint(rust_i18n::t!("container.logs.empty").to_string(), p)
     } else {
-        // 逐行渲染而不是整块文本：反转顺序时才能保持每行独立可选。
+        // 逐行渲染而不是整块文本：反转顺序与高亮时保持每行独立。
         let rows = v_flex().gap_0().children(
-            log_lines(logs, reversed)
+            lines
                 .into_iter()
-                .map(|line| div().child(line.to_string())),
+                .map(|line| render_log_line(line, filter, p)),
         );
         div()
             .id("container-logs-scroll")

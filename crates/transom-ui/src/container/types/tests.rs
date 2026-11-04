@@ -65,6 +65,24 @@ fn log_lines_reverse_keeps_every_line() {
 }
 
 #[test]
+fn filtered_log_lines_matches_keyword_and_reverses() {
+    let text = "INFO: starting service\nDEBUG: cache miss\nERROR: failed to connect\nINFO: ready";
+    assert_eq!(
+        super::filtered_log_lines(text, "info", false),
+        vec!["INFO: starting service", "INFO: ready"]
+    );
+    assert_eq!(
+        super::filtered_log_lines(text, "INFO", true),
+        vec!["INFO: ready", "INFO: starting service"]
+    );
+    assert_eq!(
+        super::filtered_log_lines(text, "failed", false),
+        vec!["ERROR: failed to connect"]
+    );
+    assert_eq!(super::filtered_log_lines(text, "", false).len(), 4);
+}
+
+#[test]
 fn state_filter_covers_both_states() {
     assert!(ContainerStateFilter::All.accepts(true));
     assert!(ContainerStateFilter::All.accepts(false));

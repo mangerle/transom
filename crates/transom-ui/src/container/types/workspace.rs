@@ -143,6 +143,9 @@ pub(crate) struct ContainerWorkspaceState {
     /// 搜索框变化时触发整壳重绘，过滤结果随输入实时更新。
     pub(crate) _search_subscription: Subscription,
     pub(crate) _create_subscription: Subscription,
+    /// 日志关键字过滤输入框与订阅。
+    pub(crate) logs_search: Entity<InputState>,
+    pub(crate) _logs_search_subscription: Subscription,
 }
 
 impl ContainerWorkspaceState {
@@ -164,6 +167,15 @@ impl ContainerWorkspaceState {
             }
         });
         let create_subscription = cx.subscribe(&create_input, |_, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
+        let logs_search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.logs.search_placeholder").to_string())
+        });
+        let logs_search_subscription = cx.subscribe(&logs_search, |_, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 cx.notify();
             }
@@ -227,11 +239,17 @@ impl ContainerWorkspaceState {
             busy: false,
             _search_subscription: search_subscription,
             _create_subscription: create_subscription,
+            logs_search,
+            _logs_search_subscription: logs_search_subscription,
         }
     }
 
     pub(crate) fn query(&self, cx: &App) -> String {
         self.search.read(cx).value().to_string()
+    }
+
+    pub(crate) fn logs_search_query(&self, cx: &App) -> String {
+        self.logs_search.read(cx).value().to_string()
     }
 
     pub(crate) fn append_logs(&mut self, bytes: &[u8]) {

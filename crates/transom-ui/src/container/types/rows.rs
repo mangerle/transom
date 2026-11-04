@@ -134,6 +134,23 @@ pub(crate) fn log_lines(text: &str, reversed: bool) -> Vec<&str> {
     lines
 }
 
+/// 按关键字过滤日志行；若关键词为空则返回全部行；`reversed` 为真时最新在前。
+pub(crate) fn filtered_log_lines<'a>(text: &'a str, filter: &str, reversed: bool) -> Vec<&'a str> {
+    let filter = filter.trim();
+    if filter.is_empty() {
+        return log_lines(text, reversed);
+    }
+    let filter_lower = filter.to_lowercase();
+    let mut lines: Vec<&'a str> = text
+        .lines()
+        .filter(|line| line.to_lowercase().contains(&filter_lower))
+        .collect();
+    if reversed {
+        lines.reverse();
+    }
+    lines
+}
+
 /// 快捷筛选是否放行该卷：`UnusedVolumes` 需要它没有被任何容器挂载。
 pub(crate) fn volume_passes_filter(filter: ContainerQuickFilter, in_use: bool) -> bool {
     match filter {
