@@ -224,6 +224,18 @@ impl AppShell {
                                 })),
                         )
                         .child(
+                            Button::new("container-export")
+                                .xsmall()
+                                .icon(IconName::FileText)
+                                .label(rust_i18n::t!("container.action.export_config").to_string())
+                                .on_click(cx.listener({
+                                    let name = name.clone();
+                                    move |this, _, _, cx| {
+                                        this.open_container_export(tab_id, name.clone(), cx);
+                                    }
+                                })),
+                        )
+                        .child(
                             Button::new("container-remove")
                             .danger()
                             .xsmall()

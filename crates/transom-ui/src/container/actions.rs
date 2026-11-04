@@ -280,6 +280,12 @@ impl AppShell {
                 };
                 self.open_container_rename(tab_id, id, name, window, cx);
             }
+            RowAction::ExportConfig => {
+                let RowTarget::Container { name, .. } = target else {
+                    return;
+                };
+                self.open_container_export(tab_id, name, cx);
+            }
             RowAction::Tag => {
                 let RowTarget::Image(id) = target else {
                     return;

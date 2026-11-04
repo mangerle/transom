@@ -5263,6 +5263,9 @@ container:
     disconnect_network:
       en: Disconnect
       zh-CN: 断开网络
+    export_config:
+      en: Export Config
+      zh-CN: 导出配置
     start_all:
       en: Start all
       zh-CN: 全部启动
@@ -5272,6 +5275,22 @@ container:
     running:
       en: '%{action} in progress…'
       zh-CN: 正在%{action}…
+  export:
+    title:
+      en: 'Export Configuration: %{name}'
+      zh-CN: '导出容器配置：%{name}'
+    docker_run:
+      en: Docker Run
+      zh-CN: Docker Run 命令
+    compose:
+      en: Docker Compose
+      zh-CN: Docker Compose 片段
+    copy:
+      en: Copy
+      zh-CN: 复制
+    copied:
+      en: Configuration copied to clipboard
+      zh-CN: 已复制配置到剪贴板
   network_connect:
     label:
       en: 'Connect Container:'

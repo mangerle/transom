@@ -133,6 +133,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) tag_image: Option<(String, Entity<InputState>)>,
     /// 网络连接容器条：网络 ID 与待连接容器名输入框；`None` 表示不显示。
     pub(crate) connect_network: Option<(String, Entity<InputState>)>,
+    /// 容器配置导出条：(容器名, run命令, compose YAML, 是否展示compose)；`None` 表示不显示。
+    pub(crate) export_config: Option<(String, String, String, bool)>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
     /// 待确认的删除动作。
@@ -229,6 +231,7 @@ impl ContainerWorkspaceState {
             update_container: None,
             tag_image: None,
             connect_network: None,
+            export_config: None,
             pending_select: None,
             files: ContainerFilesState {
                 new_dir_open: false,
@@ -338,6 +341,7 @@ impl ContainerWorkspaceState {
         self.confirm = None;
         self.prune_armed = None;
         self.rename_container = None;
+        self.export_config = None;
         if !ContainerSortKey::for_section(section).contains(&self.sort_key) {
             self.sort_key = ContainerSortKey::default_for(section);
             self.sort_desc = false;

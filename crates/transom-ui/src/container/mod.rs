@@ -5,6 +5,7 @@ mod compose;
 mod detail;
 mod engines;
 mod events;
+mod export;
 mod files_actions;
 mod form;
 mod lifecycle;

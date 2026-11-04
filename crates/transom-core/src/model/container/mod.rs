@@ -11,10 +11,12 @@
 
 mod create;
 mod engine;
+mod export;
 mod inventory;
 
 pub use create::*;
 pub use engine::*;
+pub use export::*;
 pub use inventory::*;
 
 /// 截短容器/镜像 ID，供列表与日志定位。
