@@ -253,6 +253,19 @@ impl AppShell {
                         })),
                 );
         }
+        if params.section == ContainerSection::Volumes {
+            let tab_id = params.tab_id;
+            controls = controls.child(
+                Button::new("container-volume-restore")
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::Upload)
+                    .tooltip(rust_i18n::t!("container.action.restore_volume").to_string())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.restore_volume(tab_id, None, cx);
+                    })),
+            );
+        }
         // 卷、镜像与网络都有「清理」视角：清未使用或悬空条目。
         let prune_target = match params.section {
             ContainerSection::Volumes => Some(ContainerPruneTarget::Volumes),

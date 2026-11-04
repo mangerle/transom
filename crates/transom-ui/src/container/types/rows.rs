@@ -36,6 +36,8 @@ pub(crate) enum RowAction {
     Commit,
     Clone,
     EditComposeYaml,
+    BackupVolume,
+    RestoreVolume,
     Remove,
     CopyId,
     CopyName,
@@ -65,6 +67,8 @@ impl RowAction {
             Self::Commit => "container.action.commit",
             Self::Clone => "container.action.clone",
             Self::EditComposeYaml => "container.compose.edit_yaml",
+            Self::BackupVolume => "container.action.backup_volume",
+            Self::RestoreVolume => "container.action.restore_volume",
             Self::Remove => "common.delete",
             Self::CopyId => "container.row.copy_id",
             Self::CopyName => "container.row.copy_name",
@@ -95,6 +99,8 @@ impl RowAction {
             Self::Commit => IconName::Layers,
             Self::Clone => IconName::Copy,
             Self::EditComposeYaml => IconName::FilePen,
+            Self::BackupVolume => IconName::Download,
+            Self::RestoreVolume => IconName::Upload,
             Self::Remove => IconName::Trash,
             Self::CopyId => IconName::Copy,
             Self::CopyName => IconName::Copy,
@@ -124,6 +130,7 @@ impl RowAction {
                 matches!(target, RowTarget::Container { .. })
             }
             Self::EditComposeYaml => matches!(target, RowTarget::Compose(_)),
+            Self::BackupVolume | Self::RestoreVolume => matches!(target, RowTarget::Volume(_)),
             // 卷与编排项目没有独立 ID，名称就是唯一标识，不给重复的复制项。
             Self::CopyId => matches!(
                 target,

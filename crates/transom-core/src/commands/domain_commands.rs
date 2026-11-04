@@ -254,6 +254,20 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         local_path: std::path::PathBuf,
     },
+    /// 备份数据卷为本地 Tar 归档文件。
+    BackupVolume {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        volume: String,
+        local_path: std::path::PathBuf,
+    },
+    /// 从本地 Tar 归档文件恢复到数据卷中。
+    RestoreVolume {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        volume: String,
+        local_path: std::path::PathBuf,
+    },
     /// 在远端镜像仓库搜索镜像（Docker Hub 或私有 Registry）。
     SearchImages {
         tab_id: TabId,

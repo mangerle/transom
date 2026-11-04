@@ -37,5 +37,6 @@ pub use image_archive::{load_image, save_image};
 pub use logs::{LogSink, stream_logs, stream_project_logs};
 pub use service::ContainerService;
 pub use volume_files::{
-    download_volume_file, list_volume_dir, read_volume_file, write_volume_file_bytes,
+    backup_volume, download_volume_file, list_volume_dir, read_volume_file, restore_volume,
+    write_volume_file_bytes,
 };

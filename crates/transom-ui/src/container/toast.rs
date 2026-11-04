@@ -51,6 +51,12 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
                 .unwrap_or_else(|| local_path.display().to_string());
             Some(verb_object("container.action.load_image", &name))
         }
+        C::BackupVolume { volume, .. } => {
+            Some(verb_object("container.action.backup_volume", volume))
+        }
+        C::RestoreVolume { volume, .. } => {
+            Some(verb_object("container.action.restore_volume", volume))
+        }
         C::CreateVolume { name, .. } => Some(verb_object("container.create", name)),
         C::CreateNetwork { spec, .. } => Some(verb_object("container.create", &spec.name)),
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {

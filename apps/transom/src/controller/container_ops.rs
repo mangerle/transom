@@ -196,7 +196,9 @@ pub(super) fn handle_container_command(
         | ContainerCommand::SaveFile { .. }
         | ContainerCommand::SaveVolumeFile { .. }
         | ContainerCommand::SaveImage { .. }
-        | ContainerCommand::LoadImage { .. } => files::handle(state, ctx, command),
+        | ContainerCommand::LoadImage { .. }
+        | ContainerCommand::BackupVolume { .. }
+        | ContainerCommand::RestoreVolume { .. } => files::handle(state, ctx, command),
     }
 }
 

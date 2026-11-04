@@ -247,6 +247,10 @@ pub(crate) fn row_actions(row: &ListRow) -> Vec<RowAction> {
         actions.push(RowAction::Save);
         actions.push(RowAction::History);
     }
+    if matches!(row.target, RowTarget::Volume(_)) {
+        actions.push(RowAction::BackupVolume);
+        actions.push(RowAction::RestoreVolume);
+    }
     if matches!(row.target, RowTarget::Compose(_)) {
         actions.push(RowAction::EditComposeYaml);
     }
@@ -277,7 +281,8 @@ pub(crate) fn quick_actions(row: &ListRow) -> Vec<RowAction> {
             RowAction::Remove,
         ],
         RowTarget::Image(_) => vec![RowAction::Run, RowAction::Remove],
-        RowTarget::Volume(_) | RowTarget::Network(_) => vec![RowAction::Remove],
+        RowTarget::Volume(_) => vec![RowAction::BackupVolume, RowAction::Remove],
+        RowTarget::Network(_) => vec![RowAction::Remove],
         RowTarget::Compose(_) => vec![RowAction::EditComposeYaml],
     };
     actions

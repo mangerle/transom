@@ -422,7 +422,7 @@ pub async fn rename(
 }
 
 /// 打开归档流：后台任务把 HTTP 响应体泵入有界通道，阻塞侧按需读取。
-async fn open_archive(
+pub(crate) async fn open_archive(
     api: &crate::api::DockerApi,
     container: &str,
     path: &str,

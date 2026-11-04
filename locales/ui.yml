@@ -5408,6 +5408,12 @@ container:
     load_image:
       en: Import from Tar
       zh-CN: 导入镜像 (Load)
+    backup_volume:
+      en: Backup as Tar
+      zh-CN: 备份为 Tar 压缩包
+    restore_volume:
+      en: Restore from Tar
+      zh-CN: 从 Tar 恢复数据卷
     connect_network:
       en: Connect
       zh-CN: 连接网络

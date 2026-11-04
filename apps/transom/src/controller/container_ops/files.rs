@@ -293,6 +293,38 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     .map(|_| ())
             },
         ),
+        ContainerCommand::BackupVolume {
+            tab_id,
+            request_id,
+            volume,
+            local_path,
+        } => transfer(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine, cancel, progress| async move {
+                transom_container::backup_volume(&engine, &volume, &local_path, cancel, progress)
+                    .await
+                    .map(|_| ())
+            },
+        ),
+        ContainerCommand::RestoreVolume {
+            tab_id,
+            request_id,
+            volume,
+            local_path,
+        } => transfer(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine, cancel, progress| async move {
+                transom_container::restore_volume(&engine, &volume, &local_path, cancel, progress)
+                    .await
+                    .map(|_| ())
+            },
+        ),
         _ => {}
     }
 }

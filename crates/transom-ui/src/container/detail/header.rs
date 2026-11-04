@@ -351,6 +351,28 @@ impl AppShell {
                                 cx.notify();
                             })),
                     );
+                    let vol_name_backup = volume.name.clone();
+                    actions = actions.child(
+                        Button::new("volume-backup")
+                            .xsmall()
+                            .ghost()
+                            .icon(IconName::Download)
+                            .tooltip(rust_i18n::t!("container.action.backup_volume").to_string())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.backup_volume(tab_id, vol_name_backup.clone(), cx);
+                            })),
+                    );
+                    let vol_name_restore = volume.name.clone();
+                    actions = actions.child(
+                        Button::new("volume-restore")
+                            .xsmall()
+                            .ghost()
+                            .icon(IconName::Upload)
+                            .tooltip(rust_i18n::t!("container.action.restore_volume").to_string())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.restore_volume(tab_id, Some(vol_name_restore.clone()), cx);
+                            })),
+                    );
                     actions = actions.child(delete_button(
                         "volume-delete",
                         cx,

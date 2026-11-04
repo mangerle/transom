@@ -6,6 +6,7 @@ mod changes;
 mod image_archive;
 mod refresh;
 mod requests;
+mod volume_archive;
 
 impl AppShell {
     pub(super) fn send_tracked(
@@ -313,6 +314,18 @@ impl AppShell {
                     return;
                 };
                 self.edit_compose_yaml(tab_id, &name, window, cx);
+            }
+            RowAction::BackupVolume => {
+                let RowTarget::Volume(name) = target else {
+                    return;
+                };
+                self.backup_volume(tab_id, name, cx);
+            }
+            RowAction::RestoreVolume => {
+                let RowTarget::Volume(name) = target else {
+                    return;
+                };
+                self.restore_volume(tab_id, Some(name), cx);
             }
             RowAction::CopyId | RowAction::CopyName => {}
         }
