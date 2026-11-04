@@ -2089,6 +2089,9 @@ menu:
   connect:
     en: Connect
     zh-CN: 连接
+  manage_containers:
+    en: Manage Containers
+    zh-CN: 管理此主机的容器
   new_session_here:
     en: New Session Here
     zh-CN: 在此新建会话

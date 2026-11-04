@@ -140,6 +140,7 @@ fn session_context_menu(
     session_id: SessionId,
     folder_id: Option<transom_core::FolderId>,
     menu_host: Option<String>,
+    is_ssh: bool,
     app_entity: Entity<AppShell>,
 ) -> impl Fn(
     gpui_kit::component::menu::PopupMenu,
@@ -162,6 +163,18 @@ fn session_context_menu(
                 }
             },
         ));
+        if is_ssh {
+            let container_app = app.clone();
+            menu = menu.item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.manage_containers").to_string(),
+                IconName::Boxes,
+                move |_, window, cx| {
+                    container_app.update(cx, |this, cx| {
+                        this.open_container_workspace_for_session(session_id, window, cx);
+                    });
+                },
+            ));
+        }
         if folder_id.is_some() {
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.move_to_root").to_string(),
@@ -254,6 +267,7 @@ fn session_context_menu(
 
 /// 会话行的展示快照：由目录会话与侧栏选中态推导。
 struct SessionRowVisuals {
+    is_ssh: bool,
     menu_host: Option<String>,
     icon_name: IconName,
     detail_text: String,
@@ -346,7 +360,9 @@ impl AppShell {
         } else {
             p.list_background
         };
+        let is_ssh = matches!(session.connection, transom_core::Connection::Ssh(_));
         SessionRowVisuals {
+            is_ssh,
             menu_host,
             icon_name,
             detail_text,
@@ -395,6 +411,7 @@ impl AppShell {
         let folder_id = session.folder_id;
         let app_entity = cx.entity().clone();
         let SessionRowVisuals {
+            is_ssh,
             menu_host,
             icon_name,
             detail_text,
@@ -443,6 +460,7 @@ impl AppShell {
                 session_id,
                 folder_id,
                 menu_host,
+                is_ssh,
                 app_entity.clone(),
             ));
         // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配

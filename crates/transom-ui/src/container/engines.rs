@@ -1,6 +1,7 @@
 //! 引擎连接的发现、保存、删除与工作区打开。
 
 use super::*;
+use transom_core::{ContainerEndpoint, ContainerEngineKind, ContainerEngineRef, SessionId};
 
 impl AppShell {
     /// 打开（或聚焦）一个引擎连接的工作区标签。
@@ -45,6 +46,67 @@ impl AppShell {
         self.state
             .send_command(ContainerCommand::Connect { tab_id, profile });
         cx.notify();
+    }
+
+    /// 通过已有 SSH 主机会话一键打开或复用其远端 Docker 工作区。
+    pub(crate) fn open_container_workspace_for_session(
+        &mut self,
+        session_id: SessionId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session) = self
+            .state
+            .catalog
+            .sessions
+            .iter()
+            .find(|s| s.id == session_id)
+        else {
+            return;
+        };
+        let Connection::Ssh(ssh) = &session.connection else {
+            return;
+        };
+
+        let identity_file = match &ssh.auth {
+            transom_core::AuthMethod::PrivateKey { path, .. } => {
+                Some(path.display().to_string())
+            }
+            _ => None,
+        };
+
+        let endpoint = ContainerEndpoint::Ssh {
+            host: ssh.host.clone(),
+            port: if ssh.port != 22 { Some(ssh.port) } else { None },
+            user: if !ssh.username.is_empty() {
+                Some(ssh.username.clone())
+            } else {
+                None
+            },
+            identity_file,
+        };
+
+        let engine = ContainerEngineRef {
+            kind: ContainerEngineKind::Docker,
+            endpoint,
+        };
+
+        // 若已有相同端点的已保存引擎配置则优先复用，否则生成按会话命名的专属临时 Profile。
+        let profile = self
+            .state
+            .catalog
+            .engines
+            .iter()
+            .find(|p| p.engine == engine)
+            .cloned()
+            .unwrap_or_else(|| {
+                ContainerEngineProfile::new(
+                    format!("{} (Docker)", session.name),
+                    engine,
+                )
+            });
+
+        self.open_engine_workspace(profile, window, cx);
     }
 
     /// 保存引擎连接配置（新建或更新）。
