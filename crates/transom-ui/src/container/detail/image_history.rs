@@ -8,7 +8,7 @@
 //!   当外部镜像剥离或缺失构建历史元数据时，自动降级为 RootFS.Layers 的 SHA256 散列指纹层展示，确保任何时候都能追踪每一层镜像分层。
 
 use super::*;
-use ::gpui::ClipboardItem;
+use gpui_kit::ClipboardItem;
 
 /// 渲染镜像构建历史（History）独立页签时间线。
 pub(crate) fn render_image_history(

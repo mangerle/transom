@@ -42,6 +42,7 @@ pub(super) use files::render_files;
 use header::ContainerHeaderView;
 pub(super) use header::detail_icon;
 pub(crate) use image::render_image_detail;
+#[cfg(test)]
 pub(crate) use image_history::clean_dockerfile_instruction;
 use logs::ContainerLogsView;
 pub(super) use logs::render_logs;
@@ -232,10 +233,6 @@ impl AppShell {
                         preview_editor: files.3.as_ref(),
                         preview_saving: files.4,
                         loading: files.5,
-                        rename_from: files.6.as_deref(),
-                        rename_input: files.7.as_ref(),
-                        new_dir_open: files.8,
-                        new_dir_input: files.9.as_ref(),
                         scroll: &files.10,
                         readonly: is_volume,
                     },

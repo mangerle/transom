@@ -13,10 +13,6 @@ pub(crate) struct ContainerFilesView<'a> {
     pub(super) preview_editor: Option<&'a Entity<TextareaState>>,
     pub(super) preview_saving: bool,
     pub(super) loading: bool,
-    pub(super) rename_from: Option<&'a str>,
-    pub(super) rename_input: Option<&'a Entity<InputState>>,
-    pub(super) new_dir_open: bool,
-    pub(super) new_dir_input: Option<&'a Entity<InputState>>,
     pub(super) scroll: &'a ScrollHandle,
     pub(super) readonly: bool,
 }
@@ -34,10 +30,6 @@ pub(crate) fn render_files(
         preview_editor,
         preview_saving,
         loading,
-        rename_from: _,
-        rename_input: _,
-        new_dir_open: _,
-        new_dir_input: _,
         scroll,
         readonly,
     } = view;

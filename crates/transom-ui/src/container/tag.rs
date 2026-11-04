@@ -1,22 +1,16 @@
-//! 镜像打标签输入条：打开、取消与提交。
+//! 镜像打标签状态管理：打开、取消与提交。
 //!
-//! 设计原理（Why）：直接在镜像详情头部展开标签输入条，支持用户输入新 tag
+//! 设计原理（Why）：通过居中模态弹窗支持用户输入新 tag
 //! （如 `my-app:v1.0.0` 或 `registry.example.com/repo:tag`），
 //! 输入完成下发 TagImage 命令，并在成功后自动刷新镜像列表。
 
 use super::*;
 use crate::app::AppShell;
-use crate::divider::{DividerEdge, DividerStyled};
-use crate::palette::Palette;
-use gpui_kit::assets::IconName;
-use gpui_kit::base::h_flex;
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::Sizable;
+use gpui_kit::component::input::InputState;
 use transom_core::TabId;
 
 impl AppShell {
-    /// 打开镜像打标签输入条。
+    /// 打开镜像打标签弹窗。
     pub(crate) fn open_image_tag(
         &mut self,
         tab_id: TabId,
@@ -43,7 +37,7 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 提交镜像新标签。
+    /// 提交镜像打标签。
     pub(crate) fn submit_image_tag(
         &mut self,
         tab_id: TabId,
@@ -94,65 +88,5 @@ impl AppShell {
             },
         );
         cx.notify();
-    }
-
-    /// 渲染镜像打标签输入条。
-    pub(crate) fn render_image_tag_bar(
-        &mut self,
-        tab_id: TabId,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let (_image, input) = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| workspace.tag_image.clone())?;
-
-        Some(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .px_3()
-                .py_1p5()
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Bottom, p.divider_width)
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.tag.label").to_string()),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(Input::new(&input).xsmall()),
-                )
-                .child(
-                    Button::new("tag-submit")
-                        .xsmall()
-                        .primary()
-                        .icon(IconName::Check)
-                        .label(rust_i18n::t!("common.confirm").to_string())
-                        .on_click(cx.listener({
-                            move |this, _, window, cx| {
-                                this.submit_image_tag(tab_id, window, cx);
-                            }
-                        })),
-                )
-                .child(
-                    Button::new("tag-cancel")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::Close)
-                        .label(rust_i18n::t!("common.cancel").to_string())
-                        .on_click(cx.listener({
-                            move |this, _, _, cx| {
-                                this.cancel_image_tag(tab_id, cx);
-                            }
-                        })),
-                )
-                .into_any_element(),
-        )
     }
 }

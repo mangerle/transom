@@ -1,21 +1,15 @@
-//! 网络连接容器输入条：展开、取消与提交。
+//! 网络连接容器状态管理：打开、取消与提交。
 //!
-//! 设计原理（Why）：直接在网络详情头部展开内联输入条，输入容器名称或 ID 即可快速
-//! 将容器接入当前网络，无需复杂多步弹窗；操作成功后自动刷新网络与容器列表。
+//! 设计原理（Why）：通过全局居中弹窗输入容器名称或 ID 快速将容器接入当前网络；
+//! 操作提交后进入 busy 状态并自动追踪刷新网络与容器列表。
 
 use super::*;
 use crate::app::AppShell;
-use crate::divider::{DividerEdge, DividerStyled};
-use crate::palette::Palette;
-use gpui_kit::assets::IconName;
-use gpui_kit::base::h_flex;
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::Sizable;
+use gpui_kit::component::input::InputState;
 use transom_core::{ContainerCommand, ContainerRequestId, TabId};
 
 impl AppShell {
-    /// 打开网络连接容器输入条。
+    /// 打开网络连接容器弹窗。
     pub(crate) fn open_network_connect(
         &mut self,
         tab_id: TabId,
@@ -87,65 +81,5 @@ impl AppShell {
             },
         );
         cx.notify();
-    }
-
-    /// 渲染网络连接容器输入条。
-    pub(crate) fn render_network_connect_bar(
-        &mut self,
-        tab_id: TabId,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let (_network, input) = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| workspace.connect_network.clone())?;
-
-        Some(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .px_3()
-                .py_1p5()
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Bottom, p.divider_width)
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.network_connect.label").to_string()),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(Input::new(&input).xsmall()),
-                )
-                .child(
-                    Button::new("network-connect-submit")
-                        .xsmall()
-                        .primary()
-                        .icon(IconName::Check)
-                        .label(rust_i18n::t!("common.confirm").to_string())
-                        .on_click(cx.listener({
-                            move |this, _, window, cx| {
-                                this.submit_network_connect(tab_id, window, cx);
-                            }
-                        })),
-                )
-                .child(
-                    Button::new("network-connect-cancel")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::Close)
-                        .label(rust_i18n::t!("common.cancel").to_string())
-                        .on_click(cx.listener({
-                            move |this, _, _, cx| {
-                                this.cancel_network_connect(tab_id, cx);
-                            }
-                        })),
-                )
-                .into_any_element(),
-        )
     }
 }
