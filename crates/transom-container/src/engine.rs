@@ -146,6 +146,24 @@ impl Engine {
         }
     }
 
+    pub async fn system_df(&self) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.system_df().await,
+            EngineBackend::Cli(cli) => cli.system_df().await,
+        }
+    }
+
+    pub async fn system_prune(
+        &self,
+        all: bool,
+        volumes: bool,
+    ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.system_prune(all, volumes).await,
+            EngineBackend::Cli(cli) => cli.system_prune(all, volumes).await,
+        }
+    }
+
     pub async fn inspect_image(
         &self,
         image: &str,

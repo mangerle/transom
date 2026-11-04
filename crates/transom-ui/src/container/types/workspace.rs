@@ -164,6 +164,14 @@ pub(crate) struct ContainerWorkspaceState {
     /// 镜像推送到远端仓库弹窗状态。
     pub(crate) push_dialog: Option<ContainerPushDialog>,
     pub(crate) prune_armed: Option<ContainerPruneTarget>,
+    /// 系统全局磁盘用量分析数据。
+    pub(crate) system_df: Option<transom_core::ContainerSystemDiskUsage>,
+    pub(crate) system_df_loading: bool,
+    pub(crate) system_df_request: Option<ContainerRequestId>,
+    pub(crate) system_df_dialog_open: bool,
+    pub(crate) system_prune_all: bool,
+    pub(crate) system_prune_volumes: bool,
+    pub(crate) system_prune_running: bool,
     /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
@@ -288,6 +296,13 @@ impl ContainerWorkspaceState {
             hub_dialog: None,
             push_dialog: None,
             prune_armed: None,
+            system_df: None,
+            system_df_loading: false,
+            system_df_request: None,
+            system_df_dialog_open: false,
+            system_prune_all: false,
+            system_prune_volumes: false,
+            system_prune_running: false,
             notice: None,
             busy: false,
             _search_subscription: search_subscription,

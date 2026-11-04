@@ -14,12 +14,14 @@ mod engine;
 mod export;
 mod inventory;
 mod registry;
+mod system;
 
 pub use create::*;
 pub use engine::*;
 pub use export::*;
 pub use inventory::*;
 pub use registry::*;
+pub use system::*;
 
 /// 截短容器/镜像 ID，供列表与日志定位。
 pub fn short_id(id: &str) -> String {

@@ -53,7 +53,7 @@ pub(crate) fn render_container_changes(
         .ghost()
         .xsmall()
         .icon(IconName::RefreshCw)
-        .label(rust_i18n::t!("common.refresh").to_string())
+        .label(rust_i18n::t!("container.changes.refresh").to_string())
         .on_click(cx.listener({
             let cid = refresh_cid.clone();
             move |this, _, _, cx| {
@@ -121,7 +121,7 @@ pub(crate) fn render_container_changes(
         return v_flex()
             .child(toolbar)
             .child(centered_hint(
-                rust_i18n::t!("common.no_results").to_string(),
+                rust_i18n::t!("container.changes.no_results").to_string(),
                 p,
             ))
             .into_any_element();

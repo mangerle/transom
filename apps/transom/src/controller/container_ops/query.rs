@@ -159,6 +159,27 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             |engine| async move { engine.prune_networks().await },
             |request_id, report| ContainerAppEvent::NetworksPruned { request_id, report },
         ),
+        ContainerCommand::SystemDf { tab_id, request_id } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            |engine| async move { engine.system_df().await },
+            |request_id, usage| ContainerAppEvent::SystemDfLoaded { request_id, usage },
+        ),
+        ContainerCommand::SystemPrune {
+            tab_id,
+            request_id,
+            all,
+            volumes,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine| async move { engine.system_prune(all, volumes).await },
+            |request_id, report| ContainerAppEvent::SystemPruned { request_id, report },
+        ),
         ContainerCommand::SearchImages {
             tab_id,
             request_id,

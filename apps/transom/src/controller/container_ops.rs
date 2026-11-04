@@ -111,6 +111,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::PruneVolumes { .. }
         | ContainerCommand::PruneImages { .. }
         | ContainerCommand::PruneNetworks { .. }
+        | ContainerCommand::SystemDf { .. }
+        | ContainerCommand::SystemPrune { .. }
         | ContainerCommand::SearchImages { .. } => query::handle(state, ctx, command),
         ContainerCommand::RunCompose { .. }
         | ContainerCommand::Lifecycle { .. }

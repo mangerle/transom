@@ -44,6 +44,9 @@ impl ModalKind {
             ModalKind::ContainerPush => shell
                 .find_container_modal_tab(|ws| ws.push_dialog.is_some())
                 .is_some(),
+            ModalKind::ContainerSystemDf => shell
+                .find_container_modal_tab(|ws| ws.system_df_dialog_open)
+                .is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -144,6 +147,17 @@ impl ModalKind {
                 {
                     if let Some(ws) = shell.state.container_workspace_mut(tab_id) {
                         ws.push_dialog = None;
+                    }
+                    cx.notify();
+                }
+                Some(true)
+            }
+            ModalKind::ContainerSystemDf => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.system_df_dialog_open)
+                {
+                    if let Some(ws) = shell.state.container_workspace_mut(tab_id) {
+                        ws.system_df_dialog_open = false;
                     }
                     cx.notify();
                 }
@@ -303,7 +317,9 @@ impl ModalKind {
                 .and_then(|(_, ws)| ws.push_dialog.as_ref())
                 .map(|push| ModalFocus::Input(push.target_repo.clone()))
                 .unwrap_or(ModalFocus::None),
-            ModalKind::ContainerConfirm | ModalKind::ContainerExportConfig => ModalFocus::None,
+            ModalKind::ContainerConfirm
+            | ModalKind::ContainerExportConfig
+            | ModalKind::ContainerSystemDf => ModalFocus::None,
             _ => return None,
         };
         Some(focus)

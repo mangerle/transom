@@ -4549,6 +4549,12 @@ container:
     no_changes:
       en: No file system changes compared to base image
       zh-CN: 该容器与基础镜像相比暂无文件系统变更
+    no_results:
+      en: No matching changes
+      zh-CN: 无匹配的变更
+    refresh:
+      en: Refresh changes
+      zh-CN: 刷新变更
   notice:
     dismiss:
       en: Dismiss
@@ -5159,6 +5165,12 @@ container:
     search_placeholder:
       en: Search JSON keys or values...
       zh-CN: 搜索 JSON 键名或参数值...
+    stats_total:
+      en: '%{lines} lines · %{bytes} bytes'
+      zh-CN: '%{lines} 行 · %{bytes} 字节'
+    stats_matched:
+      en: 'Matched %{matched} / %{total} lines'
+      zh-CN: '匹配 %{matched} / %{total} 行'
   field:
     context_path:
       en: Context path
@@ -5966,4 +5978,63 @@ container:
     submit:
       en: Start Push
       zh-CN: 开始推送
+  system_df:
+    title:
+      en: Storage Analysis & System Prune
+      zh-CN: 存储分析与联合清理
+    subtitle:
+      en: Analyze host disk usage across images, containers, volumes, and build cache
+      zh-CN: 分析镜像、容器、数据卷与构建缓存占用的宿主机磁盘空间
+    total_used:
+      en: Total Space Used
+      zh-CN: 引擎占用总空间
+    total_reclaimable:
+      en: Total Reclaimable
+      zh-CN: 预计可安全释放
+    category_images:
+      en: Images
+      zh-CN: 镜像资产
+    category_containers:
+      en: Containers
+      zh-CN: 容器实例
+    category_volumes:
+      en: Local Volumes
+      zh-CN: 本地数据卷
+    category_build_cache:
+      en: Build Cache
+      zh-CN: 构建缓存
+    reclaimable:
+      en: Reclaimable
+      zh-CN: 可释放
+    opt_enabled:
+      en: Enabled
+      zh-CN: 已开启
+    opt_disabled:
+      en: Disabled
+      zh-CN: 已关闭
+    opt_prune_all:
+      en: Clean all unused images
+      zh-CN: 清理所有未被使用的镜像
+    opt_prune_all_hint:
+      en: When disabled, only dangling (untagged) images are removed
+      zh-CN: 关闭时仅清理悬空（无标签）镜像，开启后将清理所有无容器引用的镜像
+    opt_prune_volumes:
+      en: Prune unused anonymous and named volumes
+      zh-CN: 联合清理未被使用的本地数据卷
+    opt_prune_volumes_hint:
+      en: Unused volumes will be permanently removed
+      zh-CN: 警告：当前未被任何容器引用的本地卷数据将被彻底清除
+    btn_refresh:
+      en: Refresh
+      zh-CN: 刷新
+    btn_prune:
+      en: Execute System Prune
+      zh-CN: 一键系统联合清理
+    pruning:
+      en: Pruning system…
+      zh-CN: 正在执行系统级深度清理…
+    prune_success:
+      en: System prune completed, reclaimed %{reclaimed} disk space
+      zh-CN: 系统联合清理完成，已安全释放 %{reclaimed} 磁盘空间
+
 

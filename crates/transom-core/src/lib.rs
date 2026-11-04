@@ -46,7 +46,7 @@ pub use model::container::{
     ContainerFileKind, ContainerFileSystemChange, ContainerHealthDetails, ContainerHealthLog, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerInterfaceIo,
     ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
     ContainerNetworkSpec, ContainerNetworkSummary, ContainerPathChangeKind, ContainerPort, ContainerPortPublish,
-    ContainerProcess, ContainerPruneReport, ContainerRegistry, ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary,
+    ContainerProcess, ContainerPruneReport, ContainerRegistry, ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary, ContainerSystemDiskUsage,
     ContainerVolumeDetails, ContainerVolumeSummary, ContainerUpdateSpec, ImageLayerProgress, ImageSearchResult, TlsConfig, compose_projects,
     generate_docker_compose, generate_docker_run, is_valid_container_name, short_id,
 };

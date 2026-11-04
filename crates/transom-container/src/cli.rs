@@ -349,6 +349,99 @@ impl CliBackend {
         Ok(parse_diff_output(&output.stdout))
     }
 
+    /// 查询系统全局磁盘占用分析。
+    pub async fn system_df(&self) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
+        let output = self
+            .run(&[
+                "system".to_string(),
+                "df".to_string(),
+                "--format={{json .}}".to_string(),
+            ])
+            .await?;
+        if output.success {
+            let mut usage = transom_core::ContainerSystemDiskUsage::default();
+            for line in output.stdout.lines() {
+                let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+                    continue;
+                };
+                let typ = val.get("Type").and_then(|v| v.as_str()).unwrap_or_default();
+                let size_str = val.get("Size").and_then(|v| v.as_str()).unwrap_or_default();
+                let size_bytes = parse_human_size(size_str).unwrap_or(0);
+                let count = val.get("TotalCount").and_then(|v| v.as_str()).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+                let reclaimable_str = val.get("Reclaimable").and_then(|v| v.as_str()).unwrap_or_default();
+                let reclaimable_bytes = reclaimable_str.split('(').next().and_then(parse_human_size).unwrap_or(0);
+
+                if typ.eq_ignore_ascii_case("images") {
+                    usage.images_count = count;
+                    usage.images_size = size_bytes;
+                    usage.images_reclaimable = reclaimable_bytes;
+                } else if typ.eq_ignore_ascii_case("containers") {
+                    usage.containers_count = count;
+                    usage.containers_size = size_bytes;
+                    usage.containers_reclaimable = reclaimable_bytes;
+                } else if typ.eq_ignore_ascii_case("local volumes") || typ.eq_ignore_ascii_case("volumes") {
+                    usage.volumes_count = count;
+                    usage.volumes_size = size_bytes;
+                    usage.volumes_reclaimable = reclaimable_bytes;
+                } else if typ.eq_ignore_ascii_case("build cache") {
+                    usage.build_cache_count = count;
+                    usage.build_cache_size = size_bytes;
+                    usage.build_cache_reclaimable = reclaimable_bytes;
+                }
+            }
+            usage.recalculate_totals();
+            return Ok(usage);
+        }
+
+        let mut usage = transom_core::ContainerSystemDiskUsage::default();
+        if let Ok(images) = self.list_images().await {
+            usage.images_count = images.len();
+            usage.images_size = images.iter().map(|img| img.size).sum();
+        }
+        if let Ok(volumes) = self.list_volumes().await {
+            usage.volumes_count = volumes.len();
+        }
+        if let Ok(containers) = self.list_containers().await {
+            usage.containers_count = containers.len();
+        }
+        usage.recalculate_totals();
+        Ok(usage)
+    }
+
+    /// 执行系统级联合清理。
+    pub async fn system_prune(
+        &self,
+        all: bool,
+        volumes: bool,
+    ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+        let mut args = vec![
+            "system".to_string(),
+            "prune".to_string(),
+            "-f".to_string(),
+        ];
+        if all {
+            args.push("-a".to_string());
+        }
+        if volumes {
+            args.push("--volumes".to_string());
+        }
+        let output = self.run(&args).await?;
+        let mut deleted = Vec::new();
+        let mut reclaimed = 0;
+        for line in output.stdout.lines() {
+            let line = line.trim();
+            if let Some(space_str) = line.strip_prefix("Total reclaimed space:") {
+                reclaimed = parse_human_size(space_str.trim()).unwrap_or(0);
+            } else if line.starts_with("Deleted ") || line.starts_with("deleted:") {
+                deleted.push(line.to_string());
+            }
+        }
+        Ok(transom_core::ContainerPruneReport {
+            deleted,
+            reclaimed,
+        })
+    }
+
     pub async fn inspect_image(
         &self,
         image: &str,

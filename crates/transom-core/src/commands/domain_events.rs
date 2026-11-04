@@ -14,7 +14,7 @@ use crate::model::container::{
     ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
     ContainerFileEntry, ContainerFileSystemChange, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
     ContainerNetworkSummary, ContainerProcess, ContainerPruneReport, ContainerStats,
-    ContainerSummary, ContainerVolumeDetails, ContainerVolumeSummary,
+    ContainerSummary, ContainerSystemDiskUsage, ContainerVolumeDetails, ContainerVolumeSummary,
 };
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;
@@ -326,6 +326,16 @@ pub enum ContainerAppEvent {
     },
     /// 清理未使用网络的结果。
     NetworksPruned {
+        request_id: ContainerRequestId,
+        report: ContainerPruneReport,
+    },
+    /// 全局磁盘空间占用查询结果。
+    SystemDfLoaded {
+        request_id: ContainerRequestId,
+        usage: ContainerSystemDiskUsage,
+    },
+    /// 系统级联合清理完成的结果。
+    SystemPruned {
         request_id: ContainerRequestId,
         report: ContainerPruneReport,
     },

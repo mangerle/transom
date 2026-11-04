@@ -489,4 +489,16 @@ pub enum ContainerCommand {
         tab_id: TabId,
         request_id: ContainerRequestId,
     },
+    /// 查询全局系统磁盘占用（对应 Docker system df）。
+    SystemDf {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    /// 执行系统级联合清理（对应 Docker system prune）。
+    SystemPrune {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        all: bool,
+        volumes: bool,
+    },
 }

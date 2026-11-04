@@ -7,9 +7,9 @@
 use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
-    ChangeItem, ContainerInspect, ContainerListItem, ContainerUpdateRequest, ExecCreateResponse,
-    ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
-    ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, TopResponse, VersionResponse, VolumeItem,
+    BuildCachePruneResponse, ChangeItem, ContainerInspect, ContainerListItem, ContainerUpdateRequest, ContainersPruneResponse,
+    ExecCreateResponse, ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
+    ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem,
     VolumeListResponse, VolumePruneResponse,
 };
 use crate::transport::EngineTransport;
@@ -24,7 +24,7 @@ use transom_core::ContainerEngineKind;
 use transom_core::{
     ContainerDetails, ContainerFileSystemChange, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
-    ContainerRegistryAuth, ContainerStats, ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails,
+    ContainerRegistryAuth, ContainerStats, ContainerSummary, ContainerSystemDiskUsage, ContainerUpdateSpec, ContainerVolumeDetails,
     ContainerVolumeSummary,
 };
 
@@ -467,10 +467,107 @@ impl DockerApi {
     /// 设计原理（Why）：与卷不同，镜像的 prune 默认语义就是 `dangling=true`，
     /// 这里显式带上过滤，避免依赖引擎默认值；过滤条件同样只能走查询参数。
     /// 删除对象既可能是取消标签（`Untagged`）也可能是真删层（`Deleted`），
-    /// 两种都收进同一份报告，界面按条数回报。
-    ///
-    /// # Errors
-    /// 引擎不可达、返回非 2xx 或响应无法解析时返回 [`ContainerError`]。
+    /// 清理所有已停止的容器。
+    pub async fn prune_containers(&self) -> Result<ContainerPruneReport, ContainerError> {
+        const OPERATION: &str = "清理已停止容器";
+        let response = self.send(Method::POST, "/containers/prune", None, OPERATION).await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, OPERATION, body, "containers"));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let report: ContainersPruneResponse =
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+                operation: OPERATION.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(ContainerPruneReport {
+            deleted: report.containers_deleted,
+            reclaimed: report.space_reclaimed,
+        })
+    }
+
+    /// 查询全局系统磁盘占用分析。
+    pub async fn system_df(&self) -> Result<ContainerSystemDiskUsage, ContainerError> {
+        const OPERATION: &str = "查询系统磁盘占用";
+        let response = self.send(Method::GET, "/system/df", None, OPERATION).await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, OPERATION, body, "system"));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let report: SystemDfResponse =
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+                operation: OPERATION.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(report.into_disk_usage())
+    }
+
+    /// 系统级联合清理（已停止容器、镜像、网络、可选数据卷与构建缓存）。
+    pub async fn system_prune(
+        &self,
+        all: bool,
+        volumes: bool,
+    ) -> Result<ContainerPruneReport, ContainerError> {
+        let mut total_deleted = Vec::new();
+        let mut total_reclaimed: u64 = 0;
+
+        // 1. 清理已停止容器
+        if let Ok(report) = self.prune_containers().await {
+            total_deleted.extend(report.deleted);
+            total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
+        }
+
+        // 2. 清理镜像（all 为 true 时清理全部未用镜像，否则仅清理悬空镜像）
+        let img_filter = if all { "{}" } else { r#"{"dangling":["true"]}"# };
+        let img_suffix = format!("/images/prune?filters={}", http::percent_encode(img_filter));
+        if let Ok(response) = self.send(Method::POST, &img_suffix, None, "清理镜像").await
+            && response.status.is_success()
+            && let Ok(bytes) = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await
+            && let Ok(report) = serde_json::from_slice::<ImagePruneResponse>(&bytes)
+        {
+            let deleted: Vec<String> = report
+                .images_deleted
+                .into_iter()
+                .flat_map(|entry| [entry.untagged, entry.deleted])
+                .flatten()
+                .collect();
+            total_deleted.extend(deleted);
+            total_reclaimed = total_reclaimed.saturating_add(report.space_reclaimed);
+        }
+
+        // 3. 清理未使用网络
+        if let Ok(report) = self.prune_networks().await {
+            total_deleted.extend(report.deleted);
+            total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
+        }
+
+        // 4. 清理未使用数据卷（若开启）
+        if volumes && let Ok(report) = self.prune_volumes().await {
+            total_deleted.extend(report.deleted);
+            total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
+        }
+
+        // 5. 清理构建缓存（尝试执行，失败安全降级）
+        if let Ok(response) = self.send(Method::POST, "/build/prune", None, "清理构建缓存").await
+            && response.status.is_success()
+            && let Ok(bytes) = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await
+            && let Ok(report) = serde_json::from_slice::<BuildCachePruneResponse>(&bytes)
+        {
+            total_deleted.extend(report.caches_deleted);
+            total_reclaimed = total_reclaimed.saturating_add(report.space_reclaimed);
+        }
+
+        Ok(ContainerPruneReport {
+            deleted: total_deleted,
+            reclaimed: total_reclaimed,
+        })
+    }
+
+    /// 清理悬空镜像。
     pub async fn prune_images(&self) -> Result<ContainerPruneReport, ContainerError> {
         const OPERATION: &str = "清理悬空镜像";
         let suffix = format!(

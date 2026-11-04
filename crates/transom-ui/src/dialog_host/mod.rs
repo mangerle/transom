@@ -91,6 +91,8 @@ pub(crate) enum ModalKind {
     ContainerHub,
     /// 镜像推送到远端仓库。
     ContainerPush,
+    /// 全局系统磁盘用量看板与空间体检。
+    ContainerSystemDf,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -164,6 +166,7 @@ impl ModalKind {
         ModalKind::ContainerFileNewDir,
         ModalKind::ContainerHub,
         ModalKind::ContainerPush,
+        ModalKind::ContainerSystemDf,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -249,6 +252,10 @@ impl ModalKind {
             ModalKind::ContainerPush => (
                 Some(crate::theme::tokens::dialog::FILTER),
                 "container-push",
+            ),
+            ModalKind::ContainerSystemDf => (
+                Some(crate::theme::tokens::dialog::AUDIT),
+                "container-system-df",
             ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
@@ -389,6 +396,15 @@ impl ModalKind {
                     div().into_any_element()
                 }
             }
+            ModalKind::ContainerSystemDf => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.system_df_dialog_open)
+                {
+                    shell.render_container_system_df_dialog_body(tab_id, app, window, cx, p)
+                } else {
+                    div().into_any_element()
+                }
+            }
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -441,6 +457,7 @@ mod tests {
         ModalKind::ContainerFileNewDir,
         ModalKind::ContainerHub,
         ModalKind::ContainerPush,
+        ModalKind::ContainerSystemDf,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

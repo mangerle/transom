@@ -22,6 +22,7 @@ mod rename;
 mod sidebar;
 mod stats;
 mod stats_actions;
+mod system_df_dialog;
 mod tag;
 mod terminal;
 mod toast;

@@ -289,6 +289,16 @@ impl AppShell {
                 })))
             })
             .child(
+                Button::new("container-system-df-btn")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::HardDrive)
+                    .tooltip(rust_i18n::t!("container.system_df.title").to_string())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.open_container_system_df_dialog(tab_id, cx);
+                    })),
+            )
+            .child(
                 Button::new("container-refresh")
                     .ghost()
                     .xsmall()

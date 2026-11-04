@@ -49,9 +49,19 @@ pub(crate) fn render_raw_inspect(
         }));
 
     let stats_label = if search_keyword.is_empty() {
-        format!("{total_lines} 行 · {} 字节", inspect_json.len())
+        rust_i18n::t!(
+            "container.inspect.stats_total",
+            lines = total_lines,
+            bytes = inspect_json.len()
+        )
+        .to_string()
     } else {
-        format!("匹配 {matching_count} / {total_lines} 行")
+        rust_i18n::t!(
+            "container.inspect.stats_matched",
+            matched = matching_count,
+            total = total_lines
+        )
+        .to_string()
     };
 
     let toolbar = h_flex()

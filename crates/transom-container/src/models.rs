@@ -536,6 +536,24 @@ pub struct ImagePruneEntry {
     pub deleted: Option<String>,
 }
 
+/// `POST /containers/prune` 响应。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ContainersPruneResponse {
+    #[serde(rename = "ContainersDeleted", default, deserialize_with = "null_as_empty")]
+    pub containers_deleted: Vec<String>,
+    #[serde(rename = "SpaceReclaimed", default)]
+    pub space_reclaimed: u64,
+}
+
+/// `POST /build/prune` 响应。
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct BuildCachePruneResponse {
+    #[serde(rename = "CachesDeleted", default, deserialize_with = "null_as_empty")]
+    pub caches_deleted: Vec<String>,
+    #[serde(rename = "SpaceReclaimed", default)]
+    pub space_reclaimed: u64,
+}
+
 /// `POST /volumes/prune` 响应。
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct VolumePruneResponse {
@@ -1141,11 +1159,136 @@ impl From<ImageSearchItem> for transom_core::ImageSearchResult {
     }
 }
 
+/// 系统全局磁盘占用响应（GET /system/df）。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct SystemDfResponse {
+    pub layers_size: Option<u64>,
+    #[serde(default)]
+    pub images: Option<Vec<DfImageItem>>,
+    #[serde(default)]
+    pub containers: Option<Vec<DfContainerItem>>,
+    #[serde(default)]
+    pub volumes: Option<Vec<DfVolumeItem>>,
+    #[serde(default)]
+    pub build_cache: Option<Vec<DfBuildCacheItem>>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct DfImageItem {
+    pub id: Option<String>,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub shared_size: u64,
+    #[serde(default)]
+    pub containers: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct DfContainerItem {
+    pub id: Option<String>,
+    #[serde(default)]
+    pub size_rw: u64,
+    #[serde(default)]
+    pub size_root_fs: u64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct DfVolumeItem {
+    pub name: Option<String>,
+    #[serde(default)]
+    pub usage_data: Option<DfVolumeUsageData>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct DfVolumeUsageData {
+    #[serde(default)]
+    pub size: i64,
+    #[serde(default)]
+    pub ref_count: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
+pub struct DfBuildCacheItem {
+    #[serde(rename = "ID")]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub in_use: bool,
+    #[serde(default)]
+    pub shared: bool,
+}
+
+impl SystemDfResponse {
+    /// 转换为 transom-core 的聚合用量结构体。
+    pub fn into_disk_usage(self) -> transom_core::ContainerSystemDiskUsage {
+        let mut usage = transom_core::ContainerSystemDiskUsage::default();
+
+        if let Some(images) = self.images {
+            usage.images_count = images.len();
+            for img in images {
+                usage.images_size = usage.images_size.saturating_add(img.size);
+                if img.containers <= 0 {
+                    usage.images_reclaimable = usage.images_reclaimable.saturating_add(img.size);
+                }
+            }
+        }
+
+        if let Some(containers) = self.containers {
+            usage.containers_count = containers.len();
+            for c in containers {
+                usage.containers_size = usage.containers_size.saturating_add(c.size_rw);
+                // 容器的可写层空间一般在清理容器时释放
+                usage.containers_reclaimable = usage.containers_reclaimable.saturating_add(c.size_rw);
+            }
+        }
+
+        if let Some(volumes) = self.volumes {
+            usage.volumes_count = volumes.len();
+            for v in volumes {
+                if let Some(data) = v.usage_data {
+                    let sz = data.size.max(0) as u64;
+                    usage.volumes_size = usage.volumes_size.saturating_add(sz);
+                    if data.ref_count <= 0 {
+                        usage.volumes_reclaimable = usage.volumes_reclaimable.saturating_add(sz);
+                    }
+                }
+            }
+        }
+
+        if let Some(cache_items) = self.build_cache {
+            usage.build_cache_count = cache_items.len();
+            for cache in cache_items {
+                usage.build_cache_size = usage.build_cache_size.saturating_add(cache.size);
+                if !cache.in_use {
+                    usage.build_cache_reclaimable = usage.build_cache_reclaimable.saturating_add(cache.size);
+                }
+            }
+        }
+
+        usage.recalculate_totals();
+        usage
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         ChangeItem, ContainerInspect, ContainerListItem, HealthInfo, ImageListItem, ImagePruneResponse, NetworkItem,
-        NetworkSettings, StatsResponse, TopResponse, VersionResponse, VolumeItem,
+        NetworkSettings, StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem,
         VolumePruneResponse,
     };
     use transom_core::ContainerState;
@@ -1373,5 +1516,41 @@ mod tests {
         assert_eq!(iter.next().unwrap().into_change().kind, transom_core::ContainerPathChangeKind::Modified);
         assert_eq!(iter.next().unwrap().into_change().kind, transom_core::ContainerPathChangeKind::Added);
         assert_eq!(iter.next().unwrap().into_change().kind, transom_core::ContainerPathChangeKind::Deleted);
+    }
+
+    #[test]
+    fn system_df_deserialization_and_conversion() {
+        let json = r#"{
+            "LayersSize": 1024000,
+            "Images": [
+                {"Id": "img1", "Size": 1000, "SharedSize": 0, "Containers": 0},
+                {"Id": "img2", "Size": 2000, "SharedSize": 0, "Containers": 1}
+            ],
+            "Containers": [
+                {"Id": "c1", "SizeRw": 500, "SizeRootFs": 3000}
+            ],
+            "Volumes": [
+                {"Name": "v1", "UsageData": {"Size": 800, "RefCount": 0}},
+                {"Name": "v2", "UsageData": {"Size": 1200, "RefCount": 2}}
+            ],
+            "BuildCache": [
+                {"ID": "bc1", "Size": 600, "InUse": false, "Shared": false}
+            ]
+        }"#;
+        let resp: SystemDfResponse = serde_json::from_str(json).expect("必须成功反序列化 SystemDfResponse");
+        let usage = resp.into_disk_usage();
+        assert_eq!(usage.images_count, 2);
+        assert_eq!(usage.images_size, 3000);
+        assert_eq!(usage.images_reclaimable, 1000);
+        assert_eq!(usage.containers_count, 1);
+        assert_eq!(usage.containers_size, 500);
+        assert_eq!(usage.volumes_count, 2);
+        assert_eq!(usage.volumes_size, 2000);
+        assert_eq!(usage.volumes_reclaimable, 800);
+        assert_eq!(usage.build_cache_count, 1);
+        assert_eq!(usage.build_cache_size, 600);
+        assert_eq!(usage.build_cache_reclaimable, 600);
+        assert_eq!(usage.total_size, 6100);
+        assert_eq!(usage.total_reclaimable, 2900);
     }
 }

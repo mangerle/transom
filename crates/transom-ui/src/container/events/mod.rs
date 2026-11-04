@@ -2,6 +2,7 @@
 
 mod pull;
 mod result;
+mod system;
 mod terminal;
 
 use super::*;
@@ -477,20 +478,14 @@ impl AppShell {
             ContainerAppEvent::PullTaskFinished { task_id, error } => {
                 self.on_container_pull_task_finished(task_id, error, window, cx)
             }
-            ContainerAppEvent::ContainerDiffed {
-                request_id,
-                container,
-                changes,
-            } => {
-                if let Some(tab_id) = self.state.containers.take_tab(request_id)
-                    && let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                {
-                    if workspace.changes_request == Some(request_id) {
-                        workspace.changes_request = None;
-                    }
-                    workspace.changes_loading = false;
-                    workspace.changes = Some((container, changes));
-                }
+            ContainerAppEvent::ContainerDiffed { request_id, container, changes } => {
+                self.on_container_diffed(request_id, container, changes);
+            }
+            ContainerAppEvent::SystemDfLoaded { request_id, usage } => {
+                self.on_container_system_df_loaded(request_id, usage);
+            }
+            ContainerAppEvent::SystemPruned { request_id, report } => {
+                self.on_container_system_pruned(request_id, report, window, cx);
             }
         }
         cx.notify();
