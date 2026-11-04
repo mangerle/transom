@@ -12,6 +12,7 @@ mod form;
 mod lifecycle;
 mod list;
 mod logs_actions;
+mod modals;
 mod network_connect;
 mod rename;
 mod sidebar;
@@ -96,5 +97,29 @@ impl AppState {
             states.insert(profile.id, workspace.status.clone());
         }
         states
+    }
+}
+
+impl AppShell {
+    /// 寻找当前需要响应容器弹窗的工作区（优先当前活动标签，回退至首个包含该弹窗状态的标签）。
+    pub(crate) fn find_container_modal_tab<F>(&self, predicate: F) -> Option<(TabId, &ContainerWorkspaceState)>
+    where
+        F: Fn(&ContainerWorkspaceState) -> bool,
+    {
+        if let Some(tab_id) = self.state.workspace.active_tab {
+            if let Some(ws) = self.state.container_workspace(tab_id) {
+                if predicate(ws) {
+                    return Some((tab_id, ws));
+                }
+            }
+        }
+        for tab in self.state.workspace.tabs.iter() {
+            if let TabContent::Containers(ws) = &tab.content {
+                if predicate(ws) {
+                    return Some((tab.id, ws));
+                }
+            }
+        }
+        None
     }
 }

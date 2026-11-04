@@ -69,6 +69,24 @@ pub(crate) enum ModalKind {
     ContainerRunForm,
     /// 拉取镜像 / 新建卷与网络的弹窗。
     ContainerCreate,
+    /// 容器/镜像/卷/网络/Compose/文件删除确认。
+    ContainerConfirm,
+    /// 容器重命名。
+    ContainerRename,
+    /// 镜像打标签。
+    ContainerTagImage,
+    /// 容器提交为镜像。
+    ContainerCommit,
+    /// 容器资源限额修改。
+    ContainerUpdate,
+    /// 网络连接容器。
+    ContainerNetworkConnect,
+    /// 容器反向导出配置查看。
+    ContainerExportConfig,
+    /// 容器文件重命名。
+    ContainerFileRename,
+    /// 容器新建目录。
+    ContainerFileNewDir,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -131,6 +149,15 @@ impl ModalKind {
         ModalKind::ContainerFolderForm,
         ModalKind::ContainerRunForm,
         ModalKind::ContainerCreate,
+        ModalKind::ContainerConfirm,
+        ModalKind::ContainerRename,
+        ModalKind::ContainerTagImage,
+        ModalKind::ContainerCommit,
+        ModalKind::ContainerUpdate,
+        ModalKind::ContainerNetworkConnect,
+        ModalKind::ContainerExportConfig,
+        ModalKind::ContainerFileRename,
+        ModalKind::ContainerFileNewDir,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -177,6 +204,37 @@ impl ModalKind {
             ModalKind::ContainerCreate => (
                 Some(crate::theme::tokens::dialog::CONFIRM),
                 "container-create",
+            ),
+            ModalKind::ContainerConfirm => {
+                (Some(crate::theme::tokens::dialog::CONFIRM), "container-confirm")
+            }
+            ModalKind::ContainerRename => {
+                (Some(crate::theme::tokens::dialog::INPUT), "container-rename")
+            }
+            ModalKind::ContainerTagImage => {
+                (Some(crate::theme::tokens::dialog::INPUT), "container-tag-image")
+            }
+            ModalKind::ContainerCommit => {
+                (Some(crate::theme::tokens::dialog::FILTER), "container-commit")
+            }
+            ModalKind::ContainerUpdate => {
+                (Some(crate::theme::tokens::dialog::INPUT), "container-update")
+            }
+            ModalKind::ContainerNetworkConnect => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-network-connect",
+            ),
+            ModalKind::ContainerExportConfig => (
+                Some(crate::theme::tokens::dialog::AUDIT),
+                "container-export-config",
+            ),
+            ModalKind::ContainerFileRename => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-file-rename",
+            ),
+            ModalKind::ContainerFileNewDir => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-file-new-dir",
             ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
@@ -226,6 +284,7 @@ impl ModalKind {
 }
 
 mod body;
+mod container;
 mod stack;
 mod state;
 
@@ -281,6 +340,23 @@ impl ModalKind {
             ModalKind::ContainerCreate => {
                 shell.render_container_create_dialog_body(app, window, cx, p)
             }
+            ModalKind::ContainerConfirm => shell.render_container_confirm_dialog_body(app, cx, p),
+            ModalKind::ContainerRename => shell.render_container_rename_dialog_body(app, cx, p),
+            ModalKind::ContainerTagImage => shell.render_container_tag_dialog_body(app, cx, p),
+            ModalKind::ContainerCommit => shell.render_container_commit_dialog_body(app, cx, p),
+            ModalKind::ContainerUpdate => shell.render_container_update_dialog_body(app, cx, p),
+            ModalKind::ContainerNetworkConnect => {
+                shell.render_container_network_connect_dialog_body(app, cx, p)
+            }
+            ModalKind::ContainerExportConfig => {
+                shell.render_container_export_config_dialog_body(app, cx, p)
+            }
+            ModalKind::ContainerFileRename => {
+                shell.render_container_file_rename_dialog_body(app, cx, p)
+            }
+            ModalKind::ContainerFileNewDir => {
+                shell.render_container_file_new_dir_dialog_body(app, cx, p)
+            }
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -322,6 +398,15 @@ mod tests {
         ModalKind::ContainerFolderForm,
         ModalKind::ContainerRunForm,
         ModalKind::ContainerCreate,
+        ModalKind::ContainerConfirm,
+        ModalKind::ContainerRename,
+        ModalKind::ContainerTagImage,
+        ModalKind::ContainerCommit,
+        ModalKind::ContainerUpdate,
+        ModalKind::ContainerNetworkConnect,
+        ModalKind::ContainerExportConfig,
+        ModalKind::ContainerFileRename,
+        ModalKind::ContainerFileNewDir,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

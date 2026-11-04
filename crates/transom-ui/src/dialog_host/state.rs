@@ -10,6 +10,9 @@ use crate::app::app_settings;
 impl ModalKind {
     /// 该弹窗此刻是否应当存在。只读状态、不产生副作用：对账每帧都会问一次。
     pub(super) fn is_open(self, shell: &AppShell, cx: &App) -> bool {
+        if let Some(open) = self.container_is_open(shell) {
+            return open;
+        }
         match self {
             ModalKind::AuthPrompt => shell.state.modals.connection.auth_prompt.is_some(),
             ModalKind::HostKeyConfirm => shell.state.modals.connection.host_key_confirm.is_some(),
@@ -39,6 +42,7 @@ impl ModalKind {
             ModalKind::Settings => shell.state.modals.settings.read(cx).is_open(),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture.is_some(),
             ModalKind::DiffViewer => shell.state.diff_viewer.is_some(),
+            _ => false,
         }
     }
 
@@ -55,6 +59,9 @@ impl ModalKind {
 
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
+        if let Some(values) = self.container_field_values(shell, cx) {
+            return values;
+        }
         match self {
             ModalKind::ContainerForm => shell
                 .state
@@ -158,6 +165,9 @@ impl ModalKind {
             return false;
         }
         shell.state.dialog_hint = None;
+        if let Some(handled) = self.container_cancel(shell, cx) {
+            return handled;
+        }
         match self {
             ModalKind::SftpConfirm => {
                 shell.state.sftp_modals.confirm = None;
@@ -256,6 +266,7 @@ impl ModalKind {
                 shell.close_diff_viewer(cx);
                 true
             }
+            _ => true,
         }
     }
 
@@ -280,6 +291,9 @@ impl ModalKind {
     }
 
     fn run_commit(self, shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+        if self.container_commit(shell, window, cx).is_some() {
+            return;
+        }
         match self {
             ModalKind::SftpConfirm => {
                 shell.sftp_confirm_delete(cx);
@@ -341,6 +355,7 @@ impl ModalKind {
             ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
             ModalKind::DiffViewer => shell.close_diff_viewer(cx),
+            _ => {}
         }
     }
 
@@ -349,6 +364,9 @@ impl ModalKind {
     /// 一律走 `as_ref()` 安全取值：关闭动作可能在对账把弹窗弹出栈之前就把状态
     /// 清空，这一帧仍可能渲染一次；用 `expect` 会把这条正常路径变成 panic。
     pub(super) fn focus_target(self, shell: &AppShell) -> ModalFocus {
+        if let Some(target) = self.container_focus_target(shell) {
+            return target;
+        }
         match self {
             ModalKind::SftpInput => input_focus(shell, |state| {
                 state

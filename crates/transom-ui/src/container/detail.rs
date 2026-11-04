@@ -34,8 +34,9 @@ mod terminal;
 mod volume;
 
 pub(super) use compose::render_compose_detail;
-pub(super) use confirm::{delete_button, render_confirm_bar};
-use file_bars::{mode_label, parent_path, render_new_dir_bar, render_rename_bar};
+pub(super) use confirm::delete_button;
+pub(crate) use file_bars::parent_path;
+use file_bars::mode_label;
 use files::ContainerFilesView;
 pub(super) use files::render_files;
 use header::ContainerHeaderView;
@@ -53,58 +54,6 @@ pub(super) use terminal::render_terminal;
 pub(super) use volume::render_volume_detail;
 
 impl AppShell {
-    /// 容器改名条：与文件重命名同样的形态，避免为一次改名再弹一层模态。
-    pub(crate) fn render_container_rename_bar(
-        &mut self,
-        tab_id: TabId,
-        p: &Palette,
-        cx: &mut Context<AppShell>,
-    ) -> Option<AnyElement> {
-        let (_, input) = self
-            .state
-            .container_workspace(tab_id)?
-            .rename_container
-            .clone()?;
-        Some(
-            h_flex()
-                .gap_1()
-                .px_2()
-                .py_1()
-                .items_center()
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Bottom, p.divider_width)
-                .child(
-                    div()
-                        .text_xs()
-                        .flex_none()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.rename.label").to_string()),
-                )
-                .child(Input::new(&input).flex_1().min_w_0())
-                .child(
-                    Button::new("container-rename-submit")
-                        .primary()
-                        .xsmall()
-                        .icon(IconName::Check)
-                        .label(rust_i18n::t!("common.confirm").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.submit_container_rename(tab_id, window, cx);
-                        })),
-                )
-                .child(
-                    Button::new("container-rename-cancel")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Close)
-                        .label(rust_i18n::t!("common.cancel").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.cancel_container_rename(tab_id, cx);
-                        })),
-                )
-                .into_any_element(),
-        )
-    }
-
     /// 右侧详情区。
     pub(crate) fn render_container_detail(
         &mut self,
@@ -118,7 +67,6 @@ impl AppShell {
         };
         let section = workspace.section;
         let selected = workspace.selected.clone();
-        let confirm = workspace.confirm.clone();
         let detail_tab = workspace.detail_tab;
         let overview_raw = workspace.overview_raw;
         let browser_host = workspace.browser_host();
@@ -231,13 +179,6 @@ impl AppShell {
             p,
             cx,
         );
-        let confirm_bar = confirm.map(|confirm| render_confirm_bar(tab_id, confirm, p, cx));
-        let rename_bar = self.render_container_rename_bar(tab_id, p, cx);
-        let update_bar = self.render_container_update_bar(tab_id, p, cx);
-        let tag_bar = self.render_image_tag_bar(tab_id, p, cx);
-        let network_connect_bar = self.render_network_connect_bar(tab_id, p, cx);
-        let export_bar = self.render_container_export_bar(tab_id, p, cx);
-        let commit_bar = self.render_container_commit_bar(tab_id, p, cx);
 
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
@@ -336,13 +277,6 @@ impl AppShell {
             .size_full()
             .overflow_hidden()
             .child(header)
-            .children(rename_bar)
-            .children(update_bar)
-            .children(tag_bar)
-            .children(network_connect_bar)
-            .children(export_bar)
-            .children(commit_bar)
-            .children(confirm_bar)
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .into_any_element()
     }

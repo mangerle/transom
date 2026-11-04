@@ -131,6 +131,9 @@ activity:
     en: Switch to Chinese
     zh-CN: 切换为中文
 common:
+  close:
+    en: Close
+    zh-CN: 关闭
   save:
     en: Save
     zh-CN: 保存
@@ -4555,6 +4558,12 @@ container:
       en: None
       zh-CN: 无
   rename:
+    modal_title:
+      en: Rename Container
+      zh-CN: 重命名容器
+    prompt:
+      en: 'Enter a new name for the container:'
+      zh-CN: '请输入容器的新名称：'
     label:
       en: New name
       zh-CN: 新名称
@@ -5324,6 +5333,12 @@ container:
     title:
       en: 'Export Configuration: %{name}'
       zh-CN: '导出容器配置：%{name}'
+    run_tab:
+      en: Docker Run
+      zh-CN: Docker Run 命令
+    compose_tab:
+      en: Docker Compose
+      zh-CN: Docker Compose 片段
     docker_run:
       en: Docker Run
       zh-CN: Docker Run 命令
@@ -5337,6 +5352,12 @@ container:
       en: Configuration copied to clipboard
       zh-CN: 已复制配置到剪贴板
   network_connect:
+    modal_title:
+      en: Connect Container to Network
+      zh-CN: 连接容器到网络
+    prompt:
+      en: 'Enter container name or ID to connect:'
+      zh-CN: '请输入待接入该网络的容器名称或 ID：'
     label:
       en: 'Connect Container:'
       zh-CN: '连接容器:'
@@ -5347,6 +5368,12 @@ container:
       en: Please enter a valid container name or ID
       zh-CN: 请输入有效的容器名称或 ID
   tag:
+    modal_title:
+      en: Add Image Tag
+      zh-CN: 添加镜像标签
+    prompt:
+      en: 'Enter new repository and tag (e.g. repo:tag):'
+      zh-CN: '请输入新的仓库与标签名（例如 repo:tag）：'
     label:
       en: 'Add Tag:'
       zh-CN: '添加标签:'
@@ -5357,6 +5384,21 @@ container:
       en: Please enter a valid image name and tag
       zh-CN: 请输入合法的镜像名称与标签
   commit:
+    modal_title:
+      en: Commit Container to Image
+      zh-CN: 提交容器为镜像
+    prompt:
+      en: 'Create a new image from the container changes:'
+      zh-CN: '将容器的可写层提交并固化为新的镜像副本：'
+    repo_label:
+      en: Repository
+      zh-CN: 仓库名称
+    tag_label:
+      en: Tag
+      zh-CN: 标签
+    comment_label:
+      en: Commit Comment (Optional)
+      zh-CN: 提交说明（可选）
     label:
       en: 'Commit Container to Image:'
       zh-CN: '提交容器为镜像:'
@@ -5373,6 +5415,18 @@ container:
       en: Image repository name is required
       zh-CN: 请输入镜像仓库名
   update_resources:
+    modal_title:
+      en: Update Container Resources
+      zh-CN: 更新容器资源限制
+    prompt:
+      en: 'Adjust resource limits dynamically:'
+      zh-CN: '动态调整容器的内存与 CPU 资源限制：'
+    memory_label:
+      en: Memory Limit (MB)
+      zh-CN: 内存上限（MB）
+    cpu_label:
+      en: CPU Quota (Cores)
+      zh-CN: CPU 配额（核数）
     label:
       en: 'Resources:'
       zh-CN: '动态配额:'
@@ -5383,6 +5437,27 @@ container:
       en: CPU quota (cores, e.g. 1.0)
       zh-CN: CPU配额(核数，如 1.0)
   confirm:
+    title_container:
+      en: Remove Container
+      zh-CN: 删除容器
+    title_image:
+      en: Remove Image
+      zh-CN: 删除镜像
+    title_volume:
+      en: Remove Volume
+      zh-CN: 删除存储卷
+    title_network:
+      en: Remove Network
+      zh-CN: 删除网络
+    title_compose:
+      en: Remove Compose Project
+      zh-CN: 停止并移除编排项目
+    title_file:
+      en: Remove File
+      zh-CN: 删除文件
+    irreversible:
+      en: This action is destructive and cannot be undone.
+      zh-CN: 此操作为破坏性修改且无法撤销。
     compose_down:
       en: 'Stop and remove the compose project %{name}? Its containers and networks will be deleted.'
       zh-CN: '确认停止并删除编排项目 %{name}？它创建的容器与网络都会被删掉。'
@@ -5655,6 +5730,12 @@ container:
       en: The container was killed by the kernel OOM killer. Check its memory limit.
       zh-CN: 容器上次退出被内核 OOM 终止，请检查内存上限。
   files:
+    mkdir_modal_title:
+      en: New Directory
+      zh-CN: 新建目录
+    mkdir_prompt:
+      en: 'Enter directory name:'
+      zh-CN: '请输入新建目录名称：'
     new_dir:
       en: New folder
       zh-CN: 新建目录
@@ -5685,6 +5766,12 @@ container:
     truncated:
       en: Preview truncated
       zh-CN: 预览已截断
+    rename_modal_title:
+      en: Rename File
+      zh-CN: 重命名文件
+    rename_prompt:
+      en: 'Enter a new name:'
+      zh-CN: '请输入新的文件或目录名称：'
     rename:
       en: Rename
       zh-CN: 重命名

@@ -396,4 +396,60 @@ impl AppShell {
         self.send_tracked(tab_id, request_id, command);
         cx.notify();
     }
+
+    /// 提交容器内文件重命名。
+    pub(crate) fn submit_container_file_rename(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((from, input)) = self.state.container_workspace(tab_id).and_then(|workspace| {
+            let from = workspace.files.rename_from.clone()?;
+            let input = workspace.files.rename_input.clone()?;
+            Some((from, input))
+        }) else {
+            return;
+        };
+        let value = input.read(cx).value().trim().to_string();
+        if value.is_empty() || value.contains('/') {
+            self.show_toast(
+                rust_i18n::t!("container.files.rename_invalid").to_string(),
+                false,
+                window,
+                cx,
+            );
+            return;
+        }
+        let parent = detail::parent_path(&from);
+        let to = if parent == "/" {
+            format!("/{value}")
+        } else {
+            format!("{parent}/{value}")
+        };
+        self.rename_container_path(tab_id, from, to);
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.files.rename_input = None;
+            workspace.files.rename_from = None;
+        }
+        cx.notify();
+    }
+
+    /// 取消容器内文件重命名。
+    pub(crate) fn cancel_container_file_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.files.rename_from = None;
+            workspace.files.rename_input = None;
+        }
+        cx.notify();
+    }
+
+    /// 取消新建目录。
+    pub(crate) fn cancel_container_file_new_dir(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.files.new_dir_open = false;
+            workspace.files.new_dir_input = None;
+        }
+        cx.notify();
+    }
 }

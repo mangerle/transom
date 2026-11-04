@@ -34,10 +34,10 @@ pub(crate) fn render_files(
         preview_editor,
         preview_saving,
         loading,
-        rename_from,
-        rename_input,
-        new_dir_open,
-        new_dir_input,
+        rename_from: _,
+        rename_input: _,
+        new_dir_open: _,
+        new_dir_input: _,
         scroll,
         readonly,
     } = view;
@@ -98,9 +98,6 @@ pub(crate) fn render_files(
                 })),
         );
     }
-
-    let rename_bar = (!readonly).then(|| render_rename_bar(tab_id, rename_from, rename_input, p, cx)).flatten();
-    let mkdir_bar = (!readonly && new_dir_open).then(|| render_new_dir_bar(tab_id, new_dir_input, p, cx));
 
     // 目录优先、再按名称：归档接口按 tar 顺序返回，用户习惯是先看目录。
     let mut ordered: Vec<&ContainerFileEntry> = entries.iter().collect();
@@ -399,9 +396,7 @@ pub(crate) fn render_files(
         .flex_none()
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(crumbs)
-        .children(mkdir_bar)
-        .children(rename_bar);
+        .child(crumbs);
 
     let drop_bg = p.sidebar_accent.opacity(0.3);
     let drop_border = p.primary;
