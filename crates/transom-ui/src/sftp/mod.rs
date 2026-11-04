@@ -65,7 +65,7 @@ pub(crate) use self::properties::{
 };
 pub(crate) use self::quick_paths::LocalQuickPaths;
 pub(crate) use self::search_modal::SftpSearchModalState;
-pub(crate) use self::side_remote::SftpActivePane;
+pub(crate) use self::side_remote::{SftpActivePane, SftpDragItem};
 pub(crate) use self::state::{
     LocalFileEntry, RemoteDirCacheEntry, SFTP_DIR_CACHE_TTL, SftpChmodModalState,
     SftpFilterModalState, SftpInputModalState, SftpInputTarget, SftpLocalPaneInit,

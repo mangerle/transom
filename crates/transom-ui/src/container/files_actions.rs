@@ -163,11 +163,8 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 上传本地文件到当前目录。
-    pub(crate) fn upload_container_file(&mut self, tab_id: TabId) {
-        let Some(local_path) = rfd::FileDialog::new().pick_file() else {
-            return;
-        };
+    /// 上传指定本地路径的文件到容器当前目录。
+    pub(crate) fn upload_container_path(&mut self, tab_id: TabId, local_path: std::path::PathBuf) {
         let Some(file_name) = local_path
             .file_name()
             .map(|name| name.to_string_lossy().to_string())
@@ -203,6 +200,14 @@ impl AppShell {
                 local_path,
             },
         );
+    }
+
+    /// 上传本地文件到当前目录。
+    pub(crate) fn upload_container_file(&mut self, tab_id: TabId) {
+        let Some(local_path) = rfd::FileDialog::new().pick_file() else {
+            return;
+        };
+        self.upload_container_path(tab_id, local_path);
     }
 
     /// 重命名容器内路径。

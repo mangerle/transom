@@ -1,7 +1,9 @@
 //! 文件页签：目录行、上传与预览入口。
 
 use super::*;
+use crate::sftp::SftpDragItem;
 use gpui_kit::component::input::TextareaState;
+use gpui_kit::gpui::ExternalPaths;
 
 /// 文件页签的渲染参数：字段多且都是借用，收敛为结构体避免长参数列表。
 pub(crate) struct ContainerFilesView<'a> {
@@ -400,18 +402,59 @@ pub(crate) fn render_files(
         .child(crumbs)
         .children(mkdir_bar)
         .children(rename_bar);
-    let mut body = v_flex().size_full().overflow_hidden().child(header).child(
-        div()
-            // 滚动容器用稳定 id，切目录只复位偏移不重建整块列表；换 id 会让
-            // GPUI 丢弃该元素并在同一帧重新挂载，肉眼就是一次闪烁。
-            .id("container-files-scroll")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(scroll)
-            .p_2()
-            .child(list),
-    );
+
+    let drop_bg = p.sidebar_accent.opacity(0.3);
+    let drop_border = p.primary;
+    let app_drop = app.clone();
+    let app_sftp_drop = app.clone();
+
+    let mut scroll_container = div()
+        // 滚动容器用稳定 id，切目录只复位偏移不重建整块列表；换 id 会让
+        // GPUI 丢弃该元素并在同一帧重新挂载，肉眼就是一次闪烁。
+        .id("container-files-scroll")
+        .flex_1()
+        .min_h_0()
+        .overflow_y_scroll()
+        .track_scroll(scroll)
+        .p_2();
+
+    if !readonly {
+        scroll_container = scroll_container
+            .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                style.bg(drop_bg).border_2().border_color(drop_border)
+            })
+            .drag_over::<SftpDragItem>(move |style, _, _, _| {
+                style.bg(drop_bg).border_2().border_color(drop_border)
+            })
+            .on_drop(move |paths: &ExternalPaths, _window, cx| {
+                let dropped = paths.paths().to_vec();
+                if dropped.is_empty() {
+                    return;
+                }
+                app_drop.update(cx, |this, _| {
+                    for path in dropped {
+                        this.upload_container_path(tab_id, path);
+                    }
+                });
+            })
+            .on_drop(move |drag: &SftpDragItem, _window, cx| {
+                let paths: Vec<std::path::PathBuf> =
+                    drag.paths.iter().map(std::path::PathBuf::from).collect();
+                app_sftp_drop.update(cx, |this, _| {
+                    for path in paths {
+                        if path.exists() {
+                            this.upload_container_path(tab_id, path);
+                        }
+                    }
+                });
+            });
+    }
+
+    let mut body = v_flex()
+        .size_full()
+        .overflow_hidden()
+        .child(header)
+        .child(scroll_container.child(list));
     if let Some(preview) = preview {
         body = body.child(super::file_preview::render_file_preview(
             tab_id,
