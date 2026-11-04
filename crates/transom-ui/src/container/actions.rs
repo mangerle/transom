@@ -401,7 +401,9 @@ impl AppShell {
             ContainerDetailTab::Files => self.ensure_container_files(tab_id),
             ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
             ContainerDetailTab::Changes => self.ensure_container_changes(tab_id),
-            ContainerDetailTab::Overview | ContainerDetailTab::History => {}
+            ContainerDetailTab::Overview
+            | ContainerDetailTab::History
+            | ContainerDetailTab::Yaml => {}
         }
         cx.notify();
     }

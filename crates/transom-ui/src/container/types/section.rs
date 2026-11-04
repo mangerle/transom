@@ -51,7 +51,11 @@ impl ContainerSection {
                 ContainerDetailTab::Files,
                 ContainerDetailTab::Changes,
             ],
-            Self::Compose => &[ContainerDetailTab::Overview, ContainerDetailTab::Logs],
+            Self::Compose => &[
+                ContainerDetailTab::Overview,
+                ContainerDetailTab::Yaml,
+                ContainerDetailTab::Logs,
+            ],
             Self::Images => &[ContainerDetailTab::Overview, ContainerDetailTab::History],
             Self::Volumes => &[ContainerDetailTab::Overview, ContainerDetailTab::Files],
             Self::Networks => &[ContainerDetailTab::Overview],
@@ -69,6 +73,7 @@ pub(crate) enum ContainerDetailTab {
     Files,
     Changes,
     History,
+    Yaml,
 }
 
 impl ContainerDetailTab {
@@ -81,6 +86,7 @@ impl ContainerDetailTab {
             Self::Files => "container.detail.files",
             Self::Changes => "container.detail.changes",
             Self::History => "container.detail.history",
+            Self::Yaml => "container.detail.yaml",
         }
     }
 }

@@ -62,7 +62,7 @@ impl AppShell {
     pub(crate) fn render_container_detail(
         &mut self,
         tab_id: TabId,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
@@ -70,6 +70,7 @@ impl AppShell {
             return div().into_any_element();
         };
         let section = workspace.section;
+        let compose_yaml_editor = workspace.compose_yaml_editor.clone();
         let selected = workspace.selected.clone();
         let detail_tab = workspace.detail_tab;
         let overview_raw = workspace.overview_raw;
@@ -171,6 +172,12 @@ impl AppShell {
                 .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
         };
 
+        if section == ContainerSection::Compose && detail_tab == ContainerDetailTab::Yaml {
+            if let Some(project) = &selected_compose {
+                self.ensure_compose_yaml_loaded(tab_id, &project.name, window, cx);
+            }
+        }
+
         let tabs = self.render_detail_tab_buttons(tab_id, section, detail_tab, p, cx);
         let header = self.render_detail_header(
             tab_id,
@@ -271,9 +278,16 @@ impl AppShell {
                     cx,
                 )
             }
-            (ContainerSection::Compose, _) => {
-                render_compose_detail(tab_id, selected_compose.as_ref(), &containers, p, cx)
-            }
+            (ContainerSection::Compose, _) => render_compose_detail(
+                tab_id,
+                selected_compose.as_ref(),
+                &containers,
+                detail_tab,
+                compose_yaml_editor.as_ref(),
+                p,
+                window,
+                cx,
+            ),
             (ContainerSection::Images, _) => render_image_detail(
                 tab_id,
                 selected_image.as_ref(),

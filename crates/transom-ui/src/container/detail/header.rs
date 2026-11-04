@@ -465,5 +465,6 @@ pub(crate) fn detail_icon(tab: ContainerDetailTab) -> IconName {
         ContainerDetailTab::Files => IconName::FolderOpen,
         ContainerDetailTab::Changes => IconName::FileDiff,
         ContainerDetailTab::History => IconName::Clock,
+        ContainerDetailTab::Yaml => IconName::FileText,
     }
 }

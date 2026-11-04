@@ -14,33 +14,78 @@ pub(crate) struct ContainerLogsView<'a> {
     pub(super) filter: &'a str,
 }
 
+/// 根据容器名称生成稳定的彩色标签色（背景透明度与前景色）。
+fn container_badge_color(name: &str) -> (gpui::Hsla, gpui::Hsla) {
+    let mut hash: u32 = 5381;
+    for b in name.bytes() {
+        hash = hash.wrapping_mul(33).wrapping_add(b as u32);
+    }
+    let hues = [0.58, 0.38, 0.12, 0.78, 0.05, 0.48];
+    let h = hues[(hash as usize) % hues.len()];
+    let fg = gpui::hsla(h, 0.75, 0.65, 1.0);
+    let bg = gpui::hsla(h, 0.75, 0.65, 0.18);
+    (bg, fg)
+}
+
 /// 渲染单行日志，并在存在搜索关键字时对命中部分进行背景高亮。
 fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
-    let filter = filter.trim();
-    if filter.is_empty() {
-        return div().child(line.to_string()).into_any_element();
-    }
-    let filter_lower = filter.to_lowercase();
-    let line_lower = line.to_lowercase();
-    let mut spans = Vec::new();
-    let mut last_end = 0;
-    for (start, _) in line_lower.match_indices(&filter_lower) {
-        if start > last_end {
-            spans.push(div().child(line[last_end..start].to_string()));
+    let mut prefix_badge = None;
+    let mut remaining_line = line;
+
+    // 解析多容器多路复用日志前缀，如 `[web-1] `
+    if line.starts_with('[') {
+        if let Some(close_idx) = line.find(']') {
+            let tag = &line[1..close_idx];
+            if !tag.is_empty() && tag != "stderr" {
+                let (bg, fg) = container_badge_color(tag);
+                prefix_badge = Some(
+                    div()
+                        .mr_1p5()
+                        .px_1()
+                        .py_0p5()
+                        .rounded_xs()
+                        .bg(bg)
+                        .text_color(fg)
+                        .font_weight(FontWeight::BOLD)
+                        .child(format!("[{tag}]")),
+                );
+                remaining_line = line[close_idx + 1..].trim_start();
+            }
         }
-        let end = start + filter.len();
-        spans.push(
-            div()
-                .bg(p.sidebar_accent.opacity(0.55))
-                .rounded_xs()
-                .child(line[start..end].to_string()),
-        );
-        last_end = end;
     }
-    if last_end < line.len() {
-        spans.push(div().child(line[last_end..].to_string()));
+
+    let filter = filter.trim();
+    let text_element: AnyElement = if filter.is_empty() {
+        div().child(remaining_line.to_string()).into_any_element()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        let line_lower = remaining_line.to_lowercase();
+        let mut spans = Vec::new();
+        let mut last_end = 0;
+        for (start, _) in line_lower.match_indices(&filter_lower) {
+            if start > last_end {
+                spans.push(div().child(remaining_line[last_end..start].to_string()));
+            }
+            let end = start + filter.len();
+            spans.push(
+                div()
+                    .bg(p.sidebar_accent.opacity(0.55))
+                    .rounded_xs()
+                    .child(remaining_line[start..end].to_string()),
+            );
+            last_end = end;
+        }
+        if last_end < remaining_line.len() {
+            spans.push(div().child(remaining_line[last_end..].to_string()));
+        }
+        h_flex().gap_0().children(spans).into_any_element()
+    };
+
+    if let Some(badge) = prefix_badge {
+        h_flex().items_baseline().child(badge).child(text_element).into_any_element()
+    } else {
+        text_element
     }
-    h_flex().gap_0().children(spans).into_any_element()
 }
 
 pub(crate) fn render_logs(

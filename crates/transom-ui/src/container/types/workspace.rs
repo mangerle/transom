@@ -174,6 +174,9 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) system_prune_all: bool,
     pub(crate) system_prune_volumes: bool,
     pub(crate) system_prune_running: bool,
+    /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
+    pub(crate) compose_yaml_editor:
+        Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
     /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
@@ -306,6 +309,7 @@ impl ContainerWorkspaceState {
             system_prune_all: false,
             system_prune_volumes: false,
             system_prune_running: false,
+            compose_yaml_editor: None,
             notice: None,
             busy: false,
             _search_subscription: search_subscription,

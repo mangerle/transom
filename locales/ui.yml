@@ -140,6 +140,9 @@ common:
   cancel:
     en: Cancel
     zh-CN: 取消
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
   confirm:
     en: Confirm
     zh-CN: 确定
@@ -4918,6 +4921,9 @@ container:
     changes:
       en: Changes
       zh-CN: 文件变更
+    yaml:
+      en: YAML
+      zh-CN: Compose YAML
     copy_path:
       en: Copy Path
       zh-CN: 复制路径
@@ -5628,6 +5634,30 @@ container:
     no_containers:
       en: No containers belong to this project
       zh-CN: 该项目下没有容器
+    topology_title:
+      en: Microservice Topology
+      zh-CN: 微服务架构拓扑看板
+    loading_yaml:
+      en: Loading Compose YAML…
+      zh-CN: 正在载入 Compose YAML…
+    yaml_file:
+      en: Compose File
+      zh-CN: 配置文件
+    yaml_saved:
+      en: Compose YAML saved
+      zh-CN: Compose YAML 已就地保存
+    up_deploy:
+      en: Up & Deploy
+      zh-CN: 应用部署 (Up)
+    read_failed:
+      en: 'Failed to read Compose YAML: %{error}'
+      zh-CN: '读取 Compose YAML 失败：%{error}'
+    save_failed:
+      en: 'Failed to save Compose YAML: %{error}'
+      zh-CN: '保存 Compose YAML 失败：%{error}'
+    service_count:
+      en: '%{count} service containers'
+      zh-CN: '%{count} 个服务容器'
   logs:
     tail_all:
       en: All
