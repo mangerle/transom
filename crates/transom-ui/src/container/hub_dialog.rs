@@ -39,12 +39,9 @@ impl AppShell {
                 .placeholder(rust_i18n::t!("container.hub.search_placeholder").to_string())
         });
 
-        let app = cx.entity().clone();
-        let subscription = cx.subscribe(&search_input, move |_, _, event: &InputEvent, cx| {
+        let subscription = cx.subscribe(&search_input, move |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                app.update(cx, |this, cx| {
-                    this.execute_hub_search(tab_id, cx);
-                });
+                this.execute_hub_search(tab_id, cx);
             }
         });
 

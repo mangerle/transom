@@ -60,21 +60,15 @@ impl AppShell {
                 .default_value(tag_part)
         });
 
-        let app = cx.entity().clone();
-        let sub1 = cx.subscribe(&target_repo, move |_, _, event: &InputEvent, cx| {
+        let sub1 = cx.subscribe(&target_repo, move |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                app.update(cx, |this, cx| {
-                    this.submit_container_push_dialog(tab_id, cx);
-                });
+                this.submit_container_push_dialog(tab_id, cx);
             }
         });
 
-        let app2 = cx.entity().clone();
-        let sub2 = cx.subscribe(&target_tag, move |_, _, event: &InputEvent, cx| {
+        let sub2 = cx.subscribe(&target_tag, move |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                app2.update(cx, |this, cx| {
-                    this.submit_container_push_dialog(tab_id, cx);
-                });
+                this.submit_container_push_dialog(tab_id, cx);
             }
         });
 
