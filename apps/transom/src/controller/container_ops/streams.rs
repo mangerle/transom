@@ -166,6 +166,7 @@ async fn stream_stats_with_reconnect(
     let local_engine = is_local_engine(&engine);
     let mut failures = 0u32;
     let mut samples = 0u64;
+    let mut cached_host_load: Option<(f32, f32, f32)> = None;
     loop {
         if cancel.load(Ordering::Relaxed) {
             return;
@@ -209,8 +210,9 @@ async fn stream_stats_with_reconnect(
                         )
                         .await
                     {
-                        stats.host_load = parse_loadavg(text.as_bytes());
+                        cached_host_load = parse_loadavg(text.as_bytes());
                     }
+                    stats.host_load = cached_host_load;
                     let event = ContainerAppEvent::StatsUpdated {
                         request_id,
                         container: container.clone(),

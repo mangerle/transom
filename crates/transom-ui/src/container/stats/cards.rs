@@ -12,7 +12,7 @@ pub(crate) fn cpu_card(
 ) -> AnyElement {
     let p = chrome.p;
     let color = usage_color(stats.cpu_percent, p);
-    let mut content = v_flex().gap_2();
+    let mut content = v_flex().flex_1().min_h_0().gap_2();
     if !chrome.waiting {
         content = content.child(usage_bar(stats.cpu_percent / 100.0, color, p));
     }
@@ -115,7 +115,7 @@ pub(crate) fn memory_card(
 ) -> AnyElement {
     let p = chrome.p;
     let color = usage_color(stats.memory_percent, p);
-    let mut content = v_flex().gap_2();
+    let mut content = v_flex().flex_1().min_h_0().gap_2();
     if !chrome.waiting {
         content = content.child(usage_bar(stats.memory_percent / 100.0, color, p));
     }
@@ -205,6 +205,8 @@ pub(crate) fn network_card(
 ) -> AnyElement {
     let p = chrome.p;
     let content = v_flex()
+        .flex_1()
+        .min_h_0()
         .gap_2()
         .child(trend_label(chrome))
         .child(render_network_dual_sparkline(
@@ -312,7 +314,7 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
         write_rates,
         devices,
     } = data;
-    let mut content = v_flex().gap_2().child(
+    let mut content = v_flex().flex_1().min_h_0().gap_2().child(
         h_flex()
             .justify_between()
             .text_xs()

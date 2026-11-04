@@ -32,7 +32,8 @@ fn render_percent_bars(
     let data_len = history.len().min(SPARKLINE_SLOTS);
     if data_len == 0 {
         return h_flex()
-            .h(px(height_px))
+            .flex_1()
+            .min_h(px(height_px))
             .w_full()
             .items_end()
             .p_1p5()
@@ -53,20 +54,28 @@ fn render_percent_bars(
     let start_idx = history.len() - data_len;
     let mut slots = Vec::with_capacity(data_len);
     for &val in &history[start_idx..] {
-        let fraction = (val / 100.0).clamp(0.0, 1.0);
-        let bar_h = (height_px * fraction).max(2.0);
+        let fraction = (val / 100.0).clamp(0.02, 1.0);
         slots.push(
             div()
                 .flex_1()
                 .min_w_0()
-                .h(px(bar_h))
-                .rounded_t_xs()
-                .bg(color),
+                .h_full()
+                .flex()
+                .items_end()
+                .child(
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .h(relative(fraction))
+                        .rounded_t_xs()
+                        .bg(color),
+                ),
         );
     }
 
     h_flex()
-        .h(px(height_px))
+        .flex_1()
+        .min_h(px(height_px))
         .w_full()
         .overflow_hidden()
         .items_end()
@@ -89,7 +98,8 @@ fn render_percent_line(
 ) -> AnyElement {
     let history = history.to_vec();
     div()
-        .h(px(height_px))
+        .flex_1()
+        .min_h(px(height_px))
         .w_full()
         .overflow_hidden()
         .p_1p5()
@@ -242,7 +252,8 @@ fn render_network_bars(
     let data_len = len.min(SPARKLINE_SLOTS);
     if data_len == 0 {
         return h_flex()
-            .h(px(height_px))
+            .flex_1()
+            .min_h(px(height_px))
             .w_full()
             .items_end()
             .p_1p5()
@@ -265,11 +276,8 @@ fn render_network_bars(
     for i in start_idx..len {
         let rx = rx_history.get(i).copied().unwrap_or(0);
         let tx = tx_history.get(i).copied().unwrap_or(0);
-        let rx_frac = (rx as f32 / peak as f32).clamp(0.0, 1.0);
-        let tx_frac = (tx as f32 / peak as f32).clamp(0.0, 1.0);
-
-        let rx_h = (height_px * rx_frac).max(2.0);
-        let tx_h = (height_px * tx_frac).max(2.0);
+        let rx_frac = (rx as f32 / peak as f32).clamp(0.02, 1.0);
+        let tx_frac = (tx as f32 / peak as f32).clamp(0.02, 1.0);
 
         slots.push(
             div()
@@ -283,7 +291,7 @@ fn render_network_bars(
                     div()
                         .w_full()
                         .min_w_0()
-                        .h(px(rx_h))
+                        .h(relative(rx_frac))
                         .rounded_t_xs()
                         .bg(rx_color),
                 )
@@ -291,7 +299,7 @@ fn render_network_bars(
                     div()
                         .w_full()
                         .min_w_0()
-                        .h(px(tx_h))
+                        .h(relative(tx_frac))
                         .rounded_t_xs()
                         .bg(tx_color),
                 ),
@@ -299,7 +307,8 @@ fn render_network_bars(
     }
 
     h_flex()
-        .h(px(height_px))
+        .flex_1()
+        .min_h(px(height_px))
         .w_full()
         .overflow_hidden()
         .items_end()
@@ -325,7 +334,8 @@ fn render_network_line(
     let rx_history = rx_history.to_vec();
     let tx_history = tx_history.to_vec();
     div()
-        .h(px(height_px))
+        .flex_1()
+        .min_h(px(height_px))
         .w_full()
         .overflow_hidden()
         .p_1p5()

@@ -342,6 +342,13 @@ impl AppShell {
                 if let Some(workspace) = self.state.container_workspace_mut(tab_id)
                     && workspace.stats_request == Some(request_id)
                 {
+                    let mut stats = stats;
+                    if stats.host_load.is_none()
+                        && let Some(prev) = &workspace.stats
+                        && prev.host_load.is_some()
+                    {
+                        stats.host_load = prev.host_load;
+                    }
                     workspace.stats = Some(stats.clone());
                     let due = workspace
                         .stats_last_append

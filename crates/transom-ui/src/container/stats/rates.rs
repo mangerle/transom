@@ -45,7 +45,14 @@ pub(crate) fn stat_card(
                 )
                 .child(summary),
         )
-        .child(v_flex().gap_2p5().p_2p5().child(content))
+        .child(
+            v_flex()
+                .flex_1()
+                .min_h_0()
+                .gap_2p5()
+                .p_2p5()
+                .child(content),
+        )
         .into_any_element()
 }
 
