@@ -16,6 +16,7 @@ mod list;
 mod logs_actions;
 mod modals;
 mod network_connect;
+mod port_forward;
 mod pull_drawer;
 mod pull_manager;
 mod push_dialog;

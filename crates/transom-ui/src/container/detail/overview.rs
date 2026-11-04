@@ -86,13 +86,26 @@ pub(crate) fn render_container_overview(
         rows = rows.child(kv(p, rust_i18n::t!("container.field.ports"), "—".to_string()));
     } else {
         let host_for_ports = browser_host.to_string();
+        let container_name = details.name.trim_start_matches('/').to_string();
         let port_children = details.ports.iter().map(|port| {
+            let private_port = port.private_port;
+            let forward_btn = Button::new(format!("btn-forward-port-{private_port}"))
+                .ghost()
+                .xsmall()
+                .icon(IconName::ArrowLeftRight)
+                .tooltip(rust_i18n::t!("container.forward.button_tooltip").to_string())
+                .on_click(cx.listener({
+                    let container_name = container_name.clone();
+                    move |this, _, window, cx| {
+                        this.open_container_port_forward(tab_id, &container_name, private_port, window, cx);
+                    }
+                }));
             match port.public_port {
                 Some(public) => {
                     let url = format!("http://{host_for_ports}:{public}");
                     let label = format!("{public}->{}/{}", port.private_port, port.protocol);
                     let open_url = url.clone();
-                    Button::new(format!("btn-open-port-{public}"))
+                    let open_btn = Button::new(format!("btn-open-port-{public}"))
                         .ghost()
                         .xsmall()
                         .icon(IconName::ExternalLink)
@@ -100,16 +113,26 @@ pub(crate) fn render_container_overview(
                         .tooltip(url)
                         .on_click(move |_, _, _| {
                             let _ = open::that_detached(&open_url);
-                        })
+                        });
+                    h_flex()
+                        .gap_1()
+                        .items_center()
+                        .child(open_btn)
+                        .child(forward_btn)
                         .into_any_element()
                 }
                 None => {
                     let label = format!("{}/{}", port.private_port, port.protocol);
-                    div()
+                    let label_el = div()
                         .text_xs()
                         .font_family(p.mono_font_family.clone())
                         .text_color(p.muted_foreground)
-                        .child(label)
+                        .child(label);
+                    h_flex()
+                        .gap_1p5()
+                        .items_center()
+                        .child(label_el)
+                        .child(forward_btn)
                         .into_any_element()
                 }
             }

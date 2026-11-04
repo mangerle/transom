@@ -95,6 +95,8 @@ pub(crate) enum ModalKind {
     ContainerSystemDf,
     /// 从 Dockerfile 构建镜像。
     ContainerBuild,
+    /// 容器内端口一键建立 SSH 本地端口转发。
+    ContainerForward,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -170,6 +172,7 @@ impl ModalKind {
         ModalKind::ContainerPush,
         ModalKind::ContainerSystemDf,
         ModalKind::ContainerBuild,
+        ModalKind::ContainerForward,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -248,22 +251,11 @@ impl ModalKind {
                 Some(crate::theme::tokens::dialog::INPUT),
                 "container-file-new-dir",
             ),
-            ModalKind::ContainerHub => (
-                Some(crate::theme::tokens::dialog::AUDIT),
-                "container-hub",
-            ),
-            ModalKind::ContainerPush => (
-                Some(crate::theme::tokens::dialog::FILTER),
-                "container-push",
-            ),
-            ModalKind::ContainerSystemDf => (
-                Some(crate::theme::tokens::dialog::AUDIT),
-                "container-system-df",
-            ),
-            ModalKind::ContainerBuild => (
-                Some(crate::theme::tokens::dialog::AUDIT),
-                "container-build",
-            ),
+            ModalKind::ContainerHub => (Some(crate::theme::tokens::dialog::AUDIT), "container-hub"),
+            ModalKind::ContainerPush => (Some(crate::theme::tokens::dialog::FILTER), "container-push"),
+            ModalKind::ContainerSystemDf => (Some(crate::theme::tokens::dialog::AUDIT), "container-system-df"),
+            ModalKind::ContainerBuild => (Some(crate::theme::tokens::dialog::AUDIT), "container-build"),
+            ModalKind::ContainerForward => (Some(crate::theme::tokens::dialog::FILTER), "container-forward"),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
                 "session-form",
@@ -405,6 +397,11 @@ impl ModalKind {
                 .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
                     shell.render_container_build_dialog_body(tab_id, app, window, cx, p)
                 }),
+            ModalKind::ContainerForward => shell
+                .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
+                    shell.render_container_forward_dialog_body(tab_id, app, window, cx, p)
+                }),
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -459,6 +456,7 @@ mod tests {
         ModalKind::ContainerPush,
         ModalKind::ContainerSystemDf,
         ModalKind::ContainerBuild,
+        ModalKind::ContainerForward,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

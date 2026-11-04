@@ -50,6 +50,9 @@ impl ModalKind {
             ModalKind::ContainerBuild => shell
                 .find_container_modal_tab(|ws| ws.build_dialog.is_some())
                 .is_some(),
+            ModalKind::ContainerForward => shell
+                .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                .is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -177,6 +180,14 @@ impl ModalKind {
                 }
                 Some(true)
             }
+            ModalKind::ContainerForward => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                {
+                    shell.cancel_container_port_forward(tab_id, cx);
+                }
+                Some(true)
+            }
             _ => None,
         }
     }
@@ -287,6 +298,14 @@ impl ModalKind {
                 }
                 Some(())
             }
+            ModalKind::ContainerForward => {
+                if let Some((tab_id, _)) =
+                    shell.find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                {
+                    shell.submit_container_port_forward(tab_id, cx);
+                }
+                Some(())
+            }
             _ => None,
         }
     }
@@ -343,6 +362,11 @@ impl ModalKind {
                 .find_container_modal_tab(|ws| ws.build_dialog.is_some())
                 .and_then(|(_, ws)| ws.build_dialog.as_ref())
                 .map(|build| ModalFocus::Input(build.context_path.clone()))
+                .unwrap_or(ModalFocus::None),
+            ModalKind::ContainerForward => shell
+                .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                .and_then(|(_, ws)| ws.forward_dialog.as_ref())
+                .map(|fwd| ModalFocus::Input(fwd.local_port_input.clone()))
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerConfirm
             | ModalKind::ContainerExportConfig
@@ -428,6 +452,17 @@ impl ModalKind {
                         build.context_path.read(cx).value().to_string(),
                         build.dockerfile.read(cx).value().to_string(),
                         build.tag.read(cx).value().to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            ModalKind::ContainerForward => shell
+                .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                .and_then(|(_, ws)| ws.forward_dialog.as_ref())
+                .map(|fwd| {
+                    vec![
+                        fwd.local_port_input.read(cx).value().to_string(),
+                        fwd.target_host_input.read(cx).value().to_string(),
+                        fwd.selected_ssh_index.to_string(),
                     ]
                 })
                 .unwrap_or_default(),

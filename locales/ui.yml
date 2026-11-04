@@ -4600,6 +4600,52 @@ container:
     empty_tag:
       en: Image tag cannot be empty
       zh-CN: 镜像标签不能为空
+  forward:
+    button_tooltip:
+      en: Forward to local via SSH
+      zh-CN: 通过 SSH 转发到本地
+    modal_title:
+      en: Establish SSH Port Forwarding
+      zh-CN: 建立 SSH 端口转发
+    prompt:
+      en: Map remote container service port to localhost 127.0.0.1 via SSH tunnel
+      zh-CN: 将远程容器内的服务端口通过 SSH 隧道安全映射至本地 127.0.0.1
+    target_container:
+      en: Target Container
+      zh-CN: 目标容器
+    remote_port:
+      en: Container Port
+      zh-CN: 容器内端口
+    ssh_session:
+      en: SSH Tunnel Session
+      zh-CN: 隧道 SSH 会话
+    no_ssh_sessions:
+      en: No active SSH session found. Please connect to the remote host first.
+      zh-CN: 未检测到活跃的 SSH 会话，请先连接到目标服务器
+    local_port:
+      en: Local Port
+      zh-CN: 本地绑定端口
+    local_port_placeholder:
+      en: 'e.g. 6379'
+      zh-CN: '例如 6379'
+    target_host:
+      en: Target Host
+      zh-CN: 目标主机
+    target_host_placeholder:
+      en: 'Default: 127.0.0.1'
+      zh-CN: '默认为 127.0.0.1'
+    submit:
+      en: Start Forwarding
+      zh-CN: 建立端口转发
+    no_session_selected:
+      en: Please select an active SSH session
+      zh-CN: 请选择一个已连接的 SSH 会话
+    invalid_port:
+      en: Local port must be a valid number between 1 and 65535
+      zh-CN: 本地端口必须为 1 到 65535 之间的有效整数
+    success:
+      en: 'Port forwarding established: %{container} 127.0.0.1:%{local} -> :%{remote}'
+      zh-CN: '已为容器 %{container} 建立端口转发: 127.0.0.1:%{local} -> :%{remote}'
   changes:
     search_placeholder:
       en: Filter change path…

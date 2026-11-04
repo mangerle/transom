@@ -7,6 +7,7 @@ mod commit;
 mod confirm;
 mod export;
 mod files;
+mod forward;
 mod network;
 mod rename;
 mod tag;
