@@ -461,22 +461,22 @@ impl AppShell {
                 self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Networks, window, cx);
             }
             ContainerAppEvent::ActionFinished { request_id, error } => {
-                self.on_container_action_finished(request_id, error, window, cx)
+                self.on_container_action_finished(request_id, error, window, cx);
             }
             ContainerAppEvent::TransferFinished { request_id, error } => {
-                self.on_container_transfer_finished(request_id, error, window, cx)
+                self.on_container_transfer_finished(request_id, error, window, cx);
             }
             ContainerAppEvent::Failed { request_id, error } => {
-                self.on_container_failed(request_id, error, window, cx)
+                self.on_container_failed(request_id, error, window, cx);
             }
             ContainerAppEvent::ImagesSearched { request_id, results } => {
-                self.on_container_images_searched(request_id, results, window, cx)
+                self.on_container_images_searched(request_id, results, window, cx);
             }
             ContainerAppEvent::PullTaskProgress { task_id, status, layers } => {
-                self.on_container_pull_task_progress(task_id, status, layers, window, cx)
+                self.on_container_pull_task_progress(task_id, status, layers, window, cx);
             }
             ContainerAppEvent::PullTaskFinished { task_id, error } => {
-                self.on_container_pull_task_finished(task_id, error, window, cx)
+                self.on_container_pull_task_finished(task_id, error, window, cx);
             }
             ContainerAppEvent::ContainerDiffed { request_id, container, changes } => {
                 self.on_container_diffed(request_id, container, changes);
@@ -486,6 +486,9 @@ impl AppShell {
             }
             ContainerAppEvent::SystemPruned { request_id, report } => {
                 self.on_container_system_pruned(request_id, report, window, cx);
+            }
+            ContainerAppEvent::EngineEventReceived { tab_id, event } => {
+                self.on_container_engine_event_received(tab_id, event, window, cx);
             }
         }
         cx.notify();

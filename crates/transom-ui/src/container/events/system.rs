@@ -67,4 +67,64 @@ impl AppShell {
             workspace.changes = Some((container, changes));
         }
     }
+
+    /// 容器引擎长连接事件流收到事件。
+    pub(super) fn on_container_engine_event_received(
+        &mut self,
+        tab_id: TabId,
+        event: transom_core::EngineEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current_section = match self.state.container_workspace(tab_id) {
+            Some(workspace) => workspace.section,
+            None => return,
+        };
+
+        // 1. 如果是容器异常退出或 OOM，向用户弹出警告 Toast
+        if event.is_abnormal_container_exit() {
+            let fallback_id = &event.id[..event.id.len().min(12)];
+            let name = event.name.as_deref().unwrap_or(fallback_id);
+            let msg = if event.action == "oom" {
+                rust_i18n::t!("container.event.oom_killed", name = name).to_string()
+            } else {
+                let code_val = event.exit_code.unwrap_or(-1);
+                rust_i18n::t!(
+                    "container.event.abnormal_exit",
+                    name = name,
+                    code = code_val
+                )
+                .to_string()
+            };
+            self.show_toast(msg, false, window, cx);
+        }
+
+        // 2. 根据事件类型触发当前激活分类的自动刷新
+        match event.resource_type.as_str() {
+            "container" => {
+                if matches!(
+                    current_section,
+                    ContainerSection::Containers | ContainerSection::Compose
+                ) {
+                    self.refresh_container_section(tab_id);
+                }
+            }
+            "image" => {
+                if current_section == ContainerSection::Images {
+                    self.refresh_container_section(tab_id);
+                }
+            }
+            "volume" => {
+                if current_section == ContainerSection::Volumes {
+                    self.refresh_container_section(tab_id);
+                }
+            }
+            "network" => {
+                if current_section == ContainerSection::Networks {
+                    self.refresh_container_section(tab_id);
+                }
+            }
+            _ => {}
+        }
+    }
 }

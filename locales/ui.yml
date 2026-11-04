@@ -4539,6 +4539,13 @@ container:
     failed:
       en: '%{action} failed: %{error}'
       zh-CN: '%{action} 失败：%{error}'
+  event:
+    abnormal_exit:
+      en: 'Container %{name} exited abnormally with code %{code}'
+      zh-CN: '容器 %{name} 异常退出，退出码: %{code}'
+    oom_killed:
+      en: 'Container %{name} was killed due to out of memory (OOM)'
+      zh-CN: '容器 %{name} 发生内存溢出被强制杀死 (OOMKilled)'
   changes:
     search_placeholder:
       en: Filter change path…

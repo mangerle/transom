@@ -33,6 +33,8 @@ use transom_core::{
 pub(super) struct ContainerWorkspace {
     pub(super) engine: Engine,
     tasks: HashMap<ContainerRequestId, TaskEntry>,
+    events_shutdown: Option<tokio::sync::watch::Sender<bool>>,
+    events_task: Option<JoinHandle<()>>,
 }
 
 struct TaskEntry {
@@ -45,7 +47,43 @@ impl ContainerWorkspace {
         Self {
             engine,
             tasks: HashMap::new(),
+            events_shutdown: None,
+            events_task: None,
         }
+    }
+
+    /// 启动引擎长连接事件监听。
+    pub(super) fn start_events_listener(
+        &mut self,
+        tab_id: TabId,
+        event_tx: flume::Sender<transom_core::AppEvent>,
+    ) {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (raw_event_tx, mut raw_event_rx) = tokio::sync::mpsc::channel(100);
+        let engine = self.engine.clone();
+
+        let handle = tokio::spawn(async move {
+            let listen_task = tokio::spawn(async move {
+                if let Err(e) = engine.listen_events(raw_event_tx, shutdown_rx).await {
+                    log::debug!("容器引擎事件监听退出，标签: {tab_id:?}，原因: {e}");
+                }
+            });
+
+            while let Some(event) = raw_event_rx.recv().await {
+                if event_tx
+                    .send_async(ContainerAppEvent::EngineEventReceived { tab_id, event }.into())
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            listen_task.abort();
+            let _ = listen_task.await;
+        });
+
+        self.events_shutdown = Some(shutdown_tx);
+        self.events_task = Some(handle);
     }
 
     /// 登记长任务；同一请求 ID 重复登记时先中止旧任务（例如重复开启统计）。
@@ -78,6 +116,12 @@ impl ContainerWorkspace {
     ///
     /// 返回被中止的请求 ID，供调用方清理取消标志登记（停机路径可忽略）。
     pub(super) fn shutdown(&mut self) -> Vec<ContainerRequestId> {
+        if let Some(shutdown) = self.events_shutdown.take() {
+            let _ = shutdown.send(true);
+        }
+        if let Some(handle) = self.events_task.take() {
+            handle.abort();
+        }
         let request_ids = self.tasks.keys().copied().collect();
         for (_, entry) in self.tasks.drain() {
             entry.cancel.store(true, Ordering::Relaxed);

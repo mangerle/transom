@@ -8,7 +8,7 @@ use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
     BuildCachePruneResponse, ChangeItem, ContainerInspect, ContainerListItem, ContainerUpdateRequest, ContainersPruneResponse,
-    ExecCreateResponse, ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
+    DockerEventMessage, ExecCreateResponse, ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
     ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem,
     VolumeListResponse, VolumePruneResponse,
 };
@@ -1300,6 +1300,72 @@ impl DockerApi {
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
+    }
+
+    /// 监听 Docker 引擎全局长连接事件流（GET /events）。
+    pub async fn listen_events(
+        &self,
+        event_tx: tokio::sync::mpsc::Sender<transom_core::EngineEvent>,
+        mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), ContainerError> {
+        let response = self
+            .send(Method::GET, "/events", None, "listen_events")
+            .await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 4096).await;
+            return Err(http::status_error(status, "listen_events", body, "/events"));
+        }
+
+        let response = response;
+        let mut body = std::pin::pin!(response.body);
+        let mut buffer = String::new();
+
+        loop {
+            tokio::select! {
+                biased;
+                _ = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() {
+                        log::debug!("收到平滑停机通知，结束 Docker /events 监听流");
+                        break;
+                    }
+                }
+                frame = body.frame() => {
+                    let Some(frame_res) = frame else {
+                        log::info!("Docker /events 事件长连接流正常断开");
+                        break;
+                    };
+                    let Ok(frame) = frame_res else {
+                        log::warn!("Docker /events 帧读取中断");
+                        break;
+                    };
+                    let Ok(data) = frame.into_data() else {
+                        continue;
+                    };
+                    let Ok(text) = std::str::from_utf8(&data) else {
+                        continue;
+                    };
+                    buffer.push_str(text);
+
+                    while let Some(pos) = buffer.find('\n') {
+                        let line = buffer[..pos].trim().to_string();
+                        buffer.drain(..=pos);
+                        if line.is_empty() {
+                            continue;
+                        }
+                        if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(&line) {
+                            if let Some(event) = msg.into_engine_event() {
+                                if event_tx.send(event).await.is_err() {
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

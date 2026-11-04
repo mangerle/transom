@@ -61,10 +61,9 @@ async fn handle_container_connected(
     match result {
         Ok(engine) => {
             let info = engine.info.clone();
-            if let Some(mut previous) = state
-                .container_workspaces
-                .insert(tab_id, ContainerWorkspace::new(engine))
-            {
+            let mut ws = ContainerWorkspace::new(engine);
+            ws.start_events_listener(tab_id, ctx.event_tx.clone());
+            if let Some(mut previous) = state.container_workspaces.insert(tab_id, ws) {
                 previous.shutdown();
             }
             let _ = ctx

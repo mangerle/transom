@@ -524,6 +524,18 @@ impl Engine {
     pub fn cli_backend_ref(&self) -> Option<&CliBackend> {
         self.cli()
     }
+
+    /// 监听容器引擎全局长连接事件流。
+    pub async fn listen_events(
+        &self,
+        event_tx: tokio::sync::mpsc::Sender<transom_core::EngineEvent>,
+        shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Http(api) => api.listen_events(event_tx, shutdown_rx).await,
+            EngineBackend::Cli(cli) => cli.listen_events(event_tx, shutdown_rx).await,
+        }
+    }
 }
 
 /// 发现本机全部引擎；单个候选失败只记录原因，不影响其它候选。

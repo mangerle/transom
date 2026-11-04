@@ -10,8 +10,10 @@
 
 use crate::discovery::CliSpec;
 use crate::error::ContainerError;
+use crate::models::DockerEventMessage;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use transom_core::{
     ContainerEngineKind, ContainerImageSummary, ContainerProcess, ContainerState, ContainerSummary,
@@ -440,6 +442,68 @@ impl CliBackend {
             deleted,
             reclaimed,
         })
+    }
+
+    /// 监听引擎 CLI 长连接事件流（docker events --format '{{json .}}'）。
+    pub async fn listen_events(
+        &self,
+        event_tx: tokio::sync::mpsc::Sender<transom_core::EngineEvent>,
+        mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), ContainerError> {
+        let args = vec!["events".to_string(), "--format".to_string(), "{{json .}}".to_string()];
+        let mut cmd = self.command(&args);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::null());
+
+        let mut child = cmd.spawn().map_err(|e| ContainerError::Cli {
+            command: self.describe(&args),
+            message: e.to_string(),
+        })?;
+
+        let Some(stdout) = child.stdout.take() else {
+            return Ok(());
+        };
+
+        let mut reader = tokio::io::BufReader::new(stdout);
+        let mut line = String::new();
+
+        loop {
+            line.clear();
+            tokio::select! {
+                biased;
+                _ = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                        break;
+                    }
+                }
+                res = reader.read_line(&mut line) => {
+                    let Ok(n) = res else {
+                        break;
+                    };
+                    if n == 0 {
+                        break;
+                    }
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(trimmed) {
+                        if let Some(event) = msg.into_engine_event() {
+                            if event_tx.send(event).await.is_err() {
+                                let _ = child.kill().await;
+                                let _ = child.wait().await;
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let _ = child.wait().await;
+        Ok(())
     }
 
     pub async fn inspect_image(

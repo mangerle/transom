@@ -11,6 +11,7 @@
 
 mod create;
 mod engine;
+mod event;
 mod export;
 mod inventory;
 mod registry;
@@ -18,6 +19,7 @@ mod system;
 
 pub use create::*;
 pub use engine::*;
+pub use event::*;
 pub use export::*;
 pub use inventory::*;
 pub use registry::*;

@@ -14,7 +14,7 @@ use crate::model::container::{
     ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
     ContainerFileEntry, ContainerFileSystemChange, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
     ContainerNetworkSummary, ContainerProcess, ContainerPruneReport, ContainerStats,
-    ContainerSummary, ContainerSystemDiskUsage, ContainerVolumeDetails, ContainerVolumeSummary,
+    ContainerSummary, ContainerSystemDiskUsage, ContainerVolumeDetails, ContainerVolumeSummary, EngineEvent,
 };
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;
@@ -350,6 +350,11 @@ pub enum ContainerAppEvent {
     ComposeProjectsListed {
         request_id: ContainerRequestId,
         projects: Vec<ComposeProject>,
+    },
+    /// 收到容器引擎长连接实时事件。
+    EngineEventReceived {
+        tab_id: TabId,
+        event: EngineEvent,
     },
     /// 交互式终端已就绪；UI 用返回的 IO 在详情页签内创建终端视图。
     /// `exit` 在 exec 结束时触发，用于把页签标记为已断开。

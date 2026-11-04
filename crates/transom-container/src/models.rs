@@ -1232,6 +1232,50 @@ pub struct DfBuildCacheItem {
     pub shared: bool,
 }
 
+/// Docker 原生流式事件消息（GET /events）。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DockerEventMessage {
+    #[serde(alias = "Type", alias = "type", default)]
+    pub resource_type: String,
+    #[serde(alias = "Action", alias = "action", default)]
+    pub action: String,
+    #[serde(alias = "Actor", alias = "actor", default)]
+    pub actor: Option<DockerEventActor>,
+    #[serde(alias = "time", alias = "Time", default)]
+    pub time: i64,
+}
+
+/// Docker 原生流式事件主体。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DockerEventActor {
+    #[serde(rename = "ID", default)]
+    pub id: String,
+    #[serde(default)]
+    pub attributes: Option<std::collections::HashMap<String, String>>,
+}
+
+impl DockerEventMessage {
+    /// 转换为 transom-core 的标准 EngineEvent 模型。
+    pub fn into_engine_event(self) -> Option<transom_core::EngineEvent> {
+        let actor = self.actor?;
+        let attributes = actor.attributes.unwrap_or_default();
+        let name = attributes.get("name").cloned();
+        let image = attributes.get("image").cloned();
+        let exit_code = attributes.get("exitCode").and_then(|s| s.parse::<i32>().ok());
+
+        Some(transom_core::EngineEvent {
+            resource_type: self.resource_type,
+            action: self.action,
+            id: actor.id,
+            name,
+            image,
+            exit_code,
+            timestamp: self.time,
+        })
+    }
+}
+
 impl SystemDfResponse {
     /// 转换为 transom-core 的聚合用量结构体。
     pub fn into_disk_usage(self) -> transom_core::ContainerSystemDiskUsage {
@@ -1287,7 +1331,7 @@ impl SystemDfResponse {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChangeItem, ContainerInspect, ContainerListItem, HealthInfo, ImageListItem, ImagePruneResponse, NetworkItem,
+        ChangeItem, ContainerInspect, ContainerListItem, DockerEventMessage, HealthInfo, ImageListItem, ImagePruneResponse, NetworkItem,
         NetworkSettings, StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem,
         VolumePruneResponse,
     };
@@ -1552,5 +1596,32 @@ mod tests {
         assert_eq!(usage.build_cache_reclaimable, 600);
         assert_eq!(usage.total_size, 6100);
         assert_eq!(usage.total_reclaimable, 2900);
+    }
+
+    #[test]
+    fn test_docker_event_deserialize_and_convert() {
+        let json = r#"{
+            "Type": "container",
+            "Action": "die",
+            "Actor": {
+                "ID": "1234567890abcdef",
+                "Attributes": {
+                    "name": "web_server",
+                    "image": "nginx:alpine",
+                    "exitCode": "137"
+                }
+            },
+            "time": 1700000000
+        }"#;
+        let event_msg: DockerEventMessage = serde_json::from_str(json).expect("必须成功解析 DockerEventMessage");
+        let event = event_msg.into_engine_event().expect("必须成功转换为 EngineEvent");
+        assert_eq!(event.resource_type, "container");
+        assert_eq!(event.action, "die");
+        assert_eq!(event.id, "1234567890abcdef");
+        assert_eq!(event.name.as_deref(), Some("web_server"));
+        assert_eq!(event.image.as_deref(), Some("nginx:alpine"));
+        assert_eq!(event.exit_code, Some(137));
+        assert_eq!(event.timestamp, 1700000000);
+        assert!(event.is_abnormal_container_exit());
     }
 }
