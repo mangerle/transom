@@ -15,7 +15,7 @@ pub(super) fn container_header_actions(
     tab_id: TabId,
     container: &ContainerSummary,
     detail_tab: ContainerDetailTab,
-    overview_raw: bool,
+    _overview_raw: bool,
     cx: &mut Context<AppShell>,
 ) -> Vec<AnyElement> {
     let mut actions = Vec::new();

@@ -185,21 +185,16 @@ fn render_compose_overview_and_topology(
         .filter(|item| item.compose_project.as_deref() == Some(project.name.as_str()))
         .collect();
 
-    let project_name = project.name.clone();
-    let project_name_up = project.name.clone();
-    let project_name_down = project.name.clone();
-    let project_name_restart = project.name.clone();
-
-    // 顶部控制与状态栏
+    // 顶部状态横幅：呈现项目名称、运行状态与微服务容器数量（不再与顶栏按钮重复）
     let action_bar = h_flex()
         .gap_2()
         .items_center()
         .justify_between()
         .p_3()
         .rounded(p.radius.lg)
-        .bg(p.muted.opacity(0.15))
-        .border_color(p.divider(p.border))
-        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .bg(p.muted.opacity(0.04))
+        .border_1()
+        .border_color(p.border.opacity(0.3))
         .child(
             h_flex()
                 .gap_2()
@@ -217,9 +212,9 @@ fn render_compose_overview_and_topology(
                         .py_0p5()
                         .rounded(p.radius.full)
                         .bg(if project.running == project.total && project.total > 0 {
-                            p.success.opacity(0.2)
+                            p.success.opacity(0.12)
                         } else if project.running > 0 {
-                            p.warning.opacity(0.2)
+                            p.warning.opacity(0.12)
                         } else {
                             p.muted.opacity(0.4)
                         })
@@ -235,66 +230,13 @@ fn render_compose_overview_and_topology(
                 ),
         )
         .child(
-            h_flex()
-                .gap_1p5()
-                .items_center()
-                .child(
-                    Button::new("compose-up-btn")
-                        .primary()
-                        .xsmall()
-                        .icon(IconName::Play)
-                        .label(rust_i18n::t!("container.action.start").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.run_compose(tab_id, project_name_up.clone(), ComposeAction::Up, cx);
-                        })),
-                )
-                .child(
-                    Button::new("compose-restart-btn")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::RotateCw)
-                        .label(rust_i18n::t!("container.action.restart").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.run_compose(tab_id, project_name_restart.clone(), ComposeAction::Up, cx);
-                        })),
-                )
-                .child(
-                    Button::new("compose-down-btn")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Square)
-                        .label(rust_i18n::t!("container.action.stop").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.run_compose(tab_id, project_name_down.clone(), ComposeAction::Down, cx);
-                        })),
-                )
-                .child(
-                    Button::new("compose-yaml-tab-btn")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::FilePen)
-                        .label(rust_i18n::t!("container.detail.yaml").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(w) = this.state.container_workspace_mut(tab_id) {
-                                w.detail_tab = ContainerDetailTab::Yaml;
-                            }
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    Button::new("compose-logs-tab-btn")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ScrollText)
-                        .label(rust_i18n::t!("container.detail.logs").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(w) = this.state.container_workspace_mut(tab_id) {
-                                w.detail_tab = ContainerDetailTab::Logs;
-                            }
-                            this.ensure_container_logs(tab_id);
-                            cx.notify();
-                        })),
-                ),
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!(
+                    "container.compose.service_count",
+                    count = members.len()
+                )),
         );
 
     // 服务拓扑卡片看板
@@ -331,7 +273,7 @@ fn render_compose_overview_and_topology(
     } else {
         let mut cards_grid = v_flex().gap_2();
         for member in &members {
-            let service_name = service_name_of(member, &project_name);
+            let service_name = service_name_of(member, &project.name);
             let is_running = member.state.is_running();
             let container_id = member.id.clone();
             let container_name = member.name.clone();
