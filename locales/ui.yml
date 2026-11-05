@@ -5319,6 +5319,25 @@ container:
     containers:
       en: containers
       zh-CN: 个容器
+  quadlet:
+    title:
+      en: Quadlet Units
+      zh-CN: Quadlet 单元
+    subtitle:
+      en: List and control systemd user units generated from local Quadlet files.
+      zh-CN: 查看本机 Quadlet 文件生成的 systemd 用户单元，并执行启停或重启。
+    loading:
+      en: Loading Quadlet units…
+      zh-CN: 正在加载 Quadlet 单元…
+    empty:
+      en: No Quadlet units found in the user or system directories.
+      zh-CN: 用户或系统 Quadlet 目录中没有找到单元。
+    active:
+      en: active
+      zh-CN: 运行中
+    inactive:
+      en: inactive
+      zh-CN: 未运行
   section:
     compose:
       en: Compose

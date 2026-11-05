@@ -10,6 +10,7 @@ mod files;
 mod forward;
 mod network;
 mod pods;
+mod quadlet;
 mod rename;
 mod tag;
 mod update;

@@ -99,6 +99,8 @@ pub(crate) enum ModalKind {
     ContainerForward,
     /// Podman Pod 列表与启停。
     ContainerPods,
+    /// Podman Quadlet 单元列表与启停。
+    ContainerQuadlet,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -176,6 +178,7 @@ impl ModalKind {
         ModalKind::ContainerBuild,
         ModalKind::ContainerForward,
         ModalKind::ContainerPods,
+        ModalKind::ContainerQuadlet,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -278,6 +281,10 @@ impl ModalKind {
             ModalKind::ContainerPods => {
                 (Some(crate::theme::tokens::dialog::AUDIT), "container-pods")
             }
+            ModalKind::ContainerQuadlet => (
+                Some(crate::theme::tokens::dialog::AUDIT),
+                "container-quadlet",
+            ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
                 "session-form",
@@ -440,6 +447,7 @@ impl ModalKind {
                     },
                 ),
             ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, p),
+            ModalKind::ContainerQuadlet => shell.render_container_quadlet_dialog_body(app, p),
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -496,6 +504,7 @@ mod tests {
         ModalKind::ContainerBuild,
         ModalKind::ContainerForward,
         ModalKind::ContainerPods,
+        ModalKind::ContainerQuadlet,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

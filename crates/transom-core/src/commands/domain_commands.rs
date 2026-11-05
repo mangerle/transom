@@ -389,6 +389,18 @@ pub enum ContainerCommand {
         /// 轮询间隔（毫秒）：界面提供 1s/3s/10s 三档，0 按 3s 处理。
         interval_ms: u64,
     },
+    /// 列出 Podman Quadlet 单元（宿主 systemd 用户单元）。
+    ListQuadlets {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    /// 对 Quadlet 单元执行启停/重启。
+    QuadletAction {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        unit: String,
+        action: crate::model::container::ContainerQuadletAction,
+    },
     /// 列出 Podman Pod。
     ListPods {
         tab_id: TabId,

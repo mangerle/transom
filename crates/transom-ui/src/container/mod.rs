@@ -22,6 +22,7 @@ mod port_forward;
 mod pull_drawer;
 mod pull_manager;
 mod push_dialog;
+mod quadlet;
 mod rename;
 mod sidebar;
 mod stats;

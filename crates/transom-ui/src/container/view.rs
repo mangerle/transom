@@ -263,6 +263,15 @@ impl AppShell {
             .info
             .as_ref()
             .is_some_and(|info| info.engine.kind == transom_core::ContainerEngineKind::Podman);
+        let is_local_engine = workspace.info.as_ref().is_some_and(|info| {
+            matches!(
+                info.engine.endpoint,
+                transom_core::ContainerEndpoint::Auto
+                    | transom_core::ContainerEndpoint::Unix { .. }
+                    | transom_core::ContainerEndpoint::NamedPipe { .. }
+                    | transom_core::ContainerEndpoint::Cli { .. }
+            )
+        });
 
         h_flex()
             .gap_1()
@@ -312,6 +321,18 @@ impl AppShell {
                         .tooltip(rust_i18n::t!("container.pods.title").to_string())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.open_container_pods_dialog(tab_id, cx);
+                        })),
+                )
+            })
+            .when(is_podman && is_local_engine, |this| {
+                this.child(
+                    Button::new("container-quadlet-btn")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Settings)
+                        .tooltip(rust_i18n::t!("container.quadlet.title").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_container_quadlets_dialog(tab_id, cx);
                         })),
                 )
             })

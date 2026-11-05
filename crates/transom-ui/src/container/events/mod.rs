@@ -404,6 +404,9 @@ impl AppShell {
             ContainerAppEvent::PodsListed { request_id, pods } => {
                 self.on_container_pods_listed(request_id, pods, cx);
             }
+            ContainerAppEvent::QuadletsListed { request_id, units } => {
+                self.on_container_quadlets_listed(request_id, units, cx);
+            }
             ContainerAppEvent::ProcessesListed {
                 request_id,
                 processes,

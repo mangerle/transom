@@ -36,6 +36,13 @@ impl AppShell {
                     workspace.pods_error = Some(localized_error(err));
                 }
             }
+            if workspace.quadlets_action_request == Some(request_id) {
+                workspace.quadlets_action_request = None;
+                workspace.quadlets_loading = false;
+                if let Some(err) = &error {
+                    workspace.quadlets_error = Some(localized_error(err));
+                }
+            }
             if let Some(build) = workspace.build_dialog.as_mut()
                 && build.request_id == Some(request_id)
             {
@@ -68,6 +75,13 @@ impl AppShell {
             .is_some_and(|workspace| workspace.pods_dialog_open)
         {
             self.refresh_container_pods(tab_id);
+        }
+        if self
+            .state
+            .container_workspace(tab_id)
+            .is_some_and(|workspace| workspace.quadlets_dialog_open)
+        {
+            self.refresh_container_quadlets(tab_id);
         }
         if refresh {
             self.refresh_container_section(tab_id);
@@ -163,6 +177,16 @@ impl AppShell {
                 workspace.pods_action_request = None;
                 workspace.pods_loading = false;
                 workspace.pods_error = Some(err_desc.clone());
+            }
+            if workspace.quadlets_request == Some(request_id) {
+                workspace.quadlets_request = None;
+                workspace.quadlets_loading = false;
+                workspace.quadlets_error = Some(err_desc.clone());
+            }
+            if workspace.quadlets_action_request == Some(request_id) {
+                workspace.quadlets_action_request = None;
+                workspace.quadlets_loading = false;
+                workspace.quadlets_error = Some(err_desc.clone());
             }
             if workspace.changes_request == Some(request_id) {
                 workspace.changes_request = None;

@@ -387,6 +387,10 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         pods: Vec<crate::model::container::ContainerPodSummary>,
     },
+    QuadletsListed {
+        request_id: ContainerRequestId,
+        units: Vec<crate::model::container::ContainerQuadletUnit>,
+    },
     ProcessesListed {
         request_id: ContainerRequestId,
         processes: Vec<ContainerProcess>,

@@ -13,6 +13,7 @@ mod engine;
 mod files;
 mod lifecycle;
 mod pods;
+mod quadlet;
 mod query;
 mod streams;
 
@@ -208,6 +209,9 @@ pub(super) fn handle_container_command(
         | ContainerCommand::ListProcesses { .. } => streams::handle(state, ctx, command),
         ContainerCommand::ListPods { .. } | ContainerCommand::PodAction { .. } => {
             pods::handle(state, ctx, command)
+        }
+        ContainerCommand::ListQuadlets { .. } | ContainerCommand::QuadletAction { .. } => {
+            quadlet::handle(state, ctx, command)
         }
         ContainerCommand::ListDir { .. }
         | ContainerCommand::ListVolumeDir { .. }

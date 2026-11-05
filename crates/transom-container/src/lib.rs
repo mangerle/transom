@@ -20,6 +20,7 @@ mod http;
 pub mod image_archive;
 mod logs;
 mod models;
+pub mod quadlet;
 pub mod registry;
 mod service;
 mod stats;

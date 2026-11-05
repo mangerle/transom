@@ -251,6 +251,13 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) pods_request: Option<ContainerRequestId>,
     pub(crate) pods_dialog_open: bool,
     pub(crate) pods_action_request: Option<ContainerRequestId>,
+    /// Quadlet 单元弹窗与数据。
+    pub(crate) quadlets: Vec<transom_core::ContainerQuadletUnit>,
+    pub(crate) quadlets_loading: bool,
+    pub(crate) quadlets_error: Option<String>,
+    pub(crate) quadlets_request: Option<ContainerRequestId>,
+    pub(crate) quadlets_action_request: Option<ContainerRequestId>,
+    pub(crate) quadlets_dialog_open: bool,
     /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
     pub(crate) compose_yaml_editor:
         Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
@@ -408,6 +415,12 @@ impl ContainerWorkspaceState {
             pods_request: None,
             pods_dialog_open: false,
             pods_action_request: None,
+            quadlets: Vec::new(),
+            quadlets_loading: false,
+            quadlets_error: None,
+            quadlets_request: None,
+            quadlets_action_request: None,
+            quadlets_dialog_open: false,
             compose_yaml_editor: None,
             compose_dependencies: HashMap::new(),
             compose_hovered_service: None,

@@ -48,11 +48,11 @@ pub use model::container::{
     ContainerLifecycleAction, ContainerMount, ContainerNetworkAttachment, ContainerNetworkDetails,
     ContainerNetworkSpec, ContainerNetworkSummary, ContainerPathChangeKind, ContainerPodAction,
     ContainerPodSummary, ContainerPort, ContainerPortPublish, ContainerProcess,
-    ContainerPruneReport, ContainerRegistry, ContainerRegistryAuth, ContainerState, ContainerStats,
-    ContainerSummary, ContainerSystemDiskUsage, ContainerUpdateSpec, ContainerVolumeDetails,
-    ContainerVolumeSummary, EngineEvent, ImageLayerProgress, ImageSearchResult, TlsConfig,
-    compose_projects, generate_docker_compose, generate_docker_run, is_valid_container_name,
-    short_id,
+    ContainerPruneReport, ContainerQuadletAction, ContainerQuadletUnit, ContainerRegistry,
+    ContainerRegistryAuth, ContainerState, ContainerStats, ContainerSummary,
+    ContainerSystemDiskUsage, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary,
+    EngineEvent, ImageLayerProgress, ImageSearchResult, TlsConfig, compose_projects,
+    generate_docker_compose, generate_docker_run, is_valid_container_name, short_id,
 };
 pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};
 pub use model::forward::{

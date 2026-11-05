@@ -56,6 +56,9 @@ impl ModalKind {
             ModalKind::ContainerPods => shell
                 .find_container_modal_tab(|ws| ws.pods_dialog_open)
                 .is_some(),
+            ModalKind::ContainerQuadlet => shell
+                .find_container_modal_tab(|ws| ws.quadlets_dialog_open)
+                .is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -315,7 +318,7 @@ impl ModalKind {
                 }
                 Some(())
             }
-            ModalKind::ContainerPods => Some(()),
+            ModalKind::ContainerPods | ModalKind::ContainerQuadlet => Some(()),
             _ => None,
         }
     }
@@ -381,7 +384,8 @@ impl ModalKind {
             ModalKind::ContainerConfirm
             | ModalKind::ContainerExportConfig
             | ModalKind::ContainerSystemDf
-            | ModalKind::ContainerPods => ModalFocus::None,
+            | ModalKind::ContainerPods
+            | ModalKind::ContainerQuadlet => ModalFocus::None,
             _ => return None,
         };
         Some(focus)
@@ -468,7 +472,7 @@ impl ModalKind {
                     ]
                 })
                 .unwrap_or_default(),
-            ModalKind::ContainerPods => Vec::new(),
+            ModalKind::ContainerPods | ModalKind::ContainerQuadlet => Vec::new(),
             ModalKind::ContainerConfirm | ModalKind::ContainerExportConfig => Vec::new(),
             _ => return None,
         };
