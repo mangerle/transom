@@ -67,6 +67,9 @@ pub fn candidates(kind: ContainerEngineKind, explicit: &ContainerEndpoint) -> Ve
     if kind == ContainerEngineKind::Docker {
         candidates.extend(crate::docker_context::discover_context_candidates());
     }
+    if kind == ContainerEngineKind::Podman {
+        candidates.extend(podman_machine_candidates());
+    }
     #[cfg(windows)]
     candidates.extend(windows_candidates(kind));
     // CLI 兜底永远排在最后：只有前面都不可用时才会命中。
@@ -189,6 +192,84 @@ fn known_unix_sockets(kind: ContainerEngineKind) -> Vec<PathBuf> {
         }
     }
     paths
+}
+
+/// 通过 `podman machine inspect` 枚举 machine 暴露的 socket。
+///
+/// 设计原理（Why）：macOS/Windows 的 Podman 通常跑在虚拟机里，socket 路径由
+/// machine 动态分配；只靠固定路径会漏掉用户已经启动的 machine。
+fn podman_machine_candidates() -> Vec<EngineCandidate> {
+    let output = match run_podman_machine_inspect() {
+        Some(output) => output,
+        None => return Vec::new(),
+    };
+    parse_podman_machine_inspect(&output)
+        .into_iter()
+        .filter_map(|endpoint| explicit_candidate(ContainerEngineKind::Podman, &endpoint))
+        .collect()
+}
+
+/// 执行 `podman machine inspect --format json`，带 5 秒上限。
+fn run_podman_machine_inspect() -> Option<Vec<u8>> {
+    let mut child = std::process::Command::new("podman")
+        .args(["machine", "inspect", "--format", "json"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    loop {
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        if start.elapsed() > timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            log::debug!("podman machine inspect 超时，跳过 machine 发现");
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let output = child.wait_with_output().ok()?;
+    output.status.success().then_some(output.stdout)
+}
+
+/// 解析 podman machine inspect 的 JSON，兼容单机对象与数组两种形态。
+fn parse_podman_machine_inspect(bytes: &[u8]) -> Vec<ContainerEndpoint> {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return Vec::new();
+    };
+    let machines: Vec<&serde_json::Value> = match &value {
+        serde_json::Value::Array(items) => items.iter().collect(),
+        serde_json::Value::Object(_) => vec![&value],
+        _ => return Vec::new(),
+    };
+    let mut endpoints = Vec::with_capacity(machines.len());
+    for machine in machines {
+        let path = machine
+            .pointer("/ConnectionInfo/PodmanSocket/Path")
+            .and_then(|value| value.as_str())
+            .or_else(|| {
+                machine
+                    .pointer("/ConnectionInfo/Socket/Path")
+                    .and_then(|value| value.as_str())
+            });
+        let Some(path) = path.filter(|path| !path.trim().is_empty()) else {
+            continue;
+        };
+        let endpoint = if path.starts_with("//./pipe") || path.starts_with("\\.") {
+            ContainerEndpoint::NamedPipe {
+                path: path.to_string(),
+            }
+        } else {
+            ContainerEndpoint::Unix {
+                path: PathBuf::from(path),
+            }
+        };
+        endpoints.push(endpoint);
+    }
+    endpoints
 }
 
 /// 读取环境变量端点：Docker 读 `DOCKER_HOST`，Podman 读 `CONTAINER_HOST`。
@@ -504,9 +585,28 @@ pub fn validate_endpoint(endpoint: &ContainerEndpoint) -> Result<(), ContainerEr
 
 #[cfg(test)]
 mod tests {
-    use super::{endpoint_key, parse_endpoint, parse_ssh_endpoint};
+    use super::{endpoint_key, parse_endpoint, parse_podman_machine_inspect, parse_ssh_endpoint};
     use std::path::PathBuf;
     use transom_core::ContainerEndpoint;
+    #[test]
+    fn podman_machine_inspect_extracts_socket_paths() {
+        let json = br#"[
+          {"Name":"default","ConnectionInfo":{"PodmanSocket":{"Path":"/tmp/podman.sock"}}},
+          {"Name":"win","ConnectionInfo":{"PodmanSocket":{"Path":"//./pipe/podman-machine-default"}}}
+        ]"#;
+        let endpoints = parse_podman_machine_inspect(json);
+        assert_eq!(endpoints.len(), 2);
+        assert!(matches!(
+            &endpoints[0],
+            ContainerEndpoint::Unix { path }
+                if path.as_path() == std::path::Path::new("/tmp/podman.sock")
+        ));
+        assert!(matches!(
+            &endpoints[1],
+            ContainerEndpoint::NamedPipe { path } if path == "//./pipe/podman-machine-default"
+        ));
+    }
+
     #[test]
     fn parses_common_endpoint_forms() {
         assert_eq!(
