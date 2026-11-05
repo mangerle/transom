@@ -97,6 +97,8 @@ pub(crate) enum ModalKind {
     ContainerBuild,
     /// 容器内端口一键建立 SSH 本地端口转发。
     ContainerForward,
+    /// Podman Pod 列表与启停。
+    ContainerPods,
     /// 会话与文件夹新建/编辑表单。
     SessionForm,
     /// 文件夹新建/编辑表单。
@@ -173,6 +175,7 @@ impl ModalKind {
         ModalKind::ContainerSystemDf,
         ModalKind::ContainerBuild,
         ModalKind::ContainerForward,
+        ModalKind::ContainerPods,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
     ];
@@ -272,6 +275,9 @@ impl ModalKind {
                 Some(crate::theme::tokens::dialog::FILTER),
                 "container-forward",
             ),
+            ModalKind::ContainerPods => {
+                (Some(crate::theme::tokens::dialog::AUDIT), "container-pods")
+            }
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
                 "session-form",
@@ -433,6 +439,7 @@ impl ModalKind {
                         shell.render_container_forward_dialog_body(tab_id, app, window, cx, p)
                     },
                 ),
+            ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, p),
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
@@ -488,6 +495,7 @@ mod tests {
         ModalKind::ContainerSystemDf,
         ModalKind::ContainerBuild,
         ModalKind::ContainerForward,
+        ModalKind::ContainerPods,
         ModalKind::SessionForm,
         ModalKind::FolderForm,
         ModalKind::BatchEdit,

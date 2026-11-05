@@ -53,6 +53,9 @@ impl ModalKind {
             ModalKind::ContainerForward => shell
                 .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
                 .is_some(),
+            ModalKind::ContainerPods => shell
+                .find_container_modal_tab(|ws| ws.pods_dialog_open)
+                .is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -188,6 +191,13 @@ impl ModalKind {
                 }
                 Some(true)
             }
+            ModalKind::ContainerPods => {
+                if let Some((tab_id, _)) = shell.find_container_modal_tab(|ws| ws.pods_dialog_open)
+                {
+                    shell.close_container_pods_dialog(tab_id, cx);
+                }
+                Some(true)
+            }
             _ => None,
         }
     }
@@ -305,6 +315,7 @@ impl ModalKind {
                 }
                 Some(())
             }
+            ModalKind::ContainerPods => Some(()),
             _ => None,
         }
     }
@@ -369,7 +380,8 @@ impl ModalKind {
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerConfirm
             | ModalKind::ContainerExportConfig
-            | ModalKind::ContainerSystemDf => ModalFocus::None,
+            | ModalKind::ContainerSystemDf
+            | ModalKind::ContainerPods => ModalFocus::None,
             _ => return None,
         };
         Some(focus)
@@ -456,6 +468,7 @@ impl ModalKind {
                     ]
                 })
                 .unwrap_or_default(),
+            ModalKind::ContainerPods => Vec::new(),
             ModalKind::ContainerConfirm | ModalKind::ContainerExportConfig => Vec::new(),
             _ => return None,
         };

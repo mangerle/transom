@@ -378,6 +378,9 @@ impl AppShell {
                     );
                 }
             }
+            ContainerAppEvent::PodsListed { request_id, pods } => {
+                self.on_container_pods_listed(request_id, pods, cx);
+            }
             ContainerAppEvent::ProcessesListed {
                 request_id,
                 processes,

@@ -5303,6 +5303,22 @@ container:
     copied:
       en: 'Copied: %{value}'
       zh-CN: '已复制：%{value}'
+  pods:
+    title:
+      en: Podman Pods
+      zh-CN: Podman Pod
+    subtitle:
+      en: List and start, stop or restart pods on this Podman engine.
+      zh-CN: 查看当前 Podman 引擎上的 Pod，并执行启动、停止或重启。
+    loading:
+      en: Loading pods…
+      zh-CN: 正在加载 Pod…
+    empty:
+      en: No pods found on this engine.
+      zh-CN: 当前引擎没有 Pod。
+    containers:
+      en: containers
+      zh-CN: 个容器
   section:
     compose:
       en: Compose

@@ -234,6 +234,13 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) system_prune_all: bool,
     pub(crate) system_prune_volumes: bool,
     pub(crate) system_prune_running: bool,
+    /// Podman Pod 列表弹窗与数据。
+    pub(crate) pods: Vec<transom_core::ContainerPodSummary>,
+    pub(crate) pods_loading: bool,
+    pub(crate) pods_error: Option<String>,
+    pub(crate) pods_request: Option<ContainerRequestId>,
+    pub(crate) pods_dialog_open: bool,
+    pub(crate) pods_action_request: Option<ContainerRequestId>,
     /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
     pub(crate) compose_yaml_editor:
         Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
@@ -382,6 +389,12 @@ impl ContainerWorkspaceState {
             system_prune_all: false,
             system_prune_volumes: false,
             system_prune_running: false,
+            pods: Vec::new(),
+            pods_loading: false,
+            pods_error: None,
+            pods_request: None,
+            pods_dialog_open: false,
+            pods_action_request: None,
             compose_yaml_editor: None,
             compose_dependencies: HashMap::new(),
             compose_hovered_service: None,

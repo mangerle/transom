@@ -389,6 +389,18 @@ pub enum ContainerCommand {
         /// 轮询间隔（毫秒）：界面提供 1s/3s/10s 三档，0 按 3s 处理。
         interval_ms: u64,
     },
+    /// 列出 Podman Pod。
+    ListPods {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+    },
+    /// 对 Podman Pod 执行启停/重启/删除。
+    PodAction {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        pod: String,
+        action: crate::model::container::ContainerPodAction,
+    },
     /// 容器内进程列表：进程数与 CPU/内存占用，用于统计页的进程表。
     ListProcesses {
         tab_id: TabId,

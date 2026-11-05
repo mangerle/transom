@@ -9,6 +9,7 @@ mod export;
 mod files;
 mod forward;
 mod network;
+mod pods;
 mod rename;
 mod tag;
 mod update;

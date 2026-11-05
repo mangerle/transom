@@ -383,6 +383,10 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         error: String,
     },
+    PodsListed {
+        request_id: ContainerRequestId,
+        pods: Vec<crate::model::container::ContainerPodSummary>,
+    },
     ProcessesListed {
         request_id: ContainerRequestId,
         processes: Vec<ContainerProcess>,

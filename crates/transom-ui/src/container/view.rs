@@ -259,6 +259,10 @@ impl AppShell {
         let drawer_open = workspace.pull_drawer_open;
         let has_tasks = !workspace.pull_manager.tasks.is_empty();
         let fullscreen = self.state.containers.fullscreen == Some(tab_id);
+        let is_podman = workspace
+            .info
+            .as_ref()
+            .is_some_and(|info| info.engine.kind == transom_core::ContainerEngineKind::Podman);
 
         h_flex()
             .gap_1()
@@ -298,6 +302,18 @@ impl AppShell {
                     }
                     cx.notify();
                 })))
+            })
+            .when(is_podman, |this| {
+                this.child(
+                    Button::new("container-pods-btn")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Layers)
+                        .tooltip(rust_i18n::t!("container.pods.title").to_string())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_container_pods_dialog(tab_id, cx);
+                        })),
+                )
             })
             .child(
                 Button::new("container-system-df-btn")

@@ -121,6 +121,40 @@ impl Engine {
         }
     }
 
+    /// 列出 Podman Pod；HTTP 兼容层没有 libpod 端点，当前只支持 CLI 连接。
+    ///
+    /// # Errors
+    /// 非 Podman 引擎、HTTP 连接或 CLI 执行失败时返回错误。
+    pub async fn list_pods(
+        &self,
+    ) -> Result<Vec<transom_core::ContainerPodSummary>, ContainerError> {
+        match &self.backend {
+            EngineBackend::Cli(cli) => cli.list_pods().await,
+            EngineBackend::Http(_) => Err(ContainerError::Unsupported {
+                operation: "Pod 管理需要 Podman CLI 连接，当前 HTTP 连接暂不支持 libpod Pod API"
+                    .to_string(),
+            }),
+        }
+    }
+
+    /// 执行 Podman Pod 启停/重启/删除。
+    ///
+    /// # Errors
+    /// 非 Podman 引擎、HTTP 连接或 CLI 执行失败时返回错误。
+    pub async fn pod_action(
+        &self,
+        pod: &str,
+        action: transom_core::ContainerPodAction,
+    ) -> Result<(), ContainerError> {
+        match &self.backend {
+            EngineBackend::Cli(cli) => cli.pod_action(pod, action).await,
+            EngineBackend::Http(_) => Err(ContainerError::Unsupported {
+                operation: "Pod 管理需要 Podman CLI 连接，当前 HTTP 连接暂不支持 libpod Pod API"
+                    .to_string(),
+            }),
+        }
+    }
+
     pub async fn list_images(&self) -> Result<Vec<ContainerImageSummary>, ContainerError> {
         match &self.backend {
             EngineBackend::Http(api) => api.list_images().await,
