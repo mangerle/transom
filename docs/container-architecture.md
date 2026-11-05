@@ -51,9 +51,11 @@ Desktop 的**管理工作区**——左侧功能菜单（编排 / 容器 / 镜�
   方式对 Docker 与 Podman 一致。
 - 列表项：项目名、运行/总数、配置目录、状态。
 - 详情：项目内容器列表；操作“启动/停止/重启”默认对项目内全部容器逐个
-  执行（跨平台可用）；“compose up/down/build”需要本机 compose CLI 与
-  可访问的项目目录，作为 P1 能力，界面上明确标注依赖。
-- 不提供 Compose 文件编辑；P2 可考虑打开项目目录。
+  执行（跨平台可用）；“compose up/down/build”通过宿主机 Compose CLI 执行，
+  支持 Unix/TCP/SSH/WSL/WSLC 与自定义 CLI 端点，WSL 通过
+  `wsl.exe -d <distro> -e docker` 进入发行版。
+- Compose YAML 可在应用内置编辑器中打开与保存；配置文件路径来自容器标签，
+  保存前限制在工作目录内并做规范路径校验。
 
 ### 3.2 容器
 
@@ -65,13 +67,19 @@ Desktop 的**管理工作区**——左侧功能菜单（编排 / 容器 / 镜�
     挂载、重启策略、创建/启动时间、原始 inspect（可折叠）；
   - 日志：最近 N 行 + 跟随开关，stdout/stderr 合并展示；
   - 终端：在该容器内 exec 一个交互式 TTY，页签关闭即结束 exec；
-  - 统计：CPU、内存、网络 IO、块 IO、进程数，工作区可见时 3 秒轮询；
-  - 文件预览：容器文件系统浏览、文本预览/下载/上传、删除/重命名。
+  - 统计：CPU、内存、网络 IO、块 IO、进程数，`stream=1` 长流采样，支持
+    快速/标准/节能档位，仅统计页签可见时运行；历史可导出 CSV；
+  - 文件预览：容器文件系统浏览、文本预览/下载/上传、目录导出为 tar、
+    删除/重命名；二进制文件只允许下载，禁止文本编辑。
 
 ### 3.3 镜像
 
 - 列表：仓库标签、短 ID、大小、创建时间；支持拉取（输入引用）与删除。
-- 详情：完整 ID、标签、架构/系统、层数与大小、创建时间。
+- 详情：完整 ID、标签、架构/系统、层数与大小、创建时间、构建历史。
+- 构建：支持流式上下文、`.dockerignore`（否定/锚定/目录规则）、构建参数、
+  目标阶段、目标平台与取消。
+- 仓库：Docker Hub Search API、Harbor 搜索、Registry v2 `_catalog` 回落与
+  实时 `/tags/list`；私有仓库 Bearer 鉴权与拉取凭据随任务保存。
 
 ### 3.4 数据卷
 
@@ -154,15 +162,16 @@ struct EngineWorkspaceSession {
 | Linux | Docker rootless | `$XDG_RUNTIME_DIR/docker.sock`、`DOCKER_HOST` | CLI |
 | Linux | Podman rootful/rootless | `/run/podman/podman.sock`、`$XDG_RUNTIME_DIR/podman/podman.sock`、`CONTAINER_HOST` | CLI `podman` |
 | macOS | Docker Desktop | `~/.docker/run/docker.sock`、`/var/run/docker.sock` | CLI |
-| macOS | Podman machine | `podman machine inspect` 报告的 socket（P1） | CLI |
+| macOS | Podman machine | 通过 `CONTAINER_HOST` 或 CLI 连接（尚未自动枚举 machine） | CLI |
 | Windows | Docker Desktop | 命名管道 `//./pipe/docker_engine`、`dockerDesktopLinuxEngine` | CLI |
 | Windows | WSL 内 docker-ce | `wsl.exe -d <distro> -e docker system dial-stdio` | `wsl.exe ... docker` |
 | Windows | WSLC | `wslc.exe`（别名 `container.exe`）Docker 语法 | 无 |
-| 任意 | 远端 daemon | `ssh://` + `docker system dial-stdio`（P1） | 无 |
+| 任意 | 远端 daemon | `ssh://` + `docker system dial-stdio`，严格校验 known_hosts | 无 |
 
 发现顺序：显式配置 → `DOCKER_HOST`/`CONTAINER_HOST` → 平台已知 socket →
-Docker Desktop/命名管道 → CLI。每个候选以 `GET /_ping`（1 秒超时）确认，
-并记录 `API-Version` 做版本协商。
+Docker Desktop/命名管道 → Docker Context → CLI。每个候选以 `GET /_ping`
+（4 秒探测上限）确认，并记录 `API-Version` 做版本协商；候选生成在阻塞线程池
+执行，避免同步文件系统与 `docker context ls` 卡住 tokio worker。
 
 ## 7. 数据通路
 
@@ -187,13 +196,14 @@ Docker Desktop/命名管道 → CLI。每个候选以 `GET /_ping`（1 秒超时
 
 - 非 TTY 容器按 8 字节头解复用 stdout/stderr，TTY 容器按裸流；
 - 跟随模式只在该详情页签可见时运行，切换页签/关闭工作区即取消；
-- 输出走 `ContainerAppEvent::LogsChunk`，界面持有滚动缓冲（上限固定，
-  超出丢弃最旧行）。
+- 输出按 64KiB/100ms 合并后走 `ContainerAppEvent::LogsChunk`，界面持有
+  512KiB 滚动缓冲并只渲染最后 2000 行，超出丢弃最旧内容。
 
 ### 7.3 统计
 
-- `GET /containers/{id}/stats?stream=0` 每 3 秒采样一次（仅统计页签可见）；
+- `GET /containers/{id}/stats?stream=1` 长流采样，按快速/标准/节能档位节流；
 - 解析 CPU 百分比、内存用量/上限、网络收发、块 IO、进程数；
+- 断线按指数退避自动重连，连续失败时向界面回报采样错误；
 - CLI 后端用 `docker stats --no-stream --format '{{json .}}'` 降级。
 
 ### 7.4 文件
@@ -308,8 +318,11 @@ enum ContainerCommand {
 
 ## 10. 安全与可观测性
 
-- 引擎 socket 权限即权限边界；不保存引擎口令、不调用 `sudo`；
-- 明文 TCP 需显式配置并二次确认；TLS 证书三件套 P1；
+- 引擎 socket 权限即权限边界；仓库密码写入系统钥匙串，`settings.json`
+  不再保存明文，也不调用 `sudo`；
+- TLS 证书配置按文件时间戳缓存；未配置 CA 时使用 WebPKI 公共根证书，
+  支持 `DOCKER_CERT_PATH`/`DOCKER_TLS_VERIFY`；
+- Docker SSH 通道严格校验 known_hosts，首次连接需先通过 SSH 会话确认指纹；
 - 日志全中文、无凭证；容器名、操作、耗时进入日志上下文；
 - 新增错误码：`ContainerUnavailable`、`ContainerApi`、`ContainerNotFound`、
   `ContainerConflict`；
@@ -331,10 +344,12 @@ enum ContainerCommand {
    Compose 聚合」与「exec 升级 + 阻塞读写桥」两条链路；真机 Docker/Podman
    冒烟在装有运行时的机器上补做。
 
-**P1**：macOS 与 Windows 通道（命名管道、Docker Desktop、WSL dial-stdio、
-WSLC CLI、Podman machine）、TLS/SSH 端点、Compose CLI 级操作。
+**已落地（P1）**：Windows 命名管道、Docker Desktop、WSL dial-stdio、WSLC CLI、
+TLS/SSH 端点、Docker Context、Compose CLI 级操作与 YAML 编辑、镜像构建、
+容器高级运行参数、Registry v2 实时标签、目录导出、统计 CSV 导出。
 
-**P2**：镜像构建、Compose 文件编辑、容器指标历史、容器间文件对比。
+**待继续（P2）**：Podman machine 自动枚举、Podman Pod/Quadlet、容器指标历史
+持久化与阈值告警、容器间文件复制、定时清理、容器间文件对比。
 
 ## 12. 关键决策
 
