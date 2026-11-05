@@ -97,20 +97,22 @@ pub(super) fn copyable_field(
 
     if !is_empty {
         let text_to_copy = val_str.clone();
-        let copy_btn = Button::new(ElementId::Name(format!("copy-field-{}", val_str.len()).into()))
-            .ghost()
-            .xsmall()
-            .icon(IconName::Copy)
-            .tooltip(rust_i18n::t!("common.copy").to_string())
-            .on_click(cx.listener(move |this, _, window, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(text_to_copy.clone()));
-                this.show_toast(
-                    rust_i18n::t!("container.row.copied", value = text_to_copy.as_str()).to_string(),
-                    true,
-                    window,
-                    cx,
-                );
-            }));
+        let copy_btn = Button::new(ElementId::Name(
+            format!("copy-field-{}", val_str.len()).into(),
+        ))
+        .ghost()
+        .xsmall()
+        .icon(IconName::Copy)
+        .tooltip(rust_i18n::t!("common.copy").to_string())
+        .on_click(cx.listener(move |this, _, window, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(text_to_copy.clone()));
+            this.show_toast(
+                rust_i18n::t!("container.row.copied", value = text_to_copy.as_str()).to_string(),
+                true,
+                window,
+                cx,
+            );
+        }));
         row = row.child(copy_btn);
     }
 
@@ -139,7 +141,11 @@ pub(super) fn render_port_chips(
 
     let chips = ports.iter().map(|port| {
         let private_port = port.private_port;
-        let protocol = if port.protocol.is_empty() { "tcp" } else { &port.protocol };
+        let protocol = if port.protocol.is_empty() {
+            "tcp"
+        } else {
+            &port.protocol
+        };
         let forward_btn = Button::new(ElementId::Name(format!("chip-fwd-{}", private_port).into()))
             .ghost()
             .xsmall()
@@ -148,7 +154,13 @@ pub(super) fn render_port_chips(
             .on_click(cx.listener({
                 let container_name = container_name.clone();
                 move |this, _, window, cx| {
-                    this.open_container_port_forward(tab_id, &container_name, private_port, window, cx);
+                    this.open_container_port_forward(
+                        tab_id,
+                        &container_name,
+                        private_port,
+                        window,
+                        cx,
+                    );
                 }
             }));
 
@@ -206,7 +218,11 @@ pub(super) fn render_port_chips(
         chip_body
     });
 
-    h_flex().gap_2().flex_wrap().children(chips).into_any_element()
+    h_flex()
+        .gap_2()
+        .flex_wrap()
+        .children(chips)
+        .into_any_element()
 }
 
 /// 存储挂载两行式列表。
@@ -226,7 +242,11 @@ pub(super) fn render_mounts_card(mounts: &[ContainerMount], p: &Palette) -> AnyE
             crate::widgets::status_badge("ro", p.warning, p)
         };
         let kind_badge = if !mount.kind.is_empty() {
-            Some(crate::widgets::status_badge(mount.kind.clone(), p.primary, p))
+            Some(crate::widgets::status_badge(
+                mount.kind.clone(),
+                p.primary,
+                p,
+            ))
         } else {
             None
         };
@@ -242,7 +262,11 @@ pub(super) fn render_mounts_card(mounts: &[ContainerMount], p: &Palette) -> AnyE
                 h_flex()
                     .gap_1p5()
                     .items_center()
-                    .child(Icon::new(IconName::Folder).xsmall().text_color(p.muted_foreground))
+                    .child(
+                        Icon::new(IconName::Folder)
+                            .xsmall()
+                            .text_color(p.muted_foreground),
+                    )
                     .child(
                         div()
                             .text_size(px(11.0))
@@ -328,7 +352,9 @@ pub(super) fn render_env_card(
             div()
                 .text_size(px(11.0))
                 .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.detail.env_more_hint", count = remaining).to_string())
+                .child(
+                    rust_i18n::t!("container.detail.env_more_hint", count = remaining).to_string(),
+                )
                 .into_any_element(),
         )
     } else {
@@ -370,7 +396,11 @@ pub(super) fn render_health_timeline(
     let header_extra = h_flex()
         .gap_2()
         .items_center()
-        .child(crate::widgets::status_badge(health.status.clone(), status_color, p))
+        .child(crate::widgets::status_badge(
+            health.status.clone(),
+            status_color,
+            p,
+        ))
         .child(
             div()
                 .text_size(px(11.0))
@@ -386,11 +416,8 @@ pub(super) fn render_health_timeline(
     for item in health.log.iter().rev().take(5) {
         let ok = item.exit_code == 0;
         let dot_color = if ok { p.success } else { p.danger };
-        let exit_badge = crate::widgets::status_badge(
-            format!("exit {}", item.exit_code),
-            dot_color,
-            p,
-        );
+        let exit_badge =
+            crate::widgets::status_badge(format!("exit {}", item.exit_code), dot_color, p);
 
         let row = h_flex()
             .gap_2()

@@ -119,19 +119,22 @@ fn write_archive_stream(
             return Err(ContainerError::Cancelled);
         }
 
-        let count = reader.read(&mut buffer).map_err(|error| ContainerError::File {
-            path: temp.display().to_string(),
-            message: format!("读取响应流失败: {error}"),
-        })?;
+        let count = reader
+            .read(&mut buffer)
+            .map_err(|error| ContainerError::File {
+                path: temp.display().to_string(),
+                message: format!("读取响应流失败: {error}"),
+            })?;
 
         if count == 0 {
             break;
         }
 
-        file.write_all(&buffer[..count]).map_err(|error| ContainerError::File {
-            path: temp.display().to_string(),
-            message: format!("写入文件失败: {error}"),
-        })?;
+        file.write_all(&buffer[..count])
+            .map_err(|error| ContainerError::File {
+                path: temp.display().to_string(),
+                message: format!("写入文件失败: {error}"),
+            })?;
 
         written = written.saturating_add(count as u64);
         let _ = progress.send((written, None));

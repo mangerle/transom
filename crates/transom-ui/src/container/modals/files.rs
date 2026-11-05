@@ -63,9 +63,9 @@ impl AppShell {
         _cx: &App,
         _p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.files.new_dir_open && ws.files.new_dir_input.is_some())
-        else {
+        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| {
+            ws.files.new_dir_open && ws.files.new_dir_input.is_some()
+        }) else {
             return div().into_any_element();
         };
         let Some(input) = workspace.files.new_dir_input.clone() else {

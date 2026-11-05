@@ -200,7 +200,12 @@ impl AppShell {
                 .icon(IconName::Plus)
                 .tooltip(rust_i18n::t!("container.create_dialog.volume").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.open_container_create_dialog(tab_id, ContainerSection::Volumes, window, cx);
+                    this.open_container_create_dialog(
+                        tab_id,
+                        ContainerSection::Volumes,
+                        window,
+                        cx,
+                    );
                 })),
             ContainerSection::Networks => Button::new("container-main-create-network")
                 .xsmall()
@@ -208,7 +213,12 @@ impl AppShell {
                 .icon(IconName::Plus)
                 .tooltip(rust_i18n::t!("container.create_dialog.network").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.open_container_create_dialog(tab_id, ContainerSection::Networks, window, cx);
+                    this.open_container_create_dialog(
+                        tab_id,
+                        ContainerSection::Networks,
+                        window,
+                        cx,
+                    );
                 })),
             ContainerSection::Compose => Button::new("container-main-new-compose")
                 .xsmall()

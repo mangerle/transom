@@ -146,23 +146,26 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             let container_service = Arc::clone(&ctx.container);
             let tid = task_id.clone();
             tokio::spawn(async move {
-                let mut layers_map: std::collections::HashMap<String, transom_core::ImageLayerProgress> =
-                    std::collections::HashMap::with_capacity(16);
-                let mut progress = |status: String, layer_opt: Option<transom_core::ImageLayerProgress>| {
-                    if let Some(layer) = layer_opt {
-                        layers_map.insert(layer.id.clone(), layer);
-                    }
-                    let layers: Vec<transom_core::ImageLayerProgress> =
-                        layers_map.values().cloned().collect();
-                    let _ = event_tx.try_send(
-                        ContainerAppEvent::PullTaskProgress {
-                            task_id: tid.clone(),
-                            status,
-                            layers,
+                let mut layers_map: std::collections::HashMap<
+                    String,
+                    transom_core::ImageLayerProgress,
+                > = std::collections::HashMap::with_capacity(16);
+                let mut progress =
+                    |status: String, layer_opt: Option<transom_core::ImageLayerProgress>| {
+                        if let Some(layer) = layer_opt {
+                            layers_map.insert(layer.id.clone(), layer);
                         }
-                        .into(),
-                    );
-                };
+                        let layers: Vec<transom_core::ImageLayerProgress> =
+                            layers_map.values().cloned().collect();
+                        let _ = event_tx.try_send(
+                            ContainerAppEvent::PullTaskProgress {
+                                task_id: tid.clone(),
+                                status,
+                                layers,
+                            }
+                            .into(),
+                        );
+                    };
                 let error = engine
                     .pull_image_task(&reference, auth.as_ref(), cancel, &mut progress)
                     .await
@@ -243,13 +246,8 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             let event_tx = ctx.event_tx.clone();
             spawn_long(state, ctx, tab_id, request_id, cancel, async move {
                 let mut progress = |line: String| {
-                    let _ = event_tx.try_send(
-                        ContainerAppEvent::BuildProgress {
-                            request_id,
-                            line,
-                        }
-                        .into(),
-                    );
+                    let _ = event_tx
+                        .try_send(ContainerAppEvent::BuildProgress { request_id, line }.into());
                 };
                 let error = engine
                     .build_image(&spec, &mut progress)

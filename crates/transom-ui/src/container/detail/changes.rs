@@ -2,7 +2,9 @@
 
 use super::*;
 use gpui_kit::ClipboardItem;
-use transom_core::{ContainerCommand, ContainerFileSystemChange, ContainerPathChangeKind, ContainerRequestId};
+use transom_core::{
+    ContainerCommand, ContainerFileSystemChange, ContainerPathChangeKind, ContainerRequestId,
+};
 
 /// 渲染容器文件变更页签。
 pub(crate) fn render_container_changes(
@@ -15,7 +17,10 @@ pub(crate) fn render_container_changes(
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some(container_id) = container_id else {
-        return centered_hint(rust_i18n::t!("container.detail.no_selection").to_string(), p);
+        return centered_hint(
+            rust_i18n::t!("container.detail.no_selection").to_string(),
+            p,
+        );
     };
 
     let search_keyword = search_input.read(cx).value().trim().to_lowercase();
@@ -176,23 +181,25 @@ pub(crate) fn render_container_changes(
                     ),
             )
             .child(
-                Button::new(ElementId::Name(format!("btn-copy-diff-path-{}", change.path).into()))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Copy)
-                    .tooltip(rust_i18n::t!("container.detail.copy_path").to_string())
-                    .on_click(cx.listener({
-                        let path = copy_path.clone();
-                        move |this, _, window, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
-                            this.show_toast(
-                                rust_i18n::t!("container.detail.copied").to_string(),
-                                true,
-                                window,
-                                cx,
-                            );
-                        }
-                    })),
+                Button::new(ElementId::Name(
+                    format!("btn-copy-diff-path-{}", change.path).into(),
+                ))
+                .ghost()
+                .xsmall()
+                .icon(IconName::Copy)
+                .tooltip(rust_i18n::t!("container.detail.copy_path").to_string())
+                .on_click(cx.listener({
+                    let path = copy_path.clone();
+                    move |this, _, window, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
+                        this.show_toast(
+                            rust_i18n::t!("container.detail.copied").to_string(),
+                            true,
+                            window,
+                            cx,
+                        );
+                    }
+                })),
             );
 
         rows = rows.child(row);

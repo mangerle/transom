@@ -132,7 +132,9 @@ impl AppShell {
                 }
                 let mut re_inspect_id = None;
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    if inspect_first.is_none() && let Some(selected_id) = &workspace.selected {
+                    if inspect_first.is_none()
+                        && let Some(selected_id) = &workspace.selected
+                    {
                         re_inspect_id = Some(selected_id.clone());
                     }
                 }
@@ -448,19 +450,41 @@ impl AppShell {
                     && let Some(workspace) = self.state.container_workspace_mut(tab_id)
                 {
                     workspace.notice = Some(line.clone());
-                    if let Some(b) = workspace.build_dialog.as_mut().filter(|b| b.request_id == Some(request_id)) {
+                    if let Some(b) = workspace
+                        .build_dialog
+                        .as_mut()
+                        .filter(|b| b.request_id == Some(request_id))
+                    {
                         b.logs.push(line);
                     }
                 }
             }
             ContainerAppEvent::VolumesPruned { request_id, report } => {
-                self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Volumes, window, cx);
+                self.handle_prune_report(
+                    request_id,
+                    report.deleted.len(),
+                    ContainerPruneTarget::Volumes,
+                    window,
+                    cx,
+                );
             }
             ContainerAppEvent::ImagesPruned { request_id, report } => {
-                self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Images, window, cx);
+                self.handle_prune_report(
+                    request_id,
+                    report.deleted.len(),
+                    ContainerPruneTarget::Images,
+                    window,
+                    cx,
+                );
             }
             ContainerAppEvent::NetworksPruned { request_id, report } => {
-                self.handle_prune_report(request_id, report.deleted.len(), ContainerPruneTarget::Networks, window, cx);
+                self.handle_prune_report(
+                    request_id,
+                    report.deleted.len(),
+                    ContainerPruneTarget::Networks,
+                    window,
+                    cx,
+                );
             }
             ContainerAppEvent::ActionFinished { request_id, error } => {
                 self.on_container_action_finished(request_id, error, window, cx);
@@ -471,16 +495,27 @@ impl AppShell {
             ContainerAppEvent::Failed { request_id, error } => {
                 self.on_container_failed(request_id, error, window, cx);
             }
-            ContainerAppEvent::ImagesSearched { request_id, results } => {
+            ContainerAppEvent::ImagesSearched {
+                request_id,
+                results,
+            } => {
                 self.on_container_images_searched(request_id, results, window, cx);
             }
-            ContainerAppEvent::PullTaskProgress { task_id, status, layers } => {
+            ContainerAppEvent::PullTaskProgress {
+                task_id,
+                status,
+                layers,
+            } => {
                 self.on_container_pull_task_progress(task_id, status, layers, window, cx);
             }
             ContainerAppEvent::PullTaskFinished { task_id, error } => {
                 self.on_container_pull_task_finished(task_id, error, window, cx);
             }
-            ContainerAppEvent::ContainerDiffed { request_id, container, changes } => {
+            ContainerAppEvent::ContainerDiffed {
+                request_id,
+                container,
+                changes,
+            } => {
                 self.on_container_diffed(request_id, container, changes);
             }
             ContainerAppEvent::SystemDfLoaded { request_id, usage } => {

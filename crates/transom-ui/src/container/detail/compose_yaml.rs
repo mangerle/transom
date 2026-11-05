@@ -54,7 +54,11 @@ pub(crate) fn render_path_breadcrumbs(
     segments.push(project_name.to_string());
 
     if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
-        if let Some(parent) = path.parent().and_then(|p| p.file_name()).and_then(|f| f.to_str()) {
+        if let Some(parent) = path
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|f| f.to_str())
+        {
             segments.push(parent.to_string());
         }
         segments.push(file_name.to_string());

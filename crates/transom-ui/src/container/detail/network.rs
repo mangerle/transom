@@ -89,14 +89,12 @@ pub(crate) fn render_network_detail(
             .child(kv(p, rust_i18n::t!("container.field.labels"), labels));
     }
     let disconnect_net_id = id.clone();
-    let mut connected_block = v_flex()
-        .gap_1()
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.field.connected").to_string()),
-        );
+    let mut connected_block = v_flex().gap_1().child(
+        div()
+            .text_xs()
+            .text_color(p.muted_foreground)
+            .child(rust_i18n::t!("container.field.connected").to_string()),
+    );
     if connected_items.is_empty() {
         connected_block = connected_block.child(
             div()

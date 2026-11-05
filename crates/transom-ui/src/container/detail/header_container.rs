@@ -180,7 +180,9 @@ pub(super) fn container_header_actions(
                                     this.container_lifecycle(
                                         tab_id,
                                         name_k.clone(),
-                                        transom_core::ContainerLifecycleAction::Kill { signal: None },
+                                        transom_core::ContainerLifecycleAction::Kill {
+                                            signal: None,
+                                        },
                                         cx,
                                     );
                                 });
@@ -238,15 +240,18 @@ pub(super) fn container_header_actions(
                 let app_d = app.clone();
                 let name_d = name.clone();
                 menu = menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("common.delete").to_string())
-                        .on_click(move |_, _, cx| {
+                    PopupMenuItem::new(rust_i18n::t!("common.delete").to_string()).on_click(
+                        move |_, _, cx| {
                             app_d.update(cx, |this, cx| {
-                                if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                                    workspace.confirm = Some(ContainerConfirm::Container(name_d.clone()));
+                                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
+                                {
+                                    workspace.confirm =
+                                        Some(ContainerConfirm::Container(name_d.clone()));
                                 }
                                 cx.notify();
                             });
-                        }),
+                        },
+                    ),
                 );
 
                 menu

@@ -173,13 +173,11 @@ pub(crate) fn ports_card(
                             .text_color(p.muted_foreground)
                             .child(port.protocol.to_lowercase()),
                     )
-                    .child(
-                        div().flex_1().min_w_0().child(status_badge(
-                            rust_i18n::t!("container.stats.published").to_string(),
-                            p.success,
-                            p,
-                        )),
-                    );
+                    .child(div().flex_1().min_w_0().child(status_badge(
+                        rust_i18n::t!("container.stats.published").to_string(),
+                        p.success,
+                        p,
+                    )));
                 table = table.child(row);
             }
 
@@ -217,13 +215,11 @@ pub(crate) fn ports_card(
                             .text_color(p.muted_foreground)
                             .child(proto.to_lowercase()),
                     )
-                    .child(
-                        div().flex_1().min_w_0().child(status_badge(
-                            rust_i18n::t!("container.stats.exposed").to_string(),
-                            p.muted_foreground,
-                            p,
-                        )),
-                    );
+                    .child(div().flex_1().min_w_0().child(status_badge(
+                        rust_i18n::t!("container.stats.exposed").to_string(),
+                        p.muted_foreground,
+                        p,
+                    )));
                 table = table.child(row);
             }
 

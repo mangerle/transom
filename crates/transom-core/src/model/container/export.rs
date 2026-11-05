@@ -216,7 +216,13 @@ fn escape_shell_env(env: &str) -> String {
 fn sanitize_service_name(name: &str) -> String {
     let sanitized: String = name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if sanitized.is_empty() {
         "app".to_string()
@@ -228,7 +234,9 @@ fn sanitize_service_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::container::inventory::{ContainerDetails, ContainerMount, ContainerPort, ContainerState};
+    use crate::model::container::inventory::{
+        ContainerDetails, ContainerMount, ContainerPort, ContainerState,
+    };
 
     fn sample_container() -> ContainerDetails {
         ContainerDetails {
@@ -240,7 +248,10 @@ mod tests {
             entrypoint: Vec::new(),
             user: Some("1000".to_string()),
             working_dir: Some("/data".to_string()),
-            env: vec!["PATH=/usr/bin".to_string(), "REDIS_MAX_MEMORY=512mb".to_string()],
+            env: vec![
+                "PATH=/usr/bin".to_string(),
+                "REDIS_MAX_MEMORY=512mb".to_string(),
+            ],
             state: ContainerState::Running,
             status: "Up 2 hours".to_string(),
             created: 1700000000,

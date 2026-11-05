@@ -12,9 +12,10 @@ use crate::error::AppError;
 use crate::ids::{ConnectionId, ContainerRequestId, SessionId, TabId, TransferId};
 use crate::model::container::{
     ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
-    ContainerFileEntry, ContainerFileSystemChange, ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails,
-    ContainerNetworkSummary, ContainerProcess, ContainerPruneReport, ContainerStats,
-    ContainerSummary, ContainerSystemDiskUsage, ContainerVolumeDetails, ContainerVolumeSummary, EngineEvent,
+    ContainerFileEntry, ContainerFileSystemChange, ContainerImageDetails, ContainerImageSummary,
+    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
+    ContainerStats, ContainerSummary, ContainerSystemDiskUsage, ContainerVolumeDetails,
+    ContainerVolumeSummary, EngineEvent,
 };
 use crate::model::forward::ForwardStatus;
 use crate::model::host::HostOutcome;

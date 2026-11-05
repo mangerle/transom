@@ -7,8 +7,8 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::Icon;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_core::TabId;
@@ -23,8 +23,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some((_, workspace)) =
-            self.find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+        let Some((_, workspace)) = self.find_container_modal_tab(|ws| ws.forward_dialog.is_some())
         else {
             return div().into_any_element();
         };
@@ -113,34 +112,48 @@ impl AppShell {
                     ),
             );
         } else {
-            let session_buttons = dialog.ssh_sessions.iter().enumerate().map(|(idx, (name, _, _))| {
-                let is_selected = idx == selected_index;
-                let bg_color = if is_selected { p.primary.opacity(0.12) } else { p.list_background };
-                let border_color = if is_selected { p.primary } else { p.border };
-                let text_color = if is_selected { p.primary } else { p.foreground };
-                let app_entity = app.clone();
-                let display_name = name.clone();
+            let session_buttons =
+                dialog
+                    .ssh_sessions
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, (name, _, _))| {
+                        let is_selected = idx == selected_index;
+                        let bg_color = if is_selected {
+                            p.primary.opacity(0.12)
+                        } else {
+                            p.list_background
+                        };
+                        let border_color = if is_selected { p.primary } else { p.border };
+                        let text_color = if is_selected { p.primary } else { p.foreground };
+                        let app_entity = app.clone();
+                        let display_name = name.clone();
 
-                h_flex()
-                    .id(format!("forward-session-item-{idx}"))
-                    .cursor_pointer()
-                    .gap_2()
-                    .px_2p5()
-                    .py_1p5()
-                    .rounded_md()
-                    .bg(bg_color)
-                    .border_1()
-                    .border_color(border_color)
-                    .items_center()
-                    .on_click(move |_, _window, cx| {
-                        app_entity.update(cx, |this, cx| {
-                            this.select_forward_ssh_session(tab_id, idx, cx);
-                        });
-                    })
-                    .child(Icon::new(IconName::Terminal).size(px(13.0)).text_color(text_color))
-                    .child(div().text_xs().text_color(text_color).child(display_name))
-            });
-            session_section = session_section.child(h_flex().gap_2().flex_wrap().children(session_buttons));
+                        h_flex()
+                            .id(format!("forward-session-item-{idx}"))
+                            .cursor_pointer()
+                            .gap_2()
+                            .px_2p5()
+                            .py_1p5()
+                            .rounded_md()
+                            .bg(bg_color)
+                            .border_1()
+                            .border_color(border_color)
+                            .items_center()
+                            .on_click(move |_, _window, cx| {
+                                app_entity.update(cx, |this, cx| {
+                                    this.select_forward_ssh_session(tab_id, idx, cx);
+                                });
+                            })
+                            .child(
+                                Icon::new(IconName::Terminal)
+                                    .size(px(13.0))
+                                    .text_color(text_color),
+                            )
+                            .child(div().text_xs().text_color(text_color).child(display_name))
+                    });
+            session_section =
+                session_section.child(h_flex().gap_2().flex_wrap().children(session_buttons));
         }
 
         // 本地端口与目标主机输入

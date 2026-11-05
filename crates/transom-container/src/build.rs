@@ -65,12 +65,10 @@ pub fn pack_context_tar(context_dir: &Path) -> Result<Vec<u8>, ContainerError> {
             path: context_dir.display().to_string(),
             message: error.to_string(),
         })?;
-    builder
-        .finish()
-        .map_err(|error| ContainerError::File {
-            path: context_dir.display().to_string(),
-            message: error.to_string(),
-        })?;
+    builder.finish().map_err(|error| ContainerError::File {
+        path: context_dir.display().to_string(),
+        message: error.to_string(),
+    })?;
 
     builder.into_inner().map_err(|error| ContainerError::File {
         path: context_dir.display().to_string(),
@@ -304,7 +302,13 @@ mod tests {
         let mut names = Vec::new();
         for entry in entries {
             let entry = entry.expect("条目有效");
-            names.push(entry.path().expect("路径有效").to_string_lossy().into_owned());
+            names.push(
+                entry
+                    .path()
+                    .expect("路径有效")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
         }
         assert!(
             names.iter().any(|n| n.contains("Dockerfile")),
@@ -331,7 +335,8 @@ mod tests {
         let mut lines = Vec::new();
         let mut progress = |l: String| lines.push(l);
 
-        let json = r#"{"errorDetail":{"message":"Dockerfile not found"},"error":"Dockerfile not found"}"#;
+        let json =
+            r#"{"errorDetail":{"message":"Dockerfile not found"},"error":"Dockerfile not found"}"#;
         let res = parse_build_line(json, &mut progress);
         assert!(res.is_err());
         assert_eq!(

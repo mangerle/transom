@@ -55,17 +55,15 @@ impl AppShell {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(
-                        Icon::new(IconName::Download)
-                            .small()
-                            .text_color(p.primary),
-                    )
+                    .child(Icon::new(IconName::Download).small().text_color(p.primary))
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight::BOLD)
                             .text_color(p.foreground)
-                            .child(rust_i18n::t!("container.pull_manager.center_title").to_string()),
+                            .child(
+                                rust_i18n::t!("container.pull_manager.center_title").to_string(),
+                            ),
                     )
                     .child(
                         div()
@@ -88,7 +86,10 @@ impl AppShell {
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Trash)
-                                .tooltip(rust_i18n::t!("container.pull_manager.clear_finished").to_string())
+                                .tooltip(
+                                    rust_i18n::t!("container.pull_manager.clear_finished")
+                                        .to_string(),
+                                )
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     if let Some(ws) = this.state.container_workspace_mut(tab_id) {
                                         ws.pull_manager.clear_finished();
@@ -102,7 +103,9 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::X)
-                            .tooltip(rust_i18n::t!("container.pull_manager.close_drawer").to_string())
+                            .tooltip(
+                                rust_i18n::t!("container.pull_manager.close_drawer").to_string(),
+                            )
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if let Some(ws) = this.state.container_workspace_mut(tab_id) {
                                     ws.pull_drawer_open = false;
@@ -223,35 +226,39 @@ impl AppShell {
                                     ))
                                     .danger()
                                     .xsmall()
-                                    .label(rust_i18n::t!("container.pull_manager.cancel").to_string())
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        let next_cmd = if let Some(ws) =
-                                            this.state.container_workspace_mut(tab_id)
-                                        {
-                                            ws.pull_manager.cancel_task(&cancel_task_id)
-                                        } else {
-                                            None
-                                        };
-                                        // 发送取消中断指令
-                                        this.state.send_command(
-                                            ContainerCommand::CancelPullTask {
-                                                tab_id,
-                                                task_id: cancel_task_id.clone(),
-                                            },
-                                        );
-                                        // 调度下一个任务
-                                        if let Some((next_id, next_tab, next_ref)) = next_cmd {
+                                    .label(
+                                        rust_i18n::t!("container.pull_manager.cancel").to_string(),
+                                    )
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            let next_cmd = if let Some(ws) =
+                                                this.state.container_workspace_mut(tab_id)
+                                            {
+                                                ws.pull_manager.cancel_task(&cancel_task_id)
+                                            } else {
+                                                None
+                                            };
+                                            // 发送取消中断指令
                                             this.state.send_command(
-                                                ContainerCommand::PullImageTask {
-                                                    tab_id: next_tab,
-                                                    task_id: next_id,
-                                                    reference: next_ref,
-                                                    auth: None,
+                                                ContainerCommand::CancelPullTask {
+                                                    tab_id,
+                                                    task_id: cancel_task_id.clone(),
                                                 },
                                             );
-                                        }
-                                        cx.notify();
-                                    }))
+                                            // 调度下一个任务
+                                            if let Some((next_id, next_tab, next_ref)) = next_cmd {
+                                                this.state.send_command(
+                                                    ContainerCommand::PullImageTask {
+                                                        tab_id: next_tab,
+                                                        task_id: next_id,
+                                                        reference: next_ref,
+                                                        auth: None,
+                                                    },
+                                                );
+                                            }
+                                            cx.notify();
+                                        },
+                                    ))
                                 } else {
                                     let remove_task_id = task_id.clone();
                                     Button::new(ElementId::Name(
@@ -260,14 +267,16 @@ impl AppShell {
                                     .ghost()
                                     .xsmall()
                                     .icon(IconName::Trash)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        if let Some(ws) =
-                                            this.state.container_workspace_mut(tab_id)
-                                        {
-                                            ws.pull_manager.remove_task(&remove_task_id);
-                                        }
-                                        cx.notify();
-                                    }))
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            if let Some(ws) =
+                                                this.state.container_workspace_mut(tab_id)
+                                            {
+                                                ws.pull_manager.remove_task(&remove_task_id);
+                                            }
+                                            cx.notify();
+                                        },
+                                    ))
                                 }),
                         ),
                 );

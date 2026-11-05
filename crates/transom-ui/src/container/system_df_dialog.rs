@@ -12,7 +12,11 @@ use transom_core::{ContainerCommand, ContainerRequestId, TabId};
 
 impl AppShell {
     /// 打开全局存储分析与空间体检弹窗。
-    pub(crate) fn open_container_system_df_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn open_container_system_df_dialog(
+        &mut self,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
@@ -25,7 +29,11 @@ impl AppShell {
     }
 
     /// 关闭全局存储分析弹窗。
-    pub(crate) fn close_container_system_df_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn close_container_system_df_dialog(
+        &mut self,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.system_df_dialog_open = false;
         }
@@ -43,7 +51,11 @@ impl AppShell {
             self.cancel_container_request(tab_id, previous);
         }
         log::info!("正在查询全局系统磁盘占用，请求: {request_id}");
-        self.send_tracked(tab_id, request_id, ContainerCommand::SystemDf { tab_id, request_id });
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::SystemDf { tab_id, request_id },
+        );
     }
 
     /// 触发系统级联合深度清理（System Prune）。
@@ -97,61 +109,59 @@ impl AppShell {
         let reclaim_size_str = format_size(usage.total_reclaimable);
 
         // 顶部总览横幅
-        let summary_banner = h_flex()
-            .justify_between()
-            .items_center()
-            .p_4()
-            .rounded(p.radius.md)
-            .bg(p.secondary)
-            .border_1()
-            .border_color(p.border)
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.system_df.total_used").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(p.foreground)
-                            .child(if loading && workspace.system_df.is_none() {
-                                "...".to_string()
-                            } else {
-                                total_size_str
-                            }),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .gap_1()
-                    .items_end()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.system_df.total_reclaimable").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(if usage.total_reclaimable > 0 {
-                                p.warning
-                            } else {
-                                p.muted_foreground
-                            })
-                            .child(if loading && workspace.system_df.is_none() {
-                                "...".to_string()
-                            } else {
-                                reclaim_size_str
-                            }),
-                    ),
-            );
+        let summary_banner =
+            h_flex()
+                .justify_between()
+                .items_center()
+                .p_4()
+                .rounded(p.radius.md)
+                .bg(p.secondary)
+                .border_1()
+                .border_color(p.border)
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("container.system_df.total_used").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.foreground)
+                                .child(if loading && workspace.system_df.is_none() {
+                                    "...".to_string()
+                                } else {
+                                    total_size_str
+                                }),
+                        ),
+                )
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .items_end()
+                        .child(div().text_xs().text_color(p.muted_foreground).child(
+                            rust_i18n::t!("container.system_df.total_reclaimable").to_string(),
+                        ))
+                        .child(
+                            div()
+                                .text_xl()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(if usage.total_reclaimable > 0 {
+                                    p.warning
+                                } else {
+                                    p.muted_foreground
+                                })
+                                .child(if loading && workspace.system_df.is_none() {
+                                    "...".to_string()
+                                } else {
+                                    reclaim_size_str
+                                }),
+                        ),
+                );
 
         // 堆叠占用比例条与分类明细看板
         let stacked_bar = super::system_df_view::render_stacked_usage_bar(&usage, p);
@@ -172,18 +182,12 @@ impl AppShell {
                     .child(
                         v_flex()
                             .gap_0p5()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(rust_i18n::t!("container.system_df.opt_prune_all").to_string()),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("container.system_df.opt_prune_all_hint").to_string()),
-                            ),
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
+                                rust_i18n::t!("container.system_df.opt_prune_all").to_string(),
+                            ))
+                            .child(div().text_xs().text_color(p.muted_foreground).child(
+                                rust_i18n::t!("container.system_df.opt_prune_all_hint").to_string(),
+                            )),
                     )
                     .child(
                         Button::new("opt-prune-all-toggle")
@@ -195,12 +199,15 @@ impl AppShell {
                             } else {
                                 rust_i18n::t!("container.system_df.opt_disabled").to_string()
                             })
-                            .on_click(crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                                if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                                    ws.system_prune_all = !prune_all;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                        ws.system_prune_all = !prune_all;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     ),
             )
             .child(
@@ -210,17 +217,14 @@ impl AppShell {
                     .child(
                         v_flex()
                             .gap_0p5()
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
+                                rust_i18n::t!("container.system_df.opt_prune_volumes").to_string(),
+                            ))
                             .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(rust_i18n::t!("container.system_df.opt_prune_volumes").to_string()),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("container.system_df.opt_prune_volumes_hint").to_string()),
+                                div().text_xs().text_color(p.muted_foreground).child(
+                                    rust_i18n::t!("container.system_df.opt_prune_volumes_hint")
+                                        .to_string(),
+                                ),
                             ),
                     )
                     .child(
@@ -233,12 +237,15 @@ impl AppShell {
                             } else {
                                 rust_i18n::t!("container.system_df.opt_disabled").to_string()
                             })
-                            .on_click(crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                                if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                                    ws.system_prune_volumes = !prune_volumes;
-                                }
-                                cx.notify();
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                        ws.system_prune_volumes = !prune_volumes;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
                     ),
             );
 
@@ -254,9 +261,12 @@ impl AppShell {
                     .icon(IconName::RefreshCw)
                     .label(rust_i18n::t!("container.system_df.btn_refresh").to_string())
                     .disabled(loading || prune_running)
-                    .on_click(crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, _| {
-                        this.refresh_container_system_df(tab_id);
-                    })),
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, _, _| {
+                            this.refresh_container_system_df(tab_id);
+                        },
+                    )),
             )
             .child(
                 h_flex()
@@ -266,9 +276,12 @@ impl AppShell {
                             .small()
                             .ghost()
                             .label(rust_i18n::t!("common.close").to_string())
-                            .on_click(crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                                this.close_container_system_df_dialog(tab_id, cx);
-                            })),
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    this.close_container_system_df_dialog(tab_id, cx);
+                                },
+                            )),
                     )
                     .child(
                         Button::new("system-df-submit-prune")
@@ -280,10 +293,17 @@ impl AppShell {
                             } else {
                                 rust_i18n::t!("container.system_df.btn_prune").to_string()
                             })
-                            .disabled(loading || prune_running || (usage.total_reclaimable == 0 && !prune_all))
-                            .on_click(crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                                this.submit_container_system_prune(tab_id, cx);
-                            })),
+                            .disabled(
+                                loading
+                                    || prune_running
+                                    || (usage.total_reclaimable == 0 && !prune_all),
+                            )
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                move |this, _: &ClickEvent, _, cx| {
+                                    this.submit_container_system_prune(tab_id, cx);
+                                },
+                            )),
                     ),
             );
 
@@ -304,4 +324,3 @@ impl AppShell {
         )
     }
 }
-

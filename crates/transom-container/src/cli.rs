@@ -352,7 +352,9 @@ impl CliBackend {
     }
 
     /// 查询系统全局磁盘占用分析。
-    pub async fn system_df(&self) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
+    pub async fn system_df(
+        &self,
+    ) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
         let output = self
             .run(&[
                 "system".to_string(),
@@ -369,9 +371,20 @@ impl CliBackend {
                 let typ = val.get("Type").and_then(|v| v.as_str()).unwrap_or_default();
                 let size_str = val.get("Size").and_then(|v| v.as_str()).unwrap_or_default();
                 let size_bytes = parse_human_size(size_str).unwrap_or(0);
-                let count = val.get("TotalCount").and_then(|v| v.as_str()).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
-                let reclaimable_str = val.get("Reclaimable").and_then(|v| v.as_str()).unwrap_or_default();
-                let reclaimable_bytes = reclaimable_str.split('(').next().and_then(parse_human_size).unwrap_or(0);
+                let count = val
+                    .get("TotalCount")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(0);
+                let reclaimable_str = val
+                    .get("Reclaimable")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let reclaimable_bytes = reclaimable_str
+                    .split('(')
+                    .next()
+                    .and_then(parse_human_size)
+                    .unwrap_or(0);
 
                 if typ.eq_ignore_ascii_case("images") {
                     usage.images_count = count;
@@ -381,7 +394,9 @@ impl CliBackend {
                     usage.containers_count = count;
                     usage.containers_size = size_bytes;
                     usage.containers_reclaimable = reclaimable_bytes;
-                } else if typ.eq_ignore_ascii_case("local volumes") || typ.eq_ignore_ascii_case("volumes") {
+                } else if typ.eq_ignore_ascii_case("local volumes")
+                    || typ.eq_ignore_ascii_case("volumes")
+                {
                     usage.volumes_count = count;
                     usage.volumes_size = size_bytes;
                     usage.volumes_reclaimable = reclaimable_bytes;
@@ -416,11 +431,7 @@ impl CliBackend {
         all: bool,
         volumes: bool,
     ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
-        let mut args = vec![
-            "system".to_string(),
-            "prune".to_string(),
-            "-f".to_string(),
-        ];
+        let mut args = vec!["system".to_string(), "prune".to_string(), "-f".to_string()];
         if all {
             args.push("-a".to_string());
         }
@@ -438,10 +449,7 @@ impl CliBackend {
                 deleted.push(line.to_string());
             }
         }
-        Ok(transom_core::ContainerPruneReport {
-            deleted,
-            reclaimed,
-        })
+        Ok(transom_core::ContainerPruneReport { deleted, reclaimed })
     }
 
     /// 监听引擎 CLI 长连接事件流（docker events --format '{{json .}}'）。
@@ -450,7 +458,11 @@ impl CliBackend {
         event_tx: tokio::sync::mpsc::Sender<transom_core::EngineEvent>,
         mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<(), ContainerError> {
-        let args = vec!["events".to_string(), "--format".to_string(), "{{json .}}".to_string()];
+        let args = vec![
+            "events".to_string(),
+            "--format".to_string(),
+            "{{json .}}".to_string(),
+        ];
         let mut cmd = self.command(&args);
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::null());
@@ -851,11 +863,7 @@ impl CliBackend {
         &self,
     ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
         let stdout = self
-            .run_checked(&[
-                "network".to_string(),
-                "prune".to_string(),
-                "-f".to_string(),
-            ])
+            .run_checked(&["network".to_string(), "prune".to_string(), "-f".to_string()])
             .await?;
         let mut deleted = Vec::new();
         let mut capturing = false;
@@ -1154,11 +1162,20 @@ mod tests {
         let output = "C /etc\nA /etc/app.conf\nD /var/log/test.log\n";
         let changes = parse_diff_output(output);
         assert_eq!(changes.len(), 3);
-        assert_eq!(changes[0].kind, transom_core::ContainerPathChangeKind::Modified);
+        assert_eq!(
+            changes[0].kind,
+            transom_core::ContainerPathChangeKind::Modified
+        );
         assert_eq!(changes[0].path, "/etc");
-        assert_eq!(changes[1].kind, transom_core::ContainerPathChangeKind::Added);
+        assert_eq!(
+            changes[1].kind,
+            transom_core::ContainerPathChangeKind::Added
+        );
         assert_eq!(changes[1].path, "/etc/app.conf");
-        assert_eq!(changes[2].kind, transom_core::ContainerPathChangeKind::Deleted);
+        assert_eq!(
+            changes[2].kind,
+            transom_core::ContainerPathChangeKind::Deleted
+        );
         assert_eq!(changes[2].path, "/var/log/test.log");
     }
 

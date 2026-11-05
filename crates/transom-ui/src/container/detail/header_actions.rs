@@ -23,9 +23,10 @@ pub(super) fn compose_header_actions(
         .filter(|item| item.compose_project.as_deref() == Some(project.name.as_str()))
         .map(|item| item.name.clone())
         .collect();
-    let any_running = all_containers
-        .iter()
-        .any(|item| item.compose_project.as_deref() == Some(project.name.as_str()) && item.state == transom_core::ContainerState::Running);
+    let any_running = all_containers.iter().any(|item| {
+        item.compose_project.as_deref() == Some(project.name.as_str())
+            && item.state == transom_core::ContainerState::Running
+    });
 
     let start_names = names.clone();
     let stop_names = names;
@@ -97,7 +98,12 @@ pub(super) fn compose_header_actions(
                     IconName::RotateCw,
                     move |_, _, cx| {
                         restart_app.update(cx, |this, cx| {
-                            this.run_compose(tab_id, restart_name.clone(), ComposeAction::Restart, cx);
+                            this.run_compose(
+                                tab_id,
+                                restart_name.clone(),
+                                ComposeAction::Restart,
+                                cx,
+                            );
                         });
                     },
                 ));
@@ -189,7 +195,13 @@ pub(super) fn image_header_actions(
                 let image_id = image_id.clone();
                 let push_ref = push_ref.clone();
                 move |this, _, window, cx| {
-                    this.open_container_push_dialog(tab_id, image_id.clone(), push_ref.clone(), window, cx);
+                    this.open_container_push_dialog(
+                        tab_id,
+                        image_id.clone(),
+                        push_ref.clone(),
+                        window,
+                        cx,
+                    );
                 }
             }))
             .into_any_element(),

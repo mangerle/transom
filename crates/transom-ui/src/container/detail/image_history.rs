@@ -168,20 +168,19 @@ pub(crate) fn render_image_history(
         let mut layers_list = v_flex().gap_2();
 
         // 降级提示条
-        layers_list = layers_list.child(
-            v_flex()
-                .gap_1()
-                .p_2()
-                .rounded(p.radius.md)
-                .bg(p.primary.opacity(0.1))
-                .border_1()
-                .border_color(p.primary.opacity(0.3))
-                .child(
-                    div().text_xs().text_color(p.primary).child(
+        layers_list =
+            layers_list.child(
+                v_flex()
+                    .gap_1()
+                    .p_2()
+                    .rounded(p.radius.md)
+                    .bg(p.primary.opacity(0.1))
+                    .border_1()
+                    .border_color(p.primary.opacity(0.3))
+                    .child(div().text_xs().text_color(p.primary).child(
                         rust_i18n::t!("container.detail.history_fallback_hint").to_string(),
-                    ),
-                ),
-        );
+                    )),
+            );
 
         for (index, digest) in details.layer_digests.iter().enumerate() {
             let copy_digest = copy_button(

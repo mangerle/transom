@@ -199,14 +199,8 @@ pub(crate) fn render_container_stats(
         .gap_3()
         .child(network_card)
         .child(disk_card);
-    let metrics_layer = v_flex()
-        .gap_3()
-        .child(row_one)
-        .child(row_two);
-    let tables_layer = v_flex()
-        .gap_3()
-        .child(ports_card)
-        .child(processes_card);
+    let metrics_layer = v_flex().gap_3().child(row_one).child(row_two);
+    let tables_layer = v_flex().gap_3().child(ports_card).child(processes_card);
 
     let mut content = v_flex().gap_3().p_3();
     if let Some(banner) = oom_banner {

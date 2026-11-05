@@ -191,7 +191,10 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             tab_id,
             request_id,
             move |engine| async move { engine.search_images(&term, limit).await },
-            |request_id, results| ContainerAppEvent::ImagesSearched { request_id, results },
+            |request_id, results| ContainerAppEvent::ImagesSearched {
+                request_id,
+                results,
+            },
         ),
         _ => {}
     }

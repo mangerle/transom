@@ -18,7 +18,10 @@ pub(crate) fn service_name_of(container: &ContainerSummary, project_name: &str) 
     let raw = container.name.trim_start_matches('/');
     let prefix = format!("{project_name}_");
     let prefix_dash = format!("{project_name}-");
-    if let Some(stripped) = raw.strip_prefix(&prefix).or_else(|| raw.strip_prefix(&prefix_dash)) {
+    if let Some(stripped) = raw
+        .strip_prefix(&prefix)
+        .or_else(|| raw.strip_prefix(&prefix_dash))
+    {
         // 去除末尾序号，如 web_1 -> web, web-1 -> web
         if let Some((base, _)) = stripped.rsplit_once('_') {
             base.to_string()
@@ -57,9 +60,14 @@ pub(crate) fn render_compose_detail(
     };
 
     match params.detail_tab {
-        ContainerDetailTab::Yaml => {
-            render_compose_yaml_editor(params.tab_id, project, params.compose_yaml_editor, p, window, cx)
-        }
+        ContainerDetailTab::Yaml => render_compose_yaml_editor(
+            params.tab_id,
+            project,
+            params.compose_yaml_editor,
+            p,
+            window,
+            cx,
+        ),
         _ => render_compose_overview_and_topology(
             params.tab_id,
             project,
@@ -130,7 +138,12 @@ fn render_compose_yaml_editor(
                         .label(rust_i18n::t!("container.compose.up_deploy").to_string())
                         .disabled(is_saving)
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            this.run_compose(tab_id, project_name_up.clone(), ComposeAction::Up, cx);
+                            this.run_compose(
+                                tab_id,
+                                project_name_up.clone(),
+                                ComposeAction::Up,
+                                cx,
+                            );
                         })),
                 )
                 .child(
@@ -298,12 +311,9 @@ fn render_compose_overview_and_topology(
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("container.compose.topology_title").to_string()),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("container.compose.service_count", count = members.len()).to_string()),
-            ),
+            .child(div().text_xs().text_color(p.muted_foreground).child(
+                rust_i18n::t!("container.compose.service_count", count = members.len()).to_string(),
+            )),
     );
 
     let topology_board = super::compose_topology::render_compose_topology_board(

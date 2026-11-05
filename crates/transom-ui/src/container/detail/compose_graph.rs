@@ -69,7 +69,9 @@ pub(crate) fn build_dependents_map(
     let mut rev: HashMap<String, Vec<String>> = HashMap::new();
     for (consumer, upstreams) in deps {
         for upstream in upstreams {
-            rev.entry(upstream.clone()).or_default().push(consumer.clone());
+            rev.entry(upstream.clone())
+                .or_default()
+                .push(consumer.clone());
         }
     }
     for dependents in rev.values_mut() {

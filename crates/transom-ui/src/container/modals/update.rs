@@ -34,7 +34,10 @@ impl AppShell {
                             .text_xs()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.update_resources.memory_label").to_string()),
+                            .child(
+                                rust_i18n::t!("container.update_resources.memory_label")
+                                    .to_string(),
+                            ),
                     )
                     .child(Input::new(&mem_input).w_full()),
             )
@@ -46,7 +49,9 @@ impl AppShell {
                             .text_xs()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.update_resources.cpu_label").to_string()),
+                            .child(
+                                rust_i18n::t!("container.update_resources.cpu_label").to_string(),
+                            ),
                     )
                     .child(Input::new(&cpu_input).w_full()),
             );

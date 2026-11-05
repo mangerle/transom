@@ -43,9 +43,8 @@ mod volume;
 
 pub(super) use compose::render_compose_detail;
 pub(super) use confirm::delete_button;
-pub(super) use raw_inspect::render_raw_inspect;
-pub(crate) use file_bars::parent_path;
 use file_bars::mode_label;
+pub(crate) use file_bars::parent_path;
 use files::ContainerFilesView;
 pub(super) use files::render_files;
 use header::ContainerHeaderView;
@@ -60,6 +59,7 @@ pub(super) use overview::{
     centered_hint, format_unix, kv, linked_containers, render_container_overview, scroll_body,
     short,
 };
+pub(super) use raw_inspect::render_raw_inspect;
 pub(super) use terminal::render_terminal;
 pub(super) use volume::render_volume_detail;
 
@@ -237,9 +237,9 @@ impl AppShell {
                 compose: &selected_compose,
                 all_containers: &containers,
                 timeline: if section == ContainerSection::Containers {
-                    selected_container.as_ref().map(|c| {
-                        timeline::StatusTimeline::infer(details.as_ref(), c.state)
-                    })
+                    selected_container
+                        .as_ref()
+                        .map(|c| timeline::StatusTimeline::infer(details.as_ref(), c.state))
                 } else {
                     None
                 },
@@ -260,7 +260,10 @@ impl AppShell {
                     cx,
                 )
             }
-            (ContainerSection::Containers | ContainerSection::Compose, ContainerDetailTab::Logs) => render_logs(
+            (
+                ContainerSection::Containers | ContainerSection::Compose,
+                ContainerDetailTab::Logs,
+            ) => render_logs(
                 ContainerLogsView {
                     tab_id,
                     logs: &logs,
@@ -300,7 +303,10 @@ impl AppShell {
                     cx,
                 )
             }
-            (ContainerSection::Containers | ContainerSection::Volumes, ContainerDetailTab::Files) => {
+            (
+                ContainerSection::Containers | ContainerSection::Volumes,
+                ContainerDetailTab::Files,
+            ) => {
                 let is_volume = section == ContainerSection::Volumes;
                 render_files(
                     tab_id,
@@ -371,17 +377,15 @@ impl AppShell {
                 p,
                 cx,
             ),
-            (ContainerSection::Containers, _) => {
-                render_container_overview(
-                    tab_id,
-                    details.as_ref(),
-                    overview_raw,
-                    &inspect_search,
-                    &browser_host,
-                    p,
-                    cx,
-                )
-            }
+            (ContainerSection::Containers, _) => render_container_overview(
+                tab_id,
+                details.as_ref(),
+                overview_raw,
+                &inspect_search,
+                &browser_host,
+                p,
+                cx,
+            ),
         };
 
         v_flex()

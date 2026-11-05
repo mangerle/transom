@@ -69,9 +69,7 @@ impl AppShell {
         };
 
         let identity_file = match &ssh.auth {
-            transom_core::AuthMethod::PrivateKey { path, .. } => {
-                Some(path.display().to_string())
-            }
+            transom_core::AuthMethod::PrivateKey { path, .. } => Some(path.display().to_string()),
             _ => None,
         };
 
@@ -100,10 +98,7 @@ impl AppShell {
             .find(|p| p.engine == engine)
             .cloned()
             .unwrap_or_else(|| {
-                ContainerEngineProfile::new(
-                    format!("{} (Docker)", session.name),
-                    engine,
-                )
+                ContainerEngineProfile::new(format!("{} (Docker)", session.name), engine)
             });
 
         self.open_engine_workspace(profile, window, cx);

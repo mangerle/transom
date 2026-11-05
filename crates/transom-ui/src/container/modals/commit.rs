@@ -20,8 +20,7 @@ impl AppShell {
         else {
             return div().into_any_element();
         };
-        let Some((_, repo_input, tag_input, comment_input)) =
-            workspace.commit_container.clone()
+        let Some((_, repo_input, tag_input, comment_input)) = workspace.commit_container.clone()
         else {
             return div().into_any_element();
         };

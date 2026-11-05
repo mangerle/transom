@@ -83,9 +83,11 @@ impl ContainerError {
     /// 面向用户的友好错误详情，去除裸 JSON、内部状态码等非必要技术细节。
     pub fn user_friendly_detail(&self) -> String {
         match self {
-            Self::Api { operation, status, body } => {
-                humanize_api_error(operation, *status, body)
-            }
+            Self::Api {
+                operation,
+                status,
+                body,
+            } => humanize_api_error(operation, *status, body),
             _ => self.to_string(),
         }
     }
@@ -106,7 +108,11 @@ fn humanize_api_error(operation: &str, status: u16, body: &str) -> String {
     if raw_msg.contains("image is being used by running container") {
         if let Some(pos) = raw_msg.find("running container ") {
             let rest = &raw_msg[pos + "running container ".len()..];
-            let id = rest.split_whitespace().next().unwrap_or(rest).trim_matches('"');
+            let id = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or(rest)
+                .trim_matches('"');
             let short = if id.len() > 12 { &id[..12] } else { id };
             return format!("镜像正被运行中的容器 ({short}) 使用，无法删除");
         }
@@ -115,7 +121,11 @@ fn humanize_api_error(operation: &str, status: u16, body: &str) -> String {
     if raw_msg.contains("image is being used by stopped container") {
         if let Some(pos) = raw_msg.find("stopped container ") {
             let rest = &raw_msg[pos + "stopped container ".len()..];
-            let id = rest.split_whitespace().next().unwrap_or(rest).trim_matches('"');
+            let id = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or(rest)
+                .trim_matches('"');
             let short = if id.len() > 12 { &id[..12] } else { id };
             return format!("镜像正被已停止的容器 ({short}) 使用，请先删除容器或强制删除");
         }

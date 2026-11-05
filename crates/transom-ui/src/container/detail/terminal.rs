@@ -50,12 +50,7 @@ pub(crate) fn populate_terminal_menu(
         move |_, _, cx| {
             let app = app3.clone();
             app.update(cx, |this, cx| {
-                this.open_container_terminal_as(
-                    tab_id,
-                    None,
-                    Some("/bin/bash".to_string()),
-                    cx,
-                );
+                this.open_container_terminal_as(tab_id, None, Some("/bin/bash".to_string()), cx);
             });
         },
     ))
@@ -65,12 +60,7 @@ pub(crate) fn populate_terminal_menu(
         move |_, _, cx| {
             let app = app4.clone();
             app.update(cx, |this, cx| {
-                this.open_container_terminal_as(
-                    tab_id,
-                    None,
-                    Some("/bin/sh".to_string()),
-                    cx,
-                );
+                this.open_container_terminal_as(tab_id, None, Some("/bin/sh".to_string()), cx);
             });
         },
     ))

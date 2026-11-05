@@ -32,7 +32,11 @@ pub(crate) fn stat_card(
                         .gap_1p5()
                         .items_center()
                         .min_w_0()
-                        .child(Icon::new(icon).size(px(14.0)).text_color(p.muted_foreground))
+                        .child(
+                            Icon::new(icon)
+                                .size(px(14.0))
+                                .text_color(p.muted_foreground),
+                        )
                         .child(
                             div()
                                 .text_size(px(11.0))
@@ -255,7 +259,8 @@ pub(crate) fn trend_label(chrome: &StatsChrome) -> AnyElement {
 pub(crate) fn trend_label_with_peak(chrome: &StatsChrome, peak: Option<f32>) -> AnyElement {
     let trend_text = rust_i18n::t!("container.stats.trend", window = chrome.trend).to_string();
     if let Some(peak_val) = peak {
-        let peak_text = rust_i18n::t!("container.stats.peak", value = format!("{:.1}%", peak_val)).to_string();
+        let peak_text =
+            rust_i18n::t!("container.stats.peak", value = format!("{:.1}%", peak_val)).to_string();
         h_flex()
             .gap_2()
             .items_center()

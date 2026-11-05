@@ -26,12 +26,11 @@ pub async fn connect_tls(
 ) -> Result<TlsStream<TcpStream>, ContainerError> {
     let client_config = build_client_config(tls_config)?;
     let connector = TlsConnector::from(Arc::new(client_config));
-    let server_name = ServerName::try_from(host.to_string()).map_err(|error| {
-        ContainerError::Connect {
+    let server_name =
+        ServerName::try_from(host.to_string()).map_err(|error| ContainerError::Connect {
             endpoint: format!("tls://{host}"),
             source: std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string()),
-        }
-    })?;
+        })?;
 
     connector
         .connect(server_name, tcp_stream)
@@ -60,10 +59,12 @@ fn build_client_config(tls: &TlsConfig) -> Result<ClientConfig, ContainerError> 
             })?;
 
         for cert in certs {
-            root_store.add(cert).map_err(|error| ContainerError::Connect {
-                endpoint: format!("ca_cert: {}", tls.ca_cert),
-                source: std::io::Error::new(std::io::ErrorKind::InvalidData, error.to_string()),
-            })?;
+            root_store
+                .add(cert)
+                .map_err(|error| ContainerError::Connect {
+                    endpoint: format!("ca_cert: {}", tls.ca_cert),
+                    source: std::io::Error::new(std::io::ErrorKind::InvalidData, error.to_string()),
+                })?;
         }
     }
 
@@ -84,12 +85,11 @@ fn build_client_config(tls: &TlsConfig) -> Result<ClientConfig, ContainerError> 
                 source: std::io::Error::other(source),
             })?;
 
-        let client_key = PrivateKeyDer::from_pem_file(key_path).map_err(|source| {
-            ContainerError::Connect {
+        let client_key =
+            PrivateKeyDer::from_pem_file(key_path).map_err(|source| ContainerError::Connect {
                 endpoint: format!("client_key: {}", tls.client_key),
                 source: std::io::Error::other(source),
-            }
-        })?;
+            })?;
 
         builder
             .with_client_auth_cert(client_certs, client_key)

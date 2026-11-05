@@ -3,8 +3,8 @@
 //! 原则（Why）：外部 JSON 只在本模块出现一次，立即收敛为
 //! `transom-core` 的强类型；引擎字段增删或大小写差异不会扩散到控制器与界面。
 
-use serde::{Deserialize, Serialize};
 use serde::de::Deserializer;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use transom_core::{
     ContainerBlockDeviceIo, ContainerDetails, ContainerFileSystemChange, ContainerHealthDetails,
@@ -416,7 +416,10 @@ impl ChangeItem {
             2 => ContainerPathChangeKind::Deleted,
             _ => ContainerPathChangeKind::Modified,
         };
-        ContainerFileSystemChange { path: self.path, kind }
+        ContainerFileSystemChange {
+            path: self.path,
+            kind,
+        }
     }
 }
 
@@ -539,7 +542,11 @@ pub struct ImagePruneEntry {
 /// `POST /containers/prune` 响应。
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ContainersPruneResponse {
-    #[serde(rename = "ContainersDeleted", default, deserialize_with = "null_as_empty")]
+    #[serde(
+        rename = "ContainersDeleted",
+        default,
+        deserialize_with = "null_as_empty"
+    )]
     pub containers_deleted: Vec<String>,
     #[serde(rename = "SpaceReclaimed", default)]
     pub space_reclaimed: u64,
@@ -568,7 +575,11 @@ pub struct VolumePruneResponse {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct NetworkPruneResponse {
     /// 清理掉的网络名列表；没有可删条目时是 `null`。
-    #[serde(rename = "NetworksDeleted", default, deserialize_with = "null_as_empty")]
+    #[serde(
+        rename = "NetworksDeleted",
+        default,
+        deserialize_with = "null_as_empty"
+    )]
     pub networks_deleted: Vec<String>,
 }
 
@@ -1262,7 +1273,9 @@ impl DockerEventMessage {
         let attributes = actor.attributes.unwrap_or_default();
         let name = attributes.get("name").cloned();
         let image = attributes.get("image").cloned();
-        let exit_code = attributes.get("exitCode").and_then(|s| s.parse::<i32>().ok());
+        let exit_code = attributes
+            .get("exitCode")
+            .and_then(|s| s.parse::<i32>().ok());
 
         Some(transom_core::EngineEvent {
             resource_type: self.resource_type,
@@ -1296,7 +1309,8 @@ impl SystemDfResponse {
             for c in containers {
                 usage.containers_size = usage.containers_size.saturating_add(c.size_rw);
                 // 容器的可写层空间一般在清理容器时释放
-                usage.containers_reclaimable = usage.containers_reclaimable.saturating_add(c.size_rw);
+                usage.containers_reclaimable =
+                    usage.containers_reclaimable.saturating_add(c.size_rw);
             }
         }
 
@@ -1318,7 +1332,8 @@ impl SystemDfResponse {
             for cache in cache_items {
                 usage.build_cache_size = usage.build_cache_size.saturating_add(cache.size);
                 if !cache.in_use {
-                    usage.build_cache_reclaimable = usage.build_cache_reclaimable.saturating_add(cache.size);
+                    usage.build_cache_reclaimable =
+                        usage.build_cache_reclaimable.saturating_add(cache.size);
                 }
             }
         }
@@ -1331,9 +1346,9 @@ impl SystemDfResponse {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChangeItem, ContainerInspect, ContainerListItem, DockerEventMessage, HealthInfo, ImageListItem, ImagePruneResponse, NetworkItem,
-        NetworkSettings, StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem,
-        VolumePruneResponse,
+        ChangeItem, ContainerInspect, ContainerListItem, DockerEventMessage, HealthInfo,
+        ImageListItem, ImagePruneResponse, NetworkItem, NetworkSettings, StatsResponse,
+        SystemDfResponse, TopResponse, VersionResponse, VolumeItem, VolumePruneResponse,
     };
     use transom_core::ContainerState;
 
@@ -1539,7 +1554,9 @@ mod tests {
         assert_eq!(health.failing_streak, 3);
         assert_eq!(health.log.len(), 1);
 
-        let details = health.into_health_details().expect("必须能转成健康诊断详情");
+        let details = health
+            .into_health_details()
+            .expect("必须能转成健康诊断详情");
         assert_eq!(details.status, "unhealthy");
         assert_eq!(details.failing_streak, 3);
         assert_eq!(details.log[0].exit_code, 1);
@@ -1557,9 +1574,18 @@ mod tests {
         assert_eq!(items.len(), 3);
         assert_eq!(items[0].kind, 0);
         let mut iter = items.into_iter();
-        assert_eq!(iter.next().unwrap().into_change().kind, transom_core::ContainerPathChangeKind::Modified);
-        assert_eq!(iter.next().unwrap().into_change().kind, transom_core::ContainerPathChangeKind::Added);
-        assert_eq!(iter.next().unwrap().into_change().kind, transom_core::ContainerPathChangeKind::Deleted);
+        assert_eq!(
+            iter.next().unwrap().into_change().kind,
+            transom_core::ContainerPathChangeKind::Modified
+        );
+        assert_eq!(
+            iter.next().unwrap().into_change().kind,
+            transom_core::ContainerPathChangeKind::Added
+        );
+        assert_eq!(
+            iter.next().unwrap().into_change().kind,
+            transom_core::ContainerPathChangeKind::Deleted
+        );
     }
 
     #[test]
@@ -1581,7 +1607,8 @@ mod tests {
                 {"ID": "bc1", "Size": 600, "InUse": false, "Shared": false}
             ]
         }"#;
-        let resp: SystemDfResponse = serde_json::from_str(json).expect("必须成功反序列化 SystemDfResponse");
+        let resp: SystemDfResponse =
+            serde_json::from_str(json).expect("必须成功反序列化 SystemDfResponse");
         let usage = resp.into_disk_usage();
         assert_eq!(usage.images_count, 2);
         assert_eq!(usage.images_size, 3000);
@@ -1613,8 +1640,11 @@ mod tests {
             },
             "time": 1700000000
         }"#;
-        let event_msg: DockerEventMessage = serde_json::from_str(json).expect("必须成功解析 DockerEventMessage");
-        let event = event_msg.into_engine_event().expect("必须成功转换为 EngineEvent");
+        let event_msg: DockerEventMessage =
+            serde_json::from_str(json).expect("必须成功解析 DockerEventMessage");
+        let event = event_msg
+            .into_engine_event()
+            .expect("必须成功转换为 EngineEvent");
         assert_eq!(event.resource_type, "container");
         assert_eq!(event.action, "die");
         assert_eq!(event.id, "1234567890abcdef");

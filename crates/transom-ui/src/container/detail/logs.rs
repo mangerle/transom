@@ -81,7 +81,8 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
 
     // 3. 语义着色：ERROR / WARN
     let upper = remaining_line.to_uppercase();
-    let text_color = if upper.contains("ERROR") || upper.contains("FATAL") || upper.contains("FAIL") {
+    let text_color = if upper.contains("ERROR") || upper.contains("FATAL") || upper.contains("FAIL")
+    {
         p.danger
     } else if upper.contains("WARN") {
         p.warning
@@ -198,16 +199,14 @@ pub(crate) fn render_logs(
                 } else {
                     rust_i18n::t!("container.logs.tail_format", count = choice).to_string()
                 };
-                menu = menu.item(
-                    PopupMenuItem::new(label)
-                        .checked(choice == tail)
-                        .on_click(move |_, _, cx| {
-                            app.update(cx, |this, cx| {
-                                this.set_container_logs_tail(tab_id, choice);
-                                cx.notify();
-                            });
-                        }),
-                );
+                menu = menu.item(PopupMenuItem::new(label).checked(choice == tail).on_click(
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.set_container_logs_tail(tab_id, choice);
+                            cx.notify();
+                        });
+                    },
+                ));
             }
             menu
         });

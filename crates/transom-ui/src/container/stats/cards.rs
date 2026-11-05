@@ -21,23 +21,20 @@ pub(crate) fn cpu_card(
         (format!("{:.1}", stats.cpu_percent), "%".to_string())
     };
 
-    let hero_row = h_flex()
-        .items_baseline()
-        .justify_between()
-        .child(
-            h_flex()
-                .gap_2()
-                .items_baseline()
-                .child(hero_stat(&cpu_val, &cpu_unit, color, p))
-                .when(stats.cpu_count > 0 && !chrome.waiting, |this| {
-                    this.child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.stats.core_count", count = stats.cpu_count).to_string()),
-                    )
-                }),
-        );
+    let hero_row = h_flex().items_baseline().justify_between().child(
+        h_flex()
+            .gap_2()
+            .items_baseline()
+            .child(hero_stat(&cpu_val, &cpu_unit, color, p))
+            .when(stats.cpu_count > 0 && !chrome.waiting, |this| {
+                this.child(
+                    div().text_xs().text_color(p.muted_foreground).child(
+                        rust_i18n::t!("container.stats.core_count", count = stats.cpu_count)
+                            .to_string(),
+                    ),
+                )
+            }),
+    );
     content = content.child(hero_row);
 
     if !chrome.waiting {
@@ -130,27 +127,24 @@ pub(crate) fn memory_card(
         (format!("{:.1}", stats.memory_percent), "%".to_string())
     };
 
-    let hero_row = h_flex()
-        .items_baseline()
-        .justify_between()
-        .child(
-            h_flex()
-                .gap_2()
-                .items_baseline()
-                .child(hero_stat(&mem_val, &mem_unit, color, p))
-                .when(!chrome.waiting && stats.memory_limit > 0, |this| {
-                    this.child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(format!(
-                                "{} / {}",
-                                crate::format::format_size(stats.memory_used),
-                                crate::format::format_size(stats.memory_limit)
-                            )),
-                    )
-                }),
-        );
+    let hero_row = h_flex().items_baseline().justify_between().child(
+        h_flex()
+            .gap_2()
+            .items_baseline()
+            .child(hero_stat(&mem_val, &mem_unit, color, p))
+            .when(!chrome.waiting && stats.memory_limit > 0, |this| {
+                this.child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(format!(
+                            "{} / {}",
+                            crate::format::format_size(stats.memory_used),
+                            crate::format::format_size(stats.memory_limit)
+                        )),
+                )
+            }),
+    );
     content = content.child(hero_row);
 
     if !chrome.waiting {
@@ -407,7 +401,9 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
         None => rust_i18n::t!("container.stats.loading").to_string(),
     };
     let rootfs_str = match details {
-        Some(details) if details.size_root_fs > 0 => crate::format::format_size(details.size_root_fs),
+        Some(details) if details.size_root_fs > 0 => {
+            crate::format::format_size(details.size_root_fs)
+        }
         _ => "—".to_string(),
     };
     content = content.child(

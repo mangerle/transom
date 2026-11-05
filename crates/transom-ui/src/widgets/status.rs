@@ -64,4 +64,3 @@ pub(crate) fn progress_bar(fraction: f32, color: Hsla, p: &Palette) -> AnyElemen
         )
         .into_any_element()
 }
-

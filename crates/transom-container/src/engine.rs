@@ -10,10 +10,12 @@ use crate::error::ContainerError;
 use crate::transport::EngineTransport;
 use std::time::Duration;
 use transom_core::{
-    ComposeProject, ContainerBuildSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
-    ContainerEngineRef, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
-    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerRegistryAuth, ContainerStats,
-    ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary, compose_projects,
+    ComposeProject, ContainerBuildSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
+    ContainerEngineKind, ContainerEngineRef, ContainerImageDetails, ContainerImageLayer,
+    ContainerImageSummary, ContainerLifecycleAction, ContainerNetworkDetails,
+    ContainerNetworkSummary, ContainerProcess, ContainerRegistryAuth, ContainerStats,
+    ContainerSummary, ContainerUpdateSpec, ContainerVolumeDetails, ContainerVolumeSummary,
+    compose_projects,
 };
 
 /// 探测单个候选的超时：发现是交互触发的，不能让一个坏端点拖住整页。
@@ -146,7 +148,9 @@ impl Engine {
         }
     }
 
-    pub async fn system_df(&self) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
+    pub async fn system_df(
+        &self,
+    ) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
         match &self.backend {
             EngineBackend::Http(api) => api.system_df().await,
             EngineBackend::Cli(cli) => cli.system_df().await,
@@ -307,7 +311,9 @@ impl Engine {
     }
 
     /// 清理未使用的容器网络。
-    pub async fn prune_networks(&self) -> Result<transom_core::ContainerPruneReport, ContainerError> {
+    pub async fn prune_networks(
+        &self,
+    ) -> Result<transom_core::ContainerPruneReport, ContainerError> {
         match &self.backend {
             EngineBackend::Http(api) => api.prune_networks().await,
             EngineBackend::Cli(cli) => cli.prune_networks().await,
@@ -389,10 +395,12 @@ impl Engine {
     ) -> Result<String, ContainerError> {
         match &self.backend {
             EngineBackend::Http(api) => {
-                api.commit_container(container, repo, tag, comment, author).await
+                api.commit_container(container, repo, tag, comment, author)
+                    .await
             }
             EngineBackend::Cli(cli) => {
-                cli.commit_container(container, repo, tag, comment, author).await
+                cli.commit_container(container, repo, tag, comment, author)
+                    .await
             }
         }
     }

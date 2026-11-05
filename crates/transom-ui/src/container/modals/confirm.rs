@@ -16,8 +16,7 @@ impl AppShell {
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.confirm.is_some())
+        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| ws.confirm.is_some())
         else {
             return div().into_any_element();
         };
@@ -89,8 +88,10 @@ impl AppShell {
             }),
         );
 
-        let footer =
-            crate::widgets::dialog_actions([cancel.into_any_element(), confirm_btn.into_any_element()]);
+        let footer = crate::widgets::dialog_actions([
+            cancel.into_any_element(),
+            confirm_btn.into_any_element(),
+        ]);
 
         crate::widgets::dialog_body(
             "container-confirm-modal",

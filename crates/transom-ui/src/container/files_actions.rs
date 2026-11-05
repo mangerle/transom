@@ -404,11 +404,15 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((from, input)) = self.state.container_workspace(tab_id).and_then(|workspace| {
-            let from = workspace.files.rename_from.clone()?;
-            let input = workspace.files.rename_input.clone()?;
-            Some((from, input))
-        }) else {
+        let Some((from, input)) = self
+            .state
+            .container_workspace(tab_id)
+            .and_then(|workspace| {
+                let from = workspace.files.rename_from.clone()?;
+                let input = workspace.files.rename_input.clone()?;
+                Some((from, input))
+            })
+        else {
             return;
         };
         let value = input.read(cx).value().trim().to_string();

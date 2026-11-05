@@ -18,9 +18,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(
-                rust_i18n::t!("container.network_connect.placeholder").to_string(),
-            )
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.network_connect.placeholder").to_string())
         });
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.connect_network = Some((network, input));

@@ -92,7 +92,11 @@ pub fn resolve_auth_header(
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
                 .trim_end_matches('/');
-            if k_stripped == stripped { Some(v) } else { None }
+            if k_stripped == stripped {
+                Some(v)
+            } else {
+                None
+            }
         })
     })?;
 

@@ -205,7 +205,9 @@ fn strip_tcp_scheme(url: &str) -> String {
 /// 从 `host:port` 或 IPv6 中提取纯主机名或 IP。
 fn extract_host(address: &str) -> String {
     if let Some((host, _)) = address.rsplit_once(':') {
-        host.trim_start_matches('[').trim_end_matches(']').to_string()
+        host.trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_string()
     } else {
         address.to_string()
     }
@@ -267,7 +269,10 @@ mod tests {
     fn tcp_scheme_is_stripped_for_tokio_connect() {
         assert_eq!(strip_tcp_scheme("tcp://127.0.0.1:2375"), "127.0.0.1:2375");
         assert_eq!(strip_tcp_scheme("tls://127.0.0.1:2376"), "127.0.0.1:2376");
-        assert_eq!(strip_tcp_scheme("https://my-docker.local:2376"), "my-docker.local:2376");
+        assert_eq!(
+            strip_tcp_scheme("https://my-docker.local:2376"),
+            "my-docker.local:2376"
+        );
         assert_eq!(strip_tcp_scheme("127.0.0.1:2375"), "127.0.0.1:2375");
     }
 

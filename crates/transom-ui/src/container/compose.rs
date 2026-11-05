@@ -280,7 +280,9 @@ impl AppShell {
                 match content {
                     Some(Ok(text)) => {
                         let parsed =
-                            crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+                            crate::container::detail::compose_graph::parse_compose_dependencies(
+                                &text,
+                            );
                         let editor =
                             cx.new(|cx| TextareaState::new(window, cx).default_value(text));
                         workspace.compose_yaml_editor =
@@ -320,7 +322,8 @@ impl AppShell {
         let write_path = path.clone();
 
         cx.spawn(async move |this, cx| {
-            let result = spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
+            let result =
+                spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
                     if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
@@ -330,7 +333,9 @@ impl AppShell {
                 match result {
                     Some(Ok(())) => {
                         let parsed =
-                            crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+                            crate::container::detail::compose_graph::parse_compose_dependencies(
+                                &text,
+                            );
                         if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
                             workspace.compose_dependencies = parsed;
                         }

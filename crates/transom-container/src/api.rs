@@ -7,10 +7,12 @@
 use crate::error::ContainerError;
 use crate::http::{self, RawResponse};
 use crate::models::{
-    BuildCachePruneResponse, ChangeItem, ContainerInspect, ContainerListItem, ContainerUpdateRequest, ContainersPruneResponse,
-    DockerEventMessage, ExecCreateResponse, ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse, ImagePullEvent,
-    ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate, StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem,
-    VolumeListResponse, VolumePruneResponse,
+    BuildCachePruneResponse, ChangeItem, ContainerInspect, ContainerListItem,
+    ContainerUpdateRequest, ContainersPruneResponse, DockerEventMessage, ExecCreateResponse,
+    ExecInspectResponse, ImageHistoryItem, ImageInspect, ImageListItem, ImagePruneResponse,
+    ImagePullEvent, ImageSearchItem, NetworkItem, NetworkPruneResponse, RestartPolicyUpdate,
+    StatsResponse, SystemDfResponse, TopResponse, VersionResponse, VolumeItem, VolumeListResponse,
+    VolumePruneResponse,
 };
 use crate::transport::EngineTransport;
 use bytes::Bytes;
@@ -22,10 +24,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use transom_core::ContainerEngineKind;
 use transom_core::{
-    ContainerDetails, ContainerFileSystemChange, ContainerImageDetails, ContainerImageLayer, ContainerImageSummary, ContainerLifecycleAction,
-    ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess, ContainerPruneReport,
-    ContainerRegistryAuth, ContainerStats, ContainerSummary, ContainerSystemDiskUsage, ContainerUpdateSpec, ContainerVolumeDetails,
-    ContainerVolumeSummary,
+    ContainerDetails, ContainerFileSystemChange, ContainerImageDetails, ContainerImageLayer,
+    ContainerImageSummary, ContainerLifecycleAction, ContainerNetworkDetails,
+    ContainerNetworkSummary, ContainerProcess, ContainerPruneReport, ContainerRegistryAuth,
+    ContainerStats, ContainerSummary, ContainerSystemDiskUsage, ContainerUpdateSpec,
+    ContainerVolumeDetails, ContainerVolumeSummary,
 };
 
 /// 小体积 JSON 响应的上限：超过视为异常响应，避免误读巨型对象。
@@ -272,7 +275,10 @@ impl DockerApi {
     ) -> Result<Vec<ContainerImageLayer>, ContainerError> {
         let suffix = format!("/images/{}/history", http::percent_encode(image));
         let items: Vec<ImageHistoryItem> = self.get_json(&suffix, "获取镜像历史层").await?;
-        Ok(items.into_iter().map(ImageHistoryItem::into_layer).collect())
+        Ok(items
+            .into_iter()
+            .map(ImageHistoryItem::into_layer)
+            .collect())
     }
 
     /// 为镜像附加新标签（Tag）。
@@ -294,7 +300,12 @@ impl DockerApi {
             return Ok(());
         }
         let body = http::read_body_text(response.body, 8192).await;
-        Err(http::status_error(response.status, "镜像打标签", body, image))
+        Err(http::status_error(
+            response.status,
+            "镜像打标签",
+            body,
+            image,
+        ))
     }
 
     /// 取一份 JSON 对象，同时把原文留一份格式化副本。
@@ -470,7 +481,9 @@ impl DockerApi {
     /// 清理所有已停止的容器。
     pub async fn prune_containers(&self) -> Result<ContainerPruneReport, ContainerError> {
         const OPERATION: &str = "清理已停止容器";
-        let response = self.send(Method::POST, "/containers/prune", None, OPERATION).await?;
+        let response = self
+            .send(Method::POST, "/containers/prune", None, OPERATION)
+            .await?;
         let status = response.status;
         if !status.is_success() {
             let body = http::read_body_text(response.body, 8192).await;
@@ -491,7 +504,9 @@ impl DockerApi {
     /// 查询全局系统磁盘占用分析。
     pub async fn system_df(&self) -> Result<ContainerSystemDiskUsage, ContainerError> {
         const OPERATION: &str = "查询系统磁盘占用";
-        let response = self.send(Method::GET, "/system/df", None, OPERATION).await?;
+        let response = self
+            .send(Method::GET, "/system/df", None, OPERATION)
+            .await?;
         let status = response.status;
         if !status.is_success() {
             let body = http::read_body_text(response.body, 8192).await;
@@ -522,7 +537,11 @@ impl DockerApi {
         }
 
         // 2. 清理镜像（all 为 true 时清理全部未用镜像，否则仅清理悬空镜像）
-        let img_filter = if all { "{}" } else { r#"{"dangling":["true"]}"# };
+        let img_filter = if all {
+            "{}"
+        } else {
+            r#"{"dangling":["true"]}"#
+        };
         let img_suffix = format!("/images/prune?filters={}", http::percent_encode(img_filter));
         if let Ok(response) = self.send(Method::POST, &img_suffix, None, "清理镜像").await
             && response.status.is_success()
@@ -552,7 +571,9 @@ impl DockerApi {
         }
 
         // 5. 清理构建缓存（尝试执行，失败安全降级）
-        if let Ok(response) = self.send(Method::POST, "/build/prune", None, "清理构建缓存").await
+        if let Ok(response) = self
+            .send(Method::POST, "/build/prune", None, "清理构建缓存")
+            .await
             && response.status.is_success()
             && let Ok(bytes) = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await
             && let Ok(report) = serde_json::from_slice::<BuildCachePruneResponse>(&bytes)
@@ -773,7 +794,9 @@ impl DockerApi {
     /// 清理未使用的容器网络。
     pub async fn prune_networks(&self) -> Result<ContainerPruneReport, ContainerError> {
         const OPERATION: &str = "清理未使用网络";
-        let response = self.send(Method::POST, "/networks/prune", None, OPERATION).await?;
+        let response = self
+            .send(Method::POST, "/networks/prune", None, OPERATION)
+            .await?;
         let status = response.status;
         if !status.is_success() {
             let body = http::read_body_text(response.body, 8192).await;
@@ -916,21 +939,17 @@ impl DockerApi {
         let body = ContainerUpdateRequest {
             memory: spec.memory_bytes,
             nano_cpus: spec.nano_cpus,
-            restart_policy: spec.restart_policy.as_ref().map(|name| RestartPolicyUpdate {
-                name: name.clone(),
-            }),
+            restart_policy: spec
+                .restart_policy
+                .as_ref()
+                .map(|name| RestartPolicyUpdate { name: name.clone() }),
         };
         let payload = serde_json::to_vec(&body).map_err(|error| ContainerError::Http {
             operation: "序列化更新容器参数".to_string(),
             message: error.to_string(),
         })?;
         let response = self
-            .send(
-                Method::POST,
-                &path,
-                Some(payload),
-                "更新容器配置",
-            )
+            .send(Method::POST, &path, Some(payload), "更新容器配置")
             .await?;
         if response.status.is_success() {
             return Ok(());
@@ -972,9 +991,7 @@ impl DockerApi {
             }
         }
         let path = format!("/commit?{}", query.join("&"));
-        let response = self
-            .send(Method::POST, &path, None, "提交容器镜像")
-            .await?;
+        let response = self.send(Method::POST, &path, None, "提交容器镜像").await?;
         let status = response.status;
         let body = http::read_body_text(response.body, 8192).await;
         if status.is_success() {
@@ -1067,12 +1084,11 @@ impl DockerApi {
         let status = response.status;
         let body = http::read_body_text(response.body, 131_072).await;
         http::ensure_success(status, "检索远端镜像", body.clone(), Some(term))?;
-        let items: Vec<ImageSearchItem> = serde_json::from_str(&body).map_err(|error| {
-            ContainerError::Decode {
+        let items: Vec<ImageSearchItem> =
+            serde_json::from_str(&body).map_err(|error| ContainerError::Decode {
                 operation: "反序列化镜像检索结果".to_string(),
                 message: error.to_string(),
-            }
-        })?;
+            })?;
         Ok(items.into_iter().map(Into::into).collect())
     }
 

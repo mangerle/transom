@@ -26,9 +26,8 @@ pub(crate) fn navigate_selection(
         return None;
     }
 
-    let current_index = current_selected_key.and_then(|key| {
-        rows.iter().position(|r| row_key(&r.target) == key)
-    });
+    let current_index =
+        current_selected_key.and_then(|key| rows.iter().position(|r| row_key(&r.target) == key));
 
     let next_index = match current_index {
         Some(idx) => {

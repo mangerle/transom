@@ -216,7 +216,8 @@ impl ImagePullManager {
 
     /// 移除单个非活跃任务。
     pub(crate) fn remove_task(&mut self, task_id: &str) {
-        self.tasks.retain(|t| t.id != task_id || t.state.is_active());
+        self.tasks
+            .retain(|t| t.id != task_id || t.state.is_active());
     }
 
     /// 清空所有已完成、已失败或已取消的任务。

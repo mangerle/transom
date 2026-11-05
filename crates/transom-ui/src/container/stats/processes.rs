@@ -179,10 +179,10 @@ pub(crate) fn processes_card(
                         .pt_1()
                         .text_xs()
                         .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!(
-                            "container.stats.process_limit",
-                            count = PROCESS_LIMIT
-                        ).to_string()),
+                        .child(
+                            rust_i18n::t!("container.stats.process_limit", count = PROCESS_LIMIT)
+                                .to_string(),
+                        ),
                 );
             }
             table.pb_2().into_any_element()

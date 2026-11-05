@@ -236,7 +236,13 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             tab_id,
             request_id,
             move |engine| async move {
-                transom_container::write_file_bytes(&engine, &container, &path, content.into_bytes()).await
+                transom_container::write_file_bytes(
+                    &engine,
+                    &container,
+                    &path,
+                    content.into_bytes(),
+                )
+                .await
             },
             |request_id, _| ContainerAppEvent::ActionFinished {
                 request_id,
@@ -255,7 +261,13 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             tab_id,
             request_id,
             move |engine| async move {
-                transom_container::write_volume_file_bytes(&engine, &volume, &path, content.into_bytes()).await
+                transom_container::write_volume_file_bytes(
+                    &engine,
+                    &volume,
+                    &path,
+                    content.into_bytes(),
+                )
+                .await
             },
             |request_id, _| ContainerAppEvent::ActionFinished {
                 request_id,

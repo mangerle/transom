@@ -39,9 +39,7 @@ impl AppShell {
             .ghost()
             .icon(IconName::ListFilter)
             .label(rust_i18n::t!("container.filter.title").to_string())
-            .when(is_filtered, |this| {
-                this.selected(true)
-            })
+            .when(is_filtered, |this| this.selected(true))
             .dropdown_menu(move |menu, _, _| {
                 let mut menu = menu;
 
@@ -73,8 +71,7 @@ impl AppShell {
                         .checked(current_include_compose)
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| {
-                                if let Some(workspace) =
-                                    this.state.container_workspace_mut(tab_id)
+                                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
                                 {
                                     workspace.include_compose = !workspace.include_compose;
                                 }
@@ -221,14 +218,17 @@ impl AppShell {
                     ContainerSection::Images => {
                         let app_pull = app.clone();
                         menu = menu.item(
-                            PopupMenuItem::new(
-                                rust_i18n::t!("container.action.pull").to_string(),
-                            )
-                            .on_click(move |_, window, cx| {
-                                app_pull.update(cx, |this, cx| {
-                                    this.open_container_create_dialog(tab_id, ContainerSection::Images, window, cx);
-                                });
-                            }),
+                            PopupMenuItem::new(rust_i18n::t!("container.action.pull").to_string())
+                                .on_click(move |_, window, cx| {
+                                    app_pull.update(cx, |this, cx| {
+                                        this.open_container_create_dialog(
+                                            tab_id,
+                                            ContainerSection::Images,
+                                            window,
+                                            cx,
+                                        );
+                                    });
+                                }),
                         );
                         let app_load = app.clone();
                         menu = menu.item(
@@ -254,7 +254,8 @@ impl AppShell {
                         let app_prune = app.clone();
                         menu = menu.item(
                             PopupMenuItem::new(
-                                rust_i18n::t!(ContainerPruneTarget::Images.button_label_key()).to_string(),
+                                rust_i18n::t!(ContainerPruneTarget::Images.button_label_key())
+                                    .to_string(),
                             )
                             .on_click(move |_, _, cx| {
                                 app_prune.update(cx, |this, cx| {
@@ -284,7 +285,8 @@ impl AppShell {
                         let app_prune = app.clone();
                         menu = menu.item(
                             PopupMenuItem::new(
-                                rust_i18n::t!(ContainerPruneTarget::Volumes.button_label_key()).to_string(),
+                                rust_i18n::t!(ContainerPruneTarget::Volumes.button_label_key())
+                                    .to_string(),
                             )
                             .on_click(move |_, _, cx| {
                                 app_prune.update(cx, |this, cx| {
@@ -302,7 +304,8 @@ impl AppShell {
                         let app_prune = app.clone();
                         menu = menu.item(
                             PopupMenuItem::new(
-                                rust_i18n::t!(ContainerPruneTarget::Networks.button_label_key()).to_string(),
+                                rust_i18n::t!(ContainerPruneTarget::Networks.button_label_key())
+                                    .to_string(),
                             )
                             .on_click(move |_, _, cx| {
                                 app_prune.update(cx, |this, cx| {

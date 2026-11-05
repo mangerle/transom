@@ -8,6 +8,6 @@ mod view;
 
 pub(crate) use entity::MonitorView;
 pub(crate) use panel_event::MonitorPanelEvent;
-pub(crate) use types::{MonitorSectionCollapse, SampleIntervalMode, SparklineChartType};
 pub(crate) use types::usage_color;
+pub(crate) use types::{MonitorSectionCollapse, SampleIntervalMode, SparklineChartType};
 pub(crate) use view::MonitorTabParams;

@@ -30,19 +30,85 @@ pub(crate) fn render_container_overview(
     // 1. 运行身份与运行时
     let mut runtime_fields = v_flex().gap_1p5();
     runtime_fields = runtime_fields
-        .child(copyable_field(rust_i18n::t!("container.field.id"), short(&details.id), true, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.image"), details.image.clone(), true, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.state"), details.status.clone(), false, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.command"), details.command.clone(), true, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.entrypoint"), details.entrypoint.join(" "), true, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.user"), details.user.clone().unwrap_or_default(), false, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.working_dir"), details.working_dir.clone().unwrap_or_default(), true, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.restart"), details.restart_policy.clone().unwrap_or_default(), false, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.created"), format_unix(details.created), false, p, cx))
-        .child(copyable_field(rust_i18n::t!("container.field.started_at"), details.started_at.clone().unwrap_or_default(), false, p, cx));
+        .child(copyable_field(
+            rust_i18n::t!("container.field.id"),
+            short(&details.id),
+            true,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.image"),
+            details.image.clone(),
+            true,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.state"),
+            details.status.clone(),
+            false,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.command"),
+            details.command.clone(),
+            true,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.entrypoint"),
+            details.entrypoint.join(" "),
+            true,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.user"),
+            details.user.clone().unwrap_or_default(),
+            false,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.working_dir"),
+            details.working_dir.clone().unwrap_or_default(),
+            true,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.restart"),
+            details.restart_policy.clone().unwrap_or_default(),
+            false,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.created"),
+            format_unix(details.created),
+            false,
+            p,
+            cx,
+        ))
+        .child(copyable_field(
+            rust_i18n::t!("container.field.started_at"),
+            details.started_at.clone().unwrap_or_default(),
+            false,
+            p,
+            cx,
+        ));
 
     if let Some(code) = details.exit_code {
-        runtime_fields = runtime_fields.child(copyable_field(rust_i18n::t!("container.field.exit_code"), code.to_string(), true, p, cx));
+        runtime_fields = runtime_fields.child(copyable_field(
+            rust_i18n::t!("container.field.exit_code"),
+            code.to_string(),
+            true,
+            p,
+            cx,
+        ));
     }
 
     let raw_btn = Button::new("container-overview-raw-inspect")
@@ -209,4 +275,3 @@ pub(crate) fn format_unix(seconds: i64) -> String {
 pub(crate) fn short(id: &str) -> String {
     transom_core::short_id(id)
 }
-

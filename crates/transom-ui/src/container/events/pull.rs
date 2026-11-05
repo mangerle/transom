@@ -75,7 +75,9 @@ impl AppShell {
                 if let Some(task) = workspace.pull_manager.get(&task_id) {
                     target_tab = Some(tab_id);
                     task_reference = task.reference.clone();
-                    next_command = workspace.pull_manager.on_finished(&task_id, error_msg.clone());
+                    next_command = workspace
+                        .pull_manager
+                        .on_finished(&task_id, error_msg.clone());
                     break;
                 }
             }

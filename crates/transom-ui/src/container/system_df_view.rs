@@ -109,7 +109,10 @@ fn render_legend_item(label: String, percent: u32, color: Hsla, p: &Palette) -> 
             div()
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.foreground)
-                .child(rust_i18n::t!("container.system_df.legend_ratio", percent = percent).to_string()),
+                .child(
+                    rust_i18n::t!("container.system_df.legend_ratio", percent = percent)
+                        .to_string(),
+                ),
         )
         .into_any_element()
 }
@@ -187,20 +190,9 @@ fn render_df_detail_row(
             h_flex()
                 .gap_2p5()
                 .items_center()
-                .child(
-                    div()
-                        .w(px(3.0))
-                        .h(px(16.0))
-                        .rounded_full()
-                        .bg(accent_color),
-                )
+                .child(div().w(px(3.0)).h(px(16.0)).rounded_full().bg(accent_color))
                 .child(Icon::new(icon).small().text_color(accent_color))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(title),
-                )
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
                 .child(
                     div()
                         .text_xs()

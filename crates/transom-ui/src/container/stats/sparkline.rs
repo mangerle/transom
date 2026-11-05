@@ -56,20 +56,14 @@ fn render_percent_bars(
     for &val in &history[start_idx..] {
         let fraction = (val / 100.0).clamp(0.02, 1.0);
         slots.push(
-            div()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .flex()
-                .items_end()
-                .child(
-                    div()
-                        .w_full()
-                        .min_w_0()
-                        .h(relative(fraction))
-                        .rounded_t_xs()
-                        .bg(color),
-                ),
+            div().flex_1().min_w_0().h_full().flex().items_end().child(
+                div()
+                    .w_full()
+                    .min_w_0()
+                    .h(relative(fraction))
+                    .rounded_t_xs()
+                    .bg(color),
+            ),
         );
     }
 

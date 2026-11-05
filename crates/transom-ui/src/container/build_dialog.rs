@@ -10,8 +10,8 @@ use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{ContainerBuildSpec, ContainerCommand, ContainerRequestId, TabId};
@@ -97,11 +97,7 @@ impl AppShell {
     }
 
     /// 提交镜像构建任务。
-    pub(crate) fn submit_container_build_dialog(
-        &mut self,
-        tab_id: TabId,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn submit_container_build_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let (context_path_val, dockerfile_val, tag_val) = {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
@@ -235,7 +231,9 @@ impl AppShell {
                                     .label(rust_i18n::t!("container.build.browse").to_string())
                                     .on_click(move |_, window, cx| {
                                         app_browse.update(cx, |this, cx| {
-                                            this.browse_container_build_context_path(tab_id, window, cx);
+                                            this.browse_container_build_context_path(
+                                                tab_id, window, cx,
+                                            );
                                         });
                                     }),
                             ),
@@ -292,7 +290,11 @@ impl AppShell {
                             IconName::Square
                         })
                         .xsmall()
-                        .text_color(if no_cache { p.primary } else { p.muted_foreground }),
+                        .text_color(if no_cache {
+                            p.primary
+                        } else {
+                            p.muted_foreground
+                        }),
                     )
                     .child(
                         div()
@@ -350,17 +352,15 @@ impl AppShell {
                                         div()
                                             .text_xs()
                                             .text_color(p.muted_foreground)
-                                            .child(rust_i18n::t!("container.build.waiting_logs").to_string())
+                                            .child(
+                                                rust_i18n::t!("container.build.waiting_logs")
+                                                    .to_string(),
+                                            )
                                             .into_any_element(),
                                     ]
                                 } else {
                                     logs.into_iter()
-                                        .map(|line| {
-                                            div()
-                                                .text_xs()
-                                                .child(line)
-                                                .into_any_element()
-                                        })
+                                        .map(|line| div().text_xs().child(line).into_any_element())
                                         .collect()
                                 }),
                         ),

@@ -30,23 +30,25 @@ pub(crate) fn render_raw_inspect(
     };
 
     let copy_text = inspect_json.to_string();
-    let copy_btn = Button::new(ElementId::Name(format!("btn-copy-raw-inspect-{tab_id}").into()))
-        .ghost()
-        .xsmall()
-        .icon(IconName::Copy)
-        .label(rust_i18n::t!("container.detail.copy_inspect").to_string())
-        .on_click(cx.listener({
-            let copy_text = copy_text.clone();
-            move |this, _, window, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
-                this.show_toast(
-                    rust_i18n::t!("container.detail.copied").to_string(),
-                    true,
-                    window,
-                    cx,
-                );
-            }
-        }));
+    let copy_btn = Button::new(ElementId::Name(
+        format!("btn-copy-raw-inspect-{tab_id}").into(),
+    ))
+    .ghost()
+    .xsmall()
+    .icon(IconName::Copy)
+    .label(rust_i18n::t!("container.detail.copy_inspect").to_string())
+    .on_click(cx.listener({
+        let copy_text = copy_text.clone();
+        move |this, _, window, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+            this.show_toast(
+                rust_i18n::t!("container.detail.copied").to_string(),
+                true,
+                window,
+                cx,
+            );
+        }
+    }));
 
     let stats_label = if search_keyword.is_empty() {
         rust_i18n::t!(
@@ -64,17 +66,19 @@ pub(crate) fn render_raw_inspect(
         .to_string()
     };
 
-    let back_btn = Button::new(ElementId::Name(format!("btn-back-overview-{tab_id}").into()))
-        .ghost()
-        .xsmall()
-        .icon(IconName::LayoutDashboard)
-        .label(rust_i18n::t!("container.detail.overview").to_string())
-        .on_click(cx.listener(move |this, _, _, cx| {
-            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                workspace.overview_raw = false;
-            }
-            cx.notify();
-        }));
+    let back_btn = Button::new(ElementId::Name(
+        format!("btn-back-overview-{tab_id}").into(),
+    ))
+    .ghost()
+    .xsmall()
+    .icon(IconName::LayoutDashboard)
+    .label(rust_i18n::t!("container.detail.overview").to_string())
+    .on_click(cx.listener(move |this, _, _, cx| {
+        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+            workspace.overview_raw = false;
+        }
+        cx.notify();
+    }));
 
     let toolbar = h_flex()
         .justify_between()
@@ -98,13 +102,23 @@ pub(crate) fn render_raw_inspect(
                         .child(stats_label),
                 ),
         )
-        .child(h_flex().gap_2().items_center().child(copy_btn).child(back_btn));
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(copy_btn)
+                .child(back_btn),
+        );
 
     // 逐行渲染带有行号与关键词高亮的代码块
-    let mut code_body = v_flex().gap_0().font_family(p.mono_font_family.clone()).text_size(p.mono_font_size);
+    let mut code_body = v_flex()
+        .gap_0()
+        .font_family(p.mono_font_family.clone())
+        .text_size(p.mono_font_size);
 
     for (idx, line) in lines.iter().enumerate() {
-        let is_matched = !search_keyword.is_empty() && line.to_lowercase().contains(&search_keyword);
+        let is_matched =
+            !search_keyword.is_empty() && line.to_lowercase().contains(&search_keyword);
 
         let mut row = h_flex()
             .items_start()
@@ -131,7 +145,11 @@ pub(crate) fn render_raw_inspect(
             .flex_1()
             .min_w_0()
             .text_xs()
-            .text_color(if is_matched { p.foreground } else { p.foreground.opacity(0.9) })
+            .text_color(if is_matched {
+                p.foreground
+            } else {
+                p.foreground.opacity(0.9)
+            })
             .child(line.to_string());
 
         code_body = code_body.child(row.child(line_num).child(line_content));

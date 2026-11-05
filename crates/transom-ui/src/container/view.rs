@@ -277,7 +277,10 @@ impl AppShell {
                         .primary()
                         .xsmall()
                         .icon(IconName::Download)
-                        .label(rust_i18n::t!("container.pull_manager.indicator", count = pulling_count))
+                        .label(rust_i18n::t!(
+                            "container.pull_manager.indicator",
+                            count = pulling_count
+                        ))
                 } else {
                     Button::new("container-pull-drawer-btn")
                         .ghost()

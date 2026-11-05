@@ -347,22 +347,24 @@ pub(crate) fn render_files(
                     ));
                     let app = menu_app.clone();
                     let path = menu_path.clone();
-                    menu = menu.item(PopupMenuItem::separator()).item(crate::widgets::menu_item(
-                        rust_i18n::t!("common.delete").to_string(),
-                        IconName::Trash,
-                        move |_, _, cx| {
-                            let app = app.clone();
-                            let path = path.clone();
-                            app.update(cx, |this, cx| {
-                                this.request_remove_container_path(
-                                    tab_id,
-                                    path.clone(),
-                                    is_dir,
-                                    cx,
-                                );
-                            });
-                        },
-                    ));
+                    menu = menu
+                        .item(PopupMenuItem::separator())
+                        .item(crate::widgets::menu_item(
+                            rust_i18n::t!("common.delete").to_string(),
+                            IconName::Trash,
+                            move |_, _, cx| {
+                                let app = app.clone();
+                                let path = path.clone();
+                                app.update(cx, |this, cx| {
+                                    this.request_remove_container_path(
+                                        tab_id,
+                                        path.clone(),
+                                        is_dir,
+                                        cx,
+                                    );
+                                });
+                            },
+                        ));
                 }
                 menu
             })

@@ -22,9 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::SystemTime;
-use transom_core::{
-    ContainerCreateSpec, ContainerFileEntry, ContainerLifecycleAction,
-};
+use transom_core::{ContainerCreateSpec, ContainerFileEntry, ContainerLifecycleAction};
 
 static PROBE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -283,10 +281,11 @@ pub async fn backup_volume(
                 break;
             }
             use std::io::Write;
-            file.write_all(&buffer[..n]).map_err(|e| ContainerError::File {
-                path: temp.display().to_string(),
-                message: e.to_string(),
-            })?;
+            file.write_all(&buffer[..n])
+                .map_err(|e| ContainerError::File {
+                    path: temp.display().to_string(),
+                    message: e.to_string(),
+                })?;
             written = written.saturating_add(n as u64);
             let _ = progress.try_send((written, None));
         }
@@ -365,7 +364,11 @@ pub async fn restore_volume(
     });
 
     let stream = futures::stream::unfold(receiver, |receiver| async move {
-        receiver.recv_async().await.ok().map(|item| (item, receiver))
+        receiver
+            .recv_async()
+            .await
+            .ok()
+            .map(|item| (item, receiver))
     });
     let body = StreamBody::new(stream.map(|item| match item {
         Ok(bytes) => Ok(Frame::data(Bytes::from(bytes))),
@@ -419,10 +422,7 @@ mod tests {
         );
 
         assert_eq!(unmap_volume_path(mount, "/transom_vol"), "/");
-        assert_eq!(
-            unmap_volume_path(mount, "/transom_vol/sub/dir"),
-            "/sub/dir"
-        );
+        assert_eq!(unmap_volume_path(mount, "/transom_vol/sub/dir"), "/sub/dir");
         assert_eq!(
             unmap_volume_path("/mnt/data", "/mnt/data/file.txt"),
             "/file.txt"

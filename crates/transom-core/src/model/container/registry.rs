@@ -45,7 +45,10 @@ impl ContainerRegistry {
 
     /// 提取用于镜像 Tag 前缀的域名/主机名（例如从 "https://harbor.example.com" 提取 "harbor.example.com"）。
     pub fn domain(&self) -> &str {
-        let trimmed = self.url.trim_start_matches("http://").trim_start_matches("https://");
+        let trimmed = self
+            .url
+            .trim_start_matches("http://")
+            .trim_start_matches("https://");
         trimmed.split('/').next().unwrap_or(trimmed)
     }
 }

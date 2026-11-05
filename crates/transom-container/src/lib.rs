@@ -6,8 +6,8 @@
 
 mod api;
 pub mod auth;
-pub mod build;
 mod bridge;
+pub mod build;
 mod cli;
 pub mod compose;
 mod discovery;

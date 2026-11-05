@@ -28,12 +28,7 @@ fn volume_name_from_path(path: &Path) -> String {
 
 impl AppShell {
     /// 备份指定数据卷为本地 Tar 压缩包。
-    pub(crate) fn backup_volume(
-        &mut self,
-        tab_id: TabId,
-        volume: String,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn backup_volume(&mut self, tab_id: TabId, volume: String, cx: &mut Context<Self>) {
         let default_name = format!("{}.tar", volume.replace(['/', ':'], "_"));
         let Some(local_path) = rfd::FileDialog::new()
             .set_file_name(&default_name)

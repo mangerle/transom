@@ -15,8 +15,7 @@ impl AppShell {
         _cx: &App,
         _p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.tag_image.is_some())
+        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| ws.tag_image.is_some())
         else {
             return div().into_any_element();
         };

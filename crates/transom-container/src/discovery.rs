@@ -99,7 +99,13 @@ fn explicit_candidate(
             user,
             identity_file,
         } => {
-            let args = build_ssh_dial_stdio_args(kind, host, *port, user.as_deref(), identity_file.as_deref());
+            let args = build_ssh_dial_stdio_args(
+                kind,
+                host,
+                *port,
+                user.as_deref(),
+                identity_file.as_deref(),
+            );
             (
                 Some(EngineTransport::Stdio {
                     program: "ssh".to_string(),
@@ -568,7 +574,10 @@ mod tests {
             panic!("WSL 必须包含 Stdio 通道");
         };
         assert_eq!(program, "wsl.exe");
-        assert_eq!(args, &["-d", "Ubuntu-24.04", "-e", "docker", "system", "dial-stdio"]);
+        assert_eq!(
+            args,
+            &["-d", "Ubuntu-24.04", "-e", "docker", "system", "dial-stdio"]
+        );
         let Some(cli) = &cand.cli else {
             panic!("WSL 必须保留 CLI 兜底配置");
         };

@@ -5,8 +5,8 @@
 //! - 自动根据所选仓库域名与源镜像 Tag 智能补全目标 Tag 前缀与版本；
 //! - 自动注入 Base64 AuthConfig 凭证头部，彻底解决私有仓库 401/403 鉴权失败问题。
 
-use super::*;
 use super::list::dropdown_trigger;
+use super::*;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -87,11 +87,7 @@ impl AppShell {
     }
 
     /// 提交推送到远端请求。
-    pub(crate) fn submit_container_push_dialog(
-        &mut self,
-        tab_id: TabId,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn submit_container_push_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let (image_id, repo, tag, registry) = {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
@@ -113,9 +109,8 @@ impl AppShell {
         if repo.is_empty() || tag.is_empty() {
             if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
                 if let Some(push) = workspace.push_dialog.as_mut() {
-                    push.error = Some(
-                        rust_i18n::t!("container.push.repo_and_tag_required").to_string(),
-                    );
+                    push.error =
+                        Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
                 }
             }
             cx.notify();
@@ -168,11 +163,8 @@ impl AppShell {
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.push_dialog = None;
             workspace.notice = Some(
-                rust_i18n::t!(
-                    "container.push.pushing_notice",
-                    reference = target_full_ref
-                )
-                .to_string(),
+                rust_i18n::t!("container.push.pushing_notice", reference = target_full_ref)
+                    .to_string(),
             );
         }
         cx.notify();
@@ -228,7 +220,11 @@ impl AppShell {
                                             p.selected_registry_id = reg_item.id.clone();
                                             // 自动根据所选仓库域名补全前缀
                                             let current_val = p.target_repo.read(cx).value();
-                                            let pure_name = current_val.as_ref().rsplit('/').next().unwrap_or(current_val.as_ref());
+                                            let pure_name = current_val
+                                                .as_ref()
+                                                .rsplit('/')
+                                                .next()
+                                                .unwrap_or(current_val.as_ref());
                                             let new_val = if reg_item.id == "docker-hub" {
                                                 pure_name.to_string()
                                             } else {
@@ -339,7 +335,12 @@ impl AppShell {
                             .xsmall()
                             .text_color(p.muted_foreground),
                     )
-                    .child(div().text_xs().text_color(p.muted_foreground).child(auth_tip)),
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(auth_tip),
+                    ),
             )
             .when_some(error, |this, err| {
                 this.child(
@@ -352,12 +353,7 @@ impl AppShell {
                         .bg(p.danger.opacity(0.12))
                         .text_color(p.danger)
                         .child(Icon::new(IconName::TriangleAlert).small())
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(err),
-                        ),
+                        .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(err)),
                 )
             })
             .child(

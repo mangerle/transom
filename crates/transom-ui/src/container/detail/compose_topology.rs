@@ -21,7 +21,11 @@ fn tier_label(tier_idx: usize, total_tiers: usize) -> String {
     } else if tier_idx == total_tiers - 1 {
         rust_i18n::t!("container.compose.topology_tier_gateway").to_string()
     } else {
-        rust_i18n::t!("container.compose.topology_tier_service", tier = tier_idx + 1).to_string()
+        rust_i18n::t!(
+            "container.compose.topology_tier_service",
+            tier = tier_idx + 1
+        )
+        .to_string()
     }
 }
 
@@ -75,18 +79,13 @@ pub(crate) fn render_compose_topology_board(
         let tier_header = h_flex()
             .gap_2()
             .items_center()
-            .child(
-                div()
-                    .size_2()
-                    .rounded_full()
-                    .bg(if tier_idx == 0 {
-                        p.primary
-                    } else if is_last {
-                        p.warning
-                    } else {
-                        p.muted_foreground
-                    }),
-            )
+            .child(div().size_2().rounded_full().bg(if tier_idx == 0 {
+                p.primary
+            } else if is_last {
+                p.warning
+            } else {
+                p.muted_foreground
+            }))
             .child(
                 div()
                     .text_xs()
@@ -98,10 +97,13 @@ pub(crate) fn render_compose_topology_board(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground.opacity(0.7))
-                    .child(rust_i18n::t!(
-                        "container.compose.service_count",
-                        count = tier_services.len()
-                    ).to_string()),
+                    .child(
+                        rust_i18n::t!(
+                            "container.compose.service_count",
+                            count = tier_services.len()
+                        )
+                        .to_string(),
+                    ),
             );
 
         tier_block = tier_block.child(tier_header);
@@ -154,23 +156,13 @@ fn render_tier_connector_line(p: &Palette) -> AnyElement {
                 .bg(p.muted.opacity(0.06))
                 .border_1()
                 .border_color(p.border.opacity(0.2))
-                .child(
-                    div()
-                        .w(px(24.0))
-                        .h(px(1.0))
-                        .bg(p.border.opacity(0.5)),
-                )
+                .child(div().w(px(24.0)).h(px(1.0)).bg(p.border.opacity(0.5)))
                 .child(
                     Icon::new(IconName::ArrowDown)
                         .with_size(px(11.0))
                         .text_color(p.muted_foreground),
                 )
-                .child(
-                    div()
-                        .w(px(24.0))
-                        .h(px(1.0))
-                        .bg(p.border.opacity(0.5)),
-                ),
+                .child(div().w(px(24.0)).h(px(1.0)).bg(p.border.opacity(0.5))),
         )
         .into_any_element()
 }
@@ -234,7 +226,9 @@ fn render_topology_card(
     let hover_svc = current_svc_name.clone();
 
     let mut card = v_flex()
-        .id(ElementId::Name(format!("compose-card-{service_name}").into()))
+        .id(ElementId::Name(
+            format!("compose-card-{service_name}").into(),
+        ))
         .w_full()
         .p_2p5()
         .gap_2()
@@ -261,12 +255,11 @@ fn render_topology_card(
         .items_center()
         .flex_1()
         .min_w_0()
-        .child(
-            div()
-                .size_2p5()
-                .rounded_full()
-                .bg(if is_running { p.success } else { p.muted_foreground }),
-        )
+        .child(div().size_2p5().rounded_full().bg(if is_running {
+            p.success
+        } else {
+            p.muted_foreground
+        }))
         .child(
             v_flex()
                 .gap_0p5()
@@ -381,11 +374,10 @@ fn render_topology_card(
         // 依赖的上游
         if !upstream_deps.is_empty() {
             let mut up_row = h_flex().gap_1p5().items_center();
-            up_row = up_row.child(
-                div()
-                    .text_color(p.muted_foreground)
-                    .child(format!("↳ {}:", rust_i18n::t!("container.compose.topology_depends_on"))),
-            );
+            up_row = up_row.child(div().text_color(p.muted_foreground).child(format!(
+                "↳ {}:",
+                rust_i18n::t!("container.compose.topology_depends_on")
+            )));
             for dep in &upstream_deps {
                 let is_dep_focused = hovered_service == Some(dep.as_str());
                 up_row = up_row.child(
@@ -417,11 +409,10 @@ fn render_topology_card(
         // 供给的下游
         if !downstream_dependents.is_empty() {
             let mut down_row = h_flex().gap_1p5().items_center();
-            down_row = down_row.child(
-                div()
-                    .text_color(p.muted_foreground)
-                    .child(format!("↱ {}:", rust_i18n::t!("container.compose.topology_dependents"))),
-            );
+            down_row = down_row.child(div().text_color(p.muted_foreground).child(format!(
+                "↱ {}:",
+                rust_i18n::t!("container.compose.topology_dependents")
+            )));
             for down in &downstream_dependents {
                 let is_down_focused = hovered_service == Some(down.as_str());
                 down_row = down_row.child(

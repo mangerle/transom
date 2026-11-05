@@ -145,11 +145,8 @@ impl AppShell {
         let left: AnyElement = match section {
             ContainerSection::Containers => {
                 let mut title_row = h_flex().gap_2().items_center().min_w_0();
-                title_row = title_row.child(
-                    Icon::new(section.icon())
-                        .small()
-                        .text_color(p.primary),
-                );
+                title_row =
+                    title_row.child(Icon::new(section.icon()).small().text_color(p.primary));
                 title_row = title_row.child(
                     div()
                         .text_size(px(15.0))
@@ -182,7 +179,8 @@ impl AppShell {
                             p.muted_foreground,
                         ),
                     };
-                    title_row = title_row.child(crate::widgets::status_badge(state_label, state_color, p));
+                    title_row =
+                        title_row.child(crate::widgets::status_badge(state_label, state_color, p));
                 }
 
                 if let Some(chip) = health_chip {

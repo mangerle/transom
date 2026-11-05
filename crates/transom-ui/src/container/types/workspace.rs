@@ -228,11 +228,12 @@ impl ContainerWorkspaceState {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.logs.search_placeholder").to_string())
         });
-        let logs_search_subscription = cx.subscribe(&logs_search, |_, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::Change) {
-                cx.notify();
-            }
-        });
+        let logs_search_subscription =
+            cx.subscribe(&logs_search, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            });
         let inspect_search = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.inspect.search_placeholder").to_string())

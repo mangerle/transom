@@ -169,7 +169,12 @@ impl ContainerRunForm {
             tab_id,
             name: run_input("container.run.name_placeholder", name_hint, window, cx),
             image: run_input("container.run.image_placeholder", image_hint, window, cx),
-            command: run_input("container.run.command_placeholder", command_hint, window, cx),
+            command: run_input(
+                "container.run.command_placeholder",
+                command_hint,
+                window,
+                cx,
+            ),
             ports: run_input("container.run.ports_placeholder", ports_hint, window, cx),
             binds: run_input("container.run.binds_placeholder", binds_hint, window, cx),
             env: run_input("container.run.env_placeholder", env_hint, window, cx),
@@ -277,7 +282,10 @@ mod tests {
     #[test]
     fn test_split_helpers() {
         assert_eq!(split_list("a=1, b=2, , c=3"), vec!["a=1", "b=2", "c=3"]);
-        assert_eq!(split_argv("nginx -g 'daemon off;'"), vec!["nginx", "-g", "'daemon", "off;'"]);
+        assert_eq!(
+            split_argv("nginx -g 'daemon off;'"),
+            vec!["nginx", "-g", "'daemon", "off;'"]
+        );
     }
 
     #[test]

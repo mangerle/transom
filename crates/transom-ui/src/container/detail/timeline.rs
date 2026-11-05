@@ -73,10 +73,7 @@ impl StatusTimeline {
     }
 
     /// 根据容器当前状态与 inspect 详情推导初始 24 小时状态。
-    pub(crate) fn infer(
-        details: Option<&ContainerDetails>,
-        current_state: ContainerState,
-    ) -> Self {
+    pub(crate) fn infer(details: Option<&ContainerDetails>, current_state: ContainerState) -> Self {
         let mut buckets = [HourlyStatus::Unknown; 24];
 
         match current_state {
@@ -135,10 +132,7 @@ impl StatusTimeline {
 }
 
 /// 渲染 24 小时微缩状态时间线（Status Ribbon）。
-pub(crate) fn render_status_timeline(
-    timeline: &StatusTimeline,
-    p: &Palette,
-) -> AnyElement {
+pub(crate) fn render_status_timeline(timeline: &StatusTimeline, p: &Palette) -> AnyElement {
     let mut ribbon = h_flex()
         .gap(px(1.5))
         .items_center()

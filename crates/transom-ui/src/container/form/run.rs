@@ -172,7 +172,9 @@ impl AppShell {
                                     .text_xs()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("container.run.advanced_title").to_string()),
+                                    .child(
+                                        rust_i18n::t!("container.run.advanced_title").to_string(),
+                                    ),
                             ),
                     ),
             )
@@ -240,12 +242,13 @@ impl AppShell {
                                                     else {
                                                         return;
                                                     };
-                                                    form.restart =
-                                                        if form.restart.as_deref() == Some(*policy) {
-                                                            None
-                                                        } else {
-                                                            Some((*policy).to_string())
-                                                        };
+                                                    form.restart = if form.restart.as_deref()
+                                                        == Some(*policy)
+                                                    {
+                                                        None
+                                                    } else {
+                                                        Some((*policy).to_string())
+                                                    };
                                                     cx.notify();
                                                 },
                                             ),

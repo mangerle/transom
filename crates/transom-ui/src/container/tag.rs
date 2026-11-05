@@ -19,9 +19,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let input = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(
-                rust_i18n::t!("container.tag.placeholder").to_string(),
-            )
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.tag.placeholder").to_string())
         });
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.tag_image = Some((image, input));
@@ -66,7 +65,9 @@ impl AppShell {
 
         // 解析 repo 和 tag：若包含冒号则拆分为 repo 和 tag
         let (repo, tag) = match trimmed.rsplit_once(':') {
-            Some((r, t)) if !r.is_empty() && !t.contains('/') => (r.to_string(), Some(t.to_string())),
+            Some((r, t)) if !r.is_empty() && !t.contains('/') => {
+                (r.to_string(), Some(t.to_string()))
+            }
             _ => (trimmed.to_string(), None),
         };
 

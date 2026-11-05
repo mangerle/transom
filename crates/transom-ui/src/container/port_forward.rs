@@ -72,11 +72,7 @@ impl AppShell {
     }
 
     /// 取消端口转发弹窗。
-    pub(crate) fn cancel_container_port_forward(
-        &mut self,
-        tab_id: TabId,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn cancel_container_port_forward(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.forward_dialog = None;
             cx.notify();
@@ -100,11 +96,7 @@ impl AppShell {
     }
 
     /// 提交端口转发创建。
-    pub(crate) fn submit_container_port_forward(
-        &mut self,
-        tab_id: TabId,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn submit_container_port_forward(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
@@ -113,7 +105,8 @@ impl AppShell {
         };
 
         if dialog.ssh_sessions.is_empty() {
-            workspace.notice = Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
+            workspace.notice =
+                Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
             cx.notify();
             return;
         }
@@ -122,7 +115,8 @@ impl AppShell {
         let local_port: u16 = match local_port_str.parse() {
             Ok(port) if port > 0 => port,
             _ => {
-                workspace.notice = Some(rust_i18n::t!("container.forward.invalid_port").to_string());
+                workspace.notice =
+                    Some(rust_i18n::t!("container.forward.invalid_port").to_string());
                 cx.notify();
                 return;
             }
@@ -136,8 +130,10 @@ impl AppShell {
         };
 
         let selected_index = dialog.selected_ssh_index;
-        let Some((_, ssh_tab_id, connection_id)) = dialog.ssh_sessions.get(selected_index).cloned() else {
-            workspace.notice = Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
+        let Some((_, ssh_tab_id, connection_id)) = dialog.ssh_sessions.get(selected_index).cloned()
+        else {
+            workspace.notice =
+                Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
             cx.notify();
             return;
         };
@@ -159,7 +155,8 @@ impl AppShell {
             },
         );
 
-        self.state.set_forward_status(ssh_tab_id, rule.id, ForwardState::Starting, None);
+        self.state
+            .set_forward_status(ssh_tab_id, rule.id, ForwardState::Starting, None);
         self.state.send_command(ForwardCommand::ForwardStart {
             tab_id: ssh_tab_id,
             connection_id,

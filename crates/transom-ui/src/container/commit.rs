@@ -40,8 +40,7 @@ impl AppShell {
         });
 
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.commit_container =
-                Some((container, repo_input, tag_input, comment_input));
+            workspace.commit_container = Some((container, repo_input, tag_input, comment_input));
         }
         cx.notify();
     }

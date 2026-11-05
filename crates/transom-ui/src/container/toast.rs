@@ -22,13 +22,18 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::RemoveImage { image, .. } => {
             Some(verb_object("common.delete", &transom_core::short_id(image)))
         }
-        C::TagImage { image, repo, tag, .. } => {
+        C::TagImage {
+            image, repo, tag, ..
+        } => {
             let target = match tag {
                 Some(t) if !t.is_empty() => format!("{repo}:{t}"),
                 _ => repo.clone(),
             };
             let short_image = transom_core::short_id(image);
-            Some(verb_object("container.action.tag", &format!("{short_image} -> {target}")))
+            Some(verb_object(
+                "container.action.tag",
+                &format!("{short_image} -> {target}"),
+            ))
         }
         C::PushImage { image, tag, .. } => {
             let target = match tag {
@@ -38,12 +43,17 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             Some(verb_object("container.action.push", &target))
         }
         C::BuildImage { spec, .. } => {
-            let target = spec.tags.first().cloned().unwrap_or_else(|| spec.context_path.clone());
+            let target = spec
+                .tags
+                .first()
+                .cloned()
+                .unwrap_or_else(|| spec.context_path.clone());
             Some(verb_object("container.action.build", &target))
         }
-        C::SaveImage { image, .. } => {
-            Some(verb_object("container.action.save_image", &transom_core::short_id(image)))
-        }
+        C::SaveImage { image, .. } => Some(verb_object(
+            "container.action.save_image",
+            &transom_core::short_id(image),
+        )),
         C::LoadImage { local_path, .. } => {
             let name = local_path
                 .file_name()
@@ -62,12 +72,18 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::RemoveVolume { name, .. } | C::RemoveNetwork { network: name, .. } => {
             Some(verb_object("common.delete", name))
         }
-        C::ConnectNetwork { network, container, .. } => {
-            Some(verb_object("container.action.connect_network", &format!("{container} -> {network}")))
-        }
-        C::DisconnectNetwork { network, container, .. } => {
-            Some(verb_object("container.action.disconnect_network", &format!("{container} -/-> {network}")))
-        }
+        C::ConnectNetwork {
+            network, container, ..
+        } => Some(verb_object(
+            "container.action.connect_network",
+            &format!("{container} -> {network}"),
+        )),
+        C::DisconnectNetwork {
+            network, container, ..
+        } => Some(verb_object(
+            "container.action.disconnect_network",
+            &format!("{container} -/-> {network}"),
+        )),
         C::Rename { from, .. } => {
             Some(verb_object("container.action.rename", &path_basename(from)))
         }
@@ -78,9 +94,12 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
         C::UpdateContainer { container, .. } => {
             Some(verb_object("container.action.update", container))
         }
-        C::CommitContainer { container, repo, .. } => {
-            Some(verb_object("container.action.commit", &format!("{container} -> {repo}")))
-        }
+        C::CommitContainer {
+            container, repo, ..
+        } => Some(verb_object(
+            "container.action.commit",
+            &format!("{container} -> {repo}"),
+        )),
         C::CreateContainer { spec, .. } => Some(verb_object(
             "container.run.title",
             if spec.name.is_empty() {

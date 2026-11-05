@@ -5,8 +5,8 @@ use crate::palette::Palette;
 use gpui_kit::ClipboardItem;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::Sizable;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 
 impl AppShell {
@@ -22,8 +22,7 @@ impl AppShell {
         else {
             return div().into_any_element();
         };
-        let Some((name, run_cmd, compose_yaml, is_compose)) =
-            workspace.export_config.clone()
+        let Some((name, run_cmd, compose_yaml, is_compose)) = workspace.export_config.clone()
         else {
             return div().into_any_element();
         };
@@ -109,8 +108,10 @@ impl AppShell {
             }),
         );
 
-        let footer =
-            crate::widgets::dialog_actions([close_btn.into_any_element(), copy_btn.into_any_element()]);
+        let footer = crate::widgets::dialog_actions([
+            close_btn.into_any_element(),
+            copy_btn.into_any_element(),
+        ]);
 
         crate::widgets::dialog_body(
             "container-export-modal",

@@ -127,7 +127,11 @@ impl AppShell {
     }
 
     /// 切换统计看板容器进程表格折叠状态。
-    pub(crate) fn toggle_container_stats_processes(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_container_stats_processes(
+        &mut self,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.stats_processes_collapsed = !workspace.stats_processes_collapsed;
         }

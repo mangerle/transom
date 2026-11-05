@@ -220,21 +220,26 @@ impl ModalKind {
                 Some(crate::theme::tokens::dialog::CONFIRM),
                 "container-create",
             ),
-            ModalKind::ContainerConfirm => {
-                (Some(crate::theme::tokens::dialog::CONFIRM), "container-confirm")
-            }
-            ModalKind::ContainerRename => {
-                (Some(crate::theme::tokens::dialog::INPUT), "container-rename")
-            }
-            ModalKind::ContainerTagImage => {
-                (Some(crate::theme::tokens::dialog::INPUT), "container-tag-image")
-            }
-            ModalKind::ContainerCommit => {
-                (Some(crate::theme::tokens::dialog::FILTER), "container-commit")
-            }
-            ModalKind::ContainerUpdate => {
-                (Some(crate::theme::tokens::dialog::INPUT), "container-update")
-            }
+            ModalKind::ContainerConfirm => (
+                Some(crate::theme::tokens::dialog::CONFIRM),
+                "container-confirm",
+            ),
+            ModalKind::ContainerRename => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-rename",
+            ),
+            ModalKind::ContainerTagImage => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-tag-image",
+            ),
+            ModalKind::ContainerCommit => (
+                Some(crate::theme::tokens::dialog::FILTER),
+                "container-commit",
+            ),
+            ModalKind::ContainerUpdate => (
+                Some(crate::theme::tokens::dialog::INPUT),
+                "container-update",
+            ),
             ModalKind::ContainerNetworkConnect => (
                 Some(crate::theme::tokens::dialog::INPUT),
                 "container-network-connect",
@@ -252,10 +257,20 @@ impl ModalKind {
                 "container-file-new-dir",
             ),
             ModalKind::ContainerHub => (Some(crate::theme::tokens::dialog::AUDIT), "container-hub"),
-            ModalKind::ContainerPush => (Some(crate::theme::tokens::dialog::FILTER), "container-push"),
-            ModalKind::ContainerSystemDf => (Some(crate::theme::tokens::dialog::AUDIT), "container-system-df"),
-            ModalKind::ContainerBuild => (Some(crate::theme::tokens::dialog::AUDIT), "container-build"),
-            ModalKind::ContainerForward => (Some(crate::theme::tokens::dialog::FILTER), "container-forward"),
+            ModalKind::ContainerPush => {
+                (Some(crate::theme::tokens::dialog::FILTER), "container-push")
+            }
+            ModalKind::ContainerSystemDf => (
+                Some(crate::theme::tokens::dialog::AUDIT),
+                "container-system-df",
+            ),
+            ModalKind::ContainerBuild => {
+                (Some(crate::theme::tokens::dialog::AUDIT), "container-build")
+            }
+            ModalKind::ContainerForward => (
+                Some(crate::theme::tokens::dialog::FILTER),
+                "container-forward",
+            ),
             ModalKind::SessionForm => (
                 Some(crate::theme::tokens::dialog::SESSION_FORM),
                 "session-form",
@@ -379,29 +394,44 @@ impl ModalKind {
             }
             ModalKind::ContainerHub => shell
                 .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
-                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
-                    shell.render_container_hub_dialog_body(tab_id, app, window, cx, p)
-                }),
+                .map_or_else(
+                    || div().into_any_element(),
+                    |(tab_id, _)| {
+                        shell.render_container_hub_dialog_body(tab_id, app, window, cx, p)
+                    },
+                ),
             ModalKind::ContainerPush => shell
                 .find_container_modal_tab(|ws| ws.push_dialog.is_some())
-                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
-                    shell.render_container_push_dialog_body(tab_id, app, window, cx, p)
-                }),
+                .map_or_else(
+                    || div().into_any_element(),
+                    |(tab_id, _)| {
+                        shell.render_container_push_dialog_body(tab_id, app, window, cx, p)
+                    },
+                ),
             ModalKind::ContainerSystemDf => shell
                 .find_container_modal_tab(|ws| ws.system_df_dialog_open)
-                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
-                    shell.render_container_system_df_dialog_body(tab_id, app, window, cx, p)
-                }),
+                .map_or_else(
+                    || div().into_any_element(),
+                    |(tab_id, _)| {
+                        shell.render_container_system_df_dialog_body(tab_id, app, window, cx, p)
+                    },
+                ),
             ModalKind::ContainerBuild => shell
                 .find_container_modal_tab(|ws| ws.build_dialog.is_some())
-                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
-                    shell.render_container_build_dialog_body(tab_id, app, window, cx, p)
-                }),
+                .map_or_else(
+                    || div().into_any_element(),
+                    |(tab_id, _)| {
+                        shell.render_container_build_dialog_body(tab_id, app, window, cx, p)
+                    },
+                ),
             ModalKind::ContainerForward => shell
                 .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
-                .map_or_else(|| div().into_any_element(), |(tab_id, _)| {
-                    shell.render_container_forward_dialog_body(tab_id, app, window, cx, p)
-                }),
+                .map_or_else(
+                    || div().into_any_element(),
+                    |(tab_id, _)| {
+                        shell.render_container_forward_dialog_body(tab_id, app, window, cx, p)
+                    },
+                ),
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),

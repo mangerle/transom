@@ -7,6 +7,7 @@
 //! - 代价与局限：每个新能力需要一个"能被枚举"的入口；面板不做模糊评分，只做
 //!   大小写无关的子串匹配，排序沿用来源顺序。
 
+use crate::app::TabContent;
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::keymap;
@@ -17,7 +18,6 @@ use gpui_kit::component::theme::ThemeRegistry;
 use gpui_kit::*;
 use transom_core::AppSettings;
 use transom_core::{SessionId, SnippetId, TabId, preset_themes};
-use crate::app::TabContent;
 
 /// 面板条目的落点；Action 条目的动作已挂在 `CommandItem` 上，由组件派发。
 #[derive(Clone)]

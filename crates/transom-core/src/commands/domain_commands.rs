@@ -11,7 +11,8 @@
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
     ComposeAction, ComposeProject, ContainerBuildSpec, ContainerConnection, ContainerCreateSpec,
-    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRegistryAuth, ContainerUpdateSpec,
+    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRegistryAuth,
+    ContainerUpdateSpec,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -283,10 +284,7 @@ pub enum ContainerCommand {
         auth: Option<ContainerRegistryAuth>,
     },
     /// 取消正在进行的镜像拉取任务。
-    CancelPullTask {
-        tab_id: TabId,
-        task_id: String,
-    },
+    CancelPullTask { tab_id: TabId, task_id: String },
     ListVolumes {
         tab_id: TabId,
         request_id: ContainerRequestId,
