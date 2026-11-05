@@ -3,7 +3,7 @@
 use crate::app::AppShell;
 use crate::container::divider_width_px;
 use crate::container::types::{ContainerSection, ContainerWorkspaceStatus};
-use crate::divider::{DividerEdge, DividerStyled, h_resizable};
+use crate::divider::h_resizable;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Tab, Tabs, h_flex, v_flex};
@@ -361,7 +361,12 @@ impl AppShell {
                     .map(|(index, (section, count))| {
                         let is_selected = section == selected;
                         let icon_color = if is_selected {
-                            p.tab_active_foreground
+                            p.primary
+                        } else {
+                            p.muted_foreground
+                        };
+                        let text_color = if is_selected {
+                            p.foreground
                         } else {
                             p.muted_foreground
                         };
@@ -375,48 +380,33 @@ impl AppShell {
                         .items_center()
                         .text_sm()
                         .cursor_pointer()
-                        .border_color(p.divider(p.border))
-                        .when(index > 0, |this| {
-                            this.divider_edge(DividerEdge::Left, p.divider_width)
-                        })
-                        .when(index + 1 == tab_count, |this| {
-                            this.divider_edge(DividerEdge::Right, p.divider_width)
-                        })
+                        .text_color(text_color)
                         .set_position(index + 1, tab_count);
-                        if is_selected {
-                            tab = tab.bg(p.tab_active).text_color(p.tab_active_foreground);
-                        } else {
-                            tab = tab.text_color(p.muted_foreground).hover(|style| {
-                                style
-                                    .bg(p.sidebar_accent.opacity(0.6))
-                                    .text_color(p.foreground)
-                            });
+
+                        if !is_selected {
+                            tab = tab.hover(|style| style.text_color(p.foreground));
                         }
+
                         tab.child(Icon::new(section.icon()).small().text_color(icon_color))
                             .child(rust_i18n::t!(section.label_key()).to_string())
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(if is_selected {
-                                        p.tab_active_foreground.opacity(0.72)
-                                    } else {
-                                        p.muted_foreground
-                                    })
-                                    .child(count.to_string()),
-                            )
-                            .child({
-                                let (line_height, line_color) = if is_selected {
-                                    (active_line_px, p.primary)
-                                } else {
-                                    (divider_px, p.divider(p.border))
-                                };
-                                div()
-                                    .absolute()
-                                    .left_0()
-                                    .right_0()
-                                    .bottom_0()
-                                    .h(px(line_height))
-                                    .bg(line_color)
+                            .when(count > 0, |this| {
+                                this.child(
+                                    div()
+                                        .text_size(px(11.0))
+                                        .text_color(p.muted_foreground)
+                                        .child(count.to_string()),
+                                )
+                            })
+                            .when(is_selected, |this| {
+                                this.child(
+                                    div()
+                                        .absolute()
+                                        .left_0()
+                                        .right_0()
+                                        .bottom_0()
+                                        .h(px(active_line_px))
+                                        .bg(p.primary),
+                                )
                             })
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.select_container_section(tab_id, section, window, cx);
