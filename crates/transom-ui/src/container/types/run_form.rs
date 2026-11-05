@@ -38,6 +38,8 @@ pub(crate) struct ContainerRunForm {
     pub(crate) memory: Entity<InputState>,
     pub(crate) cpus: Entity<InputState>,
     pub(crate) restart: Option<String>,
+    /// 是否展开高级选项（命令、环境变量、资源限制、重启策略等）。
+    pub(crate) advanced_open: bool,
     /// 校验或引擎返回的错误提示，展示在表单底部。
     pub(crate) error: Option<String>,
 }
@@ -86,6 +88,7 @@ impl ContainerRunForm {
             memory: run_input("container.run.memory_placeholder", None, window, cx),
             cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: None,
+            advanced_open: false,
             error: None,
         }
     }
@@ -180,6 +183,7 @@ impl ContainerRunForm {
             memory: run_input("container.run.memory_placeholder", None, window, cx),
             cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: details.restart_policy.clone(),
+            advanced_open: false,
             error: None,
         }
     }

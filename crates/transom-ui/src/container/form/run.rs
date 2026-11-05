@@ -1,6 +1,8 @@
 //! 运行容器表单与提交。
 
 use super::*;
+use gpui_kit::component::Icon;
+use gpui_kit::prelude::FluentBuilder;
 
 impl AppShell {
     /// 打开「运行容器」表单；从镜像行进入时预填镜像引用。
@@ -106,127 +108,180 @@ impl AppShell {
         let tab_id = form.tab_id;
         let restart = form.restart.clone();
         let error = form.error.clone();
-        let mut content =
-            v_flex()
-                .gap_3()
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.image").to_string(),
-                    form.image.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.name").to_string(),
-                    form.name.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.command").to_string(),
-                    form.command.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.ports").to_string(),
-                    form.ports.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.binds").to_string(),
-                    form.binds.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.env").to_string(),
-                    form.env.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.health").to_string(),
-                    form.health.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.health_interval").to_string(),
-                    form.health_interval.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.memory").to_string(),
-                    form.memory.clone(),
-                    p,
-                ))
-                .child(crate::widgets::form_field(
-                    rust_i18n::t!("container.run.cpus").to_string(),
-                    form.cpus.clone(),
-                    p,
-                ))
-                .child(
-                    v_flex()
-                        .gap_1()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(rust_i18n::t!("container.run.restart").to_string()),
-                        )
-                        .child(h_flex().gap_1().children(RUN_RESTART_POLICIES.iter().map(
-                            |policy| {
-                                Button::new(ElementId::Name(
-                                    format!("container-run-restart-{policy}").into(),
-                                ))
+        let advanced_open = form.advanced_open;
+
+        let mut content = v_flex()
+            .gap_3()
+            // 基础必填/高频核心项
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("container.run.image").to_string(),
+                form.image.clone(),
+                p,
+            ))
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("container.run.name").to_string(),
+                form.name.clone(),
+                p,
+            ))
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("container.run.ports").to_string(),
+                form.ports.clone(),
+                p,
+            ))
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("container.run.binds").to_string(),
+                form.binds.clone(),
+                p,
+            ))
+            // 高级选项折叠切换条
+            .child(
+                h_flex()
+                    .id("container-run-advanced-toggle")
+                    .w_full()
+                    .py_1p5()
+                    .px_2()
+                    .rounded(p.radius.sm)
+                    .hover(|s| s.bg(p.muted.opacity(0.4)))
+                    .cursor_pointer()
+                    .items_center()
+                    .justify_between()
+                    .on_click(crate::dialog_host::on_event(
+                        app,
+                        move |this, _: &ClickEvent, _, cx| {
+                            if let Some(form) = this.state.containers.run_form.as_mut() {
+                                form.advanced_open = !form.advanced_open;
+                                cx.notify();
+                            }
+                        },
+                    ))
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1p5()
+                            .child(
+                                Icon::new(if advanced_open {
+                                    IconName::ChevronDown
+                                } else {
+                                    IconName::ChevronRight
+                                })
                                 .xsmall()
-                                .ghost()
-                                .selected(restart.as_deref() == Some(*policy))
-                                .label((*policy).to_string())
-                                .on_click(
-                                    crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, _, cx| {
-                                            let Some(form) =
-                                                this.state.containers.run_form.as_mut()
-                                            else {
-                                                return;
-                                            };
-                                            form.restart =
-                                                if form.restart.as_deref() == Some(*policy) {
-                                                    None
-                                                } else {
-                                                    Some((*policy).to_string())
-                                                };
-                                            cx.notify();
-                                        },
-                                    ),
+                                .text_color(p.muted_foreground),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.muted_foreground)
+                                    .child(rust_i18n::t!("container.run.advanced_title").to_string()),
+                            ),
+                    ),
+            )
+            .when(advanced_open, |this| {
+                this.child(
+                    v_flex()
+                        .gap_3()
+                        .pl_2()
+                        .border_l_2()
+                        .border_color(p.border.opacity(0.5))
+                        .child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.command").to_string(),
+                            form.command.clone(),
+                            p,
+                        ))
+                        .child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.env").to_string(),
+                            form.env.clone(),
+                            p,
+                        ))
+                        .child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.memory").to_string(),
+                            form.memory.clone(),
+                            p,
+                        ))
+                        .child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.cpus").to_string(),
+                            form.cpus.clone(),
+                            p,
+                        ))
+                        .child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.health").to_string(),
+                            form.health.clone(),
+                            p,
+                        ))
+                        .child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.health_interval").to_string(),
+                            form.health_interval.clone(),
+                            p,
+                        ))
+                        .child(
+                            v_flex()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .child(rust_i18n::t!("container.run.restart").to_string()),
                                 )
-                            },
-                        ))),
-                );
+                                .child(h_flex().gap_1().children(RUN_RESTART_POLICIES.iter().map(
+                                    |policy| {
+                                        Button::new(ElementId::Name(
+                                            format!("container-run-restart-{policy}").into(),
+                                        ))
+                                        .xsmall()
+                                        .ghost()
+                                        .selected(restart.as_deref() == Some(*policy))
+                                        .label((*policy).to_string())
+                                        .on_click(
+                                            crate::dialog_host::on_event(
+                                                app,
+                                                move |this, _: &ClickEvent, _, cx| {
+                                                    let Some(form) =
+                                                        this.state.containers.run_form.as_mut()
+                                                    else {
+                                                        return;
+                                                    };
+                                                    form.restart =
+                                                        if form.restart.as_deref() == Some(*policy) {
+                                                            None
+                                                        } else {
+                                                            Some((*policy).to_string())
+                                                        };
+                                                    cx.notify();
+                                                },
+                                            ),
+                                        )
+                                    },
+                                ))),
+                        ),
+                )
+            });
+
         if let Some(error) = error {
             content = content.child(div().text_xs().text_color(p.danger).child(error));
         }
 
-        let footer = h_flex()
-            .gap_2()
-            .justify_end()
-            .child(
-                Button::new("container-run-cancel")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| this.dismiss_container_run(cx),
-                    )),
-            )
-            .child(
-                Button::new("container-run-submit")
-                    .primary()
-                    .icon(IconName::Play)
-                    .label(rust_i18n::t!("container.run.submit").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        move |this, _: &ClickEvent, _, cx| {
-                            this.submit_container_run(tab_id, cx);
-                        },
-                    )),
-            );
+        let cancel_btn = Button::new("container-run-cancel")
+            .ghost()
+            .label(rust_i18n::t!("common.cancel").to_string())
+            .on_click(crate::dialog_host::on_event(
+                app,
+                |this, _: &ClickEvent, _, cx| this.dismiss_container_run(cx),
+            ))
+            .into_any_element();
+
+        let submit_btn = Button::new("container-run-submit")
+            .primary()
+            .icon(IconName::Play)
+            .label(rust_i18n::t!("container.run.submit").to_string())
+            .on_click(crate::dialog_host::on_event(
+                app,
+                move |this, _: &ClickEvent, _, cx| {
+                    this.submit_container_run(tab_id, cx);
+                },
+            ))
+            .into_any_element();
+
+        let footer = crate::widgets::dialog_actions([cancel_btn, submit_btn]);
 
         // 字段多，让内容区自己滚动；页头页脚由 Dialog 容器固定。
         let body = div()
@@ -237,7 +292,7 @@ impl AppShell {
         crate::widgets::dialog_body(
             "container-run-form-body",
             rust_i18n::t!("container.run.title").to_string(),
-            None,
+            Some(rust_i18n::t!("container.run.desc").to_string()),
             body,
             Some(footer),
         )

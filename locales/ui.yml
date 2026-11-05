@@ -4713,6 +4713,12 @@ container:
     title:
       en: Run a container
       zh-CN: 运行容器
+    desc:
+      en: Configure basic runtime parameters to launch a container.
+      zh-CN: 配置基础运行时参数并启动容器。
+    advanced_title:
+      en: Advanced options
+      zh-CN: 高级选项
     submit:
       en: Run
       zh-CN: 运行

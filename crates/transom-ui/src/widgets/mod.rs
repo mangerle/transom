@@ -43,6 +43,6 @@ pub(crate) use list_row::{list_row, table_header};
 pub(crate) use menu::{MenuItem, menu_item};
 pub(crate) use notice::{NoticeKind, notice};
 pub(crate) use panel_header::PanelHeader;
-pub(crate) use status::{status_badge, status_dot, status_dot_bare};
+pub(crate) use status::{progress_bar, status_badge, status_dot, status_dot_bare};
 pub(crate) use switch_card::{SwitchCardProps, switch_card};
 pub(crate) use toolbar::toolbar;

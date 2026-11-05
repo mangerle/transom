@@ -44,3 +44,24 @@ pub(crate) fn status_dot(
         .child(status_dot_bare(color))
         .into_any_element()
 }
+
+/// 通用 4px 进度条：拉取、构建、导入导出共用。
+///
+/// 轨道使用 8% 弱色透明度，填充使用指定的主色/语义色，胶囊全圆。
+pub(crate) fn progress_bar(fraction: f32, color: Hsla, p: &Palette) -> AnyElement {
+    let progress_val = fraction.clamp(0.0, 1.0);
+    div()
+        .w_full()
+        .h(rems(space::XS))
+        .rounded_full()
+        .bg(p.foreground.opacity(0.08))
+        .child(
+            div()
+                .h_full()
+                .rounded_full()
+                .bg(color)
+                .w(relative(progress_val)),
+        )
+        .into_any_element()
+}
+

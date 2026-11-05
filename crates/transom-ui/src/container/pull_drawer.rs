@@ -273,20 +273,7 @@ impl AppShell {
                         v_flex()
                             .w_full()
                             .gap_1()
-                            .child(
-                                div()
-                                    .w_full()
-                                    .h(px(4.0))
-                                    .rounded_full()
-                                    .bg(p.muted)
-                                    .child(
-                                        div()
-                                            .h_full()
-                                            .rounded_full()
-                                            .bg(p.primary)
-                                            .w(relative(progress_val)),
-                                    ),
-                            )
+                            .child(crate::widgets::progress_bar(progress_val, p.primary, p))
                             .when(!status_line.is_empty(), |this| {
                                 this.child(
                                     div()
