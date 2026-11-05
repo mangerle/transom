@@ -10,6 +10,7 @@ pub(super) fn render_file_preview(
     preview: &(String, String, bool),
     preview_editor: Option<&Entity<TextareaState>>,
     preview_saving: bool,
+    binary: bool,
     readonly: bool,
     p: &Palette,
     cx: &mut Context<AppShell>,
@@ -30,6 +31,12 @@ pub(super) fn render_file_preview(
                     .text_xs()
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("container.files.truncated").to_string())
+            }))
+            .children(binary.then(|| {
+                div()
+                    .text_xs()
+                    .text_color(p.warning)
+                    .child(rust_i18n::t!("container.files.binary").to_string())
             })),
     );
 
@@ -59,7 +66,7 @@ pub(super) fn render_file_preview(
                     })),
             );
     } else {
-        if !readonly && !*truncated {
+        if !readonly && !*truncated && !binary {
             actions = actions.child(
                 Button::new("container-file-edit")
                     .ghost()
@@ -83,7 +90,12 @@ pub(super) fn render_file_preview(
     }
     header = header.child(actions);
 
-    let body_content: AnyElement = if let Some(editor) = preview_editor {
+    let body_content: AnyElement = if binary {
+        super::centered_hint(
+            rust_i18n::t!("container.files.binary_hint").to_string(),
+            p,
+        )
+    } else if let Some(editor) = preview_editor {
         div()
             .flex_1()
             .min_h_0()

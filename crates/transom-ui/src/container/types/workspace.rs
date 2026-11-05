@@ -34,6 +34,8 @@ pub(crate) struct ContainerFilesState {
     pub(crate) request: Option<ContainerRequestId>,
     /// 当前预览：路径、内容、是否截断。
     pub(crate) preview: Option<(String, String, bool)>,
+    /// 当前预览是否为二进制文件；为真时禁止文本编辑。
+    pub(crate) preview_binary: bool,
     /// 就地编辑状态：当用户点击“编辑”时保存该 TextareaState。
     pub(crate) preview_editor: Option<Entity<TextareaState>>,
     /// 编辑器是否正在保存。
@@ -309,6 +311,7 @@ impl ContainerWorkspaceState {
             commit_container: None,
             pending_select: None,
             files: ContainerFilesState {
+                preview_binary: false,
                 new_dir_open: false,
                 new_dir_input: None,
                 ..ContainerFilesState::default()

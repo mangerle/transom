@@ -417,6 +417,7 @@ impl AppShell {
                 path,
                 content,
                 truncated,
+                binary,
                 ..
             } => {
                 let Some(tab_id) = self.state.containers.take_tab(request_id) else {
@@ -424,6 +425,10 @@ impl AppShell {
                 };
                 if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
                     workspace.files.preview = Some((path, content, truncated));
+                    workspace.files.preview_binary = binary;
+                    if binary {
+                        workspace.files.preview_editor = None;
+                    }
                 }
             }
             ContainerAppEvent::TransferProgress {

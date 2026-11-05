@@ -6358,6 +6358,12 @@ container:
     truncated:
       en: Preview truncated
       zh-CN: 预览已截断
+    binary:
+      en: Binary file
+      zh-CN: 二进制文件
+    binary_hint:
+      en: This file contains binary data and cannot be edited as text. Download it to inspect locally.
+      zh-CN: 该文件包含二进制数据，不能用文本编辑器修改；请下载后再查看。
     rename_modal_title:
       en: Rename File
       zh-CN: 重命名文件

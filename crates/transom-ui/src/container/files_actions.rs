@@ -69,6 +69,7 @@ impl AppShell {
         };
         workspace.files.preview_editor = None;
         workspace.files.preview_saving = false;
+        workspace.files.preview_binary = false;
         let request_id = ContainerRequestId::new();
         let command = if is_volume {
             ContainerCommand::ReadVolumeFile {
@@ -322,6 +323,9 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
+        if workspace.files.preview_binary {
+            return;
+        }
         let Some((_, content, _)) = workspace.files.preview.as_ref() else {
             return;
         };
@@ -349,6 +353,7 @@ impl AppShell {
         workspace.files.preview = None;
         workspace.files.preview_editor = None;
         workspace.files.preview_saving = false;
+        workspace.files.preview_binary = false;
         cx.notify();
     }
 
@@ -357,6 +362,9 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
+        if workspace.files.preview_binary {
+            return;
+        }
         let Some((path, _, _)) = workspace.files.preview.as_ref().cloned() else {
             return;
         };

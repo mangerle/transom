@@ -399,6 +399,8 @@ pub enum ContainerAppEvent {
         content: String,
         truncated: bool,
         size: u64,
+        /// 是否包含 NUL 或非法 UTF-8；二进制文件不允许文本编辑。
+        binary: bool,
     },
     TransferProgress {
         request_id: ContainerRequestId,

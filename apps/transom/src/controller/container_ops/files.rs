@@ -64,12 +64,20 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 move |engine| async move {
                     transom_container::read_file(&engine, &container, &path, max_bytes).await
                 },
-                move |request_id, (bytes, truncated, size)| ContainerAppEvent::FilePreview {
-                    request_id,
-                    path: reply_path,
-                    content: String::from_utf8_lossy(&bytes).to_string(),
-                    truncated,
-                    size,
+                move |request_id, (bytes, truncated, size)| {
+                    let binary = is_binary_preview(&bytes);
+                    ContainerAppEvent::FilePreview {
+                        request_id,
+                        path: reply_path,
+                        content: if binary {
+                            String::new()
+                        } else {
+                            String::from_utf8_lossy(&bytes).to_string()
+                        },
+                        truncated,
+                        size,
+                        binary,
+                    }
                 },
             )
         }
@@ -89,12 +97,20 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 move |engine| async move {
                     transom_container::read_volume_file(&engine, &volume, &path, max_bytes).await
                 },
-                move |request_id, (bytes, truncated, size)| ContainerAppEvent::FilePreview {
-                    request_id,
-                    path: reply_path,
-                    content: String::from_utf8_lossy(&bytes).to_string(),
-                    truncated,
-                    size,
+                move |request_id, (bytes, truncated, size)| {
+                    let binary = is_binary_preview(&bytes);
+                    ContainerAppEvent::FilePreview {
+                        request_id,
+                        path: reply_path,
+                        content: if binary {
+                            String::new()
+                        } else {
+                            String::from_utf8_lossy(&bytes).to_string()
+                        },
+                        truncated,
+                        size,
+                        binary,
+                    }
                 },
             )
         }
@@ -338,5 +354,23 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             },
         ),
         _ => {}
+    }
+}
+
+/// 判断预览内容是否为二进制：非法 UTF-8 或包含 NUL 都不允许进入文本编辑。
+fn is_binary_preview(bytes: &[u8]) -> bool {
+    std::str::from_utf8(bytes).is_err() || bytes.contains(&0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_binary_preview;
+
+    #[test]
+    fn binary_preview_detection_rejects_invalid_utf8_and_nul() {
+        assert!(!is_binary_preview(b"plain text"));
+        assert!(!is_binary_preview("中文".as_bytes()));
+        assert!(is_binary_preview(&[0xff, 0xfe]));
+        assert!(is_binary_preview(b"text\0with-nul"));
     }
 }

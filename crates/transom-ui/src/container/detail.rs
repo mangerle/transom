@@ -188,6 +188,7 @@ impl AppShell {
             workspace.files.new_dir_open,
             workspace.files.new_dir_input.clone(),
             workspace.files.scroll.clone(),
+            workspace.files.preview_binary,
         );
         let selected_container = containers
             .iter()
@@ -316,6 +317,7 @@ impl AppShell {
                         preview: files.2.as_ref(),
                         preview_editor: files.3.as_ref(),
                         preview_saving: files.4,
+                        preview_binary: files.11,
                         loading: files.5,
                         scroll: &files.10,
                         readonly: is_volume,
