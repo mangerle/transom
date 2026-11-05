@@ -676,7 +676,7 @@ impl CliBackend {
                 deleted.push(line.to_string());
             }
         }
-        Ok(transom_core::ContainerPruneReport { deleted, reclaimed })
+        Ok(transom_core::ContainerPruneReport { deleted, reclaimed, errors: Vec::new() })
     }
 
     /// 监听引擎 CLI 长连接事件流（docker events --format '{{json .}}'）。
@@ -886,6 +886,7 @@ impl CliBackend {
         Ok(transom_core::ContainerPruneReport {
             deleted,
             reclaimed: 0,
+            errors: Vec::new(),
         })
     }
 
@@ -987,6 +988,7 @@ impl CliBackend {
         Ok(transom_core::ContainerPruneReport {
             deleted,
             reclaimed: 0,
+            errors: Vec::new(),
         })
     }
 
@@ -1109,6 +1111,7 @@ impl CliBackend {
         Ok(transom_core::ContainerPruneReport {
             deleted,
             reclaimed: 0,
+            errors: Vec::new(),
         })
     }
 

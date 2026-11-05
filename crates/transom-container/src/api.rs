@@ -498,6 +498,7 @@ impl DockerApi {
         Ok(ContainerPruneReport {
             deleted: report.containers_deleted,
             reclaimed: report.space_reclaimed,
+            errors: Vec::new(),
         })
     }
 
@@ -529,71 +530,48 @@ impl DockerApi {
     ) -> Result<ContainerPruneReport, ContainerError> {
         let mut total_deleted = Vec::new();
         let mut total_reclaimed: u64 = 0;
+        let mut errors = Vec::new();
+        let mut merge =
+            |step: &str, result: Result<ContainerPruneReport, ContainerError>| match result {
+                Ok(report) => {
+                    total_deleted.extend(report.deleted);
+                    total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
+                }
+                Err(error) => errors.push(format!("{step}失败: {error}")),
+            };
 
-        // 1. 清理已停止容器
-        if let Ok(report) = self.prune_containers().await {
-            total_deleted.extend(report.deleted);
-            total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
+        merge("清理已停止容器", self.prune_containers().await);
+        merge("清理镜像", self.prune_images_filtered(all).await);
+        merge("清理未使用网络", self.prune_networks().await);
+        if volumes {
+            merge("清理未使用数据卷", self.prune_volumes().await);
         }
-
-        // 2. 清理镜像（all 为 true 时清理全部未用镜像，否则仅清理悬空镜像）
-        let img_filter = if all {
-            "{}"
-        } else {
-            r#"{"dangling":["true"]}"#
-        };
-        let img_suffix = format!("/images/prune?filters={}", http::percent_encode(img_filter));
-        if let Ok(response) = self.send(Method::POST, &img_suffix, None, "清理镜像").await
-            && response.status.is_success()
-            && let Ok(bytes) = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await
-            && let Ok(report) = serde_json::from_slice::<ImagePruneResponse>(&bytes)
-        {
-            let deleted: Vec<String> = report
-                .images_deleted
-                .into_iter()
-                .flat_map(|entry| [entry.untagged, entry.deleted])
-                .flatten()
-                .collect();
-            total_deleted.extend(deleted);
-            total_reclaimed = total_reclaimed.saturating_add(report.space_reclaimed);
-        }
-
-        // 3. 清理未使用网络
-        if let Ok(report) = self.prune_networks().await {
-            total_deleted.extend(report.deleted);
-            total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
-        }
-
-        // 4. 清理未使用数据卷（若开启）
-        if volumes && let Ok(report) = self.prune_volumes().await {
-            total_deleted.extend(report.deleted);
-            total_reclaimed = total_reclaimed.saturating_add(report.reclaimed);
-        }
-
-        // 5. 清理构建缓存（尝试执行，失败安全降级）
-        if let Ok(response) = self
-            .send(Method::POST, "/build/prune", None, "清理构建缓存")
-            .await
-            && response.status.is_success()
-            && let Ok(bytes) = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await
-            && let Ok(report) = serde_json::from_slice::<BuildCachePruneResponse>(&bytes)
-        {
-            total_deleted.extend(report.caches_deleted);
-            total_reclaimed = total_reclaimed.saturating_add(report.space_reclaimed);
-        }
+        merge("清理构建缓存", self.prune_build_cache().await);
 
         Ok(ContainerPruneReport {
             deleted: total_deleted,
             reclaimed: total_reclaimed,
+            errors,
         })
     }
 
     /// 清理悬空镜像。
     pub async fn prune_images(&self) -> Result<ContainerPruneReport, ContainerError> {
-        const OPERATION: &str = "清理悬空镜像";
+        self.prune_images_filtered(false).await
+    }
+
+    /// 按 `all` 语义清理镜像。
+    ///
+    /// Docker API 的默认 `filters` 等同于 `dangling=true`；要清理“全部未使用镜像”
+    /// 必须显式传 `dangling=false`，空对象 `{}` 并不会扩大清理范围。
+    async fn prune_images_filtered(
+        &self,
+        all: bool,
+    ) -> Result<ContainerPruneReport, ContainerError> {
+        const OPERATION: &str = "清理镜像";
         let suffix = format!(
             "/images/prune?filters={}",
-            http::percent_encode(r#"{"dangling":["true"]}"#)
+            http::percent_encode(image_prune_filter(all))
         );
         let response = self.send(Method::POST, &suffix, None, OPERATION).await?;
         let status = response.status;
@@ -616,6 +594,31 @@ impl DockerApi {
         Ok(ContainerPruneReport {
             deleted,
             reclaimed: report.space_reclaimed,
+            errors: Vec::new(),
+        })
+    }
+
+    /// 清理构建缓存。
+    async fn prune_build_cache(&self) -> Result<ContainerPruneReport, ContainerError> {
+        const OPERATION: &str = "清理构建缓存";
+        let response = self
+            .send(Method::POST, "/build/prune", None, OPERATION)
+            .await?;
+        let status = response.status;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, OPERATION, body, "build cache"));
+        }
+        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let report: BuildCachePruneResponse =
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
+                operation: OPERATION.to_string(),
+                message: error.to_string(),
+            })?;
+        Ok(ContainerPruneReport {
+            deleted: report.caches_deleted,
+            reclaimed: report.space_reclaimed,
+            errors: Vec::new(),
         })
     }
 
@@ -652,6 +655,7 @@ impl DockerApi {
         Ok(ContainerPruneReport {
             deleted: report.volumes_deleted,
             reclaimed: report.space_reclaimed,
+            errors: Vec::new(),
         })
     }
 
@@ -811,6 +815,7 @@ impl DockerApi {
         Ok(ContainerPruneReport {
             deleted: report.networks_deleted,
             reclaimed: 0,
+            errors: Vec::new(),
         })
     }
 
@@ -1470,6 +1475,15 @@ fn log_request_error(operation: &str, error: &ContainerError) {
     log::debug!("容器引擎请求失败，操作: {operation}，原因: {error}");
 }
 
+/// 镜像清理的过滤器：显式区分“仅悬空”与“全部未使用”，不依赖引擎默认值。
+fn image_prune_filter(all: bool) -> &'static str {
+    if all {
+        r#"{"dangling":["false"]}"#
+    } else {
+        r#"{"dangling":["true"]}"#
+    }
+}
+
 /// 格式化原始 inspect JSON；解析失败时按原文返回，保证“高级信息”仍可查看。
 fn format_inspect_json(bytes: &[u8]) -> String {
     serde_json::from_slice::<serde_json::Value>(bytes)
@@ -1739,7 +1753,13 @@ fn port_bindings(ports: &[transom_core::ContainerPortPublish]) -> serde_json::Va
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_api_prefix, port_bindings, split_reference};
+    use super::{image_prune_filter, normalize_api_prefix, port_bindings, split_reference};
+
+    #[test]
+    fn image_prune_filter_distinguishes_dangling_and_all_unused() {
+        assert_eq!(image_prune_filter(false), r#"{"dangling":["true"]}"#);
+        assert_eq!(image_prune_filter(true), r#"{"dangling":["false"]}"#);
+    }
 
     #[test]
     fn port_bindings_group_by_container_port_and_protocol() {

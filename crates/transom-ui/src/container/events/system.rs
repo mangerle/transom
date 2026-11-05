@@ -38,12 +38,23 @@ impl AppShell {
         }
 
         let reclaimed_str = format_size(report.reclaimed);
-        let msg = rust_i18n::t!(
-            "container.system_df.prune_success",
-            reclaimed = reclaimed_str
-        )
-        .to_string();
-        self.show_toast(msg, true, window, cx);
+        let succeeded = report.errors.is_empty();
+        let msg = if succeeded {
+            rust_i18n::t!(
+                "container.system_df.prune_success",
+                reclaimed = reclaimed_str
+            )
+            .to_string()
+        } else {
+            rust_i18n::t!(
+                "container.system_df.prune_partial",
+                count = report.errors.len(),
+                reclaimed = reclaimed_str,
+                errors = report.errors.join("；")
+            )
+            .to_string()
+        };
+        self.show_toast(msg, succeeded, window, cx);
 
         // 清理完成后，重新统计磁盘占用并刷新各资源列表
         self.refresh_container_system_df(tab_id);

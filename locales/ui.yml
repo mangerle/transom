@@ -6670,5 +6670,8 @@ container:
     prune_success:
       en: System prune completed, reclaimed %{reclaimed} disk space
       zh-CN: 系统联合清理完成，已安全释放 %{reclaimed} 磁盘空间
+    prune_partial:
+      en: 'Prune finished with %{count} failed step(s), reclaimed %{reclaimed}: %{errors}'
+      zh-CN: '系统清理完成，但有 %{count} 个步骤失败，已释放 %{reclaimed}：%{errors}'
 
 

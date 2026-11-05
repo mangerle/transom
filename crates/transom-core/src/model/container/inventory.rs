@@ -535,6 +535,13 @@ pub struct ContainerPruneReport {
     /// 引擎报告的回收字节数。
     #[serde(default)]
     pub reclaimed: u64,
+    /// 系统级联合清理中失败但未阻断其它步骤的操作说明。
+    ///
+    /// 设计原理（Why）：联合清理包含容器、镜像、网络、卷与构建缓存五个独立步骤，
+    /// 某一步失败不应让已经完成的删除结果丢失；把失败原因回传给界面，才能让用户
+    /// 知道“回收了多少”之外还有哪些资源没清成。
+    #[serde(default)]
+    pub errors: Vec<String>,
 }
 
 /// 编排项目命令。
