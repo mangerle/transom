@@ -184,6 +184,10 @@ pub(crate) struct ContainerWorkspaceState {
     /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
     pub(crate) compose_yaml_editor:
         Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
+    /// Compose 项目的微服务依赖图：(服务名 -> 上游依赖的服务名列表)。
+    pub(crate) compose_dependencies: HashMap<String, Vec<String>>,
+    /// 拓扑看板中当前鼠标悬停的服务名；用于上下游依赖卡片与连线的高亮聚焦。
+    pub(crate) compose_hovered_service: Option<String>,
     /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
@@ -321,6 +325,8 @@ impl ContainerWorkspaceState {
             system_prune_volumes: false,
             system_prune_running: false,
             compose_yaml_editor: None,
+            compose_dependencies: HashMap::new(),
+            compose_hovered_service: None,
             notice: None,
             busy: false,
             _search_subscription: search_subscription,
@@ -432,6 +438,8 @@ impl ContainerWorkspaceState {
         self.rename_container = None;
         self.export_config = None;
         self.commit_container = None;
+        self.compose_hovered_service = None;
+        self.compose_dependencies.clear();
         if !ContainerSortKey::for_section(section).contains(&self.sort_key) {
             self.sort_key = ContainerSortKey::default_for(section);
             self.sort_desc = false;

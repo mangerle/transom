@@ -20,6 +20,8 @@ use transom_core::{
 
 mod changes;
 mod compose;
+pub(crate) mod compose_graph;
+mod compose_topology;
 mod confirm;
 mod file_bars;
 mod file_preview;

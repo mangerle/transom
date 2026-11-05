@@ -11,12 +11,10 @@ use super::*;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::input::{Textarea, TextareaState};
 use std::path::PathBuf;
-use transom_core::{
-    ComposeAction, ComposeProject, ContainerLifecycleAction, ContainerRequestId, ContainerSummary,
-};
+use transom_core::{ComposeAction, ComposeProject, ContainerSummary};
 
 /// 提取 Compose 容器的服务名（优先从镜像/名称推导简洁名）。
-fn service_name_of(container: &ContainerSummary, project_name: &str) -> String {
+pub(crate) fn service_name_of(container: &ContainerSummary, project_name: &str) -> String {
     let raw = container.name.trim_start_matches('/');
     let prefix = format!("{project_name}_");
     let prefix_dash = format!("{project_name}-");
@@ -260,138 +258,41 @@ fn render_compose_overview_and_topology(
             ),
     );
 
-    if members.is_empty() {
-        topology_section = topology_section.child(
-            div()
-                .p_4()
-                .rounded(p.radius.md)
-                .bg(p.muted.opacity(0.1))
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.compose.no_containers").to_string()),
-        );
-    } else {
-        let mut cards_grid = v_flex().gap_2();
-        for member in &members {
-            let service_name = service_name_of(member, &project.name);
-            let is_running = member.state.is_running();
-            let container_id = member.id.clone();
-            let container_name = member.name.clone();
-            let member_id_select = member.id.clone();
-            let member_id_toggle = member.id.clone();
-
-            let card = h_flex()
-                .p_2p5()
-                .gap_3()
-                .items_center()
-                .justify_between()
-                .rounded(p.radius.md)
-                .bg(p.list_background)
-                .border_color(p.divider(p.border))
-                .border_1()
-                .child(
-                    h_flex()
-                        .gap_2p5()
-                        .items_center()
-                        .flex_1()
-                        .min_w_0()
-                        // 状态指示灯
-                        .child(
-                            div()
-                                .size_2p5()
-                                .rounded_full()
-                                .bg(if is_running { p.success } else { p.muted_foreground }),
-                        )
-                        .child(
-                            v_flex()
-                                .gap_0p5()
-                                .flex_1()
-                                .min_w_0()
-                                .child(
-                                    h_flex()
-                                        .gap_2()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::BOLD)
-                                                .child(service_name),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(p.muted_foreground)
-                                                .child(container_name),
-                                        ),
-                                )
-                                .child(
-                                    h_flex()
-                                        .gap_2()
-                                        .items_center()
-                                        .text_xs()
-                                        .text_color(p.muted_foreground)
-                                        .child(div().child(member.image.clone()))
-                                        .child(div().child("·"))
-                                        .child(div().child(member.status.clone())),
-                                ),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .gap_1()
-                        .items_center()
-                        .child(
-                            Button::new(ElementId::Name(format!("toggle-{container_id}").into()))
-                                .ghost()
-                                .xsmall()
-                                .icon(if is_running {
-                                    IconName::Square
-                                } else {
-                                    IconName::Play
-                                })
-                                .tooltip(if is_running {
-                                    rust_i18n::t!("container.action.stop").to_string()
-                                } else {
-                                    rust_i18n::t!("container.action.start").to_string()
-                                })
-                                .on_click(cx.listener(move |this, _, _, _cx| {
-                                    let action = if is_running {
-                                        ContainerLifecycleAction::Stop
-                                    } else {
-                                        ContainerLifecycleAction::Start
-                                    };
-                                    let req = ContainerRequestId::new();
-                                    this.send_tracked(
-                                        tab_id,
-                                        req,
-                                        transom_core::ContainerCommand::Lifecycle {
-                                            tab_id,
-                                            request_id: req,
-                                            container: member_id_toggle.clone(),
-                                            action,
-                                        },
-                                    );
-                                })),
-                        )
-                        .child(
-                            Button::new(ElementId::Name(format!("inspect-{container_id}").into()))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Info)
-                                .tooltip(rust_i18n::t!("container.detail.overview").to_string())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.select_container_item(tab_id, member_id_select.clone());
-                                    if let Some(w) = this.state.container_workspace_mut(tab_id) {
-                                        w.section = ContainerSection::Containers;
-                                    }
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            cards_grid = cards_grid.child(card);
-        }
-        topology_section = topology_section.child(cards_grid);
+    // 确保异步解析依赖
+    let project_name = project.name.clone();
+    let needs_load = cx
+        .entity()
+        .read(cx)
+        .state
+        .container_workspace(tab_id)
+        .is_some_and(|w| w.compose_dependencies.is_empty());
+    if needs_load {
+        let app = cx.entity().clone();
+        cx.defer(move |cx| {
+            app.update(cx, |this, cx| {
+                this.ensure_compose_dependencies_loaded(tab_id, &project_name, cx);
+            });
+        });
     }
+
+    let (deps, hovered_service) = cx
+        .entity()
+        .read(cx)
+        .state
+        .container_workspace(tab_id)
+        .map(|w| (w.compose_dependencies.clone(), w.compose_hovered_service.clone()))
+        .unwrap_or_default();
+
+    let topology_board = super::compose_topology::render_compose_topology_board(
+        tab_id,
+        project,
+        &members,
+        &deps,
+        hovered_service.as_deref(),
+        p,
+        cx,
+    );
+    topology_section = topology_section.child(topology_board);
 
     // 基础路径信息
     let mut meta_section = v_flex().gap_1p5().pt_2();

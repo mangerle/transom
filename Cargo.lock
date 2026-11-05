@@ -8600,6 +8600,7 @@ dependencies = [
  "rfd",
  "rust-i18n",
  "serde_json",
+ "serde_yaml_ng",
  "similar",
  "ssh-key",
  "tempfile",

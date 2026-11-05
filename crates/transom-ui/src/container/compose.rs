@@ -279,10 +279,13 @@ impl AppShell {
                 };
                 match content {
                     Some(Ok(text)) => {
+                        let parsed =
+                            crate::container::detail::compose_graph::parse_compose_dependencies(&text);
                         let editor =
                             cx.new(|cx| TextareaState::new(window, cx).default_value(text));
                         workspace.compose_yaml_editor =
                             Some((target_project, target_path, editor, false));
+                        workspace.compose_dependencies = parsed;
                         cx.notify();
                     }
                     Some(Err(err)) => {
@@ -313,10 +316,11 @@ impl AppShell {
         }
         *saving = true;
         let text = editor.read(cx).value().to_string();
+        let write_text = text.clone();
         let write_path = path.clone();
 
         cx.spawn(async move |this, cx| {
-            let result = spawn_blocking_local(move || std::fs::write(&write_path, text)).await;
+            let result = spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
                     if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
@@ -325,6 +329,11 @@ impl AppShell {
                 }
                 match result {
                     Some(Ok(())) => {
+                        let parsed =
+                            crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+                        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                            workspace.compose_dependencies = parsed;
+                        }
                         this.show_toast(
                             rust_i18n::t!("container.compose.yaml_saved").to_string(),
                             true,
@@ -346,6 +355,55 @@ impl AppShell {
         })
         .detach();
         cx.notify();
+    }
+
+    /// 确保当前 Compose 项目的微服务依赖图已解析载入。
+    pub(crate) fn ensure_compose_dependencies_loaded(
+        &mut self,
+        tab_id: TabId,
+        project_name: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if !workspace.compose_dependencies.is_empty() {
+            return;
+        }
+        if let Some((current_name, _, editor, _)) = &workspace.compose_yaml_editor {
+            if current_name == project_name {
+                let text = editor.read(cx).value();
+                workspace.compose_dependencies =
+                    crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+                return;
+            }
+        }
+        let Some(project) = workspace
+            .compose
+            .iter()
+            .find(|p| p.name == project_name)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(yaml_path) = compose_project_yaml(&project) else {
+            return;
+        };
+
+        cx.spawn(async move |this, cx| {
+            let content = spawn_blocking_local(move || std::fs::read_to_string(&yaml_path)).await;
+            let _ = this.update_in(cx, |this, _, cx| {
+                if let Some(Ok(text)) = content {
+                    let parsed =
+                        crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                        workspace.compose_dependencies = parsed;
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
     }
 }
 

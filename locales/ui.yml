@@ -5780,6 +5780,30 @@ container:
     topology_title:
       en: Microservice Topology
       zh-CN: 微服务架构拓扑看板
+    topology_upstream:
+      en: Upstream Dependency
+      zh-CN: 上游依赖
+    topology_downstream:
+      en: Downstream Consumer
+      zh-CN: 下游消费
+    topology_depends_on:
+      en: Depends on
+      zh-CN: 依赖
+    topology_dependents:
+      en: Serves
+      zh-CN: 供给
+    topology_tier_infra:
+      en: Infrastructure Services
+      zh-CN: 底层基础服务
+    topology_tier_app:
+      en: Application Services
+      zh-CN: 核心业务服务
+    topology_tier_gateway:
+      en: Gateway & Ingress
+      zh-CN: 接入与网关服务
+    topology_tier_service:
+      en: 'Tier %{tier}'
+      zh-CN: '分层 %{tier}'
     loading_yaml:
       en: Loading Compose YAML…
       zh-CN: 正在载入 Compose YAML…
