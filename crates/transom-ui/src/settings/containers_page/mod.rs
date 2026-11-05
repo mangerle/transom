@@ -225,9 +225,9 @@ impl SettingsView {
                     .container_registries
                     .iter_mut()
                     .find(|r| r.id == "docker-hub")
-                {
-                    hub.is_default = true;
-                }
+            {
+                hub.is_default = true;
+            }
         });
 
         let snapshot = app_settings(cx).clone();
