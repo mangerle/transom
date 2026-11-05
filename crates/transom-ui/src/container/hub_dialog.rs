@@ -259,10 +259,11 @@ impl AppShell {
                     .w_full()
                     .p_3()
                     .gap_3()
-                    .rounded(p.radius.md)
+                    .rounded(p.radius.lg)
                     .border_1()
-                    .border_color(p.border)
-                    .bg(p.background)
+                    .border_color(p.border.opacity(0.18))
+                    .bg(p.muted.opacity(0.04))
+                    .hover(|s| s.bg(p.muted.opacity(0.08)))
                     .items_center()
                     .justify_between()
                     .child(
@@ -277,7 +278,7 @@ impl AppShell {
                                     .child(
                                         div()
                                             .text_sm()
-                                            .font_weight(FontWeight::BOLD)
+                                            .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(p.foreground)
                                             .child(name),
                                     )
@@ -288,7 +289,7 @@ impl AppShell {
                                                 .py_0p5()
                                                 .text_xs()
                                                 .rounded(p.radius.sm)
-                                                .bg(p.primary.opacity(0.15))
+                                                .bg(p.primary.opacity(0.12))
                                                 .text_color(p.primary)
                                                 .child(rust_i18n::t!("container.hub.official").to_string()),
                                         )

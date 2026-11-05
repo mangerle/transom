@@ -186,7 +186,7 @@ impl AppShell {
         tab_id: TabId,
         app: &Entity<AppShell>,
         _window: &mut Window,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
@@ -203,6 +203,9 @@ impl AppShell {
         let building = build.building;
         let logs = build.logs.clone();
         let error = build.error.clone();
+
+        let success = build.success;
+        let tag_display = build.tag.read(cx).value().to_string();
 
         let app_browse = app.clone();
         let app_cancel = app.clone();
@@ -298,6 +301,27 @@ impl AppShell {
                             .child(rust_i18n::t!("container.build.no_cache").to_string()),
                     ),
             )
+            .when(building, |this| {
+                this.child(
+                    h_flex()
+                        .w_full()
+                        .gap_2()
+                        .items_center()
+                        .child(Icon::new(IconName::Loader).xsmall().text_color(p.primary))
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.primary)
+                                .child(rust_i18n::t!("container.build.building").to_string()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .child(crate::widgets::progress_bar(1.0, p.primary, p)),
+                        ),
+                )
+            })
             .when(!logs.is_empty() || building, |this| {
                 this.child(
                     v_flex()
@@ -313,9 +337,12 @@ impl AppShell {
                             div()
                                 .id("container-build-logs-scroll")
                                 .p_2()
-                                .rounded(p.radius.md)
-                                .bg(p.editor_background)
+                                .rounded(p.radius.lg)
+                                .bg(p.muted.opacity(0.04))
+                                .border_1()
+                                .border_color(p.border.opacity(0.18))
                                 .text_color(p.foreground)
+                                .font_family(p.mono_font_family.clone())
                                 .h(px(140.0))
                                 .overflow_y_scroll()
                                 .children(if logs.is_empty() {
@@ -339,8 +366,43 @@ impl AppShell {
                         ),
                 )
             })
+            .when(success, |this| {
+                this.child(
+                    h_flex()
+                        .w_full()
+                        .p_3()
+                        .gap_2()
+                        .items_center()
+                        .rounded(p.radius.lg)
+                        .bg(p.success.opacity(0.12))
+                        .text_color(p.success)
+                        .child(Icon::new(IconName::Check).small())
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(rust_i18n::t!("container.build.success", tag = tag_display)),
+                        ),
+                )
+            })
             .when_some(error, |this, err| {
-                this.child(div().text_xs().text_color(p.danger).child(err))
+                this.child(
+                    h_flex()
+                        .w_full()
+                        .p_3()
+                        .gap_2()
+                        .items_center()
+                        .rounded(p.radius.lg)
+                        .bg(p.danger.opacity(0.12))
+                        .text_color(p.danger)
+                        .child(Icon::new(IconName::TriangleAlert).small())
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(rust_i18n::t!("container.build.failed", error = err)),
+                        ),
+                )
             })
             .child(
                 h_flex()

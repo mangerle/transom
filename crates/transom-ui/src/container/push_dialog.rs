@@ -274,13 +274,23 @@ impl AppShell {
                             .child(rust_i18n::t!("container.push.source_image").to_string()),
                     )
                     .child(
-                        div()
-                            .p_2()
-                            .rounded(p.radius.md)
-                            .bg(p.muted.opacity(0.4))
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .child(source_tag),
+                        h_flex()
+                            .p_3()
+                            .gap_2()
+                            .items_center()
+                            .rounded(p.radius.lg)
+                            .bg(p.muted.opacity(0.04))
+                            .border_1()
+                            .border_color(p.border.opacity(0.18))
+                            .child(Icon::new(IconName::Box).small().text_color(p.primary))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_family(p.mono_font_family.clone())
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.foreground)
+                                    .child(source_tag),
+                            ),
                     ),
             )
             .child(
@@ -318,8 +328,12 @@ impl AppShell {
             )
             .child(
                 h_flex()
-                    .gap_1p5()
+                    .px_3()
+                    .py_2()
+                    .gap_2()
                     .items_center()
+                    .rounded(p.radius.md)
+                    .bg(p.muted.opacity(0.04))
                     .child(
                         Icon::new(IconName::Info)
                             .xsmall()
@@ -328,7 +342,23 @@ impl AppShell {
                     .child(div().text_xs().text_color(p.muted_foreground).child(auth_tip)),
             )
             .when_some(error, |this, err| {
-                this.child(div().text_xs().text_color(p.danger).child(err))
+                this.child(
+                    h_flex()
+                        .w_full()
+                        .p_3()
+                        .gap_2()
+                        .items_center()
+                        .rounded(p.radius.lg)
+                        .bg(p.danger.opacity(0.12))
+                        .text_color(p.danger)
+                        .child(Icon::new(IconName::TriangleAlert).small())
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(err),
+                        ),
+                )
             })
             .child(
                 h_flex()
