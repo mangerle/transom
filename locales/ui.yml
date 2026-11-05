@@ -5856,6 +5856,12 @@ container:
     service_count:
       en: '%{count} service containers'
       zh-CN: '%{count} 个服务容器'
+    yaml_syntax_error:
+      en: 'YAML error at line %{line}: %{msg}'
+      zh-CN: '第 %{line} 行语法错误：%{msg}'
+    yaml_syntax_valid:
+      en: YAML syntax valid
+      zh-CN: YAML 语法校验通过
   logs:
     tail_all:
       en: All

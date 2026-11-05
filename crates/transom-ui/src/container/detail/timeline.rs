@@ -177,6 +177,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_timeline_uniform() {
+        let timeline = StatusTimeline::uniform(HourlyStatus::Running);
+        for bucket in timeline.buckets {
+            assert_eq!(bucket, HourlyStatus::Running);
+        }
+    }
+
+    #[test]
     fn test_timeline_default_is_unknown() {
         let timeline = StatusTimeline::default();
         for bucket in timeline.buckets {

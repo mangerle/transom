@@ -57,6 +57,8 @@ pub(crate) fn render_compose_detail(
     }
 }
 
+use super::compose_yaml::{render_line_numbers, render_path_breadcrumbs, validate_compose_yaml};
+
 /// 渲染在线 YAML 编辑器。
 fn render_compose_yaml_editor(
     tab_id: TabId,
@@ -73,10 +75,14 @@ fn render_compose_yaml_editor(
         );
     };
 
-    let display_path = path.display().to_string();
     let is_saving = *saving;
     let project_name = project.name.clone();
     let project_name_up = project.name.clone();
+
+    // 实时读取内容并计算行数与语法校验
+    let current_text = editor.read(cx).value();
+    let line_count = current_text.lines().count().max(1);
+    let validation_err = validate_compose_yaml(&current_text);
 
     let header = h_flex()
         .px_3()
@@ -85,28 +91,7 @@ fn render_compose_yaml_editor(
         .justify_between()
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.compose.yaml_file").to_string()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .px_1p5()
-                        .py_0p5()
-                        .rounded(p.radius.sm)
-                        .bg(p.muted.opacity(0.3))
-                        .text_color(p.foreground)
-                        .child(display_path),
-                ),
-        )
+        .child(render_path_breadcrumbs(&project.name, path, p))
         .child(
             h_flex()
                 .gap_1p5()
@@ -149,24 +134,70 @@ fn render_compose_yaml_editor(
                 ),
         );
 
+    // 底部语法校验状态横幅
+    let status_banner = match &validation_err {
+        Some(err) => h_flex()
+            .w_full()
+            .px_3()
+            .py_1()
+            .gap_1p5()
+            .items_center()
+            .bg(p.danger.opacity(0.08))
+            .text_color(p.danger)
+            .child(Icon::new(IconName::TriangleAlert).xsmall())
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(rust_i18n::t!(
+                        "container.compose.yaml_syntax_error",
+                        line = err.line,
+                        msg = err.message.clone()
+                    )),
+            )
+            .into_any_element(),
+        None => h_flex()
+            .w_full()
+            .px_3()
+            .py_1()
+            .gap_1p5()
+            .items_center()
+            .bg(p.success.opacity(0.04))
+            .text_color(p.success)
+            .child(Icon::new(IconName::Check).xsmall())
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(rust_i18n::t!("container.compose.yaml_syntax_valid").to_string()),
+            )
+            .into_any_element(),
+    };
+
+    let editor_area = h_flex()
+        .size_full()
+        .rounded(p.radius.md)
+        .bg(p.muted.opacity(0.06))
+        .overflow_hidden()
+        .child(render_line_numbers(
+            line_count,
+            validation_err.as_ref().map(|e| e.line),
+            p,
+        ))
+        .child(
+            div()
+                .flex_1()
+                .size_full()
+                .p_2()
+                .child(Textarea::new(editor).size_full()),
+        );
+
     v_flex()
         .size_full()
         .overflow_hidden()
         .child(header)
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .p_2()
-                .child(
-                    div()
-                        .size_full()
-                        .rounded(p.radius.md)
-                        .bg(p.muted.opacity(0.12))
-                        .p_2()
-                        .child(Textarea::new(editor).size_full()),
-                ),
-        )
+        .child(div().flex_1().min_h_0().p_2().child(editor_area))
+        .child(status_banner)
         .into_any_element()
 }
 

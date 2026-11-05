@@ -22,6 +22,7 @@ mod changes;
 mod compose;
 pub(crate) mod compose_graph;
 mod compose_topology;
+pub(crate) mod compose_yaml;
 mod confirm;
 mod file_bars;
 mod file_preview;
