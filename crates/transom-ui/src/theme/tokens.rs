@@ -124,5 +124,6 @@ pub(crate) mod dialog {
     pub const KNOWN_HOSTS: f32 = 36.25;
     pub const BACKUP: f32 = 32.5;
     pub const AUDIT: f32 = 56.25;
+    pub const CONTAINER_RUN: f32 = 54.0;
     pub const REPLAY: f32 = 35.0;
 }

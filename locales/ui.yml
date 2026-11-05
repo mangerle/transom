@@ -4906,6 +4906,102 @@ container:
     port_number:
       en: 'Port is not a number: %{value}'
       zh-CN: '端口不是数字: %{value}'
+    section_basic:
+      en: Basic Information
+      zh-CN: 基本信息
+    section_ports:
+      en: Port Mappings
+      zh-CN: 端口映射 (已智能推断)
+    section_volumes:
+      en: Storage & Volumes
+      zh-CN: 存储与数据卷
+    section_env:
+      en: Environment Variables
+      zh-CN: 环境变量
+    section_resources:
+      en: Resources & Restart
+      zh-CN: 资源限制与重启
+    add_port:
+      en: Add Port Mapping
+      zh-CN: 添加端口
+    add_volume:
+      en: Add Volume Mount
+      zh-CN: 添加数据卷
+    add_env:
+      en: Add Variable
+      zh-CN: 添加变量
+    host_port:
+      en: Host Port
+      zh-CN: 宿主端口
+    container_port:
+      en: Container Port
+      zh-CN: 容器端口
+    host_path:
+      en: Host Path / Named Volume
+      zh-CN: 宿主机路径 / 命名卷
+    container_path:
+      en: Mount Path
+      zh-CN: 容器内挂载点
+    read_write:
+      en: Read/Write
+      zh-CN: 读写
+    read_only:
+      en: Read Only
+      zh-CN: 只读
+    env_key:
+      en: KEY
+      zh-CN: 变量名 (KEY)
+    env_value:
+      en: VALUE
+      zh-CN: 变量值 (VALUE)
+    preset_title:
+      en: Quick Presets
+      zh-CN: 快速预设模式
+    preset_daemon:
+      en: Daemon Service
+      zh-CN: 后台常驻服务
+    preset_daemon_desc:
+      en: Runs in background with automatic restart
+      zh-CN: 后台长期运行，异常自动重启
+    preset_interactive:
+      en: Interactive CLI
+      zh-CN: 交互式排查工具
+    preset_interactive_desc:
+      en: Interactive shell with auto-remove on exit
+      zh-CN: 分配终端输入，退出即销毁容器
+    preview_title:
+      en: Realtime CLI Preview
+      zh-CN: 实时命令预览
+    copy_command:
+      en: Copy Command
+      zh-CN: 复制命令
+    copied:
+      en: Copied!
+      zh-CN: 已复制到剪贴板
+    meta_title:
+      en: Image Metadata
+      zh-CN: 镜像元数据
+    meta_size:
+      en: Size
+      zh-CN: 虚拟体积
+    meta_arch:
+      en: Architecture
+      zh-CN: 基础架构
+    meta_id:
+      en: Image ID
+      zh-CN: 镜像指纹
+    import_env_title:
+      en: Import from .env
+      zh-CN: 批量导入 .env
+    empty_ports_hint:
+      en: No port mappings configured. Click "Add Port" to expose container services.
+      zh-CN: 未配置端口映射。点击“添加端口”将容器服务暴露至宿主机。
+    empty_volumes_hint:
+      en: No volume mounts configured. Click "Add Volume" to persist container data.
+      zh-CN: 未配置数据卷。点击“添加数据卷”持久化容器数据。
+    empty_env_hint:
+      en: No custom environment variables configured.
+      zh-CN: 未配置自定义环境变量。
   search:
     en: Search containers, images, volumes or networks
     zh-CN: 搜索容器、镜像、数据卷或网络

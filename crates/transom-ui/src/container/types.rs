@@ -12,10 +12,10 @@ use gpui_kit::*;
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 use transom_core::{
-    ComposeProject, ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
+    ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
     ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
     ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary,
-    ContainerPortPublish, ContainerProcess, ContainerRequestId, ContainerStats, ContainerSummary,
+    ContainerProcess, ContainerRequestId, ContainerStats, ContainerSummary,
     ContainerVolumeDetails, ContainerVolumeSummary, EngineProfileId, SessionColor, SessionIcon,
     TabId,
 };
@@ -27,7 +27,7 @@ mod engine_form;
 mod forward;
 mod hub;
 mod rows;
-mod run_form;
+pub(crate) mod run_form;
 mod section;
 mod workspace;
 

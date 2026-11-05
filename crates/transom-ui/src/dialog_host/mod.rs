@@ -214,7 +214,10 @@ impl ModalKind {
                 "container-folder-form",
             ),
             ModalKind::ContainerRunForm => {
-                (Some(crate::theme::tokens::dialog::FILTER), "container-run")
+                (
+                    Some(crate::theme::tokens::dialog::CONTAINER_RUN),
+                    "container-run",
+                )
             }
             ModalKind::ContainerCreate => (
                 Some(crate::theme::tokens::dialog::CONFIRM),
