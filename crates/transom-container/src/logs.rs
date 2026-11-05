@@ -307,6 +307,7 @@ async fn cli_logs(
     }
     args.push(container.to_string());
     let mut command = cli.command(&args);
+    crate::cli::configure_child(&mut command);
     command
         .kill_on_drop(true)
         .stdout(std::process::Stdio::piped())
@@ -329,7 +330,7 @@ async fn cli_logs(
 
     let result = loop {
         if cancel.load(Ordering::Relaxed) {
-            let _ = child.kill().await;
+            crate::cli::terminate_child(&mut child).await;
             break Ok(());
         }
         match tokio::time::timeout(CANCEL_TICK, receiver.recv_async()).await {
@@ -457,4 +458,3 @@ mod tests {
         assert_eq!(result, b"\x1b[36m[api-svc]\x1b[0m ready\n");
     }
 }
-

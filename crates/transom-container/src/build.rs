@@ -31,6 +31,9 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use transom_core::ContainerBuildSpec;
 
+/// CLI 构建总超时：构建可能持续很久，但必须有上限，避免子进程永久挂住。
+const CLI_BUILD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+
 /// Docker /build 接口返回的单行 JSON 消息结构。
 #[derive(Debug, Deserialize)]
 struct BuildMessage {
@@ -429,10 +432,14 @@ pub async fn build_image_cli(
     args.push(spec.context_path.clone());
 
     let mut cmd = cli.command(&args);
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    crate::cli::configure_child(&mut cmd);
+    cmd.kill_on_drop(true)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
+    let command_line = format!("docker {}", args.join(" "));
     let mut child = cmd.spawn().map_err(|error| ContainerError::Cli {
-        command: format!("docker {}", args.join(" ")),
+        command: command_line.clone(),
         message: format!("启动构建子进程失败: {error}"),
     })?;
 
@@ -444,11 +451,19 @@ pub async fn build_image_cli(
 
     let mut stdout_done = out_reader.is_none();
     let mut stderr_done = err_reader.is_none();
+    let deadline = tokio::time::Instant::now() + CLI_BUILD_TIMEOUT;
 
     while !stdout_done || !stderr_done {
         if cancel.load(Ordering::Relaxed) {
-            let _ = child.kill().await;
+            crate::cli::terminate_child(&mut child).await;
             return Err(ContainerError::Cancelled);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            crate::cli::terminate_child(&mut child).await;
+            return Err(ContainerError::Cli {
+                command: command_line,
+                message: format!("构建超过 {} 秒未结束", CLI_BUILD_TIMEOUT.as_secs()),
+            });
         }
         tokio::select! {
             res = async {

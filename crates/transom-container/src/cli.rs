@@ -12,16 +12,59 @@ use crate::discovery::CliSpec;
 use crate::error::ContainerError;
 use crate::models::DockerEventMessage;
 use serde::de::DeserializeOwned;
+use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use transom_core::{
     ContainerEngineKind, ContainerImageSummary, ContainerProcess, ContainerState, ContainerSummary,
     short_id,
 };
 
-/// CLI 单次命令超时；拉取镜像与日志跟随不走这里。
+/// 短查询命令超时；列表、检视、启停等交互式操作使用这一档。
 const CLI_TIMEOUT: Duration = Duration::from_secs(20);
+/// 镜像拉取/推送超时：大镜像可能持续很久，不能用 20 秒把正常传输杀掉。
+const CLI_IMAGE_TRANSFER_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+/// 镜像导出/导入超时：归档读写取决于磁盘与镜像体积。
+pub(crate) const CLI_ARCHIVE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// 系统级清理超时：需要删除多类资源，允许更长的执行窗口。
+const CLI_PRUNE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+/// 系统磁盘占用查询超时：镜像/卷很多时引擎统计可能较慢。
+const CLI_SYSTEM_DF_TIMEOUT: Duration = Duration::from_secs(60);
+/// 单个镜像删除超时：大镜像的层回收可能慢于普通查询。
+const CLI_IMAGE_REMOVE_TIMEOUT: Duration = Duration::from_secs(120);
+/// 单条命令输出上限：防止异常命令把整段输出读进内存。
+const CLI_OUTPUT_LIMIT: usize = 4 * 1024 * 1024;
+/// 取消与超时的检查节拍。
+const CLI_TICK: Duration = Duration::from_millis(100);
+
+/// 把 CLI 子进程放入独立进程组，便于连同其派生的子进程一起终止。
+///
+/// 设计原理（Why）：`docker build` 等命令可能再派生 buildx 等子进程；只杀
+/// 直接子进程会让孙进程继续持有 stdout/stderr 管道，导致输出读取任务无法 EOF。
+/// Unix 上通过 `process_group(0)` 建立新进程组，终止时对整组发信号。
+#[cfg(unix)]
+pub(crate) fn configure_child(command: &mut Command) {
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+pub(crate) fn configure_child(_command: &mut Command) {}
+
+/// 终止 CLI 子进程并回收，Unix 上同时终止其进程组。
+pub(crate) async fn terminate_child(child: &mut tokio::process::Child) {
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        // 安全性：只向整数 pid 对应的进程组发送 SIGKILL，不涉及内存访问。
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGKILL);
+        }
+    }
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+}
 
 #[derive(Debug, Clone)]
 pub struct CliBackend {
@@ -35,6 +78,64 @@ pub struct CliOutput {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
+}
+
+/// 带截断标记的原始输出。
+struct CappedOutput {
+    bytes: Vec<u8>,
+    truncated: bool,
+}
+
+/// 排空管道，只保留前 `CLI_OUTPUT_LIMIT` 字节，剩余数据继续读取并丢弃。
+///
+/// 设计原理（Why）：不能只读到上限就停止轮询，否则子进程会因管道写满而阻塞；
+/// 必须持续消费到 EOF，只对保留区做截断。
+async fn read_capped<R>(reader: Option<R>) -> io::Result<CappedOutput>
+where
+    R: AsyncRead + Unpin,
+{
+    let Some(mut reader) = reader else {
+        return Ok(CappedOutput {
+            bytes: Vec::new(),
+            truncated: false,
+        });
+    };
+    let mut bytes = Vec::with_capacity(8192);
+    let mut buffer = [0u8; 8192];
+    let mut truncated = false;
+    loop {
+        let count = reader.read(&mut buffer).await?;
+        if count == 0 {
+            break;
+        }
+        if bytes.len() >= CLI_OUTPUT_LIMIT {
+            truncated = true;
+            continue;
+        }
+        let remaining = CLI_OUTPUT_LIMIT - bytes.len();
+        let take = remaining.min(count);
+        bytes.extend_from_slice(&buffer[..take]);
+        if take < count {
+            truncated = true;
+        }
+    }
+    Ok(CappedOutput { bytes, truncated })
+}
+
+/// 等待输出读取任务并把任务 panic/管道错误收敛为带命令上下文的 CLI 错误。
+async fn join_output(
+    handle: tokio::task::JoinHandle<io::Result<CappedOutput>>,
+    command: &str,
+    stream: &str,
+) -> Result<CappedOutput, ContainerError> {
+    let result = handle.await.map_err(|error| ContainerError::Cli {
+        command: command.to_string(),
+        message: format!("读取命令{stream}任务失败: {error}"),
+    })?;
+    result.map_err(|error| ContainerError::Cli {
+        command: command.to_string(),
+        message: format!("读取命令{stream}失败: {error}"),
+    })
 }
 
 impl CliBackend {
@@ -56,31 +157,51 @@ impl CliBackend {
     /// 执行一条短命令并收集输出。
     ///
     /// # Errors
-    /// 子进程启动失败、超时或退出码非零时返回 [`ContainerError::Cli`]；
-    /// 需要读取 stderr 的场景由调用方决定是否把 stderr 放进错误。
+    /// 子进程启动失败、超时或读取输出失败时返回 [`ContainerError::Cli`]。
     pub async fn run(&self, args: &[String]) -> Result<CliOutput, ContainerError> {
-        let description = self.describe(args);
-        let mut command = self.command(args);
-        command.kill_on_drop(true);
-        let output = tokio::time::timeout(CLI_TIMEOUT, command.output())
-            .await
-            .map_err(|_| ContainerError::Cli {
-                command: description.clone(),
-                message: "命令执行超时".to_string(),
-            })?
-            .map_err(|error| ContainerError::Cli {
-                command: description.clone(),
-                message: error.to_string(),
-            })?;
-        Ok(CliOutput {
-            success: output.status.success(),
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
+        self.run_controlled(args, CLI_TIMEOUT, None).await
+    }
+
+    /// 执行一条命令并允许调用方指定超时（用于系统清理等长任务）。
+    pub(crate) async fn run_with_timeout(
+        &self,
+        args: &[String],
+        timeout: Duration,
+    ) -> Result<CliOutput, ContainerError> {
+        self.run_controlled(args, timeout, None).await
     }
 
     pub(crate) async fn run_checked(&self, args: &[String]) -> Result<String, ContainerError> {
-        let output = self.run(args).await?;
+        self.run_checked_controlled(args, CLI_TIMEOUT, None).await
+    }
+
+    /// 带超时的 `run_checked`；长任务必须显式传自己的超时档位。
+    pub(crate) async fn run_checked_with_timeout(
+        &self,
+        args: &[String],
+        timeout: Duration,
+    ) -> Result<String, ContainerError> {
+        self.run_checked_controlled(args, timeout, None).await
+    }
+
+    /// 带超时与取消令牌的 `run_checked`：拉取、归档等长任务可被用户中止。
+    pub(crate) async fn run_checked_cancellable(
+        &self,
+        args: &[String],
+        timeout: Duration,
+        cancel: &Arc<AtomicBool>,
+    ) -> Result<String, ContainerError> {
+        self.run_checked_controlled(args, timeout, Some(cancel))
+            .await
+    }
+
+    async fn run_checked_controlled(
+        &self,
+        args: &[String],
+        timeout: Duration,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> Result<String, ContainerError> {
+        let output = self.run_controlled(args, timeout, cancel).await?;
         if !output.success {
             return Err(ContainerError::Cli {
                 command: self.describe(args),
@@ -88,6 +209,77 @@ impl CliBackend {
             });
         }
         Ok(output.stdout)
+    }
+
+    /// 子进程执行核心：同时排空 stdout/stderr，避免管道写满导致死锁；
+    /// 超时或用户取消时先 kill 再 wait，确保不留下孤儿进程。
+    async fn run_controlled(
+        &self,
+        args: &[String],
+        timeout: Duration,
+        cancel: Option<&Arc<AtomicBool>>,
+    ) -> Result<CliOutput, ContainerError> {
+        let description = self.describe(args);
+        let mut command = self.command(args);
+        configure_child(&mut command);
+        command
+            .kill_on_drop(true)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let mut child = command.spawn().map_err(|error| ContainerError::Cli {
+            command: description.clone(),
+            message: error.to_string(),
+        })?;
+        let stdout_task = tokio::spawn(read_capped(child.stdout.take()));
+        let stderr_task = tokio::spawn(read_capped(child.stderr.take()));
+        let deadline = tokio::time::Instant::now() + timeout;
+
+        let outcome = loop {
+            if cancel.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+                terminate_child(&mut child).await;
+                break Err(ContainerError::Cancelled);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                terminate_child(&mut child).await;
+                break Err(ContainerError::Cli {
+                    command: description.clone(),
+                    message: format!("命令执行超时（{} 秒）", timeout.as_secs()),
+                });
+            }
+            tokio::select! {
+                status = child.wait() => {
+                    match status {
+                        Ok(status) => break Ok(status),
+                        Err(error) => {
+                            // 等待失败时子进程状态未知，先终止再回收，避免输出任务永久等待管道 EOF。
+                            terminate_child(&mut child).await;
+                            break Err(ContainerError::Cli {
+                                command: description.clone(),
+                                message: format!("等待命令退出失败: {error}"),
+                            });
+                        }
+                    }
+                }
+                _ = tokio::time::sleep(CLI_TICK) => continue,
+            }
+        };
+
+        let stdout = join_output(stdout_task, &description, "标准输出").await;
+        let stderr = join_output(stderr_task, &description, "标准错误").await;
+        let stdout = stdout?;
+        let stderr = stderr?;
+        if stdout.truncated || stderr.truncated {
+            log::warn!(
+                "容器 CLI 输出超过上限 {} 字节，已截断，命令: {description}",
+                CLI_OUTPUT_LIMIT
+            );
+        }
+        let status = outcome?;
+        Ok(CliOutput {
+            success: status.success(),
+            stdout: String::from_utf8_lossy(&stdout.bytes).to_string(),
+            stderr: String::from_utf8_lossy(&stderr.bytes).to_string(),
+        })
     }
 
     /// 探测 CLI 版本；返回 `(版本, API 版本)`，API 版本拿不到时为空串。
@@ -270,19 +462,25 @@ impl CliBackend {
             container.to_string(),
             name.to_string(),
         ];
-        self.run(&args).await.map(|_| ())
+        self.run_checked(&args).await.map(|_| ())
     }
 
     pub async fn pull_image(&self, reference: &str) -> Result<(), ContainerError> {
-        self.run_checked(&["pull".to_string(), reference.to_string()])
-            .await
-            .map(|_| ())
+        self.run_checked_with_timeout(
+            &["pull".to_string(), reference.to_string()],
+            CLI_IMAGE_TRANSFER_TIMEOUT,
+        )
+        .await
+        .map(|_| ())
     }
 
     pub async fn push_image(&self, reference: &str) -> Result<(), ContainerError> {
-        self.run_checked(&["push".to_string(), reference.to_string()])
-            .await
-            .map(|_| ())
+        self.run_checked_with_timeout(
+            &["push".to_string(), reference.to_string()],
+            CLI_IMAGE_TRANSFER_TIMEOUT,
+        )
+        .await
+        .map(|_| ())
     }
 
     pub async fn build_image(
@@ -300,7 +498,9 @@ impl CliBackend {
             args.push("-f".to_string());
         }
         args.push(image.to_string());
-        self.run_checked(&args).await.map(|_| ())
+        self.run_checked_with_timeout(&args, CLI_IMAGE_REMOVE_TIMEOUT)
+            .await
+            .map(|_| ())
     }
 
     /// `inspect` 系列命令返回数组；取第一条并保留格式化原文。
@@ -346,10 +546,10 @@ impl CliBackend {
         &self,
         container: &str,
     ) -> Result<Vec<transom_core::ContainerFileSystemChange>, ContainerError> {
-        let output = self
-            .run(&["diff".to_string(), container.to_string()])
+        let stdout = self
+            .run_checked(&["diff".to_string(), container.to_string()])
             .await?;
-        Ok(parse_diff_output(&output.stdout))
+        Ok(parse_diff_output(&stdout))
     }
 
     /// 查询系统全局磁盘占用分析。
@@ -357,11 +557,14 @@ impl CliBackend {
         &self,
     ) -> Result<transom_core::ContainerSystemDiskUsage, ContainerError> {
         let output = self
-            .run(&[
-                "system".to_string(),
-                "df".to_string(),
-                "--format={{json .}}".to_string(),
-            ])
+            .run_with_timeout(
+                &[
+                    "system".to_string(),
+                    "df".to_string(),
+                    "--format={{json .}}".to_string(),
+                ],
+                CLI_SYSTEM_DF_TIMEOUT,
+            )
             .await?;
         if output.success {
             let mut usage = transom_core::ContainerSystemDiskUsage::default();
@@ -411,16 +614,37 @@ impl CliBackend {
             return Ok(usage);
         }
 
+        log::warn!(
+            "CLI 系统磁盘统计失败，降级为列表汇总，原因: {}",
+            output.stderr.trim()
+        );
         let mut usage = transom_core::ContainerSystemDiskUsage::default();
+        let mut fallback_succeeded = false;
         if let Ok(images) = self.list_images().await {
+            fallback_succeeded = true;
             usage.images_count = images.len();
             usage.images_size = images.iter().map(|img| img.size).sum();
         }
         if let Ok(volumes) = self.list_volumes().await {
+            fallback_succeeded = true;
             usage.volumes_count = volumes.len();
         }
         if let Ok(containers) = self.list_containers().await {
+            fallback_succeeded = true;
             usage.containers_count = containers.len();
+        }
+        if !fallback_succeeded {
+            return Err(ContainerError::Cli {
+                command: self.describe(&[
+                    "system".to_string(),
+                    "df".to_string(),
+                    "--format={{json .}}".to_string(),
+                ]),
+                message: format!(
+                    "system df 与列表回退均失败，原始错误: {}",
+                    output.stderr.trim()
+                ),
+            });
         }
         usage.recalculate_totals();
         Ok(usage)
@@ -439,10 +663,12 @@ impl CliBackend {
         if volumes {
             args.push("--volumes".to_string());
         }
-        let output = self.run(&args).await?;
+        let stdout = self
+            .run_checked_with_timeout(&args, CLI_PRUNE_TIMEOUT)
+            .await?;
         let mut deleted = Vec::new();
         let mut reclaimed = 0;
-        for line in output.stdout.lines() {
+        for line in stdout.lines() {
             let line = line.trim();
             if let Some(space_str) = line.strip_prefix("Total reclaimed space:") {
                 reclaimed = parse_human_size(space_str.trim()).unwrap_or(0);
@@ -465,8 +691,10 @@ impl CliBackend {
             "{{json .}}".to_string(),
         ];
         let mut cmd = self.command(&args);
-        cmd.stdout(std::process::Stdio::piped());
-        cmd.stderr(std::process::Stdio::null());
+        configure_child(&mut cmd);
+        cmd.kill_on_drop(true)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
 
         let mut child = cmd.spawn().map_err(|e| ContainerError::Cli {
             command: self.describe(&args),
@@ -484,10 +712,9 @@ impl CliBackend {
             line.clear();
             tokio::select! {
                 biased;
-                _ = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        let _ = child.kill().await;
-                        let _ = child.wait().await;
+                changed = shutdown_rx.changed() => {
+                    if changed.is_err() || *shutdown_rx.borrow() {
+                        terminate_child(&mut child).await;
                         break;
                     }
                 }
@@ -505,8 +732,7 @@ impl CliBackend {
                     if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(trimmed) {
                         if let Some(event) = msg.into_engine_event() {
                             if event_tx.send(event).await.is_err() {
-                                let _ = child.kill().await;
-                                let _ = child.wait().await;
+                                terminate_child(&mut child).await;
                                 return Ok(());
                             }
                         }
@@ -654,8 +880,7 @@ impl CliBackend {
             .map(str::trim)
             .filter(|line| !line.is_empty())
         {
-            self.run_checked(&["rmi".to_string(), "--force".to_string(), id.to_string()])
-                .await?;
+            self.remove_image(id, true).await?;
             deleted.push(transom_core::short_id(id));
         }
         Ok(transom_core::ContainerPruneReport {
@@ -1207,5 +1432,79 @@ mod tests {
         );
         assert_eq!(parse_size_pair("1kB / 2kB"), (1000, 2000));
         assert_eq!(parse_size_pair("garbage"), (0, 0));
+    }
+
+    #[cfg(unix)]
+    fn sh_backend(program: &str) -> super::CliBackend {
+        super::CliBackend::new(
+            transom_core::ContainerEngineKind::Docker,
+            crate::discovery::CliSpec {
+                program: program.to_string(),
+                prefix: Vec::new(),
+            },
+        )
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cli_run_captures_output_and_surfaces_exit_code() {
+        let backend = sh_backend("sh");
+        let output = backend
+            .run(&["-c".to_string(), "printf hello".to_string()])
+            .await
+            .expect("echo 必须执行成功");
+        assert!(output.success);
+        assert_eq!(output.stdout, "hello");
+
+        let error = backend
+            .run_checked(&["-c".to_string(), "echo boom >&2; exit 7".to_string()])
+            .await
+            .expect_err("非零退出码必须转成错误");
+        assert!(matches!(error, crate::error::ContainerError::Cli { .. }));
+        assert!(error.to_string().contains("boom"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cli_run_timeout_kills_child_promptly() {
+        let backend = sh_backend("sh");
+        let started = std::time::Instant::now();
+        let error = backend
+            .run_with_timeout(
+                &["-c".to_string(), "sleep 5".to_string()],
+                std::time::Duration::from_millis(150),
+            )
+            .await
+            .expect_err("超时必须失败");
+        assert!(matches!(error, crate::error::ContainerError::Cli { .. }));
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(3),
+            "超时后必须尽快返回，实际耗时: {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cli_run_cancellation_kills_child_promptly() {
+        let backend = sh_backend("sh");
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let task_cancel = std::sync::Arc::clone(&cancel);
+        let task = tokio::spawn(async move {
+            backend
+                .run_checked_cancellable(
+                    &["-c".to_string(), "sleep 5".to_string()],
+                    std::time::Duration::from_secs(30),
+                    &task_cancel,
+                )
+                .await
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        let result = task.await.expect("任务不能 panic");
+        assert!(matches!(
+            result,
+            Err(crate::error::ContainerError::Cancelled)
+        ));
     }
 }

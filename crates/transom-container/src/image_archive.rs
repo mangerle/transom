@@ -11,7 +11,7 @@
 
 use crate::api::DockerApi;
 use crate::bridge::{BlockingReader, output_channel};
-use crate::cli::CliBackend;
+use crate::cli::{CLI_ARCHIVE_TIMEOUT, CliBackend};
 use crate::engine::Engine;
 use crate::error::ContainerError;
 use crate::http;
@@ -170,17 +170,24 @@ async fn save_image_cli(
     let temp_str = temp.display().to_string();
 
     let result = cli
-        .run_checked(&[
-            "save".to_string(),
-            image.to_string(),
-            "-o".to_string(),
-            temp_str,
-        ])
+        .run_checked_cancellable(
+            &[
+                "save".to_string(),
+                image.to_string(),
+                "-o".to_string(),
+                temp_str,
+            ],
+            CLI_ARCHIVE_TIMEOUT,
+            cancel,
+        )
         .await;
 
     if cancel.load(Ordering::Relaxed) {
         let _ = std::fs::remove_file(&temp);
         return Err(ContainerError::Cancelled);
+    }
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
 
     result?;
@@ -349,7 +356,11 @@ async fn load_image_cli(
 
     let source_str = source.display().to_string();
     let result = cli
-        .run_checked(&["load".to_string(), "-i".to_string(), source_str])
+        .run_checked_cancellable(
+            &["load".to_string(), "-i".to_string(), source_str],
+            CLI_ARCHIVE_TIMEOUT,
+            cancel,
+        )
         .await;
 
     if cancel.load(Ordering::Relaxed) {
