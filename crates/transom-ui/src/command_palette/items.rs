@@ -16,7 +16,8 @@ use gpui_kit::component::command::{CommandGroup, CommandItem};
 use gpui_kit::component::theme::ThemeRegistry;
 use gpui_kit::*;
 use transom_core::AppSettings;
-use transom_core::{SessionId, SnippetId, preset_themes};
+use transom_core::{SessionId, SnippetId, TabId, preset_themes};
+use crate::app::TabContent;
 
 /// 面板条目的落点；Action 条目的动作已挂在 `CommandItem` 上，由组件派发。
 #[derive(Clone)]
@@ -30,6 +31,11 @@ pub(super) enum PaletteTarget {
     UiTheme(String),
     TerminalTheme(String),
     Snippet(SnippetId),
+    /// 容器跳转目标：指定标签与容器 ID。
+    Container {
+        tab_id: TabId,
+        container_id: String,
+    },
 }
 
 /// 一次渲染的完整模型：分组条目与逐条对应的落点。
@@ -129,6 +135,47 @@ impl AppState {
         }
         items
     }
+
+    /// 遍历各容器工作区已拉取到的容器，转为可搜索条目。
+    pub(super) fn container_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
+        let mut items = Vec::new();
+        for tab in self.workspace.tabs.iter() {
+            let TabContent::Containers(workspace) = &tab.content else {
+                continue;
+            };
+            for container in &workspace.containers {
+                let name = &container.name;
+                let image = &container.image;
+                let state_str = container.state.key();
+                let keywords: Vec<SharedString> = vec![
+                    name.clone().into(),
+                    image.clone().into(),
+                    state_str.into(),
+                    SharedString::from("container"),
+                    SharedString::from("docker"),
+                ];
+                if !hit(needle, name, &keywords) {
+                    continue;
+                }
+                let icon = if container.state == transom_core::ContainerState::Running {
+                    IconName::Play
+                } else {
+                    IconName::Square
+                };
+                items.push((
+                    CommandItem::new()
+                        .icon(icon)
+                        .label(name.clone())
+                        .keywords(keywords),
+                    PaletteTarget::Container {
+                        tab_id: tab.id,
+                        container_id: container.id.clone(),
+                    },
+                ));
+            }
+        }
+        items
+    }
 }
 
 impl AppShell {
@@ -143,7 +190,7 @@ impl AppShell {
         cx: &App,
     ) -> PaletteModel {
         let needle = term.to_lowercase();
-        let mut model = PaletteModel::with_capacity(6);
+        let mut model = PaletteModel::with_capacity(7);
 
         if action_mode {
             // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
@@ -159,6 +206,10 @@ impl AppShell {
             model.push(
                 rust_i18n::t!("app.sessions").to_string(),
                 self.state.session_items(term, &needle),
+            );
+            model.push(
+                rust_i18n::t!("app.palette_containers").to_string(),
+                self.state.container_items(&needle),
             );
             model.push(
                 rust_i18n::t!("app.palette_snippets").to_string(),

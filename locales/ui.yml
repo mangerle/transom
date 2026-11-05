@@ -84,6 +84,9 @@ app:
   palette_snippets:
     en: Snippets
     zh-CN: 快捷命令
+  palette_containers:
+    en: Containers
+    zh-CN: 容器
   palette_empty:
     en: No matching commands
     zh-CN: 没有匹配的条目

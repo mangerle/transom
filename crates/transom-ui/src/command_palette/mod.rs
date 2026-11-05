@@ -248,6 +248,17 @@ impl AppShell {
                     self.apply_snippet(&snippet, execute, cx);
                 }
             }
+            Some(PaletteTarget::Container {
+                tab_id,
+                container_id,
+            }) => {
+                self.activate_tab(tab_id, window, cx);
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                    workspace.apply_section(crate::container::ContainerSection::Containers);
+                }
+                self.select_container_item(tab_id, container_id);
+                cx.notify();
+            }
             // 动作已由组件派发；None 表示索引失效，静默忽略。
             Some(PaletteTarget::Action) | None => {}
         }
