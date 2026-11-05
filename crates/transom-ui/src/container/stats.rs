@@ -51,6 +51,8 @@ pub(crate) struct ContainerStatsView<'a> {
     pub(crate) is_running: bool,
     /// 是否已选中容器：没有选中时统计页只给提示，不画空卡片。
     pub(crate) has_selection: bool,
+    pub(crate) ports_collapsed: bool,
+    pub(crate) processes_collapsed: bool,
 }
 
 pub(crate) fn render_container_stats(
@@ -72,6 +74,8 @@ pub(crate) fn render_container_stats(
         processes_error,
         is_running,
         has_selection,
+        ports_collapsed,
+        processes_collapsed,
     } = view;
 
     let waiting = stats.is_none() && error.is_none();
@@ -91,7 +95,7 @@ pub(crate) fn render_container_stats(
             )
             .into_any_element();
     }
-    // 没数据也先把六张卡片摆出来，用「—」占位；等待/失败只在工具条右侧提示，
+    // 没数据也先把卡片摆出来，用「—」占位；等待/失败只在工具条右侧提示，
     // 不再让整页只剩一句「正在采样统计…」。
     let placeholder = ContainerStats::default();
     let stats = stats.unwrap_or(&placeholder);
@@ -171,45 +175,45 @@ pub(crate) fn render_container_stats(
         },
         &chrome,
     );
-    let ports_card = ports_card(details, browser_host, &chrome);
+    let ports_card = ports_card(tab_id, details, browser_host, ports_collapsed, &chrome, cx);
     let processes_card = processes_card(
         tab_id,
         processes,
         processes_loading,
         processes_error,
         is_running,
+        processes_collapsed,
         &chrome,
         cx,
     );
 
-    // 三行两列：同一行的高度由较高的卡片决定，左右两列底部因此对齐，
-    // 不会再出现左列早早结束、右列拖很长的情况。
+    // 两层架构：
+    // 第一层：CPU/内存大卡与网络/磁盘大卡构成核心指标看板
+    // 第二层：端口映射与进程表格下沉为可折叠表格卡片
     let row_one = h_flex()
         .items_stretch()
-        .gap_2()
+        .gap_3()
         .child(cpu_card)
         .child(memory_card);
     let row_two = h_flex()
         .items_stretch()
-        .gap_2()
+        .gap_3()
         .child(network_card)
         .child(disk_card);
-    let row_three = h_flex()
-        .items_stretch()
-        .gap_2()
+    let metrics_layer = v_flex()
+        .gap_3()
+        .child(row_one)
+        .child(row_two);
+    let tables_layer = v_flex()
+        .gap_3()
         .child(ports_card)
         .child(processes_card);
-    let grid = v_flex()
-        .gap_2()
-        .child(row_one)
-        .child(row_two)
-        .child(row_three);
 
-    let mut content = v_flex().gap_2().p_3();
+    let mut content = v_flex().gap_3().p_3();
     if let Some(banner) = oom_banner {
         content = content.child(banner);
     }
-    content = content.child(grid);
+    content = content.child(metrics_layer).child(tables_layer);
 
     v_flex()
         .size_full()

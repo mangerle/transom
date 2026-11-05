@@ -1,6 +1,7 @@
-//! 容器进程列表。
+//! 容器进程可折叠表格卡片。
 
 use super::*;
+use crate::widgets::table_header;
 use gpui_kit::component::Disableable;
 
 pub(crate) fn processes_card(
@@ -9,6 +10,7 @@ pub(crate) fn processes_card(
     loading: bool,
     error: Option<&str>,
     is_running: bool,
+    collapsed: bool,
     chrome: &StatsChrome,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
@@ -18,8 +20,9 @@ pub(crate) fn processes_card(
     } else {
         rust_i18n::t!("container.stats.not_running_short").to_string()
     };
+
     let summary = h_flex()
-        .gap_1p5()
+        .gap_2()
         .items_center()
         .child(
             div()
@@ -46,107 +49,162 @@ pub(crate) fn processes_card(
                         cx.notify();
                     }
                 })),
-        )
-        .into_any_element();
-    let body: AnyElement = if let Some(error) = error {
-        div()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .child(error.to_string())
-            .into_any_element()
-    } else if !is_running {
-        div()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .child(rust_i18n::t!("container.stats.process_not_running").to_string())
-            .into_any_element()
-    } else if processes.is_empty() {
-        div()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .child(rust_i18n::t!("container.stats.process_empty").to_string())
-            .into_any_element()
-    } else {
-        let mut sorted: Vec<&ContainerProcess> = processes.iter().collect();
-        sorted.sort_by(|left, right| {
-            right
-                .cpu_percent
-                .partial_cmp(&left.cpu_percent)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let mut rows = v_flex().gap_0p5().child(process_header(p)).children(
-            sorted
-                .iter()
-                .take(PROCESS_LIMIT)
-                .map(|process| process_row(process, p)),
         );
-        if sorted.len() > PROCESS_LIMIT {
-            rows = rows.child(div().text_xs().text_color(p.muted_foreground).child(
-                rust_i18n::t!("container.stats.process_limit", count = PROCESS_LIMIT).to_string(),
-            ));
-        }
-        rows.into_any_element()
-    };
-    stat_card(
-        "container-stats-card-processes",
-        IconName::ListTree,
-        rust_i18n::t!("container.stats.processes").to_string(),
-        summary,
-        body,
-        p,
-    )
-}
 
-pub(crate) fn process_header(p: &Palette) -> AnyElement {
-    let label = |text: String, width: f32, right: bool| {
-        let mut element = div()
-            .w(px(width))
-            .flex_none()
-            .text_xs()
-            .text_color(p.muted_foreground)
-            .child(text);
-        if right {
-            element = element.text_right();
-        }
-        element
-    };
-    h_flex()
+    let header_btn = h_flex()
         .gap_2()
         .items_center()
-        .border_color(p.divider(p.border))
-        .border_b_1()
-        .pb_1()
-        .child(label("PID".to_string(), 52.0, false))
-        .child(label(
-            rust_i18n::t!("container.stats.process_user").to_string(),
-            72.0,
-            false,
-        ))
-        .child(label("CPU".to_string(), 52.0, true))
-        .child(label(
-            rust_i18n::t!("container.stats.process_mem").to_string(),
-            52.0,
-            true,
-        ))
+        .justify_between()
+        .w_full()
+        .px_3()
+        .py_2p5()
         .child(
+            h_flex()
+                .id("btn-toggle-stats-processes")
+                .gap_1p5()
+                .items_center()
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_container_stats_processes(tab_id, cx);
+                }))
+                .child(
+                    Icon::new(if collapsed {
+                        IconName::ChevronRight
+                    } else {
+                        IconName::ChevronDown
+                    })
+                    .size(px(14.0))
+                    .text_color(p.muted_foreground),
+                )
+                .child(
+                    Icon::new(IconName::ListTree)
+                        .size(px(14.0))
+                        .text_color(p.muted_foreground),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.stats.processes").to_string()),
+                ),
+        )
+        .child(summary);
+
+    let mut card = v_flex()
+        .id("container-stats-card-processes")
+        .w_full()
+        .rounded(px(10.0))
+        .bg(p.muted.opacity(0.04))
+        .overflow_hidden()
+        .child(header_btn);
+
+    if !collapsed {
+        let body: AnyElement = if let Some(error) = error {
             div()
-                .flex_1()
-                .min_w_0()
+                .px_3()
+                .pb_3()
                 .text_xs()
                 .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.stats.process_command").to_string()),
-        )
-        .into_any_element()
+                .child(error.to_string())
+                .into_any_element()
+        } else if !is_running {
+            div()
+                .px_3()
+                .pb_3()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.stats.process_not_running").to_string())
+                .into_any_element()
+        } else if processes.is_empty() {
+            div()
+                .px_3()
+                .pb_3()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.stats.process_empty").to_string())
+                .into_any_element()
+        } else {
+            let mut sorted: Vec<&ContainerProcess> = processes.iter().collect();
+            sorted.sort_by(|left, right| {
+                right
+                    .cpu_percent
+                    .partial_cmp(&left.cpu_percent)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let th = table_header(
+                vec![
+                    div()
+                        .w(px(64.0))
+                        .flex_none()
+                        .child("PID".to_string())
+                        .into_any_element(),
+                    div()
+                        .w(px(80.0))
+                        .flex_none()
+                        .child(rust_i18n::t!("container.stats.process_user").to_string())
+                        .into_any_element(),
+                    div()
+                        .w(px(64.0))
+                        .flex_none()
+                        .text_right()
+                        .child("CPU".to_string())
+                        .into_any_element(),
+                    div()
+                        .w(px(64.0))
+                        .flex_none()
+                        .text_right()
+                        .child(rust_i18n::t!("container.stats.process_mem").to_string())
+                        .into_any_element(),
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(rust_i18n::t!("container.stats.process_command").to_string())
+                        .into_any_element(),
+                ],
+                p,
+            );
+
+            let mut table = v_flex().w_full().child(th).children(
+                sorted
+                    .iter()
+                    .take(PROCESS_LIMIT)
+                    .map(|process| process_row(process, p)),
+            );
+            if sorted.len() > PROCESS_LIMIT {
+                table = table.child(
+                    div()
+                        .px_3()
+                        .pt_1()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!(
+                            "container.stats.process_limit",
+                            count = PROCESS_LIMIT
+                        ).to_string()),
+                );
+            }
+            table.pb_2().into_any_element()
+        };
+
+        card = card.child(body);
+    }
+
+    card.into_any_element()
 }
 
 pub(crate) fn process_row(process: &ContainerProcess, p: &Palette) -> AnyElement {
     h_flex()
+        .w_full()
+        .px_3()
+        .py_1p5()
         .gap_2()
         .items_center()
         .text_xs()
         .child(
             div()
-                .w(px(52.0))
+                .w(px(64.0))
                 .flex_none()
                 .font_family(p.mono_font_family.clone())
                 .text_color(p.muted_foreground)
@@ -154,7 +212,7 @@ pub(crate) fn process_row(process: &ContainerProcess, p: &Palette) -> AnyElement
         )
         .child(
             div()
-                .w(px(72.0))
+                .w(px(80.0))
                 .flex_none()
                 .truncate()
                 .text_color(p.foreground)
@@ -162,17 +220,19 @@ pub(crate) fn process_row(process: &ContainerProcess, p: &Palette) -> AnyElement
         )
         .child(
             div()
-                .w(px(52.0))
+                .w(px(64.0))
                 .flex_none()
                 .text_right()
+                .font_family(p.mono_font_family.clone())
                 .text_color(usage_color(process.cpu_percent, p))
                 .child(format!("{:.1}%", process.cpu_percent)),
         )
         .child(
             div()
-                .w(px(52.0))
+                .w(px(64.0))
                 .flex_none()
                 .text_right()
+                .font_family(p.mono_font_family.clone())
                 .text_color(p.muted_foreground)
                 .child(format!("{:.1}%", process.mem_percent)),
         )

@@ -124,6 +124,9 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) stats_request: Option<ContainerRequestId>,
     /// 采样失败原因：没有它，页签会永远停在「正在采样统计…」不给任何出口。
     pub(crate) stats_error: Option<String>,
+    /// 统计看板端口映射与进程表格的折叠状态。
+    pub(crate) stats_ports_collapsed: bool,
+    pub(crate) stats_processes_collapsed: bool,
     pub(crate) terminal: Option<ContainerTerminalState>,
     /// 正在建立的终端会话与所选 (用户, Shell)：建立前连点页签会重复创建 exec，必须占位拦住。
     pub(crate) terminal_request: Option<(ContainerRequestId, Option<String>, Option<String>)>,
@@ -283,6 +286,8 @@ impl ContainerWorkspaceState {
             stats_processes_error: None,
             stats_request: None,
             stats_error: None,
+            stats_ports_collapsed: false,
+            stats_processes_collapsed: false,
             terminal: None,
             terminal_request: None,
             rename_container: None,

@@ -253,7 +253,7 @@ pub(crate) fn usage_color(percent: f32, p: &crate::palette::Palette) -> Hsla {
     if percent > 85.0 {
         p.danger
     } else if percent > 65.0 {
-        p.sidebar_accent_foreground
+        p.warning
     } else {
         p.primary
     }

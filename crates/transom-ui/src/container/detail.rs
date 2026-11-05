@@ -142,6 +142,8 @@ impl AppShell {
         let stats_processes_loading = workspace.stats_processes_loading;
         let stats_processes_error = workspace.stats_processes_error.clone();
         let stats_error = workspace.stats_error.clone();
+        let stats_ports_collapsed = workspace.stats_ports_collapsed;
+        let stats_processes_collapsed = workspace.stats_processes_collapsed;
         let stats_is_running = workspace
             .selected_container()
             .map(|c| c.state.is_running())
@@ -287,6 +289,8 @@ impl AppShell {
                         processes_error: stats_processes_error.as_deref(),
                         is_running: stats_is_running,
                         has_selection: selected.is_some(),
+                        ports_collapsed: stats_ports_collapsed,
+                        processes_collapsed: stats_processes_collapsed,
                     },
                     p,
                     cx,
