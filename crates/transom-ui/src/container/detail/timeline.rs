@@ -65,7 +65,8 @@ impl Default for StatusTimeline {
 }
 
 impl StatusTimeline {
-    /// 创建全量状态一致的时间线。
+    /// 创建全量状态一致的时间线；仅测试辅助使用。
+    #[cfg(test)]
     pub(crate) fn uniform(status: HourlyStatus) -> Self {
         Self {
             buckets: [status; 24],
@@ -86,14 +87,11 @@ impl StatusTimeline {
         let mut buckets = [HourlyStatus::Unknown; 24];
         const HOUR: i64 = 3600;
 
-        let created_ts = details
-            .map(|d| d.created)
-            .filter(|&t| t > 100_000_000);
+        let created_ts = details.map(|d| d.created).filter(|&t| t > 100_000_000);
         let started_ts = details
             .and_then(|d| parse_rfc3339_timestamp(d.started_at.as_deref()))
             .or(created_ts);
-        let finished_ts = details
-            .and_then(|d| parse_rfc3339_timestamp(d.finished_at.as_deref()));
+        let finished_ts = details.and_then(|d| parse_rfc3339_timestamp(d.finished_at.as_deref()));
 
         let is_oom = details.map(|d| d.oom_killed).unwrap_or(false)
             || details.and_then(|d| d.exit_code) == Some(137);
@@ -111,11 +109,11 @@ impl StatusTimeline {
             let slot_end = now - ((23 - idx) as i64) * HOUR;
 
             // 1. 若当前时间槽在容器创建前，容器尚不存在，标为无记录 (Unknown)
-            if let Some(created) = created_ts {
-                if slot_end <= created {
-                    *slot = HourlyStatus::Unknown;
-                    continue;
-                }
+            if let Some(created) = created_ts
+                && slot_end <= created
+            {
+                *slot = HourlyStatus::Unknown;
+                continue;
             }
 
             match current_state {
@@ -162,19 +160,19 @@ impl StatusTimeline {
                 ContainerState::Paused => {
                     if idx == 23 {
                         *slot = HourlyStatus::Exited;
-                    } else if let Some(started) = started_ts {
-                        if slot_end >= started {
-                            *slot = HourlyStatus::Running;
-                        }
+                    } else if let Some(started) = started_ts
+                        && slot_end >= started
+                    {
+                        *slot = HourlyStatus::Running;
                     }
                 }
                 ContainerState::Restarting => {
                     if idx == 23 {
                         *slot = HourlyStatus::Error;
-                    } else if let Some(started) = started_ts {
-                        if slot_end >= started {
-                            *slot = HourlyStatus::Running;
-                        }
+                    } else if let Some(started) = started_ts
+                        && slot_end >= started
+                    {
+                        *slot = HourlyStatus::Running;
                     }
                 }
                 _ => {}
@@ -184,7 +182,8 @@ impl StatusTimeline {
         Self { buckets }
     }
 
-    /// 记录当前这 1 小时的实时状态更新。
+    /// 记录当前这 1 小时的实时状态更新；仅测试辅助使用。
+    #[cfg(test)]
     pub(crate) fn update_current(&mut self, status: HourlyStatus) {
         self.buckets[23] = status;
     }
@@ -214,11 +213,7 @@ pub(crate) fn render_status_timeline(timeline: &StatusTimeline, p: &Palette) -> 
         let color = status.color(p);
         let status_text = status.label();
         let tooltip_msg = if hours_ago == 1 {
-            rust_i18n::t!(
-                "container.timeline.slot_desc_current",
-                status = status_text
-            )
-            .to_string()
+            rust_i18n::t!("container.timeline.slot_desc_current", status = status_text).to_string()
         } else {
             rust_i18n::t!(
                 "container.timeline.slot_desc",

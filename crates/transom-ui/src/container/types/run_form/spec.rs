@@ -107,10 +107,11 @@ impl RunContainerFormState {
             }
         }
 
-        if let Some(ref r) = self.restart {
-            if !r.is_empty() && self.preset == RunPreset::Daemon {
-                parts.push(format!("  --restart {r}"));
-            }
+        if let Some(ref r) = self.restart
+            && !r.is_empty()
+            && self.preset == RunPreset::Daemon
+        {
+            parts.push(format!("  --restart {r}"));
         }
 
         let mem = read(&self.memory);
@@ -222,15 +223,11 @@ fn parse_labels(raw: &str) -> Result<HashMap<String, String>, String> {
     let mut labels = HashMap::new();
     for entry in split_list(raw) {
         let Some((key, value)) = entry.split_once('=') else {
-            return Err(
-                rust_i18n::t!("container.run.label_invalid", entry = entry).to_string(),
-            );
+            return Err(rust_i18n::t!("container.run.label_invalid", entry = entry).to_string());
         };
         let key = key.trim();
         if key.is_empty() {
-            return Err(
-                rust_i18n::t!("container.run.label_empty_key", entry = entry).to_string(),
-            );
+            return Err(rust_i18n::t!("container.run.label_empty_key", entry = entry).to_string());
         }
         labels.insert(key.to_string(), value.trim().to_string());
     }

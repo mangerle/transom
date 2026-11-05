@@ -20,10 +20,12 @@ impl AppShell {
         else {
             return div().into_any_element();
         };
-        let Some((_, repo_input, tag_input, comment_input)) = workspace.commit_container.clone()
-        else {
+        let Some(state) = workspace.commit_container.clone() else {
             return div().into_any_element();
         };
+        let repo_input = state.repo;
+        let tag_input = state.tag;
+        let comment_input = state.comment;
 
         let content = v_flex()
             .gap_3()

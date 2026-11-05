@@ -77,14 +77,16 @@ impl AppShell {
             let registry_pull = current_registry.clone();
 
             let detail_body = render_hub_image_detail(
-                &detail_item,
-                &active_tag,
-                &pull_reference,
-                &hub_tags,
-                tags_loading,
-                tags_error.as_deref(),
-                custom_tag_input,
-                copy_toast,
+                super::detail::HubImageDetailParams {
+                    item: &detail_item,
+                    active_tag: &active_tag,
+                    pull_reference: &pull_reference,
+                    tags: &hub_tags,
+                    tags_loading,
+                    tags_error: tags_error.as_deref(),
+                    custom_tag_input,
+                    copy_toast,
+                },
                 move |_, cx| {
                     app_back.update(cx, |this, cx| {
                         this.back_to_hub_results(tab_id, cx);
@@ -108,10 +110,10 @@ impl AppShell {
                     let cmd = cmd.to_string();
                     app_copy.update(cx, |this, cx| {
                         cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd));
-                        if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                            if let Some(h) = ws.hub_dialog.as_mut() {
-                                h.copy_toast = true;
-                            }
+                        if let Some(ws) = this.state.container_workspace_mut(tab_id)
+                            && let Some(h) = ws.hub_dialog.as_mut()
+                        {
+                            h.copy_toast = true;
                         }
                         cx.notify();
                     });
@@ -165,10 +167,10 @@ impl AppShell {
                             .checked(reg.id == selected_reg_id)
                             .on_click(move |_, _, cx| {
                                 app_item.update(cx, |this, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                                        if let Some(h) = ws.hub_dialog.as_mut() {
-                                            h.selected_registry_id = reg_id.clone();
-                                        }
+                                    if let Some(ws) = this.state.container_workspace_mut(tab_id)
+                                        && let Some(h) = ws.hub_dialog.as_mut()
+                                    {
+                                        h.selected_registry_id = reg_id.clone();
                                     }
                                     cx.notify();
                                 });
@@ -214,12 +216,12 @@ impl AppShell {
                 let tag = tag.to_string();
                 let app_chip = app_chip.clone();
                 app_chip.update(cx, move |this, cx| {
-                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                        if let Some(hub) = ws.hub_dialog.as_mut() {
-                            hub.search_input.update(cx, |input, cx| {
-                                input.set_value(tag, window, cx);
-                            });
-                        }
+                    if let Some(ws) = this.state.container_workspace_mut(tab_id)
+                        && let Some(hub) = ws.hub_dialog.as_mut()
+                    {
+                        hub.search_input.update(cx, |input, cx| {
+                            input.set_value(tag, window, cx);
+                        });
                     }
                     this.execute_hub_search(tab_id, cx);
                 });

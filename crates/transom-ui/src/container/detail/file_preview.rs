@@ -4,17 +4,30 @@ use super::*;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::input::{Textarea, TextareaState};
 
+/// 文件预览渲染参数：预览内容与编辑状态属于同一组视图数据。
+pub(super) struct FilePreviewView<'a> {
+    pub(super) tab_id: TabId,
+    pub(super) preview: &'a (String, String, bool),
+    pub(super) preview_editor: Option<&'a Entity<TextareaState>>,
+    pub(super) preview_saving: bool,
+    pub(super) binary: bool,
+    pub(super) readonly: bool,
+}
+
 /// 渲染文件预览卡片或就地编辑框。
 pub(super) fn render_file_preview(
-    tab_id: TabId,
-    preview: &(String, String, bool),
-    preview_editor: Option<&Entity<TextareaState>>,
-    preview_saving: bool,
-    binary: bool,
-    readonly: bool,
+    view: FilePreviewView<'_>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let FilePreviewView {
+        tab_id,
+        preview,
+        preview_editor,
+        preview_saving,
+        binary,
+        readonly,
+    } = view;
     let (path, content, truncated) = preview;
     let mut header = h_flex().gap_2().items_center().justify_between().child(
         h_flex()
@@ -91,10 +104,7 @@ pub(super) fn render_file_preview(
     header = header.child(actions);
 
     let body_content: AnyElement = if binary {
-        super::centered_hint(
-            rust_i18n::t!("container.files.binary_hint").to_string(),
-            p,
-        )
+        super::centered_hint(rust_i18n::t!("container.files.binary_hint").to_string(), p)
     } else if let Some(editor) = preview_editor {
         div()
             .flex_1()

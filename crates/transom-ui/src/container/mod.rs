@@ -36,10 +36,10 @@ mod view;
 
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
-    ContainerBuildDialog, ContainerConfirm, ContainerDetailTab, ContainerDiscovery,
-    ContainerFilesState, ContainerHubDialog, ContainerPushDialog, ContainerSection,
-    ContainerTerminalState, ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus,
-    RowAction, RowTarget,
+    ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,
+    ContainerDiscovery, ContainerFilesState, ContainerHubDialog, ContainerPushDialog,
+    ContainerSection, ContainerTerminalState, ContainerUiState, ContainerWorkspaceState,
+    ContainerWorkspaceStatus, RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};
@@ -120,18 +120,17 @@ impl AppShell {
     where
         F: Fn(&ContainerWorkspaceState) -> bool,
     {
-        if let Some(tab_id) = self.state.workspace.active_tab {
-            if let Some(ws) = self.state.container_workspace(tab_id) {
-                if predicate(ws) {
-                    return Some((tab_id, ws));
-                }
-            }
+        if let Some(tab_id) = self.state.workspace.active_tab
+            && let Some(ws) = self.state.container_workspace(tab_id)
+            && predicate(ws)
+        {
+            return Some((tab_id, ws));
         }
         for tab in self.state.workspace.tabs.iter() {
-            if let TabContent::Containers(ws) = &tab.content {
-                if predicate(ws) {
-                    return Some((tab.id, ws));
-                }
+            if let TabContent::Containers(ws) = &tab.content
+                && predicate(ws)
+            {
+                return Some((tab.id, ws));
             }
         }
         None

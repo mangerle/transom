@@ -122,26 +122,6 @@ pub(crate) fn split_rate(bytes_per_sec: u64) -> (String, String) {
     }
 }
 
-/// 将字节容量拆分为数值和单位，供大字号指标独立排版。
-pub(crate) fn split_size(bytes: u64) -> (String, String) {
-    const KB: f64 = 1024.0;
-    const MB: f64 = KB * 1024.0;
-    const GB: f64 = MB * 1024.0;
-    const TB: f64 = GB * 1024.0;
-    let value = bytes as f64;
-    if value < KB {
-        (bytes.to_string(), "B".to_string())
-    } else if value < MB {
-        (format!("{:.1}", value / KB), "KB".to_string())
-    } else if value < GB {
-        (format!("{:.1}", value / MB), "MB".to_string())
-    } else if value < TB {
-        (format!("{:.1}", value / GB), "GB".to_string())
-    } else {
-        (format!("{:.1}", value / TB), "TB".to_string())
-    }
-}
-
 pub(crate) fn summary_text(value: String, color: Hsla) -> AnyElement {
     div()
         .text_xs()
@@ -200,40 +180,6 @@ pub(crate) fn latest_interface_rates(
         .collect()
 }
 
-pub(crate) fn latest_device_rates(
-    history: &[ContainerStats],
-    seconds: f32,
-) -> Vec<(String, u64, u64)> {
-    let Some(last) = history.last() else {
-        return Vec::new();
-    };
-    let previous = history.len().checked_sub(2).map(|index| &history[index]);
-    last.block_devices
-        .iter()
-        .map(|device| {
-            let (read, write) = previous
-                .and_then(|sample| {
-                    sample
-                        .block_devices
-                        .iter()
-                        .find(|item| item.device == device.device)
-                })
-                .map(|item| {
-                    (
-                        device.read_bytes.saturating_sub(item.read_bytes),
-                        device.write_bytes.saturating_sub(item.write_bytes),
-                    )
-                })
-                .unwrap_or((0, 0));
-            (
-                device.device.clone(),
-                (read as f64 / seconds as f64) as u64,
-                (write as f64 / seconds as f64) as u64,
-            )
-        })
-        .collect()
-}
-
 /// 卡片共用外观：走势图形态、窗口文案与调色板。
 pub(crate) struct StatsChrome<'a> {
     pub(crate) chart: SparklineChartType,
@@ -286,5 +232,4 @@ pub(crate) struct DiskCardData<'a> {
     pub(crate) write_rate: u64,
     pub(crate) read_rates: &'a [u64],
     pub(crate) write_rates: &'a [u64],
-    pub(crate) devices: &'a [(String, u64, u64)],
 }

@@ -43,10 +43,10 @@ impl AppShell {
         is_compose: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            if let Some((_, _, _, ref mut cur)) = workspace.export_config {
-                *cur = is_compose;
-            }
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+            && let Some((_, _, _, ref mut cur)) = workspace.export_config
+        {
+            *cur = is_compose;
         }
         cx.notify();
     }

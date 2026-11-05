@@ -16,16 +16,21 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ImageSearchResult;
 
+/// 镜像详情视图的数据参数。
+pub(crate) struct HubImageDetailParams<'a> {
+    pub(crate) item: &'a ImageSearchResult,
+    pub(crate) active_tag: &'a str,
+    pub(crate) pull_reference: &'a str,
+    pub(crate) tags: &'a [String],
+    pub(crate) tags_loading: bool,
+    pub(crate) tags_error: Option<&'a str>,
+    pub(crate) custom_tag_input: Option<&'a Entity<gpui_kit::component::input::InputState>>,
+    pub(crate) copy_toast: bool,
+}
+
 /// 渲染镜像全貌详情与版本标签视图。
 pub(crate) fn render_hub_image_detail<FBack, FPull, FCopy>(
-    item: &ImageSearchResult,
-    active_tag: &str,
-    pull_reference: &str,
-    tags: &[String],
-    tags_loading: bool,
-    tags_error: Option<&str>,
-    custom_tag_input: Option<&Entity<gpui_kit::component::input::InputState>>,
-    copy_toast: bool,
+    params: HubImageDetailParams<'_>,
     on_back: FBack,
     on_pull: FPull,
     on_copy_cmd: FCopy,
@@ -36,6 +41,16 @@ where
     FPull: Fn(&str, &mut Window, &mut App) + 'static + Clone,
     FCopy: Fn(&str, &mut Window, &mut App) + 'static + Clone,
 {
+    let HubImageDetailParams {
+        item,
+        active_tag,
+        pull_reference,
+        tags,
+        tags_loading,
+        tags_error,
+        custom_tag_input,
+        copy_toast,
+    } = params;
     let name = item.name.clone();
     let desc = if item.description.is_empty() {
         rust_i18n::t!("container.hub.no_description").to_string()

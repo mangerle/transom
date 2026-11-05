@@ -29,9 +29,7 @@ pub(crate) fn tab_icon(
         return (IconName::Gauge.into(), p.primary);
     }
     if let Connection::ContainerEngine(profile) = &tab.session.connection {
-        let icon = session_icon(profile.icon)
-            .map(AppIcon::from)
-            .unwrap_or_else(|| {
+        let icon = session_icon(profile.icon).unwrap_or_else(|| {
                 if profile.engine.kind == ContainerEngineKind::Docker {
                     AppIcon::Docker
                 } else {
@@ -47,9 +45,7 @@ pub(crate) fn tab_icon(
     }
     let appearance = shell.state.session_appearance(tab);
     let icon = appearance
-        .icon
-        .map(AppIcon::from)
-        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection).into());
+        .icon.unwrap_or_else(|| crate::connection::icon(&tab.session.connection).into());
     let color = appearance.color.unwrap_or(if active {
         p.sidebar_accent_foreground
     } else {

@@ -12,12 +12,11 @@ use gpui_kit::*;
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 use transom_core::{
-    ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
-    ContainerEngineKind, ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry,
-    ContainerImageDetails, ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary,
-    ContainerProcess, ContainerRequestId, ContainerStats, ContainerSummary,
-    ContainerVolumeDetails, ContainerVolumeSummary, EngineProfileId, SessionColor, SessionIcon,
-    TabId,
+    ComposeProject, ContainerDetails, ContainerEndpoint, ContainerEngineInfo, ContainerEngineKind,
+    ContainerEngineProfile, ContainerEngineRef, ContainerFileEntry, ContainerImageDetails,
+    ContainerImageSummary, ContainerNetworkDetails, ContainerNetworkSummary, ContainerProcess,
+    ContainerRequestId, ContainerStats, ContainerSummary, ContainerVolumeDetails,
+    ContainerVolumeSummary, EngineProfileId, SessionColor, SessionIcon, TabId,
 };
 use transom_terminal::TerminalView;
 

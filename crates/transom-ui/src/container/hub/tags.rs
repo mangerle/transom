@@ -36,7 +36,7 @@ pub(crate) fn get_image_tag_presets(image_name: &str) -> Vec<ImageTagPreset> {
     // 提取纯镜像名（忽略命名空间，如 bitnami/mysql 同样匹配 mysql 规则）
     let pure_name = image_name
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or(image_name)
         .to_lowercase();
 

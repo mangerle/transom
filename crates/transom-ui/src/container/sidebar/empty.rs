@@ -199,9 +199,13 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::Boxes)
                             .label(rust_i18n::t!("container.discovery.connect_docker").to_string())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_container_workspace_for_session(session_id, window, cx);
-                            })),
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    this.open_container_workspace_for_session(
+                                        session_id, window, cx,
+                                    );
+                                },
+                            )),
                         ),
                 );
             }

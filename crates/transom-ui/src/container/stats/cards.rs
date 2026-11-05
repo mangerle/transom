@@ -335,7 +335,6 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
         write_rate,
         read_rates,
         write_rates,
-        devices: _,
     } = data;
 
     let (r_val, r_unit) = if chrome.waiting {

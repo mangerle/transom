@@ -35,10 +35,12 @@ impl AppShell {
         let image_raw = form.image.read(cx).value().trim().to_string();
 
         // 查找已有镜像的元数据摘要
-        let image_meta = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|ws| ws.images.iter().find(|img| img.tags.contains(&image_raw) || img.id.starts_with(&image_raw)).cloned());
+        let image_meta = self.state.container_workspace(tab_id).and_then(|ws| {
+            ws.images
+                .iter()
+                .find(|img| img.tags.contains(&image_raw) || img.id.starts_with(&image_raw))
+                .cloned()
+        });
 
         let cmd_to_copy = preview_cmd.clone();
 
@@ -73,7 +75,8 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            if let Some(f) = this.state.containers.run_form.as_mut() {
+                                            if let Some(f) = this.state.containers.run_form.as_mut()
+                                            {
                                                 f.preset = RunPreset::Daemon;
                                                 f.restart = Some("unless-stopped".to_string());
                                                 cx.notify();
@@ -87,11 +90,15 @@ impl AppShell {
                                     .ghost()
                                     .selected(current_preset == RunPreset::Interactive)
                                     .icon(IconName::Terminal)
-                                    .label(rust_i18n::t!("container.run.preset_interactive").to_string())
+                                    .label(
+                                        rust_i18n::t!("container.run.preset_interactive")
+                                            .to_string(),
+                                    )
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            if let Some(f) = this.state.containers.run_form.as_mut() {
+                                            if let Some(f) = this.state.containers.run_form.as_mut()
+                                            {
                                                 f.preset = RunPreset::Interactive;
                                                 f.restart = None;
                                                 cx.notify();
@@ -134,12 +141,20 @@ impl AppShell {
                                 h_flex()
                                     .justify_between()
                                     .text_xs()
-                                    .child(div().text_color(p.muted_foreground).child(rust_i18n::t!("container.run.image").to_string()))
+                                    .child(
+                                        div().text_color(p.muted_foreground).child(
+                                            rust_i18n::t!("container.run.image").to_string(),
+                                        ),
+                                    )
                                     .child(
                                         div()
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.foreground)
-                                            .child(if image_raw.is_empty() { "—".to_string() } else { image_raw }),
+                                            .child(if image_raw.is_empty() {
+                                                "—".to_string()
+                                            } else {
+                                                image_raw
+                                            }),
                                     ),
                             )
                             .when_some(image_meta, |this, meta| {
@@ -147,7 +162,9 @@ impl AppShell {
                                     h_flex()
                                         .justify_between()
                                         .text_xs()
-                                        .child(div().text_color(p.muted_foreground).child(rust_i18n::t!("container.run.meta_size").to_string()))
+                                        .child(div().text_color(p.muted_foreground).child(
+                                            rust_i18n::t!("container.run.meta_size").to_string(),
+                                        ))
                                         .child(
                                             div()
                                                 .font_family(p.mono_font_family.clone())
@@ -159,7 +176,9 @@ impl AppShell {
                                     h_flex()
                                         .justify_between()
                                         .text_xs()
-                                        .child(div().text_color(p.muted_foreground).child(rust_i18n::t!("container.run.meta_id").to_string()))
+                                        .child(div().text_color(p.muted_foreground).child(
+                                            rust_i18n::t!("container.run.meta_id").to_string(),
+                                        ))
                                         .child(
                                             div()
                                                 .font_family(p.mono_font_family.clone())
@@ -185,13 +204,19 @@ impl AppShell {
                                     .text_xs()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.foreground)
-                                    .child(rust_i18n::t!("container.run.preview_title").to_string()),
+                                    .child(
+                                        rust_i18n::t!("container.run.preview_title").to_string(),
+                                    ),
                             )
                             .child(
                                 Button::new("copy-run-cmd-btn")
                                     .ghost()
                                     .xsmall()
-                                    .icon(if copy_toast { IconName::Check } else { IconName::Copy })
+                                    .icon(if copy_toast {
+                                        IconName::Check
+                                    } else {
+                                        IconName::Copy
+                                    })
                                     .label(if copy_toast {
                                         rust_i18n::t!("container.run.copied").to_string()
                                     } else {
@@ -200,8 +225,11 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd_to_copy.clone()));
-                                            if let Some(f) = this.state.containers.run_form.as_mut() {
+                                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                                cmd_to_copy.clone(),
+                                            ));
+                                            if let Some(f) = this.state.containers.run_form.as_mut()
+                                            {
                                                 f.copy_toast = true;
                                                 cx.notify();
                                             }

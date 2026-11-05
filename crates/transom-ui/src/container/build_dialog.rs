@@ -117,12 +117,12 @@ impl AppShell {
             return;
         };
         let path_str = folder.display().to_string();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            if let Some(build) = workspace.build_dialog.as_mut() {
-                build.context_path.update(cx, |input, cx| {
-                    input.set_value(path_str, window, cx);
-                });
-            }
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+            && let Some(build) = workspace.build_dialog.as_mut()
+        {
+            build.context_path.update(cx, |input, cx| {
+                input.set_value(path_str, window, cx);
+            });
         }
         cx.notify();
     }
@@ -150,20 +150,20 @@ impl AppShell {
         };
 
         if context_path_val.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                if let Some(build) = workspace.build_dialog.as_mut() {
-                    build.error = Some(rust_i18n::t!("container.build.empty_context").to_string());
-                }
+            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                && let Some(build) = workspace.build_dialog.as_mut()
+            {
+                build.error = Some(rust_i18n::t!("container.build.empty_context").to_string());
             }
             cx.notify();
             return;
         }
 
         if tag_val.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                if let Some(build) = workspace.build_dialog.as_mut() {
-                    build.error = Some(rust_i18n::t!("container.build.empty_tag").to_string());
-                }
+            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                && let Some(build) = workspace.build_dialog.as_mut()
+            {
+                build.error = Some(rust_i18n::t!("container.build.empty_tag").to_string());
             }
             cx.notify();
             return;
@@ -177,10 +177,10 @@ impl AppShell {
         let build_args = match parse_build_args(&build_args_val) {
             Ok(args) => args,
             Err(error) => {
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                    if let Some(build) = workspace.build_dialog.as_mut() {
-                        build.error = Some(error);
-                    }
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                    && let Some(build) = workspace.build_dialog.as_mut()
+                {
+                    build.error = Some(error);
                 }
                 cx.notify();
                 return;
@@ -366,10 +366,10 @@ impl AppShell {
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                         app_toggle_cache.update(cx, |this, cx| {
-                            if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                                if let Some(b) = ws.build_dialog.as_mut() {
-                                    b.no_cache = !b.no_cache;
-                                }
+                            if let Some(ws) = this.state.container_workspace_mut(tab_id)
+                                && let Some(b) = ws.build_dialog.as_mut()
+                            {
+                                b.no_cache = !b.no_cache;
                             }
                             cx.notify();
                         });
@@ -564,8 +564,12 @@ mod tests {
 
     #[test]
     fn build_args_parse_comma_and_newline_forms() {
-        let args = parse_build_args("HTTP_PROXY=http://proxy,NPM_TOKEN=abc\nEMPTY=").expect("解析成功");
-        assert_eq!(args.get("HTTP_PROXY").map(String::as_str), Some("http://proxy"));
+        let args =
+            parse_build_args("HTTP_PROXY=http://proxy,NPM_TOKEN=abc\nEMPTY=").expect("解析成功");
+        assert_eq!(
+            args.get("HTTP_PROXY").map(String::as_str),
+            Some("http://proxy")
+        );
         assert_eq!(args.get("NPM_TOKEN").map(String::as_str), Some("abc"));
         assert_eq!(args.get("EMPTY").map(String::as_str), Some(""));
     }

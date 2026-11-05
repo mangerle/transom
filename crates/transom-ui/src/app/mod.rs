@@ -187,11 +187,10 @@ impl AppShell {
     ) {
         let msg = message.into();
         let now = std::time::Instant::now();
-        if let Some((last_msg, last_time)) = &self.state.last_toast {
-            if last_msg == &msg && now.duration_since(*last_time).as_millis() < 1200 {
+        if let Some((last_msg, last_time)) = &self.state.last_toast
+            && last_msg == &msg && now.duration_since(*last_time).as_millis() < 1200 {
                 return;
             }
-        }
         self.state.last_toast = Some((msg.clone(), now));
         let notification = if success {
             Notification::success(msg)
@@ -210,11 +209,10 @@ impl AppShell {
     ) {
         let msg = message.into();
         let now = std::time::Instant::now();
-        if let Some((last_msg, last_time)) = &self.state.last_toast {
-            if last_msg == &msg && now.duration_since(*last_time).as_millis() < 1200 {
+        if let Some((last_msg, last_time)) = &self.state.last_toast
+            && last_msg == &msg && now.duration_since(*last_time).as_millis() < 1200 {
                 return;
             }
-        }
         self.state.last_toast = Some((msg.clone(), now));
         self.push_toast(Notification::info(msg), window, cx);
     }

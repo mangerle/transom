@@ -70,15 +70,17 @@ where
         let select_fn = on_select_tag.clone();
         let tag_click_val = tag_name.clone();
 
-        let chip = Button::new(ElementId::Name(format!("hub-tag-{}-{}", name, preset.tag).into()))
-            .xsmall()
-            .ghost()
-            .selected(is_selected)
-            .label(tag_name)
-            .tooltip(format!("{}: {}", preset.tag, preset.desc))
-            .on_click(move |_, window, cx| {
-                select_fn(&tag_click_val, window, cx);
-            });
+        let chip = Button::new(ElementId::Name(
+            format!("hub-tag-{}-{}", name, preset.tag).into(),
+        ))
+        .xsmall()
+        .ghost()
+        .selected(is_selected)
+        .label(tag_name)
+        .tooltip(format!("{}: {}", preset.tag, preset.desc))
+        .on_click(move |_, window, cx| {
+            select_fn(&tag_click_val, window, cx);
+        });
 
         tag_chips = tag_chips.child(chip);
     }
@@ -245,7 +247,9 @@ where
                                         .text_xs()
                                         .font_weight(FontWeight::MEDIUM)
                                         .text_color(p.muted_foreground.opacity(0.8))
-                                        .child(rust_i18n::t!("container.hub.tag_col_tag").to_string()),
+                                        .child(
+                                            rust_i18n::t!("container.hub.tag_col_tag").to_string(),
+                                        ),
                                 )
                                 .child(tag_chips),
                         ),
@@ -261,7 +265,11 @@ where
                         .primary()
                         .small()
                         .icon(IconName::Download)
-                        .label(format!("{}:{}", rust_i18n::t!("container.hub.pull"), pull_tag))
+                        .label(format!(
+                            "{}:{}",
+                            rust_i18n::t!("container.hub.pull"),
+                            pull_tag
+                        ))
                         .tooltip(format!("docker pull {}:{}", name, pull_tag))
                         .on_click(move |_, window, cx| {
                             pull_fn(&pull_tag, window, cx);

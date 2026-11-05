@@ -137,10 +137,8 @@ impl AppShell {
                     self.schedule_container_refresh(tab_id, cx);
                 }
             }
-            "network" => {
-                if current_section == ContainerSection::Networks {
-                    self.schedule_container_refresh(tab_id, cx);
-                }
+            "network" if current_section == ContainerSection::Networks => {
+                self.schedule_container_refresh(tab_id, cx);
             }
             _ => {}
         }

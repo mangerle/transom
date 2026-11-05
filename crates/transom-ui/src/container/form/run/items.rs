@@ -9,9 +9,9 @@ use crate::container::types::run_form::{EnvVarItem, PortMappingItem, VolumeMappi
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::Sizable;
 use gpui_kit::*;
 
 impl AppShell {
@@ -49,16 +49,9 @@ impl AppShell {
                     .w_full()
                     .child(
                         // 宿主端口输入
-                        h_flex()
-                            .flex_1()
-                            .child(Input::new(&item.host_port).small()),
+                        h_flex().flex_1().child(Input::new(&item.host_port).small()),
                     )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child("➔"),
-                    )
+                    .child(div().text_xs().text_color(p.muted_foreground).child("➔"))
                     .child(
                         // 容器端口输入
                         h_flex()
@@ -79,11 +72,16 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        if let Some(target) = f.ports.iter_mut().find(|p| p.id == port_id) {
-                                            target.protocol = if is_udp { "tcp".to_string() } else { "udp".to_string() };
-                                            cx.notify();
-                                        }
+                                    if let Some(f) = this.state.containers.run_form.as_mut()
+                                        && let Some(target) =
+                                            f.ports.iter_mut().find(|p| p.id == port_id)
+                                    {
+                                        target.protocol = if is_udp {
+                                            "tcp".to_string()
+                                        } else {
+                                            "udp".to_string()
+                                        };
+                                        cx.notify();
                                     }
                                 },
                             )),
@@ -133,7 +131,9 @@ impl AppShell {
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
                                     if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.ports.push(PortMappingItem::new(None, None, "tcp", window, cx));
+                                        f.ports.push(PortMappingItem::new(
+                                            None, None, "tcp", window, cx,
+                                        ));
                                         cx.notify();
                                     }
                                 },
@@ -175,17 +175,8 @@ impl AppShell {
                     .gap_2()
                     .items_center()
                     .w_full()
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .child(Input::new(&item.host_path).small()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child("➔"),
-                    )
+                    .child(h_flex().flex_1().child(Input::new(&item.host_path).small()))
+                    .child(div().text_xs().text_color(p.muted_foreground).child("➔"))
                     .child(
                         h_flex()
                             .flex_1()
@@ -203,11 +194,12 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        if let Some(target) = f.volumes.iter_mut().find(|v| v.id == vol_id) {
-                                            target.read_only = !read_only;
-                                            cx.notify();
-                                        }
+                                    if let Some(f) = this.state.containers.run_form.as_mut()
+                                        && let Some(target) =
+                                            f.volumes.iter_mut().find(|v| v.id == vol_id)
+                                    {
+                                        target.read_only = !read_only;
+                                        cx.notify();
                                     }
                                 },
                             )),
@@ -256,7 +248,9 @@ impl AppShell {
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
                                     if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.volumes.push(VolumeMappingItem::new(None, None, false, window, cx));
+                                        f.volumes.push(VolumeMappingItem::new(
+                                            None, None, false, window, cx,
+                                        ));
                                         cx.notify();
                                     }
                                 },
@@ -296,11 +290,7 @@ impl AppShell {
                     .gap_2()
                     .items_center()
                     .w_full()
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .child(Input::new(&item.key).small()),
-                    )
+                    .child(h_flex().flex_1().child(Input::new(&item.key).small()))
                     .child(
                         div()
                             .text_xs()
@@ -308,11 +298,7 @@ impl AppShell {
                             .text_color(p.muted_foreground)
                             .child("="),
                     )
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .child(Input::new(&item.value).small()),
-                    )
+                    .child(h_flex().flex_1().child(Input::new(&item.value).small()))
                     .child(
                         Button::new(ElementId::Name(format!("del-env-{idx}").into()))
                             .xsmall()

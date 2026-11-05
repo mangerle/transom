@@ -4,16 +4,28 @@ use super::*;
 use crate::widgets::table_header;
 use gpui_kit::component::Disableable;
 
+pub(crate) struct ContainerProcessesView<'a> {
+    pub(crate) tab_id: TabId,
+    pub(crate) processes: &'a [ContainerProcess],
+    pub(crate) loading: bool,
+    pub(crate) error: Option<&'a str>,
+    pub(crate) is_running: bool,
+    pub(crate) collapsed: bool,
+}
+
 pub(crate) fn processes_card(
-    tab_id: TabId,
-    processes: &[ContainerProcess],
-    loading: bool,
-    error: Option<&str>,
-    is_running: bool,
-    collapsed: bool,
+    view: ContainerProcessesView<'_>,
     chrome: &StatsChrome,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let ContainerProcessesView {
+        tab_id,
+        processes,
+        loading,
+        error,
+        is_running,
+        collapsed,
+    } = view;
     let p = chrome.p;
     let refresh_tooltip = if is_running {
         rust_i18n::t!("container.stats.process_refresh").to_string()

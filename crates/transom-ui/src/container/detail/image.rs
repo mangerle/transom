@@ -10,17 +10,30 @@
 use super::image_history::{copy_button, render_image_history};
 use super::*;
 
+/// 镜像详情渲染参数。
+pub(crate) struct ImageDetailView<'a> {
+    pub(crate) tab_id: TabId,
+    pub(crate) summary: Option<&'a transom_core::ContainerImageSummary>,
+    pub(crate) details: Option<&'a ContainerImageDetails>,
+    pub(crate) overview_raw: bool,
+    pub(crate) detail_tab: ContainerDetailTab,
+    pub(crate) search_input: &'a Entity<InputState>,
+}
+
 /// 渲染镜像详情的主入口调度器。
 pub(crate) fn render_image_detail(
-    tab_id: TabId,
-    summary: Option<&transom_core::ContainerImageSummary>,
-    details: Option<&ContainerImageDetails>,
-    overview_raw: bool,
-    detail_tab: ContainerDetailTab,
-    search_input: &Entity<InputState>,
+    view: ImageDetailView<'_>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let ImageDetailView {
+        tab_id,
+        summary,
+        details,
+        overview_raw,
+        detail_tab,
+        search_input,
+    } = view;
     match detail_tab {
         ContainerDetailTab::History => render_image_history(summary, details, p, cx),
         _ => render_image_overview(tab_id, summary, details, overview_raw, search_input, p, cx),

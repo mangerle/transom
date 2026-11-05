@@ -212,13 +212,13 @@ impl AppShell {
         }
         .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string());
 
-        if section == ContainerSection::Compose {
-            if let Some(project) = &selected_compose {
-                if detail_tab == ContainerDetailTab::Yaml {
-                    self.ensure_compose_yaml_loaded(tab_id, &project.name, window, cx);
-                } else if compose_deps_is_empty {
-                    self.ensure_compose_dependencies_loaded(tab_id, &project.name, cx);
-                }
+        if section == ContainerSection::Compose
+            && let Some(project) = &selected_compose
+        {
+            if detail_tab == ContainerDetailTab::Yaml {
+                self.ensure_compose_yaml_loaded(tab_id, &project.name, window, cx);
+            } else if compose_deps_is_empty {
+                self.ensure_compose_dependencies_loaded(tab_id, &project.name, cx);
             }
         }
 
@@ -353,12 +353,14 @@ impl AppShell {
                 cx,
             ),
             (ContainerSection::Images, _) => render_image_detail(
-                tab_id,
-                selected_image.as_ref(),
-                image_details.as_ref(),
-                overview_raw,
-                detail_tab,
-                &inspect_search,
+                super::detail::image::ImageDetailView {
+                    tab_id,
+                    summary: selected_image.as_ref(),
+                    details: image_details.as_ref(),
+                    overview_raw,
+                    detail_tab,
+                    search_input: &inspect_search,
+                },
                 p,
                 cx,
             ),

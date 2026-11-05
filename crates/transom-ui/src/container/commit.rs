@@ -40,7 +40,12 @@ impl AppShell {
         });
 
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.commit_container = Some((container, repo_input, tag_input, comment_input));
+            workspace.commit_container = Some(ContainerCommitState {
+                container,
+                repo: repo_input,
+                tag: tag_input,
+                comment: comment_input,
+            });
         }
         cx.notify();
     }
@@ -60,13 +65,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((container, repo_input, tag_input, comment_input)) = self
+        let Some(state) = self
             .state
             .container_workspace(tab_id)
             .and_then(|workspace| workspace.commit_container.clone())
         else {
             return;
         };
+        let container = state.container;
+        let repo_input = state.repo;
+        let tag_input = state.tag;
+        let comment_input = state.comment;
 
         let repo = repo_input.read(cx).value().trim().to_string();
         if repo.is_empty() {

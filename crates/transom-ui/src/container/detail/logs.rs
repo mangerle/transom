@@ -36,24 +36,24 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
     let mut remaining_line = line;
 
     // 1. 解析多容器前缀，如 `[web-1] `
-    if line.starts_with('[') {
-        if let Some(close_idx) = line.find(']') {
-            let tag = &line[1..close_idx];
-            if !tag.is_empty() && tag != "stderr" {
-                let (bg, fg) = container_badge_color(tag);
-                prefix_badge = Some(
-                    div()
-                        .mr_1p5()
-                        .px_1()
-                        .py_0p5()
-                        .rounded_xs()
-                        .bg(bg)
-                        .text_color(fg)
-                        .font_weight(FontWeight::BOLD)
-                        .child(format!("[{tag}]")),
-                );
-                remaining_line = line[close_idx + 1..].trim_start();
-            }
+    if line.starts_with('[')
+        && let Some(close_idx) = line.find(']')
+    {
+        let tag = &line[1..close_idx];
+        if !tag.is_empty() && tag != "stderr" {
+            let (bg, fg) = container_badge_color(tag);
+            prefix_badge = Some(
+                div()
+                    .mr_1p5()
+                    .px_1()
+                    .py_0p5()
+                    .rounded_xs()
+                    .bg(bg)
+                    .text_color(fg)
+                    .font_weight(FontWeight::BOLD)
+                    .child(format!("[{tag}]")),
+            );
+            remaining_line = line[close_idx + 1..].trim_start();
         }
     }
 
@@ -64,18 +64,17 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
         if candidate.as_bytes()[4] == b'-'
             && candidate.as_bytes()[7] == b'-'
             && (candidate.as_bytes()[10] == b'T' || candidate.as_bytes()[10] == b' ')
+            && let Some(space_idx) = remaining_line.find(' ')
         {
-            if let Some(space_idx) = remaining_line.find(' ') {
-                let ts = &remaining_line[..space_idx];
-                timestamp_prefix = Some(
-                    div()
-                        .mr_2()
-                        .text_size(px(11.0))
-                        .text_color(p.muted_foreground)
-                        .child(ts.to_string()),
-                );
-                remaining_line = remaining_line[space_idx + 1..].trim_start();
-            }
+            let ts = &remaining_line[..space_idx];
+            timestamp_prefix = Some(
+                div()
+                    .mr_2()
+                    .text_size(px(11.0))
+                    .text_color(p.muted_foreground)
+                    .child(ts.to_string()),
+            );
+            remaining_line = remaining_line[space_idx + 1..].trim_start();
         }
     }
 

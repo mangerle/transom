@@ -114,12 +114,13 @@ pub(crate) fn render_compose_topology_board(
             if let Some(member) = member_by_service.get(svc_name) {
                 let card = render_topology_card(
                     tab_id,
-                    project,
                     member,
-                    svc_name,
-                    deps,
-                    &rev_deps,
-                    hovered_service,
+                    TopologyContext {
+                        service_name: svc_name,
+                        deps,
+                        rev_deps: &rev_deps,
+                        hovered_service,
+                    },
                     p,
                     cx,
                 );
@@ -167,18 +168,28 @@ fn render_tier_connector_line(p: &Palette) -> AnyElement {
         .into_any_element()
 }
 
+/// 拓扑卡片依赖上下文。
+struct TopologyContext<'a> {
+    service_name: &'a str,
+    deps: &'a HashMap<String, Vec<String>>,
+    rev_deps: &'a HashMap<String, Vec<String>>,
+    hovered_service: Option<&'a str>,
+}
+
 /// 渲染单个微服务拓扑卡片。
 fn render_topology_card(
     tab_id: TabId,
-    _project: &ComposeProject,
     member: &ContainerSummary,
-    service_name: &str,
-    deps: &HashMap<String, Vec<String>>,
-    rev_deps: &HashMap<String, Vec<String>>,
-    hovered_service: Option<&str>,
+    context: TopologyContext<'_>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let TopologyContext {
+        service_name,
+        deps,
+        rev_deps,
+        hovered_service,
+    } = context;
     let highlight = calculate_highlight_state(service_name, hovered_service, deps, rev_deps);
 
     let is_running = member.state.is_running();

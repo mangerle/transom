@@ -12,8 +12,7 @@ impl AppShell {
         form: &ContainerFormState,
         p: &Palette,
     ) -> AnyElement {
-        let default_icon =
-            session_icon(form.icon).unwrap_or_else(|| AppIcon::Named(IconName::Boxes));
+        let default_icon = session_icon(form.icon).unwrap_or(AppIcon::Named(IconName::Boxes));
 
         // 图标选择行
         let icon_row = h_flex()

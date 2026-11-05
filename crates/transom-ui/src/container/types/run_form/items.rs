@@ -81,9 +81,8 @@ impl VolumeMappingItem {
         );
 
         let host_path = cx.new(|cx| {
-            let mut s = InputState::new(window, cx).placeholder(
-                rust_i18n::t!("container.run.binds_placeholder").to_string(),
-            );
+            let mut s = InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.run.binds_placeholder").to_string());
             if let Some(h) = host {
                 s = s.default_value(h.to_string());
             }
@@ -157,7 +156,8 @@ pub(crate) fn run_input(
     cx: &mut Context<crate::app::AppShell>,
 ) -> Entity<InputState> {
     cx.new(|cx| {
-        let mut state = InputState::new(window, cx).placeholder(rust_i18n::t!(placeholder).to_string());
+        let mut state =
+            InputState::new(window, cx).placeholder(rust_i18n::t!(placeholder).to_string());
         if let Some(text) = initial {
             state = state.default_value(text);
         }

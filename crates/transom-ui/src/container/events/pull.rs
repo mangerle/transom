@@ -79,12 +79,12 @@ impl AppShell {
     ) {
         let tab_ids: Vec<TabId> = self.state.workspace.tabs.iter().map(|t| t.id).collect();
         for tab_id in tab_ids {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                if workspace.pull_manager.get(&task_id).is_some() {
-                    workspace.pull_manager.on_progress(&task_id, status, layers);
-                    cx.notify();
-                    break;
-                }
+            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                && workspace.pull_manager.get(&task_id).is_some()
+            {
+                workspace.pull_manager.on_progress(&task_id, status, layers);
+                cx.notify();
+                break;
             }
         }
     }
@@ -107,15 +107,15 @@ impl AppShell {
 
         let tab_ids: Vec<TabId> = self.state.workspace.tabs.iter().map(|t| t.id).collect();
         for tab_id in tab_ids {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                if let Some(task) = workspace.pull_manager.get(&task_id) {
-                    target_tab = Some(tab_id);
-                    task_reference = task.reference.clone();
-                    next_command = workspace
-                        .pull_manager
-                        .on_finished(&task_id, error_msg.clone());
-                    break;
-                }
+            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                && let Some(task) = workspace.pull_manager.get(&task_id)
+            {
+                target_tab = Some(tab_id);
+                task_reference = task.reference.clone();
+                next_command = workspace
+                    .pull_manager
+                    .on_finished(&task_id, error_msg.clone());
+                break;
             }
         }
 

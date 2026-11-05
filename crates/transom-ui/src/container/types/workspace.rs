@@ -50,6 +50,15 @@ pub(crate) struct ContainerFilesState {
     pub(crate) new_dir_input: Option<Entity<InputState>>,
 }
 
+/// 容器提交镜像的就地表单状态。
+#[derive(Clone)]
+pub(crate) struct ContainerCommitState {
+    pub(crate) container: String,
+    pub(crate) repo: Entity<InputState>,
+    pub(crate) tag: Entity<InputState>,
+    pub(crate) comment: Entity<InputState>,
+}
+
 /// 待确认的删除操作：删除是破坏性动作，必须再点一次确认。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ContainerConfirm {
@@ -152,13 +161,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) connect_network: Option<(String, Entity<InputState>)>,
     /// 容器配置导出条：(容器名, run命令, compose YAML, 是否展示compose)；`None` 表示不显示。
     pub(crate) export_config: Option<(String, String, String, bool)>,
-    /// 容器提交镜像条：(容器名, repo输入框, tag输入框, comment输入框)；`None` 表示不显示。
-    pub(crate) commit_container: Option<(
-        String,
-        Entity<InputState>,
-        Entity<InputState>,
-        Entity<InputState>,
-    )>,
+    /// 容器提交镜像条；`None` 表示不显示。
+    pub(crate) commit_container: Option<ContainerCommitState>,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
     /// 待确认的删除动作。

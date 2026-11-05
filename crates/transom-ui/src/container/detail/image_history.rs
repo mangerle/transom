@@ -186,11 +186,7 @@ pub(crate) fn render_image_history(
                 );
 
             for adv in layer_advices {
-                let badge_color = if adv.is_warning {
-                    p.danger
-                } else {
-                    p.warning
-                };
+                let badge_color = if adv.is_warning { p.danger } else { p.warning };
                 let bg_color = badge_color.opacity(0.12);
                 card = card.child(
                     h_flex()
@@ -417,7 +413,9 @@ pub(crate) fn inspect_layer_slimming(
         advice.push(ImageSlimmingAdvice {
             is_warning: true,
             title: "Alpine APK 缓存未跳过".to_string(),
-            suggestion: "建议使用 `apk add --no-cache` 代替常规安装，避免生成 `/var/cache/apk/*` 临时索引。".to_string(),
+            suggestion:
+                "建议使用 `apk add --no-cache` 代替常规安装，避免生成 `/var/cache/apk/*` 临时索引。"
+                    .to_string(),
         });
     }
 
@@ -426,7 +424,9 @@ pub(crate) fn inspect_layer_slimming(
         advice.push(ImageSlimmingAdvice {
             is_warning: true,
             title: "Python Pip 缓存残留".to_string(),
-            suggestion: "建议为 pip install 添加 `--no-cache-dir` 参数，避免将 wheel 和下载缓存写入只读层。".to_string(),
+            suggestion:
+                "建议为 pip install 添加 `--no-cache-dir` 参数，避免将 wheel 和下载缓存写入只读层。"
+                    .to_string(),
         });
     }
 
@@ -438,7 +438,9 @@ pub(crate) fn inspect_layer_slimming(
         advice.push(ImageSlimmingAdvice {
             is_warning: false,
             title: "Node 模块缓存建议清理".to_string(),
-            suggestion: "建议在依赖安装后执行 `npm cache clean --force` 并使用 `--omit=dev` 剔除开发依赖。".to_string(),
+            suggestion:
+                "建议在依赖安装后执行 `npm cache clean --force` 并使用 `--omit=dev` 剔除开发依赖。"
+                    .to_string(),
         });
     }
 
@@ -471,5 +473,3 @@ mod tests {
         assert!(advices.is_empty());
     }
 }
-
-

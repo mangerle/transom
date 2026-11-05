@@ -166,7 +166,7 @@ pub(super) fn render_port_chips(
                 }
             }));
 
-        let chip_body = match port.public_port {
+        match port.public_port {
             Some(public) => {
                 let url = format!("http://{host_for_ports}:{public}");
                 let label = format!("{public} → {private_port}/{protocol}");
@@ -215,9 +215,7 @@ pub(super) fn render_port_chips(
                     .child(forward_btn)
                     .into_any_element()
             }
-        };
-
-        chip_body
+        }
     });
 
     h_flex()

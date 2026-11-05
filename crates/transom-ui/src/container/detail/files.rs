@@ -479,12 +479,14 @@ pub(crate) fn render_files(
         .child(scroll_container.child(list));
     if let Some(preview) = preview {
         body = body.child(super::file_preview::render_file_preview(
-            tab_id,
-            preview,
-            preview_editor,
-            preview_saving,
-            preview_binary,
-            readonly,
+            super::file_preview::FilePreviewView {
+                tab_id,
+                preview,
+                preview_editor,
+                preview_saving,
+                binary: preview_binary,
+                readonly,
+            },
             p,
             cx,
         ));

@@ -120,10 +120,10 @@ pub(crate) fn handle_list_key_down(
                 .state
                 .container_workspace(tab_id)
                 .and_then(|w| w.selected.clone());
-            if let Some(row) = find_selected_row(rows, current_selected.as_deref()) {
-                if matches!(row.target, RowTarget::Container { .. }) {
-                    app.set_container_detail_tab(tab_id, ContainerDetailTab::Logs, window, cx);
-                }
+            if let Some(row) = find_selected_row(rows, current_selected.as_deref())
+                && matches!(row.target, RowTarget::Container { .. })
+            {
+                app.set_container_detail_tab(tab_id, ContainerDetailTab::Logs, window, cx);
             }
         }
         // 's'：启停当前选中的容器或 Compose 项目

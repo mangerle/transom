@@ -240,15 +240,12 @@ pub(super) fn container_header_actions(
                 let id_rc = id.clone();
                 let name_rc = name.clone();
                 menu = menu.item(
-                    PopupMenuItem::new(
-                        rust_i18n::t!("container.detail.recreate_menu").to_string(),
-                    )
-                    .on_click(move |_, window, cx| {
+                    PopupMenuItem::new(rust_i18n::t!("container.detail.recreate_menu").to_string())
+                        .on_click(move |_, window, cx| {
                             app_rc.update(cx, |this, cx| {
                                 this.recreate_container(tab_id, &id_rc, &name_rc, window, cx);
                             });
-                        },
-                    ),
+                        }),
                 );
 
                 menu = menu.item(PopupMenuItem::separator());

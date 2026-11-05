@@ -106,7 +106,6 @@ pub(crate) fn render_container_stats(
     let read_rates = per_second(history, |sample| sample.block_read, seconds);
     let write_rates = per_second(history, |sample| sample.block_write, seconds);
     let interface_rates = latest_interface_rates(history, seconds);
-    let device_rates = latest_device_rates(history, seconds);
     let current_rx = rx_rates.last().copied().unwrap_or(0);
     let current_tx = tx_rates.last().copied().unwrap_or(0);
     let current_read = read_rates.last().copied().unwrap_or(0);
@@ -170,18 +169,19 @@ pub(crate) fn render_container_stats(
             write_rate: current_write,
             read_rates: &read_rates,
             write_rates: &write_rates,
-            devices: &device_rates,
         },
         &chrome,
     );
     let ports_card = ports_card(tab_id, details, browser_host, ports_collapsed, &chrome, cx);
     let processes_card = processes_card(
-        tab_id,
-        processes,
-        processes_loading,
-        processes_error,
-        is_running,
-        processes_collapsed,
+        processes::ContainerProcessesView {
+            tab_id,
+            processes,
+            loading: processes_loading,
+            error: processes_error,
+            is_running,
+            collapsed: processes_collapsed,
+        },
         &chrome,
         cx,
     );

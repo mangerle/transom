@@ -107,11 +107,11 @@ impl AppShell {
         };
 
         if repo.is_empty() || tag.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-                if let Some(push) = workspace.push_dialog.as_mut() {
-                    push.error =
-                        Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
-                }
+            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
+                && let Some(push) = workspace.push_dialog.as_mut()
+            {
+                push.error =
+                    Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
             }
             cx.notify();
             return;
@@ -193,25 +193,25 @@ impl AppShell {
                             .checked(reg.id == selected_reg_id)
                             .on_click(move |_, window, cx| {
                                 app_item.update(cx, |this, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
-                                        if let Some(p) = ws.push_dialog.as_mut() {
-                                            p.selected_registry_id = reg_item.id.clone();
-                                            // 自动根据所选仓库域名补全前缀
-                                            let current_val = p.target_repo.read(cx).value();
-                                            let pure_name = current_val
-                                                .as_ref()
-                                                .rsplit('/')
-                                                .next()
-                                                .unwrap_or(current_val.as_ref());
-                                            let new_val = if reg_item.id == "docker-hub" {
-                                                pure_name.to_string()
-                                            } else {
-                                                format!("{}/{}", reg_item.domain(), pure_name)
-                                            };
-                                            p.target_repo.update(cx, |input, cx| {
-                                                input.set_value(new_val, window, cx);
-                                            });
-                                        }
+                                    if let Some(ws) = this.state.container_workspace_mut(tab_id)
+                                        && let Some(p) = ws.push_dialog.as_mut()
+                                    {
+                                        p.selected_registry_id = reg_item.id.clone();
+                                        // 自动根据所选仓库域名补全前缀
+                                        let current_val = p.target_repo.read(cx).value();
+                                        let pure_name = current_val
+                                            .as_ref()
+                                            .rsplit('/')
+                                            .next()
+                                            .unwrap_or(current_val.as_ref());
+                                        let new_val = if reg_item.id == "docker-hub" {
+                                            pure_name.to_string()
+                                        } else {
+                                            format!("{}/{}", reg_item.domain(), pure_name)
+                                        };
+                                        p.target_repo.update(cx, |input, cx| {
+                                            input.set_value(new_val, window, cx);
+                                        });
                                     }
                                     cx.notify();
                                 });

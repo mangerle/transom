@@ -220,15 +220,14 @@ impl SettingsView {
         update_app_settings(cx, |s| {
             s.container_registries.retain(|r| r.id != reg_id);
             // 若删除了当前默认源，自动将 Docker Hub 设为默认
-            if !s.container_registries.iter().any(|r| r.is_default) {
-                if let Some(hub) = s
+            if !s.container_registries.iter().any(|r| r.is_default)
+                && let Some(hub) = s
                     .container_registries
                     .iter_mut()
                     .find(|r| r.id == "docker-hub")
                 {
                     hub.is_default = true;
                 }
-            }
         });
 
         let snapshot = app_settings(cx).clone();

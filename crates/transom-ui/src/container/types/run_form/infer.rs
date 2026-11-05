@@ -4,15 +4,14 @@
 //! - 根据常见官方镜像命名智能推荐端口与容器名，提供零配置开箱即用运行体验；
 //! - 集中管理 CPU 核心换算与 Docker CLI 命令切分，附带严密的单元测试保障。
 
+#[cfg(test)]
 use transom_core::ContainerPortPublish;
 
 /// 根据镜像引用推断建议的容器名与暴露端口映射。
-pub(crate) fn infer_image_defaults(
-    image: &str,
-) -> (Option<String>, Vec<(u16, u16, &'static str)>) {
+pub(crate) fn infer_image_defaults(image: &str) -> (Option<String>, Vec<(u16, u16, &'static str)>) {
     let clean = image
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or(image)
         .split(':')
         .next()
@@ -57,6 +56,7 @@ pub(crate) fn split_argv(text: &str) -> Vec<String> {
 }
 
 /// 解析形如 "8080:80, 53:53/udp" 的端口配置字符串（兼容批量导入与测试）。
+#[cfg(test)]
 pub(crate) fn parse_ports(input: &str) -> Result<Vec<ContainerPortPublish>, String> {
     let mut out = Vec::new();
     for seg in split_list(input) {

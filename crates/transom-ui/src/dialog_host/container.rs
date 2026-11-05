@@ -203,10 +203,9 @@ impl ModalKind {
             ModalKind::ContainerConfirm => {
                 if let Some((tab_id, ws)) =
                     shell.find_container_modal_tab(|ws| ws.confirm.is_some())
+                    && let Some(confirm) = ws.confirm.clone()
                 {
-                    if let Some(confirm) = ws.confirm.clone() {
-                        shell.apply_container_confirm(tab_id, confirm, cx);
-                    }
+                    shell.apply_container_confirm(tab_id, confirm, cx);
                 }
                 Some(())
             }
@@ -326,7 +325,7 @@ impl ModalKind {
             ModalKind::ContainerCommit => shell
                 .find_container_modal_tab(|ws| ws.commit_container.is_some())
                 .and_then(|(_, ws)| ws.commit_container.as_ref())
-                .map(|(_, repo, _, _)| ModalFocus::Input(repo.clone()))
+                .map(|state| ModalFocus::Input(state.repo.clone()))
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerUpdate => shell
                 .find_container_modal_tab(|ws| ws.update_container.is_some())
@@ -392,11 +391,11 @@ impl ModalKind {
             ModalKind::ContainerCommit => shell
                 .find_container_modal_tab(|ws| ws.commit_container.is_some())
                 .and_then(|(_, ws)| ws.commit_container.as_ref())
-                .map(|(_, repo, tag, comment)| {
+                .map(|state| {
                     vec![
-                        repo.read(cx).value().to_string(),
-                        tag.read(cx).value().to_string(),
-                        comment.read(cx).value().to_string(),
+                        state.repo.read(cx).value().to_string(),
+                        state.tag.read(cx).value().to_string(),
+                        state.comment.read(cx).value().to_string(),
                     ]
                 })
                 .unwrap_or_default(),

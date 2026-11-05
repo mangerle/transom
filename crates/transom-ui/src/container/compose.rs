@@ -186,10 +186,10 @@ impl AppShell {
         workspace.section = ContainerSection::Compose;
         workspace.selected = Some(name.to_string());
         workspace.detail_tab = ContainerDetailTab::Yaml;
-        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor {
-            if current_name != name {
-                workspace.compose_yaml_editor = None;
-            }
+        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
+            && current_name != name
+        {
+            workspace.compose_yaml_editor = None;
         }
         self.ensure_compose_yaml_loaded(tab_id, name, window, cx);
         cx.notify();
@@ -284,10 +284,10 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
             return;
         };
-        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor {
-            if current_name == project_name {
-                return;
-            }
+        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
+            && current_name == project_name
+        {
+            return;
         }
         let Some(project) = workspace
             .compose
@@ -358,10 +358,10 @@ impl AppShell {
             let result =
                 spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
             let _ = this.update_in(cx, |this, window, cx| {
-                if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                    if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
-                        *saving = false;
-                    }
+                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
+                    && let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor
+                {
+                    *saving = false;
                 }
                 match result {
                     Some(Ok(())) => {
@@ -408,13 +408,13 @@ impl AppShell {
         if !workspace.compose_dependencies.is_empty() {
             return;
         }
-        if let Some((current_name, _, editor, _)) = &workspace.compose_yaml_editor {
-            if current_name == project_name {
-                let text = editor.read(cx).value();
-                workspace.compose_dependencies =
-                    crate::container::detail::compose_graph::parse_compose_dependencies(&text);
-                return;
-            }
+        if let Some((current_name, _, editor, _)) = &workspace.compose_yaml_editor
+            && current_name == project_name
+        {
+            let text = editor.read(cx).value();
+            workspace.compose_dependencies =
+                crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+            return;
         }
         let Some(project) = workspace
             .compose
@@ -449,7 +449,10 @@ fn unique_compose_destination(path: &Path) -> PathBuf {
     if !path.exists() {
         return path.to_path_buf();
     }
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("compose");
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("compose");
     let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("yaml");
     let stamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
     path.with_file_name(format!("{stem}-{stamp}.{extension}"))
@@ -463,10 +466,15 @@ pub(crate) fn compose_project_yaml(project: &ComposeProject) -> Option<PathBuf> 
         }
     }
     let directory = PathBuf::from(project.working_dir.as_deref()?);
-    ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"]
-        .into_iter()
-        .map(|name| directory.join(name))
-        .find(|path| path.is_file())
+    [
+        "compose.yaml",
+        "compose.yml",
+        "docker-compose.yaml",
+        "docker-compose.yml",
+    ]
+    .into_iter()
+    .map(|name| directory.join(name))
+    .find(|path| path.is_file())
 }
 
 fn compose_yaml_is_allowed(path: &Path, project: Option<&ComposeProject>) -> bool {

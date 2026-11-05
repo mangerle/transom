@@ -131,12 +131,11 @@ impl AppShell {
                     }
                 }
                 let mut re_inspect_id = None;
-                if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    if inspect_first.is_none()
-                        && let Some(selected_id) = &workspace.selected
-                    {
-                        re_inspect_id = Some(selected_id.clone());
-                    }
+                if let Some(workspace) = self.state.container_workspace(tab_id)
+                    && inspect_first.is_none()
+                    && let Some(selected_id) = &workspace.selected
+                {
+                    re_inspect_id = Some(selected_id.clone());
                 }
                 if let Some(id) = inspect_first {
                     self.select_container_item(tab_id, id);
@@ -462,8 +461,7 @@ impl AppShell {
                     {
                         b.logs.push(line);
                         if b.logs.len() > crate::container::types::BUILD_LOG_LIMIT {
-                            let excess =
-                                b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
+                            let excess = b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
                             b.logs.drain(..excess);
                         }
                     }
