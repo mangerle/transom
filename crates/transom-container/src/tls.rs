@@ -10,10 +10,14 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 use transom_core::TlsConfig;
+
+/// TLS 握手超时：TCP 已连接但对端不完成握手时不能永久等待。
+const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// 基于 TLS 配置建立加密的 TCP 流。
 ///
@@ -32,13 +36,20 @@ pub async fn connect_tls(
             source: std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string()),
         })?;
 
-    connector
-        .connect(server_name, tcp_stream)
-        .await
-        .map_err(|source| ContainerError::Connect {
-            endpoint: format!("tls://{host}"),
-            source,
-        })
+    // TLS 握手同样属于外部 I/O：对端接受 TCP 后不再响应时必须快速失败。
+    tokio::time::timeout(
+        TLS_HANDSHAKE_TIMEOUT,
+        connector.connect(server_name, tcp_stream),
+    )
+    .await
+    .map_err(|_| ContainerError::Connect {
+        endpoint: format!("tls://{host}"),
+        source: std::io::Error::new(std::io::ErrorKind::TimedOut, "TLS 握手超时"),
+    })?
+    .map_err(|source| ContainerError::Connect {
+        endpoint: format!("tls://{host}"),
+        source,
+    })
 }
 
 /// 解析证书配置并构建 rustls [`ClientConfig`]。

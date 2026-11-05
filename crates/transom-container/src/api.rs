@@ -440,7 +440,7 @@ impl DockerApi {
             #[serde(rename = "Id", default)]
             id: String,
         }
-        let body = http::read_body_bytes(response.body, 4096).await?;
+        let body = http::read_body_bytes(response.body, 64 * 1024).await?;
         let created: Created =
             serde_json::from_slice(&body).map_err(|error| ContainerError::Decode {
                 operation: "解析创建容器响应".to_string(),
@@ -993,20 +993,21 @@ impl DockerApi {
         let path = format!("/commit?{}", query.join("&"));
         let response = self.send(Method::POST, &path, None, "提交容器镜像").await?;
         let status = response.status;
-        let body = http::read_body_text(response.body, 8192).await;
-        if status.is_success() {
-            let id = serde_json::from_str::<serde_json::Value>(&body)
-                .ok()
-                .and_then(|v| {
-                    v.get("Id")
-                        .and_then(|id| id.as_str())
-                        .map(|s| s.to_string())
-                })
-                .unwrap_or_default();
-            return Ok(id);
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, "提交容器镜像", body, container));
         }
-        http::ensure_success(status, "提交容器镜像", body, Some(container))?;
-        Ok(String::new())
+        let bytes = http::read_body_bytes(response.body, 64 * 1024).await?;
+        let id = serde_json::from_slice::<serde_json::Value>(&bytes)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("Id")
+                    .and_then(|id| id.as_str())
+                    .map(str::to_string)
+            })
+            .unwrap_or_default();
+        Ok(id)
     }
 
     /// 重命名容器。
@@ -1082,10 +1083,13 @@ impl DockerApi {
         }
         let response = self.send(Method::GET, &path, None, "检索远端镜像").await?;
         let status = response.status;
-        let body = http::read_body_text(response.body, 131_072).await;
-        http::ensure_success(status, "检索远端镜像", body.clone(), Some(term))?;
+        if !status.is_success() {
+            let body = http::read_body_text(response.body, 8192).await;
+            return Err(http::status_error(status, "检索远端镜像", body, term));
+        }
+        let bytes = http::read_body_bytes(response.body, 131_072).await?;
         let items: Vec<ImageSearchItem> =
-            serde_json::from_str(&body).map_err(|error| ContainerError::Decode {
+            serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
                 operation: "反序列化镜像检索结果".to_string(),
                 message: error.to_string(),
             })?;

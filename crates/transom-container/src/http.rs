@@ -23,6 +23,9 @@ use std::time::Duration;
 /// 单次请求的总超时；日志跟随与 exec 流不套用此上限。
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// 响应体读取总超时：守护进程或远端代理半死不活时不能永久占住任务。
+const BODY_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// 错误响应体最多保留的字节数，避免异常响应打满日志。
 const ERROR_BODY_LIMIT: usize = 8 * 1024;
 
@@ -197,22 +200,31 @@ pub async fn request_upgrade(
 ) -> Result<EngineStream, ContainerError> {
     let operation = format!("{method} {path}（升级）");
     let stream = transport.connect().await?;
-    let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
+    let (mut sender, connection) = tokio::time::timeout(
+        REQUEST_TIMEOUT,
+        hyper::client::conn::http1::handshake(TokioIo::new(stream)),
+    )
+    .await
+    .map_err(|_| ContainerError::Http {
+        operation: operation.clone(),
+        message: "HTTP 握手超时".to_string(),
+    })?
+    .map_err(|error| ContainerError::Http {
+        operation: operation.clone(),
+        message: error.to_string(),
+    })?;
+    let connection_task = tokio::spawn(async move { connection.with_upgrades().await });
+    let request = build_request(method, path, body, content_type, true)?;
+    let mut response = tokio::time::timeout(REQUEST_TIMEOUT, sender.send_request(request))
         .await
+        .map_err(|_| ContainerError::Http {
+            operation: operation.clone(),
+            message: "发送升级请求超时".to_string(),
+        })?
         .map_err(|error| ContainerError::Http {
             operation: operation.clone(),
             message: error.to_string(),
         })?;
-    let connection_task = tokio::spawn(async move { connection.with_upgrades().await });
-    let request = build_request(method, path, body, content_type, true)?;
-    let mut response =
-        sender
-            .send_request(request)
-            .await
-            .map_err(|error| ContainerError::Http {
-                operation: operation.clone(),
-                message: error.to_string(),
-            })?;
     if response.status() != StatusCode::SWITCHING_PROTOCOLS {
         let status = response.status();
         let body = read_body_text(response.into_body(), ERROR_BODY_LIMIT).await;
@@ -229,13 +241,16 @@ pub async fn request_upgrade(
             }
         });
     }
-    let upgraded =
-        hyper::upgrade::on(&mut response)
-            .await
-            .map_err(|error| ContainerError::Http {
-                operation: operation.clone(),
-                message: format!("升级连接失败: {error}"),
-            })?;
+    let upgraded = tokio::time::timeout(REQUEST_TIMEOUT, hyper::upgrade::on(&mut response))
+        .await
+        .map_err(|_| ContainerError::Http {
+            operation: operation.clone(),
+            message: "等待连接升级超时".to_string(),
+        })?
+        .map_err(|error| ContainerError::Http {
+            operation: operation.clone(),
+            message: format!("升级连接失败: {error}"),
+        })?;
     // 升级完成后连接驱动的使命结束；等待它以释放任务句柄。
     let _ = connection_task.await;
     Ok(Box::new(TokioIo::new(upgraded)))
@@ -329,14 +344,66 @@ where
     })
 }
 
-/// 读取响应体的文本摘要（错误诊断用），超限截断。
-pub async fn read_body_text(body: Incoming, limit: usize) -> String {
-    match body.collect().await {
-        Ok(collected) => {
-            let bytes = collected.to_bytes();
-            let slice = &bytes[..bytes.len().min(limit)];
-            String::from_utf8_lossy(slice).trim().to_string()
+/// 读取响应体前缀，最多保留 `limit` 字节，并返回是否还有被丢弃的数据。
+///
+/// 设计原理（Why）：必须先按帧累计再判断上限，不能 `collect()` 后才知道大小；
+/// 否则远端引擎返回超大响应时会先整段读入内存。达到上限后停止读取，由调用方
+/// 根据语义决定是截断展示还是报错；连接守卫会在响应释放时终止驱动。
+async fn read_body_prefix<B>(body: B, limit: usize) -> Result<(Vec<u8>, bool), ContainerError>
+where
+    B: hyper::body::Body<Data = Bytes>,
+    B::Error: std::fmt::Display,
+{
+    let deadline = tokio::time::Instant::now() + BODY_READ_TIMEOUT;
+    let mut body = std::pin::pin!(body);
+    let mut bytes = Vec::with_capacity(limit.min(64 * 1024));
+    let mut truncated = false;
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(ContainerError::Decode {
+                operation: "读取响应体".to_string(),
+                message: "读取响应体超时".to_string(),
+            });
         }
+        let frame = match tokio::time::timeout(remaining, body.frame()).await {
+            Err(_) => {
+                return Err(ContainerError::Decode {
+                    operation: "读取响应体".to_string(),
+                    message: "读取响应体超时".to_string(),
+                });
+            }
+            Ok(None) => break,
+            Ok(Some(Err(error))) => {
+                return Err(ContainerError::Decode {
+                    operation: "读取响应体".to_string(),
+                    message: error.to_string(),
+                });
+            }
+            Ok(Some(Ok(frame))) => frame,
+        };
+        let Ok(data) = frame.into_data() else {
+            continue;
+        };
+        let capacity = limit.saturating_sub(bytes.len());
+        if data.len() > capacity {
+            bytes.extend_from_slice(&data[..capacity]);
+            truncated = true;
+            break;
+        }
+        bytes.extend_from_slice(&data);
+    }
+    Ok((bytes, truncated))
+}
+
+/// 读取响应体的文本摘要（错误诊断用），超限截断。
+pub async fn read_body_text<B>(body: B, limit: usize) -> String
+where
+    B: hyper::body::Body<Data = Bytes>,
+    B::Error: std::fmt::Display,
+{
+    match read_body_prefix(body, limit).await {
+        Ok((bytes, _)) => String::from_utf8_lossy(&bytes).trim().to_string(),
         Err(error) => format!("读取响应体失败: {error}"),
     }
 }
@@ -344,23 +411,20 @@ pub async fn read_body_text(body: Incoming, limit: usize) -> String {
 /// 读取完整响应体（用于小体积 JSON 响应）。
 ///
 /// # Errors
-/// 响应体读取失败或超过上限时返回 [`ContainerError::Decode`]。
-pub async fn read_body_bytes(body: Incoming, limit: usize) -> Result<Bytes, ContainerError> {
-    let collected = body
-        .collect()
-        .await
-        .map_err(|error| ContainerError::Decode {
-            operation: "读取响应体".to_string(),
-            message: error.to_string(),
-        })?;
-    let bytes = collected.to_bytes();
-    if bytes.len() > limit {
+/// 响应体读取失败、超时或超过上限时返回 [`ContainerError::Decode`]。
+pub async fn read_body_bytes<B>(body: B, limit: usize) -> Result<Bytes, ContainerError>
+where
+    B: hyper::body::Body<Data = Bytes>,
+    B::Error: std::fmt::Display,
+{
+    let (bytes, truncated) = read_body_prefix(body, limit).await?;
+    if truncated {
         return Err(ContainerError::Decode {
             operation: "读取响应体".to_string(),
             message: format!("响应超过上限 {limit} 字节"),
         });
     }
-    Ok(bytes)
+    Ok(Bytes::from(bytes))
 }
 
 /// 把引擎返回的非成功状态码转成错误；`operation` 用于错误上下文。
@@ -427,7 +491,9 @@ pub fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::percent_encode;
+    use super::{percent_encode, read_body_bytes, read_body_prefix, read_body_text};
+    use bytes::Bytes;
+    use http_body_util::Full;
 
     #[test]
     fn percent_encoding_keeps_unreserved_and_encodes_separators() {
@@ -435,5 +501,32 @@ mod tests {
         assert_eq!(percent_encode("a-b_c.d~e"), "a-b_c.d~e");
         assert_eq!(percent_encode("中文"), "%E4%B8%AD%E6%96%87");
         assert_eq!(percent_encode("a b"), "a%20b");
+    }
+
+    #[tokio::test]
+    async fn body_prefix_stops_at_limit_and_marks_truncation() {
+        let body = Full::new(Bytes::from(vec![b'a'; 64]));
+        let (prefix, truncated) = read_body_prefix(body, 16).await.expect("读取前缀必须成功");
+        assert_eq!(prefix.len(), 16);
+        assert!(truncated);
+    }
+
+    #[tokio::test]
+    async fn body_reads_reject_oversized_json_but_accept_exact_limit() {
+        let oversized = Full::new(Bytes::from(vec![b'a'; 32]));
+        let error = read_body_bytes(oversized, 16)
+            .await
+            .expect_err("超过上限必须报错");
+        assert!(matches!(error, crate::error::ContainerError::Decode { .. }));
+
+        let exact = Full::new(Bytes::from(vec![b'a'; 16]));
+        let bytes = read_body_bytes(exact, 16)
+            .await
+            .expect("恰好达到上限必须允许");
+        assert_eq!(bytes.len(), 16);
+
+        let textual = Full::new(Bytes::from(vec![b'b'; 32]));
+        let text = read_body_text(textual, 8).await;
+        assert_eq!(text, "bbbbbbbb");
     }
 }
