@@ -272,7 +272,12 @@ pub(super) fn render_mounts_card(mounts: &[ContainerMount], p: &Palette) -> AnyE
                             .text_size(px(11.0))
                             .font_family(p.mono_font_family.clone())
                             .truncate()
-                            .child(mount.source.clone()),
+                            .child(
+                                mount
+                                    .volume_name()
+                                    .unwrap_or(mount.source.as_str())
+                                    .to_string(),
+                            ),
                     )
                     .children(kind_badge),
             )

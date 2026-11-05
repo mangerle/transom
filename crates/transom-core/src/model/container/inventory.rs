@@ -166,6 +166,13 @@ fn shorten_reference(reference: &str) -> String {
 pub struct ContainerMount {
     /// `bind` / `volume` / `tmpfs` 等。
     pub kind: String,
+    /// 命名卷名称；`bind` 挂载时为空。
+    ///
+    /// 设计原理（Why）：Docker 的列表与检视接口在 `Source` 中返回的是宿主挂载点
+    /// （如 `/var/lib/docker/volumes/app-data/_data`），只有 `Name` 才是卷名。
+    /// 判断“卷是否在用”以及按卷复用容器都必须使用卷名，不能把宿主路径当卷名。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// 宿主侧来源（卷名或宿主路径）。
     pub source: String,
     /// 容器内目标路径。
@@ -174,6 +181,23 @@ pub struct ContainerMount {
     pub mode: String,
     #[serde(default)]
     pub rw: bool,
+}
+
+impl ContainerMount {
+    /// 返回命名卷的真实卷名；非卷挂载返回 `None`。
+    ///
+    /// 设计原理（Why）：引擎对命名卷同时给出 `Name` 与宿主挂载点 `Source`，
+    /// 业务层只需要卷名；`Name` 缺失时退回 `Source`，兼容把卷名直接放在
+    /// `Source` 的引擎或旧数据，避免历史配置失效。
+    pub fn volume_name(&self) -> Option<&str> {
+        if self.kind != "volume" {
+            return None;
+        }
+        self.name
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .or_else(|| (!self.source.is_empty()).then_some(self.source.as_str()))
+    }
 }
 
 /// 容器详情（基础信息页签）。

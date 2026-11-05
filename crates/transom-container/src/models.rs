@@ -151,6 +151,7 @@ impl MountItem {
     pub fn into_mount(self) -> ContainerMount {
         ContainerMount {
             kind: self.mount_type,
+            name: self.name,
             source: self.source,
             destination: self.destination,
             mode: self.mode,
@@ -1379,6 +1380,48 @@ mod tests {
         let image = images.into_iter().next().expect("至少一个").into_summary();
         assert!(image.tags.is_empty());
         assert_eq!(image.display_name(), "f00");
+    }
+
+    /// 真机回归：命名卷的 `Source` 是宿主挂载点，只有 `Name` 才是卷名。
+    /// 业务层判断“卷是否在用”和按卷复用容器都必须使用 `Name`。
+    #[test]
+    fn named_volume_mount_keeps_name_for_identity() {
+        let json = r#"[{
+            "Id": "sha256:abc123",
+            "Names": ["/web"],
+            "Image": "nginx:latest",
+            "Created": 1700000000,
+            "Ports": [],
+            "Labels": {},
+            "State": "running",
+            "Status": "Up 1 hour",
+            "Mounts": [
+                {
+                    "Type": "volume",
+                    "Name": "app-data",
+                    "Source": "/var/lib/docker/volumes/app-data/_data",
+                    "Destination": "/data",
+                    "Mode": "z",
+                    "RW": true
+                },
+                {
+                    "Type": "bind",
+                    "Source": "/host/config",
+                    "Destination": "/config",
+                    "Mode": "",
+                    "RW": false
+                }
+            ]
+        }]"#;
+        let container: ContainerListItem = serde_json::from_str::<Vec<ContainerListItem>>(json)
+            .expect("容器列表必须能反序列化")
+            .into_iter()
+            .next()
+            .expect("至少一条容器");
+        let summary = container.into_summary();
+        assert_eq!(summary.mounts[0].name.as_deref(), Some("app-data"));
+        assert_eq!(summary.mounts[0].volume_name(), Some("app-data"));
+        assert_eq!(summary.mounts[1].volume_name(), None);
     }
 
     /// 真机回归：内置网络的 `IPAM.Config` 与无标签网络的 `Labels` 会是显式 null，

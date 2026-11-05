@@ -15,13 +15,14 @@ pub(crate) fn collect_rows(
     // CLI 兜底的容器摘要没有挂载明细，算不出在用卷，此时既不显示徽章也不给筛选。
     let usage_known = !cli_backend && !workspace.containers.is_empty();
     // 在用卷集合由已拉到的容器挂载计算：列表接口就带 Mounts，不需要逐个 inspect。
+    // 命名卷必须用 `Name` 匹配：`Source` 是宿主挂载点，拿它比卷名会把所有卷都判成空闲。
     let used_volumes: HashSet<String> = if usage_known {
         workspace
             .containers
             .iter()
             .flat_map(|item| item.mounts.iter())
-            .filter(|mount| mount.kind == "volume")
-            .map(|mount| mount.source.clone())
+            .filter_map(|mount| mount.volume_name())
+            .map(str::to_string)
             .collect()
     } else {
         HashSet::default()

@@ -201,7 +201,9 @@ fn format_mount_spec(mount: &ContainerMount) -> String {
     } else {
         ""
     };
-    format!("{}:{}{ro_suffix}", mount.source, mount.destination)
+    // 命名卷必须用卷名生成 `docker run -v`，宿主挂载点会被解释成 bind mount。
+    let source = mount.volume_name().unwrap_or(mount.source.as_str());
+    format!("{source}:{}{ro_suffix}", mount.destination)
 }
 
 fn escape_shell_env(env: &str) -> String {
@@ -269,6 +271,7 @@ mod tests {
             }],
             mounts: vec![ContainerMount {
                 kind: "bind".to_string(),
+                name: None,
                 source: "/host/redis-data".to_string(),
                 destination: "/data".to_string(),
                 mode: "".to_string(),

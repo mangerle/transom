@@ -86,9 +86,8 @@ async fn resolve_volume_target(
     if let Ok(containers) = api.list_containers().await {
         for summary in containers {
             for mount in summary.mounts {
-                let matches_vol =
-                    mount.source == volume || mount.source.ends_with(&format!("/{volume}"));
-                if matches_vol {
+                // 按卷名匹配：命名卷的 Source 是宿主挂载点，不能用来识别卷。
+                if mount.volume_name() == Some(volume) {
                     // 若需要写入，则挂载点必须为可写（rw 为 true，且 mode 不包含 ro）
                     if writeable && (!mount.rw || mount.mode.contains("ro")) {
                         continue;

@@ -151,9 +151,10 @@ impl RunContainerFormState {
 
         let mut volumes = Vec::new();
         for m in &details.mounts {
-            if !m.source.is_empty() && !m.destination.is_empty() {
+            let source = m.volume_name().unwrap_or(m.source.as_str());
+            if !source.is_empty() && !m.destination.is_empty() {
                 volumes.push(VolumeMappingItem::new(
-                    Some(&m.source),
+                    Some(source),
                     Some(&m.destination),
                     m.mode.contains("ro"),
                     window,
