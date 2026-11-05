@@ -461,6 +461,14 @@ pub enum ContainerCommand {
         path: String,
         local_path: PathBuf,
     },
+    /// 上传本地目录到容器内目标目录，保留目录层级。
+    UploadDirectory {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        local_path: PathBuf,
+    },
     RemovePath {
         tab_id: TabId,
         request_id: ContainerRequestId,

@@ -231,22 +231,38 @@ impl AppShell {
         };
         let request_id = ContainerRequestId::new();
         workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        self.send_tracked(
-            tab_id,
-            request_id,
+        let is_dir = local_path.is_dir();
+        let command = if is_dir {
+            ContainerCommand::UploadDirectory {
+                tab_id,
+                request_id,
+                container,
+                path: target,
+                local_path,
+            }
+        } else {
             ContainerCommand::Upload {
                 tab_id,
                 request_id,
                 container,
                 path: target,
                 local_path,
-            },
-        );
+            }
+        };
+        self.send_tracked(tab_id, request_id, command);
     }
 
     /// 上传本地文件到当前目录。
     pub(crate) fn upload_container_file(&mut self, tab_id: TabId) {
         let Some(local_path) = rfd::FileDialog::new().pick_file() else {
+            return;
+        };
+        self.upload_container_path(tab_id, local_path);
+    }
+
+    /// 上传本地目录到当前目录，目录层级原样保留。
+    pub(crate) fn upload_container_directory(&mut self, tab_id: TabId) {
+        let Some(local_path) = rfd::FileDialog::new().pick_folder() else {
             return;
         };
         self.upload_container_path(tab_id, local_path);

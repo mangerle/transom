@@ -213,6 +213,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::DownloadVolumeFile { .. }
         | ContainerCommand::DownloadDirectory { .. }
         | ContainerCommand::Upload { .. }
+        | ContainerCommand::UploadDirectory { .. }
         | ContainerCommand::RemovePath { .. }
         | ContainerCommand::CreateDir { .. }
         | ContainerCommand::SaveFile { .. }

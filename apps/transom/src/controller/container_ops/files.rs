@@ -203,6 +203,30 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     .map(|_| ())
             },
         ),
+        ContainerCommand::UploadDirectory {
+            tab_id,
+            request_id,
+            container,
+            path,
+            local_path,
+        } => transfer(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine, cancel, progress| async move {
+                transom_container::upload_directory(
+                    &engine,
+                    &container,
+                    &path,
+                    &local_path,
+                    cancel,
+                    progress,
+                )
+                .await
+                .map(|_| ())
+            },
+        ),
         ContainerCommand::RemovePath {
             tab_id,
             request_id,

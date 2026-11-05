@@ -355,6 +355,85 @@ pub async fn upload(
     Ok(total)
 }
 
+/// 上传本地目录到容器内目标目录；目录内容以 tar 流式传输，保留层级与符号链接。
+///
+/// # Errors
+/// 容器路径非法、本地路径不是目录、tar 生成失败、引擎拒绝或用户取消时返回错误。
+pub async fn upload_directory(
+    engine: &Engine,
+    container: &str,
+    path: &str,
+    local_path: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: flume::Sender<(u64, Option<u64>)>,
+) -> Result<u64, ContainerError> {
+    let api = engine.http()?.clone();
+    let path = validate_container_path(path)?;
+    let metadata = std::fs::metadata(local_path).map_err(|error| ContainerError::File {
+        path: local_path.display().to_string(),
+        message: error.to_string(),
+    })?;
+    if !metadata.is_dir() {
+        return Err(ContainerError::File {
+            path: local_path.display().to_string(),
+            message: "只能上传目录".to_string(),
+        });
+    }
+    let (sender, receiver) = flume::bounded::<Result<Vec<u8>, std::io::Error>>(8);
+    let builder_cancel = Arc::clone(&cancel);
+    let builder_local = local_path.to_path_buf();
+    let builder = tokio::task::spawn_blocking(move || {
+        build_dir_tar_stream(&builder_local, &builder_cancel, &progress, sender)
+    });
+    let stream = futures::stream::unfold(receiver, |receiver| async move {
+        receiver
+            .recv_async()
+            .await
+            .ok()
+            .map(|item| (item, receiver))
+    });
+    let body = StreamBody::new(stream.map(|item| match item {
+        Ok(bytes) => Ok(Frame::data(Bytes::from(bytes))),
+        Err(error) => Err(error),
+    }));
+    let suffix = format!(
+        "/containers/{}/archive?path={}",
+        http::percent_encode(container),
+        http::percent_encode(&path)
+    );
+    let response = http::request_stream(
+        api.transport_ref(),
+        hyper::Method::PUT,
+        &api.versioned_path(&suffix),
+        body,
+        Some("application/x-tar"),
+    )
+    .await;
+    let tar_result = builder.await.map_err(|error| ContainerError::File {
+        path: path.clone(),
+        message: format!("目录 tar 生成任务失败: {error}"),
+    })?;
+    let response = response?;
+    if !response.status.is_success() {
+        let status = response.status;
+        let body = http::read_body_text(response.body, 8192).await;
+        http::ensure_success(status, "上传目录", body, Some(&path))?;
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+    tar_result.map_err(|message| {
+        if cancel.load(Ordering::Relaxed) {
+            ContainerError::Cancelled
+        } else {
+            ContainerError::File {
+                path: path.clone(),
+                message,
+            }
+        }
+    })
+}
+
 /// 向容器内指定路径写入文件字节数据（基于 Docker 归档 API 的 tar 包流式回写）。
 ///
 /// 设计原理（Why）：
@@ -864,6 +943,32 @@ fn temp_path(destination: &Path) -> PathBuf {
     destination.with_file_name(format!(".{name}.{stamp}.transom-part"))
 }
 
+/// 递归构建目录 tar，写入有界通道；发送端阻塞形成反压。
+fn build_dir_tar_stream(
+    local_dir: &Path,
+    cancel: &Arc<AtomicBool>,
+    progress: &flume::Sender<(u64, Option<u64>)>,
+    sender: flume::Sender<Result<Vec<u8>, std::io::Error>>,
+) -> Result<u64, String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("已取消".to_string());
+    }
+    let writer = ProgressChannelWriter {
+        sender,
+        written: 0,
+        progress: progress.clone(),
+    };
+    let mut builder = tar::Builder::new(writer);
+    builder.mode(tar::HeaderMode::Deterministic);
+    builder.follow_symlinks(false);
+    builder
+        .append_dir_all(".", local_dir)
+        .map_err(|error| error.to_string())?;
+    builder.finish().map_err(|error| error.to_string())?;
+    let writer = builder.into_inner().map_err(|error| error.to_string())?;
+    Ok(writer.written)
+}
+
 fn build_tar_stream(
     local_path: &Path,
     name: &str,
@@ -913,6 +1018,28 @@ fn file_mode(metadata: &std::fs::Metadata) -> u32 {
     {
         let _ = metadata;
         0o644
+    }
+}
+
+/// 目录上传的 tar 输出：写入通道并累计字节数上报进度。
+struct ProgressChannelWriter {
+    sender: flume::Sender<Result<Vec<u8>, std::io::Error>>,
+    written: u64,
+    progress: flume::Sender<(u64, Option<u64>)>,
+}
+
+impl Write for ProgressChannelWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.sender
+            .send(Ok(buf.to_vec()))
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "上传通道已关闭"))?;
+        self.written = self.written.saturating_add(buf.len() as u64);
+        let _ = self.progress.try_send((self.written, None));
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -985,6 +1112,41 @@ mod tests {
             relativize("etc/ssl/certs/ca.pem", "etc").as_deref(),
             Some("ssl/certs/ca.pem")
         );
+    }
+
+    #[test]
+    fn directory_upload_builds_tar_with_nested_files() {
+        let directory = tempfile::tempdir().expect("临时目录");
+        std::fs::create_dir(directory.path().join("sub")).expect("创建子目录");
+        std::fs::write(directory.path().join("sub").join("app.txt"), b"hello")
+            .expect("写入测试文件");
+        let (sender, receiver) = flume::bounded(64);
+        let (progress, _progress_rx) = flume::bounded(8);
+        let root = directory.path().to_path_buf();
+        let builder = std::thread::spawn(move || {
+            super::build_dir_tar_stream(
+                &root,
+                &std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                &progress,
+                sender,
+            )
+        });
+        let mut bytes = Vec::new();
+        while let Ok(chunk) = receiver.recv() {
+            bytes.extend(chunk.expect("tar 块必须成功"));
+        }
+        builder
+            .join()
+            .expect("tar 构建线程")
+            .expect("目录 tar 构建必须成功");
+        let mut archive = tar::Archive::new(std::io::Cursor::new(bytes));
+        let names: Vec<String> = archive
+            .entries()
+            .expect("tar 条目")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path().expect("路径").display().to_string())
+            .collect();
+        assert!(names.iter().any(|name| name.ends_with("sub/app.txt")));
     }
 
     #[test]

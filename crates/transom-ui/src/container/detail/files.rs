@@ -82,6 +82,17 @@ pub(crate) fn render_files(
                 })),
         );
         crumbs = crumbs.child(
+            Button::new("container-file-upload-dir")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Upload)
+                .label(rust_i18n::t!("container.files.upload_directory").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.upload_container_directory(tab_id);
+                    cx.notify();
+                })),
+        );
+        crumbs = crumbs.child(
             Button::new("container-file-mkdir")
                 .ghost()
                 .xsmall()

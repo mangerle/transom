@@ -34,7 +34,7 @@ pub use error::ContainerError;
 pub use exec::open_exec;
 pub use files::{
     create_dir, download, download_directory, list_dir, read_file, remove as remove_path,
-    rename as rename_path, upload, validate_container_path, write_file_bytes,
+    rename as rename_path, upload, upload_directory, validate_container_path, write_file_bytes,
 };
 pub use image_archive::{load_image, save_image};
 pub use logs::{LogSink, stream_logs, stream_project_logs};

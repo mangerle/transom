@@ -6451,6 +6451,9 @@ container:
     upload:
       en: Upload
       zh-CN: 上传
+    upload_directory:
+      en: Upload folder
+      zh-CN: 上传目录
     download:
       en: Download
       zh-CN: 下载
