@@ -197,33 +197,26 @@ impl AppShell {
         let selected_volume = workspace.selected_volume().cloned();
         let selected_network = workspace.selected_network().cloned();
         let selected_compose = workspace.selected_compose().cloned();
+        let compose_deps = workspace.compose_dependencies.clone();
+        let compose_hovered = workspace.compose_hovered_service.clone();
+        let compose_deps_is_empty = compose_deps.is_empty();
 
         let title = match section {
-            ContainerSection::Containers => selected_container
-                .as_ref()
-                .map(|item| item.name.clone())
-                .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
-            ContainerSection::Images => selected_image
-                .as_ref()
-                .map(|item| item.display_name())
-                .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
-            ContainerSection::Volumes => selected_volume
-                .as_ref()
-                .map(|item| item.name.clone())
-                .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
-            ContainerSection::Networks => selected_network
-                .as_ref()
-                .map(|item| item.name.clone())
-                .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
-            ContainerSection::Compose => selected_compose
-                .as_ref()
-                .map(|item| item.name.clone())
-                .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string()),
-        };
+            ContainerSection::Containers => selected_container.as_ref().map(|i| i.name.clone()),
+            ContainerSection::Images => selected_image.as_ref().map(|i| i.display_name()),
+            ContainerSection::Volumes => selected_volume.as_ref().map(|i| i.name.clone()),
+            ContainerSection::Networks => selected_network.as_ref().map(|i| i.name.clone()),
+            ContainerSection::Compose => selected_compose.as_ref().map(|i| i.name.clone()),
+        }
+        .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string());
 
-        if section == ContainerSection::Compose && detail_tab == ContainerDetailTab::Yaml {
+        if section == ContainerSection::Compose {
             if let Some(project) = &selected_compose {
-                self.ensure_compose_yaml_loaded(tab_id, &project.name, window, cx);
+                if detail_tab == ContainerDetailTab::Yaml {
+                    self.ensure_compose_yaml_loaded(tab_id, &project.name, window, cx);
+                } else if compose_deps_is_empty {
+                    self.ensure_compose_dependencies_loaded(tab_id, &project.name, cx);
+                }
             }
         }
 
@@ -337,11 +330,15 @@ impl AppShell {
                 )
             }
             (ContainerSection::Compose, _) => render_compose_detail(
-                tab_id,
-                selected_compose.as_ref(),
-                &containers,
-                detail_tab,
-                compose_yaml_editor.as_ref(),
+                compose::ComposeDetailParams {
+                    tab_id,
+                    project: selected_compose.as_ref(),
+                    containers: &containers,
+                    detail_tab,
+                    compose_yaml_editor: compose_yaml_editor.as_ref(),
+                    dependencies: &compose_deps,
+                    hovered_service: compose_hovered.as_deref(),
+                },
                 p,
                 window,
                 cx,

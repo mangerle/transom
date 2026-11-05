@@ -32,28 +32,43 @@ pub(crate) fn service_name_of(container: &ContainerSummary, project_name: &str) 
     }
 }
 
+/// Compose 详情与拓扑渲染参数。
+pub(crate) struct ComposeDetailParams<'a> {
+    pub(crate) tab_id: TabId,
+    pub(crate) project: Option<&'a ComposeProject>,
+    pub(crate) containers: &'a [ContainerSummary],
+    pub(crate) detail_tab: ContainerDetailTab,
+    pub(crate) compose_yaml_editor: Option<&'a (String, PathBuf, Entity<TextareaState>, bool)>,
+    pub(crate) dependencies: &'a std::collections::HashMap<String, Vec<String>>,
+    pub(crate) hovered_service: Option<&'a str>,
+}
+
 pub(crate) fn render_compose_detail(
-    tab_id: TabId,
-    project: Option<&ComposeProject>,
-    containers: &[ContainerSummary],
-    detail_tab: ContainerDetailTab,
-    compose_yaml_editor: Option<&(String, PathBuf, Entity<TextareaState>, bool)>,
+    params: ComposeDetailParams,
     p: &Palette,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let Some(project) = project else {
+    let Some(project) = params.project else {
         return centered_hint(
             rust_i18n::t!("container.detail.no_selection").to_string(),
             p,
         );
     };
 
-    match detail_tab {
+    match params.detail_tab {
         ContainerDetailTab::Yaml => {
-            render_compose_yaml_editor(tab_id, project, compose_yaml_editor, p, window, cx)
+            render_compose_yaml_editor(params.tab_id, project, params.compose_yaml_editor, p, window, cx)
         }
-        _ => render_compose_overview_and_topology(tab_id, project, containers, p, cx),
+        _ => render_compose_overview_and_topology(
+            params.tab_id,
+            project,
+            params.containers,
+            params.dependencies,
+            params.hovered_service,
+            p,
+            cx,
+        ),
     }
 }
 
@@ -206,6 +221,8 @@ fn render_compose_overview_and_topology(
     tab_id: TabId,
     project: &ComposeProject,
     containers: &[ContainerSummary],
+    dependencies: &std::collections::HashMap<String, Vec<String>>,
+    hovered_service: Option<&str>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
@@ -289,37 +306,12 @@ fn render_compose_overview_and_topology(
             ),
     );
 
-    // 确保异步解析依赖
-    let project_name = project.name.clone();
-    let needs_load = cx
-        .entity()
-        .read(cx)
-        .state
-        .container_workspace(tab_id)
-        .is_some_and(|w| w.compose_dependencies.is_empty());
-    if needs_load {
-        let app = cx.entity().clone();
-        cx.defer(move |cx| {
-            app.update(cx, |this, cx| {
-                this.ensure_compose_dependencies_loaded(tab_id, &project_name, cx);
-            });
-        });
-    }
-
-    let (deps, hovered_service) = cx
-        .entity()
-        .read(cx)
-        .state
-        .container_workspace(tab_id)
-        .map(|w| (w.compose_dependencies.clone(), w.compose_hovered_service.clone()))
-        .unwrap_or_default();
-
     let topology_board = super::compose_topology::render_compose_topology_board(
         tab_id,
         project,
         &members,
-        &deps,
-        hovered_service.as_deref(),
+        dependencies,
+        hovered_service,
         p,
         cx,
     );
