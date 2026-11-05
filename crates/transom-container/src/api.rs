@@ -1371,13 +1371,19 @@ impl DockerApi {
     ) -> Result<(), ContainerError> {
         let mut retry_delay = std::time::Duration::from_secs(1);
         const MAX_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(16);
+        let mut last_timestamp = 0i64;
 
         loop {
             if *shutdown_rx.borrow() || event_tx.is_closed() {
                 break;
             }
 
-            let response = match self.send(Method::GET, "/events", None, "listen_events").await {
+            let path = if last_timestamp > 0 {
+                format!("/events?since={last_timestamp}")
+            } else {
+                "/events".to_string()
+            };
+            let response = match self.send(Method::GET, &path, None, "listen_events").await {
                 Ok(resp) if resp.status.is_success() => {
                     retry_delay = std::time::Duration::from_secs(1);
                     resp
@@ -1455,6 +1461,7 @@ impl DockerApi {
                             }
                             if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(&line) {
                                 if let Some(event) = msg.into_engine_event() {
+                                    last_timestamp = last_timestamp.max(event.timestamp);
                                     if event_tx.send(event).await.is_err() {
                                         return Ok(());
                                     }
@@ -1466,6 +1473,19 @@ impl DockerApi {
             }
 
             if *shutdown_rx.borrow() || event_tx.is_closed() {
+                break;
+            }
+            // 长连接断开期间可能漏事件：让界面做一次全量对账，避免列表长期停留在旧状态。
+            let resync = transom_core::EngineEvent {
+                resource_type: "engine".to_string(),
+                action: "resync".to_string(),
+                id: String::new(),
+                name: None,
+                image: None,
+                exit_code: None,
+                timestamp: last_timestamp,
+            };
+            if event_tx.send(resync).await.is_err() {
                 break;
             }
             tokio::select! {

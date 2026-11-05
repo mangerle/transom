@@ -92,6 +92,13 @@ impl AppShell {
             None => return,
         };
 
+        // 0. 事件流重连后的全量对账：断线期间漏掉的事件无法逐条补发。
+        if event.resource_type == "engine" && event.action == "resync" {
+            log::debug!("容器事件流重连，触发工作区全量刷新");
+            self.refresh_container_workspace_all(tab_id);
+            return;
+        }
+
         // 1. 如果是容器异常退出或 OOM，向用户弹出警告 Toast
         if event.is_abnormal_container_exit() {
             let fallback_id = &event.id[..event.id.len().min(12)];
