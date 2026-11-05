@@ -5955,6 +5955,9 @@ container:
     edit_yaml:
       en: Edit YAML
       zh-CN: 编辑 YAML
+    created_hint:
+      en: "Compose project '%{name}' created. You can now edit and deploy in the editor"
+      zh-CN: "编排项目 '%{name}' 已就地创建，现可在右侧编辑器中修改并立即部署"
     file_task_failed:
       en: The YAML file operation could not be scheduled
       zh-CN: 无法调度 YAML 文件操作

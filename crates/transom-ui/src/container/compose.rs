@@ -146,7 +146,7 @@ impl AppShell {
         .detach();
     }
 
-    /// 用系统默认编辑器打开当前项目的 YAML，路径必须位于受控目录或工作目录内。
+    /// 在内置编辑器中打开当前项目的 YAML，并自动定位到详情面板的 YAML 源码标签页。
     pub(crate) fn edit_compose_yaml(
         &mut self,
         tab_id: TabId,
@@ -154,10 +154,13 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let project = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| workspace.compose.iter().find(|item| item.name == name))
+        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let project = workspace
+            .compose
+            .iter()
+            .find(|item| item.name == name)
             .cloned();
         let Some(path) = project.as_ref().and_then(compose_project_yaml) else {
             self.show_toast(
@@ -177,7 +180,17 @@ impl AppShell {
             );
             return;
         }
-        crate::audit::open_local_path(&path);
+
+        workspace.section = ContainerSection::Compose;
+        workspace.selected = Some(name.to_string());
+        workspace.detail_tab = ContainerDetailTab::Yaml;
+        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor {
+            if current_name != name {
+                workspace.compose_yaml_editor = None;
+            }
+        }
+        self.ensure_compose_yaml_loaded(tab_id, name, window, cx);
+        cx.notify();
     }
 
     fn open_local_compose(
@@ -201,7 +214,7 @@ impl AppShell {
             return;
         };
         let project = ComposeProject {
-            name,
+            name: name.clone(),
             running: 0,
             total: 0,
             working_dir: path
@@ -209,8 +222,26 @@ impl AppShell {
                 .map(|parent| parent.to_string_lossy().into_owned()),
             config_files: vec![path.to_string_lossy().into_owned()],
         };
-        self.start_compose_project(tab_id, project, transom_core::ComposeAction::Up, cx);
-        crate::audit::open_local_path(&path);
+
+        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+            return;
+        };
+        if !workspace.compose.iter().any(|item| item.name == name) {
+            workspace.compose.push(project);
+        }
+        workspace.section = ContainerSection::Compose;
+        workspace.selected = Some(name.clone());
+        workspace.detail_tab = ContainerDetailTab::Yaml;
+        workspace.compose_yaml_editor = None;
+
+        self.ensure_compose_yaml_loaded(tab_id, &name, window, cx);
+        self.show_toast(
+            rust_i18n::t!("container.compose.created_hint", name = name).to_string(),
+            true,
+            window,
+            cx,
+        );
+        cx.notify();
     }
 
     fn start_compose_project(
@@ -416,14 +447,8 @@ fn unique_compose_destination(path: &Path) -> PathBuf {
     if !path.exists() {
         return path.to_path_buf();
     }
-    let stem = path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or("compose");
-    let extension = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or("yaml");
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("compose");
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("yaml");
     let stamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
     path.with_file_name(format!("{stem}-{stamp}.{extension}"))
 }
@@ -436,15 +461,10 @@ pub(crate) fn compose_project_yaml(project: &ComposeProject) -> Option<PathBuf> 
         }
     }
     let directory = PathBuf::from(project.working_dir.as_deref()?);
-    [
-        "compose.yaml",
-        "compose.yml",
-        "docker-compose.yaml",
-        "docker-compose.yml",
-    ]
-    .into_iter()
-    .map(|name| directory.join(name))
-    .find(|path| path.is_file())
+    ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"]
+        .into_iter()
+        .map(|name| directory.join(name))
+        .find(|path| path.is_file())
 }
 
 fn compose_yaml_is_allowed(path: &Path, project: Option<&ComposeProject>) -> bool {
