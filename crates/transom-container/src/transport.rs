@@ -45,7 +45,7 @@ impl EngineTransport {
             Self::Unix { path } => format!("unix://{}", path.display()),
             Self::NamedPipe { path } => format!("npipe:{path}"),
             Self::Tcp { url, tls } => {
-                if tls.as_ref().is_some_and(|c| !c.is_empty()) {
+                if tls.is_some() {
                     format!("{url} (TLS)")
                 } else {
                     url.clone()
@@ -135,7 +135,7 @@ impl EngineTransport {
                         })?;
                 socket.set_nodelay(true).ok();
 
-                if let Some(tls_cfg) = tls.as_ref().filter(|c| !c.is_empty()) {
+                if let Some(tls_cfg) = tls.as_ref() {
                     let host = extract_host(&address);
                     let tls_stream = crate::tls::connect_tls(socket, &host, tls_cfg).await?;
                     Ok(Box::new(tls_stream))

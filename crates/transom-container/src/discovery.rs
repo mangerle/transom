@@ -9,7 +9,7 @@
 use crate::error::ContainerError;
 use crate::transport::EngineTransport;
 use std::path::PathBuf;
-use transom_core::{ContainerEndpoint, ContainerEngineKind};
+use transom_core::{ContainerEndpoint, ContainerEngineKind, TlsConfig};
 
 /// 一个待探测的引擎候选。
 #[derive(Debug, Clone)]
@@ -198,7 +198,49 @@ fn environment_endpoint(kind: ContainerEngineKind) -> Option<ContainerEndpoint> 
         ContainerEngineKind::Podman => "CONTAINER_HOST",
     };
     let value = std::env::var(key).ok()?;
-    parse_endpoint(&value)
+    let mut endpoint = parse_endpoint(&value)?;
+    if let ContainerEndpoint::Tcp { url, tls } = &mut endpoint
+        && (url.starts_with("https://") || tls_requested(kind))
+    {
+        *tls = Some(tls_config_from_environment(kind));
+    }
+    Some(endpoint)
+}
+
+/// 环境变量是否显式要求 TLS。
+fn tls_requested(kind: ContainerEngineKind) -> bool {
+    let key = match kind {
+        ContainerEngineKind::Docker => "DOCKER_TLS_VERIFY",
+        ContainerEngineKind::Podman => "CONTAINER_TLS_VERIFY",
+    };
+    std::env::var(key)
+        .map(|value| !value.is_empty() && value != "0")
+        .unwrap_or(false)
+}
+
+/// 从 `DOCKER_CERT_PATH`（Podman 为 `CONTAINER_CERT_PATH`）或 `~/.docker`
+/// 读取三件套路径；文件不存在时留空，由 rustls 使用公共根证书。
+fn tls_config_from_environment(kind: ContainerEngineKind) -> TlsConfig {
+    let cert_key = match kind {
+        ContainerEngineKind::Docker => "DOCKER_CERT_PATH",
+        ContainerEngineKind::Podman => "CONTAINER_CERT_PATH",
+    };
+    let cert_dir = std::env::var_os(cert_key)
+        .map(PathBuf::from)
+        .or_else(|| directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".docker")));
+    let path_for = |name: &str| {
+        cert_dir
+            .as_ref()
+            .map(|dir| dir.join(name))
+            .filter(|path| path.is_file())
+            .map(|path| path.display().to_string())
+            .unwrap_or_default()
+    };
+    TlsConfig {
+        ca_cert: path_for("ca.pem"),
+        client_cert: path_for("cert.pem"),
+        client_key: path_for("key.pem"),
+    }
 }
 
 /// 解析常见的端点字符串。
@@ -221,7 +263,8 @@ pub fn parse_endpoint(value: &str) -> Option<ContainerEndpoint> {
     {
         return Some(ContainerEndpoint::Tcp {
             url: value.to_string(),
-            tls: None,
+            // https 明确要求 TLS；证书路径由环境变量或默认目录补充。
+            tls: value.starts_with("https://").then(TlsConfig::default),
         });
     }
     if let Some(rest) = value.strip_prefix("ssh://") {
@@ -486,6 +529,14 @@ mod tests {
         assert!(matches!(
             parse_endpoint("ssh://user@host"),
             Some(ContainerEndpoint::Ssh { .. })
+        ));
+        assert!(matches!(
+            parse_endpoint("https://docker.example.com:2376"),
+            Some(ContainerEndpoint::Tcp { tls: Some(_), .. })
+        ));
+        assert!(matches!(
+            parse_endpoint("tcp://127.0.0.1:2375"),
+            Some(ContainerEndpoint::Tcp { tls: None, .. })
         ));
         assert_eq!(parse_endpoint("   "), None);
         assert_eq!(parse_endpoint("relative/path"), None);

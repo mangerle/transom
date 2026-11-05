@@ -40,6 +40,8 @@ chrono.workspace = true
 tokio-rustls = "0.26"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 rustls-pki-types = "1"
+# 未配置自定义 CA 时使用 WebPKI 公共根证书，支持 https:// 端点。
+webpki-roots = "1"
 
 [target.'cfg(unix)'.dependencies]
 # 让 CLI 子进程自成进程组，超时/取消时可以连同其派生的 buildx 等子进程一起终止。

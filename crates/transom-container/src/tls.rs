@@ -113,6 +113,10 @@ fn file_stamp(path: &str) -> String {
 /// 解析证书配置并构建 rustls [`ClientConfig`]。
 fn build_client_config(tls: &TlsConfig) -> Result<ClientConfig, ContainerError> {
     let mut root_store = RootCertStore::empty();
+    if tls.ca_cert.is_empty() {
+        // 未配置私有 CA 时回落到 WebPKI 公共根证书，支持 https:// 与系统证书端点。
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    }
 
     if !tls.ca_cert.is_empty() {
         let ca_path = Path::new(&tls.ca_cert);
