@@ -1331,65 +1331,129 @@ impl DockerApi {
         }
     }
 
-    /// 监听 Docker 引擎全局长连接事件流（GET /events）。
+    /// 监听 Docker 引擎全局长连接事件流（GET /events），支持连接中断指数退避自愈。
+    ///
+    /// ### 设计初衷 (Why)
+    /// Docker 引擎事件流用于实时驱动 UI 容器与镜像状态刷新。网络波动、引擎重启或 SSH 转发隧道抖动
+    /// 均可能导致 HTTP chunk 流中断或 EOF。若直接退出，前端将永久失去事件响应。
+    ///
+    /// ### 核心优势
+    /// 内置指数退避重连机制（1s 至 16s），并在重连等待期间积极响应平滑停机信号 `shutdown_rx`，
+    /// 避免无限自旋，同时保证消费端通道关闭时立即终止。
+    ///
+    /// ### 代价与局限
+    /// 在断线重连的间隔期内发生的瞬时事件可能遗漏；调用方可在重连后主动触发全量轮询兜底。
     pub async fn listen_events(
         &self,
         event_tx: tokio::sync::mpsc::Sender<transom_core::EngineEvent>,
         mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
     ) -> Result<(), ContainerError> {
-        let response = self
-            .send(Method::GET, "/events", None, "listen_events")
-            .await?;
-        let status = response.status;
-        if !status.is_success() {
-            let body = http::read_body_text(response.body, 4096).await;
-            return Err(http::status_error(status, "listen_events", body, "/events"));
-        }
-
-        let response = response;
-        let mut body = std::pin::pin!(response.body);
-        let mut buffer = String::new();
+        let mut retry_delay = std::time::Duration::from_secs(1);
+        const MAX_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(16);
 
         loop {
-            tokio::select! {
-                biased;
-                _ = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        log::debug!("收到平滑停机通知，结束 Docker /events 监听流");
-                        break;
-                    }
-                }
-                frame = body.frame() => {
-                    let Some(frame_res) = frame else {
-                        log::info!("Docker /events 事件长连接流正常断开");
-                        break;
-                    };
-                    let Ok(frame) = frame_res else {
-                        log::warn!("Docker /events 帧读取中断");
-                        break;
-                    };
-                    let Ok(data) = frame.into_data() else {
-                        continue;
-                    };
-                    let Ok(text) = std::str::from_utf8(&data) else {
-                        continue;
-                    };
-                    buffer.push_str(text);
+            if *shutdown_rx.borrow() || event_tx.is_closed() {
+                break;
+            }
 
-                    while let Some(pos) = buffer.find('\n') {
-                        let line = buffer[..pos].trim().to_string();
-                        buffer.drain(..=pos);
-                        if line.is_empty() {
+            let response = match self.send(Method::GET, "/events", None, "listen_events").await {
+                Ok(resp) if resp.status.is_success() => {
+                    retry_delay = std::time::Duration::from_secs(1);
+                    resp
+                }
+                Ok(resp) => {
+                    let body = http::read_body_text(resp.body, 4096).await;
+                    log::warn!(
+                        "连接 Docker /events 失败，状态码: {}，原因: {body}，将在 {retry_delay:?} 后重试",
+                        resp.status
+                    );
+                    tokio::select! {
+                        biased;
+                        _ = shutdown_rx.changed() => {
+                            if *shutdown_rx.borrow() { break; }
+                        }
+                        _ = tokio::time::sleep(retry_delay) => {
+                            retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
                             continue;
                         }
-                        if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(&line) {
-                            if let Some(event) = msg.into_engine_event() {
-                                if event_tx.send(event).await.is_err() {
-                                    return Ok(());
+                    }
+                    continue;
+                }
+                Err(error) => {
+                    log::warn!(
+                        "连接 Docker /events 出错: {error}，将在 {retry_delay:?} 后重试"
+                    );
+                    tokio::select! {
+                        biased;
+                        _ = shutdown_rx.changed() => {
+                            if *shutdown_rx.borrow() { break; }
+                        }
+                        _ = tokio::time::sleep(retry_delay) => {
+                            retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
+                            continue;
+                        }
+                    }
+                    continue;
+                }
+            };
+
+            let mut body = std::pin::pin!(response.body);
+            let mut buffer = String::new();
+
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = shutdown_rx.changed() => {
+                        if *shutdown_rx.borrow() {
+                            log::debug!("收到平滑停机通知，结束 Docker /events 监听流");
+                            return Ok(());
+                        }
+                    }
+                    frame = body.frame() => {
+                        let Some(frame_res) = frame else {
+                            log::info!("Docker /events 事件流结束，准备重连自愈");
+                            break;
+                        };
+                        let Ok(frame) = frame_res else {
+                            log::warn!("Docker /events 帧读取中断，准备重连自愈");
+                            break;
+                        };
+                        let Ok(data) = frame.into_data() else {
+                            continue;
+                        };
+                        let Ok(text) = std::str::from_utf8(&data) else {
+                            continue;
+                        };
+                        buffer.push_str(text);
+
+                        while let Some(pos) = buffer.find('\n') {
+                            let line = buffer[..pos].trim().to_string();
+                            buffer.drain(..=pos);
+                            if line.is_empty() {
+                                continue;
+                            }
+                            if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(&line) {
+                                if let Some(event) = msg.into_engine_event() {
+                                    if event_tx.send(event).await.is_err() {
+                                        return Ok(());
+                                    }
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            if *shutdown_rx.borrow() || event_tx.is_closed() {
+                break;
+            }
+            tokio::select! {
+                biased;
+                _ = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() { break; }
+                }
+                _ = tokio::time::sleep(retry_delay) => {
+                    retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
                 }
             }
         }
