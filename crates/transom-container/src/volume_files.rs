@@ -33,16 +33,66 @@ struct VolumeTarget {
     is_temporary: bool,
 }
 
+/// 自动销毁临时探针容器的守卫对象。
+struct TemporaryTargetGuard<'a> {
+    api: &'a DockerApi,
+    container_id: Option<String>,
+}
+
+impl<'a> TemporaryTargetGuard<'a> {
+    fn new(api: &'a DockerApi, target: &VolumeTarget) -> Self {
+        Self {
+            api,
+            container_id: if target.is_temporary {
+                Some(target.container_id.clone())
+            } else {
+                None
+            },
+        }
+    }
+
+    async fn dismiss(mut self) {
+        if let Some(id) = self.container_id.take() {
+            cleanup_temporary(self.api, &id).await;
+        }
+    }
+}
+
+impl Drop for TemporaryTargetGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(id) = self.container_id.take() {
+            let api = self.api.clone();
+            tokio::spawn(async move {
+                cleanup_temporary(&api, &id).await;
+            });
+        }
+    }
+}
+
 /// 解析或创建用于访问指定卷的目标容器与挂载点。
+///
+/// # 设计原理（Why）
+/// - 若存在已有容器挂载了该卷，优先复用该容器，避免容器创建销毁开销；
+/// - 若为写操作（`writeable = true`），校验挂载点必须为可写（`rw`），避免向只读容器写文件触发引擎报错；
+/// - 若无可用容器，创建轻量临时探针容器。挂载模式严格根据读写需求指定为 `:rw` 或 `:ro`；
+/// - 镜像选择上优先匹配 alpine/busybox/debian 等小型 Linux 发行版；若本地无可用镜像，尝试自动拉取极简镜像；
+/// - 利用 [`TemporaryTargetGuard`] 保障探针容器在退出时自动销毁，避免遗留孤儿容器。
 async fn resolve_volume_target(
     api: &DockerApi,
     volume: &str,
+    writeable: bool,
 ) -> Result<VolumeTarget, ContainerError> {
-    // 1. 优先在现有容器中查找是否已有挂载该卷的容器
+    // 1. 优先在现有容器中查找是否已有挂载该卷且满足读写要求的容器
     if let Ok(containers) = api.list_containers().await {
         for summary in containers {
             for mount in summary.mounts {
-                if mount.source == volume || mount.source.ends_with(&format!("/{volume}")) {
+                let matches_vol =
+                    mount.source == volume || mount.source.ends_with(&format!("/{volume}"));
+                if matches_vol {
+                    // 若需要写入，则挂载点必须为可写（rw 为 true，且 mode 不包含 ro）
+                    if writeable && (!mount.rw || mount.mode.contains("ro")) {
+                        continue;
+                    }
                     return Ok(VolumeTarget {
                         container_id: summary.id,
                         mount_path: mount.destination,
@@ -53,13 +103,29 @@ async fn resolve_volume_target(
         }
     }
 
-    // 2. 无现有容器挂载该卷，创建极简只读探针容器
+    // 2. 无现有匹配容器，智能选择本地可用镜像创建探针容器
     let images = api.list_images().await.unwrap_or_default();
-    let image_name = images
-        .iter()
-        .find_map(|img| img.tags.first().cloned())
-        .or_else(|| images.first().map(|img| img.id.clone()))
-        .unwrap_or_else(|| "alpine".to_string());
+    let selected_image = select_probe_image(&images);
+    let image_name = match selected_image {
+        Some(name) => name,
+        None => {
+            log::info!("本地未发现可用镜像，尝试自动拉取 alpine 探针镜像以访问数据卷: {volume}");
+            let mut pull_error = None;
+            let reference = "alpine:latest";
+            let mut dummy = |_, _| {};
+            if let Err(err) = api.pull_image(reference, &mut dummy).await {
+                pull_error = Some(err);
+            }
+            if let Some(err) = pull_error {
+                return Err(ContainerError::NoEngine {
+                    detail: format!(
+                        "访问数据卷需要临时探针容器，但本地无可用镜像且自动拉取 alpine 失败: {err}"
+                    ),
+                });
+            }
+            reference.to_string()
+        }
+    };
 
     let count = PROBE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let now = SystemTime::now()
@@ -67,11 +133,12 @@ async fn resolve_volume_target(
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let probe_name = format!("transom-vol-{now}-{count}");
+    let mode = if writeable { "rw" } else { "ro" };
 
     let spec = ContainerCreateSpec {
         image: image_name,
         name: probe_name,
-        binds: vec![format!("{volume}:/transom_vol:ro")],
+        binds: vec![format!("{volume}:/transom_vol:{mode}")],
         ..Default::default()
     };
     let container_id = api.create_container(&spec).await?;
@@ -81,6 +148,31 @@ async fn resolve_volume_target(
         mount_path: "/transom_vol".to_string(),
         is_temporary: true,
     })
+}
+
+/// 优先选择轻量级系统镜像作为探针容器镜像。
+fn select_probe_image(images: &[transom_core::ContainerImageSummary]) -> Option<String> {
+    const PREFERRED_KEYWORDS: &[&str] = &[
+        "alpine", "busybox", "debian", "ubuntu", "distroless", "archlinux",
+    ];
+    // 第一优先级：匹配常见系统镜像关键字
+    for keyword in PREFERRED_KEYWORDS {
+        for img in images {
+            for tag in &img.tags {
+                if tag.contains(keyword) && !tag.contains("<none>") {
+                    return Some(tag.clone());
+                }
+            }
+        }
+    }
+    // 第二优先级：带有正常命名 tag 的任意可用镜像
+    for img in images {
+        if let Some(tag) = img.tags.iter().find(|t| !t.contains("<none>")) {
+            return Some(tag.clone());
+        }
+    }
+    // 第三优先级：镜像 ID
+    images.first().map(|img| img.id.clone())
 }
 
 /// 清理临时探针容器。
@@ -132,15 +224,14 @@ pub async fn list_volume_dir(
     path: &str,
 ) -> Result<Vec<ContainerFileEntry>, ContainerError> {
     let api = engine.http()?.clone();
-    let target = resolve_volume_target(&api, volume).await?;
+    let target = resolve_volume_target(&api, volume, false).await?;
+    let guard = TemporaryTargetGuard::new(&api, &target);
     let container_path = map_volume_path(&target.mount_path, path);
     let result = match container_path {
         Ok(c_path) => list_dir(engine, &target.container_id, &c_path).await,
         Err(e) => Err(e),
     };
-    if target.is_temporary {
-        cleanup_temporary(&api, &target.container_id).await;
-    }
+    guard.dismiss().await;
     let mut entries = result?;
     for entry in &mut entries {
         entry.path = unmap_volume_path(&target.mount_path, &entry.path);
@@ -159,15 +250,14 @@ pub async fn read_volume_file(
     max_bytes: usize,
 ) -> Result<(Vec<u8>, bool, u64), ContainerError> {
     let api = engine.http()?.clone();
-    let target = resolve_volume_target(&api, volume).await?;
+    let target = resolve_volume_target(&api, volume, false).await?;
+    let guard = TemporaryTargetGuard::new(&api, &target);
     let container_path = map_volume_path(&target.mount_path, path);
     let result = match container_path {
         Ok(c_path) => read_file(engine, &target.container_id, &c_path, max_bytes).await,
         Err(e) => Err(e),
     };
-    if target.is_temporary {
-        cleanup_temporary(&api, &target.container_id).await;
-    }
+    guard.dismiss().await;
     result
 }
 
@@ -184,7 +274,8 @@ pub async fn download_volume_file(
     progress: flume::Sender<(u64, Option<u64>)>,
 ) -> Result<u64, ContainerError> {
     let api = engine.http()?.clone();
-    let target = resolve_volume_target(&api, volume).await?;
+    let target = resolve_volume_target(&api, volume, false).await?;
+    let guard = TemporaryTargetGuard::new(&api, &target);
     let container_path = map_volume_path(&target.mount_path, path);
     let result = match container_path {
         Ok(c_path) => {
@@ -200,9 +291,7 @@ pub async fn download_volume_file(
         }
         Err(e) => Err(e),
     };
-    if target.is_temporary {
-        cleanup_temporary(&api, &target.container_id).await;
-    }
+    guard.dismiss().await;
     result
 }
 
@@ -217,15 +306,14 @@ pub async fn write_volume_file_bytes(
     data: Vec<u8>,
 ) -> Result<(), ContainerError> {
     let api = engine.http()?.clone();
-    let target = resolve_volume_target(&api, volume).await?;
+    let target = resolve_volume_target(&api, volume, true).await?;
+    let guard = TemporaryTargetGuard::new(&api, &target);
     let container_path = map_volume_path(&target.mount_path, path);
     let result = match container_path {
         Ok(c_path) => write_file_bytes(engine, &target.container_id, &c_path, data).await,
         Err(e) => Err(e),
     };
-    if target.is_temporary {
-        cleanup_temporary(&api, &target.container_id).await;
-    }
+    guard.dismiss().await;
     result
 }
 
@@ -250,7 +338,8 @@ pub async fn backup_volume(
     progress: flume::Sender<(u64, Option<u64>)>,
 ) -> Result<u64, ContainerError> {
     let api = engine.http()?.clone();
-    let target = resolve_volume_target(&api, volume).await?;
+    let target = resolve_volume_target(&api, volume, false).await?;
+    let guard = TemporaryTargetGuard::new(&api, &target);
     let container_path = format!("{}/.", target.mount_path.trim_end_matches('/'));
 
     let (reader, task) = open_archive(&api, &target.container_id, &container_path).await?;
@@ -303,9 +392,7 @@ pub async fn backup_volume(
     })?;
 
     task.abort();
-    if target.is_temporary {
-        cleanup_temporary(&api, &target.container_id).await;
-    }
+    guard.dismiss().await;
     result
 }
 
@@ -324,8 +411,9 @@ pub async fn restore_volume(
     // 1. 若目标数据卷不存在，尝试先创建
     let _ = engine.create_volume(volume, None).await;
 
-    // 2. 解析挂载目标（探针或已有容器）
-    let target = resolve_volume_target(&api, volume).await?;
+    // 2. 解析挂载目标（探针或已有容器），指定可写模式
+    let target = resolve_volume_target(&api, volume, true).await?;
+    let guard = TemporaryTargetGuard::new(&api, &target);
     let container_path = target.mount_path.clone();
 
     // 3. 读取本地 tar 文件并通过 PUT archive 流式写入容器
@@ -390,9 +478,7 @@ pub async fn restore_volume(
     .await;
 
     let _ = reader_task.await;
-    if target.is_temporary {
-        cleanup_temporary(&api, &target.container_id).await;
-    }
+    guard.dismiss().await;
 
     let response = response?;
     if !response.status.is_success() {
@@ -436,5 +522,41 @@ mod tests {
         let dest = Path::new("/tmp/my_vol.tar");
         let temp = temp_path(dest);
         assert_eq!(temp, Path::new("/tmp/my_vol.tar.transom-part"));
+    }
+
+    #[test]
+    fn test_select_probe_image() {
+        use super::select_probe_image;
+        use transom_core::ContainerImageSummary;
+
+        let empty: Vec<ContainerImageSummary> = Vec::new();
+        assert_eq!(select_probe_image(&empty), None);
+
+        let regular_img = ContainerImageSummary {
+            id: "sha256:111".to_string(),
+            tags: vec!["my-custom-service:v1".to_string()],
+            size: 1024,
+            created: 0,
+        };
+        let alpine_img = ContainerImageSummary {
+            id: "sha256:222".to_string(),
+            tags: vec!["docker.io/library/alpine:3.18".to_string()],
+            size: 512,
+            created: 0,
+        };
+
+        // 优先匹配 alpine 关键字
+        let images = vec![regular_img.clone(), alpine_img.clone()];
+        assert_eq!(
+            select_probe_image(&images),
+            Some("docker.io/library/alpine:3.18".to_string())
+        );
+
+        // 无关键字时回落到有效 tag 镜像
+        let images_no_preferred = vec![regular_img.clone()];
+        assert_eq!(
+            select_probe_image(&images_no_preferred),
+            Some("my-custom-service:v1".to_string())
+        );
     }
 }
