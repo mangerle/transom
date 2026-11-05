@@ -482,13 +482,13 @@ impl AppShell {
                 if let Some(tab_id) = self.state.containers.tab_of(request_id)
                     && let Some(workspace) = self.state.container_workspace_mut(tab_id)
                 {
-                    workspace.notice = Some(line.clone());
+                    workspace.notice = line.lines().last().map(str::to_string);
                     if let Some(b) = workspace
                         .build_dialog
                         .as_mut()
                         .filter(|b| b.request_id == Some(request_id))
                     {
-                        b.logs.push(line);
+                        b.logs.extend(line.lines().map(str::to_string));
                         if b.logs.len() > crate::container::types::BUILD_LOG_LIMIT {
                             let excess = b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
                             b.logs.drain(..excess);

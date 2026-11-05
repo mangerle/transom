@@ -314,15 +314,44 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             let event_tx = ctx.event_tx.clone();
             let cancel_for_build = std::sync::Arc::clone(&cancel);
             spawn_long(state, ctx, tab_id, request_id, cancel, async move {
+                // 构建输出可能逐行高频到达；合并成 64KiB/100ms 的小批次再进事件总线。
+                const BUILD_BATCH_BYTES: usize = 64 * 1024;
+                const BUILD_BATCH_INTERVAL: std::time::Duration =
+                    std::time::Duration::from_millis(100);
+                let mut pending = String::new();
+                let mut last_flush = tokio::time::Instant::now();
                 let mut progress = |line: String| {
-                    let _ = event_tx
-                        .try_send(ContainerAppEvent::BuildProgress { request_id, line }.into());
+                    pending.push_str(&line);
+                    pending.push('\n');
+                    if pending.len() >= BUILD_BATCH_BYTES
+                        || last_flush.elapsed() >= BUILD_BATCH_INTERVAL
+                    {
+                        let batch = std::mem::take(&mut pending);
+                        let _ = event_tx.try_send(
+                            ContainerAppEvent::BuildProgress {
+                                request_id,
+                                line: batch,
+                            }
+                            .into(),
+                        );
+                        last_flush = tokio::time::Instant::now();
+                    }
                 };
                 let error = engine
                     .build_image(&spec, &cancel_for_build, &mut progress)
                     .await
                     .err()
                     .map(AppError::from);
+                drop(progress);
+                if !pending.is_empty() {
+                    let _ = event_tx.try_send(
+                        ContainerAppEvent::BuildProgress {
+                            request_id,
+                            line: pending,
+                        }
+                        .into(),
+                    );
+                }
                 send_event(
                     &event_tx,
                     ContainerAppEvent::ActionFinished { request_id, error },
