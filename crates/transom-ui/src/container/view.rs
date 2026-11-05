@@ -345,9 +345,18 @@ impl AppShell {
             return div().into_any_element();
         };
         let selected = workspace.section;
+        let container_count = if workspace.include_compose {
+            workspace.containers.len()
+        } else {
+            workspace
+                .containers
+                .iter()
+                .filter(|c| c.compose_project.is_none())
+                .count()
+        };
         let counts = [
             workspace.compose.len(),
-            workspace.containers.len(),
+            container_count,
             workspace.images.len(),
             workspace.volumes.len(),
             workspace.networks.len(),

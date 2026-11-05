@@ -219,14 +219,14 @@ impl AppShell {
                         );
                     }
                     ContainerSection::Images => {
-                        let app_hub = app.clone();
+                        let app_pull = app.clone();
                         menu = menu.item(
                             PopupMenuItem::new(
-                                rust_i18n::t!("container.pull_manager.explore_market").to_string(),
+                                rust_i18n::t!("container.action.pull").to_string(),
                             )
                             .on_click(move |_, window, cx| {
-                                app_hub.update(cx, |this, cx| {
-                                    this.open_container_hub_dialog(tab_id, window, cx);
+                                app_pull.update(cx, |this, cx| {
+                                    this.open_container_create_dialog(tab_id, ContainerSection::Images, window, cx);
                                 });
                             }),
                         );

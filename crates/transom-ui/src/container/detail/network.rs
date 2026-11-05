@@ -163,5 +163,26 @@ pub(crate) fn render_network_detail(
         }
     }
     rows = rows.child(connected_block);
-    scroll_body(rows, p).into_any_element()
+    let raw_btn = Button::new("network-overview-raw-inspect")
+        .xsmall()
+        .ghost()
+        .icon(IconName::Braces)
+        .label(rust_i18n::t!("container.field.inspect").to_string())
+        .on_click(cx.listener(move |this, _, _, cx| {
+            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                workspace.overview_raw = true;
+            }
+            cx.notify();
+        }))
+        .into_any_element();
+
+    let card = super::overview_cards::overview_card(
+        rust_i18n::t!("container.detail.category_identity").to_string(),
+        IconName::Network,
+        p,
+        Some(raw_btn),
+        rows,
+    );
+
+    scroll_body(v_flex().gap_3().child(card), p).into_any_element()
 }

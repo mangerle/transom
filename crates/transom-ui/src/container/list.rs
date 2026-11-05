@@ -186,13 +186,13 @@ impl AppShell {
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_container_run_form(tab_id, None, window, cx);
                 })),
-            ContainerSection::Images => Button::new("container-main-pull")
+            ContainerSection::Images => Button::new("container-main-explore-hub")
                 .xsmall()
                 .primary()
-                .icon(IconName::Download)
-                .tooltip(rust_i18n::t!("container.action.pull").to_string())
+                .icon(IconName::Globe)
+                .tooltip(rust_i18n::t!("container.pull_manager.explore_market").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
-                    this.open_container_create_dialog(tab_id, ContainerSection::Images, window, cx);
+                    this.open_container_hub_dialog(tab_id, window, cx);
                 })),
             ContainerSection::Volumes => Button::new("container-main-create-volume")
                 .xsmall()
