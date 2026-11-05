@@ -163,7 +163,7 @@ pub(crate) fn render_logs(
     } = view;
 
     let all_lines_count = logs.lines().count();
-    let lines = filtered_log_lines(logs, filter, reversed);
+    let lines = filtered_log_lines(logs, filter, reversed, LOG_RENDER_LIMIT);
     let matched_count = lines.len();
 
     // 1. 跟随主行动按钮

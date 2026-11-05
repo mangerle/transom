@@ -43,6 +43,8 @@ pub(crate) use workspace::*;
 
 /// 日志缓冲上限：超出后丢弃最旧部分，避免长时间跟随把内存吃满。
 pub(crate) const LOG_BUFFER_LIMIT: usize = 512 * 1024;
+/// 单帧最多渲染的日志行数：只画尾部窗口，避免每次刷新重建上万个文本元素。
+pub(crate) const LOG_RENDER_LIMIT: usize = 2000;
 
 /// 容器统计固定保留的采样点数，与刷新间隔无关。
 pub(crate) const STATS_HISTORY_LIMIT: usize = 120;

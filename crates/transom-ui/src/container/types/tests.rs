@@ -59,27 +59,46 @@ fn quick_filters_only_apply_where_they_mean_something() {
 #[test]
 fn log_lines_reverse_keeps_every_line() {
     let text = "a\nb\n\nc";
-    assert_eq!(super::log_lines(text, false), vec!["a", "b", "", "c"]);
-    assert_eq!(super::log_lines(text, true), vec!["c", "", "b", "a"]);
-    assert!(super::log_lines("", false).is_empty());
+    assert_eq!(
+        super::filtered_log_lines(text, "", false, 1000),
+        vec!["a", "b", "", "c"]
+    );
+    assert_eq!(
+        super::filtered_log_lines(text, "", true, 1000),
+        vec!["c", "", "b", "a"]
+    );
+    assert!(super::filtered_log_lines("", "", false, 1000).is_empty());
+}
+
+#[test]
+fn filtered_log_lines_only_renders_tail_window() {
+    let text = "one\ntwo\nthree\nfour";
+    assert_eq!(
+        super::filtered_log_lines(text, "", false, 2),
+        vec!["three", "four"]
+    );
+    assert_eq!(
+        super::filtered_log_lines(text, "", true, 2),
+        vec!["four", "three"]
+    );
 }
 
 #[test]
 fn filtered_log_lines_matches_keyword_and_reverses() {
     let text = "INFO: starting service\nDEBUG: cache miss\nERROR: failed to connect\nINFO: ready";
     assert_eq!(
-        super::filtered_log_lines(text, "info", false),
+        super::filtered_log_lines(text, "info", false, 1000),
         vec!["INFO: starting service", "INFO: ready"]
     );
     assert_eq!(
-        super::filtered_log_lines(text, "INFO", true),
+        super::filtered_log_lines(text, "INFO", true, 1000),
         vec!["INFO: ready", "INFO: starting service"]
     );
     assert_eq!(
-        super::filtered_log_lines(text, "failed", false),
+        super::filtered_log_lines(text, "failed", false, 1000),
         vec!["ERROR: failed to connect"]
     );
-    assert_eq!(super::filtered_log_lines(text, "", false).len(), 4);
+    assert_eq!(super::filtered_log_lines(text, "", false, 1000).len(), 4);
 }
 
 #[test]

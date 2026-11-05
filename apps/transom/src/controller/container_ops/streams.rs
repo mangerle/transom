@@ -2,6 +2,65 @@
 
 use super::*;
 
+/// 日志事件批量上限：避免每 8KB 日志块都走一次事件总线与整窗重绘。
+const LOG_BATCH_BYTES: usize = 64 * 1024;
+/// 日志批量时间窗口；低吞吐时最多延迟这么久。
+const LOG_BATCH_INTERVAL: Duration = Duration::from_millis(100);
+
+/// 把连续日志块合并成较少的事件；窗口满或超时立即投递。
+struct LogBatcher<'a> {
+    event_tx: &'a flume::Sender<transom_core::AppEvent>,
+    request_id: ContainerRequestId,
+    pending: Vec<u8>,
+    last_flush: tokio::time::Instant,
+}
+
+impl<'a> LogBatcher<'a> {
+    fn new(
+        event_tx: &'a flume::Sender<transom_core::AppEvent>,
+        request_id: ContainerRequestId,
+    ) -> Self {
+        Self {
+            event_tx,
+            request_id,
+            pending: Vec::with_capacity(LOG_BATCH_BYTES),
+            last_flush: tokio::time::Instant::now(),
+        }
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        self.pending.extend_from_slice(bytes);
+        if self.pending.len() >= LOG_BATCH_BYTES || self.last_flush.elapsed() >= LOG_BATCH_INTERVAL
+        {
+            self.flush();
+        }
+    }
+
+    fn flush(&mut self) {
+        if self.pending.is_empty() {
+            return;
+        }
+        let bytes = std::mem::take(&mut self.pending);
+        if self
+            .event_tx
+            .try_send(
+                ContainerAppEvent::LogsChunk {
+                    request_id: self.request_id,
+                    bytes,
+                }
+                .into(),
+            )
+            .is_err()
+        {
+            log::debug!(
+                "容器日志事件队列已满，丢弃一批日志，请求: {}",
+                self.request_id
+            );
+        }
+        self.last_flush = tokio::time::Instant::now();
+    }
+}
+
 pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
     match command {
         ContainerCommand::Cancel { tab_id, request_id } => {
@@ -55,14 +114,14 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 request_id,
                 Arc::clone(&cancel),
                 async move {
-                    let mut sink = |bytes: Vec<u8>| {
-                        let _ = event_tx
-                            .try_send(ContainerAppEvent::LogsChunk { request_id, bytes }.into());
-                    };
+                    let mut batcher = LogBatcher::new(&event_tx, request_id);
+                    let mut sink = |bytes: Vec<u8>| batcher.push(&bytes);
                     let result = transom_container::stream_logs(
                         &engine, &container, tail, follow, timestamps, &cancel, &mut sink,
                     )
                     .await;
+                    drop(sink);
+                    batcher.flush();
                     match result {
                         Ok(()) | Err(transom_container::ContainerError::Cancelled) => {}
                         Err(error) => send_failed(&event_tx, request_id, error).await,
@@ -91,14 +150,14 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 request_id,
                 Arc::clone(&cancel),
                 async move {
-                    let mut sink = |bytes: Vec<u8>| {
-                        let _ = event_tx
-                            .try_send(ContainerAppEvent::LogsChunk { request_id, bytes }.into());
-                    };
+                    let mut batcher = LogBatcher::new(&event_tx, request_id);
+                    let mut sink = |bytes: Vec<u8>| batcher.push(&bytes);
                     let result = transom_container::stream_project_logs(
                         &engine, containers, tail, follow, timestamps, &cancel, &mut sink,
                     )
                     .await;
+                    drop(sink);
+                    batcher.flush();
                     match result {
                         Ok(()) | Err(transom_container::ContainerError::Cancelled) => {}
                         Err(error) => send_failed(&event_tx, request_id, error).await,

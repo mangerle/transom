@@ -2,7 +2,8 @@
 
 use crate::app::AppShell;
 use crate::container::types::{
-    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_TAIL_CHOICES, filtered_log_lines,
+    ContainerConfirm, ContainerDetailTab, ContainerSection, LOG_RENDER_LIMIT, LOG_TAIL_CHOICES,
+    filtered_log_lines,
 };
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;

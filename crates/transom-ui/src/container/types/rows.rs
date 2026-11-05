@@ -153,31 +153,28 @@ pub(crate) fn row_key(target: &RowTarget) -> &str {
     }
 }
 
-/// 按行切分日志正文；`reversed` 为真时最新在前。
+/// 按关键字过滤日志行；只保留最后 `max_lines` 行，`reversed` 为真时最新在前。
 ///
-/// 设计原理（Why）：跟随日志时最想知道的是「刚刚发生了什么」，而纯文本块没有
-/// 自动滚到底的能力，把顺序翻过来能让最新内容始终出现在视野里。空行保留，
-/// 因为引擎输出本身可能含空行，丢掉会让日志对不上号。
-pub(crate) fn log_lines(text: &str, reversed: bool) -> Vec<&str> {
-    let mut lines: Vec<&str> = text.lines().collect();
-    if reversed {
-        lines.reverse();
+/// 设计原理（Why）：跟随日志时界面每帧只需要尾部窗口；从末尾反向取够行数再做
+/// 过滤，既避免全量收集，也避免对上万行逐一构建 UI 元素。
+pub(crate) fn filtered_log_lines<'a>(
+    text: &'a str,
+    filter: &str,
+    reversed: bool,
+    max_lines: usize,
+) -> Vec<&'a str> {
+    if max_lines == 0 {
+        return Vec::new();
     }
-    lines
-}
-
-/// 按关键字过滤日志行；若关键词为空则返回全部行；`reversed` 为真时最新在前。
-pub(crate) fn filtered_log_lines<'a>(text: &'a str, filter: &str, reversed: bool) -> Vec<&'a str> {
     let filter = filter.trim();
-    if filter.is_empty() {
-        return log_lines(text, reversed);
-    }
     let filter_lower = filter.to_lowercase();
     let mut lines: Vec<&'a str> = text
         .lines()
-        .filter(|line| line.to_lowercase().contains(&filter_lower))
+        .rev()
+        .take(max_lines)
+        .filter(|line| filter.is_empty() || line.to_lowercase().contains(&filter_lower))
         .collect();
-    if reversed {
+    if !reversed {
         lines.reverse();
     }
     lines
