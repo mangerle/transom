@@ -37,6 +37,7 @@ mod overview;
 mod overview_cards;
 mod raw_inspect;
 mod terminal;
+pub(crate) mod timeline;
 mod volume;
 
 pub(super) use compose::render_compose_detail;
@@ -241,6 +242,13 @@ impl AppShell {
                 network: &selected_network,
                 compose: &selected_compose,
                 all_containers: &containers,
+                timeline: if section == ContainerSection::Containers {
+                    selected_container.as_ref().map(|c| {
+                        timeline::StatusTimeline::infer(details.as_ref(), c.state)
+                    })
+                } else {
+                    None
+                },
             },
             p,
             cx,

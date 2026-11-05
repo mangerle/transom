@@ -22,6 +22,8 @@ pub(crate) struct ContainerHeaderView<'a> {
     pub(super) network: &'a Option<transom_core::ContainerNetworkSummary>,
     pub(super) compose: &'a Option<ComposeProject>,
     pub(super) all_containers: &'a [ContainerSummary],
+    /// 容器 24 小时状态时间线。
+    pub(super) timeline: Option<super::timeline::StatusTimeline>,
 }
 
 impl AppShell {
@@ -45,6 +47,7 @@ impl AppShell {
             network,
             compose,
             all_containers,
+            timeline,
         } = view;
         // 健康状态点：healthy 绿、unhealthy 红、starting 等其他状态弱色。
         // 只在镜像声明了 HEALTHCHECK 时出现，没声明就不制造噪声。
@@ -259,6 +262,10 @@ impl AppShell {
 
                 if let Some(chip) = health_chip {
                     title_row = title_row.child(chip);
+                }
+
+                if let Some(tl) = timeline {
+                    title_row = title_row.child(super::timeline::render_status_timeline(&tl, p));
                 }
 
                 if let Some(tabs) = tabs {

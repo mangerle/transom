@@ -4550,6 +4550,28 @@ sidebar:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'
 container:
+  timeline:
+    title:
+      en: 24h Status Timeline
+      zh-CN: 24小时状态时间线
+    running:
+      en: Running
+      zh-CN: 运行中
+    exited:
+      en: Exited (Normal)
+      zh-CN: 正常退出
+    error:
+      en: Error
+      zh-CN: 异常退出
+    oom_killed:
+      en: OOM Killed
+      zh-CN: 内存溢出终止 (OOM)
+    unknown:
+      en: No Record
+      zh-CN: 无记录
+    slot_desc:
+      en: "%{hours}h ago: %{status}"
+      zh-CN: "%{hours}小时前：%{status}"
   status:
     en: Status
     zh-CN: 状态
