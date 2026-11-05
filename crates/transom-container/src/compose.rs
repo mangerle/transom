@@ -44,7 +44,7 @@ pub async fn run(
     );
     let local_dir = validate_project(project, action, is_remote)?;
 
-    let program = engine.info.engine.kind.cli_program().to_string();
+    let (program, command_prefix) = compose_program(endpoint, engine.info.engine.kind);
     let endpoint_args = endpoint_cli_args(endpoint);
 
     log::info!(
@@ -60,6 +60,7 @@ pub async fn run(
         project,
         action,
         &endpoint_args,
+        &command_prefix,
         local_dir.as_deref(),
         cancel,
     )
@@ -81,6 +82,7 @@ pub async fn run(
         project,
         action,
         &endpoint_args,
+        &command_prefix,
         local_dir.as_deref(),
         cancel,
     )
@@ -189,22 +191,52 @@ pub fn endpoint_cli_args(endpoint: &ContainerEndpoint) -> Vec<String> {
             args.push("-H".to_string());
             args.push(target);
         }
-        ContainerEndpoint::Wsl { .. } | ContainerEndpoint::Wslc | ContainerEndpoint::Cli { .. } => {}
+        ContainerEndpoint::Wsl { .. } | ContainerEndpoint::Wslc | ContainerEndpoint::Cli { .. } => {
+        }
     }
     args
 }
 
-/// 组装 CLI 参数：端点参数先行，工程名与配置文件作为独立 argv 传入，不经过 Shell。
+/// 选择 compose 的实际程序与前缀参数。
+///
+/// WSL 端点必须通过 `wsl.exe -d <distro> -e docker` 进入发行版；
+/// 自定义 CLI 端点直接复用配置里的 program/args；其余端点走引擎 CLI。
+fn compose_program(
+    endpoint: &ContainerEndpoint,
+    kind: transom_core::ContainerEngineKind,
+) -> (String, Vec<String>) {
+    match endpoint {
+        ContainerEndpoint::Wsl { distro } => (
+            "wsl.exe".to_string(),
+            vec![
+                "-d".to_string(),
+                distro.clone(),
+                "-e".to_string(),
+                kind.cli_program().to_string(),
+            ],
+        ),
+        ContainerEndpoint::Wslc => ("wslc".to_string(), Vec::new()),
+        ContainerEndpoint::Cli { program, args } => (program.clone(), args.clone()),
+        _ => (kind.cli_program().to_string(), Vec::new()),
+    }
+}
+
+/// 组装 CLI 参数：端点参数、CLI 前缀先行，工程名与配置文件作为独立 argv 传入，
+/// 不经过 Shell。
 fn build_args(
     program: &str,
     project: &ComposeProject,
     action: ComposeAction,
     endpoint_args: &[String],
+    command_prefix: &[String],
     local_dir: Option<&str>,
 ) -> Vec<String> {
-    let mut args = Vec::with_capacity(project.config_files.len() * 2 + endpoint_args.len() + 6);
-    // 1. 全局端点参数必须位于子命令之前
+    let mut args = Vec::with_capacity(
+        project.config_files.len() * 2 + endpoint_args.len() + command_prefix.len() + 6,
+    );
+    // 1. 全局端点参数与 CLI 前缀必须位于子命令之前
     args.extend(endpoint_args.iter().cloned());
+    args.extend(command_prefix.iter().cloned());
 
     // 2. compose 子命令
     if !is_standalone(program) {
@@ -264,11 +296,20 @@ async fn spawn_compose(
     project: &ComposeProject,
     action: ComposeAction,
     endpoint_args: &[String],
+    command_prefix: &[String],
     working_dir: Option<&str>,
     cancel: &Arc<AtomicBool>,
 ) -> Result<Completed, ContainerError> {
-    let args = build_args(program, project, action, endpoint_args, working_dir);
+    let args = build_args(
+        program,
+        project,
+        action,
+        endpoint_args,
+        command_prefix,
+        working_dir,
+    );
     let mut cmd = tokio::process::Command::new(program);
+    crate::cli::configure_child(&mut cmd);
     cmd.args(&args);
 
     if let Some(dir) = working_dir {
@@ -294,11 +335,11 @@ async fn spawn_compose(
     let deadline = tokio::time::Instant::now() + COMPOSE_TIMEOUT;
     let status = loop {
         if cancel.load(Ordering::Relaxed) {
-            let _ = child.kill().await;
+            crate::cli::terminate_child(&mut child).await;
             return Err(ContainerError::Cancelled);
         }
         if tokio::time::Instant::now() >= deadline {
-            let _ = child.kill().await;
+            crate::cli::terminate_child(&mut child).await;
             return Err(ContainerError::Cli {
                 command: display_command(program, action, endpoint_args),
                 message: format!("编排命令超过 {} 秒未结束", COMPOSE_TIMEOUT.as_secs()),
@@ -313,7 +354,6 @@ async fn spawn_compose(
         }
     };
 
-    let _ = child.kill().await;
     Ok(Completed {
         status,
         stdout: stdout_task.await.unwrap_or_default(),
@@ -332,8 +372,10 @@ async fn read_capped(pipe: Option<impl tokio::io::AsyncRead + Unpin + Send>) -> 
         if count == 0 {
             break;
         }
-        if buffer.len() < OUTPUT_LIMIT {
-            buffer.extend_from_slice(&chunk[..count]);
+        buffer.extend_from_slice(&chunk[..count]);
+        if buffer.len() > OUTPUT_LIMIT {
+            let excess = buffer.len() - OUTPUT_LIMIT;
+            buffer.drain(..excess);
         }
     }
     buffer
@@ -420,11 +462,19 @@ mod tests {
             &project,
             ComposeAction::Down,
             &endpoint_args,
+            &[],
             None,
         );
         assert_eq!(
             down_args,
-            vec!["-H", "tcp://remote:2375", "compose", "-p", "web_app", "down"]
+            vec![
+                "-H",
+                "tcp://remote:2375",
+                "compose",
+                "-p",
+                "web_app",
+                "down"
+            ]
         );
 
         // 本地有目录：包含 -f
@@ -433,6 +483,7 @@ mod tests {
             &project,
             ComposeAction::Up,
             &endpoint_args,
+            &[],
             Some("/local/path"),
         );
         assert_eq!(
@@ -449,6 +500,18 @@ mod tests {
                 "-d"
             ]
         );
+    }
+
+    #[test]
+    fn wsl_endpoint_runs_compose_inside_distro() {
+        let (program, prefix) = compose_program(
+            &ContainerEndpoint::Wsl {
+                distro: "Ubuntu-24.04".to_string(),
+            },
+            transom_core::ContainerEngineKind::Docker,
+        );
+        assert_eq!(program, "wsl.exe");
+        assert_eq!(prefix, vec!["-d", "Ubuntu-24.04", "-e", "docker"]);
     }
 
     #[test]
