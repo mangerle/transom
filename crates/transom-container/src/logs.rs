@@ -95,6 +95,17 @@ pub async fn stream_logs(
     Ok(())
 }
 
+/// 多容器联合日志流的 ANSI 终端高对比度色彩调色板。
+const ANSI_COLOR_PALETTE: [&str; 6] = [
+    "\x1b[36m", // 青色
+    "\x1b[32m", // 绿色
+    "\x1b[33m", // 黄色
+    "\x1b[35m", // 洋红色
+    "\x1b[34m", // 蓝色
+    "\x1b[96m", // 亮青色
+];
+const ANSI_RESET: &str = "\x1b[0m";
+
 /// 针对单条流为每行开头注入服务/容器前缀。
 #[derive(Debug)]
 pub struct LinePrefixer {
@@ -103,10 +114,20 @@ pub struct LinePrefixer {
 }
 
 impl LinePrefixer {
-    /// 构造带容器/服务名前缀的行格式化器。
+    /// 构造带容器/服务名前缀的行格式化器（默认无色）。
+    #[allow(dead_code)]
     pub fn new(name: &str) -> Self {
         Self {
             prefix: format!("[{name}] ").into_bytes(),
+            at_line_start: true,
+        }
+    }
+
+    /// 构造带专属 ANSI 终端高亮色彩的容器/服务名前缀格式化器。
+    pub fn with_color(name: &str, color_index: usize) -> Self {
+        let color = ANSI_COLOR_PALETTE[color_index % ANSI_COLOR_PALETTE.len()];
+        Self {
+            prefix: format!("{color}[{name}]{ANSI_RESET} ").into_bytes(),
             at_line_start: true,
         }
     }
@@ -128,7 +149,7 @@ impl LinePrefixer {
     }
 }
 
-/// 聚合拉取多个容器的联合日志；多路流合并推送到单一输出端，每行带容器名前缀。
+/// 聚合拉取多个容器的联合日志；多路流合并推送到单一输出端，每行带彩色容器名前缀。
 ///
 /// # Errors
 /// 引擎错误或协议异常时返回 [`ContainerError`]。
@@ -148,12 +169,12 @@ pub async fn stream_project_logs(
     let (tx, rx) = flume::bounded::<Vec<u8>>(64);
     let mut handles = Vec::with_capacity(containers.len());
 
-    for name in containers {
+    for (color_idx, name) in containers.into_iter().enumerate() {
         let engine = engine.clone();
         let cancel = Arc::clone(cancel);
         let tx = tx.clone();
         let handle = tokio::spawn(async move {
-            let mut prefixer = LinePrefixer::new(&name);
+            let mut prefixer = LinePrefixer::with_color(&name, color_idx);
             let mut sub_sink = |chunk: Vec<u8>| {
                 let formatted = prefixer.process(&chunk);
                 let _ = tx.send(formatted);
@@ -428,4 +449,12 @@ mod tests {
         assert_eq!(part1, b"[db] hello ");
         assert_eq!(part2, b"world\n[db] next\n");
     }
+
+    #[test]
+    fn line_prefixer_with_color_injects_ansi() {
+        let mut prefixer = super::LinePrefixer::with_color("api-svc", 0);
+        let result = prefixer.process(b"ready\n");
+        assert_eq!(result, b"\x1b[36m[api-svc]\x1b[0m ready\n");
+    }
 }
+
