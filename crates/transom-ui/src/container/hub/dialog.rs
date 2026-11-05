@@ -8,7 +8,7 @@
 use super::card::render_hub_result_card;
 use super::detail::render_hub_image_detail;
 use super::view;
-use crate::app::{app_settings, AppShell};
+use crate::app::{AppShell, app_settings};
 use crate::container::list::dropdown_trigger;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -18,7 +18,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{ContainerRegistry, TabId};
 
 impl AppShell {
     /// 渲染镜像仓库弹窗整体界面（根据状态呈现全景详情页或搜索列表）。
@@ -46,14 +46,18 @@ impl AppShell {
         let input_val = search_input.read(cx).value().trim().to_string();
         let selected_detail = hub.selected_detail.clone();
         let selected_tags = hub.selected_tags.clone();
+        let hub_tags = hub.tags.clone();
+        let tags_loading = hub.tags_loading;
+        let tags_error = hub.tags_error.clone();
         let custom_tag_input = hub.custom_tag_input.as_ref();
         let copy_toast = hub.copy_toast;
 
-        let current_registry_name = registries
+        let current_registry = registries
             .iter()
-            .find(|r| r.id == selected_reg_id)
-            .map(|r| r.name.clone())
-            .unwrap_or_else(|| rust_i18n::t!("container.hub.docker_hub_default").to_string());
+            .find(|registry| registry.id == selected_reg_id)
+            .cloned()
+            .unwrap_or_else(ContainerRegistry::docker_hub);
+        let current_registry_name = current_registry.name.clone();
 
         // 1. 顶部 Header
         let header = view::render_hub_header(&current_registry_name, p);
@@ -65,15 +69,20 @@ impl AppShell {
                 .get(&item_name)
                 .cloned()
                 .unwrap_or_else(|| "latest".to_string());
+            let pull_reference = current_registry.qualify_reference(&item_name, &active_tag);
 
             let app_back = app.clone();
             let app_pull = app.clone();
             let app_copy = app.clone();
-            let reg_name_pull = current_registry_name.clone();
+            let registry_pull = current_registry.clone();
 
             let detail_body = render_hub_image_detail(
                 &detail_item,
                 &active_tag,
+                &pull_reference,
+                &hub_tags,
+                tags_loading,
+                tags_error.as_deref(),
                 custom_tag_input,
                 copy_toast,
                 move |_, cx| {
@@ -82,10 +91,17 @@ impl AppShell {
                     });
                 },
                 move |tag_to_pull, window, cx| {
-                    let full_ref = format!("{}:{}", item_name, tag_to_pull);
-                    let reg_name = reg_name_pull.clone();
+                    let repository = item_name.clone();
+                    let registry = registry_pull.clone();
                     app_pull.update(cx, move |this, cx| {
-                        this.enqueue_image_pull(tab_id, full_ref, reg_name, window, cx);
+                        this.enqueue_image_pull(
+                            tab_id,
+                            repository,
+                            tag_to_pull.to_string(),
+                            registry,
+                            window,
+                            cx,
+                        );
                     });
                 },
                 move |cmd, _, cx| {
@@ -329,7 +345,7 @@ impl AppShell {
 
             for item in results {
                 let img_name = item.name.clone();
-                let reg_name = current_registry_name.clone();
+                let registry = current_registry.clone();
                 let active_tag = selected_tags
                     .get(&img_name)
                     .cloned()
@@ -346,10 +362,17 @@ impl AppShell {
                     &item,
                     &active_tag,
                     move |tag_to_pull, window, cx| {
-                        let full_ref = format!("{}:{}", item_for_pull, tag_to_pull);
-                        let reg = reg_name.clone();
+                        let repository = item_for_pull.clone();
+                        let registry = registry.clone();
                         app_pull.update(cx, move |this, cx| {
-                            this.enqueue_image_pull(tab_id, full_ref, reg, window, cx);
+                            this.enqueue_image_pull(
+                                tab_id,
+                                repository,
+                                tag_to_pull.to_string(),
+                                registry,
+                                window,
+                                cx,
+                            );
                         });
                     },
                     move |new_tag, _, cx| {

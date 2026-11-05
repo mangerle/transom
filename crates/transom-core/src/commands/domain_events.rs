@@ -425,6 +425,11 @@ pub enum ContainerAppEvent {
         request_id: ContainerRequestId,
         results: Vec<crate::model::container::ImageSearchResult>,
     },
+    /// 指定镜像仓库的实时标签列表读取完成。
+    ImageTagsListed {
+        request_id: ContainerRequestId,
+        tags: Vec<String>,
+    },
     /// 镜像拉取任务分层进度更新。
     PullTaskProgress {
         task_id: String,

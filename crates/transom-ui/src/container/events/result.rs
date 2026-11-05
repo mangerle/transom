@@ -144,6 +144,18 @@ impl AppShell {
                 workspace.changes_request = None;
                 workspace.changes_loading = false;
             }
+            if let Some(hub) = workspace.hub_dialog.as_mut() {
+                if hub.search_request == Some(request_id) {
+                    hub.searching = false;
+                    hub.search_request = None;
+                    hub.search_error = Some(err_desc.clone());
+                }
+                if hub.tags_request == Some(request_id) {
+                    hub.tags_loading = false;
+                    hub.tags_request = None;
+                    hub.tags_error = Some(err_desc.clone());
+                }
+            }
             if workspace
                 .terminal_request
                 .as_ref()

@@ -23,6 +23,7 @@ flume.workspace = true
 futures.workspace = true
 globset.workspace = true
 base64.workspace = true
+reqwest.workspace = true
 directories.workspace = true
 # HTTP/1.1 直接跑在任意双向流上（unix socket / 命名管道 / 子进程 stdio），
 # 并支持 exec 需要的 HTTP Upgrade。hyper 1 家族已由 reqwest 间接引入，

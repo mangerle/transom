@@ -246,13 +246,15 @@ impl AppShell {
                                                 },
                                             );
                                             // 调度下一个任务
-                                            if let Some((next_id, next_tab, next_ref)) = next_cmd {
+                                            if let Some((next_id, next_tab, next_ref, next_auth)) =
+                                                next_cmd
+                                            {
                                                 this.state.send_command(
                                                     ContainerCommand::PullImageTask {
                                                         tab_id: next_tab,
                                                         task_id: next_id,
                                                         reference: next_ref,
-                                                        auth: None,
+                                                        auth: next_auth,
                                                     },
                                                 );
                                             }

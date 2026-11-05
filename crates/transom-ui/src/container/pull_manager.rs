@@ -7,7 +7,10 @@
 //! - 实时维护各分层（Layer）进度并汇聚总体下载/解压完成度。
 
 use std::collections::HashMap;
-use transom_core::{ImageLayerProgress, TabId};
+use transom_core::{ContainerRegistryAuth, ImageLayerProgress, TabId};
+
+/// 自动调度下一个任务所需的完整参数：任务 ID、工作区、镜像引用与仓库凭据。
+type ScheduledPull = (String, TabId, String, Option<ContainerRegistryAuth>);
 
 /// 镜像拉取任务状态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +58,8 @@ pub(crate) struct ImagePullTask {
     pub(crate) reference: String,
     /// 来源仓库名称（如 `Docker Hub (官方)`, `私有 Harbor`）。
     pub(crate) registry_name: String,
+    /// 私有仓库凭据；Docker Hub 或匿名拉取为 `None`。
+    pub(crate) auth: Option<ContainerRegistryAuth>,
     pub(crate) state: PullTaskState,
     /// 当前最新的一行状态描述（如 "Extracting", "Download complete"）。
     pub(crate) status_line: String,
@@ -68,11 +73,13 @@ impl ImagePullTask {
         tab_id: TabId,
         reference: String,
         registry_name: String,
+        auth: Option<ContainerRegistryAuth>,
         state: PullTaskState,
     ) -> Self {
         Self {
             id,
             tab_id,
+            auth,
             reference,
             registry_name,
             state,
@@ -148,6 +155,7 @@ impl ImagePullManager {
         tab_id: TabId,
         reference: String,
         registry_name: String,
+        auth: Option<ContainerRegistryAuth>,
     ) -> (String, bool) {
         let task_id = transom_core::ContainerRequestId::new().to_string();
         let should_start = self.pulling_count() < self.max_concurrent;
@@ -162,6 +170,7 @@ impl ImagePullManager {
             tab_id,
             reference,
             registry_name,
+            auth,
             initial_state,
         );
         self.tasks.push(task);
@@ -184,12 +193,12 @@ impl ImagePullManager {
     }
 
     /// 标记拉取任务结束。
-    /// 若产生空闲并发槽位，自动调度下一个排队中的任务，返回其 (task_id, tab_id, reference)。
+    /// 若产生空闲并发槽位，自动调度下一个排队中的任务。
     pub(crate) fn on_finished(
         &mut self,
         task_id: &str,
         error: Option<String>,
-    ) -> Option<(String, TabId, String)> {
+    ) -> Option<ScheduledPull> {
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == task_id) {
             task.state = match error {
                 Some(err) => PullTaskState::Failed(err),
@@ -201,7 +210,7 @@ impl ImagePullManager {
 
     /// 主动取消指定任务。
     /// 若被取消的任务处于 Pulling 状态，同样调度下一个排队中的任务。
-    pub(crate) fn cancel_task(&mut self, task_id: &str) -> Option<(String, TabId, String)> {
+    pub(crate) fn cancel_task(&mut self, task_id: &str) -> Option<ScheduledPull> {
         let mut was_pulling = false;
         if let Some(task) = self.tasks.iter_mut().find(|t| t.id == task_id) {
             was_pulling = task.state == PullTaskState::Pulling;
@@ -226,7 +235,7 @@ impl ImagePullManager {
     }
 
     /// 内部调度：拉起下一个排队中的任务。
-    fn schedule_next(&mut self) -> Option<(String, TabId, String)> {
+    fn schedule_next(&mut self) -> Option<ScheduledPull> {
         if self.pulling_count() >= self.max_concurrent {
             return None;
         }
@@ -239,6 +248,7 @@ impl ImagePullManager {
             next_queued.id.clone(),
             next_queued.tab_id,
             next_queued.reference.clone(),
+            next_queued.auth.clone(),
         ))
     }
 }
@@ -253,23 +263,23 @@ mod tests {
         let tab = TabId::new();
 
         // 任务 1：立即执行
-        let (t1, start1) = manager.enqueue(tab, "nginx:latest".into(), "Docker Hub".into());
+        let (t1, start1) = manager.enqueue(tab, "nginx:latest".into(), "Docker Hub".into(), None);
         assert!(start1);
         assert_eq!(manager.pulling_count(), 1);
 
         // 任务 2：立即执行（达到上限 2）
-        let (t2, start2) = manager.enqueue(tab, "redis:alpine".into(), "Docker Hub".into());
+        let (t2, start2) = manager.enqueue(tab, "redis:alpine".into(), "Docker Hub".into(), None);
         assert!(start2);
         assert_eq!(manager.pulling_count(), 2);
 
         // 任务 3：排队中
-        let (t3, start3) = manager.enqueue(tab, "postgres:15".into(), "Docker Hub".into());
+        let (t3, start3) = manager.enqueue(tab, "postgres:15".into(), "Docker Hub".into(), None);
         assert!(!start3);
         assert_eq!(manager.pulling_count(), 2);
 
         // 任务 1 完成 -> 自动调度任务 3
         let next = manager.on_finished(&t1, None);
-        assert_eq!(next, Some((t3.clone(), tab, "postgres:15".into())));
+        assert_eq!(next, Some((t3.clone(), tab, "postgres:15".into(), None)));
         assert_eq!(manager.pulling_count(), 2);
 
         // 任务 2 取消 -> 此时没有新任务可排队

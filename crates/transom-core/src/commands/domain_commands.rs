@@ -11,8 +11,8 @@
 use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, TabId, TransferId};
 use crate::model::container::{
     ComposeAction, ComposeProject, ContainerBuildSpec, ContainerConnection, ContainerCreateSpec,
-    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRegistryAuth,
-    ContainerUpdateSpec,
+    ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRegistry,
+    ContainerRegistryAuth, ContainerUpdateSpec,
 };
 use crate::model::forward::ForwardRule;
 use crate::model::host::HostAction;
@@ -269,12 +269,20 @@ pub enum ContainerCommand {
         volume: String,
         local_path: std::path::PathBuf,
     },
-    /// 在远端镜像仓库搜索镜像（Docker Hub 或私有 Registry）。
+    /// 在指定镜像仓库搜索镜像（Docker Hub 或私有 Registry）。
     SearchImages {
         tab_id: TabId,
         request_id: ContainerRequestId,
+        registry: ContainerRegistry,
         term: String,
         limit: Option<u32>,
+    },
+    /// 读取指定仓库的实时标签列表。
+    ListImageTags {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        registry: ContainerRegistry,
+        repository: String,
     },
     /// 带任务追踪与分层进度的镜像拉取指令。
     PullImageTask {

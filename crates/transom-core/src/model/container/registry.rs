@@ -8,6 +8,7 @@
 //! - 镜像分层拉取进度抽象为精细化的 `ImageLayerProgress`，支持界面实时渲染
 //!   Docker/Podman 每一个 Layer 的下载与解压双阶段百分比。
 
+use super::ContainerRegistryAuth;
 use serde::{Deserialize, Serialize};
 
 /// 镜像仓库配置（如 Docker Hub、私有 Harbor、阿里云等）。
@@ -50,6 +51,51 @@ impl ContainerRegistry {
             .trim_start_matches("http://")
             .trim_start_matches("https://");
         trimmed.split('/').next().unwrap_or(trimmed)
+    }
+
+    /// 是否为 Docker Hub；Hub 的搜索入口与私有 Registry 不同。
+    pub fn is_docker_hub(&self) -> bool {
+        let domain = self.domain().to_ascii_lowercase();
+        matches!(
+            domain.as_str(),
+            "docker.io" | "index.docker.io" | "registry-1.docker.io" | "hub.docker.com"
+        ) || self.id.eq_ignore_ascii_case("docker-hub")
+    }
+
+    /// 把仓库名与标签拼成可直接交给 Docker 的完整引用。
+    ///
+    /// Docker Hub 不需要域名前缀；私有仓库补 `domain/`；仓库名已包含域名时
+    /// 不重复拼接，避免出现 `harbor/harbor/app`。
+    pub fn qualify_reference(&self, repository: &str, tag: &str) -> String {
+        let repo = repository.trim().trim_start_matches('/');
+        if repo.is_empty() {
+            return String::new();
+        }
+        let domain = self.domain();
+        let base = if self.is_docker_hub() || repo.starts_with(&format!("{domain}/")) {
+            repo.to_string()
+        } else {
+            format!("{domain}/{repo}")
+        };
+        let tag = tag.trim();
+        if tag.is_empty() || base.contains('@') {
+            base
+        } else {
+            format!("{base}:{tag}")
+        }
+    }
+
+    /// 构造拉取/推送所需的认证凭据；未配置用户名时返回 `None`。
+    pub fn auth(&self) -> Option<ContainerRegistryAuth> {
+        if self.username.is_empty() {
+            return None;
+        }
+        Some(ContainerRegistryAuth {
+            username: self.username.clone(),
+            password: self.password.clone(),
+            server_address: Some(self.url.clone()),
+            identity_token: None,
+        })
     }
 }
 
@@ -110,5 +156,38 @@ mod tests {
             is_default: false,
         };
         assert_eq!(reg.domain(), "harbor.internal.company.com");
+    }
+
+    #[test]
+    fn docker_hub_reference_has_no_domain_prefix() {
+        let hub = ContainerRegistry::docker_hub();
+        assert!(hub.is_docker_hub());
+        assert_eq!(hub.qualify_reference("nginx", "latest"), "nginx:latest");
+        assert_eq!(
+            hub.qualify_reference("bitnami/redis", "7.2"),
+            "bitnami/redis:7.2"
+        );
+    }
+
+    #[test]
+    fn private_registry_reference_prefixes_domain_once() {
+        let registry = ContainerRegistry {
+            id: "harbor".into(),
+            name: "Harbor".into(),
+            url: "https://harbor.example.com".into(),
+            username: "user".into(),
+            password: "secret".into(),
+            is_default: false,
+        };
+        assert!(!registry.is_docker_hub());
+        assert_eq!(
+            registry.qualify_reference("library/nginx", "1.27"),
+            "harbor.example.com/library/nginx:1.27"
+        );
+        assert_eq!(
+            registry.qualify_reference("harbor.example.com/library/nginx", "1.27"),
+            "harbor.example.com/library/nginx:1.27"
+        );
+        assert!(registry.auth().is_some());
     }
 }

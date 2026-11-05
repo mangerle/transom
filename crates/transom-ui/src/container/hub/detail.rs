@@ -6,7 +6,6 @@
 //! - 包含直接输入任意自定义 Tag 的拉取控件与规范 Docker CLI 命令一键复制。
 
 use super::card::format_star_count;
-use super::tags::get_image_tag_presets;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -21,6 +20,10 @@ use transom_core::ImageSearchResult;
 pub(crate) fn render_hub_image_detail<FBack, FPull, FCopy>(
     item: &ImageSearchResult,
     active_tag: &str,
+    pull_reference: &str,
+    tags: &[String],
+    tags_loading: bool,
+    tags_error: Option<&str>,
     custom_tag_input: Option<&Entity<gpui_kit::component::input::InputState>>,
     copy_toast: bool,
     on_back: FBack,
@@ -42,10 +45,9 @@ where
     let stars_str = format_star_count(item.star_count);
     let is_official = item.is_official;
     let is_automated = item.is_automated;
-    let tag_presets = get_image_tag_presets(&item.name);
     let current_tag = active_tag.to_string();
 
-    let cli_cmd = format!("docker pull {}:{}", name, current_tag);
+    let cli_cmd = format!("docker pull {pull_reference}");
     let cmd_for_copy = cli_cmd.clone();
     let on_copy = on_copy_cmd.clone();
 
@@ -171,7 +173,9 @@ where
                                             .text_xs()
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(p.primary)
-                                            .child(rust_i18n::t!("container.hub.official").to_string()),
+                                            .child(
+                                                rust_i18n::t!("container.hub.official").to_string(),
+                                            ),
                                     ),
                             )
                         })
@@ -209,12 +213,7 @@ where
                                 ),
                         ),
                 )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(desc),
-                ),
+                .child(div().text_xs().text_color(p.muted_foreground).child(desc)),
         );
 
     // 3. 自定义版本标签快速拉取栏
@@ -237,11 +236,7 @@ where
                     .text_color(p.foreground)
                     .child(rust_i18n::t!("container.hub.custom_tag").to_string()),
             )
-            .child(
-                h_flex()
-                    .flex_1()
-                    .child(Input::new(input).small()),
-            )
+            .child(h_flex().flex_1().child(Input::new(input).small()))
             .child(
                 Button::new("hub-detail-pull-custom-btn")
                     .primary()
@@ -300,78 +295,96 @@ where
     );
 
     // 渲染各版本行
-    for preset in tag_presets {
-        let tag_name = preset.tag.to_string();
-        let is_current = current_tag == preset.tag;
-        let row_pull_fn = on_pull.clone();
-        let pull_val = tag_name.clone();
+    if tags_loading {
+        tags_list = tags_list.child(
+            h_flex()
+                .w_full()
+                .p_3()
+                .items_center()
+                .gap_2()
+                .child(
+                    Icon::new(IconName::Loader)
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.hub.tags_loading").to_string()),
+                ),
+        );
+    } else if let Some(error) = tags_error {
+        tags_list = tags_list.child(
+            div()
+                .w_full()
+                .p_3()
+                .rounded(p.radius.sm)
+                .bg(p.danger.opacity(0.06))
+                .text_xs()
+                .text_color(p.danger)
+                .child(error.to_string()),
+        );
+    } else if tags.is_empty() {
+        tags_list = tags_list.child(
+            div()
+                .w_full()
+                .p_3()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.hub.tags_empty").to_string()),
+        );
+    } else {
+        for tag in tags {
+            let tag_name = tag.clone();
+            let is_current = current_tag == *tag;
+            let row_pull_fn = on_pull.clone();
+            let pull_val = tag_name.clone();
 
-        let row = h_flex()
-            .w_full()
-            .px_2()
-            .py_2()
-            .rounded(p.radius.sm)
-            .bg(if is_current {
-                p.primary.opacity(0.08)
-            } else {
-                p.muted.opacity(0.02)
-            })
-            .hover(|s| s.bg(p.muted.opacity(0.06)))
-            .border_1()
-            .border_color(if is_current {
-                p.primary.opacity(0.25)
-            } else {
-                p.border.opacity(0.10)
-            })
-            .items_center()
-            .child(
-                h_flex()
-                    .w(px(140.0))
-                    .gap_1p5()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_family(p.mono_font_family.clone())
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.foreground)
-                            .child(tag_name),
-                    )
-                    .when(preset.recommended, |this| {
-                        this.child(
-                            div()
-                                .px_1()
-                                .py_0p5()
-                                .rounded(p.radius.sm)
-                                .bg(p.success.opacity(0.12))
-                                .text_color(p.success)
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(rust_i18n::t!("container.hub.recommended_tag").to_string()),
-                        )
-                    }),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(preset.desc),
-            )
-            .child(
-                div()
-                    .w(px(160.0))
-                    .text_xs()
-                    .font_family(p.mono_font_family.clone())
-                    .text_color(p.muted_foreground)
-                    .child(preset.arch),
-            )
-            .child(
-                h_flex()
-                    .w(px(80.0))
-                    .justify_end()
-                    .child(
-                        Button::new(ElementId::Name(format!("hub-tag-row-pull-{}", preset.tag).into()))
+            let row = h_flex()
+                .w_full()
+                .px_2()
+                .py_2()
+                .rounded(p.radius.sm)
+                .bg(if is_current {
+                    p.primary.opacity(0.08)
+                } else {
+                    p.muted.opacity(0.02)
+                })
+                .hover(|s| s.bg(p.muted.opacity(0.06)))
+                .border_1()
+                .border_color(if is_current {
+                    p.primary.opacity(0.25)
+                } else {
+                    p.border.opacity(0.10)
+                })
+                .items_center()
+                .child(
+                    div()
+                        .w(px(180.0))
+                        .text_xs()
+                        .font_family(p.mono_font_family.clone())
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(tag_name.clone()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.hub.tags_source").to_string()),
+                )
+                .child(
+                    div()
+                        .w(px(140.0))
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child("—"),
+                )
+                .child(
+                    h_flex().w(px(80.0)).justify_end().child(
+                        Button::new(ElementId::Name(format!("hub-tag-row-pull-{}", tag).into()))
                             .secondary()
                             .xsmall()
                             .icon(IconName::Download)
@@ -380,9 +393,10 @@ where
                                 row_pull_fn(&pull_val, window, cx);
                             }),
                     ),
-            );
+                );
 
-        tags_list = tags_list.child(row);
+            tags_list = tags_list.child(row);
+        }
     }
 
     v_flex()

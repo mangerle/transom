@@ -24,6 +24,14 @@ pub(crate) struct ContainerHubDialog {
     pub(crate) search_request: Option<ContainerRequestId>,
     /// 当前正在查看详情的镜像（Some 时在弹窗内展示详情视图，None 时展示搜索列表）。
     pub(crate) selected_detail: Option<ImageSearchResult>,
+    /// 当前详情镜像的实时标签列表（来自 Registry v2）。
+    pub(crate) tags: Vec<String>,
+    /// 标签列表是否正在加载。
+    pub(crate) tags_loading: bool,
+    /// 标签列表加载失败原因。
+    pub(crate) tags_error: Option<String>,
+    /// 标签列表在途请求 ID。
+    pub(crate) tags_request: Option<ContainerRequestId>,
     /// 记录各镜像当前选中的版本标签（Key 为镜像名，如 "mysql" -> "8.0"；未指定时默认 "latest"）。
     pub(crate) selected_tags: std::collections::HashMap<String, String>,
     /// 详情页中的自定义版本输入框。

@@ -32,6 +32,42 @@ impl AppShell {
         }
     }
 
+    /// 处理 Registry 实时标签列表返回事件。
+    pub(crate) fn on_container_image_tags_listed(
+        &mut self,
+        request_id: ContainerRequestId,
+        tags: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(hub) = workspace.hub_dialog.as_mut() else {
+            return;
+        };
+        if hub.tags_request != Some(request_id) {
+            return;
+        }
+        hub.tags = tags;
+        hub.tags_loading = false;
+        hub.tags_error = None;
+        hub.tags_request = None;
+        // 若当前选中的 tag 不在实时列表里（仓库已删除该 tag），回落到 latest。
+        if let Some(detail) = hub.selected_detail.as_ref() {
+            let selected = hub
+                .selected_tags
+                .entry(detail.name.clone())
+                .or_insert_with(|| "latest".to_string());
+            if !hub.tags.is_empty() && !hub.tags.iter().any(|tag| tag == selected) {
+                *selected = hub.tags[0].clone();
+            }
+        }
+        cx.notify();
+    }
+
     /// 处理分层下载进度推送。
     pub(crate) fn on_container_pull_task_progress(
         &mut self,
@@ -114,12 +150,12 @@ impl AppShell {
             }
 
             // 调度排队中的下一个下载任务
-            if let Some((next_task_id, next_tab_id, reference)) = next_command {
+            if let Some((next_task_id, next_tab_id, reference, auth)) = next_command {
                 self.state.send_command(ContainerCommand::PullImageTask {
                     tab_id: next_tab_id,
                     task_id: next_task_id,
                     reference,
-                    auth: None,
+                    auth,
                 });
             }
             cx.notify();

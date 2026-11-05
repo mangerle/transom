@@ -183,6 +183,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         ContainerCommand::SearchImages {
             tab_id,
             request_id,
+            registry,
             term,
             limit,
         } => one_shot(
@@ -190,11 +191,28 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             ctx,
             tab_id,
             request_id,
-            move |engine| async move { engine.search_images(&term, limit).await },
+            move |_engine| async move {
+                transom_container::registry::search(&registry, &term, limit).await
+            },
             |request_id, results| ContainerAppEvent::ImagesSearched {
                 request_id,
                 results,
             },
+        ),
+        ContainerCommand::ListImageTags {
+            tab_id,
+            request_id,
+            registry,
+            repository,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |_engine| async move {
+                transom_container::registry::list_tags(&registry, &repository).await
+            },
+            |request_id, tags| ContainerAppEvent::ImageTagsListed { request_id, tags },
         ),
         _ => {}
     }

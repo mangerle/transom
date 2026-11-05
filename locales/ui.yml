@@ -6474,7 +6474,16 @@ container:
       zh-CN: 拉取该版本
     tags_title:
       en: Available Version Tags
-      zh-CN: 常用版本标签 (Tags)
+      zh-CN: 可用版本标签 (Tags)
+    tags_loading:
+      en: Loading tags from registry...
+      zh-CN: 正在从仓库读取实时标签…
+    tags_empty:
+      en: The registry returned no tags; enter one manually.
+      zh-CN: 仓库未返回标签，请手动输入版本。
+    tags_source:
+      en: Live Registry v2 tag
+      zh-CN: Registry v2 实时标签
     tag_col_tag:
       en: Tag
       zh-CN: 版本标签

@@ -56,6 +56,10 @@ impl AppShell {
                 search_error: None,
                 search_request: None,
                 selected_detail: None,
+                tags: Vec::new(),
+                tags_loading: false,
+                tags_error: None,
+                tags_request: None,
                 selected_tags: HashMap::new(),
                 custom_tag_input: None,
                 copy_toast: false,
@@ -67,7 +71,7 @@ impl AppShell {
 
     /// 发起远端镜像搜索请求，支持从 `mysql:8.0` 等精准输入中自动提取预选 Tag。
     pub(crate) fn execute_hub_search(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let (raw_input, _reg_id) = {
+        let (raw_input, registry) = {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
@@ -75,8 +79,13 @@ impl AppShell {
                 return;
             };
             let term = hub.search_input.read(cx).value().trim().to_string();
-            let reg_id = hub.selected_registry_id.clone();
-            (term, reg_id)
+            let registry = app_settings(cx)
+                .container_registries
+                .iter()
+                .find(|registry| registry.id == hub.selected_registry_id)
+                .cloned()
+                .unwrap_or_else(ContainerRegistry::docker_hub);
+            (term, registry)
         };
 
         if raw_input.is_empty() {
@@ -91,8 +100,12 @@ impl AppShell {
                 hub.searching = true;
                 hub.search_error = None;
                 hub.search_request = Some(request_id);
-                // 搜索时重置详情视图回到列表
+                // 搜索时重置详情视图与旧标签，避免把上一个仓库的结果带过来。
                 hub.selected_detail = None;
+                hub.tags.clear();
+                hub.tags_error = None;
+                hub.tags_loading = false;
+                hub.tags_request = None;
                 if let Some(tag) = tag_hint {
                     hub.selected_tags.insert(term.clone(), tag);
                 }
@@ -105,6 +118,7 @@ impl AppShell {
             ContainerCommand::SearchImages {
                 tab_id,
                 request_id,
+                registry,
                 term,
                 limit: Some(25),
             },
@@ -120,17 +134,25 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let current_tag = {
+        let (current_tag, registry) = {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
             let Some(hub) = workspace.hub_dialog.as_ref() else {
                 return;
             };
-            hub.selected_tags
+            let current_tag = hub
+                .selected_tags
                 .get(&item.name)
                 .cloned()
-                .unwrap_or_else(|| "latest".to_string())
+                .unwrap_or_else(|| "latest".to_string());
+            let registry = app_settings(cx)
+                .container_registries
+                .iter()
+                .find(|registry| registry.id == hub.selected_registry_id)
+                .cloned()
+                .unwrap_or_else(ContainerRegistry::docker_hub);
+            (current_tag, registry)
         };
 
         let custom_input = cx.new(|cx| {
@@ -139,13 +161,29 @@ impl AppShell {
                 .default_value(current_tag)
         });
 
+        let request_id = ContainerRequestId::new();
+        let repository = item.name.clone();
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             if let Some(hub) = workspace.hub_dialog.as_mut() {
                 hub.selected_detail = Some(item);
                 hub.custom_tag_input = Some(custom_input);
                 hub.copy_toast = false;
+                hub.tags.clear();
+                hub.tags_loading = true;
+                hub.tags_error = None;
+                hub.tags_request = Some(request_id);
             }
         }
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::ListImageTags {
+                tab_id,
+                request_id,
+                registry,
+                repository,
+            },
+        );
         cx.notify();
     }
 
@@ -156,6 +194,10 @@ impl AppShell {
                 hub.selected_detail = None;
                 hub.custom_tag_input = None;
                 hub.copy_toast = false;
+                hub.tags.clear();
+                hub.tags_loading = false;
+                hub.tags_error = None;
+                hub.tags_request = None;
             }
         }
         cx.notify();
@@ -178,21 +220,31 @@ impl AppShell {
     }
 
     /// 将选中的远端镜像加入下载队列并自动调度。
+    ///
+    /// `repository` 与 `tag` 分开传入，由仓库配置负责补全私有仓库域名；
+    /// 认证凭据随任务保存，排队中的任务被自动调度时不会丢失私有仓库登录态。
     pub(crate) fn enqueue_image_pull(
         &mut self,
         tab_id: TabId,
-        reference: String,
-        registry_name: String,
+        repository: String,
+        tag: String,
+        registry: ContainerRegistry,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let reference = registry.qualify_reference(&repository, &tag);
+        if reference.is_empty() {
+            return;
+        }
+        let auth = registry.auth();
+        let registry_name = registry.name.clone();
         let (task_id, should_start) = {
             let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
                 return;
             };
             workspace
                 .pull_manager
-                .enqueue(tab_id, reference.clone(), registry_name)
+                .enqueue(tab_id, reference.clone(), registry_name, auth.clone())
         };
 
         // 自动打开下载抽屉以展现分层下载进度
@@ -205,7 +257,7 @@ impl AppShell {
                 tab_id,
                 task_id,
                 reference: reference.clone(),
-                auth: None,
+                auth,
             });
             self.show_toast(
                 rust_i18n::t!("container.hub.pull_started", reference = reference).to_string(),

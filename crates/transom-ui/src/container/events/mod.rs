@@ -501,6 +501,9 @@ impl AppShell {
             } => {
                 self.on_container_images_searched(request_id, results, window, cx);
             }
+            ContainerAppEvent::ImageTagsListed { request_id, tags } => {
+                self.on_container_image_tags_listed(request_id, tags, cx);
+            }
             ContainerAppEvent::PullTaskProgress {
                 task_id,
                 status,

@@ -29,6 +29,9 @@ pub enum ContainerError {
         status: u16,
         body: String,
     },
+    /// 镜像仓库（Docker Hub / Registry v2）交互失败。
+    #[error("镜像仓库交互失败，操作: {operation}，原因: {message}")]
+    Registry { operation: String, message: String },
     /// 目标容器、镜像或文件不存在。
     #[error("容器引擎中找不到目标: {target}")]
     NotFound { target: String },
@@ -70,7 +73,9 @@ impl ContainerError {
             Self::Api { status, .. } if *status == 409 || *status == 304 => {
                 ErrorCode::ContainerConflict
             }
-            Self::Api { .. } | Self::Http { .. } | Self::Decode { .. } => ErrorCode::ContainerApi,
+            Self::Api { .. } | Self::Http { .. } | Self::Decode { .. } | Self::Registry { .. } => {
+                ErrorCode::ContainerApi
+            }
             Self::Unsupported { .. } | Self::InvalidPath { .. } | Self::InvalidName { .. } => {
                 ErrorCode::Configuration
             }
