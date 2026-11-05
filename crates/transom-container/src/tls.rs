@@ -8,8 +8,9 @@ use crate::error::ContainerError;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore};
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
@@ -18,6 +19,8 @@ use transom_core::TlsConfig;
 
 /// TLS 握手超时：TCP 已连接但对端不完成握手时不能永久等待。
 const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+/// 证书配置缓存上限；路径与更新时间不同的配置各自独立。
+const TLS_CONFIG_CACHE_LIMIT: usize = 16;
 
 /// 基于 TLS 配置建立加密的 TCP 流。
 ///
@@ -28,8 +31,8 @@ pub async fn connect_tls(
     host: &str,
     tls_config: &TlsConfig,
 ) -> Result<TlsStream<TcpStream>, ContainerError> {
-    let client_config = build_client_config(tls_config)?;
-    let connector = TlsConnector::from(Arc::new(client_config));
+    let client_config = cached_client_config(tls_config)?;
+    let connector = TlsConnector::from(client_config);
     let server_name =
         ServerName::try_from(host.to_string()).map_err(|error| ContainerError::Connect {
             endpoint: format!("tls://{host}"),
@@ -50,6 +53,61 @@ pub async fn connect_tls(
         endpoint: format!("tls://{host}"),
         source,
     })
+}
+
+/// 证书配置缓存：同一组证书文件在进程内只解析一次。
+fn cached_client_config(tls: &TlsConfig) -> Result<Arc<ClientConfig>, ContainerError> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<ClientConfig>>>> = OnceLock::new();
+    let key = tls_cache_key(tls);
+    if let Ok(cache) = CACHE
+        .get_or_init(|| Mutex::new(HashMap::with_capacity(4)))
+        .lock()
+        && let Some(config) = cache.get(&key)
+    {
+        return Ok(Arc::clone(config));
+    }
+    let config = Arc::new(build_client_config(tls)?);
+    if let Ok(mut cache) = CACHE
+        .get_or_init(|| Mutex::new(HashMap::with_capacity(4)))
+        .lock()
+    {
+        if cache.len() >= TLS_CONFIG_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(key, Arc::clone(&config));
+    }
+    Ok(config)
+}
+
+/// 缓存键包含证书路径与文件时间戳：证书轮换后不会继续使用旧配置。
+fn tls_cache_key(tls: &TlsConfig) -> String {
+    format!(
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        tls.ca_cert,
+        file_stamp(&tls.ca_cert),
+        tls.client_cert,
+        file_stamp(&tls.client_cert),
+        tls.client_key,
+        file_stamp(&tls.client_key)
+    )
+}
+
+fn file_stamp(path: &str) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|duration| duration.as_nanos())
+                .unwrap_or(0);
+            format!("{}:{modified}", metadata.len())
+        }
+        Err(_) => "missing".to_string(),
+    }
 }
 
 /// 解析证书配置并构建 rustls [`ClientConfig`]。
@@ -79,7 +137,16 @@ fn build_client_config(tls: &TlsConfig) -> Result<ClientConfig, ContainerError> 
         }
     }
 
-    let builder = ClientConfig::builder().with_root_certificates(root_store);
+    // 显式指定 ring provider：进程内可能同时链接了其它 rustls 使用方，
+    // `ClientConfig::builder()` 依赖全局默认 provider，缺失时会直接 panic。
+    let builder =
+        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .map_err(|error| ContainerError::Connect {
+                endpoint: "rustls".to_string(),
+                source: std::io::Error::other(error.to_string()),
+            })?
+            .with_root_certificates(root_store);
 
     if !tls.client_cert.is_empty() && !tls.client_key.is_empty() {
         let cert_path = Path::new(&tls.client_cert);
@@ -110,5 +177,19 @@ fn build_client_config(tls: &TlsConfig) -> Result<ClientConfig, ContainerError> 
             })
     } else {
         Ok(builder.with_no_client_auth())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cached_client_config;
+    use transom_core::TlsConfig;
+
+    #[test]
+    fn identical_tls_config_is_reused_from_cache() {
+        let config = TlsConfig::default();
+        let first = cached_client_config(&config).expect("空 TLS 配置必须可构建");
+        let second = cached_client_config(&config).expect("空 TLS 配置必须可复用");
+        assert!(std::sync::Arc::ptr_eq(&first, &second));
     }
 }
