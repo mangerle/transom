@@ -372,3 +372,18 @@ fn density_sans_mono_gap_stays_within_bounds() {
         );
     }
 }
+
+/// 自动清理默认关闭，旧配置缺少字段时也不能意外开启破坏性自动化。
+#[test]
+fn container_automation_defaults_off_and_survives_round_trip() {
+    let settings = AppSettings::default();
+    assert!(!settings.container_automation.auto_prune_enabled);
+    let json = serde_json::to_value(&settings).expect("设置必须可序列化");
+    let mut value = json;
+    value
+        .as_object_mut()
+        .expect("设置根必须是对象")
+        .remove("container_automation");
+    let parsed: AppSettings = serde_json::from_value(value).expect("旧配置必须可反序列化");
+    assert!(!parsed.container_automation.auto_prune_enabled);
+}
