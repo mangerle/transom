@@ -176,6 +176,16 @@
   - 违反时的表现是 `cannot read/update ... while it is already being updated`；不得用 `cx.defer` 兜底，必须按上述方向改结构。
   - 守卫测试：`panel_entities_have_no_parent_entity_handle`、`panel_entities_have_no_sync_callback_channel`、`monitor_panel_has_no_sync_callback_channel`、`editor_panel_has_no_sync_callback_channel`。
 - **实体回调禁止重入自身**：面板实体的点击/输入回调执行期间，该实体已被 GPUI 租借。回调里回交外壳（`with_shell`）时，被调用的外壳方法不得再 `read`/`update` 同一实体，否则触发 “cannot update while it is already being updated” 崩溃。正确切分是：状态变更留在面板内完成，外壳只接收结果（快照、布尔值、宽度）做持久化、采样或跨面板协调。
+- **GPUI 渲染期二次租借与借用冲突防范（严禁 Double Lease Panic）**：
+  - **根本成因与运行时机制**：GPUI 调度实体的 `Render::render(&mut self, window, cx)` 时，内部正通过 `update_entity` 持有该实体的独占更新借用（即被租借为 `&mut`）。此时若在 `render` 及其向下调用的任何深层辅助渲染函数中，再次调用 `cx.entity().read(cx)`、`cx.read_entity(...)`、或者把当前实体句柄传入外部工具函数并在渲染同步期 `entity.read(cx)`/`entity.update(...)`，就会直接触发 GPUI 内部的底层断言崩溃：`cannot read/update [EntityName] while it is already being updated`（Double Lease Panic）。
+  - **绝对红线**：
+    1. 严禁在 `Render::render` 执行流及任何下层私有渲染拆分函数（如 `render_*`）中调用 `cx.entity().read(cx)` 或 `cx.read_entity`。
+    2. 严禁因局部借用冲突（例如同时持有 `&self.state.xxx` 又需要调用 `self.method()`）而试图通过 `cx.entity().read(cx)` 旁路“绕过”借用检查器。
+    3. 严禁在渲染流程中直接发起会导致对同一实体 `update` 的同步副作用或重入调用。
+  - **标准重构范式**：
+    1. **参数对象模式单向传递**：深层拆分的子渲染函数（无论是方法还是关联函数/独立函数），严禁反查宿主 Entity。必须定义专用的参数结构体（如 `XxxParams` / `XxxData`），在持有 `&self` 的外层入口一次性提取所需字段或轻量 Clone，以不可变引用或拥有型数据自顶向下单向注入。
+    2. **局部拥有型变量消除生命周期冲突**：若在解构读取 `self.state` 时需要调用 `&mut self` 的其它辅助方法，严禁使用实体句柄旁路读取；必须在方法调用前，将需要用到的轻量只读字段通过 `.clone()` 或模式匹配提取为独立的局部拥有型变量（Owned Variable），促使 NLL（非词法作用域生命周期）及时释放对 `self.state` 的借用，再安全调用后续方法。
+    3. **异步加载与生命周期解耦**：若页面渲染时发现数据未就绪（如依赖拓扑、详情快照未加载），绝对禁止在渲染函数中内联启动同步加载或回写实体；必须由视图初始化钩子、生命周期事件或显式交互意图异步拉取，状态就绪后由响应式更新触发下一帧无副作用的纯渲染。
 - **提交与验证**：一次提交只解决一个问题，提交信息使用 Conventional Commits 中文描述；每次提交前执行 `cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo check --all-targets`，涉及行为变更时执行 `cargo test`。重构提交必须说明取舍与门禁结果。
 
 ---
@@ -211,3 +221,4 @@
 18. **[平台边界]** 桌面集成是否只经 `transom-desktop`？macOS/Windows 占位实现是否返回明确错误而非静默成功？
 19. **[状态归属]** 新方法是否确实需要 `Context<Self>`/`Window`？纯状态查询是否写进了 `impl AppState`？`AppShell` 字段是否仍然只有一个 `state`、且状态访问是否显式写 `.state`（不得用 Deref 继承）？
 20. **[构造器复用]** 菜单项、弹窗按钮、空状态、列表行、表头是否复用了 `widgets` 构造器？是否新增了手写 `PopupMenuItem::new(...).icon(...)` 链？
+21. **[GPUI 实体借用安全与 Double Lease]** 是否彻底杜绝在 Render 执行链路或下层辅助渲染函数中调用 `cx.entity().read(cx)` / `cx.read_entity`？渲染所需数据是否通过参数对象（Params）自顶向下单向传递？是否通过提取局部变量或解构规避了 `&mut self` 借用冲突，杜绝了通过实体句柄旁路重入？
