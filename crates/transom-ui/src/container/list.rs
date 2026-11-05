@@ -32,10 +32,12 @@ use transom_core::{
 };
 
 mod filters;
+mod keyboard;
 mod render;
 mod rows;
 
 pub(crate) use filters::*;
+pub(crate) use keyboard::*;
 pub(crate) use render::*;
 pub(crate) use rows::*;
 
@@ -47,6 +49,7 @@ pub(crate) struct ToolbarParams<'a> {
     pub(crate) tab_id: TabId,
     pub(crate) section: ContainerSection,
     pub(crate) search: &'a Entity<InputState>,
+    pub(crate) focus_handle: FocusHandle,
     pub(crate) state_filter: ContainerStateFilter,
     pub(crate) include_compose: bool,
     pub(crate) quick: ContainerQuickFilter,
@@ -55,6 +58,7 @@ pub(crate) struct ToolbarParams<'a> {
 }
 
 /// 一行的展示数据与动作目标。
+#[derive(Clone)]
 pub(crate) struct ListRow {
     /// 与条目主键拼成稳定 ElementId 的前缀。
     pub(crate) key: String,
@@ -99,11 +103,13 @@ impl AppShell {
             )
         });
 
+        let focus_handle = workspace.list_focus_handle.clone();
         let toolbar = self.render_list_toolbar(
             &ToolbarParams {
                 tab_id,
                 section,
                 search: &search,
+                focus_handle: focus_handle.clone(),
                 state_filter,
                 include_compose,
                 quick,
@@ -142,7 +148,14 @@ impl AppShell {
                     .child(rust_i18n::t!("container.loading").to_string()),
             );
         }
+        let rows_for_keys = rows.clone();
         v_flex()
+            .id("container-list-panel")
+            .track_focus(&focus_handle)
+            .key_context("ContainerList")
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                handle_list_key_down(this, tab_id, &rows_for_keys, event, window, cx);
+            }))
             .h_full()
             .w_full()
             .min_w_0()
@@ -207,10 +220,20 @@ impl AppShell {
                 })),
         };
 
+        let list_focus = params.focus_handle.clone();
+        let search_input = div()
+            .flex_1()
+            .min_w_0()
+            .on_action(move |_: &gpui_kit::component::input::Escape, window, cx| {
+                window.focus(&list_focus, cx);
+                cx.stop_propagation();
+            })
+            .child(Input::new(params.search));
+
         h_flex()
             .gap_1()
             .items_center()
-            .child(Input::new(params.search).flex_1().min_w_0())
+            .child(search_input)
             .child(self.render_unified_filter_menu(params, p, cx))
             .child(main_action_btn)
             .child(self.render_more_menu(params, cx))

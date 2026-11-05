@@ -83,6 +83,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) sort_desc: bool,
     /// 列表栏拖拽状态：宽度由用户拖动决定，随工作区存活。
     pub(crate) list_split: Entity<ResizableState>,
+    /// 列表键盘导航焦点句柄。
+    pub(crate) list_focus_handle: FocusHandle,
     pub(crate) containers: Vec<ContainerSummary>,
     pub(crate) images: Vec<ContainerImageSummary>,
     pub(crate) volumes: Vec<ContainerVolumeSummary>,
@@ -264,6 +266,7 @@ impl ContainerWorkspaceState {
             sort_key: ContainerSortKey::default_for(ContainerSection::Containers),
             sort_desc: false,
             list_split: cx.new(|_| ResizableState::default()),
+            list_focus_handle: cx.focus_handle(),
             containers: Vec::new(),
             images: Vec::new(),
             volumes: Vec::new(),
