@@ -484,6 +484,22 @@ pub enum ContainerCommand {
         from: String,
         to: String,
     },
+    /// 修改容器内路径权限。
+    ChmodPath {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        mode: String,
+    },
+    /// 修改容器内路径属主。
+    ChownPath {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        owner: String,
+    },
     /// 就地保存/写入容器内文本文件。
     SaveFile {
         tab_id: TabId,

@@ -269,6 +269,26 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             let cancel = Arc::new(AtomicBool::new(false));
             transom_container::copy(&engine, &container, &from, &to, &cancel).await
         }),
+        ContainerCommand::ChmodPath {
+            tab_id,
+            request_id,
+            container,
+            path,
+            mode,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            let cancel = Arc::new(AtomicBool::new(false));
+            transom_container::chmod(&engine, &container, &path, &mode, &cancel).await
+        }),
+        ContainerCommand::ChownPath {
+            tab_id,
+            request_id,
+            container,
+            path,
+            owner,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            let cancel = Arc::new(AtomicBool::new(false));
+            transom_container::chown(&engine, &container, &path, &owner, &cancel).await
+        }),
         ContainerCommand::CreateDir {
             tab_id,
             request_id,

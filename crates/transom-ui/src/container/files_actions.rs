@@ -174,24 +174,49 @@ impl AppShell {
         );
     }
 
-    /// 打开文件重命名条：按钮与右键菜单共用同一份输入状态。
-    pub(crate) fn begin_container_file_rename(
+    /// 打开文件操作提示：重命名、复制、改权限与改属主共用同一套输入弹窗。
+    fn open_container_file_prompt(
         &mut self,
         tab_id: TabId,
-        path: String,
-        name: String,
+        prompt: ContainerFilePrompt,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let input = cx.new(|cx| InputState::new(window, cx).default_value(name));
+        let placeholder = rust_i18n::t!(prompt.placeholder_key()).to_string();
+        let default_value = prompt.default_value();
+        let input = cx.new(|cx| {
+            let input = InputState::new(window, cx).placeholder(placeholder);
+            if default_value.is_empty() {
+                input
+            } else {
+                input.default_value(default_value)
+            }
+        });
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.files.rename_from = Some(path);
-            workspace.files.rename_input = Some(input);
+            workspace.files.prompt = Some(prompt);
+            workspace.files.prompt_input = Some(input);
         }
         cx.notify();
     }
 
-    /// 打开「复制到」输入条；与重命名共用弹窗骨架，提交时按 copy_from 分流。
+    /// 打开文件重命名条。
+    pub(crate) fn begin_container_file_rename(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        _name: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_container_file_prompt(
+            tab_id,
+            ContainerFilePrompt::Rename { from: path },
+            window,
+            cx,
+        );
+    }
+
+    /// 打开「复制到」输入条。
     pub(crate) fn begin_container_file_copy(
         &mut self,
         tab_id: TabId,
@@ -199,15 +224,34 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("container.files.copy_placeholder").to_string())
-        });
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.files.copy_from = Some(path);
-            workspace.files.rename_input = Some(input);
-        }
-        cx.notify();
+        self.open_container_file_prompt(
+            tab_id,
+            ContainerFilePrompt::Copy { from: path },
+            window,
+            cx,
+        );
+    }
+
+    /// 打开「修改权限」输入条。
+    pub(crate) fn begin_container_file_chmod(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_container_file_prompt(tab_id, ContainerFilePrompt::Chmod { path }, window, cx);
+    }
+
+    /// 打开「修改属主」输入条。
+    pub(crate) fn begin_container_file_chown(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_container_file_prompt(tab_id, ContainerFilePrompt::Chown { path }, window, cx);
     }
 
     /// 请求删除容器内路径；目录按递归删除走二次确认。
@@ -367,28 +411,6 @@ impl AppShell {
         cx.notify();
     }
 
-    pub(crate) fn rename_container_path(&mut self, tab_id: TabId, from: String, to: String) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(container) = workspace.selected_container_name() else {
-            return;
-        };
-        let request_id = ContainerRequestId::new();
-        workspace.files.rename_from = None;
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::Rename {
-                tab_id,
-                request_id,
-                container,
-                from,
-                to,
-            },
-        );
-    }
-
     /// 进入文件就地编辑模式。
     pub(crate) fn begin_edit_container_file(
         &mut self,
@@ -481,86 +503,72 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 提交容器内文件重命名。
-    pub(crate) fn submit_container_file_rename(
+    /// 提交文件操作提示：按提示类型生成命令并清空输入状态。
+    pub(crate) fn submit_container_file_prompt(
         &mut self,
         tab_id: TabId,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some((from, input)) = self
+        let Some((prompt, input)) = self
             .state
             .container_workspace(tab_id)
             .and_then(|workspace| {
-                let from = workspace.files.rename_from.clone()?;
-                let input = workspace.files.rename_input.clone()?;
-                Some((from, input))
+                let prompt = workspace.files.prompt.clone()?;
+                let input = workspace.files.prompt_input.clone()?;
+                Some((prompt, input))
             })
         else {
             return;
         };
         let value = input.read(cx).value().trim().to_string();
-        if value.is_empty() || value.contains('/') {
-            self.show_toast(
-                rust_i18n::t!("container.files.rename_invalid").to_string(),
-                false,
-                window,
-                cx,
-            );
-            return;
-        }
-        let parent = detail::parent_path(&from);
-        let to = if parent == "/" {
-            format!("/{value}")
-        } else {
-            format!("{parent}/{value}")
+        let (action, invalid_key, same_key) = match &prompt {
+            ContainerFilePrompt::Rename { .. } => {
+                if value.is_empty() || value.contains('/') {
+                    ("".to_string(), Some("container.files.rename_invalid"), None)
+                } else {
+                    (value.clone(), None, None)
+                }
+            }
+            ContainerFilePrompt::Copy { from } => {
+                if value.is_empty()
+                    || !value.starts_with('/')
+                    || value.split('/').any(|segment| segment == "..")
+                {
+                    ("".to_string(), Some("container.files.copy_invalid"), None)
+                } else if &value == from {
+                    ("".to_string(), None, Some("container.files.copy_same"))
+                } else {
+                    (value.clone(), None, None)
+                }
+            }
+            ContainerFilePrompt::Chmod { .. } => {
+                if !(3..=4).contains(&value.len())
+                    || !value.bytes().all(|byte| (b'0'..=b'7').contains(&byte))
+                {
+                    ("".to_string(), Some("container.files.chmod_invalid"), None)
+                } else {
+                    (value.clone(), None, None)
+                }
+            }
+            ContainerFilePrompt::Chown { .. } => {
+                let valid = !value.is_empty()
+                    && value.split(':').count() <= 2
+                    && value.split(':').all(|part| {
+                        !part.is_empty()
+                            && part.bytes().all(|byte| {
+                                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                            })
+                    });
+                if valid {
+                    (value.clone(), None, None)
+                } else {
+                    ("".to_string(), Some("container.files.chown_invalid"), None)
+                }
+            }
         };
-        self.rename_container_path(tab_id, from, to);
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.files.rename_input = None;
-            workspace.files.rename_from = None;
-        }
-        cx.notify();
-    }
-
-    /// 提交容器内复制；目标必须是绝对路径。
-    pub(crate) fn submit_container_file_copy(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some((from, input)) = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| {
-                let from = workspace.files.copy_from.clone()?;
-                let input = workspace.files.rename_input.clone()?;
-                Some((from, input))
-            })
-        else {
-            return;
-        };
-        let destination = input.read(cx).value().trim().to_string();
-        if destination.is_empty()
-            || !destination.starts_with('/')
-            || destination.split('/').any(|segment| segment == "..")
-        {
-            self.show_toast(
-                rust_i18n::t!("container.files.copy_invalid").to_string(),
-                false,
-                window,
-                cx,
-            );
-            return;
-        }
-        if destination == from {
-            self.show_toast(
-                rust_i18n::t!("container.files.copy_same").to_string(),
-                false,
-                window,
-                cx,
-            );
+        if let Some(key) = invalid_key.or(same_key) {
+            self.show_toast(rust_i18n::t!(key).to_string(), false, window, cx);
             return;
         }
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
@@ -570,29 +578,55 @@ impl AppShell {
             return;
         };
         let request_id = ContainerRequestId::new();
-        workspace.files.copy_from = None;
-        workspace.files.rename_from = None;
-        workspace.files.rename_input = None;
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::CopyPath {
+        let command = match prompt {
+            ContainerFilePrompt::Rename { from } => {
+                let parent = detail::parent_path(&from);
+                let to = if parent == "/" {
+                    format!("/{action}")
+                } else {
+                    format!("{parent}/{action}")
+                };
+                ContainerCommand::Rename {
+                    tab_id,
+                    request_id,
+                    container,
+                    from,
+                    to,
+                }
+            }
+            ContainerFilePrompt::Copy { from } => ContainerCommand::CopyPath {
                 tab_id,
                 request_id,
                 container,
                 from,
-                to: destination,
+                to: action,
             },
-        );
+            ContainerFilePrompt::Chmod { path } => ContainerCommand::ChmodPath {
+                tab_id,
+                request_id,
+                container,
+                path,
+                mode: action,
+            },
+            ContainerFilePrompt::Chown { path } => ContainerCommand::ChownPath {
+                tab_id,
+                request_id,
+                container,
+                path,
+                owner: action,
+            },
+        };
+        workspace.files.prompt = None;
+        workspace.files.prompt_input = None;
+        self.send_tracked(tab_id, request_id, command);
         cx.notify();
     }
 
-    /// 取消容器内文件重命名或复制。
+    /// 取消容器内文件操作提示。
     pub(crate) fn cancel_container_file_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.files.rename_from = None;
-            workspace.files.copy_from = None;
-            workspace.files.rename_input = None;
+            workspace.files.prompt = None;
+            workspace.files.prompt_input = None;
         }
         cx.notify();
     }

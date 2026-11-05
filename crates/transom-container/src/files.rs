@@ -643,6 +643,95 @@ pub async fn copy(
     Ok(())
 }
 
+/// 修改容器内路径权限；只接受 3-4 位八进制模式。
+///
+/// # Errors
+/// 路径或模式非法、命令执行失败或退出码非零时返回错误。
+pub async fn chmod(
+    engine: &Engine,
+    container: &str,
+    path: &str,
+    mode: &str,
+    cancel: &Arc<AtomicBool>,
+) -> Result<(), ContainerError> {
+    let api = engine.http()?;
+    let path = validate_container_path(path)?;
+    let mode = mode.trim();
+    if !valid_file_mode(mode) {
+        return Err(ContainerError::File {
+            path,
+            message: "权限模式必须是 3-4 位八进制数，例如 755".to_string(),
+        });
+    }
+    let command = vec![
+        "chmod".to_string(),
+        mode.to_string(),
+        "--".to_string(),
+        path.clone(),
+    ];
+    let code = api.run_command(container, &command, cancel).await?;
+    if code != 0 {
+        return Err(ContainerError::File {
+            path,
+            message: format!("chmod 退出码: {code}"),
+        });
+    }
+    Ok(())
+}
+
+/// 修改容器内路径属主；接受 `user` 或 `user:group`。
+///
+/// # Errors
+/// 路径或属主格式非法、命令执行失败或退出码非零时返回错误。
+pub async fn chown(
+    engine: &Engine,
+    container: &str,
+    path: &str,
+    owner: &str,
+    cancel: &Arc<AtomicBool>,
+) -> Result<(), ContainerError> {
+    let api = engine.http()?;
+    let path = validate_container_path(path)?;
+    let owner = owner.trim();
+    if !valid_file_owner(owner) {
+        return Err(ContainerError::File {
+            path,
+            message: "属主必须是 user 或 user:group".to_string(),
+        });
+    }
+    let command = vec![
+        "chown".to_string(),
+        owner.to_string(),
+        "--".to_string(),
+        path.clone(),
+    ];
+    let code = api.run_command(container, &command, cancel).await?;
+    if code != 0 {
+        return Err(ContainerError::File {
+            path,
+            message: format!("chown 退出码: {code}"),
+        });
+    }
+    Ok(())
+}
+
+/// 权限模式只允许 3-4 位八进制数。
+fn valid_file_mode(mode: &str) -> bool {
+    (3..=4).contains(&mode.len()) && mode.bytes().all(|byte| (b'0'..=b'7').contains(&byte))
+}
+
+/// 属主允许 `user` 或 `user:group`，各段只含常见账户名字符。
+fn valid_file_owner(owner: &str) -> bool {
+    !owner.is_empty()
+        && owner.split(':').count() <= 2
+        && owner.split(':').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        })
+}
+
 /// 容器内已有文件的元数据快照。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ArchiveMetadata {
@@ -1178,6 +1267,19 @@ mod tests {
             .map(|entry| entry.path().expect("路径").display().to_string())
             .collect();
         assert!(names.iter().any(|name| name.ends_with("sub/app.txt")));
+    }
+
+    #[test]
+    fn file_mode_and_owner_validation_rejects_bad_input() {
+        assert!(super::valid_file_mode("755"));
+        assert!(super::valid_file_mode("0644"));
+        assert!(!super::valid_file_mode("888"));
+        assert!(!super::valid_file_mode("75"));
+        assert!(super::valid_file_owner("root"));
+        assert!(super::valid_file_owner("1000:1000"));
+        assert!(!super::valid_file_owner(""));
+        assert!(!super::valid_file_owner("root:"));
+        assert!(!super::valid_file_owner("a:b:c"));
     }
 
     #[test]

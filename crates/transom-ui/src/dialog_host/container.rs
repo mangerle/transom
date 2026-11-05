@@ -31,7 +31,7 @@ impl ModalKind {
                 .find_container_modal_tab(|ws| ws.export_config.is_some())
                 .is_some(),
             ModalKind::ContainerFileRename => shell
-                .find_container_modal_tab(|ws| ws.files.rename_input.is_some())
+                .find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
                 .is_some(),
             ModalKind::ContainerFileNewDir => shell
                 .find_container_modal_tab(|ws| {
@@ -122,7 +122,7 @@ impl ModalKind {
             }
             ModalKind::ContainerFileRename => {
                 if let Some((tab_id, _)) =
-                    shell.find_container_modal_tab(|ws| ws.files.rename_input.is_some())
+                    shell.find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
                 {
                     shell.cancel_container_file_rename(tab_id, cx);
                 }
@@ -259,9 +259,9 @@ impl ModalKind {
             }
             ModalKind::ContainerFileRename => {
                 if let Some((tab_id, _)) =
-                    shell.find_container_modal_tab(|ws| ws.files.rename_input.is_some())
+                    shell.find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
                 {
-                    shell.submit_container_file_rename(tab_id, window, cx);
+                    shell.submit_container_file_prompt(tab_id, window, cx);
                 }
                 Some(())
             }
@@ -338,8 +338,8 @@ impl ModalKind {
                 .map(|(_, input)| ModalFocus::Input(input.clone()))
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerFileRename => shell
-                .find_container_modal_tab(|ws| ws.files.rename_input.is_some())
-                .and_then(|(_, ws)| ws.files.rename_input.as_ref())
+                .find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
+                .and_then(|(_, ws)| ws.files.prompt_input.as_ref())
                 .map(|input| ModalFocus::Input(input.clone()))
                 .unwrap_or(ModalFocus::None),
             ModalKind::ContainerFileNewDir => shell
@@ -415,8 +415,8 @@ impl ModalKind {
                 .map(|(_, input)| vec![input.read(cx).value().to_string()])
                 .unwrap_or_default(),
             ModalKind::ContainerFileRename => shell
-                .find_container_modal_tab(|ws| ws.files.rename_input.is_some())
-                .and_then(|(_, ws)| ws.files.rename_input.as_ref())
+                .find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
+                .and_then(|(_, ws)| ws.files.prompt_input.as_ref())
                 .map(|input| vec![input.read(cx).value().to_string()])
                 .unwrap_or_default(),
             ModalKind::ContainerFileNewDir => shell

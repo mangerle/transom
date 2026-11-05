@@ -6517,6 +6517,39 @@ container:
     rename_invalid:
       en: Enter a file name without slashes
       zh-CN: 请输入不含斜杠的文件名
+    rename_placeholder:
+      en: New name
+      zh-CN: 新名称
+    chmod:
+      en: Change permissions
+      zh-CN: 修改权限
+    chmod_modal_title:
+      en: Change permissions
+      zh-CN: 修改权限
+    chmod_prompt:
+      en: 'Enter an octal mode such as 755 or 0644:'
+      zh-CN: '输入八进制权限，例如 755 或 0644：'
+    chmod_placeholder:
+      en: '755'
+      zh-CN: '755'
+    chmod_invalid:
+      en: Permission mode must be 3-4 octal digits
+      zh-CN: 权限模式必须是 3-4 位八进制数
+    chown:
+      en: Change owner
+      zh-CN: 修改属主
+    chown_modal_title:
+      en: Change owner
+      zh-CN: 修改属主
+    chown_prompt:
+      en: 'Enter user or user:group:'
+      zh-CN: '输入 user 或 user:group：'
+    chown_placeholder:
+      en: root:root
+      zh-CN: root:root
+    chown_invalid:
+      en: Owner must be user or user:group
+      zh-CN: 属主必须是 user 或 user:group
     browse:
       en: Browse volume files
       zh-CN: 浏览卷文件

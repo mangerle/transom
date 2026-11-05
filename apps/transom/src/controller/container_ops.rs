@@ -216,6 +216,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::UploadDirectory { .. }
         | ContainerCommand::RemovePath { .. }
         | ContainerCommand::CopyPath { .. }
+        | ContainerCommand::ChmodPath { .. }
+        | ContainerCommand::ChownPath { .. }
         | ContainerCommand::CreateDir { .. }
         | ContainerCommand::SaveFile { .. }
         | ContainerCommand::SaveVolumeFile { .. }

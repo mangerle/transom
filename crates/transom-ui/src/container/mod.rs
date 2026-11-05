@@ -37,9 +37,9 @@ mod view;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
     ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,
-    ContainerDiscovery, ContainerFilesState, ContainerHubDialog, ContainerPushDialog,
-    ContainerSection, ContainerTerminalState, ContainerUiState, ContainerWorkspaceState,
-    ContainerWorkspaceStatus, RowAction, RowTarget,
+    ContainerDiscovery, ContainerFilePrompt, ContainerFilesState, ContainerHubDialog,
+    ContainerPushDialog, ContainerSection, ContainerTerminalState, ContainerUiState,
+    ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};

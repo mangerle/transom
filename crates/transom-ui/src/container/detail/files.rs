@@ -349,6 +349,30 @@ pub(crate) fn render_files(
                             });
                         },
                     ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.chmod").to_string(),
+                        IconName::Lock,
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_chmod(tab_id, path.clone(), window, cx);
+                                cx.notify();
+                            });
+                        },
+                    ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.chown").to_string(),
+                        IconName::KeyRound,
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_chown(tab_id, path.clone(), window, cx);
+                                cx.notify();
+                            });
+                        },
+                    ));
                 } else {
                     let app = menu_app.clone();
                     let path = menu_path.clone();
@@ -386,6 +410,30 @@ pub(crate) fn render_files(
                         move |_, window, cx| {
                             app.update(cx, |this, cx| {
                                 this.begin_container_file_copy(tab_id, path.clone(), window, cx);
+                                cx.notify();
+                            });
+                        },
+                    ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.chmod").to_string(),
+                        IconName::Lock,
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_chmod(tab_id, path.clone(), window, cx);
+                                cx.notify();
+                            });
+                        },
+                    ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.chown").to_string(),
+                        IconName::KeyRound,
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_chown(tab_id, path.clone(), window, cx);
                                 cx.notify();
                             });
                         },

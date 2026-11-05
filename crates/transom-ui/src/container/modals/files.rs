@@ -16,14 +16,16 @@ impl AppShell {
         _p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.files.rename_input.is_some())
+            self.find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
         else {
             return div().into_any_element();
         };
-        let Some(input) = workspace.files.rename_input.clone() else {
+        let Some(input) = workspace.files.prompt_input.clone() else {
             return div().into_any_element();
         };
-        let is_copy = workspace.files.copy_from.is_some();
+        let Some(prompt) = workspace.files.prompt.clone() else {
+            return div().into_any_element();
+        };
 
         let content = v_flex().gap_3().child(Input::new(&input).w_full());
 
@@ -41,31 +43,19 @@ impl AppShell {
             Some(IconName::Check),
             crate::widgets::DialogConfirmKind::Primary,
             crate::dialog_host::on_event(app, move |this, _: &ClickEvent, window, cx| {
-                if is_copy {
-                    this.submit_container_file_copy(tab_id, window, cx);
-                } else {
-                    this.submit_container_file_rename(tab_id, window, cx);
-                }
+                this.submit_container_file_prompt(tab_id, window, cx);
             }),
         );
 
         let footer =
             crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
 
-        let title = if is_copy {
-            rust_i18n::t!("container.files.copy_modal_title").to_string()
-        } else {
-            rust_i18n::t!("container.files.rename_modal_title").to_string()
-        };
-        let prompt = if is_copy {
-            rust_i18n::t!("container.files.copy_prompt").to_string()
-        } else {
-            rust_i18n::t!("container.files.rename_prompt").to_string()
-        };
+        let title = rust_i18n::t!(prompt.title_key()).to_string();
+        let prompt_text = rust_i18n::t!(prompt.prompt_key()).to_string();
         crate::widgets::dialog_body(
             "container-file-rename-modal",
             title,
-            Some(prompt),
+            Some(prompt_text),
             content,
             Some(footer),
         )

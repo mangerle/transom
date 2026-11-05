@@ -40,16 +40,59 @@ pub(crate) struct ContainerFilesState {
     pub(crate) preview_editor: Option<Entity<TextareaState>>,
     /// 编辑器是否正在保存。
     pub(crate) preview_saving: bool,
-    /// 正在重命名的源路径；`None` 表示不显示重命名条。
-    pub(crate) rename_from: Option<String>,
-    /// 重命名输入框；首次点击重命名时创建，之后复用。
-    pub(crate) rename_input: Option<Entity<InputState>>,
-    /// 正在复制到新路径的源路径；与重命名共用输入框与弹窗骨架。
-    pub(crate) copy_from: Option<String>,
+    /// 文件操作提示词：重命名、复制、改权限或改属主共用一个输入弹窗。
+    pub(crate) prompt: Option<ContainerFilePrompt>,
+    /// 文件操作输入框；首次打开提示时创建，之后复用。
+    pub(crate) prompt_input: Option<Entity<InputState>>,
     /// 新建目录条是否展开。
     pub(crate) new_dir_open: bool,
     /// 新建目录的名字输入框；首次展开时创建，之后复用。
     pub(crate) new_dir_input: Option<Entity<InputState>>,
+}
+
+/// 文件操作提示词；来源路径与操作类型一起决定标题、校验与命令。
+#[derive(Clone)]
+pub(crate) enum ContainerFilePrompt {
+    Rename { from: String },
+    Copy { from: String },
+    Chmod { path: String },
+    Chown { path: String },
+}
+
+impl ContainerFilePrompt {
+    pub(crate) fn title_key(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "container.files.rename_modal_title",
+            Self::Copy { .. } => "container.files.copy_modal_title",
+            Self::Chmod { .. } => "container.files.chmod_modal_title",
+            Self::Chown { .. } => "container.files.chown_modal_title",
+        }
+    }
+
+    pub(crate) fn prompt_key(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "container.files.rename_prompt",
+            Self::Copy { .. } => "container.files.copy_prompt",
+            Self::Chmod { .. } => "container.files.chmod_prompt",
+            Self::Chown { .. } => "container.files.chown_prompt",
+        }
+    }
+
+    pub(crate) fn placeholder_key(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "container.files.rename_placeholder",
+            Self::Copy { .. } => "container.files.copy_placeholder",
+            Self::Chmod { .. } => "container.files.chmod_placeholder",
+            Self::Chown { .. } => "container.files.chown_placeholder",
+        }
+    }
+
+    pub(crate) fn default_value(&self) -> String {
+        match self {
+            Self::Rename { from } => from.rsplit('/').next().unwrap_or(from).to_string(),
+            _ => String::new(),
+        }
+    }
 }
 
 /// 容器提交镜像的就地表单状态。
