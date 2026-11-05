@@ -162,7 +162,7 @@ struct EngineWorkspaceSession {
 | Linux | Docker rootless | `$XDG_RUNTIME_DIR/docker.sock`、`DOCKER_HOST` | CLI |
 | Linux | Podman rootful/rootless | `/run/podman/podman.sock`、`$XDG_RUNTIME_DIR/podman/podman.sock`、`CONTAINER_HOST` | CLI `podman` |
 | macOS | Docker Desktop | `~/.docker/run/docker.sock`、`/var/run/docker.sock` | CLI |
-| macOS | Podman machine | 通过 `CONTAINER_HOST` 或 CLI 连接（尚未自动枚举 machine） | CLI |
+| macOS | Podman machine | `podman machine inspect` 自动枚举 `ConnectionInfo.PodmanSocket` | CLI |
 | Windows | Docker Desktop | 命名管道 `//./pipe/docker_engine`、`dockerDesktopLinuxEngine` | CLI |
 | Windows | WSL 内 docker-ce | `wsl.exe -d <distro> -e docker system dial-stdio` | `wsl.exe ... docker` |
 | Windows | WSLC | `wslc.exe`（别名 `container.exe`）Docker 语法 | 无 |
@@ -348,8 +348,8 @@ enum ContainerCommand {
 TLS/SSH 端点、Docker Context、Compose CLI 级操作与 YAML 编辑、镜像构建、
 容器高级运行参数、Registry v2 实时标签、目录导出、统计 CSV 导出。
 
-**待继续（P2）**：Podman machine 自动枚举、Podman Pod/Quadlet、容器指标历史
-持久化与阈值告警、容器间文件复制、定时清理、容器间文件对比。
+**待继续（P2）**：Podman Pod/Quadlet、容器指标历史持久化与阈值告警、
+容器间文件复制、容器间文件对比。
 
 ## 12. 关键决策
 
