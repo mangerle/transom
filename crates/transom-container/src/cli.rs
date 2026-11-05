@@ -419,17 +419,17 @@ impl CliBackend {
         author: Option<&str>,
     ) -> Result<String, ContainerError> {
         let mut args = vec!["commit".to_string()];
-        if let Some(comment) = comment {
-            if !comment.is_empty() {
-                args.push("-m".to_string());
-                args.push(comment.to_string());
-            }
+        if let Some(comment) = comment
+            && !comment.is_empty()
+        {
+            args.push("-m".to_string());
+            args.push(comment.to_string());
         }
-        if let Some(author) = author {
-            if !author.is_empty() {
-                args.push("-a".to_string());
-                args.push(author.to_string());
-            }
+        if let Some(author) = author
+            && !author.is_empty()
+        {
+            args.push("-a".to_string());
+            args.push(author.to_string());
         }
         args.push(container.to_string());
         let reference = match tag {
@@ -676,7 +676,11 @@ impl CliBackend {
                 deleted.push(line.to_string());
             }
         }
-        Ok(transom_core::ContainerPruneReport { deleted, reclaimed, errors: Vec::new() })
+        Ok(transom_core::ContainerPruneReport {
+            deleted,
+            reclaimed,
+            errors: Vec::new(),
+        })
     }
 
     /// 监听引擎 CLI 长连接事件流（docker events --format '{{json .}}'）。
@@ -729,14 +733,12 @@ impl CliBackend {
                     if trimmed.is_empty() {
                         continue;
                     }
-                    if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(trimmed) {
-                        if let Some(event) = msg.into_engine_event() {
-                            if event_tx.send(event).await.is_err() {
+                    if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(trimmed)
+                        && let Some(event) = msg.into_engine_event()
+                            && event_tx.send(event).await.is_err() {
                                 terminate_child(&mut child).await;
                                 return Ok(());
                             }
-                        }
-                    }
                 }
             }
         }

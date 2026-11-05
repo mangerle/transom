@@ -192,15 +192,15 @@ fn list_contexts_from_disk() -> Vec<DockerContextInfo> {
 
     let mut list = Vec::new();
     let meta_dir = docker_dir.join("contexts").join("meta");
-    if meta_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&meta_dir) {
-            for entry in entries.flatten() {
-                let meta_file = entry.path().join("meta.json");
-                if meta_file.is_file() {
-                    if let Some(info) = parse_meta_json_file(&meta_file, &current_context) {
-                        list.push(info);
-                    }
-                }
+    if meta_dir.is_dir()
+        && let Ok(entries) = fs::read_dir(&meta_dir)
+    {
+        for entry in entries.flatten() {
+            let meta_file = entry.path().join("meta.json");
+            if meta_file.is_file()
+                && let Some(info) = parse_meta_json_file(&meta_file, &current_context)
+            {
+                list.push(info);
             }
         }
     }
@@ -232,16 +232,16 @@ fn switch_context_in_config_file(new_context: &str) -> Result<(), String> {
     };
     let config_path = base_dirs.home_dir().join(".docker").join("config.json");
     let mut value: serde_json::Value = if config_path.exists() {
-        let content = fs::read_to_string(&config_path)
-            .map_err(|e| format!("读取 config.json 失败: {e}"))?;
+        let content =
+            fs::read_to_string(&config_path).map_err(|e| format!("读取 config.json 失败: {e}"))?;
         serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
     } else {
         serde_json::json!({})
     };
 
     value["currentContext"] = serde_json::Value::String(new_context.to_string());
-    let formatted = serde_json::to_string_pretty(&value)
-        .map_err(|e| format!("序列化 JSON 失败: {e}"))?;
+    let formatted =
+        serde_json::to_string_pretty(&value).map_err(|e| format!("序列化 JSON 失败: {e}"))?;
 
     if let Some(parent) = config_path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -333,7 +333,9 @@ mod tests {
         };
         let candidate = ctx.to_candidate().expect("应成功转换为候选");
         match candidate.endpoint {
-            ContainerEndpoint::Ssh { host, port, user, .. } => {
+            ContainerEndpoint::Ssh {
+                host, port, user, ..
+            } => {
                 assert_eq!(host, "192.168.1.100");
                 assert_eq!(port, Some(2222));
                 assert_eq!(user, Some("root".to_string()));

@@ -352,10 +352,10 @@ pub async fn build_image_http(
     }));
 
     let mut query = Vec::new();
-    if let Some(df) = &spec.dockerfile {
-        if !df.is_empty() {
-            query.push(format!("dockerfile={}", http::percent_encode(df)));
-        }
+    if let Some(df) = &spec.dockerfile
+        && !df.is_empty()
+    {
+        query.push(format!("dockerfile={}", http::percent_encode(df)));
     }
     for tag in &spec.tags {
         if !tag.is_empty() {
@@ -365,15 +365,15 @@ pub async fn build_image_http(
     if spec.no_cache {
         query.push("nocache=1".to_string());
     }
-    if let Some(target) = &spec.target {
-        if !target.is_empty() {
-            query.push(format!("target={}", http::percent_encode(target)));
-        }
+    if let Some(target) = &spec.target
+        && !target.is_empty()
+    {
+        query.push(format!("target={}", http::percent_encode(target)));
     }
-    if let Some(platform) = &spec.platform {
-        if !platform.is_empty() {
-            query.push(format!("platform={}", http::percent_encode(platform)));
-        }
+    if let Some(platform) = &spec.platform
+        && !platform.is_empty()
+    {
+        query.push(format!("platform={}", http::percent_encode(platform)));
     }
     if !spec.build_args.is_empty() {
         let json =
@@ -477,11 +477,11 @@ pub async fn build_image_cli(
     progress: &mut (dyn FnMut(String) + Send),
 ) -> Result<(), ContainerError> {
     let mut args = vec!["build".to_string()];
-    if let Some(df) = &spec.dockerfile {
-        if !df.is_empty() {
-            args.push("-f".to_string());
-            args.push(df.clone());
-        }
+    if let Some(df) = &spec.dockerfile
+        && !df.is_empty()
+    {
+        args.push("-f".to_string());
+        args.push(df.clone());
     }
     for tag in &spec.tags {
         if !tag.is_empty() {
@@ -492,17 +492,17 @@ pub async fn build_image_cli(
     if spec.no_cache {
         args.push("--no-cache".to_string());
     }
-    if let Some(target) = &spec.target {
-        if !target.is_empty() {
-            args.push("--target".to_string());
-            args.push(target.clone());
-        }
+    if let Some(target) = &spec.target
+        && !target.is_empty()
+    {
+        args.push("--target".to_string());
+        args.push(target.clone());
     }
-    if let Some(platform) = &spec.platform {
-        if !platform.is_empty() {
-            args.push("--platform".to_string());
-            args.push(platform.clone());
-        }
+    if let Some(platform) = &spec.platform
+        && !platform.is_empty()
+    {
+        args.push("--platform".to_string());
+        args.push(platform.clone());
     }
     for (key, val) in &spec.build_args {
         args.push("--build-arg".to_string());

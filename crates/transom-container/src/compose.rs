@@ -155,23 +155,23 @@ pub fn endpoint_cli_args(endpoint: &ContainerEndpoint) -> Vec<String> {
         ContainerEndpoint::Tcp { url, tls } => {
             args.push("-H".to_string());
             args.push(url.clone());
-            if let Some(tls) = tls {
-                if !tls.is_empty() {
-                    if !tls.ca_cert.is_empty() {
-                        args.push("--tlscacert".to_string());
-                        args.push(tls.ca_cert.clone());
-                        args.push("--tlsverify".to_string());
-                    } else {
-                        args.push("--tls".to_string());
-                    }
-                    if !tls.client_cert.is_empty() {
-                        args.push("--tlscert".to_string());
-                        args.push(tls.client_cert.clone());
-                    }
-                    if !tls.client_key.is_empty() {
-                        args.push("--tlskey".to_string());
-                        args.push(tls.client_key.clone());
-                    }
+            if let Some(tls) = tls
+                && !tls.is_empty()
+            {
+                if !tls.ca_cert.is_empty() {
+                    args.push("--tlscacert".to_string());
+                    args.push(tls.ca_cert.clone());
+                    args.push("--tlsverify".to_string());
+                } else {
+                    args.push("--tls".to_string());
+                }
+                if !tls.client_cert.is_empty() {
+                    args.push("--tlscert".to_string());
+                    args.push(tls.client_cert.clone());
+                }
+                if !tls.client_key.is_empty() {
+                    args.push("--tlskey".to_string());
+                    args.push(tls.client_key.clone());
                 }
             }
         }

@@ -197,21 +197,19 @@ async fn header_from_config(config: &DockerConfigFile, image: &str) -> Option<St
             }
         }
 
-        if let Some(auth_b64) = &entry.auth {
-            if let Ok(decoded) = BASE64.decode(auth_b64) {
-                if let Ok(text) = String::from_utf8(decoded) {
-                    if let Some((user, pass)) = text.split_once(':') {
-                        let payload = DockerAuthPayload {
-                            username: user,
-                            password: pass,
-                            serveraddress: Some(&host),
-                            identitytoken: None,
-                        };
-                        if let Ok(json) = serde_json::to_string(&payload) {
-                            return Some(BASE64.encode(json));
-                        }
-                    }
-                }
+        if let Some(auth_b64) = &entry.auth
+            && let Ok(decoded) = BASE64.decode(auth_b64)
+            && let Ok(text) = String::from_utf8(decoded)
+            && let Some((user, pass)) = text.split_once(':')
+        {
+            let payload = DockerAuthPayload {
+                username: user,
+                password: pass,
+                serveraddress: Some(&host),
+                identitytoken: None,
+            };
+            if let Ok(json) = serde_json::to_string(&payload) {
+                return Some(BASE64.encode(json));
             }
         }
     }
@@ -225,17 +223,17 @@ async fn header_from_config(config: &DockerConfigFile, image: &str) -> Option<St
         .get(&host)
         .or_else(|| config.cred_helpers.get(stripped_host))
         .or(config.creds_store.as_ref());
-    if let Some(helper_name) = helper {
-        if let Some((username, secret)) = query_credential_helper(helper_name, &host).await {
-            let payload = DockerAuthPayload {
-                username: &username,
-                password: &secret,
-                serveraddress: Some(&host),
-                identitytoken: None,
-            };
-            if let Ok(json) = serde_json::to_string(&payload) {
-                return Some(BASE64.encode(json));
-            }
+    if let Some(helper_name) = helper
+        && let Some((username, secret)) = query_credential_helper(helper_name, &host).await
+    {
+        let payload = DockerAuthPayload {
+            username: &username,
+            password: &secret,
+            serveraddress: Some(&host),
+            identitytoken: None,
+        };
+        if let Ok(json) = serde_json::to_string(&payload) {
+            return Some(BASE64.encode(json));
         }
     }
     None

@@ -1041,20 +1041,20 @@ impl DockerApi {
             format!("container={}", http::percent_encode(container)),
             format!("repo={}", http::percent_encode(repo)),
         ];
-        if let Some(tag) = tag {
-            if !tag.is_empty() {
-                query.push(format!("tag={}", http::percent_encode(tag)));
-            }
+        if let Some(tag) = tag
+            && !tag.is_empty()
+        {
+            query.push(format!("tag={}", http::percent_encode(tag)));
         }
-        if let Some(comment) = comment {
-            if !comment.is_empty() {
-                query.push(format!("comment={}", http::percent_encode(comment)));
-            }
+        if let Some(comment) = comment
+            && !comment.is_empty()
+        {
+            query.push(format!("comment={}", http::percent_encode(comment)));
         }
-        if let Some(author) = author {
-            if !author.is_empty() {
-                query.push(format!("author={}", http::percent_encode(author)));
-            }
+        if let Some(author) = author
+            && !author.is_empty()
+        {
+            query.push(format!("author={}", http::percent_encode(author)));
         }
         let path = format!("/commit?{}", query.join("&"));
         let response = self.send(Method::POST, &path, None, "提交容器镜像").await?;
@@ -1361,15 +1361,14 @@ impl DockerApi {
             .create_exec(container, command, None, None, &[], false)
             .await
             .map_err(|error| {
-                if let ContainerError::Api { status, body, .. } = &error {
-                    if *status == 409 || body.contains("is not running") {
+                if let ContainerError::Api { status, body, .. } = &error
+                    && (*status == 409 || body.contains("is not running")) {
                         return ContainerError::Unsupported {
                             operation: format!(
                                 "容器 {container} 未运行，Docker 引擎不支持在已停止的容器中执行目录创建或文件删除/重命名"
                             ),
                         };
                     }
-                }
                 error
             })?;
         let path = format!("/exec/{}/start", http::percent_encode(&exec_id));
@@ -1456,9 +1455,7 @@ impl DockerApi {
                     continue;
                 }
                 Err(error) => {
-                    log::warn!(
-                        "连接 Docker /events 出错: {error}，将在 {retry_delay:?} 后重试"
-                    );
+                    log::warn!("连接 Docker /events 出错: {error}，将在 {retry_delay:?} 后重试");
                     tokio::select! {
                         biased;
                         _ = shutdown_rx.changed() => {
@@ -1508,14 +1505,13 @@ impl DockerApi {
                             if line.is_empty() {
                                 continue;
                             }
-                            if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(&line) {
-                                if let Some(event) = msg.into_engine_event() {
+                            if let Ok(msg) = serde_json::from_str::<DockerEventMessage>(&line)
+                                && let Some(event) = msg.into_engine_event() {
                                     last_timestamp = last_timestamp.max(event.timestamp);
                                     if event_tx.send(event).await.is_err() {
                                         return Ok(());
                                     }
                                 }
-                            }
                         }
                     }
                 }
