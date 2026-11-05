@@ -11,6 +11,7 @@ mod export;
 mod files_actions;
 mod form;
 mod hub_dialog;
+mod hub_view;
 mod lifecycle;
 mod list;
 mod logs_actions;
@@ -35,9 +36,10 @@ mod view;
 
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
-    ContainerBuildDialog, ContainerConfirm, ContainerDetailTab, ContainerDiscovery, ContainerFilesState,
-    ContainerHubDialog, ContainerPushDialog, ContainerSection, ContainerTerminalState,
-    ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
+    ContainerBuildDialog, ContainerConfirm, ContainerDetailTab, ContainerDiscovery,
+    ContainerFilesState, ContainerHubDialog, ContainerPushDialog, ContainerSection,
+    ContainerTerminalState, ContainerUiState, ContainerWorkspaceState, ContainerWorkspaceStatus,
+    RowAction, RowTarget,
 };
 
 use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};
@@ -111,7 +113,10 @@ impl AppState {
 
 impl AppShell {
     /// 寻找当前需要响应容器弹窗的工作区（优先当前活动标签，回退至首个包含该弹窗状态的标签）。
-    pub(crate) fn find_container_modal_tab<F>(&self, predicate: F) -> Option<(TabId, &ContainerWorkspaceState)>
+    pub(crate) fn find_container_modal_tab<F>(
+        &self,
+        predicate: F,
+    ) -> Option<(TabId, &ContainerWorkspaceState)>
     where
         F: Fn(&ContainerWorkspaceState) -> bool,
     {

@@ -6169,6 +6169,51 @@ container:
       en: This workspace is displayed in fullscreen.
       zh-CN: 该工作区正在全屏显示。
   hub:
+    title:
+      en: Explore Image Market
+      zh-CN: 探索镜像市场
+    subtitle:
+      en: Search, filter, and pull official and private registry images with one click
+      zh-CN: 在 Docker Hub 与私有镜像源中搜索、筛选并一键拉取镜像
+    current_registry:
+      en: 'Registry: %{name}'
+      zh-CN: '当前源: %{name}'
+    popular_label:
+      en: Popular
+      zh-CN: 热门镜像
+    results_count:
+      en: 'Found %{count} images'
+      zh-CN: '共检索到 %{count} 个镜像'
+    automated:
+      en: Automated
+      zh-CN: 自动构建
+    welcome_title:
+      en: Start Image Exploration
+      zh-CN: 开启镜像生态探索
+    welcome_subtitle:
+      en: Enter keywords or pick from popular tags to search official and community builds
+      zh-CN: 输入镜像名称或点击上方热门推荐，即刻检索官方认证与社区精选构建
+    guide_official_title:
+      en: Official Verification
+      zh-CN: 官方认证保障
+    guide_official_desc:
+      en: High priority for vetted official base images, avoiding bloated or insecure layers.
+      zh-CN: 优先展现经官方严苛审查维护的官方基础镜像，远离未知安全隐患。
+    guide_stars_title:
+      en: Community Reputation
+      zh-CN: 社区热度指标
+    guide_stars_desc:
+      en: Real-time star counts and automated build badges to evaluate image trustworthiness.
+      zh-CN: 集成真实社区 Star 评价与自动化构建标识，秒级评估镜像可信度。
+    guide_pull_title:
+      en: Concurrent Pulling
+      zh-CN: 后台并发下载
+    guide_pull_desc:
+      en: Non-blocking parallel layer downloads with real-time status in the pull drawer.
+      zh-CN: 一键加入下载队列，支持并发分层追踪与断点调度，不阻塞主界面。
+    footer_hint:
+      en: Image pulls are processed in the background. Open the drawer anytime to track layer details.
+      zh-CN: 提示：下载任务在后台并发调度，可随时在右侧下载抽屉查看分层进度与耗时。
     search_placeholder:
       en: Search image keywords, e.g. nginx, redis, ubuntu
       zh-CN: 输入镜像关键词搜索，例如 nginx、redis、ubuntu
