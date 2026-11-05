@@ -10,7 +10,12 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 use transom_core::ContainerRegistryAuth;
+
+/// 外部凭据助手可能等待系统钥匙串授权，必须有上限，不能阻塞拉取。
+const CREDENTIAL_HELPER_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Deserialize, Default)]
 struct DockerConfigFile {
@@ -84,13 +89,14 @@ pub fn extract_registry_host(image: &str) -> String {
 ///
 /// ### 代价与局限
 /// 依赖宿主机环境安装并配置有相应的 `docker-credential-*` 可执行程序；未安装时安全降级。
-fn query_credential_helper(helper: &str, server_url: &str) -> Option<(String, String)> {
+async fn query_credential_helper(helper: &str, server_url: &str) -> Option<(String, String)> {
     let program = format!("docker-credential-{helper}");
-    let mut child = std::process::Command::new(&program)
+    let mut child = tokio::process::Command::new(&program)
         .arg("get")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|error| {
             log::debug!("未能启动 Docker 凭证助手 {program}，原因: {error}");
@@ -99,14 +105,20 @@ fn query_credential_helper(helper: &str, server_url: &str) -> Option<(String, St
         .ok()?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        use std::io::Write;
-        let _ = stdin.write_all(server_url.as_bytes());
-        let _ = stdin.write_all(b"\n");
+        let _ = stdin.write_all(server_url.as_bytes()).await;
+        let _ = stdin.write_all(b"\n").await;
+        let _ = stdin.shutdown().await;
     }
 
-    let output = child.wait_with_output().ok()?;
+    let output = tokio::time::timeout(CREDENTIAL_HELPER_TIMEOUT, child.wait_with_output())
+        .await
+        .ok()?
+        .ok()?;
     if !output.status.success() {
-        log::debug!("Docker 凭证助手 {program} 退出码非 0: {:?}", output.status.code());
+        log::debug!(
+            "Docker 凭证助手 {program} 退出码非 0: {:?}",
+            output.status.code()
+        );
         return None;
     }
 
@@ -127,35 +139,48 @@ fn query_credential_helper(helper: &str, server_url: &str) -> Option<(String, St
 }
 
 /// 尝试解析对应镜像仓库的认证凭据，并返回 base64 格式的 Header 字符串。
-pub fn resolve_auth_header(
+pub async fn resolve_auth_header(
     image: &str,
     explicit_auth: Option<&ContainerRegistryAuth>,
 ) -> Option<String> {
     if let Some(auth) = explicit_auth {
         return encode_auth_header(auth).ok();
     }
-    // 从 ~/.docker/config.json 自动匹配
-    let config_path = home_dir()?.join(".docker").join("config.json");
-    let content = std::fs::read_to_string(config_path).ok()?;
-    let config: DockerConfigFile = serde_json::from_str(&content).ok()?;
-    let host = extract_registry_host(image);
+    let home = home_dir()?;
+    let mut paths = Vec::with_capacity(3);
+    paths.push(home.join(".docker").join("config.json"));
+    paths.push(home.join(".config").join("containers").join("auth.json"));
+    if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
+        paths.push(PathBuf::from(runtime).join("containers").join("auth.json"));
+    }
+    for path in paths {
+        let Ok(content) = tokio::fs::read_to_string(&path).await else {
+            continue;
+        };
+        let Ok(config) = serde_json::from_str::<DockerConfigFile>(&content) else {
+            continue;
+        };
+        if let Some(header) = header_from_config(&config, image).await {
+            return Some(header);
+        }
+    }
+    None
+}
 
-    // 1. 尝试直接从 auths 字典中匹配明文或 identitytoken
+/// 从一份 Docker/Podman 认证配置中解析目标镜像的 Header。
+async fn header_from_config(config: &DockerConfigFile, image: &str) -> Option<String> {
+    let host = extract_registry_host(image);
     let entry = config.auths.get(&host).or_else(|| {
         let stripped = host
             .trim_start_matches("https://")
             .trim_start_matches("http://")
             .trim_end_matches('/');
-        config.auths.iter().find_map(|(k, v)| {
-            let k_stripped = k
+        config.auths.iter().find_map(|(key, value)| {
+            let key_stripped = key
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
                 .trim_end_matches('/');
-            if k_stripped == stripped {
-                Some(v)
-            } else {
-                None
-            }
+            (key_stripped == stripped).then_some(value)
         })
     });
 
@@ -174,8 +199,8 @@ pub fn resolve_auth_header(
 
         if let Some(auth_b64) = &entry.auth {
             if let Ok(decoded) = BASE64.decode(auth_b64) {
-                if let Ok(s) = String::from_utf8(decoded) {
-                    if let Some((user, pass)) = s.split_once(':') {
+                if let Ok(text) = String::from_utf8(decoded) {
+                    if let Some((user, pass)) = text.split_once(':') {
                         let payload = DockerAuthPayload {
                             username: user,
                             password: pass,
@@ -191,7 +216,6 @@ pub fn resolve_auth_header(
         }
     }
 
-    // 2. 若 auths 中未记录明文，尝试通过 credHelpers 或 credsStore 外部凭据助手解析
     let stripped_host = host
         .trim_start_matches("https://")
         .trim_start_matches("http://")
@@ -201,9 +225,8 @@ pub fn resolve_auth_header(
         .get(&host)
         .or_else(|| config.cred_helpers.get(stripped_host))
         .or(config.creds_store.as_ref());
-
     if let Some(helper_name) = helper {
-        if let Some((username, secret)) = query_credential_helper(helper_name, &host) {
+        if let Some((username, secret)) = query_credential_helper(helper_name, &host).await {
             let payload = DockerAuthPayload {
                 username: &username,
                 password: &secret,
@@ -215,7 +238,6 @@ pub fn resolve_auth_header(
             }
         }
     }
-
     None
 }
 
@@ -263,6 +285,26 @@ mod tests {
         assert_eq!(json["serveraddress"], "https://index.docker.io/v1/");
     }
 
+    #[tokio::test]
+    async fn auths_entry_resolves_registry_credentials() {
+        let mut config = DockerConfigFile::default();
+        config.auths.insert(
+            "registry.example.com".to_string(),
+            DockerConfigAuthEntry {
+                auth: Some(BASE64.encode("user:secret")),
+                identitytoken: None,
+            },
+        );
+        let header = header_from_config(&config, "registry.example.com/team/app:1.0")
+            .await
+            .expect("必须解析出认证头");
+        let decoded = BASE64.decode(header).expect("认证头必须可解码");
+        let json: serde_json::Value = serde_json::from_slice(&decoded).expect("必须是 JSON");
+        assert_eq!(json["username"], "user");
+        assert_eq!(json["password"], "secret");
+        assert_eq!(json["serveraddress"], "registry.example.com");
+    }
+
     #[test]
     fn test_docker_config_file_deserialization_with_helpers() {
         let json_data = r#"{
@@ -284,4 +326,3 @@ mod tests {
         assert!(config.auths.contains_key("https://index.docker.io/v1/"));
     }
 }
-

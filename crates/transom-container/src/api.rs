@@ -1126,7 +1126,7 @@ impl DockerApi {
         if let Some(tag) = tag {
             path.push_str(&format!("&tag={}", http::percent_encode(&tag)));
         }
-        let auth_header = crate::auth::resolve_auth_header(&image, auth);
+        let auth_header = crate::auth::resolve_auth_header(&image, auth).await;
         let mut extra_headers = Vec::new();
         if let Some(h) = auth_header.as_deref() {
             extra_headers.push(("X-Registry-Auth", h));
@@ -1164,7 +1164,7 @@ impl DockerApi {
         if let Some(tag) = effective_tag {
             path.push_str(&format!("?tag={}", http::percent_encode(tag)));
         }
-        let auth_header = crate::auth::resolve_auth_header(image, auth);
+        let auth_header = crate::auth::resolve_auth_header(image, auth).await;
         let mut extra_headers = Vec::new();
         if let Some(h) = auth_header.as_deref() {
             extra_headers.push(("X-Registry-Auth", h));
