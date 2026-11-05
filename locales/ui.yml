@@ -5075,6 +5075,27 @@ container:
     disconnected:
       en: Engine disconnected
       zh-CN: 引擎已断开
+    running:
+      en: Running
+      zh-CN: 运行中
+    paused:
+      en: Paused
+      zh-CN: 已暂停
+    restarting:
+      en: Restarting
+      zh-CN: 重启中
+    exited:
+      en: Stopped
+      zh-CN: 已停止
+    created:
+      en: Created
+      zh-CN: 已创建
+    dead:
+      en: Dead
+      zh-CN: 已损坏
+    unknown:
+      en: Unknown
+      zh-CN: 未知
   sidebar:
     search:
       en: Search engine connections

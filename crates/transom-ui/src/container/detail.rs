@@ -26,6 +26,7 @@ mod file_preview;
 mod files;
 mod header;
 mod header_actions;
+mod header_container;
 mod image;
 mod image_history;
 mod logs;

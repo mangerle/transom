@@ -71,214 +71,13 @@ impl AppShell {
         match section {
             ContainerSection::Containers => {
                 if let Some(container) = container {
-                    // 原始 inspect 只是一个视图切换，用一个小图标按钮就够；它只属于
-                    // 基础信息页，切到日志/终端等页签时不该占位置。
-                    if detail_tab == ContainerDetailTab::Overview {
-                        let raw = overview_raw;
-                        actions = actions.child(
-                            Button::new("container-raw-inspect")
-                                .xsmall()
-                                .ghost()
-                                .icon(IconName::Braces)
-                                .selected(raw)
-                                .tooltip(
-                                    rust_i18n::t!(if raw {
-                                        "container.detail.overview"
-                                    } else {
-                                        "container.field.inspect"
-                                    })
-                                    .to_string(),
-                                )
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(workspace) =
-                                        this.state.container_workspace_mut(tab_id)
-                                    {
-                                        workspace.overview_raw = !raw;
-                                        workspace.detail_tab = ContainerDetailTab::Overview;
-                                    }
-                                    cx.notify();
-                                })),
-                        );
-                    }
-                    let name = container.name.clone();
-                    let running = container.state.is_running();
-                    if container.state == transom_core::ContainerState::Paused {
-                        actions = actions.child(
-                            Button::new("container-unpause")
-                                .xsmall()
-                                .icon(IconName::Play)
-                                .label(rust_i18n::t!("container.action.unpause").to_string())
-                                .on_click(cx.listener({
-                                    let name = name.clone();
-                                    move |this, _, _, cx| {
-                                        this.container_lifecycle(
-                                            tab_id,
-                                            name.clone(),
-                                            transom_core::ContainerLifecycleAction::Unpause,
-                                            cx,
-                                        );
-                                    }
-                                })),
-                        );
-                    } else if running {
-                        actions = actions
-                            .child(
-                                Button::new("container-pause")
-                                    .xsmall()
-                                    .icon(IconName::Pause)
-                                    .label(rust_i18n::t!("container.action.pause").to_string())
-                                    .on_click(cx.listener({
-                                        let name = name.clone();
-                                        move |this, _, _, cx| {
-                                            this.container_lifecycle(
-                                                tab_id,
-                                                name.clone(),
-                                                transom_core::ContainerLifecycleAction::Pause,
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new("container-stop")
-                                    .xsmall()
-                                    .icon(IconName::Square)
-                                    .label(rust_i18n::t!("container.action.stop").to_string())
-                                    .on_click(cx.listener({
-                                        let name = name.clone();
-                                        move |this, _, _, cx| {
-                                            this.container_lifecycle(
-                                                tab_id,
-                                                name.clone(),
-                                                transom_core::ContainerLifecycleAction::Stop,
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new("container-restart")
-                                    .xsmall()
-                                    .icon(IconName::RefreshCw)
-                                    .label(rust_i18n::t!("container.action.restart").to_string())
-                                    .on_click(cx.listener({
-                                        let name = name.clone();
-                                        move |this, _, _, cx| {
-                                            this.container_lifecycle(
-                                                tab_id,
-                                                name.clone(),
-                                                transom_core::ContainerLifecycleAction::Restart,
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            )
-                            .child(
-                                Button::new("container-kill")
-                                    .xsmall()
-                                    .danger()
-                                    .icon(IconName::CircleAlert)
-                                    .label(rust_i18n::t!("container.action.kill").to_string())
-                                    .on_click(cx.listener({
-                                        let name = name.clone();
-                                        move |this, _, _, cx| {
-                                            this.container_lifecycle(
-                                                tab_id,
-                                                name.clone(),
-                                                transom_core::ContainerLifecycleAction::Kill { signal: None },
-                                                cx,
-                                            );
-                                        }
-                                    })),
-                            );
-                    } else {
-                        actions = actions.child(
-                            Button::new("container-start")
-                                .xsmall()
-                                .icon(IconName::Play)
-                                .label(rust_i18n::t!("container.action.start").to_string())
-                                .on_click(cx.listener({
-                                    let name = name.clone();
-                                    move |this, _, _, cx| {
-                                        this.container_lifecycle(
-                                            tab_id,
-                                            name.clone(),
-                                            transom_core::ContainerLifecycleAction::Start,
-                                            cx,
-                                        );
-                                    }
-                                })),
-                        );
-                    }
-                    actions = actions
-                        .child(
-                            Button::new("container-update")
-                                .xsmall()
-                                .icon(IconName::Settings)
-                                .label(rust_i18n::t!("container.action.update").to_string())
-                                .on_click(cx.listener({
-                                    let name = name.clone();
-                                    move |this, _, window, cx| {
-                                        this.open_container_update(tab_id, name.clone(), window, cx);
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("container-export")
-                                .xsmall()
-                                .icon(IconName::FileText)
-                                .label(rust_i18n::t!("container.action.export_config").to_string())
-                                .on_click(cx.listener({
-                                    let name = name.clone();
-                                    move |this, _, _, cx| {
-                                        this.open_container_export(tab_id, name.clone(), cx);
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("container-commit")
-                                .xsmall()
-                                .icon(IconName::Layers)
-                                .label(rust_i18n::t!("container.action.commit").to_string())
-                                .on_click(cx.listener({
-                                    let name = name.clone();
-                                    move |this, _, window, cx| {
-                                        this.open_container_commit(tab_id, name.clone(), window, cx);
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("container-clone")
-                                .xsmall()
-                                .icon(IconName::Copy)
-                                .label(rust_i18n::t!("container.action.clone").to_string())
-                                .on_click(cx.listener({
-                                    let id = container.id.clone();
-                                    let name = name.clone();
-                                    move |this, _, window, cx| {
-                                        this.clone_container(tab_id, &id, &name, window, cx);
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("container-remove")
-                            .danger()
-                            .xsmall()
-                            .icon(IconName::Trash)
-                            .label(rust_i18n::t!("common.delete").to_string())
-                            .on_click(cx.listener({
-                                let name = name.clone();
-                                move |this, _, _, cx| {
-                                    if let Some(workspace) =
-                                        this.state.container_workspace_mut(tab_id)
-                                    {
-                                        workspace.confirm =
-                                            Some(ContainerConfirm::Container(name.clone()));
-                                    }
-                                    cx.notify();
-                                }
-                            })),
-                    );
+                    actions = actions.children(super::header_container::container_header_actions(
+                        tab_id,
+                        container,
+                        detail_tab,
+                        overview_raw,
+                        cx,
+                    ));
                 }
             }
             ContainerSection::Compose => {
@@ -414,24 +213,83 @@ impl AppShell {
             }
         }
 
-        // 有页签时页签占左、动作占右；没有页签的分类才显示标题，因为那里没有
-        // 第二处能说明「当前选中的是谁」。
-        let left: AnyElement = match tabs {
-            Some(tabs) => tabs,
-            None => h_flex()
-                .gap_2()
-                .items_center()
-                .min_w_0()
-                .child(Icon::new(section.icon()).small().text_color(p.primary))
-                .child(
+        // 头部左侧：根据规范显示「容器名 15px/600 + 状态胶囊 + 健康点」并跟随页签组
+        let left: AnyElement = match section {
+            ContainerSection::Containers => {
+                let mut title_row = h_flex().gap_2().items_center().min_w_0();
+                title_row = title_row.child(
+                    Icon::new(IconName::Container)
+                        .small()
+                        .text_color(p.primary),
+                );
+                title_row = title_row.child(
                     div()
-                        .text_sm()
-                        .font_weight(FontWeight::BOLD)
+                        .text_size(px(15.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .max_w(px(220.0))
                         .truncate()
                         .child(title),
-                )
-                .into_any_element(),
+                );
+
+                if let Some(c) = container {
+                    let (state_label, state_color) = match c.state {
+                        transom_core::ContainerState::Running => (
+                            rust_i18n::t!("container.state.running").to_string(),
+                            p.success,
+                        ),
+                        transom_core::ContainerState::Paused => (
+                            rust_i18n::t!("container.state.paused").to_string(),
+                            p.warning,
+                        ),
+                        transom_core::ContainerState::Restarting => (
+                            rust_i18n::t!("container.state.restarting").to_string(),
+                            p.primary,
+                        ),
+                        transom_core::ContainerState::Exited => (
+                            rust_i18n::t!("container.state.exited").to_string(),
+                            p.muted_foreground,
+                        ),
+                        _ => (
+                            rust_i18n::t!(format!("container.state.{}", c.state.key())).to_string(),
+                            p.muted_foreground,
+                        ),
+                    };
+                    title_row = title_row.child(crate::widgets::status_badge(state_label, state_color, p));
+                }
+
+                if let Some(chip) = health_chip {
+                    title_row = title_row.child(chip);
+                }
+
+                if let Some(tabs) = tabs {
+                    title_row = title_row
+                        .child(div().w(px(1.0)).h(px(16.0)).bg(p.divider(p.border)).mx_1())
+                        .child(tabs);
+                }
+
+                title_row.into_any_element()
+            }
+            _ => {
+                let mut row = h_flex().gap_2().items_center().min_w_0();
+                row = row
+                    .child(Icon::new(section.icon()).small().text_color(p.primary))
+                    .child(
+                        div()
+                            .text_size(px(15.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .max_w(px(260.0))
+                            .truncate()
+                            .child(title),
+                    );
+                if let Some(tabs) = tabs {
+                    row = row
+                        .child(div().w(px(1.0)).h(px(16.0)).bg(p.divider(p.border)).mx_1())
+                        .child(tabs);
+                }
+                row.into_any_element()
+            }
         };
+
         h_flex()
             .h(rems(CONTENT_HEADER_HEIGHT))
             .px_3()
@@ -449,7 +307,6 @@ impl AppShell {
                     .gap_2()
                     .items_center()
                     .flex_shrink_0()
-                    .children(health_chip)
                     .child(actions),
             )
             .into_any_element()
