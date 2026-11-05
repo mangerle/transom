@@ -8,8 +8,6 @@ use std::path::{Path, PathBuf};
 use transom_core::ComposeProject;
 use transom_platform::paths;
 
-const DEFAULT_COMPOSE_YAML: &str = "services:\n  app:\n    image: alpine:3.20\n    command: [\"sh\", \"-c\", \"while true; do sleep 3600; done\"]\n";
-
 impl AppShell {
     /// 编排项目命令：`up` 直接下发，`down` 会删容器与网络，先过确认条。
     pub(crate) fn run_compose(
@@ -42,11 +40,15 @@ impl AppShell {
         self.start_compose_project(tab_id, project, action, cx);
     }
 
-    /// 新建一个受应用托管的 Compose YAML，并立即以项目名启动。
-    pub(crate) fn create_local_compose(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    /// 根据自定义或预设模板内容新建 Compose 项目并在详情中打开。
+    pub(crate) fn create_local_compose_with_content(
+        &mut self,
+        tab_id: TabId,
+        content: String,
+        cx: &mut Context<Self>,
+    ) {
         let stamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
         let path = paths::compose_dir().join(format!("compose-{stamp}.yaml"));
-        let body = DEFAULT_COMPOSE_YAML.to_string();
         cx.spawn(async move |this, cx| {
             let create_message = rust_i18n::t!(
                 "container.compose.create_failed",
@@ -64,7 +66,7 @@ impl AppShell {
                         .to_string()
                     },
                 )?;
-                std::fs::write(&path, body).map_err(|error| {
+                std::fs::write(&path, content).map_err(|error| {
                     rust_i18n::t!(
                         "container.compose.file_io_failed",
                         message = create_message.as_str(),

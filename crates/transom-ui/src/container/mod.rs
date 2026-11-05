@@ -4,6 +4,7 @@ mod actions;
 mod build_dialog;
 mod commit;
 mod compose;
+mod compose_templates;
 mod detail;
 mod engines;
 mod events;

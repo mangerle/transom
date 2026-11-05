@@ -177,7 +177,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let tab_id = params.tab_id;
-        let main_action_btn = match params.section {
+        let main_action_btn: AnyElement = match params.section {
             ContainerSection::Containers => Button::new("container-main-run")
                 .xsmall()
                 .primary()
@@ -185,7 +185,8 @@ impl AppShell {
                 .tooltip(rust_i18n::t!("container.action.run").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_container_run_form(tab_id, None, window, cx);
-                })),
+                }))
+                .into_any_element(),
             ContainerSection::Images => Button::new("container-main-explore-hub")
                 .xsmall()
                 .primary()
@@ -193,7 +194,8 @@ impl AppShell {
                 .tooltip(rust_i18n::t!("container.pull_manager.explore_market").to_string())
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_container_hub_dialog(tab_id, window, cx);
-                })),
+                }))
+                .into_any_element(),
             ContainerSection::Volumes => Button::new("container-main-create-volume")
                 .xsmall()
                 .primary()
@@ -206,7 +208,8 @@ impl AppShell {
                         window,
                         cx,
                     );
-                })),
+                }))
+                .into_any_element(),
             ContainerSection::Networks => Button::new("container-main-create-network")
                 .xsmall()
                 .primary()
@@ -219,15 +222,49 @@ impl AppShell {
                         window,
                         cx,
                     );
-                })),
-            ContainerSection::Compose => Button::new("container-main-new-compose")
-                .xsmall()
-                .primary()
-                .icon(IconName::FilePlus)
-                .tooltip(rust_i18n::t!("container.compose.new_yaml").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.create_local_compose(tab_id, cx);
-                })),
+                }))
+                .into_any_element(),
+            ContainerSection::Compose => {
+                let app = cx.entity().clone();
+                Button::new("container-main-new-compose")
+                    .xsmall()
+                    .primary()
+                    .icon(IconName::FilePlus)
+                    .tooltip(rust_i18n::t!("container.compose.new_yaml").to_string())
+                    .dropdown_menu(move |menu, _, _| {
+                        let mut menu = menu;
+                        for t in crate::container::compose_templates::default_templates() {
+                            let app = app.clone();
+                            let yaml = t.yaml.to_string();
+                            menu = menu.item(
+                                gpui_kit::component::menu::PopupMenuItem::new(t.name.to_string())
+                                    .on_click(move |_, _, cx| {
+                                        app.update(cx, |this, cx| {
+                                            this.create_local_compose_with_content(
+                                                tab_id,
+                                                yaml.clone(),
+                                                cx,
+                                            );
+                                        });
+                                    }),
+                            );
+                        }
+                        menu = menu.item(gpui_kit::component::menu::PopupMenuItem::separator());
+                        let app_import = app.clone();
+                        menu = menu.item(
+                            gpui_kit::component::menu::PopupMenuItem::new(
+                                rust_i18n::t!("container.compose.import_yaml").to_string(),
+                            )
+                            .on_click(move |_, _, cx| {
+                                app_import.update(cx, |this, cx| {
+                                    this.import_local_compose(tab_id, cx);
+                                });
+                            }),
+                        );
+                        menu
+                    })
+                    .into_any_element()
+            }
         };
 
         let list_focus = params.focus_handle.clone();
