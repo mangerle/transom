@@ -4647,6 +4647,9 @@ container:
     slot_desc:
       en: "%{hours}h ago: %{status}"
       zh-CN: "%{hours}小时前：%{status}"
+    slot_desc_current:
+      en: "Current (within 1h): %{status}"
+      zh-CN: "当前（1小时内）：%{status}"
   status:
     en: Status
     zh-CN: 状态
