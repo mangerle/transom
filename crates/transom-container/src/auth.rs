@@ -16,6 +16,10 @@ use transom_core::ContainerRegistryAuth;
 struct DockerConfigFile {
     #[serde(default)]
     auths: HashMap<String, DockerConfigAuthEntry>,
+    #[serde(default, rename = "credsStore")]
+    creds_store: Option<String>,
+    #[serde(default, rename = "credHelpers")]
+    cred_helpers: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -67,6 +71,61 @@ pub fn extract_registry_host(image: &str) -> String {
     }
 }
 
+/// 通过 Docker 凭据助手（Credential Helper）查询凭据
+///
+/// ### 设计初衷 (Why)
+/// 现代 Docker Desktop 以及主流操作系统默认将 Registry 凭据托管在系统级安全凭据库中
+/// （如 osxkeychain, wincred, secretservice, pass 或 desktop）。
+/// 此时 `~/.docker/config.json` 的 `auths` 中仅有空对象，必须通过标准命令
+/// `docker-credential-<helper> get` 从外部助手获取明文与 Token。
+///
+/// ### 核心优势
+/// 遵循 Docker 官方标准外部凭据交互契约，自动解析系统密钥链，避免私有仓库拉取鉴权失败。
+///
+/// ### 代价与局限
+/// 依赖宿主机环境安装并配置有相应的 `docker-credential-*` 可执行程序；未安装时安全降级。
+fn query_credential_helper(helper: &str, server_url: &str) -> Option<(String, String)> {
+    let program = format!("docker-credential-{helper}");
+    let mut child = std::process::Command::new(&program)
+        .arg("get")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|error| {
+            log::debug!("未能启动 Docker 凭证助手 {program}，原因: {error}");
+            error
+        })
+        .ok()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = stdin.write_all(server_url.as_bytes());
+        let _ = stdin.write_all(b"\n");
+    }
+
+    let output = child.wait_with_output().ok()?;
+    if !output.status.success() {
+        log::debug!("Docker 凭证助手 {program} 退出码非 0: {:?}", output.status.code());
+        return None;
+    }
+
+    #[derive(Deserialize)]
+    struct HelperResult {
+        #[serde(rename = "Username")]
+        username: String,
+        #[serde(rename = "Secret")]
+        secret: String,
+    }
+
+    let parsed: HelperResult = serde_json::from_slice(&output.stdout).ok()?;
+    if parsed.username.is_empty() && parsed.secret.is_empty() {
+        None
+    } else {
+        Some((parsed.username, parsed.secret))
+    }
+}
+
 /// 尝试解析对应镜像仓库的认证凭据，并返回 base64 格式的 Header 字符串。
 pub fn resolve_auth_header(
     image: &str,
@@ -81,7 +140,7 @@ pub fn resolve_auth_header(
     let config: DockerConfigFile = serde_json::from_str(&content).ok()?;
     let host = extract_registry_host(image);
 
-    // 尝试直接匹配或去除协议头匹配
+    // 1. 尝试直接从 auths 字典中匹配明文或 identitytoken
     let entry = config.auths.get(&host).or_else(|| {
         let stripped = host
             .trim_start_matches("https://")
@@ -98,34 +157,61 @@ pub fn resolve_auth_header(
                 None
             }
         })
-    })?;
+    });
 
-    if let Some(token) = &entry.identitytoken {
-        let payload = DockerAuthPayload {
-            username: "",
-            password: "",
-            serveraddress: Some(&host),
-            identitytoken: Some(token),
-        };
-        if let Ok(json) = serde_json::to_string(&payload) {
-            return Some(BASE64.encode(json));
+    if let Some(entry) = entry {
+        if let Some(token) = &entry.identitytoken {
+            let payload = DockerAuthPayload {
+                username: "",
+                password: "",
+                serveraddress: Some(&host),
+                identitytoken: Some(token),
+            };
+            if let Ok(json) = serde_json::to_string(&payload) {
+                return Some(BASE64.encode(json));
+            }
+        }
+
+        if let Some(auth_b64) = &entry.auth {
+            if let Ok(decoded) = BASE64.decode(auth_b64) {
+                if let Ok(s) = String::from_utf8(decoded) {
+                    if let Some((user, pass)) = s.split_once(':') {
+                        let payload = DockerAuthPayload {
+                            username: user,
+                            password: pass,
+                            serveraddress: Some(&host),
+                            identitytoken: None,
+                        };
+                        if let Ok(json) = serde_json::to_string(&payload) {
+                            return Some(BASE64.encode(json));
+                        }
+                    }
+                }
+            }
         }
     }
 
-    if let Some(auth_b64) = &entry.auth {
-        if let Ok(decoded) = BASE64.decode(auth_b64) {
-            if let Ok(s) = String::from_utf8(decoded) {
-                if let Some((user, pass)) = s.split_once(':') {
-                    let payload = DockerAuthPayload {
-                        username: user,
-                        password: pass,
-                        serveraddress: Some(&host),
-                        identitytoken: None,
-                    };
-                    if let Ok(json) = serde_json::to_string(&payload) {
-                        return Some(BASE64.encode(json));
-                    }
-                }
+    // 2. 若 auths 中未记录明文，尝试通过 credHelpers 或 credsStore 外部凭据助手解析
+    let stripped_host = host
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/');
+    let helper = config
+        .cred_helpers
+        .get(&host)
+        .or_else(|| config.cred_helpers.get(stripped_host))
+        .or(config.creds_store.as_ref());
+
+    if let Some(helper_name) = helper {
+        if let Some((username, secret)) = query_credential_helper(helper_name, &host) {
+            let payload = DockerAuthPayload {
+                username: &username,
+                password: &secret,
+                serveraddress: Some(&host),
+                identitytoken: None,
+            };
+            if let Ok(json) = serde_json::to_string(&payload) {
+                return Some(BASE64.encode(json));
             }
         }
     }
@@ -134,8 +220,7 @@ pub fn resolve_auth_header(
 }
 
 fn home_dir() -> Option<PathBuf> {
-    #[allow(deprecated)]
-    std::env::home_dir()
+    directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
 }
 
 #[cfg(test)]
@@ -177,4 +262,26 @@ mod tests {
         assert_eq!(json["password"], "testpassword");
         assert_eq!(json["serveraddress"], "https://index.docker.io/v1/");
     }
+
+    #[test]
+    fn test_docker_config_file_deserialization_with_helpers() {
+        let json_data = r#"{
+            "auths": {
+                "https://index.docker.io/v1/": {}
+            },
+            "credsStore": "desktop",
+            "credHelpers": {
+                "gcr.io": "gcr"
+            }
+        }"#;
+        let config: DockerConfigFile =
+            serde_json::from_str(json_data).expect("反序列化 Docker 配置文件");
+        assert_eq!(config.creds_store.as_deref(), Some("desktop"));
+        assert_eq!(
+            config.cred_helpers.get("gcr.io").map(|s| s.as_str()),
+            Some("gcr")
+        );
+        assert!(config.auths.contains_key("https://index.docker.io/v1/"));
+    }
 }
+
