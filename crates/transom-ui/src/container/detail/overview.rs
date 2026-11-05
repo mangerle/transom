@@ -45,11 +45,24 @@ pub(crate) fn render_container_overview(
         runtime_fields = runtime_fields.child(copyable_field(rust_i18n::t!("container.field.exit_code"), code.to_string(), true, p, cx));
     }
 
+    let raw_btn = Button::new("container-overview-raw-inspect")
+        .xsmall()
+        .ghost()
+        .icon(IconName::Braces)
+        .label(rust_i18n::t!("container.field.inspect").to_string())
+        .on_click(cx.listener(move |this, _, _, cx| {
+            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                workspace.overview_raw = true;
+            }
+            cx.notify();
+        }))
+        .into_any_element();
+
     cards = cards.child(overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),
         IconName::Info,
         p,
-        None,
+        Some(raw_btn),
         runtime_fields,
     ));
 

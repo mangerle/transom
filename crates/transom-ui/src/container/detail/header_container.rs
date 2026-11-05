@@ -23,34 +23,6 @@ pub(super) fn container_header_actions(
     let name = container.name.clone();
     let id = container.id.clone();
 
-    // 1. 概览页时的原始 inspect 切换按钮
-    if detail_tab == ContainerDetailTab::Overview {
-        let raw = overview_raw;
-        actions.push(
-            Button::new("container-raw-inspect")
-                .xsmall()
-                .ghost()
-                .icon(IconName::Braces)
-                .selected(raw)
-                .tooltip(
-                    rust_i18n::t!(if raw {
-                        "container.detail.overview"
-                    } else {
-                        "container.field.inspect"
-                    })
-                    .to_string(),
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                        workspace.overview_raw = !raw;
-                        workspace.detail_tab = ContainerDetailTab::Overview;
-                    }
-                    cx.notify();
-                }))
-                .into_any_element(),
-        );
-    }
-
     let running = container.state == transom_core::ContainerState::Running;
     let paused = container.state == transom_core::ContainerState::Paused;
 

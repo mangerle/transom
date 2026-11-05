@@ -64,6 +64,18 @@ pub(crate) fn render_raw_inspect(
         .to_string()
     };
 
+    let back_btn = Button::new(ElementId::Name(format!("btn-back-overview-{tab_id}").into()))
+        .ghost()
+        .xsmall()
+        .icon(IconName::LayoutDashboard)
+        .label(rust_i18n::t!("container.detail.overview").to_string())
+        .on_click(cx.listener(move |this, _, _, cx| {
+            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                workspace.overview_raw = false;
+            }
+            cx.notify();
+        }));
+
     let toolbar = h_flex()
         .justify_between()
         .items_center()
@@ -86,7 +98,7 @@ pub(crate) fn render_raw_inspect(
                         .child(stats_label),
                 ),
         )
-        .child(copy_btn);
+        .child(h_flex().gap_2().items_center().child(copy_btn).child(back_btn));
 
     // 逐行渲染带有行号与关键词高亮的代码块
     let mut code_body = v_flex().gap_0().font_family(p.mono_font_family.clone()).text_size(p.mono_font_size);
