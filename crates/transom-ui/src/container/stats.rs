@@ -9,8 +9,7 @@
 //! 卡片。
 
 use crate::app::AppShell;
-use crate::divider::{DividerEdge, DividerStyled};
-use crate::monitor::{SampleIntervalMode, SparklineChartType, usage_bar, usage_color};
+use crate::monitor::{SampleIntervalMode, SparklineChartType, usage_color};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};

@@ -5823,6 +5823,21 @@ container:
     matched_lines:
       en: "%{matched}/%{total} lines"
       zh-CN: "%{matched}/%{total} 行"
+    status_total:
+      en: "%{count} lines"
+      zh-CN: "共 %{count} 行"
+    status_matched:
+      en: "Matched %{matched} of %{total} lines"
+      zh-CN: "匹配 %{matched} / %{total} 行"
+    status_following:
+      en: "Live following"
+      zh-CN: "实时跟随中"
+    status_paused:
+      en: "Following paused"
+      zh-CN: "跟随已暂停"
+    tail_format:
+      en: "Tail %{count}"
+      zh-CN: "尾部 %{count} 行"
   terminal:
     hint:
       en: Open an interactive shell inside this container.
