@@ -218,7 +218,7 @@ impl AppShell {
             ContainerSection::Containers => {
                 let mut title_row = h_flex().gap_2().items_center().min_w_0();
                 title_row = title_row.child(
-                    Icon::new(IconName::Container)
+                    Icon::new(section.icon())
                         .small()
                         .text_color(p.primary),
                 );
