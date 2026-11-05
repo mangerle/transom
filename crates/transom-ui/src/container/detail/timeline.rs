@@ -132,35 +132,48 @@ impl StatusTimeline {
                     }
                 }
                 ContainerState::Exited | ContainerState::Dead => {
-                    if let (Some(started), Some(finished)) = (started_ts, finished_ts) {
-                        if slot_start < finished && slot_end >= started {
-                            *slot = HourlyStatus::Running;
-                        } else if slot_end >= finished {
-                            *slot = exit_status;
-                        } else {
+                    // 当前时刻槽位（idx == 23）必须真实反映容器当前的退出状态，杜绝已停止状态下误判为运行中
+                    if idx == 23 {
+                        *slot = exit_status;
+                    } else if let (Some(started), Some(finished)) = (started_ts, finished_ts) {
+                        if slot_end <= started {
+                            // 槽位在容器启动之前，尚无运行记录
                             *slot = HourlyStatus::Unknown;
+                        } else if slot_start >= finished {
+                            // 槽位在容器退出之后，始终为已退出状态
+                            *slot = exit_status;
+                        } else if slot_end <= finished {
+                            // 槽位结束前容器仍在正常运行
+                            *slot = HourlyStatus::Running;
+                        } else {
+                            // 容器在该时间槽区间内退出了，标为退出状态
+                            *slot = exit_status;
                         }
                     } else if let Some(finished) = finished_ts {
-                        if slot_end >= finished {
+                        if slot_start >= finished {
                             *slot = exit_status;
                         } else {
                             *slot = HourlyStatus::Unknown;
                         }
-                    } else if idx == 23 {
-                        *slot = exit_status;
+                    } else {
+                        *slot = HourlyStatus::Unknown;
                     }
                 }
                 ContainerState::Paused => {
-                    if let Some(started) = started_ts {
+                    if idx == 23 {
+                        *slot = HourlyStatus::Exited;
+                    } else if let Some(started) = started_ts {
                         if slot_end >= started {
-                            *slot = HourlyStatus::Exited;
+                            *slot = HourlyStatus::Running;
                         }
                     }
                 }
                 ContainerState::Restarting => {
-                    if let Some(started) = started_ts {
+                    if idx == 23 {
+                        *slot = HourlyStatus::Error;
+                    } else if let Some(started) = started_ts {
                         if slot_end >= started {
-                            *slot = HourlyStatus::Error;
+                            *slot = HourlyStatus::Running;
                         }
                     }
                 }
@@ -391,5 +404,109 @@ mod tests {
         let mut timeline = StatusTimeline::default();
         timeline.update_current(HourlyStatus::Running);
         assert_eq!(timeline.buckets[23], HourlyStatus::Running);
+    }
+
+    #[test]
+    fn test_timeline_infer_recently_stopped_shows_exited_for_current_slot() {
+        // 模拟当前时间，容器在 10 分钟前启动，在 2 分钟前退出
+        let now = 1730000000;
+        let created = now - 600;
+        let started_at = chrono::DateTime::from_timestamp(now - 600, 0)
+            .unwrap()
+            .to_rfc3339();
+        let finished_at = chrono::DateTime::from_timestamp(now - 120, 0)
+            .unwrap()
+            .to_rfc3339();
+
+        let details = ContainerDetails {
+            id: "cid-redis".to_string(),
+            name: "redis".to_string(),
+            image: "redis:latest".to_string(),
+            image_id: "sha256:456".to_string(),
+            command: "redis-server".to_string(),
+            entrypoint: Vec::new(),
+            user: None,
+            working_dir: None,
+            env: Vec::new(),
+            state: ContainerState::Exited,
+            status: "Exited (0) 2 minutes ago".to_string(),
+            created,
+            started_at: Some(started_at),
+            finished_at: Some(finished_at),
+            exit_code: Some(0),
+            health: None,
+            health_details: None,
+            restart_policy: None,
+            ports: Vec::new(),
+            mounts: Vec::new(),
+            compose_project: None,
+            oom_killed: false,
+            size_rw: 0,
+            size_root_fs: 0,
+            exposed_ports: Vec::new(),
+            inspect: String::new(),
+        };
+
+        let timeline = StatusTimeline::infer_at(Some(&details), ContainerState::Exited, now);
+        // 当前时刻已停止，最右侧槽位（第 23 格）必须为 Exited，杜绝显示为 Running
+        assert_eq!(timeline.buckets[23], HourlyStatus::Exited);
+        // 1 小时前容器尚未创建，必须为 Unknown
+        for i in 0..23 {
+            assert_eq!(timeline.buckets[i], HourlyStatus::Unknown);
+        }
+    }
+
+    #[test]
+    fn test_timeline_infer_stopped_after_running() {
+        // 模拟运行了 5 小时后在当前这 1 小时内退出的容器
+        let now = 1730000000;
+        let created = now - 5 * 3600;
+        let started_at = chrono::DateTime::from_timestamp(now - 5 * 3600, 0)
+            .unwrap()
+            .to_rfc3339();
+        let finished_at = chrono::DateTime::from_timestamp(now - 1800, 0)
+            .unwrap()
+            .to_rfc3339();
+
+        let details = ContainerDetails {
+            id: "cid-app".to_string(),
+            name: "app".to_string(),
+            image: "app:latest".to_string(),
+            image_id: "sha256:789".to_string(),
+            command: "app".to_string(),
+            entrypoint: Vec::new(),
+            user: None,
+            working_dir: None,
+            env: Vec::new(),
+            state: ContainerState::Exited,
+            status: "Exited (0) 30 minutes ago".to_string(),
+            created,
+            started_at: Some(started_at),
+            finished_at: Some(finished_at),
+            exit_code: Some(0),
+            health: None,
+            health_details: None,
+            restart_policy: None,
+            ports: Vec::new(),
+            mounts: Vec::new(),
+            compose_project: None,
+            oom_killed: false,
+            size_rw: 0,
+            size_root_fs: 0,
+            exposed_ports: Vec::new(),
+            inspect: String::new(),
+        };
+
+        let timeline = StatusTimeline::infer_at(Some(&details), ContainerState::Exited, now);
+        // 当前时刻已退出
+        assert_eq!(timeline.buckets[23], HourlyStatus::Exited);
+        // 1~4 小时前的槽位全程在运行，必须为 Running
+        for i in 19..23 {
+            assert_eq!(
+                timeline.buckets[i],
+                HourlyStatus::Running,
+                "第 {i} 小时槽应当为 Running"
+            );
+        }
     }
 }
