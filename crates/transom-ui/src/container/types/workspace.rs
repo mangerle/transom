@@ -74,6 +74,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) create_input: Entity<InputState>,
     /// 状态筛选档位（仅容器分类）。
     pub(crate) state_filter: ContainerStateFilter,
+    /// 是否在「容器」列表中包含由 Compose 启动的衍生容器（默认 false）。
+    pub(crate) include_compose: bool,
     /// 卷与镜像的清理视角。
     pub(crate) quick_filter: ContainerQuickFilter,
     /// 当前排序键与方向。
@@ -253,6 +255,7 @@ impl ContainerWorkspaceState {
             search,
             create_input,
             state_filter: ContainerStateFilter::All,
+            include_compose: false,
             quick_filter: ContainerQuickFilter::All,
             sort_key: ContainerSortKey::default_for(ContainerSection::Containers),
             sort_desc: false,
@@ -403,6 +406,7 @@ impl ContainerWorkspaceState {
     /// 这类无效组合；同时收回不可用的详情页签并清掉旧选中项。
     pub(crate) fn apply_section(&mut self, section: ContainerSection) {
         self.section = section;
+        self.include_compose = false;
         // 快捷筛选是分类专属的视角，跨分类留着会继续过滤出莫名其妙的空列表。
         self.quick_filter = if ContainerQuickFilter::for_section(section).len() > 1 {
             self.quick_filter

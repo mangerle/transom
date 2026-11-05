@@ -31,6 +31,7 @@ pub(crate) fn collect_rows(
             .containers
             .iter()
             .filter(|item| filter.accepts(item.state.is_running()))
+            .filter(|item| workspace.include_compose || item.compose_project.is_none())
             .filter(|item| {
                 matches_query(
                     query,

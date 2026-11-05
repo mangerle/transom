@@ -48,6 +48,7 @@ pub(crate) struct ToolbarParams<'a> {
     pub(crate) section: ContainerSection,
     pub(crate) search: &'a Entity<InputState>,
     pub(crate) state_filter: ContainerStateFilter,
+    pub(crate) include_compose: bool,
     pub(crate) quick: ContainerQuickFilter,
     pub(crate) sort_key: ContainerSortKey,
     pub(crate) sort_desc: bool,
@@ -81,6 +82,7 @@ impl AppShell {
         let section = workspace.section;
         let search = workspace.search.clone();
         let state_filter = workspace.state_filter;
+        let include_compose = workspace.include_compose;
         let sort_key = workspace.sort_key;
         let sort_desc = workspace.sort_desc;
         let busy = workspace.busy;
@@ -103,6 +105,7 @@ impl AppShell {
                 section,
                 search: &search,
                 state_filter,
+                include_compose,
                 quick,
                 sort_key,
                 sort_desc,

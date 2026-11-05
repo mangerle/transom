@@ -4905,6 +4905,9 @@ container:
     dangling:
       en: Dangling images
       zh-CN: 仅无标签镜像
+    include_compose:
+      en: Include Compose containers
+      zh-CN: 包含编排容器
   sort:
     name:
       en: Name

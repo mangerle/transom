@@ -22,13 +22,14 @@ impl AppShell {
         let tab_id = params.tab_id;
         let section = params.section;
         let current_state = params.state_filter;
+        let current_include_compose = params.include_compose;
         let current_quick = params.quick;
         let current_sort = active_sort(section, params.sort_key);
         let sort_desc = params.sort_desc;
         let app = cx.entity().clone();
 
         let is_filtered = (section == ContainerSection::Containers
-            && current_state != ContainerStateFilter::All)
+            && (current_state != ContainerStateFilter::All || current_include_compose))
             || current_quick != ContainerQuickFilter::All
             || current_sort != ContainerSortKey::default_for(section)
             || sort_desc;
@@ -44,7 +45,7 @@ impl AppShell {
             .dropdown_menu(move |menu, _, _| {
                 let mut menu = menu;
 
-                // 1. 容器运行状态筛选
+                // 1. 容器运行状态筛选与 Compose 容器包含项
                 if section == ContainerSection::Containers {
                     for filter in ContainerStateFilter::ALL {
                         let app = app.clone();
@@ -63,6 +64,24 @@ impl AppShell {
                                 }),
                         );
                     }
+                    menu = menu.item(PopupMenuItem::separator());
+                    let app = app.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(
+                            rust_i18n::t!("container.filter.include_compose").to_string(),
+                        )
+                        .checked(current_include_compose)
+                        .on_click(move |_, _, cx| {
+                            app.update(cx, |this, cx| {
+                                if let Some(workspace) =
+                                    this.state.container_workspace_mut(tab_id)
+                                {
+                                    workspace.include_compose = !workspace.include_compose;
+                                }
+                                cx.notify();
+                            });
+                        }),
+                    );
                     menu = menu.item(PopupMenuItem::separator());
                 }
 
@@ -151,6 +170,7 @@ impl AppShell {
                                         this.state.container_workspace_mut(tab_id)
                                     {
                                         workspace.state_filter = ContainerStateFilter::All;
+                                        workspace.include_compose = false;
                                         workspace.quick_filter = ContainerQuickFilter::All;
                                         workspace.sort_key =
                                             ContainerSortKey::default_for(workspace.section);
