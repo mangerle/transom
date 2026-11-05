@@ -49,6 +49,10 @@ impl AppShell {
                 rust_i18n::t!("container.confirm.title_file").to_string(),
                 rust_i18n::t!("container.confirm.remove_path", path = path).to_string(),
             ),
+            ContainerConfirm::UploadOverwrite { path, .. } => (
+                rust_i18n::t!("container.confirm.title_upload_overwrite").to_string(),
+                rust_i18n::t!("container.confirm.upload_overwrite", path = path).to_string(),
+            ),
         };
 
         let content = v_flex()

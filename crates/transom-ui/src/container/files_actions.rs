@@ -268,7 +268,7 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 上传指定本地路径的文件到容器当前目录。
+    /// 上传指定本地路径的文件到容器当前目录；目标已存在时先确认覆盖。
     pub(crate) fn upload_container_path(&mut self, tab_id: TabId, local_path: std::path::PathBuf) {
         let Some(file_name) = local_path
             .file_name()
@@ -277,9 +277,6 @@ impl AppShell {
             return;
         };
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(container) = workspace.selected_container_name() else {
             return;
         };
         let directory = if workspace.files.path.is_empty() {
@@ -292,9 +289,25 @@ impl AppShell {
         } else {
             format!("{directory}/{file_name}")
         };
+        let is_dir = local_path.is_dir();
+        if workspace
+            .files
+            .entries
+            .iter()
+            .any(|entry| entry.name == file_name)
+        {
+            workspace.confirm = Some(ContainerConfirm::UploadOverwrite {
+                path: target,
+                local_path,
+                directory: is_dir,
+            });
+            return;
+        }
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
         let request_id = ContainerRequestId::new();
         workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        let is_dir = local_path.is_dir();
         let command = if is_dir {
             ContainerCommand::UploadDirectory {
                 tab_id,

@@ -117,6 +117,12 @@ pub(crate) enum ContainerConfirm {
         path: String,
         recursive: bool,
     },
+    /// 上传目标已存在：确认后覆盖。
+    UploadOverwrite {
+        path: String,
+        local_path: std::path::PathBuf,
+        directory: bool,
+    },
 }
 
 /// 一个引擎工作区的全部界面状态。

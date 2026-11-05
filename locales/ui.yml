@@ -6069,6 +6069,12 @@ container:
     title_file:
       en: Remove File
       zh-CN: 删除文件
+    title_upload_overwrite:
+      en: Overwrite Existing Target
+      zh-CN: 覆盖已有目标
+    upload_overwrite:
+      en: 'A file or folder named %{path} already exists. Continue and overwrite it?'
+      zh-CN: '目标 %{path} 已存在，是否继续覆盖？'
     irreversible:
       en: This action is destructive and cannot be undone.
       zh-CN: 此操作为破坏性修改且无法撤销。

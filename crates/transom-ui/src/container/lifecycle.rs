@@ -145,6 +145,35 @@ impl AppShell {
                     recursive,
                 }
             }
+            ContainerConfirm::UploadOverwrite {
+                path,
+                local_path,
+                directory,
+            } => {
+                let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+                    return;
+                };
+                let Some(container) = workspace.selected_container_name() else {
+                    return;
+                };
+                if directory {
+                    ContainerCommand::UploadDirectory {
+                        tab_id,
+                        request_id,
+                        container,
+                        path,
+                        local_path,
+                    }
+                } else {
+                    ContainerCommand::Upload {
+                        tab_id,
+                        request_id,
+                        container,
+                        path,
+                        local_path,
+                    }
+                }
+            }
         };
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.busy = true;
