@@ -12,6 +12,7 @@ mod search_keywords;
 pub(crate) use entity::{SettingsServices, SettingsView};
 pub(crate) use event::{SettingsEvent, SettingsRequest};
 mod appearance_page;
+mod containers_page;
 mod files_page;
 mod font_field;
 mod font_select;
@@ -59,6 +60,7 @@ pub(crate) fn page_entries() -> Vec<(&'static str, IconName)> {
         ("settings.tab_window_layout", IconName::PanelLeft),
         ("settings.tab_general", IconName::Globe),
         ("settings.tab_monitor", IconName::Gauge),
+        ("settings.tab_containers", IconName::Container),
         ("settings.tab_about", IconName::Info),
     ]
 }

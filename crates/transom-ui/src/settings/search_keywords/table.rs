@@ -392,6 +392,18 @@ impl GroupSearch {
                     "settings.about_summary",
                 ],
             ),
+            GroupSearch::ContainerRegistries => (
+                "settings.container_registries_group",
+                &[
+                    "settings.container_registries_desc",
+                    "settings.add_registry",
+                    "settings.edit_registry",
+                    "settings.registry_name",
+                    "settings.registry_url",
+                    "settings.registry_username",
+                    "settings.registry_default",
+                ],
+            ),
         }
     }
 }

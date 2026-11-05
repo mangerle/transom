@@ -96,6 +96,8 @@ pub(super) enum GroupSearch {
     MonitorBehavior,
     /// 关于页：应用信息组。
     About,
+    /// 容器与镜像源页：镜像仓库源管理组。
+    ContainerRegistries,
 }
 
 impl GroupSearch {
@@ -126,6 +128,7 @@ impl GroupSearch {
                 "settings.tab_general"
             }
             MonitorSections | MonitorBehavior => "settings.tab_monitor",
+            ContainerRegistries => "settings.tab_containers",
             About => "settings.tab_about",
         }
     }
@@ -195,6 +198,7 @@ mod tests {
         GroupSearch::MonitorSections,
         GroupSearch::MonitorBehavior,
         GroupSearch::About,
+        GroupSearch::ContainerRegistries,
     ];
 
     /// 翻译结果仍是原键名，说明资源里没有这条文案（rust-i18n 缺键时原样返回键）。

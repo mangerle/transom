@@ -219,6 +219,14 @@ static SETTINGS_PAGES: &[PageSpec] = &[
         ],
     },
     PageSpec {
+        title_key: "settings.tab_containers",
+        icon: IconName::Container,
+        groups: &[plain(
+            GroupSearch::ContainerRegistries,
+            SettingsView::render_settings_container_registries,
+        )],
+    },
+    PageSpec {
         title_key: "settings.tab_about",
         icon: IconName::Info,
         groups: &[window(

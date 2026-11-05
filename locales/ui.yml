@@ -2928,6 +2928,81 @@ settings:
   tab_monitor:
     en: System Monitor
     zh-CN: 主机监控
+  tab_containers:
+    en: Containers & Registries
+    zh-CN: 容器与镜像源
+  container_registries_group:
+    en: Image Registries
+    zh-CN: 镜像仓库源
+  container_registries_desc:
+    en: Configure remote container registries for search, pull, and push (Docker Hub, Harbor, ACR).
+    zh-CN: 配置用于镜像市场检索、拉取与推送的目标仓库源（Docker Hub、私有 Harbor、阿里云 ACR 等）。
+  add_registry:
+    en: Add Registry
+    zh-CN: 添加镜像源
+  edit_registry:
+    en: Edit Registry
+    zh-CN: 编辑镜像源
+  registry_name:
+    en: Display Name
+    zh-CN: 仓库名称
+  registry_name_placeholder:
+    en: 'e.g. Company Harbor, Docker Hub'
+    zh-CN: 例如 公司私有 Harbor、阿里云 ACR
+  registry_url:
+    en: Service URL
+    zh-CN: 服务地址
+  registry_url_placeholder:
+    en: 'https://harbor.example.com'
+    zh-CN: 例如 https://harbor.example.com
+  registry_username:
+    en: Username (Optional)
+    zh-CN: 用户名（可选）
+  registry_username_placeholder:
+    en: Leave empty for anonymous access
+    zh-CN: 留空表示匿名访问
+  registry_password:
+    en: Password / Token (Optional)
+    zh-CN: 密码 / Token（可选）
+  registry_password_placeholder:
+    en: Password or access token
+    zh-CN: 私有仓库访问密码或 Token
+  registry_default:
+    en: Set as Default Source
+    zh-CN: 设为默认搜索源
+  registry_default_desc:
+    en: Automatically selected when opening the image market
+    zh-CN: 打开镜像市场探索时优先默认选中该源
+  registry_save:
+    en: Save Registry
+    zh-CN: 保存仓库
+  registry_cancel:
+    en: Cancel
+    zh-CN: 取消
+  registry_set_default:
+    en: Set Default
+    zh-CN: 设为默认
+  registry_edit:
+    en: Edit
+    zh-CN: 编辑
+  registry_delete:
+    en: Delete
+    zh-CN: 删除
+  registry_official_tag:
+    en: Built-in Official
+    zh-CN: 预置官方
+  registry_anonymous:
+    en: Anonymous Access
+    zh-CN: 匿名访问
+  registry_auth_configured:
+    en: 'Auth: %{user}'
+    zh-CN: '认证账号: %{user}'
+  registry_name_required:
+    en: Registry display name is required
+    zh-CN: 仓库名称不能为空
+  registry_url_required:
+    en: Registry service URL is required
+    zh-CN: 仓库服务地址不能为空
   monitor_sections_group:
     en: Default Section States
     zh-CN: 板块默认折叠状态

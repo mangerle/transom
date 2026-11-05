@@ -80,8 +80,22 @@ pub(crate) struct SettingsModalState {
     pub(crate) proxy: ProxyFormInputs,
     pub(crate) identity_edit: Option<IdentityEditState>,
     pub(crate) trigger_edit: Option<TriggerEditState>,
+    pub(crate) registry_edit: Option<RegistryEditState>,
     /// 打开弹窗时从监控面板取来的采样档位快照：设置页只读它，变更以事件上报。
     pub(crate) monitor_interval: crate::monitor::SampleIntervalMode,
+}
+
+/// 设置弹窗内容器镜像仓库编辑表单状态。
+#[derive(Clone)]
+pub(crate) struct RegistryEditState {
+    /// 正在编辑的原仓库 ID；`None` 表示新建。
+    pub(crate) editing_id: Option<String>,
+    pub(crate) name: Entity<InputState>,
+    pub(crate) url: Entity<InputState>,
+    pub(crate) username: Entity<InputState>,
+    pub(crate) password: Entity<InputState>,
+    pub(crate) is_default: bool,
+    pub(crate) error: Option<String>,
 }
 
 /// 外观相关输入控件：字体选择、字号/行高、分割线与窗口透明度。
@@ -252,6 +266,7 @@ impl SettingsModalState {
             appearance_snapshot: None,
             identity_edit: None,
             trigger_edit: None,
+            registry_edit: None,
             sync_form,
             monitor_interval: crate::monitor::SampleIntervalMode::default(),
         }
