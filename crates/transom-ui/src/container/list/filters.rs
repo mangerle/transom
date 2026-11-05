@@ -216,20 +216,6 @@ impl AppShell {
                         );
                     }
                     ContainerSection::Images => {
-                        let app_pull = app.clone();
-                        menu = menu.item(
-                            PopupMenuItem::new(rust_i18n::t!("container.action.pull").to_string())
-                                .on_click(move |_, window, cx| {
-                                    app_pull.update(cx, |this, cx| {
-                                        this.open_container_create_dialog(
-                                            tab_id,
-                                            ContainerSection::Images,
-                                            window,
-                                            cx,
-                                        );
-                                    });
-                                }),
-                        );
                         let app_load = app.clone();
                         menu = menu.item(
                             PopupMenuItem::new(
@@ -343,7 +329,7 @@ impl AppShell {
 pub(crate) fn create_button_label(section: ContainerSection) -> Option<String> {
     let key = match section {
         ContainerSection::Containers => "container.action.run",
-        ContainerSection::Images => "container.action.pull",
+        ContainerSection::Images => "container.pull_manager.explore_market",
         ContainerSection::Volumes => "container.create_dialog.volume",
         ContainerSection::Networks => "container.create_dialog.network",
         ContainerSection::Compose => "container.compose.new_yaml",
