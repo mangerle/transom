@@ -177,7 +177,11 @@ pub async fn stream_project_logs(
             let mut prefixer = LinePrefixer::with_color(&name, color_idx);
             let mut sub_sink = |chunk: Vec<u8>| {
                 let formatted = prefixer.process(&chunk);
-                let _ = tx.send(formatted);
+                // 同步回调里不能等待异步通道；队列满时丢弃这一块并记录，
+                // 绝不阻塞 tokio worker。
+                if tx.try_send(formatted).is_err() {
+                    log::debug!("联合日志队列已满，丢弃一块日志，容器: {name}");
+                }
             };
             let _ = stream_logs(
                 &engine,
