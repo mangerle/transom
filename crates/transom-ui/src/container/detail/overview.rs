@@ -22,157 +22,69 @@ pub(crate) fn render_container_overview(
     if raw {
         return render_raw_inspect(tab_id, &details.inspect, search_input, p, cx);
     }
-    let mut rows = v_flex().gap_1p5();
-    rows = rows
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.id"),
-            short(&details.id),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.image"),
-            details.image.clone(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.state"),
-            details.status.clone(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.command"),
-            details.command.clone(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.entrypoint"),
-            details.entrypoint.join(" "),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.user"),
-            details.user.clone().unwrap_or_default(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.working_dir"),
-            details.working_dir.clone().unwrap_or_default(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.restart"),
-            details.restart_policy.clone().unwrap_or_default(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.created"),
-            format_unix(details.created),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.started_at"),
-            details.started_at.clone().unwrap_or_default(),
-        ))
-        .child(kv(
-            p,
-            rust_i18n::t!("container.field.exit_code"),
-            details
-                .exit_code
-                .map(|code| code.to_string())
-                .unwrap_or_default(),
-        ));
-    if details.ports.is_empty() {
-        rows = rows.child(kv(p, rust_i18n::t!("container.field.ports"), "—".to_string()));
-    } else {
-        let host_for_ports = browser_host.to_string();
-        let container_name = details.name.trim_start_matches('/').to_string();
-        let port_children = details.ports.iter().map(|port| {
-            let private_port = port.private_port;
-            let forward_btn = Button::new(format!("btn-forward-port-{private_port}"))
-                .ghost()
-                .xsmall()
-                .icon(IconName::ArrowLeftRight)
-                .tooltip(rust_i18n::t!("container.forward.button_tooltip").to_string())
-                .on_click(cx.listener({
-                    let container_name = container_name.clone();
-                    move |this, _, window, cx| {
-                        this.open_container_port_forward(tab_id, &container_name, private_port, window, cx);
-                    }
-                }));
-            match port.public_port {
-                Some(public) => {
-                    let url = format!("http://{host_for_ports}:{public}");
-                    let label = format!("{public}->{}/{}", port.private_port, port.protocol);
-                    let open_url = url.clone();
-                    let open_btn = Button::new(format!("btn-open-port-{public}"))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ExternalLink)
-                        .label(label)
-                        .tooltip(url)
-                        .on_click(move |_, _, _| {
-                            let _ = open::that_detached(&open_url);
-                        });
-                    h_flex()
-                        .gap_1()
-                        .items_center()
-                        .child(open_btn)
-                        .child(forward_btn)
-                        .into_any_element()
-                }
-                None => {
-                    let label = format!("{}/{}", port.private_port, port.protocol);
-                    let label_el = div()
-                        .text_xs()
-                        .font_family(p.mono_font_family.clone())
-                        .text_color(p.muted_foreground)
-                        .child(label);
-                    h_flex()
-                        .gap_1p5()
-                        .items_center()
-                        .child(label_el)
-                        .child(forward_btn)
-                        .into_any_element()
-                }
-            }
-        });
-        rows = rows.child(
-            v_flex()
-                .gap_0p5()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.field.ports").to_string()),
-                )
-                .child(h_flex().gap_2().flex_wrap().children(port_children)),
-        );
+
+    use super::overview_cards::*;
+
+    let mut cards = v_flex().gap_3();
+
+    // 1. 运行身份与运行时
+    let mut runtime_fields = v_flex().gap_1p5();
+    runtime_fields = runtime_fields
+        .child(copyable_field(rust_i18n::t!("container.field.id"), short(&details.id), true, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.image"), details.image.clone(), true, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.state"), details.status.clone(), false, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.command"), details.command.clone(), true, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.entrypoint"), details.entrypoint.join(" "), true, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.user"), details.user.clone().unwrap_or_default(), false, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.working_dir"), details.working_dir.clone().unwrap_or_default(), true, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.restart"), details.restart_policy.clone().unwrap_or_default(), false, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.created"), format_unix(details.created), false, p, cx))
+        .child(copyable_field(rust_i18n::t!("container.field.started_at"), details.started_at.clone().unwrap_or_default(), false, p, cx));
+
+    if let Some(code) = details.exit_code {
+        runtime_fields = runtime_fields.child(copyable_field(rust_i18n::t!("container.field.exit_code"), code.to_string(), true, p, cx));
     }
-    let mounts = details
-        .mounts
-        .iter()
-        .map(|mount| format!("{} -> {}", mount.source, mount.destination))
-        .collect::<Vec<_>>()
-        .join("\n");
-    rows = rows.child(kv(p, rust_i18n::t!("container.field.mounts"), mounts));
+
+    cards = cards.child(overview_card(
+        rust_i18n::t!("container.detail.category_identity").to_string(),
+        IconName::Info,
+        p,
+        None,
+        runtime_fields,
+    ));
+
+    // 2. 网络与端口映射
+    let container_name = details.name.trim_start_matches('/');
+    let port_chips = render_port_chips(tab_id, &details.ports, browser_host, container_name, p, cx);
+    cards = cards.child(overview_card(
+        rust_i18n::t!("container.field.ports").to_string(),
+        IconName::Network,
+        p,
+        None,
+        port_chips,
+    ));
+
+    // 3. 存储挂载
+    let mounts_el = render_mounts_card(&details.mounts, p);
+    cards = cards.child(overview_card(
+        rust_i18n::t!("container.field.mounts").to_string(),
+        IconName::HardDrive,
+        p,
+        None,
+        mounts_el,
+    ));
+
+    // 4. 健康检查时间线（如果有）
     if let Some(health_diag) = &details.health_details {
-        rows = rows.child(render_health_diagnostic(health_diag, p));
-    } else {
-        rows = rows.child(kv(
-            p,
-            rust_i18n::t!("container.field.health"),
-            details.health_label(),
-        ));
+        cards = cards.child(render_health_timeline(health_diag, p));
     }
+
+    // 5. 环境变量
     if !details.env.is_empty() {
-        rows = rows.child(kv(
-            p,
-            rust_i18n::t!("container.field.env"),
-            details.env.join("\n"),
-        ));
+        cards = cards.child(render_env_card(&details.env, p, cx));
     }
-    scroll_body(rows, p).into_any_element()
+
+    scroll_body(cards, p).into_any_element()
 }
 
 /// 关联容器行：卷、网络与编排详情里点名字直接跳到那个容器。
@@ -283,110 +195,5 @@ pub(crate) fn format_unix(seconds: i64) -> String {
 
 pub(crate) fn short(id: &str) -> String {
     transom_core::short_id(id)
-}
-
-fn render_health_diagnostic(
-    health: &transom_core::ContainerHealthDetails,
-    p: &Palette,
-) -> AnyElement {
-    let status_color = if health.status == "healthy" {
-        p.success
-    } else if health.status == "unhealthy" {
-        p.danger
-    } else {
-        p.warning
-    };
-
-    let mut block = v_flex()
-        .gap_1()
-        .p_2()
-        .rounded(p.radius.md)
-        .bg(p.muted.opacity(0.15))
-        .border_1()
-        .border_color(p.border.opacity(0.4));
-
-    let header = h_flex()
-        .justify_between()
-        .items_center()
-        .child(
-            h_flex()
-                .gap_1p5()
-                .items_center()
-                .child(div().size_2().rounded_full().bg(status_color))
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(rust_i18n::t!("container.field.health").to_string()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(status_color)
-                        .child(health.status.clone()),
-                ),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(format!(
-                    "{}: {}",
-                    rust_i18n::t!("container.health.failing_streak"),
-                    health.failing_streak
-                )),
-        );
-
-    block = block.child(header);
-
-    if !health.log.is_empty() {
-        let mut log_list = v_flex().gap_1().pt_1();
-        for item in health.log.iter().rev().take(5) {
-            let exit_color = if item.exit_code == 0 {
-                p.success
-            } else {
-                p.danger
-            };
-            let mut item_row = v_flex()
-                .gap_0p5()
-                .p_1p5()
-                .rounded(p.radius.sm)
-                .bg(p.background)
-                .border_1()
-                .border_color(p.border.opacity(0.2))
-                .child(
-                    h_flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(p.mono_font_family.clone())
-                                .text_color(p.muted_foreground)
-                                .child(item.start.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_family(p.mono_font_family.clone())
-                                .text_color(exit_color)
-                                .child(format!("{}: {}", rust_i18n::t!("container.health.exit_code"), item.exit_code)),
-                        ),
-                );
-            if !item.output.trim().is_empty() {
-                item_row = item_row.child(
-                    div()
-                        .text_xs()
-                        .font_family(p.mono_font_family.clone())
-                        .text_color(p.foreground.opacity(0.85))
-                        .child(item.output.trim().to_string()),
-                );
-            }
-            log_list = log_list.child(item_row);
-        }
-        block = block.child(log_list);
-    }
-
-    block.into_any_element()
 }
 

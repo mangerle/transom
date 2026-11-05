@@ -32,6 +32,7 @@ mod image_history;
 mod logs;
 mod network;
 mod overview;
+mod overview_cards;
 mod raw_inspect;
 mod terminal;
 mod volume;

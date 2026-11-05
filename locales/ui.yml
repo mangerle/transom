@@ -4983,6 +4983,18 @@ container:
     overview:
       en: Overview
       zh-CN: 基础信息
+    category_identity:
+      en: Identity & Runtime
+      zh-CN: 运行身份与基础
+    copy_env:
+      en: Copy as .env
+      zh-CN: 复制为 .env
+    env_copied:
+      en: Environment variables copied as .env
+      zh-CN: 已复制环境变量为 .env 格式
+    env_more_hint:
+      en: '… remaining %{count} items omitted (click above to copy all)'
+      zh-CN: '… 其余 %{count} 项已略去（可点击上方按钮复制全量）'
     no_inspect:
       en: No raw inspect data for this item
       zh-CN: 该条目没有原始 inspect 数据
