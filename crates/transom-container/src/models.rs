@@ -444,6 +444,12 @@ impl ContainerInspect {
     pub fn into_details(self, raw: String) -> ContainerDetails {
         let config = self.config.unwrap_or_default();
         let state = self.state.unwrap_or_default();
+        // 顶层 `Image` 是镜像 ID，`Config.Image` 才是仓库引用；两者不能混用。
+        let image_id = self.image.unwrap_or_default();
+        let image = config
+            .image
+            .filter(|image| !image.is_empty())
+            .unwrap_or_else(|| image_id.clone());
         let command = config.cmd.as_deref().unwrap_or_default().join(" ");
         let entrypoint = config.entrypoint.unwrap_or_default();
         let restart_policy = self
@@ -477,8 +483,8 @@ impl ContainerInspect {
                 .unwrap_or_default()
                 .trim_start_matches('/')
                 .to_string(),
-            image: config.image.or(self.image).unwrap_or_default(),
-            image_id: String::new(),
+            image,
+            image_id,
             command,
             entrypoint,
             user: config.user.filter(|user| !user.is_empty()),
@@ -1560,6 +1566,18 @@ mod tests {
         let inspect: ContainerInspect =
             serde_json::from_str(r#"{"Id":"x","Config":{}}"#).expect("检视必须能反序列化");
         assert!(!inspect.config.expect("配置存在").tty);
+    }
+
+    /// 顶层 `Image` 是镜像 ID，`Config.Image` 才是镜像引用，不能混用。
+    #[test]
+    fn inspect_keeps_image_reference_and_image_id_separate() {
+        let inspect: ContainerInspect = serde_json::from_str(
+            r#"{"Id":"cid","Image":"sha256:deadbeef","Config":{"Image":"nginx:latest"}}"#,
+        )
+        .expect("检视必须能反序列化");
+        let details = inspect.into_details(String::new());
+        assert_eq!(details.image, "nginx:latest");
+        assert_eq!(details.image_id, "sha256:deadbeef");
     }
 
     /// 真机回归：Docker 对无标签数据卷返回 `"Labels": null`，端口未映射时
