@@ -328,7 +328,9 @@ fn build_ssh_dial_stdio_args(
         "-o".to_string(),
         "BatchMode=yes".to_string(),
         "-o".to_string(),
-        "StrictHostKeyChecking=accept-new".to_string(),
+        // 不在首次连接时静默信任未知主机密钥；用户应先用 SSH 会话确认指纹，
+        // 或自行把主机写入 known_hosts，避免中间人攻击。
+        "StrictHostKeyChecking=yes".to_string(),
         "-o".to_string(),
         "ConnectTimeout=10".to_string(),
         "-o".to_string(),

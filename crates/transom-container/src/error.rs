@@ -93,6 +93,14 @@ impl ContainerError {
                 status,
                 body,
             } => humanize_api_error(operation, *status, body),
+            Self::Connect { source, .. }
+                if source.kind() == std::io::ErrorKind::PermissionDenied =>
+            {
+                format!(
+                    "当前用户无权访问容器引擎的 socket/命名管道，请确认已加入 docker 组或具备对应文件权限：{}",
+                    self
+                )
+            }
             _ => self.to_string(),
         }
     }
@@ -220,6 +228,17 @@ mod tests {
             reason: "必须是绝对路径".into(),
         };
         assert_eq!(error.to_app_error().code, ErrorCode::Configuration);
+    }
+
+    #[test]
+    fn permission_denied_connect_gets_hint() {
+        let error = ContainerError::Connect {
+            endpoint: "unix:///var/run/docker.sock".into(),
+            source: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+        };
+        let detail = error.user_friendly_detail();
+        assert!(detail.contains("docker 组"));
+        assert!(detail.contains("docker.sock"));
     }
 
     #[test]
