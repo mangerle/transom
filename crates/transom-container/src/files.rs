@@ -151,6 +151,104 @@ pub async fn download(
     result
 }
 
+/// 把容器内目录原样导出为本地 tar 归档。
+///
+/// 与单文件下载不同，这里不做 tar 解包，直接把归档 API 的原始 tar 流写入磁盘，
+/// 因此目录层级、符号链接与权限都能保留。
+///
+/// # Errors
+/// 路径非法、目标目录不存在、读取中断或用户取消时返回 [`ContainerError`]。
+pub async fn download_directory(
+    engine: &Engine,
+    container: &str,
+    path: &str,
+    local_path: &Path,
+    cancel: Arc<AtomicBool>,
+    progress: flume::Sender<(u64, Option<u64>)>,
+) -> Result<u64, ContainerError> {
+    let api = engine.http()?.clone();
+    let path = validate_container_path(path)?;
+    if let Some(parent) = local_path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.is_dir()
+    {
+        return Err(ContainerError::File {
+            path: local_path.display().to_string(),
+            message: "本地目标目录不存在".to_string(),
+        });
+    }
+    let (reader, task) = open_archive(&api, container, &path).await?;
+    let display = path.clone();
+    let destination = local_path.to_path_buf();
+    let result = tokio::task::spawn_blocking(move || {
+        write_archive_to_file(reader, &display, &destination, &cancel, &progress)
+    })
+    .await
+    .map_err(|error| ContainerError::File {
+        path: path.clone(),
+        message: format!("目录导出任务失败: {error}"),
+    })?;
+    task.abort();
+    result
+}
+
+/// 阻塞地把原始 tar 流写成文件，成功后原子改名。
+fn write_archive_to_file(
+    mut reader: BlockingReader,
+    container_path: &str,
+    destination: &Path,
+    cancel: &Arc<AtomicBool>,
+    progress: &flume::Sender<(u64, Option<u64>)>,
+) -> Result<u64, ContainerError> {
+    let temp = temp_path(destination);
+    let mut file = std::fs::File::create(&temp).map_err(|error| ContainerError::File {
+        path: temp.display().to_string(),
+        message: format!("创建临时归档失败: {error}"),
+    })?;
+    let mut buffer = vec![0u8; TRANSFER_CHUNK];
+    let mut written = 0u64;
+    let result = loop {
+        if cancel.load(Ordering::Relaxed) {
+            break Err(ContainerError::Cancelled);
+        }
+        let count = match reader.read(&mut buffer) {
+            Ok(0) => break Ok(()),
+            Ok(count) => count,
+            Err(error) => {
+                break Err(ContainerError::File {
+                    path: container_path.to_string(),
+                    message: format!("读取目录归档失败: {error}"),
+                });
+            }
+        };
+        if let Err(error) = file.write_all(&buffer[..count]) {
+            break Err(ContainerError::File {
+                path: temp.display().to_string(),
+                message: format!("写入目录归档失败: {error}"),
+            });
+        }
+        written = written.saturating_add(count as u64);
+        let _ = progress.try_send((written, None));
+    };
+    if result.is_ok() {
+        let _ = file.sync_all();
+    }
+    drop(file);
+    match result {
+        Ok(()) => {
+            std::fs::rename(&temp, destination).map_err(|error| ContainerError::File {
+                path: destination.display().to_string(),
+                message: format!("重命名目录归档失败: {error}"),
+            })?;
+            Ok(written)
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp);
+            Err(error)
+        }
+    }
+}
+
 /// 上传本地文件到容器内路径（`path` 含文件名）。
 ///
 /// # Errors
@@ -887,6 +985,28 @@ mod tests {
             relativize("etc/ssl/certs/ca.pem", "etc").as_deref(),
             Some("ssl/certs/ca.pem")
         );
+    }
+
+    #[test]
+    fn archive_export_writes_raw_tar_and_cleans_temp_on_cancel() {
+        let directory = tempfile::tempdir().expect("临时目录");
+        let destination = directory.path().join("export.tar");
+        let (sender, reader) = crate::bridge::output_channel(4);
+        sender
+            .send(Ok(b"tar-bytes".to_vec()))
+            .expect("发送必须成功");
+        drop(sender);
+        let (progress, _receiver) = flume::bounded(4);
+        let written = super::write_archive_to_file(
+            reader,
+            "/data",
+            &destination,
+            &std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            &progress,
+        )
+        .expect("导出必须成功");
+        assert_eq!(written, 9);
+        assert_eq!(std::fs::read(&destination).expect("读取导出"), b"tar-bytes");
     }
 
     #[test]

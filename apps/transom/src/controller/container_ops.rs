@@ -211,6 +211,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::ReadVolumeFile { .. }
         | ContainerCommand::Download { .. }
         | ContainerCommand::DownloadVolumeFile { .. }
+        | ContainerCommand::DownloadDirectory { .. }
         | ContainerCommand::Upload { .. }
         | ContainerCommand::RemovePath { .. }
         | ContainerCommand::CreateDir { .. }

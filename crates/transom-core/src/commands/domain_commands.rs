@@ -445,6 +445,14 @@ pub enum ContainerCommand {
         path: String,
         local_path: PathBuf,
     },
+    /// 把容器内目录原样导出为本地 tar 归档。
+    DownloadDirectory {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        path: String,
+        local_path: PathBuf,
+    },
     Upload {
         tab_id: TabId,
         request_id: ContainerRequestId,

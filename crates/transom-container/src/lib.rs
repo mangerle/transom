@@ -33,8 +33,8 @@ pub use engine::{Engine, discover_all, probe_explicit};
 pub use error::ContainerError;
 pub use exec::open_exec;
 pub use files::{
-    create_dir, download, list_dir, read_file, remove as remove_path, rename as rename_path,
-    upload, validate_container_path, write_file_bytes,
+    create_dir, download, download_directory, list_dir, read_file, remove as remove_path,
+    rename as rename_path, upload, validate_container_path, write_file_bytes,
 };
 pub use image_archive::{load_image, save_image};
 pub use logs::{LogSink, stream_logs, stream_project_logs};

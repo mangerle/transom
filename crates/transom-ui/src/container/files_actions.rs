@@ -133,6 +133,47 @@ impl AppShell {
         self.send_tracked(tab_id, request_id, command);
     }
 
+    /// 把容器内目录导出为本地 tar 归档。
+    pub(crate) fn download_container_directory(&mut self, tab_id: TabId, path: String) {
+        let is_volume = self
+            .state
+            .container_workspace(tab_id)
+            .is_some_and(|workspace| workspace.section == ContainerSection::Volumes);
+        if is_volume {
+            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                workspace.notice =
+                    Some(rust_i18n::t!("container.files.directory_volume_unsupported").to_string());
+            }
+            return;
+        }
+        let name = path.rsplit('/').next().unwrap_or("directory");
+        let Some(local_path) = rfd::FileDialog::new()
+            .set_file_name(format!("{name}.tar"))
+            .save_file()
+        else {
+            return;
+        };
+        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(target) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::DownloadDirectory {
+                tab_id,
+                request_id,
+                container: target,
+                path,
+                local_path,
+            },
+        );
+    }
+
     /// 打开文件重命名条：按钮与右键菜单共用同一份输入状态。
     pub(crate) fn begin_container_file_rename(
         &mut self,
