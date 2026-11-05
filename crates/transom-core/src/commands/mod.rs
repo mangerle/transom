@@ -23,7 +23,8 @@ pub enum AppCommand {
     Host(HostCommand),
     Sync(SyncCommand),
     Zmodem(ZmodemCommand),
-    Container(ContainerCommand),
+    /// 容器命令体量明显大于其它领域，装箱避免整个 AppCommand 被撑大。
+    Container(Box<ContainerCommand>),
 }
 
 impl From<TerminalCommand> for AppCommand {
@@ -64,7 +65,7 @@ impl From<ZmodemCommand> for AppCommand {
 
 impl From<ContainerCommand> for AppCommand {
     fn from(cmd: ContainerCommand) -> Self {
-        Self::Container(cmd)
+        Self::Container(Box::new(cmd))
     }
 }
 

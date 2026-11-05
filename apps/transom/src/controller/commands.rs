@@ -60,7 +60,7 @@ pub(super) async fn handle_command(
             LoopControl::Continue
         }
         AppCommand::Container(cmd) => {
-            handle_container_command(state, ctx, cmd);
+            handle_container_command(state, ctx, *cmd);
             LoopControl::Continue
         }
     }

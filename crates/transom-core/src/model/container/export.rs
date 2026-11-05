@@ -20,22 +20,23 @@ pub fn generate_docker_run(details: &ContainerDetails) -> String {
         args.push(format!("--name {clean_name}"));
     }
 
-    if let Some(ref policy) = details.restart_policy {
-        if !policy.is_empty() && policy != "no" {
-            args.push(format!("--restart {policy}"));
-        }
+    if let Some(ref policy) = details.restart_policy
+        && !policy.is_empty()
+        && policy != "no"
+    {
+        args.push(format!("--restart {policy}"));
     }
 
-    if let Some(ref user) = details.user {
-        if !user.is_empty() {
-            args.push(format!("--user {user}"));
-        }
+    if let Some(ref user) = details.user
+        && !user.is_empty()
+    {
+        args.push(format!("--user {user}"));
     }
 
-    if let Some(ref workdir) = details.working_dir {
-        if !workdir.is_empty() {
-            args.push(format!("-w {workdir}"));
-        }
+    if let Some(ref workdir) = details.working_dir
+        && !workdir.is_empty()
+    {
+        args.push(format!("-w {workdir}"));
     }
 
     // 端口映射
@@ -103,22 +104,23 @@ pub fn generate_docker_compose(details: &ContainerDetails) -> String {
         lines.push(format!("    container_name: {clean_name}"));
     }
 
-    if let Some(ref policy) = details.restart_policy {
-        if !policy.is_empty() && policy != "no" {
-            lines.push(format!("    restart: {policy}"));
-        }
+    if let Some(ref policy) = details.restart_policy
+        && !policy.is_empty()
+        && policy != "no"
+    {
+        lines.push(format!("    restart: {policy}"));
     }
 
-    if let Some(ref user) = details.user {
-        if !user.is_empty() {
-            lines.push(format!("    user: \"{user}\""));
-        }
+    if let Some(ref user) = details.user
+        && !user.is_empty()
+    {
+        lines.push(format!("    user: \"{user}\""));
     }
 
-    if let Some(ref workdir) = details.working_dir {
-        if !workdir.is_empty() {
-            lines.push(format!("    working_dir: {workdir}"));
-        }
+    if let Some(ref workdir) = details.working_dir
+        && !workdir.is_empty()
+    {
+        lines.push(format!("    working_dir: {workdir}"));
     }
 
     // 端口映射
@@ -187,10 +189,12 @@ fn format_port_spec(port: &ContainerPort, public: u16) -> String {
         format!("/{proto}")
     };
 
-    if let Some(ref ip) = port.ip {
-        if !ip.is_empty() && ip != "0.0.0.0" && ip != "::" {
-            return format!("{ip}:{public}:{}{proto_suffix}", port.private_port);
-        }
+    if let Some(ref ip) = port.ip
+        && !ip.is_empty()
+        && ip != "0.0.0.0"
+        && ip != "::"
+    {
+        return format!("{ip}:{public}:{}{proto_suffix}", port.private_port);
     }
     format!("{public}:{}{proto_suffix}", port.private_port)
 }
