@@ -42,6 +42,19 @@ pub(super) async fn handle_internal(
             handle_container_connected(state, ctx, internal).await
         }
         Internal::ContainerTaskFinished { .. } => handle_container_finished(state, ctx, internal),
+        Internal::ContainerPullTaskFinished { .. } => {
+            handle_container_pull_finished(state, internal)
+        }
+    }
+}
+
+/// 镜像拉取任务结束：只回收工作区里的 JoinHandle。
+fn handle_container_pull_finished(state: &mut ControllerState, internal: Internal) {
+    let Internal::ContainerPullTaskFinished { tab_id, task_id } = internal else {
+        return;
+    };
+    if let Some(workspace) = state.container_workspaces.get_mut(&tab_id) {
+        workspace.remove_pull_task(&task_id);
     }
 }
 

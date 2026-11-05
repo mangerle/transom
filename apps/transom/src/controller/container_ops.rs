@@ -33,6 +33,8 @@ use transom_core::{
 pub(super) struct ContainerWorkspace {
     pub(super) engine: Engine,
     tasks: HashMap<ContainerRequestId, TaskEntry>,
+    /// 镜像拉取长任务：以任务 ID 登记，关闭工作区时可以中止。
+    pull_tasks: HashMap<String, JoinHandle<()>>,
     events_shutdown: Option<tokio::sync::watch::Sender<bool>>,
     events_task: Option<JoinHandle<()>>,
 }
@@ -47,6 +49,7 @@ impl ContainerWorkspace {
         Self {
             engine,
             tasks: HashMap::new(),
+            pull_tasks: HashMap::new(),
             events_shutdown: None,
             events_task: None,
         }
@@ -112,6 +115,18 @@ impl ContainerWorkspace {
         self.tasks.remove(&request_id);
     }
 
+    /// 登记镜像拉取长任务；同一任务 ID 重复登记时先中止旧任务。
+    pub(super) fn insert_pull_task(&mut self, task_id: String, handle: JoinHandle<()>) {
+        if let Some(previous) = self.pull_tasks.insert(task_id, handle) {
+            previous.abort();
+        }
+    }
+
+    /// 拉取任务结束后回收句柄。
+    pub(super) fn remove_pull_task(&mut self, task_id: &str) {
+        self.pull_tasks.remove(task_id);
+    }
+
     /// 中止全部长任务；工作区关闭/标签关闭时调用。
     ///
     /// 返回被中止的请求 ID，供调用方清理取消标志登记（停机路径可忽略）。
@@ -120,6 +135,9 @@ impl ContainerWorkspace {
             let _ = shutdown.send(true);
         }
         if let Some(handle) = self.events_task.take() {
+            handle.abort();
+        }
+        for (_, handle) in self.pull_tasks.drain() {
             handle.abort();
         }
         let request_ids = self.tasks.keys().copied().collect();

@@ -220,6 +220,11 @@ enum Internal {
         tab_id: TabId,
         request_id: ContainerRequestId,
     },
+    /// 镜像拉取长任务结束，主循环回收句柄与取消登记。
+    ContainerPullTaskFinished {
+        tab_id: TabId,
+        task_id: String,
+    },
 }
 
 /// 建连任务的完成形态：SSH 会话，或"IO + 退出通知"的本地/串口/Telnet。

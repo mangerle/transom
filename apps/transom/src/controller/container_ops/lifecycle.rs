@@ -2,6 +2,18 @@
 
 use super::*;
 
+/// 拉取任务被中止时也必须清理取消登记，不能只依赖正常结束路径。
+struct PullTaskGuard {
+    service: Arc<transom_container::ContainerService>,
+    task_id: String,
+}
+
+impl Drop for PullTaskGuard {
+    fn drop(&mut self) {
+        self.service.finish_task(&self.task_id);
+    }
+}
+
 pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
     match command {
         ContainerCommand::RunCompose {
@@ -143,9 +155,15 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             };
             let cancel = ctx.container.register_task_cancel(&task_id);
             let event_tx = ctx.event_tx.clone();
+            let internal_tx = ctx.internal_tx.clone();
             let container_service = Arc::clone(&ctx.container);
             let tid = task_id.clone();
-            tokio::spawn(async move {
+            let handle_task_id = task_id.clone();
+            let handle = tokio::spawn(async move {
+                let _guard = PullTaskGuard {
+                    service: Arc::clone(&container_service),
+                    task_id: tid.clone(),
+                };
                 let mut layers_map: std::collections::HashMap<
                     String,
                     transom_core::ImageLayerProgress,
@@ -171,15 +189,25 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     .await
                     .err()
                     .map(AppError::from);
-                container_service.finish_task(&tid);
                 let _ = event_tx.try_send(
                     ContainerAppEvent::PullTaskFinished {
-                        task_id: tid,
+                        task_id: tid.clone(),
                         error,
                     }
                     .into(),
                 );
+                let _ = internal_tx
+                    .send_async(Internal::ContainerPullTaskFinished {
+                        tab_id,
+                        task_id: tid,
+                    })
+                    .await;
             });
+            if let Some(workspace) = state.container_workspaces.get_mut(&tab_id) {
+                workspace.insert_pull_task(handle_task_id, handle);
+            } else {
+                handle.abort();
+            }
         }
         ContainerCommand::CancelPullTask { tab_id: _, task_id } => {
             ctx.container.cancel_task(&task_id);
