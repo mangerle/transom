@@ -288,9 +288,10 @@ impl CliBackend {
     pub async fn build_image(
         &self,
         spec: &transom_core::ContainerBuildSpec,
+        cancel: &std::sync::Arc<std::sync::atomic::AtomicBool>,
         progress: &mut (dyn FnMut(String) + Send),
     ) -> Result<(), ContainerError> {
-        crate::build::build_image_cli(self, spec, progress).await
+        crate::build::build_image_cli(self, spec, cancel, progress).await
     }
 
     pub async fn remove_image(&self, image: &str, force: bool) -> Result<(), ContainerError> {

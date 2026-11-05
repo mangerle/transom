@@ -201,6 +201,7 @@ impl AppShell {
                         dockerfile,
                         tags,
                         no_cache: false,
+                        ..Default::default()
                     },
                 }
             }

@@ -1,28 +1,35 @@
 //! 镜像构建（Build）实现模块。
 //!
-//! 设计原理（Why）：
-//! - Docker / Podman 引擎通过 REST API `POST /build` 接收上下文目录的 tar 归档并执行构建；
-//! - 构建过程可能持续数分钟甚至更久，因此构建请求必须使用长超时，并以 chunked 流式读取响应行；
-//! - 每一行响应是携带 `stream` 或 `errorDetail` 的 JSON 对象，流式解析不仅可实时呈现构建进度，
-//!   更能在出错时第一时间捕获原因并向界面抛出结构化错误；
-//! - CLI 兜底则启动 `docker build` 子进程并接管 stdout/stderr 流。
+//! # 设计原理（Why）
+//! - 流式上下文打包：利用后台线程将上下文文件递归流式写入有界管道，并通过 HTTP/1.1 chunked
+//!   流式请求体实时上传，彻底避免整项目（含大构建产物）缓存在内存中导致 OOM；
+//! - `.dockerignore` 过滤支持：构建前自动解析上下文根目录下的 `.dockerignore`（默认忽略 `.git` 目录），
+//!   在遍历打包过程中跳过无关大文件，极大降低网络传输与磁盘 I/O 开销；
+//! - 取消安全性保障：接入全局取消标志 [`Arc<AtomicBool>`]，支持用户在构建任意时刻安全取消传输并中断远端守护进程；
+//! - 增强构建参数：支持 `build_args`（ARG 传参）、`target`（多阶段构建目标阶段）以及 `platform`（目标架构）。
+//!
+//! # 代价与局限（Trade-offs）
+//! - chunked 流式请求不向引擎发送 `Content-Length`，但符合 Docker REST 标准规范；
+//! - 超大目录的遍历耗时取决于本地磁盘 I/O。
 
 use crate::api::DockerApi;
 use crate::cli::CliBackend;
 use crate::error::ContainerError;
 use crate::http;
 use bytes::Bytes;
-use http_body_util::BodyExt;
+use futures::StreamExt;
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use http_body_util::{BodyExt, StreamBody};
 use hyper::Method;
+use hyper::body::Frame;
 use serde::Deserialize;
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use transom_core::ContainerBuildSpec;
-
-/// 构建操作的最大超时时间（15 分钟）。
-const BUILD_TIMEOUT: Duration = Duration::from_secs(900);
 
 /// Docker /build 接口返回的单行 JSON 消息结构。
 #[derive(Debug, Deserialize)]
@@ -38,42 +45,165 @@ struct BuildErrorDetail {
     message: Option<String>,
 }
 
-/// 打包指定目录下的所有文件为 tar 归档内存字节。
-///
-/// # Errors
-/// 若目录不存在、不是目录或打包读取失败，返回 [`ContainerError`]。
-pub fn pack_context_tar(context_dir: &Path) -> Result<Vec<u8>, ContainerError> {
-    if !context_dir.exists() {
-        return Err(ContainerError::InvalidPath {
-            path: context_dir.display().to_string(),
-            reason: "构建上下文目录不存在".to_string(),
-        });
-    }
-    if !context_dir.is_dir() {
-        return Err(ContainerError::InvalidPath {
-            path: context_dir.display().to_string(),
-            reason: "构建上下文路径不是有效目录".to_string(),
-        });
+/// .dockerignore 过滤规则匹配器。
+#[derive(Debug)]
+pub struct DockerIgnore {
+    set: GlobSet,
+    has_rules: bool,
+}
+
+impl DockerIgnore {
+    /// 从构建上下文目录解析 .dockerignore，默认始终忽略 .git 目录。
+    pub fn from_context(context_dir: &Path) -> Self {
+        let ignore_file = context_dir.join(".dockerignore");
+        let mut builder = GlobSetBuilder::new();
+        let mut count = 0;
+
+        // 默认始终忽略 .git 目录
+        if let Ok(glob) = Glob::new(".git") {
+            builder.add(glob);
+            count += 1;
+        }
+        if let Ok(glob) = Glob::new(".git/**") {
+            builder.add(glob);
+            count += 1;
+        }
+
+        if let Ok(content) = std::fs::read_to_string(ignore_file) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
+                let clean = trimmed.trim_start_matches("./");
+                if let Ok(glob) = Glob::new(clean) {
+                    builder.add(glob);
+                    count += 1;
+                }
+                let dir_pattern = format!("{}/**", clean.trim_end_matches('/'));
+                if let Ok(glob) = Glob::new(&dir_pattern) {
+                    builder.add(glob);
+                    count += 1;
+                }
+            }
+        }
+
+        match builder.build() {
+            Ok(set) => Self {
+                set,
+                has_rules: count > 0,
+            },
+            Err(e) => {
+                log::warn!("编译 .dockerignore glob 集合失败: {e}");
+                Self {
+                    set: GlobSet::empty(),
+                    has_rules: false,
+                }
+            }
+        }
     }
 
-    let mut builder = tar::Builder::new(Vec::new());
-    builder.mode(tar::HeaderMode::Deterministic);
+    /// 判定指定相对路径是否已被忽略。
+    pub fn is_ignored(&self, rel_path: &str, is_dir: bool) -> bool {
+        if !self.has_rules {
+            return false;
+        }
+        let clean = rel_path.trim_start_matches('/').trim_start_matches("./");
+        if self.set.is_match(clean) {
+            return true;
+        }
+        if is_dir {
+            let dir_path = format!("{clean}/");
+            if self.set.is_match(&dir_path) {
+                return true;
+            }
+        }
+        false
+    }
+}
 
-    builder
-        .append_dir_all(".", context_dir)
-        .map_err(|error| ContainerError::File {
-            path: context_dir.display().to_string(),
-            message: error.to_string(),
-        })?;
-    builder.finish().map_err(|error| ContainerError::File {
-        path: context_dir.display().to_string(),
-        message: error.to_string(),
+/// 流式通道写入适配器：将 tar 字节分块送入有界通道。
+struct ChannelWriter {
+    sender: flume::Sender<Result<Vec<u8>, std::io::Error>>,
+    cancel: Arc<AtomicBool>,
+}
+
+impl std::io::Write for ChannelWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "构建任务已被取消",
+            ));
+        }
+        self.sender
+            .send(Ok(buf.to_vec()))
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::BrokenPipe, "通道已断开"))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// 递归打包目录到 tar 流中，并应用 .dockerignore 过滤规则。
+fn append_dir_recursive<W: std::io::Write>(
+    builder: &mut tar::Builder<W>,
+    base_dir: &Path,
+    current_dir: &Path,
+    ignore: &DockerIgnore,
+    cancel: &Arc<AtomicBool>,
+) -> Result<(), ContainerError> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+    let read_dir = std::fs::read_dir(current_dir).map_err(|error| ContainerError::File {
+        path: current_dir.display().to_string(),
+        message: format!("读取上下文子目录失败: {error}"),
     })?;
 
-    builder.into_inner().map_err(|error| ContainerError::File {
-        path: context_dir.display().to_string(),
-        message: error.to_string(),
-    })
+    for entry in read_dir {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(ContainerError::Cancelled);
+        }
+        let entry = entry.map_err(|error| ContainerError::File {
+            path: current_dir.display().to_string(),
+            message: format!("遍历上下文条目失败: {error}"),
+        })?;
+        let path = entry.path();
+        let rel_path = path.strip_prefix(base_dir).unwrap_or(&path);
+        let rel_str = rel_path.to_string_lossy();
+        let file_type = entry.file_type().map_err(|error| ContainerError::File {
+            path: path.display().to_string(),
+            message: format!("获取文件类型失败: {error}"),
+        })?;
+
+        let is_dir = file_type.is_dir();
+        if ignore.is_ignored(&rel_str, is_dir) {
+            continue;
+        }
+
+        if is_dir {
+            builder
+                .append_dir(rel_str.as_ref(), &path)
+                .map_err(|error| ContainerError::File {
+                    path: path.display().to_string(),
+                    message: format!("打包目录条目失败: {error}"),
+                })?;
+            append_dir_recursive(builder, base_dir, &path, ignore, cancel)?;
+        } else if file_type.is_file() {
+            builder
+                .append_path_with_name(&path, rel_str.as_ref())
+                .map_err(|error| ContainerError::File {
+                    path: path.display().to_string(),
+                    message: format!("打包文件条目失败: {error}"),
+                })?;
+        } else if file_type.is_symlink() {
+            let _ = builder.append_path_with_name(&path, rel_str.as_ref());
+        }
+    }
+    Ok(())
 }
 
 /// 解析单行 Docker 构建流输出并调用进度回调。
@@ -109,14 +239,58 @@ pub fn parse_build_line(
     Ok(())
 }
 
-/// 基于 REST API 执行镜像构建。
+/// 基于 REST API 执行流式镜像构建。
 pub async fn build_image_http(
     api: &DockerApi,
     spec: &ContainerBuildSpec,
+    cancel: &Arc<AtomicBool>,
     progress: &mut (dyn FnMut(String) + Send),
 ) -> Result<(), ContainerError> {
     let context_path = Path::new(&spec.context_path);
-    let tar_bytes = pack_context_tar(context_path)?;
+    if !context_path.is_dir() {
+        return Err(ContainerError::InvalidPath {
+            path: spec.context_path.clone(),
+            reason: "构建上下文目录不存在或不是目录".to_string(),
+        });
+    }
+
+    let ignore = DockerIgnore::from_context(context_path);
+    let (sender, receiver) = flume::bounded::<Result<Vec<u8>, std::io::Error>>(8);
+    let writer = ChannelWriter {
+        sender,
+        cancel: Arc::clone(cancel),
+    };
+
+    let builder_cancel = Arc::clone(cancel);
+    let builder_context = context_path.to_path_buf();
+    let pack_task = tokio::task::spawn_blocking(move || -> Result<(), ContainerError> {
+        let mut builder = tar::Builder::new(writer);
+        builder.mode(tar::HeaderMode::Deterministic);
+        append_dir_recursive(
+            &mut builder,
+            &builder_context,
+            &builder_context,
+            &ignore,
+            &builder_cancel,
+        )?;
+        builder.finish().map_err(|error| ContainerError::File {
+            path: builder_context.display().to_string(),
+            message: format!("完成 tar 归档失败: {error}"),
+        })?;
+        Ok(())
+    });
+
+    let stream = futures::stream::unfold(receiver, |receiver| async move {
+        receiver
+            .recv_async()
+            .await
+            .ok()
+            .map(|item| (item, receiver))
+    });
+    let body = StreamBody::new(stream.map(|item| match item {
+        Ok(bytes) => Ok(Frame::data(Bytes::from(bytes))),
+        Err(e) => Err(e),
+    }));
 
     let mut query = Vec::new();
     if let Some(df) = &spec.dockerfile {
@@ -132,6 +306,21 @@ pub async fn build_image_http(
     if spec.no_cache {
         query.push("nocache=1".to_string());
     }
+    if let Some(target) = &spec.target {
+        if !target.is_empty() {
+            query.push(format!("target={}", http::percent_encode(target)));
+        }
+    }
+    if let Some(platform) = &spec.platform {
+        if !platform.is_empty() {
+            query.push(format!("platform={}", http::percent_encode(platform)));
+        }
+    }
+    if !spec.build_args.is_empty() {
+        if let Ok(json) = serde_json::to_string(&spec.build_args) {
+            query.push(format!("buildargs={}", http::percent_encode(&json)));
+        }
+    }
 
     let suffix = if query.is_empty() {
         "/build".to_string()
@@ -140,14 +329,12 @@ pub async fn build_image_http(
     };
     let path = api.versioned_path(&suffix);
 
-    let response = http::request_with_timeout(
+    let response = http::request_stream(
         api.transport_ref(),
         Method::POST,
         &path,
-        Bytes::from(tar_bytes),
+        body,
         Some("application/x-tar"),
-        &[],
-        BUILD_TIMEOUT,
     )
     .await?;
 
@@ -165,7 +352,17 @@ pub async fn build_image_http(
     let mut body = response.body;
     let mut remainder = String::new();
 
-    while let Some(frame) = body.frame().await {
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(ContainerError::Cancelled);
+        }
+        let frame = tokio::select! {
+            frame = body.frame() => frame,
+            _ = tokio::time::sleep(Duration::from_millis(200)) => continue,
+        };
+        let Some(frame) = frame else {
+            break;
+        };
         let frame = frame.map_err(|error| ContainerError::Http {
             operation: "构建镜像".to_string(),
             message: error.to_string(),
@@ -186,6 +383,7 @@ pub async fn build_image_http(
         parse_build_line(&remainder, progress)?;
     }
 
+    let _ = pack_task.await;
     Ok(())
 }
 
@@ -193,6 +391,7 @@ pub async fn build_image_http(
 pub async fn build_image_cli(
     cli: &CliBackend,
     spec: &ContainerBuildSpec,
+    cancel: &Arc<AtomicBool>,
     progress: &mut (dyn FnMut(String) + Send),
 ) -> Result<(), ContainerError> {
     let mut args = vec!["build".to_string()];
@@ -210,6 +409,22 @@ pub async fn build_image_cli(
     }
     if spec.no_cache {
         args.push("--no-cache".to_string());
+    }
+    if let Some(target) = &spec.target {
+        if !target.is_empty() {
+            args.push("--target".to_string());
+            args.push(target.clone());
+        }
+    }
+    if let Some(platform) = &spec.platform {
+        if !platform.is_empty() {
+            args.push("--platform".to_string());
+            args.push(platform.clone());
+        }
+    }
+    for (key, val) in &spec.build_args {
+        args.push("--build-arg".to_string());
+        args.push(format!("{key}={val}"));
     }
     args.push(spec.context_path.clone());
 
@@ -231,6 +446,10 @@ pub async fn build_image_cli(
     let mut stderr_done = err_reader.is_none();
 
     while !stdout_done || !stderr_done {
+        if cancel.load(Ordering::Relaxed) {
+            let _ = child.kill().await;
+            return Err(ContainerError::Cancelled);
+        }
         tokio::select! {
             res = async {
                 match &mut out_reader {
@@ -262,6 +481,7 @@ pub async fn build_image_cli(
                     }
                 }
             }
+            _ = tokio::time::sleep(Duration::from_millis(200)) => {}
         }
     }
 
@@ -287,37 +507,24 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_pack_context_tar() {
+    fn test_dockerignore_filtering() {
         let temp = tempdir().expect("创建临时目录失败");
-        let df_path = temp.path().join("Dockerfile");
-        fs::write(&df_path, "FROM scratch\n").expect("写入文件失败");
-        let sub_file = temp.path().join("main.rs");
-        fs::write(&sub_file, "fn main() {}\n").expect("写入子文件失败");
+        let root = temp.path();
+        fs::write(
+            root.join(".dockerignore"),
+            "target/\n*.tmp\nignore_me.txt\n",
+        )
+        .expect("写入 dockerignore 失败");
 
-        let tar_data = pack_context_tar(temp.path()).expect("打包上下文失败");
-        assert!(!tar_data.is_empty(), "tar 数据不应为空");
-
-        let mut archive = tar::Archive::new(&tar_data[..]);
-        let entries = archive.entries().expect("读取条目失败");
-        let mut names = Vec::new();
-        for entry in entries {
-            let entry = entry.expect("条目有效");
-            names.push(
-                entry
-                    .path()
-                    .expect("路径有效")
-                    .to_string_lossy()
-                    .into_owned(),
-            );
-        }
-        assert!(
-            names.iter().any(|n| n.contains("Dockerfile")),
-            "必须包含 Dockerfile: {names:?}"
-        );
-        assert!(
-            names.iter().any(|n| n.contains("main.rs")),
-            "必须包含 main.rs: {names:?}"
-        );
+        let ignore = DockerIgnore::from_context(root);
+        assert!(ignore.is_ignored(".git", true));
+        assert!(ignore.is_ignored(".git/config", false));
+        assert!(ignore.is_ignored("target", true));
+        assert!(ignore.is_ignored("target/debug/app", false));
+        assert!(ignore.is_ignored("test.tmp", false));
+        assert!(ignore.is_ignored("ignore_me.txt", false));
+        assert!(!ignore.is_ignored("src/main.rs", false));
+        assert!(!ignore.is_ignored("Dockerfile", false));
     }
 
     #[test]

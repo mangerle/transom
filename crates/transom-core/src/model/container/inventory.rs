@@ -703,7 +703,7 @@ pub struct ContainerUpdateSpec {
 }
 
 /// 镜像构建参数。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ContainerBuildSpec {
     /// 构建上下文所在的本地目录路径。
     pub context_path: String,
@@ -716,6 +716,15 @@ pub struct ContainerBuildSpec {
     /// 是否不使用缓存进行构建。
     #[serde(default)]
     pub no_cache: bool,
+    /// 构建参数（ARG 参数名与值映射）。
+    #[serde(default)]
+    pub build_args: std::collections::HashMap<String, String>,
+    /// 多阶段构建目标阶段名称。
+    #[serde(default)]
+    pub target: Option<String>,
+    /// 目标平台架构（如 "linux/amd64", "linux/arm64"）。
+    #[serde(default)]
+    pub platform: Option<String>,
 }
 
 #[cfg(test)]

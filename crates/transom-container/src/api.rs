@@ -1169,13 +1169,14 @@ impl DockerApi {
         consume_pull_stream(response.body, progress).await
     }
 
-    /// 构建镜像；流式上报构建进度行。
+    /// 构建镜像；流式上报构建进度行，支持取消。
     pub async fn build_image(
         &self,
         spec: &transom_core::ContainerBuildSpec,
+        cancel: &Arc<AtomicBool>,
         progress: &mut (dyn FnMut(String) + Send),
     ) -> Result<(), ContainerError> {
-        crate::build::build_image_http(self, spec, progress).await
+        crate::build::build_image_http(self, spec, cancel, progress).await
     }
 
     /// 删除镜像。

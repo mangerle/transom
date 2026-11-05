@@ -8425,6 +8425,7 @@ dependencies = [
  "chrono",
  "flume",
  "futures",
+ "globset",
  "http-body-util",
  "hyper",
  "hyper-util",

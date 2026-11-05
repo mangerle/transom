@@ -244,13 +244,14 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 return;
             };
             let event_tx = ctx.event_tx.clone();
+            let cancel_for_build = std::sync::Arc::clone(&cancel);
             spawn_long(state, ctx, tab_id, request_id, cancel, async move {
                 let mut progress = |line: String| {
                     let _ = event_tx
                         .try_send(ContainerAppEvent::BuildProgress { request_id, line }.into());
                 };
                 let error = engine
-                    .build_image(&spec, &mut progress)
+                    .build_image(&spec, &cancel_for_build, &mut progress)
                     .await
                     .err()
                     .map(AppError::from);

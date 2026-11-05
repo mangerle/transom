@@ -489,15 +489,16 @@ impl Engine {
         }
     }
 
-    /// 构建镜像；HTTP 与 CLI 后端均支持流式进度上报。
+    /// 构建镜像；HTTP 与 CLI 后端均支持流式进度上报与取消。
     pub async fn build_image(
         &self,
         spec: &ContainerBuildSpec,
+        cancel: &std::sync::Arc<std::sync::atomic::AtomicBool>,
         progress: &mut (dyn FnMut(String) + Send),
     ) -> Result<(), ContainerError> {
         match &self.backend {
-            EngineBackend::Http(api) => api.build_image(spec, progress).await,
-            EngineBackend::Cli(cli) => cli.build_image(spec, progress).await,
+            EngineBackend::Http(api) => api.build_image(spec, cancel, progress).await,
+            EngineBackend::Cli(cli) => cli.build_image(spec, cancel, progress).await,
         }
     }
 

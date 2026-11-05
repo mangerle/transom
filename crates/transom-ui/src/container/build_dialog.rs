@@ -162,6 +162,7 @@ impl AppShell {
             dockerfile: dockerfile_opt,
             tags: vec![tag_val],
             no_cache,
+            ..Default::default()
         };
 
         self.send_tracked(
