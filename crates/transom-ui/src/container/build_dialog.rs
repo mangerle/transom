@@ -543,11 +543,15 @@ fn parse_build_args(raw: &str) -> Result<HashMap<String, String>, String> {
             continue;
         }
         let Some((key, value)) = entry.split_once('=') else {
-            return Err(format!("构建参数必须是 KEY=VALUE 形式: {entry}"));
+            return Err(
+                rust_i18n::t!("container.build.build_args_invalid", entry = entry).to_string(),
+            );
         };
         let key = key.trim();
         if key.is_empty() {
-            return Err(format!("构建参数的键不能为空: {entry}"));
+            return Err(
+                rust_i18n::t!("container.build.build_args_empty_key", entry = entry).to_string(),
+            );
         }
         args.insert(key.to_string(), value.trim().to_string());
     }

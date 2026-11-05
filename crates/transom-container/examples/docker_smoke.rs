@@ -1142,6 +1142,7 @@ async fn run_stage(engine: &Engine, image: &str, report: &mut Report) {
         health_interval_secs: Some(2),
         memory_mb: Some(64),
         nano_cpus: Some(500_000_000),
+        ..ContainerCreateSpec::default()
     };
     let mut check = spec.clone();
     report.check(

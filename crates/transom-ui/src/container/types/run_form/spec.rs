@@ -4,10 +4,11 @@
 //! - 将图形表单的结构化输入精确映射为 Docker 引擎底层的 `ContainerCreateSpec` 契约；
 //! - 动态生成完整、可复制执行的 `docker run` 命令字符串，实现所见即所得。
 
-use super::infer::{parse_cores, split_argv};
+use super::infer::{parse_cores, split_argv, split_list};
 use super::{RunContainerFormState, RunPreset};
 use gpui_kit::component::input::InputState;
 use gpui_kit::{App, Entity};
+use std::collections::HashMap;
 use transom_core::{ContainerCreateSpec, ContainerPortPublish};
 
 impl RunContainerFormState {
@@ -33,6 +34,47 @@ impl RunContainerFormState {
 
         if !name.is_empty() {
             parts.push(format!("  --name {name}"));
+        }
+
+        let network_mode = read(&self.network_mode);
+        if !network_mode.is_empty() {
+            parts.push(format!("  --network {network_mode}"));
+        }
+        let hostname = read(&self.hostname);
+        if !hostname.is_empty() {
+            parts.push(format!("  --hostname {hostname}"));
+        }
+        let user = read(&self.user);
+        if !user.is_empty() {
+            parts.push(format!("  --user {user}"));
+        }
+        let working_dir = read(&self.working_dir);
+        if !working_dir.is_empty() {
+            parts.push(format!("  --workdir {working_dir}"));
+        }
+        if self.read_only_rootfs {
+            parts.push("  --read-only".to_string());
+        }
+        if self.privileged {
+            parts.push("  --privileged".to_string());
+        }
+        if self.init {
+            parts.push("  --init".to_string());
+        }
+        if self.auto_remove && self.preset != RunPreset::Interactive {
+            parts.push("  --rm".to_string());
+        }
+        for cap in split_list(&read(&self.cap_add)) {
+            parts.push(format!("  --cap-add {cap}"));
+        }
+        for cap in split_list(&read(&self.cap_drop)) {
+            parts.push(format!("  --cap-drop {cap}"));
+        }
+        for dns in split_list(&read(&self.dns)) {
+            parts.push(format!("  --dns {dns}"));
+        }
+        for (key, value) in parse_labels(&read(&self.labels)).unwrap_or_default() {
+            parts.push(format!("  --label {key}={value}"));
         }
 
         for p in &self.ports {
@@ -149,9 +191,62 @@ impl RunContainerFormState {
             health_interval_secs: read(&self.health_interval).parse::<u64>().ok(),
             memory_mb: read(&self.memory).parse::<u64>().ok(),
             nano_cpus: parse_cores(&read(&self.cpus)),
+            network_mode: non_empty(read(&self.network_mode)),
+            hostname: non_empty(read(&self.hostname)),
+            user: non_empty(read(&self.user)),
+            working_dir: non_empty(read(&self.working_dir)),
+            labels: parse_labels(&read(&self.labels))?,
+            cap_add: split_list(&read(&self.cap_add)),
+            cap_drop: split_list(&read(&self.cap_drop)),
+            dns: split_list(&read(&self.dns)),
+            auto_remove: self.auto_remove || self.preset == RunPreset::Interactive,
+            read_only_rootfs: self.read_only_rootfs,
+            privileged: self.privileged,
+            init: self.init,
+            tty: self.preset == RunPreset::Interactive,
+            ..ContainerCreateSpec::default()
         };
 
         spec.validate().map_err(|error| error.to_string())?;
         Ok(spec)
+    }
+}
+
+/// 空白输入统一视为未填写。
+fn non_empty(value: String) -> Option<String> {
+    (!value.is_empty()).then_some(value)
+}
+
+/// 解析 `KEY=VALUE,KEY2=VALUE2` 形式的容器标签。
+fn parse_labels(raw: &str) -> Result<HashMap<String, String>, String> {
+    let mut labels = HashMap::new();
+    for entry in split_list(raw) {
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(
+                rust_i18n::t!("container.run.label_invalid", entry = entry).to_string(),
+            );
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(
+                rust_i18n::t!("container.run.label_empty_key", entry = entry).to_string(),
+            );
+        }
+        labels.insert(key.to_string(), value.trim().to_string());
+    }
+    Ok(labels)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_labels;
+
+    #[test]
+    fn labels_parse_key_value_pairs() {
+        let labels = parse_labels("team=infra,env=dev").expect("标签必须可解析");
+        assert_eq!(labels.get("team").map(String::as_str), Some("infra"));
+        assert_eq!(labels.get("env").map(String::as_str), Some("dev"));
+        assert!(parse_labels("missing_equals").is_err());
+        assert!(parse_labels("=value").is_err());
     }
 }

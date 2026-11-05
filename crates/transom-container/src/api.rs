@@ -406,7 +406,7 @@ impl DockerApi {
         &self,
         spec: &transom_core::ContainerCreateSpec,
     ) -> Result<String, ContainerError> {
-        let payload = serde_json::json!({
+        let mut payload = serde_json::json!({
             "Image": spec.image,
             "Env": spec.env,
             "Cmd": spec.command,
@@ -423,10 +423,59 @@ impl DockerApi {
                 },
                 // 资源限制留空即不下发：0 在 Docker 里同样是「不限制」，但少写字段
                 // 更不容易踩到版本差异。
-                "Memory": spec.memory_mb.unwrap_or(0) * 1024 * 1024,
+                "Memory": spec.memory_mb.unwrap_or(0).saturating_mul(1024 * 1024),
                 "NanoCpus": spec.nano_cpus.unwrap_or(0),
             },
         });
+        if let Some(value) = spec.hostname.as_deref() {
+            payload["Hostname"] = serde_json::json!(value);
+        }
+        if let Some(value) = spec.user.as_deref() {
+            payload["User"] = serde_json::json!(value);
+        }
+        if let Some(value) = spec.working_dir.as_deref() {
+            payload["WorkingDir"] = serde_json::json!(value);
+        }
+        if !spec.entrypoint.is_empty() {
+            payload["Entrypoint"] = serde_json::json!(spec.entrypoint);
+        }
+        if !spec.labels.is_empty() {
+            payload["Labels"] = serde_json::json!(spec.labels);
+        }
+        if spec.tty {
+            payload["Tty"] = serde_json::json!(true);
+        }
+        let host_config =
+            payload["HostConfig"]
+                .as_object_mut()
+                .ok_or_else(|| ContainerError::Decode {
+                    operation: "构造创建容器请求".to_string(),
+                    message: "HostConfig 必须是对象".to_string(),
+                })?;
+        if let Some(value) = spec.network_mode.as_deref() {
+            host_config.insert("NetworkMode".to_string(), serde_json::json!(value));
+        }
+        if spec.auto_remove {
+            host_config.insert("AutoRemove".to_string(), serde_json::json!(true));
+        }
+        if spec.read_only_rootfs {
+            host_config.insert("ReadonlyRootfs".to_string(), serde_json::json!(true));
+        }
+        if spec.privileged {
+            host_config.insert("Privileged".to_string(), serde_json::json!(true));
+        }
+        if spec.init {
+            host_config.insert("Init".to_string(), serde_json::json!(true));
+        }
+        if !spec.cap_add.is_empty() {
+            host_config.insert("CapAdd".to_string(), serde_json::json!(spec.cap_add));
+        }
+        if !spec.cap_drop.is_empty() {
+            host_config.insert("CapDrop".to_string(), serde_json::json!(spec.cap_drop));
+        }
+        if !spec.dns.is_empty() {
+            host_config.insert("Dns".to_string(), serde_json::json!(spec.dns));
+        }
         let path = if spec.name.is_empty() {
             "/containers/create".to_string()
         } else {
@@ -1760,7 +1809,14 @@ fn healthcheck(spec: &transom_core::ContainerCreateSpec) -> serde_json::Value {
         // 取间隔的一半再夹到 [1ms, interval] 区间内，两者都能满足。
         let timeout = (nanos / 2).clamp(1_000_000, nanos);
         value["Timeout"] = serde_json::json!(timeout);
+    }
+    if let Some(retries) = spec.health_retries {
+        value["Retries"] = serde_json::json!(retries);
+    } else if spec.health_interval_secs.is_some() {
         value["Retries"] = serde_json::json!(3);
+    }
+    if let Some(seconds) = spec.health_start_period_secs {
+        value["StartPeriod"] = serde_json::json!(seconds.saturating_mul(1_000_000_000));
     }
     value
 }

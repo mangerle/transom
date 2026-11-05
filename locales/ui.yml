@@ -4712,6 +4712,12 @@ container:
     build_args_placeholder:
       en: 'KEY=VALUE,KEY2=VALUE2'
       zh-CN: 'KEY=VALUE,KEY2=VALUE2'
+    build_args_invalid:
+      en: 'Build argument must be KEY=VALUE: %{entry}'
+      zh-CN: '构建参数必须是 KEY=VALUE 形式: %{entry}'
+    build_args_empty_key:
+      en: 'Build argument key cannot be empty: %{entry}'
+      zh-CN: '构建参数的键不能为空: %{entry}'
     no_cache:
       en: Do not use cache (--no-cache)
       zh-CN: 免缓存构建 (--no-cache)
@@ -4939,6 +4945,72 @@ container:
     cpus_placeholder:
       en: 0.5 means half a core
       zh-CN: 0.5 表示半核
+    network_mode:
+      en: Network mode
+      zh-CN: 网络模式
+    network_mode_placeholder:
+      en: bridge / host / none / container:name
+      zh-CN: bridge / host / none / container:名称
+    hostname:
+      en: Hostname
+      zh-CN: 主机名
+    hostname_placeholder:
+      en: Leave empty to use the container ID
+      zh-CN: 留空使用容器 ID
+    user:
+      en: User
+      zh-CN: 运行用户
+    user_placeholder:
+      en: name or UID[:GID]
+      zh-CN: 用户名或 UID[:GID]
+    working_dir:
+      en: Working directory
+      zh-CN: 工作目录
+    working_dir_placeholder:
+      en: /app
+      zh-CN: /app
+    labels:
+      en: Labels
+      zh-CN: 容器标签
+    labels_placeholder:
+      en: team=infra,env=dev
+      zh-CN: team=infra,env=dev
+    cap_add:
+      en: Add capabilities
+      zh-CN: 追加权限
+    cap_add_placeholder:
+      en: NET_ADMIN,SYS_TIME
+      zh-CN: NET_ADMIN,SYS_TIME
+    cap_drop:
+      en: Drop capabilities
+      zh-CN: 移除权限
+    cap_drop_placeholder:
+      en: ALL
+      zh-CN: ALL
+    dns:
+      en: DNS servers
+      zh-CN: DNS 服务器
+    dns_placeholder:
+      en: 1.1.1.1,8.8.8.8
+      zh-CN: 1.1.1.1,8.8.8.8
+    auto_remove:
+      en: Auto remove on exit
+      zh-CN: 退出后自动删除
+    read_only_rootfs:
+      en: Read-only root filesystem
+      zh-CN: 只读根文件系统
+    privileged:
+      en: Privileged mode (dangerous)
+      zh-CN: 特权模式（高风险）
+    init:
+      en: Use init process
+      zh-CN: 启用 init 进程
+    label_invalid:
+      en: 'Container label must be KEY=VALUE: %{entry}'
+      zh-CN: '容器标签必须是 KEY=VALUE 形式: %{entry}'
+    label_empty_key:
+      en: 'Container label key cannot be empty: %{entry}'
+      zh-CN: '容器标签键不能为空: %{entry}'
     restart:
       en: Restart policy
       zh-CN: 重启策略

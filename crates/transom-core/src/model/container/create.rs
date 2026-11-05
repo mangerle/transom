@@ -6,6 +6,7 @@
 //! 引擎返回难以定位的 400。
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// 端口映射请求：宿主端口 -> 容器端口。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +67,54 @@ pub struct ContainerCreateSpec {
     /// 契约类型，因此在界面侧一次性换算成整数纳核，本层只做整数校验。
     #[serde(default)]
     pub nano_cpus: Option<u64>,
+    /// 网络模式（`bridge`/`host`/`none`/`container:<id>` 等）；留空用引擎默认。
+    #[serde(default)]
+    pub network_mode: Option<String>,
+    /// 容器主机名。
+    #[serde(default)]
+    pub hostname: Option<String>,
+    /// 容器内运行用户（名称或 UID）。
+    #[serde(default)]
+    pub user: Option<String>,
+    /// 容器内工作目录。
+    #[serde(default)]
+    pub working_dir: Option<String>,
+    /// 覆盖镜像 ENTRYPOINT 的 argv；留空表示继承镜像默认。
+    #[serde(default)]
+    pub entrypoint: Vec<String>,
+    /// 追加容器标签。
+    #[serde(default)]
+    pub labels: HashMap<String, String>,
+    /// 追加 Linux capabilities（如 `NET_ADMIN`）。
+    #[serde(default)]
+    pub cap_add: Vec<String>,
+    /// 移除 Linux capabilities。
+    #[serde(default)]
+    pub cap_drop: Vec<String>,
+    /// 自定义 DNS 服务器。
+    #[serde(default)]
+    pub dns: Vec<String>,
+    /// 容器退出后自动删除。
+    #[serde(default)]
+    pub auto_remove: bool,
+    /// 只读根文件系统。
+    #[serde(default)]
+    pub read_only_rootfs: bool,
+    /// 特权模式；界面必须二次确认。
+    #[serde(default)]
+    pub privileged: bool,
+    /// 在容器内启用轻量 init 进程。
+    #[serde(default)]
+    pub init: bool,
+    /// 申请 TTY。
+    #[serde(default)]
+    pub tty: bool,
+    /// 健康检查启动宽限期（秒）。
+    #[serde(default)]
+    pub health_start_period_secs: Option<u64>,
+    /// 健康检查连续失败重试次数。
+    #[serde(default)]
+    pub health_retries: Option<u32>,
 }
 
 impl ContainerCreateSpec {
@@ -134,6 +183,33 @@ impl ContainerCreateSpec {
         }
         self.memory_mb = self.memory_mb.filter(|mb| *mb > 0);
         self.nano_cpus = self.nano_cpus.filter(|nano| *nano > 0);
+        self.network_mode = normalize_optional(self.network_mode.take());
+        self.hostname = normalize_optional(self.hostname.take());
+        self.user = normalize_optional(self.user.take());
+        self.working_dir = normalize_optional(self.working_dir.take());
+        self.cap_add = normalize_list(std::mem::take(&mut self.cap_add));
+        self.cap_drop = normalize_list(std::mem::take(&mut self.cap_drop));
+        self.dns = normalize_list(std::mem::take(&mut self.dns));
+        self.entrypoint = normalize_list(std::mem::take(&mut self.entrypoint));
+        self.labels = normalize_labels(std::mem::take(&mut self.labels))?;
+        if self.auto_remove
+            && self
+                .restart
+                .as_deref()
+                .is_some_and(|restart| restart != "no")
+        {
+            return Err("自动删除容器不能同时设置重启策略".to_string());
+        }
+        if self.health_cmd.is_none() {
+            self.health_start_period_secs = None;
+            self.health_retries = None;
+        }
+        if self.health_start_period_secs == Some(0) {
+            return Err("健康检查启动宽限期必须大于 0 秒".to_string());
+        }
+        if self.health_retries == Some(0) {
+            return Err("健康检查重试次数必须大于 0".to_string());
+        }
         if self.nano_cpus.is_some_and(|nano| nano > 256_000_000_000) {
             // 超过 256 核基本是把「核」当成「纳核」填错的量级，引擎会接受但没意义。
             return Err("CPU 上限看起来填错了单位，请按核填写（最多 256 核）".to_string());
@@ -155,6 +231,35 @@ pub fn is_valid_container_name(name: &str) -> bool {
         _ => return false,
     }
     chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+}
+
+/// 去空白并把空字符串收敛成 `None`。
+fn normalize_optional(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+/// 去空白、丢弃空项并保持顺序。
+fn normalize_list(values: Vec<String>) -> Vec<String> {
+    values
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+/// 标签键不能为空或含控制字符；值去空白。
+fn normalize_labels(labels: HashMap<String, String>) -> Result<HashMap<String, String>, String> {
+    let mut normalized = HashMap::with_capacity(labels.len());
+    for (key, value) in labels {
+        let key = key.trim().to_string();
+        if key.is_empty() || key.contains(['\0', '\n', '\r', '=']) {
+            return Err(format!("容器标签键非法: {key}"));
+        }
+        normalized.insert(key, value.trim().to_string());
+    }
+    Ok(normalized)
 }
 
 /// 挂载串校验：容器路径必须是绝对路径且不含 `..`，与归档接口的口径一致。
@@ -269,6 +374,7 @@ mod tests {
             health_interval_secs: Some(5),
             memory_mb: Some(256),
             nano_cpus: Some(500_000_000),
+            ..ContainerCreateSpec::default()
         }
     }
 
@@ -293,6 +399,29 @@ mod tests {
         let mut item = spec();
         item.name.clear();
         assert!(item.validate().is_ok(), "留空由引擎生成随机名");
+    }
+
+    #[test]
+    fn advanced_options_are_validated_and_normalized() {
+        let mut item = spec();
+        item.network_mode = Some("  host  ".to_string());
+        item.labels
+            .insert("team".to_string(), " infra ".to_string());
+        item.cap_add = vec![" NET_ADMIN ".to_string(), String::new()];
+        item.dns = vec![" 1.1.1.1 ".to_string()];
+        item.validate().expect("高级选项必须合法");
+        assert_eq!(item.network_mode.as_deref(), Some("host"));
+        assert_eq!(item.labels.get("team").map(String::as_str), Some("infra"));
+        assert_eq!(item.cap_add, vec!["NET_ADMIN"]);
+        assert_eq!(item.dns, vec!["1.1.1.1"]);
+
+        let mut item = spec();
+        item.auto_remove = true;
+        assert!(item.validate().is_err(), "自动删除不能和重启策略同时存在");
+
+        let mut item = spec();
+        item.labels.insert(String::new(), "value".to_string());
+        assert!(item.validate().is_err(), "空标签键必须拒绝");
     }
 
     #[test]
