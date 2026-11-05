@@ -556,12 +556,25 @@ impl Engine {
 /// 可用 REST 端点时它才是唯一入口；若两者都可用就并存两条 Docker 条目，用户在
 /// 界面里既分不清也删不掉，而 CLI 后端还少 resize 与归档能力。
 pub async fn discover_all() -> (Vec<Engine>, Vec<String>) {
-    let mut candidates =
-        discovery::candidates(ContainerEngineKind::Docker, &ContainerEndpoint::Auto);
-    candidates.extend(discovery::candidates(
-        ContainerEngineKind::Podman,
-        &ContainerEndpoint::Auto,
-    ));
+    // 候选生成会扫描文件系统并可能调用 `docker context ls`，放到阻塞线程池，
+    // 避免在 tokio worker 上做同步 IO 或等待子进程。
+    let candidates = match tokio::task::spawn_blocking(|| {
+        let mut candidates =
+            discovery::candidates(ContainerEngineKind::Docker, &ContainerEndpoint::Auto);
+        candidates.extend(discovery::candidates(
+            ContainerEngineKind::Podman,
+            &ContainerEndpoint::Auto,
+        ));
+        candidates
+    })
+    .await
+    {
+        Ok(candidates) => candidates,
+        Err(error) => {
+            log::error!("容器引擎候选生成任务失败，原因: {error}");
+            Vec::new()
+        }
+    };
     let mut engines = Vec::with_capacity(candidates.len());
     let mut failures = Vec::with_capacity(candidates.len());
     for candidate in candidates {
