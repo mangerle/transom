@@ -202,7 +202,11 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let title = workspace.profile.display_name();
+        let profile = &workspace.profile;
+        let title = profile.display_name();
+        let icon = crate::session_appearance::session_icon(profile.icon)
+            .unwrap_or(crate::app_assets::AppIcon::Named(IconName::Boxes));
+        let profile_color = crate::session_appearance::session_color(profile.color);
         let info = workspace.info.as_ref().map(|info| {
             format!(
                 "{} · API {} · {}",
@@ -217,7 +221,11 @@ impl AppShell {
             .items_center()
             .min_w_0()
             .flex_shrink_1()
-            .child(Icon::new(IconName::Container).small().text_color(p.primary))
+            .child(
+                Icon::new(icon)
+                    .small()
+                    .text_color(profile_color.unwrap_or(p.primary)),
+            )
             .child(
                 div()
                     .text_sm()
