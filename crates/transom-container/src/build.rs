@@ -151,7 +151,7 @@ fn compile_ignore_rule(pattern: &str, negated: bool) -> Option<IgnoreRule> {
     }
     let mut exact = Vec::new();
     let mut descendants = Vec::new();
-    let mut add = |candidate: &str, target: &mut Vec<GlobMatcher>| {
+    let add = |candidate: &str, target: &mut Vec<GlobMatcher>| {
         if let Ok(glob) = Glob::new(candidate) {
             target.push(glob.compile_matcher());
         }
