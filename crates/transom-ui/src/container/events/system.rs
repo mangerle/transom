@@ -117,22 +117,22 @@ impl AppShell {
                     current_section,
                     ContainerSection::Containers | ContainerSection::Compose
                 ) {
-                    self.refresh_container_section(tab_id);
+                    self.schedule_container_refresh(tab_id, cx);
                 }
             }
             "image" => {
                 if current_section == ContainerSection::Images {
-                    self.refresh_container_section(tab_id);
+                    self.schedule_container_refresh(tab_id, cx);
                 }
             }
             "volume" => {
                 if current_section == ContainerSection::Volumes {
-                    self.refresh_container_section(tab_id);
+                    self.schedule_container_refresh(tab_id, cx);
                 }
             }
             "network" => {
                 if current_section == ContainerSection::Networks {
-                    self.refresh_container_section(tab_id);
+                    self.schedule_container_refresh(tab_id, cx);
                 }
             }
             _ => {}

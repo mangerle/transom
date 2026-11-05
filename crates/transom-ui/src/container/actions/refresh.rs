@@ -2,7 +2,27 @@
 
 use super::*;
 
+/// 引擎事件连发时的合并窗口；把同一批变更收敛成一次列表请求。
+const REFRESH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(250);
+
 impl AppShell {
+    /// 引擎事件触发的防抖刷新：窗口内只保留最后一次请求。
+    pub(crate) fn schedule_container_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        if self.state.container_workspace(tab_id).is_none() {
+            return;
+        }
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(REFRESH_DEBOUNCE).await;
+            let _ = this.update(cx, |this, cx| {
+                this.refresh_container_section(tab_id);
+                cx.notify();
+            });
+        });
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.refresh_task = Some(task);
+        }
+    }
+
     /// 刷新当前选中分类的列表。
     pub(crate) fn refresh_container_section(&mut self, tab_id: TabId) {
         let Some(workspace) = self.state.container_workspace_mut(tab_id) else {

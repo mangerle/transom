@@ -195,6 +195,8 @@ pub(crate) struct ContainerWorkspaceState {
     /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
     pub(crate) notice: Option<String>,
     pub(crate) busy: bool,
+    /// 引擎事件触发的防抖刷新任务；新事件到达时替换旧任务。
+    pub(crate) refresh_task: Option<Task<()>>,
     /// 搜索框变化时触发整壳重绘，过滤结果随输入实时更新。
     pub(crate) _search_subscription: Subscription,
     pub(crate) _create_subscription: Subscription,
@@ -336,6 +338,7 @@ impl ContainerWorkspaceState {
             compose_hovered_service: None,
             notice: None,
             busy: false,
+            refresh_task: None,
             _search_subscription: search_subscription,
             _create_subscription: create_subscription,
             logs_search,
