@@ -172,6 +172,10 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) stats_history: VecDeque<ContainerStats>,
     /// 上一次把统计样本追加到 UI 的时间；用于按档位节流，不影响后台统计流。
     pub(crate) stats_last_append: Option<Instant>,
+    /// 连续高负载采样计数与上次告警时间，避免瞬时尖峰反复打扰。
+    pub(crate) stats_high_cpu: u8,
+    pub(crate) stats_high_memory: u8,
+    pub(crate) stats_alert_at: Option<Instant>,
     /// 走势图形态（折线/柱状），与主机监控同一套组件。
     pub(crate) stats_chart: SparklineChartType,
     /// 采样档位：与主机监控相同的 1s/3s/10s。
@@ -349,6 +353,9 @@ impl ContainerWorkspaceState {
             stats: None,
             stats_history: VecDeque::with_capacity(STATS_HISTORY_LIMIT),
             stats_last_append: None,
+            stats_high_cpu: 0,
+            stats_high_memory: 0,
+            stats_alert_at: None,
             stats_chart: SparklineChartType::default(),
             stats_interval: SampleIntervalMode::Normal,
             stats_processes: Vec::new(),
@@ -500,6 +507,9 @@ impl ContainerWorkspaceState {
         self.overview_raw = false;
         self.stats = None;
         self.stats_history.clear();
+        self.stats_high_cpu = 0;
+        self.stats_high_memory = 0;
+        self.stats_alert_at = None;
         self.stats_last_append = None;
         self.stats_error = None;
         self.stats_processes.clear();

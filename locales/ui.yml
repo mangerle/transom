@@ -6301,6 +6301,12 @@ container:
     waiting:
       en: Collecting stats…
       zh-CN: 正在采样统计…
+    alert_cpu:
+      en: CPU usage stayed above 90% for 3 samples.
+      zh-CN: CPU 占用连续 3 次采样超过 90%。
+    alert_memory:
+      en: Memory usage stayed above 90% for 3 samples.
+      zh-CN: 内存占用连续 3 次采样超过 90%。
     export_csv:
       en: Export stats to CSV
       zh-CN: 导出统计 CSV

@@ -352,6 +352,29 @@ impl AppShell {
                     {
                         stats.host_load = prev.host_load;
                     }
+                    workspace.stats_high_cpu = if stats.cpu_percent >= 90.0 {
+                        workspace.stats_high_cpu.saturating_add(1)
+                    } else {
+                        0
+                    };
+                    workspace.stats_high_memory = if stats.memory_percent >= 90.0 {
+                        workspace.stats_high_memory.saturating_add(1)
+                    } else {
+                        0
+                    };
+                    let high_cpu = workspace.stats_high_cpu >= 3;
+                    let high_memory = workspace.stats_high_memory >= 3;
+                    let alert_due = workspace
+                        .stats_alert_at
+                        .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(300));
+                    if (high_cpu || high_memory) && alert_due {
+                        workspace.stats_alert_at = Some(std::time::Instant::now());
+                        workspace.notice = Some(if high_cpu {
+                            rust_i18n::t!("container.stats.alert_cpu").to_string()
+                        } else {
+                            rust_i18n::t!("container.stats.alert_memory").to_string()
+                        });
+                    }
                     workspace.stats = Some(stats.clone());
                     let due = workspace
                         .stats_last_append
