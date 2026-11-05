@@ -176,10 +176,27 @@ impl AppShell {
             ))
             .into_any_element();
 
+        let is_recreate = form.recreate_container_id.is_some();
+        let submit_label = if is_recreate {
+            "重建并启动".to_string()
+        } else {
+            rust_i18n::t!("container.run.submit").to_string()
+        };
+        let dialog_title = if is_recreate {
+            "就地修改并重建容器".to_string()
+        } else {
+            rust_i18n::t!("container.run.title").to_string()
+        };
+        let dialog_desc = if is_recreate {
+            "将停止并替换当前容器，以修改后的新配置重新创建并启动同名容器；原挂载卷与外部数据不受影响。".to_string()
+        } else {
+            rust_i18n::t!("container.run.desc").to_string()
+        };
+
         let submit_btn = Button::new("container-run-submit")
             .primary()
             .icon(IconName::Play)
-            .label(rust_i18n::t!("container.run.submit").to_string())
+            .label(submit_label)
             .on_click(crate::dialog_host::on_event(
                 app,
                 move |this, _: &ClickEvent, _, cx| {
@@ -198,8 +215,8 @@ impl AppShell {
 
         crate::widgets::dialog_body(
             "container-run-form-body",
-            rust_i18n::t!("container.run.title").to_string(),
-            Some(rust_i18n::t!("container.run.desc").to_string()),
+            dialog_title,
+            Some(dialog_desc),
             body,
             Some(footer),
         )

@@ -108,6 +108,14 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
                 spec.name.as_str()
             },
         )),
+        C::RecreateContainer { spec, .. } => Some(verb_object(
+            "container.run.title",
+            if spec.name.is_empty() {
+                spec.image.as_str()
+            } else {
+                spec.name.as_str()
+            },
+        )),
         C::CreateDir { path, .. } => {
             Some(verb_object("container.files.new_dir", &path_basename(path)))
         }

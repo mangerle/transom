@@ -177,7 +177,8 @@ pub(super) fn handle_container_command(
         | ContainerCommand::RenameContainer { .. }
         | ContainerCommand::UpdateContainer { .. }
         | ContainerCommand::CommitContainer { .. }
-        | ContainerCommand::CreateContainer { .. } => lifecycle::handle(state, ctx, command),
+        | ContainerCommand::CreateContainer { .. }
+        | ContainerCommand::RecreateContainer { .. } => lifecycle::handle(state, ctx, command),
         ContainerCommand::Cancel { .. }
         | ContainerCommand::ExecTerminal { .. }
         | ContainerCommand::Logs { .. }

@@ -43,6 +43,8 @@ pub(crate) struct RunContainerFormState {
     pub(crate) cpus: Entity<InputState>,
     pub(crate) restart: Option<String>,
     pub(crate) preset: RunPreset,
+    /// 就地重建的目标原容器 ID。如果为 Some，提交时将以原子方式停止并移除原容器后以新配置重建。
+    pub(crate) recreate_container_id: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) copy_toast: bool,
 }
@@ -85,6 +87,7 @@ impl RunContainerFormState {
             cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: Some("unless-stopped".to_string()),
             preset: RunPreset::Daemon,
+            recreate_container_id: None,
             error: None,
             copy_toast: false,
         }
@@ -97,8 +100,30 @@ impl RunContainerFormState {
         window: &mut Window,
         cx: &mut Context<crate::app::AppShell>,
     ) -> Self {
+        Self::build_from_details_inner(tab_id, details, false, window, cx)
+    }
+
+    /// 基于已有容器实例反向推导出就地重建表单状态（保持原名，记录原容器 ID）。
+    pub(crate) fn for_recreate(
+        tab_id: TabId,
+        details: &transom_core::ContainerDetails,
+        window: &mut Window,
+        cx: &mut Context<crate::app::AppShell>,
+    ) -> Self {
+        Self::build_from_details_inner(tab_id, details, true, window, cx)
+    }
+
+    fn build_from_details_inner(
+        tab_id: TabId,
+        details: &transom_core::ContainerDetails,
+        is_recreate: bool,
+        window: &mut Window,
+        cx: &mut Context<crate::app::AppShell>,
+    ) -> Self {
         let name_hint = if details.name.is_empty() {
             None
+        } else if is_recreate {
+            Some(details.name.clone())
         } else {
             Some(format!("{}-clone", details.name))
         };
@@ -168,6 +193,7 @@ impl RunContainerFormState {
             cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: details.restart_policy.clone(),
             preset: RunPreset::Daemon,
+            recreate_container_id: is_recreate.then(|| details.id.clone()),
             error: None,
             copy_toast: false,
         }

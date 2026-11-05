@@ -479,6 +479,13 @@ pub enum ContainerCommand {
         request_id: ContainerRequestId,
         spec: ContainerCreateSpec,
     },
+    /// 就地重建容器：停止并移除旧容器后，以修改后的新配置创建并启动新容器。
+    RecreateContainer {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        old_container_id: String,
+        spec: ContainerCreateSpec,
+    },
     /// 在容器内创建目录：归档接口只能写入已存在的目录，上传前先建目录才可用。
     CreateDir {
         tab_id: TabId,

@@ -366,6 +366,38 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             };
             run_action(state, ctx, tab_id, request_id, action);
         }
+        ContainerCommand::RecreateContainer {
+            tab_id,
+            request_id,
+            old_container_id,
+            spec,
+        } => {
+            let action = move |engine: Engine| async move {
+                // 1. 强制移除原容器（force: true 会自动处理停止状态，并保留外部挂载卷）
+                let _ = engine
+                    .lifecycle(
+                        &old_container_id,
+                        ContainerLifecycleAction::Remove { force: true },
+                    )
+                    .await;
+                // 3. 以新配置创建容器
+                let id = engine.create_container(&spec).await?;
+                // 4. 启动新容器
+                engine
+                    .lifecycle(&id, ContainerLifecycleAction::Start)
+                    .await
+                    .inspect(|_| {
+                        log::info!(
+                            "容器已就地重建并启动，原ID: {}，镜像: {}，新容器: {}",
+                            old_container_id,
+                            spec.image,
+                            id
+                        )
+                    })?;
+                Ok(())
+            };
+            run_action(state, ctx, tab_id, request_id, action);
+        }
         _ => {}
     }
 }
