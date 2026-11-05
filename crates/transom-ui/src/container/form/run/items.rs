@@ -71,7 +71,11 @@ impl AppShell {
                             .xsmall()
                             .ghost()
                             .label(if is_udp { "UDP" } else { "TCP" })
-                            .tooltip(if is_udp { "点击切换为 TCP" } else { "点击切换为 UDP" })
+                            .tooltip(if is_udp {
+                                rust_i18n::t!("container.run.toggle_tcp").to_string()
+                            } else {
+                                rust_i18n::t!("container.run.toggle_udp").to_string()
+                            })
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {

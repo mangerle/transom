@@ -7,7 +7,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
-use transom_core::{GroupId, SplitAxis, TabId};
+use transom_core::{Connection, GroupId, SplitAxis, TabId};
 
 /// 标签条目右键上下文菜单的配置参数对象。
 pub(crate) struct TabContextMenuParams {
@@ -112,6 +112,23 @@ pub(crate) fn build_tab_context_menu(
                     this.state.status =
                         Some(rust_i18n::t!("menu.copied_host", host = text).to_string());
                     cx.notify();
+                });
+            },
+        ));
+    }
+
+    // 若会话为 SSH 连接，提供一键直通其远端 Docker 工作区的捷径
+    let is_ssh = app_entity.read(cx).state.catalog.sessions.iter().any(|s| {
+        s.id == session_id && matches!(s.connection, Connection::Ssh(_))
+    });
+    if is_ssh {
+        let container_app = app.clone();
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("menu.manage_containers").to_string(),
+            IconName::Boxes,
+            move |_, window, cx| {
+                container_app.update(cx, |this, cx| {
+                    this.open_container_workspace_for_session(session_id, window, cx);
                 });
             },
         ));

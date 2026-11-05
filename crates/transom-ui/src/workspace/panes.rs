@@ -10,7 +10,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
-use transom_core::{SplitAxis, SplitId, TabId};
+use transom_core::{Connection, SplitAxis, SplitId, TabId};
 
 /// 渲染一帧窗格树时共享的上下文。
 ///
@@ -190,13 +190,14 @@ impl AppShell {
                 this.close_pane(tab_id, window, cx);
             }),
         )
-        .context_menu(move |menu, _window, _cx| {
+        .context_menu(move |menu, _window, cx| {
             pane_context_menu(
                 menu,
                 tab_id,
                 zoom_label.clone(),
                 zoom_icon,
                 app_entity.clone(),
+                cx,
             )
         });
 
@@ -308,61 +309,91 @@ pub(super) fn split_element_id(id: SplitId) -> ElementId {
     ElementId::Name(format!("pane-split-{id}").into())
 }
 
-/// 窗格头右键菜单：左右/上下分屏、缩放、脱离为标签页。
+/// 窗格头右键菜单：左右/上下分屏、缩放、脱离为标签页、联动容器管理。
 fn pane_context_menu(
     menu: gpui_kit::component::menu::PopupMenu,
     tab_id: TabId,
     zoom_label: String,
     zoom_icon: IconName,
     app: Entity<AppShell>,
+    cx: &mut Context<gpui_kit::component::menu::PopupMenu>,
 ) -> gpui_kit::component::menu::PopupMenu {
-    menu.item(crate::widgets::menu_item(
-        rust_i18n::t!("menu.split_right").to_string(),
-        IconName::Columns2,
-        {
+    let maybe_ssh_session_id = {
+        let shell = app.read(cx);
+        shell.state.workspace.tab(tab_id).and_then(|tab| {
+            if matches!(tab.session.connection, Connection::Ssh(_)) {
+                Some(tab.session.id)
+            } else {
+                None
+            }
+        })
+    };
+
+    let mut menu = menu
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("menu.split_right").to_string(),
+            IconName::Columns2,
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.activate_tab(tab_id, window, cx);
+                        this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("menu.split_down").to_string(),
+            IconName::Rows2,
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.activate_tab(tab_id, window, cx);
+                        this.split_active_pane(SplitAxis::Vertical, window, cx);
+                    });
+                }
+            },
+        ))
+        .item(PopupMenuItem::separator())
+        .item(crate::widgets::menu_item(zoom_label, zoom_icon, {
             let app = app.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
                     this.activate_tab(tab_id, window, cx);
-                    this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                    this.toggle_zoom_pane(tab_id, cx);
                 });
             }
-        },
-    ))
-    .item(crate::widgets::menu_item(
-        rust_i18n::t!("menu.split_down").to_string(),
-        IconName::Rows2,
-        {
-            let app = app.clone();
-            move |_, window, cx| {
-                app.update(cx, |this, cx| {
-                    this.activate_tab(tab_id, window, cx);
-                    this.split_active_pane(SplitAxis::Vertical, window, cx);
-                });
-            }
-        },
-    ))
-    .item(PopupMenuItem::separator())
-    .item(crate::widgets::menu_item(zoom_label, zoom_icon, {
-        let app = app.clone();
-        move |_, window, cx| {
-            app.update(cx, |this, cx| {
-                this.activate_tab(tab_id, window, cx);
-                this.toggle_zoom_pane(tab_id, cx);
-            });
-        }
-    }))
-    .item(crate::widgets::menu_item(
-        rust_i18n::t!("menu.detach_pane").to_string(),
-        IconName::ArrowUpRight,
-        {
-            let app = app.clone();
-            move |_, window, cx| {
-                app.update(cx, |this, cx| {
-                    this.activate_tab(tab_id, window, cx);
-                    this.detach_pane_to_tab(tab_id, window, cx);
-                });
-            }
-        },
-    ))
+        }))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("menu.detach_pane").to_string(),
+            IconName::ArrowUpRight,
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.activate_tab(tab_id, window, cx);
+                        this.detach_pane_to_tab(tab_id, window, cx);
+                    });
+                }
+            },
+        ));
+
+    if let Some(session_id) = maybe_ssh_session_id {
+        let container_app = app.clone();
+        menu = menu
+            .item(PopupMenuItem::separator())
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.manage_containers").to_string(),
+                IconName::Boxes,
+                move |_, window, cx| {
+                    container_app.update(cx, |this, cx| {
+                        this.open_container_workspace_for_session(session_id, window, cx);
+                    });
+                },
+            ));
+    }
+
+    menu
 }

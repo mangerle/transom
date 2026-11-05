@@ -178,17 +178,17 @@ impl AppShell {
 
         let is_recreate = form.recreate_container_id.is_some();
         let submit_label = if is_recreate {
-            "重建并启动".to_string()
+            rust_i18n::t!("container.run.recreate_submit").to_string()
         } else {
             rust_i18n::t!("container.run.submit").to_string()
         };
         let dialog_title = if is_recreate {
-            "就地修改并重建容器".to_string()
+            rust_i18n::t!("container.run.recreate_title").to_string()
         } else {
             rust_i18n::t!("container.run.title").to_string()
         };
         let dialog_desc = if is_recreate {
-            "将停止并替换当前容器，以修改后的新配置重新创建并启动同名容器；原挂载卷与外部数据不受影响。".to_string()
+            rust_i18n::t!("container.run.recreate_desc").to_string()
         } else {
             rust_i18n::t!("container.run.desc").to_string()
         };

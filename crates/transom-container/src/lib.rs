@@ -11,6 +11,7 @@ pub mod build;
 mod cli;
 pub mod compose;
 mod discovery;
+pub mod docker_context;
 mod engine;
 mod error;
 mod exec;
@@ -26,6 +27,7 @@ mod transport;
 pub mod volume_files;
 
 pub use discovery::{find_in_path, parse_endpoint, validate_endpoint};
+pub use docker_context::{DockerContextInfo, list_docker_contexts, use_docker_context};
 pub use engine::{Engine, discover_all, probe_explicit};
 pub use error::ContainerError;
 pub use exec::open_exec;

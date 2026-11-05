@@ -4831,6 +4831,21 @@ container:
     advanced_title:
       en: Advanced options
       zh-CN: 高级选项
+    recreate_title:
+      en: Modify & Recreate Container
+      zh-CN: 就地修改并重建容器
+    recreate_desc:
+      en: Stop and replace current container with modified configuration.
+      zh-CN: 将停止并替换当前容器，以修改后的新配置重新创建并启动同名容器；原挂载卷与外部数据不受影响。
+    recreate_submit:
+      en: Recreate & Start
+      zh-CN: 重建并启动
+    toggle_tcp:
+      en: Click to toggle to TCP
+      zh-CN: 点击切换为 TCP
+    toggle_udp:
+      en: Click to toggle to UDP
+      zh-CN: 点击切换为 UDP
     submit:
       en: Run
       zh-CN: 运行
@@ -5200,6 +5215,9 @@ container:
       en: Networks
       zh-CN: 网络
   detail:
+    recreate_menu:
+      en: Edit & Recreate…
+      zh-CN: 就地修改与重建…
     overview:
       en: Overview
       zh-CN: 基础信息
@@ -5395,13 +5413,22 @@ container:
   discovery:
     title:
       en: Engines found on this machine
-      zh-CN: 本机发现的引擎
+      zh-CN: 本机与上下文发现的引擎
     add:
       en: Add
       zh-CN: 添加
     none:
       en: No usable engine found
       zh-CN: 未发现可用引擎
+    ssh_sessions_title:
+      en: Link SSH host sessions
+      zh-CN: 联动已保存的 SSH 主机
+    connect_docker:
+      en: Connect Docker
+      zh-CN: 接入 Docker
+    docker_context_badge:
+      en: Context
+      zh-CN: 上下文
   form:
     new_title:
       en: New engine connection

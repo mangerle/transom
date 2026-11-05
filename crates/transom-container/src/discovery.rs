@@ -63,6 +63,10 @@ pub fn candidates(kind: ContainerEngineKind, explicit: &ContainerEndpoint) -> Ve
             });
         }
     }
+    // 自动探测 Docker 时，引入系统已配置的 Docker Contexts（如远程 SSH、Colima 等）
+    if kind == ContainerEngineKind::Docker {
+        candidates.extend(crate::docker_context::discover_context_candidates());
+    }
     #[cfg(windows)]
     candidates.extend(windows_candidates(kind));
     // CLI 兜底永远排在最后：只有前面都不可用时才会命中。
@@ -73,7 +77,7 @@ pub fn candidates(kind: ContainerEngineKind, explicit: &ContainerEndpoint) -> Ve
 }
 
 /// 显式端点的候选构造；CLI 类端点在这里转成命令形态。
-fn explicit_candidate(
+pub(crate) fn explicit_candidate(
     kind: ContainerEngineKind,
     endpoint: &ContainerEndpoint,
 ) -> Option<EngineCandidate> {

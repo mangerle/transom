@@ -1,6 +1,7 @@
 //! 空状态与引擎发现候选。
 
 use super::*;
+use transom_core::Connection;
 
 impl AppShell {
     pub(crate) fn render_engine_empty(
@@ -144,6 +145,68 @@ impl AppShell {
                     .child(failure),
             );
         }
+
+        // 联动发现：扫描已保存的 SSH 会话供一键直连 Docker
+        let ssh_sessions: Vec<_> = self
+            .state
+            .catalog
+            .sessions
+            .iter()
+            .filter(|s| matches!(s.connection, Connection::Ssh(_)))
+            .cloned()
+            .collect();
+
+        if !ssh_sessions.is_empty() {
+            body = body.child(
+                div()
+                    .mt_2()
+                    .pt_1()
+                    .border_t_1()
+                    .border_color(p.border.opacity(0.4))
+                    .text_xs()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("container.discovery.ssh_sessions_title").to_string()),
+            );
+            for session in ssh_sessions {
+                let session_id = session.id;
+                let session_name = session.name.clone();
+                let host_desc = match &session.connection {
+                    Connection::Ssh(ssh) => format!("{}:{}", ssh.host, ssh.port),
+                    _ => String::new(),
+                };
+                body = body.child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().text_xs().truncate().child(session_name))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(p.muted_foreground)
+                                        .truncate()
+                                        .child(host_desc),
+                                ),
+                        )
+                        .child(
+                            Button::new(ElementId::Name(
+                                format!("container-discovery-ssh-{}", session_id).into(),
+                            ))
+                            .xsmall()
+                            .icon(IconName::Boxes)
+                            .label(rust_i18n::t!("container.discovery.connect_docker").to_string())
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_container_workspace_for_session(session_id, window, cx);
+                            })),
+                        ),
+                );
+            }
+        }
+
         body.into_any_element()
     }
 }

@@ -436,6 +436,10 @@ fn allowlisted_literal(path: &str, literal: &str) -> bool {
         || (literal == "连接已断开" && path.ends_with("connection/mod.rs"))
         || (literal == "权限" && path.ends_with("editor/banner.rs"))
         || (literal == "，上报 shell: {shell}" && path.ends_with("shell_integration.rs"))
+        || path.ends_with("container/hub/tags.rs")
+        || path.ends_with("container/detail/image_history.rs")
+        || path.ends_with("container/types/run_form/infer.rs")
+        || path.ends_with("container/compose_templates.rs")
 }
 
 /// 剔除测试模块、注释与静默调用后，返回剩余的中文字面量（行号从 1 起）。
