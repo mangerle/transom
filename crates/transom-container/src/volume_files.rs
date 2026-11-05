@@ -152,7 +152,12 @@ async fn resolve_volume_target(
 /// 优先选择轻量级系统镜像作为探针容器镜像。
 fn select_probe_image(images: &[transom_core::ContainerImageSummary]) -> Option<String> {
     const PREFERRED_KEYWORDS: &[&str] = &[
-        "alpine", "busybox", "debian", "ubuntu", "distroless", "archlinux",
+        "alpine",
+        "busybox",
+        "debian",
+        "ubuntu",
+        "distroless",
+        "archlinux",
     ];
     // 第一优先级：匹配常见系统镜像关键字
     for keyword in PREFERRED_KEYWORDS {
@@ -395,6 +400,19 @@ pub async fn backup_volume(
     result
 }
 
+/// 判断“创建数据卷”失败是否只是卷已存在。
+fn is_volume_already_exists(error: &ContainerError) -> bool {
+    match error {
+        ContainerError::Api { status, body, .. } => {
+            *status == 409 || body.to_ascii_lowercase().contains("already exists")
+        }
+        ContainerError::Cli { message, .. } => {
+            message.to_ascii_lowercase().contains("already exists")
+        }
+        _ => false,
+    }
+}
+
 /// 从本地 Tar 归档文件恢复到指定数据卷中。
 ///
 /// 若数据卷尚不存在，将先创建新卷；然后将本地 Tar 归档直接通过 Docker 归档 API
@@ -407,8 +425,12 @@ pub async fn restore_volume(
     progress: flume::Sender<(u64, Option<u64>)>,
 ) -> Result<u64, ContainerError> {
     let api = engine.http()?.clone();
-    // 1. 若目标数据卷不存在，尝试先创建
-    let _ = engine.create_volume(volume, None).await;
+    // 1. 若目标数据卷不存在则先创建；已存在不是错误，但权限/引擎故障必须回传。
+    if let Err(error) = engine.create_volume(volume, None).await
+        && !is_volume_already_exists(&error)
+    {
+        return Err(error);
+    }
 
     // 2. 解析挂载目标（探针或已有容器），指定可写模式
     let target = resolve_volume_target(&api, volume, true).await?;
@@ -476,10 +498,20 @@ pub async fn restore_volume(
     )
     .await;
 
-    let _ = reader_task.await;
+    let reader_result = reader_task.await.map_err(|error| ContainerError::File {
+        path: local_path.display().to_string(),
+        message: format!("读取恢复归档任务失败: {error}"),
+    })?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
     guard.dismiss().await;
 
     let response = response?;
+    reader_result.map_err(|error| ContainerError::File {
+        path: local_path.display().to_string(),
+        message: format!("读取恢复归档失败: {error}"),
+    })?;
     if !response.status.is_success() {
         let status = response.status;
         let body = crate::http::read_body_text(response.body, 8192).await;
@@ -491,7 +523,26 @@ pub async fn restore_volume(
 
 #[cfg(test)]
 mod tests {
-    use super::{map_volume_path, unmap_volume_path};
+    use super::{is_volume_already_exists, map_volume_path, unmap_volume_path};
+    use crate::error::ContainerError;
+
+    #[test]
+    fn volume_create_conflict_is_tolerated_but_real_failure_is_not() {
+        assert!(is_volume_already_exists(&ContainerError::Api {
+            operation: "创建数据卷".into(),
+            status: 409,
+            body: "volume already exists".into(),
+        }));
+        assert!(!is_volume_already_exists(&ContainerError::Api {
+            operation: "创建数据卷".into(),
+            status: 500,
+            body: "permission denied".into(),
+        }));
+        assert!(is_volume_already_exists(&ContainerError::Cli {
+            command: "docker volume create".into(),
+            message: "volume already exists".into(),
+        }));
+    }
 
     #[test]
     fn test_volume_path_mapping() {
