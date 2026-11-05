@@ -6,7 +6,7 @@ use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Disableable, Icon, Selectable, Sizable};
+use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::*;
 use transom_core::{ContainerCommand, ContainerRequestId, TabId};
 
@@ -153,41 +153,9 @@ impl AppShell {
                     ),
             );
 
-        // 各分类资源占用明细卡片
-        let cards_grid = v_flex()
-            .gap_2()
-            .child(render_df_card(
-                rust_i18n::t!("container.system_df.category_images").to_string(),
-                IconName::Disc,
-                usage.images_count,
-                usage.images_size,
-                usage.images_reclaimable,
-                p,
-            ))
-            .child(render_df_card(
-                rust_i18n::t!("container.system_df.category_containers").to_string(),
-                IconName::Box,
-                usage.containers_count,
-                usage.containers_size,
-                usage.containers_reclaimable,
-                p,
-            ))
-            .child(render_df_card(
-                rust_i18n::t!("container.system_df.category_volumes").to_string(),
-                IconName::Database,
-                usage.volumes_count,
-                usage.volumes_size,
-                usage.volumes_reclaimable,
-                p,
-            ))
-            .child(render_df_card(
-                rust_i18n::t!("container.system_df.category_build_cache").to_string(),
-                IconName::Layers,
-                usage.build_cache_count,
-                usage.build_cache_size,
-                usage.build_cache_reclaimable,
-                p,
-            ));
+        // 堆叠占用比例条与分类明细看板
+        let stacked_bar = super::system_df_view::render_stacked_usage_bar(&usage, p);
+        let details_list = super::system_df_view::render_df_details_list(&usage, p);
 
         // 清理选项控制
         let options_section = v_flex()
@@ -322,7 +290,8 @@ impl AppShell {
         let content = v_flex()
             .gap_3()
             .child(summary_banner)
-            .child(cards_grid)
+            .child(stacked_bar)
+            .child(details_list)
             .child(options_section)
             .child(actions_bar);
 
@@ -336,67 +305,3 @@ impl AppShell {
     }
 }
 
-fn render_df_card(
-    title: String,
-    icon: IconName,
-    count: usize,
-    size: u64,
-    reclaimable: u64,
-    p: &Palette,
-) -> AnyElement {
-    let size_str = format_size(size);
-    let reclaim_str = format_size(reclaimable);
-
-    h_flex()
-        .justify_between()
-        .items_center()
-        .px_3()
-        .py_2()
-        .rounded(p.radius.md)
-        .bg(p.secondary)
-        .border_1()
-        .border_color(p.border)
-        .child(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .child(Icon::new(icon).small().text_color(p.primary))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(title),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(format!("({count})")),
-                ),
-        )
-        .child(
-            h_flex()
-                .gap_4()
-                .items_center()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.foreground)
-                        .child(size_str),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if reclaimable > 0 {
-                            p.warning
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(format!(
-                            "{} {reclaim_str}",
-                            rust_i18n::t!("container.system_df.reclaimable")
-                        )),
-                ),
-        )
-        .into_any_element()
-}

@@ -6291,6 +6291,12 @@ container:
     category_build_cache:
       en: Build Cache
       zh-CN: 构建缓存
+    optimal:
+      en: Optimal
+      zh-CN: 已达最佳
+    legend_ratio:
+      en: '%{percent}%'
+      zh-CN: '%{percent}%'
     reclaimable:
       en: Reclaimable
       zh-CN: 可释放
