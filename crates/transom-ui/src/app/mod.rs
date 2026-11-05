@@ -146,7 +146,8 @@ use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppSettings, PanelSide, SessionCatalog, StartupTabs, TabPosition, UiThemeMode,
+    AppCommand, AppSettings, PanelSide, SessionCatalog, StartupTabs, TabId, TabPosition,
+    UiThemeMode,
 };
 
 pub(crate) use types::*;
@@ -346,6 +347,43 @@ impl AppShell {
             }
             StartupTabs::EmptyWorkspace => {}
             StartupTabs::NewLocalTerminal => self.open_local_terminal(window, cx),
+        }
+    }
+
+    /// 每 24 小时对已连接的容器工作区执行一次轻量清理；默认关闭。
+    fn tick_container_cleanup(&mut self, cx: &mut Context<Self>) {
+        const INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+        if !app_settings(cx).container_automation.auto_prune_enabled {
+            self.state.container_auto_prune_last = None;
+            return;
+        }
+        let now = std::time::Instant::now();
+        let Some(last) = self.state.container_auto_prune_last else {
+            // 首次启用只开始计时，不立即执行破坏性清理。
+            self.state.container_auto_prune_last = Some(now);
+            return;
+        };
+        if now.duration_since(last) < INTERVAL {
+            return;
+        }
+        let tabs: Vec<TabId> = self
+            .state
+            .workspace
+            .tabs
+            .iter()
+            .filter_map(|tab| match &tab.content {
+                TabContent::Containers(workspace)
+                    if workspace.status
+                        == crate::container::ContainerWorkspaceStatus::Connected =>
+                {
+                    Some(tab.id)
+                }
+                _ => None,
+            })
+            .collect();
+        self.state.container_auto_prune_last = Some(now);
+        for tab_id in tabs {
+            self.request_container_auto_prune(tab_id);
         }
     }
 

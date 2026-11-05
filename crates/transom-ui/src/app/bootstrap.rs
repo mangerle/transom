@@ -196,7 +196,13 @@ impl AppShell {
                 cx.background_executor()
                     .timer(std::time::Duration::from_secs(60))
                     .await;
-                if this.update(cx, |this, cx| this.tick_git_sync(cx)).is_err() {
+                if this
+                    .update(cx, |this, cx| {
+                        this.tick_git_sync(cx);
+                        this.tick_container_cleanup(cx);
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -270,6 +276,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         ),
         tasks: TaskHub::new(appearance_subscription, event_task),
         git_sync_schedule: GitSyncScheduler::default(),
+        container_auto_prune_last: None,
         history: prepared.history,
         history_provider: prepared.history_provider,
         probe_badges: HashMap::new(),

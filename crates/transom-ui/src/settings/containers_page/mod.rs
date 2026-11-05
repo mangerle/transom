@@ -13,7 +13,9 @@ use super::SettingsView;
 use super::modal_state::RegistryEditState;
 use crate::app::{app_settings, update_app_settings};
 use crate::palette::Palette;
+use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputState;
+use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::{ContainerRegistry, SecretKey};
 
@@ -24,11 +26,34 @@ impl SettingsView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if let Some(edit_state) = self.state.registry_edit.clone() {
+        let auto_prune = app_settings(cx).container_automation.auto_prune_enabled;
+        let automation = crate::widgets::setting_row(
+            "settings.container_auto_prune",
+            Some("settings.container_auto_prune_desc"),
+            Switch::new("container-auto-prune")
+                .checked(auto_prune)
+                .on_click(cx.listener(|this, &checked, _, cx| {
+                    update_app_settings(cx, |settings| {
+                        settings.container_automation.auto_prune_enabled = checked;
+                    });
+                    let snapshot = app_settings(cx).clone();
+                    this.persist_settings_reported(&snapshot, cx);
+                    cx.notify();
+                }))
+                .into_any_element(),
+            p,
+        );
+        let body = if let Some(edit_state) = self.state.registry_edit.clone() {
             self.render_registry_edit_form(edit_state, p, cx)
         } else {
             self.render_registries_list(p, cx)
-        }
+        };
+        v_flex()
+            .gap_3()
+            .w_full()
+            .child(automation)
+            .child(body)
+            .into_any_element()
     }
 
     /// 初始化仓库编辑状态。

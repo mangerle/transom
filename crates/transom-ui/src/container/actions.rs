@@ -9,7 +9,7 @@ mod requests;
 mod volume_archive;
 
 impl AppShell {
-    pub(super) fn send_tracked(
+    pub(crate) fn send_tracked(
         &mut self,
         tab_id: TabId,
         request_id: ContainerRequestId,
@@ -21,6 +21,22 @@ impl AppShell {
         if !self.state.send_command(command) {
             self.state.containers.requests.remove(&request_id);
         }
+    }
+
+    /// 对单个已连接工作区发起一次轻量清理；由应用级定时器调用。
+    pub(crate) fn request_container_auto_prune(&mut self, tab_id: TabId) {
+        let request_id = ContainerRequestId::new();
+        log::info!("容器自动清理触发，标签: {tab_id}，请求: {request_id}");
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::SystemPrune {
+                tab_id,
+                request_id,
+                all: false,
+                volumes: false,
+            },
+        );
     }
 
     /// 切换顶部功能分类：清空选中项并拉取该分类列表。

@@ -101,6 +101,17 @@ pub struct AppSettings {
     /// 容器镜像仓库（Registries）配置列表；缺省时预置官方 Docker Hub。
     #[serde(default = "default_container_registries")]
     pub container_registries: Vec<crate::model::container::ContainerRegistry>,
+    /// 容器资源自动清理；默认关闭，避免未经确认就删除悬空资源。
+    #[serde(default)]
+    pub container_automation: ContainerAutomationSettings,
+}
+
+/// 容器自动化设置。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContainerAutomationSettings {
+    /// 是否每 24 小时自动清理一次未使用资源。
+    #[serde(default)]
+    pub auto_prune_enabled: bool,
 }
 
 fn default_container_registries() -> Vec<crate::model::container::ContainerRegistry> {
@@ -198,6 +209,7 @@ impl Default for AppSettings {
             allow_sha1_publickey_auth: default_allow_sha1_publickey_auth(),
             monitor: MonitorSettings::default(),
             container_registries: default_container_registries(),
+            container_automation: ContainerAutomationSettings::default(),
         }
     }
 }

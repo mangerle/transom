@@ -59,6 +59,8 @@ pub(crate) struct AppState {
     pub(in crate::app) tasks: TaskHub,
     /// 定时 Git 同步的分钟节拍。
     pub(in crate::app) git_sync_schedule: GitSyncScheduler,
+    /// 上次容器自动清理时间；关闭自动化后清空，重新开启从头计时。
+    pub(in crate::app) container_auto_prune_last: Option<std::time::Instant>,
     /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
     pub(in crate::app) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 共享给每个终端视图的历史查询回调。

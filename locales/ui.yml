@@ -3006,6 +3006,12 @@ settings:
   registry_secret_failed:
     en: 'Failed to save the registry password to the system keychain: %{error}'
     zh-CN: '保存镜像仓库密码到系统钥匙串失败: %{error}'
+  container_auto_prune:
+    en: Daily container cleanup
+    zh-CN: 每日容器自动清理
+  container_auto_prune_desc:
+    en: Every 24 hours, prune stopped containers, dangling images, unused networks and build cache for open engine workspaces.
+    zh-CN: 每 24 小时对已打开的引擎工作区清理已停止容器、悬空镜像、未使用网络与构建缓存。
   monitor_sections_group:
     en: Default Section States
     zh-CN: 板块默认折叠状态
