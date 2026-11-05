@@ -281,7 +281,13 @@ fn build_ssh_dial_stdio_args(
         "-o".to_string(),
         "BatchMode=yes".to_string(),
         "-o".to_string(),
+        "StrictHostKeyChecking=accept-new".to_string(),
+        "-o".to_string(),
         "ConnectTimeout=10".to_string(),
+        "-o".to_string(),
+        "ServerAliveInterval=15".to_string(),
+        "-o".to_string(),
+        "ServerAliveCountMax=3".to_string(),
     ];
     if let Some(port) = port {
         args.push("-p".to_string());

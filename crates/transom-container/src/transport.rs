@@ -151,9 +151,22 @@ impl EngineTransport {
                     .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::piped())
                     .kill_on_drop(true);
-                let mut child = command.spawn().map_err(|error| ContainerError::Connect {
-                    endpoint: self.describe(),
-                    source: error,
+                let mut child = command.spawn().map_err(|error| {
+                    let friendly_msg = if error.kind() == std::io::ErrorKind::NotFound {
+                        if program == "ssh" {
+                            "未检测到系统的 ssh 命令，请安装 OpenSSH 客户端并确保已配置在 PATH 环境变量中".to_string()
+                        } else if program.contains("wsl") {
+                            "未检测到 wsl.exe 命令，请确保宿主机已启用 WSL 子系统".to_string()
+                        } else {
+                            format!("可执行命令未找到: {program}")
+                        }
+                    } else {
+                        error.to_string()
+                    };
+                    ContainerError::Connect {
+                        endpoint: self.describe(),
+                        source: std::io::Error::new(error.kind(), friendly_msg),
+                    }
                 })?;
                 let stdin = child.stdin.take().ok_or_else(|| ContainerError::Connect {
                     endpoint: self.describe(),
