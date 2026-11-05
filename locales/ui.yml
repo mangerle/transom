@@ -6347,8 +6347,8 @@ container:
       zh-CN: 该工作区正在全屏显示。
   hub:
     title:
-      en: Explore Image Market
-      zh-CN: 探索镜像市场
+      en: Image Registry (Hub)
+      zh-CN: 镜像仓库（Hub）
     subtitle:
       en: Search, filter, and pull official and private registry images with one click
       zh-CN: 在 Docker Hub 与私有镜像源中搜索、筛选并一键拉取镜像
@@ -6441,8 +6441,8 @@ container:
       en: View download tasks
       zh-CN: 查看下载任务
     explore_market:
-      en: 'Explore Market (Docker Hub / Private)'
-      zh-CN: '探索镜像市场 (Docker Hub / 私有源)'
+      en: Image Registry (Hub)
+      zh-CN: 镜像仓库（Hub）
     center_title:
       en: Image Download Center
       zh-CN: 镜像下载中心
@@ -6456,8 +6456,8 @@ container:
       en: Close drawer
       zh-CN: 关闭抽屉
     empty_tasks:
-      en: 'No active downloads. Pull or explore market to add tasks.'
-      zh-CN: '当前暂无下载任务，可通过「拉取镜像」或「探索市场」添加'
+      en: 'No active downloads. Pull or browse registry to add tasks.'
+      zh-CN: '当前暂无下载任务，可通过「镜像仓库（Hub）」搜索并添加'
     downloading_percent:
       en: 'Downloading %{percent}%'
       zh-CN: '下载中 %{percent}%'
