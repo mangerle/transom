@@ -5,7 +5,7 @@
 //! 接口不在范围内。
 
 use crate::error::ContainerError;
-use crate::http::{self, RawResponse};
+use crate::http::{self, ConnectionPool, RawResponse};
 use crate::models::{
     BuildCachePruneResponse, ChangeItem, ContainerInspect, ContainerListItem,
     ContainerUpdateRequest, ContainersPruneResponse, DockerEventMessage, ExecCreateResponse,
@@ -40,6 +40,8 @@ pub struct DockerApi {
     transport: EngineTransport,
     /// 形如 `/v1.46`；协商不出可用版本时为空串（走引擎的默认版本）。
     prefix: String,
+    /// 普通 GET 请求的空闲连接池；克隆客户端时共享同一份池。
+    pool: Arc<ConnectionPool>,
 }
 
 impl DockerApi {
@@ -47,6 +49,7 @@ impl DockerApi {
         Self {
             transport,
             prefix: normalize_api_prefix(api_version),
+            pool: Arc::new(ConnectionPool::default()),
         }
     }
 
@@ -117,6 +120,7 @@ impl DockerApi {
         Self {
             transport: self.transport,
             prefix: normalize_api_prefix(Some(api_version)),
+            pool: self.pool,
         }
     }
 
@@ -154,13 +158,21 @@ impl DockerApi {
         suffix: &str,
         operation: &str,
     ) -> Result<T, ContainerError> {
-        let response = self.send(Method::GET, suffix, None, operation).await?;
-        let status = response.status;
+        let path = self.path(suffix);
+        let http::PooledResponse {
+            status,
+            body,
+            mut lease,
+        } = http::pooled_request(&self.pool, &self.transport, Method::GET, &path)
+            .await
+            .inspect_err(|error| log_request_error(operation, error))?;
         if !status.is_success() {
-            let body = http::read_body_text(response.body, 8192).await;
+            let body = http::read_body_text(body, 8192).await;
             return Err(http::status_error(status, operation, body, suffix));
         }
-        let bytes = http::read_body_bytes(response.body, JSON_BODY_LIMIT).await?;
+        let bytes = http::read_body_bytes(body, JSON_BODY_LIMIT).await?;
+        // 响应体完整读完，连接可以安全复用。
+        lease.mark_reusable();
         serde_json::from_slice(&bytes).map_err(|error| ContainerError::Decode {
             operation: operation.to_string(),
             message: error.to_string(),

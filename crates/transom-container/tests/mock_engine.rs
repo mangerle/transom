@@ -374,3 +374,78 @@ async fn exec_upgrade_bridges_blocking_read_and_write() {
     drop(cleanup);
     server.abort();
 }
+
+/// 支持 keep-alive 的模拟引擎：统计 accept 次数，供连接池复用回归使用。
+fn spawn_keepalive_engine(
+    path: PathBuf,
+    accepts: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+) -> tokio::task::JoinHandle<()> {
+    let listener = UnixListener::bind(&path).expect("绑定 keep-alive 测试 socket");
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            accepts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            tokio::spawn(async move {
+                let mut buffer = Vec::with_capacity(4096);
+                loop {
+                    let mut chunk = [0u8; 4096];
+                    let count = match stream.read(&mut chunk).await {
+                        Ok(0) | Err(_) => return,
+                        Ok(count) => count,
+                    };
+                    buffer.extend_from_slice(&chunk[..count]);
+                    while let Some(end) = buffer.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
+                        let head = String::from_utf8_lossy(&buffer[..end]).to_string();
+                        buffer.drain(..end + 4);
+                        let target = head
+                            .lines()
+                            .next()
+                            .and_then(|line| line.split_whitespace().nth(1))
+                            .unwrap_or("");
+                        let (body, extra) = if target.contains("/version") {
+                            (VERSION_JSON.to_string(), "")
+                        } else if target.contains("/containers/json") {
+                            (CONTAINERS_JSON.to_string(), "")
+                        } else {
+                            (r#"{"message":"unexpected path"}"#.to_string(), "")
+                        };
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n{extra}Content-Length: {}\r\nConnection: keep-alive\r\n\r\n{body}",
+                            body.len()
+                        );
+                        if stream.write_all(response.as_bytes()).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+    })
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pooled_get_reuses_connection_between_list_requests() {
+    let directory = tempfile::tempdir().expect("临时目录");
+    let socket = directory.path().join("docker.sock");
+    let accepts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let server = spawn_keepalive_engine(socket.clone(), std::sync::Arc::clone(&accepts));
+
+    let engine: Engine = probe_explicit(
+        ContainerEngineKind::Docker,
+        &ContainerEndpoint::Unix { path: socket },
+    )
+    .await
+    .expect("探测 keep-alive 模拟引擎");
+    let after_probe = accepts.load(std::sync::atomic::Ordering::Relaxed);
+    engine.list_containers().await.expect("首次列出容器");
+    engine.list_containers().await.expect("第二次列出容器");
+    assert_eq!(
+        accepts.load(std::sync::atomic::Ordering::Relaxed),
+        after_probe,
+        "普通 GET 必须复用连接池中的连接"
+    );
+    server.abort();
+}
