@@ -6291,6 +6291,9 @@ container:
     export_failed:
       en: 'Failed to export stats: %{error}'
       zh-CN: '导出统计失败：%{error}'
+    export_thread_failed:
+      en: 'Failed to export stats: unable to start the background write thread'
+      zh-CN: '导出统计失败：无法启动后台写入线程'
     cpu:
       en: CPU
       zh-CN: CPU

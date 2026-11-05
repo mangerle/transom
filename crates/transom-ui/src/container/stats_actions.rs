@@ -50,10 +50,7 @@ impl AppShell {
                             rust_i18n::t!("container.stats.export_failed", error = error)
                                 .to_string()
                         }
-                        None => {
-                            rust_i18n::t!("container.stats.export_failed", error = "线程创建失败")
-                                .to_string()
-                        }
+                        None => rust_i18n::t!("container.stats.export_thread_failed").to_string(),
                     });
                 }
                 cx.notify();
