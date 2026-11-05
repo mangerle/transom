@@ -202,6 +202,7 @@ impl SettingsView {
         cx.emit(SettingsEvent::Status(
             rust_i18n::t!("status.ready").to_string(),
         ));
+        self.state.registry_edit = None;
         self.state.open = false;
         self.state.jump_page = None;
         cx.notify();
@@ -224,6 +225,7 @@ impl SettingsView {
             update_app_settings(cx, |s| s.window.window_background = snapshot.background);
             crate::window_appearance::refresh_window(window, cx);
         }
+        self.state.registry_edit = None;
         cx.emit(SettingsEvent::Cancelled);
         self.state.open = false;
         self.state.jump_page = None;

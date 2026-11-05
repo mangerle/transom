@@ -1,7 +1,7 @@
 //! 容器类模态弹窗的状态判定、提交、取消与焦点分发。
 
-use super::body::ModalFocus;
 use super::ModalKind;
+use super::body::ModalFocus;
 use crate::app::AppShell;
 use gpui_kit::*;
 
@@ -377,11 +377,7 @@ impl ModalKind {
     }
 
     /// 容器弹窗文本字段追踪。
-    pub(super) fn container_field_values(
-        self,
-        shell: &AppShell,
-        cx: &App,
-    ) -> Option<Vec<String>> {
+    pub(super) fn container_field_values(self, shell: &AppShell, cx: &App) -> Option<Vec<String>> {
         let values = match self {
             ModalKind::ContainerRename => shell
                 .find_container_modal_tab(|ws| ws.rename_container.is_some())
@@ -428,11 +424,6 @@ impl ModalKind {
                 .find_container_modal_tab(|ws| ws.files.new_dir_input.is_some())
                 .and_then(|(_, ws)| ws.files.new_dir_input.as_ref())
                 .map(|input| vec![input.read(cx).value().to_string()])
-                .unwrap_or_default(),
-            ModalKind::ContainerHub => shell
-                .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
-                .and_then(|(_, ws)| ws.hub_dialog.as_ref())
-                .map(|hub| vec![hub.search_input.read(cx).value().to_string()])
                 .unwrap_or_default(),
             ModalKind::ContainerPush => shell
                 .find_container_modal_tab(|ws| ws.push_dialog.is_some())

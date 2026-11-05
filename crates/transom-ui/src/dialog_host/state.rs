@@ -5,7 +5,6 @@
 
 use super::body::ModalFocus;
 use super::*;
-use crate::app::app_settings;
 
 impl ModalKind {
     /// 该弹窗此刻是否应当存在。只读状态、不产生副作用：对账每帧都会问一次。
@@ -135,13 +134,6 @@ impl ModalKind {
                 .form
                 .as_ref()
                 .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            // 设置页的控件是开关、下拉与滑块，不是文本框，逐控件加脏标记要改
-            // 遍所有设置页且新增控件必漏；这里直接比整份设置的序列化快照，
-            // 覆盖全字段。序列化失败按"不脏"处理：宁可少拦一次，也不能让
-            // Esc 永远关不掉弹窗。
-            ModalKind::Settings => serde_json::to_string(&app_settings(cx))
-                .map(|signature| vec![signature])
                 .unwrap_or_default(),
             _ => Vec::new(),
         }
