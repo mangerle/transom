@@ -337,6 +337,18 @@ pub(crate) fn render_files(
                             });
                         },
                     ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.copy_to").to_string(),
+                        IconName::Copy,
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_copy(tab_id, path.clone(), window, cx);
+                                cx.notify();
+                            });
+                        },
+                    ));
                 } else {
                     let app = menu_app.clone();
                     let path = menu_path.clone();
@@ -362,6 +374,18 @@ pub(crate) fn render_files(
                             let path = path.clone();
                             app.update(cx, |this, cx| {
                                 this.download_container_file(tab_id, path.clone());
+                                cx.notify();
+                            });
+                        },
+                    ));
+                    let app = menu_app.clone();
+                    let path = menu_path.clone();
+                    menu = menu.item(crate::widgets::menu_item(
+                        rust_i18n::t!("container.files.copy_to").to_string(),
+                        IconName::Copy,
+                        move |_, window, cx| {
+                            app.update(cx, |this, cx| {
+                                this.begin_container_file_copy(tab_id, path.clone(), window, cx);
                                 cx.notify();
                             });
                         },

@@ -259,6 +259,16 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 },
             );
         }
+        ContainerCommand::CopyPath {
+            tab_id,
+            request_id,
+            container,
+            from,
+            to,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            let cancel = Arc::new(AtomicBool::new(false));
+            transom_container::copy(&engine, &container, &from, &to, &cancel).await
+        }),
         ContainerCommand::CreateDir {
             tab_id,
             request_id,

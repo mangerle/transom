@@ -612,6 +612,37 @@ pub async fn rename(
     Ok(())
 }
 
+/// 复制容器内文件或目录；通过 exec 调用 `cp -a`，保留权限与符号链接。
+///
+/// # Errors
+/// 路径非法、命令执行失败或退出码非零时返回错误。
+pub async fn copy(
+    engine: &Engine,
+    container: &str,
+    from: &str,
+    to: &str,
+    cancel: &Arc<AtomicBool>,
+) -> Result<(), ContainerError> {
+    let api = engine.http()?;
+    let from = validate_container_path(from)?;
+    let to = validate_container_path(to)?;
+    let command = vec![
+        "cp".to_string(),
+        "-a".to_string(),
+        "--".to_string(),
+        from.clone(),
+        to,
+    ];
+    let code = api.run_command(container, &command, cancel).await?;
+    if code != 0 {
+        return Err(ContainerError::File {
+            path: from,
+            message: format!("cp 退出码: {code}"),
+        });
+    }
+    Ok(())
+}
+
 /// 容器内已有文件的元数据快照。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ArchiveMetadata {

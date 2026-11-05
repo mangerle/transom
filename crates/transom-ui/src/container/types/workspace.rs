@@ -44,6 +44,8 @@ pub(crate) struct ContainerFilesState {
     pub(crate) rename_from: Option<String>,
     /// 重命名输入框；首次点击重命名时创建，之后复用。
     pub(crate) rename_input: Option<Entity<InputState>>,
+    /// 正在复制到新路径的源路径；与重命名共用输入框与弹窗骨架。
+    pub(crate) copy_from: Option<String>,
     /// 新建目录条是否展开。
     pub(crate) new_dir_open: bool,
     /// 新建目录的名字输入框；首次展开时创建，之后复用。

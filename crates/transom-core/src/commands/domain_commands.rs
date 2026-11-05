@@ -476,6 +476,14 @@ pub enum ContainerCommand {
         path: String,
         recursive: bool,
     },
+    /// 复制容器内文件或目录到目标路径。
+    CopyPath {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        container: String,
+        from: String,
+        to: String,
+    },
     /// 就地保存/写入容器内文本文件。
     SaveFile {
         tab_id: TabId,

@@ -191,6 +191,25 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 打开「复制到」输入条；与重命名共用弹窗骨架，提交时按 copy_from 分流。
+    pub(crate) fn begin_container_file_copy(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.files.copy_placeholder").to_string())
+        });
+        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            workspace.files.copy_from = Some(path);
+            workspace.files.rename_input = Some(input);
+        }
+        cx.notify();
+    }
+
     /// 请求删除容器内路径；目录按递归删除走二次确认。
     pub(crate) fn request_remove_container_path(
         &mut self,
@@ -504,10 +523,75 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 取消容器内文件重命名。
+    /// 提交容器内复制；目标必须是绝对路径。
+    pub(crate) fn submit_container_file_copy(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((from, input)) = self
+            .state
+            .container_workspace(tab_id)
+            .and_then(|workspace| {
+                let from = workspace.files.copy_from.clone()?;
+                let input = workspace.files.rename_input.clone()?;
+                Some((from, input))
+            })
+        else {
+            return;
+        };
+        let destination = input.read(cx).value().trim().to_string();
+        if destination.is_empty()
+            || !destination.starts_with('/')
+            || destination.split('/').any(|segment| segment == "..")
+        {
+            self.show_toast(
+                rust_i18n::t!("container.files.copy_invalid").to_string(),
+                false,
+                window,
+                cx,
+            );
+            return;
+        }
+        if destination == from {
+            self.show_toast(
+                rust_i18n::t!("container.files.copy_same").to_string(),
+                false,
+                window,
+                cx,
+            );
+            return;
+        }
+        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+            return;
+        };
+        let Some(container) = workspace.selected_container_name() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        workspace.files.copy_from = None;
+        workspace.files.rename_from = None;
+        workspace.files.rename_input = None;
+        self.send_tracked(
+            tab_id,
+            request_id,
+            ContainerCommand::CopyPath {
+                tab_id,
+                request_id,
+                container,
+                from,
+                to: destination,
+            },
+        );
+        cx.notify();
+    }
+
+    /// 取消容器内文件重命名或复制。
     pub(crate) fn cancel_container_file_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.files.rename_from = None;
+            workspace.files.copy_from = None;
             workspace.files.rename_input = None;
         }
         cx.notify();

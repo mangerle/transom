@@ -6463,6 +6463,24 @@ container:
     download_directory_tooltip:
       en: Download this folder as a tar archive
       zh-CN: 将该目录导出为 tar 归档下载
+    copy_to:
+      en: Copy to…
+      zh-CN: 复制到…
+    copy_modal_title:
+      en: Copy file or folder
+      zh-CN: 复制文件或目录
+    copy_prompt:
+      en: Enter the absolute destination path inside the container.
+      zh-CN: 输入容器内的绝对目标路径。
+    copy_placeholder:
+      en: /tmp/backup
+      zh-CN: /tmp/backup
+    copy_invalid:
+      en: Destination must be an absolute path without ..
+      zh-CN: 目标必须是绝对路径且不能包含 ..
+    copy_same:
+      en: Source and destination are the same path.
+      zh-CN: 源路径与目标路径相同。
     directory_volume_unsupported:
       en: Volume folder export is not supported yet; open a container using this volume instead.
       zh-CN: 暂不支持直接导出数据卷目录；请通过挂载该卷的容器导出。

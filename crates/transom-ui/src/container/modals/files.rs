@@ -23,6 +23,7 @@ impl AppShell {
         let Some(input) = workspace.files.rename_input.clone() else {
             return div().into_any_element();
         };
+        let is_copy = workspace.files.copy_from.is_some();
 
         let content = v_flex().gap_3().child(Input::new(&input).w_full());
 
@@ -40,17 +41,31 @@ impl AppShell {
             Some(IconName::Check),
             crate::widgets::DialogConfirmKind::Primary,
             crate::dialog_host::on_event(app, move |this, _: &ClickEvent, window, cx| {
-                this.submit_container_file_rename(tab_id, window, cx);
+                if is_copy {
+                    this.submit_container_file_copy(tab_id, window, cx);
+                } else {
+                    this.submit_container_file_rename(tab_id, window, cx);
+                }
             }),
         );
 
         let footer =
             crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
 
+        let title = if is_copy {
+            rust_i18n::t!("container.files.copy_modal_title").to_string()
+        } else {
+            rust_i18n::t!("container.files.rename_modal_title").to_string()
+        };
+        let prompt = if is_copy {
+            rust_i18n::t!("container.files.copy_prompt").to_string()
+        } else {
+            rust_i18n::t!("container.files.rename_prompt").to_string()
+        };
         crate::widgets::dialog_body(
             "container-file-rename-modal",
-            rust_i18n::t!("container.files.rename_modal_title").to_string(),
-            Some(rust_i18n::t!("container.files.rename_prompt").to_string()),
+            title,
+            Some(prompt),
             content,
             Some(footer),
         )
