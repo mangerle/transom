@@ -107,6 +107,16 @@ pub(crate) fn stats_toolbar(
                     this.toggle_container_stats_chart(tab_id, cx);
                 })),
         )
+        .child(
+            Button::new("container-stats-export")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Download)
+                .tooltip(rust_i18n::t!("container.stats.export_csv").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.export_container_stats_csv(tab_id, cx);
+                })),
+        )
         .child(div().flex_1())
         .children(status)
         .into_any_element()

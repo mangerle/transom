@@ -6279,6 +6279,18 @@ container:
     waiting:
       en: Collecting stats…
       zh-CN: 正在采样统计…
+    export_csv:
+      en: Export stats to CSV
+      zh-CN: 导出统计 CSV
+    export_empty:
+      en: No stats samples to export yet.
+      zh-CN: 暂无统计样本可导出。
+    export_done:
+      en: 'Stats exported to %{path}'
+      zh-CN: '统计已导出到 %{path}'
+    export_failed:
+      en: 'Failed to export stats: %{error}'
+      zh-CN: '导出统计失败：%{error}'
     cpu:
       en: CPU
       zh-CN: CPU
