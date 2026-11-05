@@ -87,6 +87,15 @@ app:
   palette_containers:
     en: Containers
     zh-CN: 容器
+  palette_container_start:
+    en: "Start Container: %{name}"
+    zh-CN: "启动容器：%{name}"
+  palette_container_stop:
+    en: "Stop Container: %{name}"
+    zh-CN: "停止容器：%{name}"
+  palette_container_restart:
+    en: "Restart Container: %{name}"
+    zh-CN: "重启容器：%{name}"
   palette_empty:
     en: No matching commands
     zh-CN: 没有匹配的条目

@@ -36,6 +36,12 @@ pub(super) enum PaletteTarget {
         tab_id: TabId,
         container_id: String,
     },
+    /// 容器直接启停动作：指定标签、容器名与生命周期动作。
+    ContainerLifecycle {
+        tab_id: TabId,
+        container_name: String,
+        action: transom_core::ContainerLifecycleAction,
+    },
 }
 
 /// 一次渲染的完整模型：分组条目与逐条对应的落点。
@@ -136,7 +142,7 @@ impl AppState {
         items
     }
 
-    /// 遍历各容器工作区已拉取到的容器，转为可搜索条目。
+    /// 遍历各容器工作区已拉取到的容器，转为可搜索与可直接操作的条目。
     pub(super) fn container_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
         let mut items = Vec::new();
         for tab in self.workspace.tabs.iter() {
@@ -147,6 +153,7 @@ impl AppState {
                 let name = &container.name;
                 let image = &container.image;
                 let state_str = container.state.key();
+                let is_running = container.state == transom_core::ContainerState::Running;
                 let keywords: Vec<SharedString> = vec![
                     name.clone().into(),
                     image.clone().into(),
@@ -154,24 +161,94 @@ impl AppState {
                     SharedString::from("container"),
                     SharedString::from("docker"),
                 ];
-                if !hit(needle, name, &keywords) {
-                    continue;
+
+                // 1. 跳转选中该容器项
+                if hit(needle, name, &keywords) {
+                    let icon = if is_running {
+                        IconName::Play
+                    } else {
+                        IconName::Square
+                    };
+                    items.push((
+                        CommandItem::new()
+                            .icon(icon)
+                            .label(name.clone())
+                            .keywords(keywords),
+                        PaletteTarget::Container {
+                            tab_id: tab.id,
+                            container_id: container.id.clone(),
+                        },
+                    ));
                 }
-                let icon = if container.state == transom_core::ContainerState::Running {
-                    IconName::Play
+
+                // 2. 容器生命周期直接下发指令（启/停/重启）
+                if is_running {
+                    let stop_label =
+                        rust_i18n::t!("app.palette_container_stop", name = name).to_string();
+                    let stop_keywords = vec![
+                        name.clone().into(),
+                        SharedString::from("stop"),
+                        SharedString::from(rust_i18n::t!("container.action.stop").to_string()),
+                        SharedString::from("container"),
+                    ];
+                    if hit(needle, &stop_label, &stop_keywords) {
+                        items.push((
+                            CommandItem::new()
+                                .icon(IconName::Square)
+                                .label(stop_label)
+                                .keywords(stop_keywords),
+                            PaletteTarget::ContainerLifecycle {
+                                tab_id: tab.id,
+                                container_name: name.clone(),
+                                action: transom_core::ContainerLifecycleAction::Stop,
+                            },
+                        ));
+                    }
+
+                    let restart_label =
+                        rust_i18n::t!("app.palette_container_restart", name = name).to_string();
+                    let restart_keywords = vec![
+                        name.clone().into(),
+                        SharedString::from("restart"),
+                        SharedString::from(rust_i18n::t!("container.action.restart").to_string()),
+                        SharedString::from("container"),
+                    ];
+                    if hit(needle, &restart_label, &restart_keywords) {
+                        items.push((
+                            CommandItem::new()
+                                .icon(IconName::RefreshCw)
+                                .label(restart_label)
+                                .keywords(restart_keywords),
+                            PaletteTarget::ContainerLifecycle {
+                                tab_id: tab.id,
+                                container_name: name.clone(),
+                                action: transom_core::ContainerLifecycleAction::Restart,
+                            },
+                        ));
+                    }
                 } else {
-                    IconName::Square
-                };
-                items.push((
-                    CommandItem::new()
-                        .icon(icon)
-                        .label(name.clone())
-                        .keywords(keywords),
-                    PaletteTarget::Container {
-                        tab_id: tab.id,
-                        container_id: container.id.clone(),
-                    },
-                ));
+                    let start_label =
+                        rust_i18n::t!("app.palette_container_start", name = name).to_string();
+                    let start_keywords = vec![
+                        name.clone().into(),
+                        SharedString::from("start"),
+                        SharedString::from(rust_i18n::t!("container.action.start").to_string()),
+                        SharedString::from("container"),
+                    ];
+                    if hit(needle, &start_label, &start_keywords) {
+                        items.push((
+                            CommandItem::new()
+                                .icon(IconName::Play)
+                                .label(start_label)
+                                .keywords(start_keywords),
+                            PaletteTarget::ContainerLifecycle {
+                                tab_id: tab.id,
+                                container_name: name.clone(),
+                                action: transom_core::ContainerLifecycleAction::Start,
+                            },
+                        ));
+                    }
+                }
             }
         }
         items

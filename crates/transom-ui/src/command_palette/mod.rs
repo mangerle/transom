@@ -259,6 +259,14 @@ impl AppShell {
                 self.select_container_item(tab_id, container_id);
                 cx.notify();
             }
+            Some(PaletteTarget::ContainerLifecycle {
+                tab_id,
+                container_name,
+                action,
+            }) => {
+                self.container_lifecycle(tab_id, container_name, action, cx);
+                cx.notify();
+            }
             // 动作已由组件派发；None 表示索引失效，静默忽略。
             Some(PaletteTarget::Action) | None => {}
         }
