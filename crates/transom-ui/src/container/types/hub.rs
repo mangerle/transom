@@ -22,6 +22,14 @@ pub(crate) struct ContainerHubDialog {
     pub(crate) search_error: Option<String>,
     /// 绑定的在途请求 ID。
     pub(crate) search_request: Option<ContainerRequestId>,
+    /// 当前正在查看详情的镜像（Some 时在弹窗内展示详情视图，None 时展示搜索列表）。
+    pub(crate) selected_detail: Option<ImageSearchResult>,
+    /// 记录各镜像当前选中的版本标签（Key 为镜像名，如 "mysql" -> "8.0"；未指定时默认 "latest"）。
+    pub(crate) selected_tags: std::collections::HashMap<String, String>,
+    /// 详情页中的自定义版本输入框。
+    pub(crate) custom_tag_input: Option<Entity<InputState>>,
+    /// 详情页复制 CLI 命令成功提示。
+    pub(crate) copy_toast: bool,
     /// 输入框变更订阅。
     pub(crate) _subscription: Subscription,
 }

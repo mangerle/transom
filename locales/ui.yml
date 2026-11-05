@@ -6430,6 +6430,48 @@ container:
     pull_queued:
       en: 'Image %{reference} queued for download'
       zh-CN: '镜像 %{reference} 已加入排队等待槽位'
+    view_details:
+      en: Details & Tags
+      zh-CN: 详情与版本
+    back_to_results:
+      en: Back to Results
+      zh-CN: 返回搜索结果
+    custom_tag:
+      en: Custom Tag
+      zh-CN: 自定义标签
+    custom_tag_placeholder:
+      en: 'Enter tag name, e.g. 8.0.36'
+      zh-CN: 输入任意版本标签，例如 8.0.36
+    pull_selected:
+      en: Pull This Tag
+      zh-CN: 拉取该版本
+    tags_title:
+      en: Available Version Tags
+      zh-CN: 常用版本标签 (Tags)
+    tag_col_tag:
+      en: Tag
+      zh-CN: 版本标签
+    tag_col_desc:
+      en: Description
+      zh-CN: 版本说明
+    tag_col_arch:
+      en: Architectures
+      zh-CN: 支持架构
+    tag_col_action:
+      en: Action
+      zh-CN: 操作
+    copy_cli:
+      en: Copy Docker Pull Command
+      zh-CN: 复制 Docker CLI 命令
+    copied:
+      en: Copied
+      zh-CN: 已复制
+    select_tag:
+      en: Change Tag
+      zh-CN: 切换版本
+    recommended_tag:
+      en: Recommended
+      zh-CN: 推荐
   pull_manager:
     indicator:
       en: 'Downloads (%{count})'

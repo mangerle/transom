@@ -1,27 +1,24 @@
-//! 远端镜像市场探索弹窗专属纯视图组件。
+//! 远端镜像仓库探索弹窗整体布局与容器视图组件。
 //!
 //! 设计原理（Why）：
-//! - 将镜像搜索与市场浏览的纯展示逻辑（标题栏、热门搜索胶囊、特性指南卡片、搜索结果卡片等）
-//!   从 `hub_dialog.rs` 中剥离解耦，确保单一职责与单文件行数精简；
-//! - 遵循纯组件契约，只接收纯数据与行为闭包，杜绝在渲染过程中反查或重入借用宿主实体；
-//! - 采用统一设计令牌与微交互规范，提供现代化、信息层级分明的市场探索体验。
+//! - 将镜像搜索、版本标签选择与全景详情整合进同一交互弹窗中；
+//! - 采用组件分层架构（Card / Detail / Tags），保持各子模块单一职责与单文件行数精简；
+//! - 遵循纯组件契约，接收状态与行为闭包，杜绝跨层借用与重入死锁。
 
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Icon, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::ImageSearchResult;
 
 /// 常用热门探索镜像标签列表。
-pub(super) const POPULAR_IMAGE_TAGS: &[&str] = &[
+pub(crate) const POPULAR_IMAGE_TAGS: &[&str] = &[
     "nginx", "redis", "mysql", "postgres", "node", "alpine", "python", "ubuntu", "golang",
 ];
 
-/// 渲染镜像市场弹窗顶部 Header。
-pub(super) fn render_hub_header(current_registry_name: &str, p: &Palette) -> AnyElement {
+/// 渲染镜像仓库弹窗顶部 Header。
+pub(crate) fn render_hub_header(current_registry_name: &str, p: &Palette) -> AnyElement {
     h_flex()
         .w_full()
         .items_center()
@@ -100,7 +97,7 @@ pub(super) fn render_hub_header(current_registry_name: &str, p: &Palette) -> Any
 }
 
 /// 渲染热门推荐镜像胶囊行。
-pub(super) fn render_popular_chips<F>(on_select: F, p: &Palette) -> AnyElement
+pub(crate) fn render_popular_chips<F>(on_select: F, p: &Palette) -> AnyElement
 where
     F: Fn(&str, &mut Window, &mut App) + 'static + Clone,
 {
@@ -145,19 +142,8 @@ where
     row.into_any_element()
 }
 
-/// 格式化星标数字（如 12500 -> "12.5k"）。
-pub(super) fn format_star_count(stars: u64) -> String {
-    if stars >= 1_000_000 {
-        format!("{:.1}M", stars as f64 / 1_000_000.0)
-    } else if stars >= 1_000 {
-        format!("{:.1}k", stars as f64 / 1_000.0)
-    } else {
-        stars.to_string()
-    }
-}
-
 /// 渲染初始未搜索时的探索指南面板。
-pub(super) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
+pub(crate) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
     let guide_card = |icon: IconName, icon_color: Hsla, title: String, desc: String| {
         v_flex()
             .flex_1()
@@ -265,7 +251,7 @@ pub(super) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
 }
 
 /// 渲染搜索结果列表顶部状态统计条。
-pub(super) fn render_hub_results_header(
+pub(crate) fn render_hub_results_header(
     count: usize,
     registry_name: &str,
     p: &Palette,
@@ -310,198 +296,8 @@ pub(super) fn render_hub_results_header(
         .into_any_element()
 }
 
-/// 渲染单个远端镜像搜索结果卡片。
-pub(super) fn render_hub_result_card<F>(
-    item: &ImageSearchResult,
-    on_pull: F,
-    p: &Palette,
-) -> AnyElement
-where
-    F: Fn(&mut Window, &mut App) + 'static,
-{
-    let name = item.name.clone();
-    let desc = if item.description.is_empty() {
-        rust_i18n::t!("container.hub.no_description").to_string()
-    } else {
-        item.description.clone()
-    };
-    let stars_str = format_star_count(item.star_count);
-    let is_official = item.is_official;
-    let is_automated = item.is_automated;
-    let pull_ref = item.name.clone();
-
-    // 智能拆分命名空间与镜像名称（如 bitnami/redis）
-    let (namespace_part, repo_part) = if let Some((ns, repo)) = name.split_once('/') {
-        (Some(format!("{}/", ns)), repo.to_string())
-    } else {
-        (None, name.clone())
-    };
-
-    h_flex()
-        .id(ElementId::Name(format!("hub-card-{}", pull_ref).into()))
-        .w_full()
-        .p_3()
-        .gap_3()
-        .rounded(p.radius.lg)
-        .border_1()
-        .border_color(p.border.opacity(0.15))
-        .bg(p.muted.opacity(0.03))
-        .hover(|s| {
-            s.bg(p.muted.opacity(0.07))
-                .border_color(p.primary.opacity(0.25))
-        })
-        .items_center()
-        .justify_between()
-        .child(
-            h_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_3()
-                .items_center()
-                .child(
-                    // 状态徽标图标槽
-                    v_flex()
-                        .w(px(36.0))
-                        .h(px(36.0))
-                        .rounded(p.radius.md)
-                        .bg(if is_official {
-                            p.primary.opacity(0.12)
-                        } else {
-                            p.muted.opacity(0.08)
-                        })
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            Icon::new(if is_official {
-                                IconName::ShieldCheck
-                            } else {
-                                IconName::Layers
-                            })
-                            .with_size(px(18.0))
-                            .text_color(if is_official {
-                                p.primary
-                            } else {
-                                p.muted_foreground
-                            }),
-                        ),
-                )
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap_1()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(
-                                    h_flex()
-                                        .items_baseline()
-                                        .when_some(namespace_part, |this, ns| {
-                                            this.child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(p.muted_foreground)
-                                                    .child(ns),
-                                            )
-                                        })
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(p.foreground)
-                                                .child(repo_part),
-                                        ),
-                                )
-                                .when(is_official, |this| {
-                                    this.child(
-                                        h_flex()
-                                            .gap_1()
-                                            .items_center()
-                                            .px_1p5()
-                                            .py_0p5()
-                                            .rounded(p.radius.full)
-                                            .bg(p.primary.opacity(0.12))
-                                            .border_1()
-                                            .border_color(p.primary.opacity(0.20))
-                                            .child(
-                                                Icon::new(IconName::Check)
-                                                    .with_size(px(10.0))
-                                                    .text_color(p.primary),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(p.primary)
-                                                    .child(
-                                                        rust_i18n::t!("container.hub.official")
-                                                            .to_string(),
-                                                    ),
-                                            ),
-                                    )
-                                })
-                                .when(is_automated, |this| {
-                                    this.child(
-                                        div()
-                                            .px_1p5()
-                                            .py_0p5()
-                                            .text_xs()
-                                            .rounded(p.radius.sm)
-                                            .bg(p.muted.opacity(0.08))
-                                            .text_color(p.muted_foreground)
-                                            .child(
-                                                rust_i18n::t!("container.hub.automated")
-                                                    .to_string(),
-                                            ),
-                                    )
-                                })
-                                .child(
-                                    h_flex()
-                                        .gap_1()
-                                        .items_center()
-                                        .px_1p5()
-                                        .py_0p5()
-                                        .rounded(p.radius.full)
-                                        .bg(p.warning.opacity(0.08))
-                                        .child(
-                                            Icon::new(IconName::Star)
-                                                .with_size(px(11.0))
-                                                .text_color(p.warning),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(FontWeight::MEDIUM)
-                                                .text_color(p.warning)
-                                                .child(stars_str),
-                                        ),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .line_clamp(2)
-                                .child(desc),
-                        ),
-                ),
-        )
-        .child(
-            Button::new(ElementId::Name(format!("hub-pull-{}", pull_ref).into()))
-                .secondary()
-                .small()
-                .icon(IconName::Download)
-                .label(rust_i18n::t!("container.hub.pull").to_string())
-                .on_click(move |_, window, cx| {
-                    on_pull(window, cx);
-                }),
-        )
-        .into_any_element()
-}
-
 /// 渲染弹窗底部操作条。
-pub(super) fn render_hub_footer<F>(on_close: F, p: &Palette) -> AnyElement
+pub(crate) fn render_hub_footer<F>(on_close: F, p: &Palette) -> AnyElement
 where
     F: Fn(&mut Window, &mut App) + 'static,
 {

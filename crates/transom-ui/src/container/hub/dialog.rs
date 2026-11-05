@@ -1,104 +1,27 @@
-//! 远端镜像市场探索与搜索弹窗界面。
+//! 镜像仓库探索弹窗主体渲染与状态分流装配。
 //!
 //! 设计原理（Why）：
-//! - 将镜像搜索与市场浏览（Hub）作为多源镜像中心呈现，支持在官方 Docker Hub 与用户
-//!   自定义私有 Harbor / ACR 之间即时切换仓库源；
-//! - 搜索结果清晰呈现官方认证（Official）徽标与社区星标数量（Stars），降低安全风险；
-//! - 用户点击「下载」直接加入有界并发下载管理器，不阻塞前台界面并提供全链路分层进度跟踪。
+//! - 将顶层弹窗装配与状态分流（详情视图 vs 搜索结果列表）从业务动作中拆离；
+//! - 采用纯声明式布局，各子区块均由独立纯组件提供；
+//! - 严格遵守单文件行数红线与模块职责分离准则。
 
-use super::list::dropdown_trigger;
-use super::*;
+use super::card::render_hub_result_card;
+use super::detail::render_hub_image_detail;
+use super::view;
+use crate::app::{app_settings, AppShell};
+use crate::container::list::dropdown_trigger;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{ContainerCommand, ContainerRegistry, ContainerRequestId, TabId};
+use transom_core::TabId;
 
 impl AppShell {
-    /// 打开远端镜像市场探索弹窗。
-    pub(crate) fn open_container_hub_dialog(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let default_reg = app_settings(cx)
-            .container_registries
-            .iter()
-            .find(|r| r.is_default)
-            .map(|r| r.id.clone())
-            .unwrap_or_else(|| ContainerRegistry::docker_hub().id);
-
-        let search_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("container.hub.search_placeholder").to_string())
-        });
-
-        let subscription = cx.subscribe(&search_input, move |this, _, event: &InputEvent, cx| {
-            if matches!(event, InputEvent::PressEnter { .. }) {
-                this.execute_hub_search(tab_id, cx);
-            }
-        });
-
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.hub_dialog = Some(ContainerHubDialog {
-                search_input,
-                selected_registry_id: default_reg,
-                results: Vec::new(),
-                searching: false,
-                search_error: None,
-                search_request: None,
-                _subscription: subscription,
-            });
-        }
-        cx.notify();
-    }
-
-    /// 发起远端镜像搜索请求。
-    pub(crate) fn execute_hub_search(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let (term, _reg_id) = {
-            let Some(workspace) = self.state.container_workspace(tab_id) else {
-                return;
-            };
-            let Some(hub) = workspace.hub_dialog.as_ref() else {
-                return;
-            };
-            let term = hub.search_input.read(cx).value().trim().to_string();
-            let reg_id = hub.selected_registry_id.clone();
-            (term, reg_id)
-        };
-
-        if term.is_empty() {
-            return;
-        }
-
-        let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            if let Some(hub) = workspace.hub_dialog.as_mut() {
-                hub.searching = true;
-                hub.search_error = None;
-                hub.search_request = Some(request_id);
-            }
-        }
-
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::SearchImages {
-                tab_id,
-                request_id,
-                term,
-                limit: Some(25),
-            },
-        );
-        cx.notify();
-    }
-
-    /// 渲染远端镜像市场弹窗主体。
+    /// 渲染镜像仓库弹窗整体界面（根据状态呈现全景详情页或搜索列表）。
     pub(crate) fn render_container_hub_dialog_body(
         &self,
         tab_id: TabId,
@@ -121,6 +44,10 @@ impl AppShell {
         let registries = app_settings(cx).container_registries.clone();
         let search_input = hub.search_input.clone();
         let input_val = search_input.read(cx).value().trim().to_string();
+        let selected_detail = hub.selected_detail.clone();
+        let selected_tags = hub.selected_tags.clone();
+        let custom_tag_input = hub.custom_tag_input.as_ref();
+        let copy_toast = hub.copy_toast;
 
         let current_registry_name = registries
             .iter()
@@ -128,10 +55,84 @@ impl AppShell {
             .map(|r| r.name.clone())
             .unwrap_or_else(|| rust_i18n::t!("container.hub.docker_hub_default").to_string());
 
-        // 1. 顶部标题栏与当前源指示
-        let header = hub_view::render_hub_header(&current_registry_name, p);
+        // 1. 顶部 Header
+        let header = view::render_hub_header(&current_registry_name, p);
 
-        // 2. 顶栏搜索栏与仓库切换
+        // 如果用户正在查看镜像详情视图
+        if let Some(detail_item) = selected_detail {
+            let item_name = detail_item.name.clone();
+            let active_tag = selected_tags
+                .get(&item_name)
+                .cloned()
+                .unwrap_or_else(|| "latest".to_string());
+
+            let app_back = app.clone();
+            let app_pull = app.clone();
+            let app_copy = app.clone();
+            let reg_name_pull = current_registry_name.clone();
+
+            let detail_body = render_hub_image_detail(
+                &detail_item,
+                &active_tag,
+                custom_tag_input,
+                copy_toast,
+                move |_, cx| {
+                    app_back.update(cx, |this, cx| {
+                        this.back_to_hub_results(tab_id, cx);
+                    });
+                },
+                move |tag_to_pull, window, cx| {
+                    let full_ref = format!("{}:{}", item_name, tag_to_pull);
+                    let reg_name = reg_name_pull.clone();
+                    app_pull.update(cx, move |this, cx| {
+                        this.enqueue_image_pull(tab_id, full_ref, reg_name, window, cx);
+                    });
+                },
+                move |cmd, _, cx| {
+                    let cmd = cmd.to_string();
+                    app_copy.update(cx, |this, cx| {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd));
+                        if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                            if let Some(h) = ws.hub_dialog.as_mut() {
+                                h.copy_toast = true;
+                            }
+                        }
+                        cx.notify();
+                    });
+                },
+                p,
+            );
+
+            let app_close = app.clone();
+            let footer = view::render_hub_footer(
+                move |_, cx| {
+                    app_close.update(cx, |this, cx| {
+                        if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                            ws.hub_dialog = None;
+                        }
+                        cx.notify();
+                    });
+                },
+                p,
+            );
+
+            return v_flex()
+                .w_full()
+                .gap_3()
+                .child(header)
+                .child(
+                    div()
+                        .id("container-hub-detail-scroll")
+                        .w_full()
+                        .max_h(px(480.0))
+                        .overflow_y_scroll()
+                        .child(detail_body),
+                )
+                .child(footer)
+                .into_any_element();
+        }
+
+        // 2. 搜索栏与仓库切换
         let app_menu = app.clone();
         let reg_menu = dropdown_trigger(
             "container-hub-registry-select",
@@ -190,9 +191,9 @@ impl AppShell {
                     }),
             );
 
-        // 3. 热门探索芯片推荐行
+        // 3. 热门推荐芯片
         let app_chip = app.clone();
-        let chips_bar = hub_view::render_popular_chips(
+        let chips_bar = view::render_popular_chips(
             move |tag, window, cx| {
                 let tag = tag.to_string();
                 let app_chip = app_chip.clone();
@@ -210,7 +211,7 @@ impl AppShell {
             p,
         );
 
-        // 4. 内容主体根据检索状态切换
+        // 4. 内容主体分流
         let content: AnyElement = if searching {
             v_flex()
                 .size_full()
@@ -283,7 +284,7 @@ impl AppShell {
                 .into_any_element()
         } else if results.is_empty() {
             if input_val.is_empty() {
-                hub_view::render_hub_welcome_guide(p)
+                view::render_hub_welcome_guide(p)
             } else {
                 v_flex()
                     .size_full()
@@ -323,21 +324,45 @@ impl AppShell {
         } else {
             let mut list = v_flex().gap_2().w_full().p_1();
             let results_header =
-                hub_view::render_hub_results_header(results.len(), &current_registry_name, p);
+                view::render_hub_results_header(results.len(), &current_registry_name, p);
             list = list.child(results_header);
 
             for item in results {
-                let pull_ref = item.name.clone();
+                let img_name = item.name.clone();
                 let reg_name = current_registry_name.clone();
-                let app_pull = app.clone();
+                let active_tag = selected_tags
+                    .get(&img_name)
+                    .cloned()
+                    .unwrap_or_else(|| "latest".to_string());
 
-                let card = hub_view::render_hub_result_card(
+                let app_pull = app.clone();
+                let app_tag = app.clone();
+                let app_detail = app.clone();
+                let item_clone = item.clone();
+                let item_for_tag = img_name.clone();
+                let item_for_pull = img_name.clone();
+
+                let card = render_hub_result_card(
                     &item,
-                    move |window, cx| {
-                        let pull_ref = pull_ref.clone();
-                        let reg_name = reg_name.clone();
+                    &active_tag,
+                    move |tag_to_pull, window, cx| {
+                        let full_ref = format!("{}:{}", item_for_pull, tag_to_pull);
+                        let reg = reg_name.clone();
                         app_pull.update(cx, move |this, cx| {
-                            this.enqueue_image_pull(tab_id, pull_ref, reg_name, window, cx);
+                            this.enqueue_image_pull(tab_id, full_ref, reg, window, cx);
+                        });
+                    },
+                    move |new_tag, _, cx| {
+                        let img = item_for_tag.clone();
+                        let tag = new_tag.to_string();
+                        app_tag.update(cx, move |this, cx| {
+                            this.set_hub_selected_tag(tab_id, img, tag, cx);
+                        });
+                    },
+                    move |window, cx| {
+                        let it = item_clone.clone();
+                        app_detail.update(cx, move |this, cx| {
+                            this.select_hub_image_detail(tab_id, it, window, cx);
                         });
                     },
                     p,
@@ -349,7 +374,7 @@ impl AppShell {
             div()
                 .id("container-hub-scroll")
                 .w_full()
-                .max_h(px(440.0))
+                .max_h(px(460.0))
                 .overflow_y_scroll()
                 .child(list)
                 .into_any_element()
@@ -357,7 +382,7 @@ impl AppShell {
 
         // 5. 底部 Footer
         let app_close = app.clone();
-        let footer = hub_view::render_hub_footer(
+        let footer = view::render_hub_footer(
             move |_, cx| {
                 app_close.update(cx, |this, cx| {
                     if let Some(ws) = this.state.container_workspace_mut(tab_id) {
@@ -378,52 +403,5 @@ impl AppShell {
             .child(content)
             .child(footer)
             .into_any_element()
-    }
-
-    /// 将选中的远端镜像加入下载队列并自动调度。
-    pub(crate) fn enqueue_image_pull(
-        &mut self,
-        tab_id: TabId,
-        reference: String,
-        registry_name: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let (task_id, should_start) = {
-            let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-                return;
-            };
-            workspace
-                .pull_manager
-                .enqueue(tab_id, reference.clone(), registry_name)
-        };
-
-        // 自动打开下载抽屉以展现分层下载进度
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.pull_drawer_open = true;
-        }
-
-        if should_start {
-            self.state.send_command(ContainerCommand::PullImageTask {
-                tab_id,
-                task_id,
-                reference: reference.clone(),
-                auth: None,
-            });
-            self.show_toast(
-                rust_i18n::t!("container.hub.pull_started", reference = reference).to_string(),
-                true,
-                window,
-                cx,
-            );
-        } else {
-            self.show_toast(
-                rust_i18n::t!("container.hub.pull_queued", reference = reference).to_string(),
-                true,
-                window,
-                cx,
-            );
-        }
-        cx.notify();
     }
 }
