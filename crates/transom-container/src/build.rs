@@ -18,7 +18,7 @@ use crate::error::ContainerError;
 use crate::http;
 use bytes::Bytes;
 use futures::StreamExt;
-use globset::{Glob, GlobSet, GlobSetBuilder};
+use globset::{Glob, GlobMatcher};
 use http_body_util::{BodyExt, StreamBody};
 use hyper::Method;
 use hyper::body::Frame;
@@ -33,6 +33,10 @@ use transom_core::ContainerBuildSpec;
 
 /// CLI 构建总超时：构建可能持续很久，但必须有上限，避免子进程永久挂住。
 const CLI_BUILD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// HTTP 构建流的空闲超时：守护进程长时间不输出任何进度即视为挂死。
+const BUILD_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+/// 单行未结束缓冲上限：防止异常流持续输出无换行内容撑爆内存。
+const BUILD_LINE_BUFFER_LIMIT: usize = 1024 * 1024;
 
 /// Docker /build 接口返回的单行 JSON 消息结构。
 #[derive(Debug, Deserialize)]
@@ -48,81 +52,124 @@ struct BuildErrorDetail {
     message: Option<String>,
 }
 
-/// .dockerignore 过滤规则匹配器。
+/// 单条 `.dockerignore` 规则；按出现顺序应用，后面的规则覆盖前面的结果。
 #[derive(Debug)]
+struct IgnoreRule {
+    /// 匹配条目本身的 glob。
+    exact: Vec<GlobMatcher>,
+    /// 匹配目录下后代的 glob，例如 `target/**`。
+    descendants: Vec<GlobMatcher>,
+    negated: bool,
+    directory_only: bool,
+}
+
+impl IgnoreRule {
+    fn matches(&self, path: &str, is_dir: bool) -> bool {
+        if self.directory_only && !is_dir {
+            return self
+                .descendants
+                .iter()
+                .any(|matcher| matcher.is_match(path));
+        }
+        self.exact
+            .iter()
+            .chain(self.descendants.iter())
+            .any(|matcher| matcher.is_match(path))
+    }
+}
+
+/// `.dockerignore` 过滤规则集合。
+#[derive(Debug, Default)]
 pub struct DockerIgnore {
-    set: GlobSet,
-    has_rules: bool,
+    rules: Vec<IgnoreRule>,
 }
 
 impl DockerIgnore {
-    /// 从构建上下文目录解析 .dockerignore，默认始终忽略 .git 目录。
+    /// 从构建上下文目录解析 `.dockerignore`。
+    ///
+    /// 语义与 Docker CLI 对齐：支持 `#` 注释、`!` 否定、`/` 根锚定与目录结尾斜杠；
+    /// 不再隐式忽略 `.git`，需要排除时由用户的 `.dockerignore` 显式声明。
     pub fn from_context(context_dir: &Path) -> Self {
         let ignore_file = context_dir.join(".dockerignore");
-        let mut builder = GlobSetBuilder::new();
-        let mut count = 0;
-
-        // 默认始终忽略 .git 目录
-        if let Ok(glob) = Glob::new(".git") {
-            builder.add(glob);
-            count += 1;
-        }
-        if let Ok(glob) = Glob::new(".git/**") {
-            builder.add(glob);
-            count += 1;
-        }
-
-        if let Ok(content) = std::fs::read_to_string(ignore_file) {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with('#') {
-                    continue;
-                }
-                let clean = trimmed.trim_start_matches("./");
-                if let Ok(glob) = Glob::new(clean) {
-                    builder.add(glob);
-                    count += 1;
-                }
-                let dir_pattern = format!("{}/**", clean.trim_end_matches('/'));
-                if let Ok(glob) = Glob::new(&dir_pattern) {
-                    builder.add(glob);
-                    count += 1;
-                }
+        let mut rules = Vec::new();
+        let Ok(content) = std::fs::read_to_string(ignore_file) else {
+            return Self { rules };
+        };
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            let (negated, pattern) = match trimmed.strip_prefix('!') {
+                Some(pattern) => (true, pattern.trim()),
+                None => (false, trimmed),
+            };
+            if pattern.is_empty() {
+                continue;
+            }
+            if let Some(rule) = compile_ignore_rule(pattern, negated) {
+                rules.push(rule);
+            } else {
+                log::warn!("忽略无效的 .dockerignore 规则: {trimmed}");
             }
         }
-
-        match builder.build() {
-            Ok(set) => Self {
-                set,
-                has_rules: count > 0,
-            },
-            Err(e) => {
-                log::warn!("编译 .dockerignore glob 集合失败: {e}");
-                Self {
-                    set: GlobSet::empty(),
-                    has_rules: false,
-                }
-            }
-        }
+        Self { rules }
     }
 
-    /// 判定指定相对路径是否已被忽略。
+    /// 判定指定相对路径是否已被忽略；后面的规则优先。
     pub fn is_ignored(&self, rel_path: &str, is_dir: bool) -> bool {
-        if !self.has_rules {
+        if self.rules.is_empty() {
             return false;
         }
-        let clean = rel_path.trim_start_matches('/').trim_start_matches("./");
-        if self.set.is_match(clean) {
-            return true;
+        let clean = rel_path
+            .trim_start_matches('/')
+            .trim_start_matches("./")
+            .trim_end_matches('/');
+        if clean.is_empty() {
+            return false;
         }
-        if is_dir {
-            let dir_path = format!("{clean}/");
-            if self.set.is_match(&dir_path) {
-                return true;
+        let mut ignored = false;
+        for rule in &self.rules {
+            if rule.matches(clean, is_dir) {
+                ignored = !rule.negated;
             }
         }
-        false
+        ignored
     }
+}
+
+/// 把一条 Docker 风格 pattern 编译成多个 glob；无斜杠规则同时匹配任意层级。
+fn compile_ignore_rule(pattern: &str, negated: bool) -> Option<IgnoreRule> {
+    let anchored = pattern.starts_with('/');
+    let directory_only = pattern.ends_with('/');
+    let clean = pattern
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .trim_start_matches("./");
+    if clean.is_empty() {
+        return None;
+    }
+    let mut exact = Vec::new();
+    let mut descendants = Vec::new();
+    let mut add = |candidate: &str, target: &mut Vec<GlobMatcher>| {
+        if let Ok(glob) = Glob::new(candidate) {
+            target.push(glob.compile_matcher());
+        }
+    };
+    add(clean, &mut exact);
+    if !anchored {
+        add(&format!("**/{clean}"), &mut exact);
+    }
+    add(&format!("{clean}/**"), &mut descendants);
+    if !anchored {
+        add(&format!("**/{clean}/**"), &mut descendants);
+    }
+    (!exact.is_empty() || !descendants.is_empty()).then_some(IgnoreRule {
+        exact,
+        descendants,
+        negated,
+        directory_only,
+    })
 }
 
 /// 流式通道写入适配器：将 tar 字节分块送入有界通道。
@@ -161,19 +208,23 @@ fn append_dir_recursive<W: std::io::Write>(
     if cancel.load(Ordering::Relaxed) {
         return Err(ContainerError::Cancelled);
     }
-    let read_dir = std::fs::read_dir(current_dir).map_err(|error| ContainerError::File {
-        path: current_dir.display().to_string(),
-        message: format!("读取上下文子目录失败: {error}"),
-    })?;
-
-    for entry in read_dir {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(ContainerError::Cancelled);
-        }
-        let entry = entry.map_err(|error| ContainerError::File {
+    let mut entries = std::fs::read_dir(current_dir)
+        .map_err(|error| ContainerError::File {
+            path: current_dir.display().to_string(),
+            message: format!("读取上下文子目录失败: {error}"),
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| ContainerError::File {
             path: current_dir.display().to_string(),
             message: format!("遍历上下文条目失败: {error}"),
         })?;
+    // 排序保证 tar 条目顺序稳定，避免缓存键与构建结果随文件系统枚举顺序漂移。
+    entries.sort_by_key(|entry| entry.file_name());
+
+    for entry in entries {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(ContainerError::Cancelled);
+        }
         let path = entry.path();
         let rel_path = path.strip_prefix(base_dir).unwrap_or(&path);
         let rel_str = rel_path.to_string_lossy();
@@ -203,7 +254,12 @@ fn append_dir_recursive<W: std::io::Write>(
                     message: format!("打包文件条目失败: {error}"),
                 })?;
         } else if file_type.is_symlink() {
-            let _ = builder.append_path_with_name(&path, rel_str.as_ref());
+            builder
+                .append_path_with_name(&path, rel_str.as_ref())
+                .map_err(|error| ContainerError::File {
+                    path: path.display().to_string(),
+                    message: format!("打包符号链接失败: {error}"),
+                })?;
         }
     }
     Ok(())
@@ -320,9 +376,12 @@ pub async fn build_image_http(
         }
     }
     if !spec.build_args.is_empty() {
-        if let Ok(json) = serde_json::to_string(&spec.build_args) {
-            query.push(format!("buildargs={}", http::percent_encode(&json)));
-        }
+        let json =
+            serde_json::to_string(&spec.build_args).map_err(|error| ContainerError::Decode {
+                operation: "序列化构建参数".to_string(),
+                message: error.to_string(),
+            })?;
+        query.push(format!("buildargs={}", http::percent_encode(&json)));
     }
 
     let suffix = if query.is_empty() {
@@ -353,7 +412,8 @@ pub async fn build_image_http(
     }
 
     let mut body = response.body;
-    let mut remainder = String::new();
+    let mut remainder: Vec<u8> = Vec::with_capacity(8192);
+    let mut last_data = tokio::time::Instant::now();
 
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -361,7 +421,15 @@ pub async fn build_image_http(
         }
         let frame = tokio::select! {
             frame = body.frame() => frame,
-            _ = tokio::time::sleep(Duration::from_millis(200)) => continue,
+            _ = tokio::time::sleep(Duration::from_millis(200)) => {
+                if last_data.elapsed() >= BUILD_IDLE_TIMEOUT {
+                    return Err(ContainerError::Http {
+                        operation: "构建镜像".to_string(),
+                        message: format!("构建流 {} 秒无输出", BUILD_IDLE_TIMEOUT.as_secs()),
+                    });
+                }
+                continue;
+            }
         };
         let Some(frame) = frame else {
             break;
@@ -371,22 +439,33 @@ pub async fn build_image_http(
             message: error.to_string(),
         })?;
         if let Some(data) = frame.data_ref() {
-            let chunk = String::from_utf8_lossy(data);
-            remainder.push_str(&chunk);
-
-            while let Some(idx) = remainder.find('\n') {
-                let line = remainder[..idx].to_string();
-                remainder = remainder[idx + 1..].to_string();
-                parse_build_line(&line, progress)?;
+            last_data = tokio::time::Instant::now();
+            remainder.extend_from_slice(data);
+            while let Some(pos) = remainder.iter().position(|byte| *byte == b'\n') {
+                let line: Vec<u8> = remainder.drain(..=pos).collect();
+                parse_build_line(&String::from_utf8_lossy(&line), progress)?;
+            }
+            if remainder.len() > BUILD_LINE_BUFFER_LIMIT {
+                return Err(ContainerError::Decode {
+                    operation: "解析构建输出".to_string(),
+                    message: format!("单行输出超过上限 {BUILD_LINE_BUFFER_LIMIT} 字节"),
+                });
             }
         }
     }
 
-    if !remainder.trim().is_empty() {
-        parse_build_line(&remainder, progress)?;
+    if !remainder.is_empty() {
+        parse_build_line(&String::from_utf8_lossy(&remainder), progress)?;
     }
 
-    let _ = pack_task.await;
+    let pack_result = pack_task.await.map_err(|error| ContainerError::File {
+        path: spec.context_path.clone(),
+        message: format!("构建上下文打包任务失败: {error}"),
+    })?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err(ContainerError::Cancelled);
+    }
+    pack_result?;
     Ok(())
 }
 
@@ -527,17 +606,22 @@ mod tests {
         let root = temp.path();
         fs::write(
             root.join(".dockerignore"),
-            "target/\n*.tmp\nignore_me.txt\n",
+            "target/\n*.tmp\nignore_me.txt\n!keep.tmp\n/root-only.txt\n",
         )
         .expect("写入 dockerignore 失败");
 
         let ignore = DockerIgnore::from_context(root);
-        assert!(ignore.is_ignored(".git", true));
-        assert!(ignore.is_ignored(".git/config", false));
+        // Docker 默认不会隐式忽略 .git，需要用户自己写进 .dockerignore。
+        assert!(!ignore.is_ignored(".git", true));
         assert!(ignore.is_ignored("target", true));
         assert!(ignore.is_ignored("target/debug/app", false));
+        assert!(!ignore.is_ignored("target", false));
         assert!(ignore.is_ignored("test.tmp", false));
+        assert!(ignore.is_ignored("nested/test.tmp", false));
+        assert!(!ignore.is_ignored("keep.tmp", false));
         assert!(ignore.is_ignored("ignore_me.txt", false));
+        assert!(ignore.is_ignored("root-only.txt", false));
+        assert!(!ignore.is_ignored("sub/root-only.txt", false));
         assert!(!ignore.is_ignored("src/main.rs", false));
         assert!(!ignore.is_ignored("Dockerfile", false));
     }
