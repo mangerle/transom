@@ -92,7 +92,7 @@ impl BackupService for CatalogBackupService {
     fn restore_secrets(&self, secrets: &[BackupSecret]) -> Result<SecretRestoreReport, AppError> {
         let mut report = SecretRestoreReport::default();
         for secret in secrets {
-            let key = SecretKey::new(secret.owner, secret.kind);
+            let key = SecretKey::new(secret.owner.clone(), secret.kind);
             match self.secrets.get(&key) {
                 // 本机已有同名口令：保留现有值，导入备份不改本机正在用的密码。
                 Ok(Some(_)) => report.kept += 1,

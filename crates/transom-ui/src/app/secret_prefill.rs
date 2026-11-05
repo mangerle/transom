@@ -33,7 +33,7 @@ pub(crate) fn prefill_secret_fields<E: 'static>(
                         .iter()
                         .map(|(kind, _)| {
                             secret_store
-                                .get(&SecretKey::new(owner, *kind))
+                                .get(&SecretKey::new(owner.clone(), *kind))
                                 .ok()
                                 .flatten()
                         })

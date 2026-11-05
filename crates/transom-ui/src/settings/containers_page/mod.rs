@@ -15,7 +15,7 @@ use crate::app::{app_settings, update_app_settings};
 use crate::palette::Palette;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use transom_core::ContainerRegistry;
+use transom_core::{ContainerRegistry, SecretKey};
 
 impl SettingsView {
     /// 渲染容器与镜像源设置组。
@@ -145,6 +145,22 @@ impl SettingsView {
             )
         });
 
+        let secret_key = SecretKey::registry_password(&reg_id);
+        if password.is_empty() {
+            if let Err(error) = self.services.secret_store.delete(&secret_key) {
+                log::warn!("删除镜像仓库密码失败，仓库: {reg_id}，原因: {error}");
+            }
+        } else if let Err(error) = self.services.secret_store.set(&secret_key, &password) {
+            if let Some(edit) = self.state.registry_edit.as_mut() {
+                edit.error = Some(
+                    rust_i18n::t!("settings.registry_secret_failed", error = error.to_string())
+                        .to_string(),
+                );
+            }
+            cx.notify();
+            return;
+        }
+
         let new_registry = ContainerRegistry {
             id: reg_id.clone(),
             name,
@@ -192,6 +208,13 @@ impl SettingsView {
     pub(super) fn delete_registry(&mut self, reg_id: &str, cx: &mut Context<Self>) {
         if reg_id == "docker-hub" {
             return;
+        }
+        if let Err(error) = self
+            .services
+            .secret_store
+            .delete(&SecretKey::registry_password(reg_id))
+        {
+            log::warn!("删除镜像仓库密码失败，仓库: {reg_id}，原因: {error}");
         }
 
         update_app_settings(cx, |s| {

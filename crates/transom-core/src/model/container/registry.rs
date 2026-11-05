@@ -10,9 +10,10 @@
 
 use super::ContainerRegistryAuth;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// 镜像仓库配置（如 Docker Hub、私有 Harbor、阿里云等）。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContainerRegistry {
     /// 仓库唯一标识符。
     pub id: String,
@@ -24,11 +25,28 @@ pub struct ContainerRegistry {
     #[serde(default)]
     pub username: String,
     /// 可选认证密码或 Token。
-    #[serde(default)]
+    ///
+    /// 只在内存中停留，持久化时写入系统钥匙串；`skip_serializing` 确保设置
+    /// 文件永远不会再出现明文密码，旧文件里的密码会在启动迁移后清除。
+    #[serde(default, skip_serializing)]
     pub password: String,
     /// 是否为默认选中的搜索源。
     #[serde(default)]
     pub is_default: bool,
+}
+
+impl fmt::Debug for ContainerRegistry {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ContainerRegistry")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("url", &self.url)
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .field("is_default", &self.is_default)
+            .finish()
+    }
 }
 
 impl ContainerRegistry {

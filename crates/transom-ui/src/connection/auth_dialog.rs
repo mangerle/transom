@@ -37,12 +37,12 @@ impl AppState {
 
     /// 打开"凭据保存到钥匙串"标记，使目录记录与钥匙串实际状态一致。
     fn mark_credential_saved(&mut self, owner: transom_core::SecretOwner) {
-        let flipped = match owner {
+        let flipped = match &owner {
             transom_core::SecretOwner::Session(session_id) => self
                 .catalog
                 .sessions
                 .iter_mut()
-                .find(|session| session.id == session_id)
+                .find(|session| session.id == *session_id)
                 .and_then(|session| match &mut session.connection {
                     Connection::Ssh(ssh) => Some(ssh),
                     _ => None,
@@ -52,8 +52,10 @@ impl AppState {
                 .catalog
                 .identities
                 .iter_mut()
-                .find(|identity| identity.id == identity_id)
+                .find(|identity| identity.id == *identity_id)
                 .is_some_and(|identity| enable_auth_save(&mut identity.auth)),
+            // 仓库凭据没有目录侧的"已保存"标记。
+            transom_core::SecretOwner::Registry(_) => false,
         };
         if !flipped {
             return;
@@ -115,8 +117,8 @@ impl AppShell {
         let Some(pending) = self.state.modals.connection.pending_credential.take() else {
             return;
         };
-        let key = SecretKey::new(pending.owner, pending.kind);
-        self.state.mark_credential_saved(pending.owner);
+        let key = SecretKey::new(pending.owner.clone(), pending.kind);
+        self.state.mark_credential_saved(pending.owner.clone());
         let secret_store = self.state.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
             let error = cx

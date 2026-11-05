@@ -3003,6 +3003,9 @@ settings:
   registry_url_required:
     en: Registry service URL is required
     zh-CN: 仓库服务地址不能为空
+  registry_secret_failed:
+    en: 'Failed to save the registry password to the system keychain: %{error}'
+    zh-CN: '保存镜像仓库密码到系统钥匙串失败: %{error}'
   monitor_sections_group:
     en: Default Section States
     zh-CN: 板块默认折叠状态

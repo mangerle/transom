@@ -22,6 +22,7 @@ mod i18n;
 mod keymap;
 mod palette;
 mod pane_tree;
+mod registry_secrets;
 mod theme;
 mod widgets;
 mod window_appearance;
@@ -65,13 +66,20 @@ pub struct UiServices {
 pub fn run(services: UiServices) {
     // 设置文件读不出来时不能把用户关在外面：按默认值起界面，但一定要在日志里留痕，
     // 否则"设置莫名其妙回到默认"这类报障完全没有线索可查。
-    let settings = match services.settings_store.load() {
+    let mut settings = match services.settings_store.load() {
         Ok(settings) => settings,
         Err(error) => {
             log::error!("读取设置失败，本次启动按默认配置运行，原因: {error}");
             AppSettings::default()
         }
     };
+    // 旧版本把镜像仓库密码明文写在 settings.json；启动时迁移到钥匙串，
+    // 并把清理后的设置重新落盘。失败只告警，不阻断应用启动。
+    if registry_secrets::hydrate_registry_passwords(&mut settings, services.secret_store.as_ref())
+        && let Err(error) = services.settings_store.save(&settings)
+    {
+        log::warn!("镜像仓库密码迁移后保存设置失败，原因: {error}");
+    }
     let language = i18n::resolve_language(&settings.language);
     reassert_default_terminal(&settings);
     // 应用装配日志时还不知道配置值，这里补上用户设的级别。

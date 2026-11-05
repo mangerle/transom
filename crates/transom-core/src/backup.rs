@@ -196,9 +196,10 @@ impl Serialize for BackupSecret {
     /// 不必为区分归属再引入一层包装结构。
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut state = serializer.serialize_struct("BackupSecret", 3)?;
-        match self.owner {
-            SecretOwner::Session(id) => state.serialize_field("session_id", &id)?,
-            SecretOwner::Identity(id) => state.serialize_field("identity_id", &id)?,
+        match &self.owner {
+            SecretOwner::Session(id) => state.serialize_field("session_id", id)?,
+            SecretOwner::Identity(id) => state.serialize_field("identity_id", id)?,
+            SecretOwner::Registry(id) => state.serialize_field("registry_id", id)?,
         }
         state.serialize_field("kind", &self.kind)?;
         state.serialize_field("value", self.value.as_str())?;
@@ -214,6 +215,8 @@ impl<'de> Deserialize<'de> for BackupSecret {
             session_id: Option<SessionId>,
             #[serde(default)]
             identity_id: Option<IdentityId>,
+            #[serde(default)]
+            registry_id: Option<String>,
             kind: SecretKind,
             value: String,
         }
@@ -221,12 +224,13 @@ impl<'de> Deserialize<'de> for BackupSecret {
         let raw = Raw::deserialize(deserializer)?;
         // 两个字段都缺或同时出现都视为坏数据：宁可报错，也不猜归属，
         // 猜错会把口令写到别人的槽位上。
-        let owner = match (raw.session_id, raw.identity_id) {
-            (Some(id), None) => SecretOwner::Session(id),
-            (None, Some(id)) => SecretOwner::Identity(id),
+        let owner = match (raw.session_id, raw.identity_id, raw.registry_id) {
+            (Some(id), None, None) => SecretOwner::Session(id),
+            (None, Some(id), None) => SecretOwner::Identity(id),
+            (None, None, Some(id)) => SecretOwner::Registry(id),
             _ => {
                 return Err(serde::de::Error::custom(
-                    "备份口令条目必须恰好带 session_id 或 identity_id 之一",
+                    "备份口令条目必须恰好带 session_id、identity_id 或 registry_id 之一",
                 ));
             }
         };

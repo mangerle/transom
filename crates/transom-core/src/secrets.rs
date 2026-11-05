@@ -16,6 +16,8 @@ pub enum SecretKind {
     CloudSyncPassphrase,
     /// 私有 Git 仓库的 HTTPS 访问令牌；SSH 远端不需要。
     GitSyncToken,
+    /// 容器镜像仓库密码；按仓库 ID 归档，避免写进 settings.json。
+    RegistryPassword,
 }
 
 /// 口令归属：某个会话，或某个可被多个会话引用的凭据模板。
@@ -24,10 +26,12 @@ pub enum SecretKind {
 /// 若继续按 SessionId 归档，同一密码会在几十个会话的钥匙串槽里各存一份，
 /// 改密就退化成"逐台重填"。类型上区分归属，也杜绝把 IdentityId 当
 /// SessionId 传进 `SecretKey::new` 的错用。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecretOwner {
     Session(SessionId),
     Identity(IdentityId),
+    /// 镜像仓库凭据，按仓库稳定 ID 归档。
+    Registry(String),
 }
 
 impl From<SessionId> for SecretOwner {
@@ -75,6 +79,14 @@ impl SecretKey {
         Self::new(Self::nil_session(), SecretKind::GitSyncToken)
     }
 
+    /// 镜像仓库密码的槽位；账号串只暴露仓库 ID，不暴露用户名或密码。
+    pub fn registry_password(registry_id: &str) -> Self {
+        Self::new(
+            SecretOwner::Registry(registry_id.to_string()),
+            SecretKind::RegistryPassword,
+        )
+    }
+
     fn nil_session() -> SessionId {
         SessionId::from(uuid::Uuid::nil())
     }
@@ -93,10 +105,17 @@ impl SecretKey {
             SecretKind::CloudSyncCredential => return "cloud-sync/credential".to_string(),
             SecretKind::CloudSyncPassphrase => return "cloud-sync/passphrase".to_string(),
             SecretKind::GitSyncToken => return "git-sync/token".to_string(),
+            SecretKind::RegistryPassword => {
+                return match &self.owner {
+                    SecretOwner::Registry(id) => format!("registry/{id}/password"),
+                    _ => "registry/unknown/password".to_string(),
+                };
+            }
         };
-        match self.owner {
+        match &self.owner {
             SecretOwner::Session(id) => format!("{id}/{kind}"),
             SecretOwner::Identity(id) => format!("identity/{id}/{kind}"),
+            SecretOwner::Registry(id) => format!("registry/{id}/{kind}"),
         }
     }
 }
@@ -105,4 +124,23 @@ impl SecretKey {
 pub struct ConnectionSecrets {
     pub password: Option<Zeroizing<String>>,
     pub key_passphrase: Option<Zeroizing<String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SecretKey, SecretKind, SecretOwner};
+
+    #[test]
+    fn registry_password_has_dedicated_stable_account() {
+        let key = SecretKey::registry_password("harbor-prod");
+        assert_eq!(key.account(), "registry/harbor-prod/password");
+        assert_eq!(key.kind, SecretKind::RegistryPassword);
+        assert!(matches!(key.owner, SecretOwner::Registry(_)));
+    }
+
+    #[test]
+    fn registry_password_serializes_as_stable_kind_name() {
+        let json = serde_json::to_string(&SecretKind::RegistryPassword).expect("必须可序列化");
+        assert_eq!(json, "\"registry_password\"");
+    }
 }
