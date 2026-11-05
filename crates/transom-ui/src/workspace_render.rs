@@ -326,13 +326,13 @@ fn sftp_layout_plan(sftp_panel: Option<&SftpPanelState>, rem: Pixels) -> SftpLay
             rem_px(size::SFTP_MIN_WIDTH, rem).as_f32(),
         )
     };
-    // 有列折叠时允许 SFTP 面板收缩到实际内容宽度：固定的 SFTP_MIN_WIDTH
-    // 会把面板卡在更宽的位置，折叠条右侧就会留出一大片空白。
+    // 有列折叠时允许 SFTP 面板收缩到最小内容宽度（折叠条 + 展开列保底宽度）：
+    // 固定的 SFTP_MIN_WIDTH 会把面板卡在更宽的位置，导致折叠后无法收缩。
     if collapsed_count > 0
         && !sftp_all_collapsed
-        && let Some(content_width) = sftp_panel.and_then(|panel| panel.collapsed_content_width())
+        && let Some(panel) = sftp_panel
     {
-        sftp_min_width = sftp_min_width.min(content_width);
+        sftp_min_width = sftp_min_width.min(panel.min_content_width());
     }
     SftpLayoutPlan {
         show: sftp_panel.is_some_and(|panel| panel.open),

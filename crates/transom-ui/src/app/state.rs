@@ -85,8 +85,6 @@ pub(crate) struct AppState {
     pub(in crate::app) pending_notices: PendingNotices,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(in crate::app) immersive: bool,
-    /// SFTP 面板上次同步到的目标宽度；目标变了才调整面板宽度。
-    pub(in crate::app) sftp_panel_width_target: Option<f32>,
     /// 各面板/实体上报的窗口动作；渲染期一次取空并执行。
     pub(in crate::app) window_requests: super::WindowRequests,
     /// 状态栏右侧指标簇实体：统计/流量事件只重绘它，不重建整窗。

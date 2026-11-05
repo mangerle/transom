@@ -101,6 +101,11 @@ impl SftpPanelView {
         self.remember_column_widths(cx);
         if let Some(side) = self.state.side_remotes.get_mut(index) {
             side.collapsed = !side.collapsed;
+            let now_collapsed = side.collapsed;
+            let adjustment = self
+                .state
+                .plan_collapse_width_adjustment(SftpColumnId::Side(index), now_collapsed);
+            self.state.pending_width_adjustment = Some(adjustment);
         }
         self.reset_column_state(cx);
         cx.notify();
@@ -110,6 +115,10 @@ impl SftpPanelView {
     pub(crate) fn toggle_local_collapse(&mut self, cx: &mut Context<Self>) {
         self.remember_column_widths(cx);
         self.state.local.collapsed = !self.state.local.collapsed;
+        let adjustment = self
+            .state
+            .plan_collapse_width_adjustment(SftpColumnId::Local, self.state.local.collapsed);
+        self.state.pending_width_adjustment = Some(adjustment);
         self.reset_column_state(cx);
         cx.notify();
     }
@@ -118,6 +127,10 @@ impl SftpPanelView {
     pub(crate) fn toggle_remote_collapse(&mut self, cx: &mut Context<Self>) {
         self.remember_column_widths(cx);
         self.state.remote.collapsed = !self.state.remote.collapsed;
+        let adjustment = self
+            .state
+            .plan_collapse_width_adjustment(SftpColumnId::Remote, self.state.remote.collapsed);
+        self.state.pending_width_adjustment = Some(adjustment);
         self.reset_column_state(cx);
         cx.notify();
     }

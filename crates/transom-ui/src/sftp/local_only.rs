@@ -106,7 +106,7 @@ impl AppShell {
             hover_preview: None,
             column_state: cx.new(|_| ResizableState::default()),
             column_widths: ColumnWidthMemory::default(),
-            restored_width: None,
+            pending_width_adjustment: None,
             _subscriptions: vec![local_enter_sub],
         };
         let view = cx.new(|_| SftpPanelView::new(state, tab_id));

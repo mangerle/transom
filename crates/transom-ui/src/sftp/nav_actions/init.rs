@@ -313,7 +313,7 @@ impl AppShell {
             // 窗口的 keyed state 会被回收，列宽必须另有去处。
             column_state: cx.new(|_| ResizableState::default()),
             column_widths: ColumnWidthMemory::default(),
-            restored_width: None,
+            pending_width_adjustment: None,
             _subscriptions: vec![remote_enter_sub, local_enter_sub],
         }
     }

@@ -1,41 +1,32 @@
 //! SFTP 多列分栏的 UI 测量、折叠与拖拽状态。
 
-use super::width::{COLLAPSED_COLUMN_WIDTH, sftp_columns_content_width};
+use super::width::COLLAPSED_COLUMN_WIDTH;
 use super::*;
 use crate::app::app_settings;
 use crate::sftp::entity::SftpPanelView;
 use transom_core::AppSettings;
 
 impl AppShell {
-    /// 折叠或展开后同步 SFTP 面板的整体宽度。
+    /// 处理 SFTP 面板在列折叠/展开时产生的尺寸调整请求。
     ///
-    /// 折叠时面板收到内容宽度（折叠条 + 展开列的记忆宽度），让出的空间归终端；
-    /// 展开时恢复折叠前记下的宽度。展开列的宽度记忆始终不变。
-    ///
-    /// 放在渲染路径而不是折叠动作里：`resize_panel` 需要可变窗口句柄，
-    /// 而右键菜单的回调只能拿到不可变窗口。
+    /// 设计原理（Why）：折叠动作在事件或菜单回调中触发，此时无法获取可变窗口句柄；
+    /// 将调整意图（`pending_width_adjustment`）记录在面板状态中，由渲染周期的本方法
+    /// 一次性执行 `resize_panel` 并清空。
+    /// 消费后不再对面板施加持续的每帧硬性重置，从而完全保留用户手动拖拽调整面板宽度的能力。
     pub(crate) fn sync_sftp_panel_width(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(tab_id) = self.state.workspace.active_tab else {
             return;
         };
-        let Some((visible, collapsed, desired)) = self.sftp_state(tab_id, cx).map(|panel| {
-            (
-                panel.open,
-                panel.collapsed_columns_count() > 0,
-                if panel.collapsed_columns_count() > 0 {
-                    sftp_columns_content_width(panel)
-                } else {
-                    panel.restored_width
-                },
-            )
-        }) else {
-            self.state.sftp_panel_width_target = None;
+        let adjustment = self
+            .sftp_view_mut(tab_id, cx)
+            .and_then(|mut panel| panel.state.pending_width_adjustment.take());
+        let Some(adjustment) = adjustment else {
             return;
         };
-        if !visible {
-            // 面板当前不在分组里，固定索引位可能已被别的面板占用（例如监控抽屉）。
-            // 继续按索引调整会把那个面板改宽，因此先清掉目标并放弃本帧同步。
-            self.state.sftp_panel_width_target = None;
+        let Some(panel) = self.sftp_state(tab_id, cx) else {
+            return;
+        };
+        if !panel.open {
             return;
         }
         let Some(index) = self.sftp_resizable_index(app_settings(cx)) else {
@@ -51,33 +42,16 @@ impl AppShell {
             .sizes()
             .get(index)
             .copied()
-            .map(|width| width.as_f32());
-        if collapsed
-            && let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && panel.state.restored_width.is_none()
-        {
-            // 折叠前的宽度只记一次：连续折叠多列时不覆盖最初那个值。
-            panel.state.restored_width = current_width;
-        } else if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            // 恢复目标已经捕获到 desired 里，这里清掉记录，后续按当前宽度重新开始。
-            panel.state.restored_width = None;
-        }
-        // 以分栏状态里的实际宽度判断是否需要调整：目标宽度可能与上一帧的
-        // size_range 最小值不一致而被夹住，只看记录的目标值会永久停在错误宽度。
-        let actual = current_width;
-        if let Some(target) = desired
-            && actual.is_some_and(|width| (width - target).abs() < 0.5)
-        {
-            self.state.sftp_panel_width_target = desired;
-            return;
-        }
-        if desired.is_none() && self.state.sftp_panel_width_target.is_none() {
-            return;
-        }
-        self.state.sftp_panel_width_target = desired;
-        let Some(target) = desired else {
-            return;
+            .map(|width| width.as_f32())
+            .unwrap_or(360.0);
+
+        let target = match adjustment {
+            SftpWidthAdjustment::Exact(w) => w,
+            SftpWidthAdjustment::Delta(d) => current_width + d,
         };
+        let min_w = panel.min_content_width();
+        let target = target.max(min_w);
+
         panels.update(cx, |state, cx| {
             state.resize_panel(index, px(target), window, cx)
         });

@@ -100,22 +100,7 @@ fn plan_mount_widths(
     }
 }
 
-/// 折叠态下面板内容所需宽度：折叠条按条宽，展开列按记忆宽度。
-pub(super) fn sftp_columns_content_width(panel: &SftpPanelState) -> Option<f32> {
-    let mut expanded = Vec::with_capacity(panel.expanded_column_ids().len());
-    for id in panel.expanded_column_ids() {
-        expanded.push(panel.column_widths.get(id)?);
-    }
-    Some(collapsed_content_width(
-        panel.collapsed_columns_count(),
-        &expanded,
-    ))
-}
-
-/// 折叠态外层槽位宽度：面板边框 + 折叠条 + 展开列宽度之和。
-///
-/// 这是“内容宽度 → 外层槽位宽度”的唯一换算口；漏掉边框会让折叠后的宽度
-/// 反馈循环每帧少 1px。
+#[cfg(test)]
 fn collapsed_content_width(collapsed_count: usize, expanded_widths: &[f32]) -> f32 {
     SFTP_PANEL_CHROME_WIDTH
         + collapsed_count as f32 * COLLAPSED_COLUMN_WIDTH
@@ -139,9 +124,37 @@ pub(crate) fn column_layout(panel: &SftpPanelState) -> Vec<(SftpColumnId, bool)>
 }
 
 impl SftpPanelState {
-    /// 折叠态内容宽度：折叠条 + 展开列的记忆宽度；有列没有记忆宽度时返回 `None`。
-    pub(crate) fn collapsed_content_width(&self) -> Option<f32> {
-        sftp_columns_content_width(self)
+    /// 面板内容所允许的最小物理宽度：
+    /// 面板边框 + 折叠条（每个 32px） + 展开列下限（每个 100px）。
+    pub(crate) fn min_content_width(&self) -> f32 {
+        let collapsed_count = self.collapsed_columns_count();
+        let expanded_count = self.expanded_column_ids().len();
+        SFTP_PANEL_CHROME_WIDTH
+            + collapsed_count as f32 * COLLAPSED_COLUMN_WIDTH
+            + expanded_count as f32 * MIN_EXPANDED_COLUMN_WIDTH
+    }
+
+    /// 计算切换某列折叠状态后对面板整体宽度的调整需求。
+    ///
+    /// 设计原理（Why）：
+    /// - 收起列时，面板向内收缩该列让出的宽度差额（`列宽 - 32px`），将多余空间归还主工作区；
+    /// - 展开列时，面板在当前实测宽度基础上向外加宽（`列宽 - 32px`），保留用户在折叠期间对展开列的拉伸调整；
+    /// - 全收起时直接使用固定折叠条总宽。
+    pub(crate) fn plan_collapse_width_adjustment(
+        &self,
+        id: SftpColumnId,
+        now_collapsed: bool,
+    ) -> SftpWidthAdjustment {
+        if self.is_all_collapsed() {
+            return SftpWidthAdjustment::Exact(self.all_collapsed_width());
+        }
+        let col_width = self.column_widths.get(id).unwrap_or(280.0);
+        let delta = (col_width - COLLAPSED_COLUMN_WIDTH).max(0.0);
+        if now_collapsed {
+            SftpWidthAdjustment::Delta(-delta)
+        } else {
+            SftpWidthAdjustment::Delta(delta)
+        }
     }
 
     /// 全收起时的外层槽位宽度：折叠条总宽 + 面板自身边框。
@@ -154,8 +167,25 @@ impl SftpPanelState {
 mod tests {
     use super::{
         COLLAPSED_COLUMN_WIDTH, ColumnWidthMemory, MIN_EXPANDED_COLUMN_WIDTH,
-        SFTP_PANEL_CHROME_WIDTH, SftpColumnId, collapsed_content_width, plan_mount_widths,
+        SFTP_PANEL_CHROME_WIDTH, SftpColumnId, SftpWidthAdjustment, collapsed_content_width,
+        plan_mount_widths,
     };
+
+    /// 收起本地时向内收缩差额，展开时向外扩展差额。
+    #[test]
+    fn plan_collapse_width_adjustment_delta_calculation() {
+        let mut memory = ColumnWidthMemory::default();
+        memory.remember(SftpColumnId::Local, 300.0);
+        let col_width = memory.get(SftpColumnId::Local).unwrap();
+        let delta = (col_width - COLLAPSED_COLUMN_WIDTH).max(0.0);
+        assert!((delta - 268.0).abs() < 0.01);
+
+        let collapse_adj = SftpWidthAdjustment::Delta(-delta);
+        assert_eq!(collapse_adj, SftpWidthAdjustment::Delta(-268.0));
+
+        let expand_adj = SftpWidthAdjustment::Delta(delta);
+        assert_eq!(expand_adj, SftpWidthAdjustment::Delta(268.0));
+    }
 
     /// 收起后的目标宽度必须包含面板边框，否则外层槽位每帧再缩 1px。
     #[test]

@@ -299,7 +299,6 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         persistence,
         pending_notices: prepared.pending_notices,
         immersive: false,
-        sftp_panel_width_target: None,
         window_requests: Default::default(),
         status_metrics: cx.new(|_| crate::status_bar::StatusBarMetricsView::new()),
         stats_sampling: true,

@@ -250,9 +250,18 @@ pub(crate) struct SftpPanelState {
     pub(crate) column_state: Entity<ResizableState>,
     /// 各列宽度记忆（像素，按列身份），折叠时展开列按它固定宽度。
     pub(crate) column_widths: ColumnWidthMemory,
-    /// 折叠前 SFTP 面板的整体宽度，展开时恢复用。
-    pub(crate) restored_width: Option<f32>,
+    /// 待由渲染期消费的一次性宽度调整意图（折叠时收缩、展开时向外加宽）。
+    pub(crate) pending_width_adjustment: Option<SftpWidthAdjustment>,
     pub(crate) _subscriptions: Vec<Subscription>,
+}
+
+/// SFTP 面板宽度调整意图：仅在折叠/展开动作发生时由渲染期一次性消费。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum SftpWidthAdjustment {
+    /// 在当前实际面板宽度基础上调整 delta（正数加宽，负数收窄）。
+    Delta(f32),
+    /// 强制设定为特定宽度（例如所有列全收起时设定为折叠条总宽）。
+    Exact(f32),
 }
 
 impl SftpPanelState {
