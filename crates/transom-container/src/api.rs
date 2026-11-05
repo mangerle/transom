@@ -1289,7 +1289,19 @@ impl DockerApi {
     ) -> Result<i64, ContainerError> {
         let exec_id = self
             .create_exec(container, command, None, None, &[], false)
-            .await?;
+            .await
+            .map_err(|error| {
+                if let ContainerError::Api { status, body, .. } = &error {
+                    if *status == 409 || body.contains("is not running") {
+                        return ContainerError::Unsupported {
+                            operation: format!(
+                                "容器 {container} 未运行，Docker 引擎不支持在已停止的容器中执行目录创建或文件删除/重命名"
+                            ),
+                        };
+                    }
+                }
+                error
+            })?;
         let path = format!("/exec/{}/start", http::percent_encode(&exec_id));
         let body = br#"{"Detach":true,"Tty":false}"#.to_vec();
         let response = self

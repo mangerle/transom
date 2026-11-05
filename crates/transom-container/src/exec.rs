@@ -98,18 +98,27 @@ async fn http_exec(
     let read_api = api.clone();
     let read_exec_id = exec_id.clone();
     let read_container = connection.container.clone();
+    let read_tty = connection.tty;
     let read_task = tokio::spawn(async move {
         let mut buffer = vec![0u8; READ_CHUNK];
+        let mut demux_buffer = Vec::with_capacity(READ_CHUNK);
         loop {
             match read_half.read(&mut buffer).await {
                 Ok(0) => break,
                 Ok(count) => {
-                    if output_tx
-                        .send_async(Ok(buffer[..count].to_vec()))
-                        .await
-                        .is_err()
-                    {
-                        break;
+                    let chunk = &buffer[..count];
+                    if read_tty {
+                        if output_tx.send_async(Ok(chunk.to_vec())).await.is_err() {
+                            break;
+                        }
+                    } else {
+                        // 非 TTY 会话：解 8 字节多路复用帧头 [stream_type, 0, 0, 0, size_be(4)]
+                        demux_buffer.extend_from_slice(chunk);
+                        for frame in decode_demux_frames(&mut demux_buffer) {
+                            if output_tx.send_async(Ok(frame)).await.is_err() {
+                                return;
+                            }
+                        }
                     }
                 }
                 Err(error) => {
@@ -117,6 +126,9 @@ async fn http_exec(
                     break;
                 }
             }
+        }
+        if !demux_buffer.is_empty() && output_tx.send_async(Ok(demux_buffer)).await.is_err() {
+            return;
         }
         // EOF 后查询退出码：只用于日志，界面只关心会话已结束。
         match read_api.inspect_exec(&read_exec_id).await {
@@ -368,3 +380,84 @@ fn spawn_pipe_pump<R: Read + Send + 'static>(
             std::thread::spawn(|| {})
         })
 }
+
+/// 解码 Docker HTTP Exec 非 TTY 模式下的多路复用数据帧
+///
+/// ### 设计初衷 (Why)
+/// Docker 引擎在 `Tty: false` 模式下，标准输出与标准错误流会被多路复用打包。
+/// 每个有效数据帧包含 8 字节头部：`[stream_type(1), 0, 0, 0, size_be(4)]`。
+/// 若直接透传原始二进制字节流，终端或消费端会看到乱码或包含 8 字节控制头的损坏输出。
+///
+/// ### 核心优势
+/// 纯内存原地切片提取，安全处理跨网络分片和粘包。未完整的帧头与数据会被保留在缓冲区中，
+/// 等待后续数据块到达，避免数据截断。
+///
+/// ### 代价与局限
+/// 若容器输出极高频或单次帧体积极大，缓冲区会发生适量内存搬移；调用方需合理控制读取分块大小。
+pub(crate) fn decode_demux_frames(demux_buffer: &mut Vec<u8>) -> Vec<Vec<u8>> {
+    let mut frames = Vec::new();
+    while demux_buffer.len() >= 8 {
+        let length = u32::from_be_bytes([
+            demux_buffer[4],
+            demux_buffer[5],
+            demux_buffer[6],
+            demux_buffer[7],
+        ]) as usize;
+        if demux_buffer.len() < 8 + length {
+            break;
+        }
+        let frame: Vec<u8> = demux_buffer.drain(..8 + length).skip(8).collect();
+        if !frame.is_empty() {
+            frames.push(frame);
+        }
+    }
+    frames
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_demux_frames_single_and_split() {
+        let mut buffer = Vec::new();
+
+        // 构造一个包含 "hello world" 的标准输出帧 (stream_type = 1, len = 11)
+        let payload = b"hello world";
+        let mut frame = vec![1u8, 0, 0, 0];
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend_from_slice(payload);
+
+        // 模拟网络分片：先传入前 6 个字节
+        buffer.extend_from_slice(&frame[..6]);
+        let decoded = decode_demux_frames(&mut buffer);
+        assert!(decoded.is_empty());
+        assert_eq!(buffer.len(), 6);
+
+        // 传入剩余字节
+        buffer.extend_from_slice(&frame[6..]);
+        let decoded = decode_demux_frames(&mut buffer);
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0], b"hello world");
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn test_decode_demux_frames_multiple_frames() {
+        let mut buffer = Vec::new();
+
+        // 构造两帧：stdout "one", stderr "two"
+        let mut data = vec![1u8, 0, 0, 0, 0, 0, 0, 3];
+        data.extend_from_slice(b"one");
+        data.extend_from_slice(&[2u8, 0, 0, 0, 0, 0, 0, 3]);
+        data.extend_from_slice(b"two");
+
+        buffer.extend_from_slice(&data);
+        let decoded = decode_demux_frames(&mut buffer);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], b"one");
+        assert_eq!(decoded[1], b"two");
+        assert!(buffer.is_empty());
+    }
+}
+
