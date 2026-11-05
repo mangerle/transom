@@ -70,8 +70,49 @@ impl AppShell {
             return div().into_any_element();
         };
         let section = workspace.section;
-        let compose_yaml_editor = workspace.compose_yaml_editor.clone();
         let selected = workspace.selected.clone();
+        if selected.is_none() {
+            let (icon, title_key, desc_key) = match section {
+                ContainerSection::Containers => (
+                    IconName::Container,
+                    "container.empty.containers_title",
+                    "container.empty.containers_desc",
+                ),
+                ContainerSection::Images => (
+                    IconName::Layers,
+                    "container.empty.images_title",
+                    "container.empty.images_desc",
+                ),
+                ContainerSection::Volumes => (
+                    IconName::HardDrive,
+                    "container.empty.volumes_title",
+                    "container.empty.volumes_desc",
+                ),
+                ContainerSection::Networks => (
+                    IconName::Network,
+                    "container.empty.networks_title",
+                    "container.empty.networks_desc",
+                ),
+                ContainerSection::Compose => (
+                    IconName::Boxes,
+                    "container.empty.compose_title",
+                    "container.empty.compose_desc",
+                ),
+            };
+            return v_flex()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .p_6()
+                .child(crate::widgets::empty_state(
+                    icon,
+                    rust_i18n::t!(title_key).to_string(),
+                    rust_i18n::t!(desc_key).to_string(),
+                    p,
+                ))
+                .into_any_element();
+        }
+        let compose_yaml_editor = workspace.compose_yaml_editor.clone();
         let detail_tab = workspace.detail_tab;
         let overview_raw = workspace.overview_raw;
         let browser_host = workspace.browser_host();

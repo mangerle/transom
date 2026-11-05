@@ -42,6 +42,7 @@ impl ContainerPruneTarget {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn hint_key(self) -> &'static str {
         match self {
             Self::Volumes => "container.prune.hint",

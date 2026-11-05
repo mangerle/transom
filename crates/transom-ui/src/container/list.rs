@@ -23,7 +23,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenu, PopupMenuItem};
+use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{
@@ -51,10 +51,6 @@ pub(crate) struct ToolbarParams<'a> {
     pub(crate) quick: ContainerQuickFilter,
     pub(crate) sort_key: ContainerSortKey,
     pub(crate) sort_desc: bool,
-    /// CLI 兜底后端拿不到挂载明细，「仅未使用卷」档位不可用。
-    pub(crate) cli_backend: bool,
-    /// 已按下一次清理、等待第二次确认的目标；`None` 表示没有待确认动作。
-    pub(crate) prune_armed: Option<ContainerPruneTarget>,
 }
 
 /// 一行的展示数据与动作目标。
@@ -90,7 +86,6 @@ impl AppShell {
         let busy = workspace.busy;
         let selected = workspace.selected.clone();
         let quick = workspace.quick_filter;
-        let cli_backend = workspace.info.as_ref().is_some_and(|info| info.cli_backend);
         let query = workspace.query(cx).to_lowercase();
         let mut rows = collect_rows(section, workspace, &query, state_filter);
         rows.sort_by(|left, right| {
@@ -111,9 +106,8 @@ impl AppShell {
                 quick,
                 sort_key,
                 sort_desc,
-                cli_backend,
-                prune_armed: workspace.prune_armed,
             },
+            p,
             cx,
         );
         let body = render_rows(tab_id, &rows, &selected, p, cx);
@@ -155,153 +149,68 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 工具条：一行摆下搜索框与状态、快速筛选、排序三个下拉。
-    ///
-    /// 设计原理（Why）：原先把三档状态与三个排序键平铺成芯片，在可拖到 260px 的
-    /// 中栏里横向撑爆，行内容被推到右侧详情面板上（真实窗口实测）。收成下拉后
-    /// 控制项与搜索框同处一行，中栏不再需要第二行工具条；代价是换档位多一次点击。
-    /// 「运行容器」不再占工具条：起容器从镜像行的「运行」进入，同一件事不留两个入口。
+    /// 工具条：遵循「一屏一个主行动」原则，将原本 8 个拥挤控件严整收拢为 4 个：
+    /// 1. 搜索框（flex-1 自适应）
+    /// 2. 统合筛选（状态 + 快速清理 + 排序，带激活状态小圆点）
+    /// 3. 主行动按钮（运行 / 拉取 / 新建）
+    /// 4. 更多菜单（构建、探索、导入、深度清理等辅助动作）
     fn render_list_toolbar(
         &mut self,
         params: &ToolbarParams<'_>,
+        p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let mut controls = h_flex()
+        let tab_id = params.tab_id;
+        let main_action_btn = match params.section {
+            ContainerSection::Containers => Button::new("container-main-run")
+                .xsmall()
+                .primary()
+                .icon(IconName::Play)
+                .tooltip(rust_i18n::t!("container.action.run").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_container_run_form(tab_id, None, window, cx);
+                })),
+            ContainerSection::Images => Button::new("container-main-pull")
+                .xsmall()
+                .primary()
+                .icon(IconName::Download)
+                .tooltip(rust_i18n::t!("container.action.pull").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_container_create_dialog(tab_id, ContainerSection::Images, window, cx);
+                })),
+            ContainerSection::Volumes => Button::new("container-main-create-volume")
+                .xsmall()
+                .primary()
+                .icon(IconName::Plus)
+                .tooltip(rust_i18n::t!("container.create_dialog.volume").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_container_create_dialog(tab_id, ContainerSection::Volumes, window, cx);
+                })),
+            ContainerSection::Networks => Button::new("container-main-create-network")
+                .xsmall()
+                .primary()
+                .icon(IconName::Plus)
+                .tooltip(rust_i18n::t!("container.create_dialog.network").to_string())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_container_create_dialog(tab_id, ContainerSection::Networks, window, cx);
+                })),
+            ContainerSection::Compose => Button::new("container-main-new-compose")
+                .xsmall()
+                .primary()
+                .icon(IconName::FilePlus)
+                .tooltip(rust_i18n::t!("container.compose.new_yaml").to_string())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.create_local_compose(tab_id, cx);
+                })),
+        };
+
+        h_flex()
             .gap_1()
             .items_center()
-            .flex_wrap()
             .child(Input::new(params.search).flex_1().min_w_0())
-            .child(self.render_state_filter_menu(params, cx))
-            .child(self.render_quick_filter_menu(params, cx))
-            .child(self.render_sort_menu(params, cx));
-        if params.section == ContainerSection::Compose {
-            let tab_id = params.tab_id;
-            controls = controls
-                .child(
-                    Button::new("container-compose-new")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::FilePlus)
-                        .label(rust_i18n::t!("container.compose.new_yaml").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.create_local_compose(tab_id, cx);
-                        })),
-                )
-                .child(
-                    Button::new("container-compose-import")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::Upload)
-                        .label(rust_i18n::t!("container.compose.import_yaml").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.import_local_compose(tab_id, cx);
-                        })),
-                );
-        }
-        // 新增入口收在工具条上：底部常驻一行输入框在三个分类里都占高度却几乎不用。
-        // 卷与网络只留加号图标：中栏本来就窄，文字按钮会把搜索框压到不可用。
-        if let Some(label) = create_button_label(params.section) {
-            let tab_id = params.tab_id;
-            let section = params.section;
-            let button = Button::new("container-create-open")
-                .xsmall()
-                .ghost()
-                .icon(IconName::Plus);
-            let button = if matches!(
-                section,
-                ContainerSection::Volumes | ContainerSection::Networks | ContainerSection::Images
-            ) {
-                button.tooltip(label)
-            } else {
-                button.label(label)
-            };
-            controls = controls.child(button.on_click(cx.listener(move |this, _, window, cx| {
-                this.open_container_create_dialog(tab_id, section, window, cx);
-            })));
-        }
-        if params.section == ContainerSection::Images {
-            let tab_id = params.tab_id;
-            controls = controls
-                .child(
-                    Button::new("container-image-hub")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::Globe)
-                        .tooltip(rust_i18n::t!("container.pull_manager.explore_market").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_container_hub_dialog(tab_id, window, cx);
-                        })),
-                )
-                .child(
-                    Button::new("container-image-load")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::Upload)
-                        .tooltip(rust_i18n::t!("container.action.load_image").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.load_image(tab_id, cx);
-                        })),
-                )
-                .child(
-                    Button::new("container-image-build")
-                        .xsmall()
-                        .ghost()
-                        .icon(IconName::FileText)
-                        .tooltip(rust_i18n::t!("container.build.title").to_string())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.open_container_build_dialog(tab_id, window, cx);
-                        })),
-                );
-        }
-        if params.section == ContainerSection::Volumes {
-            let tab_id = params.tab_id;
-            controls = controls.child(
-                Button::new("container-volume-restore")
-                    .xsmall()
-                    .ghost()
-                    .icon(IconName::Upload)
-                    .tooltip(rust_i18n::t!("container.action.restore_volume").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.restore_volume(tab_id, None, cx);
-                    })),
-            );
-        }
-        // 卷、镜像与网络都有「清理」视角：清未使用或悬空条目。
-        let prune_target = match params.section {
-            ContainerSection::Volumes => Some(ContainerPruneTarget::Volumes),
-            ContainerSection::Images => Some(ContainerPruneTarget::Images),
-            ContainerSection::Networks => Some(ContainerPruneTarget::Networks),
-            _ => None,
-        };
-        if let Some(target) = prune_target {
-            let tab_id = params.tab_id;
-            let armed = params.prune_armed == Some(target);
-            controls = controls.child(
-                Button::new(ElementId::Name(
-                    format!("container-prune-{:?}", target).into(),
-                ))
-                .xsmall()
-                .ghost()
-                .icon(if armed {
-                    IconName::CircleAlert
-                } else {
-                    IconName::Trash
-                })
-                .selected(armed)
-                .tooltip(if armed {
-                    rust_i18n::t!("container.prune.confirm").to_string()
-                } else {
-                    format!(
-                        "{}：{}",
-                        rust_i18n::t!(target.button_label_key()),
-                        rust_i18n::t!(target.hint_key())
-                    )
-                })
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.prune_container_target(tab_id, target, armed, cx);
-                })),
-            );
-        }
-        controls.into_any_element()
+            .child(self.render_unified_filter_menu(params, p, cx))
+            .child(main_action_btn)
+            .child(self.render_more_menu(params, cx))
+            .into_any_element()
     }
 }

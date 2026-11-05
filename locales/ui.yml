@@ -134,6 +134,9 @@ common:
   close:
     en: Close
     zh-CN: 关闭
+  more:
+    en: More
+    zh-CN: 更多
   save:
     en: Save
     zh-CN: 保存
@@ -4866,6 +4869,12 @@ container:
     en: Exit fullscreen
     zh-CN: 退出全屏
   filter:
+    title:
+      en: Filter
+      zh-CN: 筛选
+    reset:
+      en: Reset filters
+      zh-CN: 重置筛选与排序
     running:
       en: Running
       zh-CN: 运行中
@@ -4907,9 +4916,43 @@ container:
     none:
       en: No matching items
       zh-CN: 没有匹配的条目
+    none_hint:
+      en: Try adjusting your search query or filter criteria
+      zh-CN: 请尝试调整搜索关键字或筛选条件
     matching:
       en: 'Matching %{shown} of %{total}'
       zh-CN: '匹配 %{shown} / %{total} 条'
+  empty:
+    containers_title:
+      en: No Container Selected
+      zh-CN: 未选择任何容器
+    containers_desc:
+      en: Select a container from the list to view overview, logs, terminal, and stats
+      zh-CN: 从列表中选择一个容器以查看基础信息、日志、终端与性能统计
+    images_title:
+      en: No Image Selected
+      zh-CN: 未选择任何镜像
+    images_desc:
+      en: Select an image from the list to view history, layers, and configuration
+      zh-CN: 从列表中选择一个镜像以查看分层历史与底层配置
+    volumes_title:
+      en: No Volume Selected
+      zh-CN: 未选择任何数据卷
+    volumes_desc:
+      en: Select a volume from the list to view driver, mountpoint, and backup options
+      zh-CN: 从列表中选择一个数据卷以查看挂载点与快照备份
+    networks_title:
+      en: No Network Selected
+      zh-CN: 未选择任何网络
+    networks_desc:
+      en: Select a network from the list to view subnet, gateway, and connected containers
+      zh-CN: 从列表中选择一个网络以查看子网网关与连接成员
+    compose_title:
+      en: No Compose Project Selected
+      zh-CN: 未选择任何编排项目
+    compose_desc:
+      en: Select a project from the list to view service topology, YAML, and unified logs
+      zh-CN: 从列表中选择一个编排项目以查看服务拓扑、在线 YAML 与联合日志
   row:
     copy_id:
       en: Copy ID
@@ -5424,6 +5467,12 @@ container:
     rename:
       en: Rename
       zh-CN: 重命名
+    run:
+      en: Run Container
+      zh-CN: 运行容器
+    pull:
+      en: Pull Image
+      zh-CN: 拉取镜像
     start:
       en: Start
       zh-CN: 启动
