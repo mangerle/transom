@@ -151,7 +151,7 @@ impl AppShell {
                             .map(|r| {
                                 rust_i18n::t!(
                                     "container.pull_manager.downloading_percent",
-                                    percent = format!("{:.0}", r * 100.0)
+                                    percent = format!("{:>3.0}", r * 100.0)
                                 )
                                 .to_string()
                             })
@@ -162,118 +162,124 @@ impl AppShell {
                     PullTaskState::Cancelled => (p.muted_foreground, state.label()),
                 };
 
+                let is_finished = state.is_finished();
                 let mut card = v_flex()
                     .w_full()
                     .p_2p5()
                     .gap_1p5()
-                    .rounded(p.radius.md)
-                    .border_1()
-                    .border_color(p.border)
-                    .bg(p.background)
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .min_w_0()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(p.foreground)
-                                            .truncate()
-                                            .child(reference),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .px_1p5()
-                                            .py_0p5()
-                                            .rounded(p.radius.sm)
-                                            .bg(p.muted.opacity(0.5))
-                                            .text_color(p.muted_foreground)
-                                            .child(reg_name),
-                                    ),
-                            )
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(state_color)
-                                            .child(state_label),
-                                    )
-                                    .child(if is_active {
-                                        let cancel_task_id = task_id.clone();
-                                        Button::new(ElementId::Name(
-                                            format!("pull-cancel-{}", cancel_task_id).into(),
-                                        ))
-                                        .danger()
-                                        .xsmall()
-                                        .label(rust_i18n::t!("container.pull_manager.cancel").to_string())
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            let next_cmd = if let Some(ws) =
-                                                this.state.container_workspace_mut(tab_id)
-                                            {
-                                                ws.pull_manager.cancel_task(&cancel_task_id)
-                                            } else {
-                                                None
-                                            };
-                                            // 发送取消中断指令
+                    .rounded(px(10.0))
+                    .bg(p.muted.opacity(0.04));
+
+                // 完成态平滑淡出：正常显示为弱化半透明，鼠标悬停时完全聚焦
+                if is_finished {
+                    card = card.opacity(0.55).hover(|s| s.opacity(1.0));
+                }
+
+                card = card.child(
+                    h_flex()
+                        .w_full()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::BOLD)
+                                        .text_color(p.foreground)
+                                        .truncate()
+                                        .child(reference),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px_1p5()
+                                        .py_0p5()
+                                        .rounded(p.radius.sm)
+                                        .bg(p.muted.opacity(0.5))
+                                        .text_color(p.muted_foreground)
+                                        .child(reg_name),
+                                ),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_family(p.mono_font_family.clone())
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(state_color)
+                                        .child(state_label),
+                                )
+                                .child(if is_active {
+                                    let cancel_task_id = task_id.clone();
+                                    Button::new(ElementId::Name(
+                                        format!("pull-cancel-{}", cancel_task_id).into(),
+                                    ))
+                                    .danger()
+                                    .xsmall()
+                                    .label(rust_i18n::t!("container.pull_manager.cancel").to_string())
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        let next_cmd = if let Some(ws) =
+                                            this.state.container_workspace_mut(tab_id)
+                                        {
+                                            ws.pull_manager.cancel_task(&cancel_task_id)
+                                        } else {
+                                            None
+                                        };
+                                        // 发送取消中断指令
+                                        this.state.send_command(
+                                            ContainerCommand::CancelPullTask {
+                                                tab_id,
+                                                task_id: cancel_task_id.clone(),
+                                            },
+                                        );
+                                        // 调度下一个任务
+                                        if let Some((next_id, next_tab, next_ref)) = next_cmd {
                                             this.state.send_command(
-                                                ContainerCommand::CancelPullTask {
-                                                    tab_id,
-                                                    task_id: cancel_task_id.clone(),
+                                                ContainerCommand::PullImageTask {
+                                                    tab_id: next_tab,
+                                                    task_id: next_id,
+                                                    reference: next_ref,
+                                                    auth: None,
                                                 },
                                             );
-                                            // 调度下一个任务
-                                            if let Some((next_id, next_tab, next_ref)) = next_cmd {
-                                                this.state.send_command(
-                                                    ContainerCommand::PullImageTask {
-                                                        tab_id: next_tab,
-                                                        task_id: next_id,
-                                                        reference: next_ref,
-                                                        auth: None,
-                                                    },
-                                                );
-                                            }
-                                            cx.notify();
-                                        }))
-                                    } else {
-                                        let remove_task_id = task_id.clone();
-                                        Button::new(ElementId::Name(
-                                            format!("pull-remove-{}", remove_task_id).into(),
-                                        ))
-                                        .ghost()
-                                        .xsmall()
-                                        .icon(IconName::Trash)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            if let Some(ws) =
-                                                this.state.container_workspace_mut(tab_id)
-                                            {
-                                                ws.pull_manager.remove_task(&remove_task_id);
-                                            }
-                                            cx.notify();
-                                        }))
-                                    }),
-                            ),
-                    );
+                                        }
+                                        cx.notify();
+                                    }))
+                                } else {
+                                    let remove_task_id = task_id.clone();
+                                    Button::new(ElementId::Name(
+                                        format!("pull-remove-{}", remove_task_id).into(),
+                                    ))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::Trash)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if let Some(ws) =
+                                            this.state.container_workspace_mut(tab_id)
+                                        {
+                                            ws.pull_manager.remove_task(&remove_task_id);
+                                        }
+                                        cx.notify();
+                                    }))
+                                }),
+                        ),
+                );
 
-                // 进度条渲染
+                // 胶囊进度条与分层状态渲染
                 if state == PullTaskState::Pulling {
                     let progress_val = ratio.unwrap_or(0.0).clamp(0.0, 1.0);
                     card = card.child(
                         v_flex()
                             .w_full()
                             .gap_1()
-                            .child(crate::widgets::progress_bar(progress_val, p.primary, p))
+                            .child(capsule_progress_bar(progress_val, p.primary))
                             .when(!status_line.is_empty(), |this| {
                                 this.child(
                                     div()
@@ -315,4 +321,22 @@ impl AppShell {
             .child(list)
             .into_any_element()
     }
+}
+
+/// 胶囊进度条：6px 高度、全圆角、8% 弱色轨道底。
+fn capsule_progress_bar(fraction: f32, color: Hsla) -> AnyElement {
+    let progress_val = fraction.clamp(0.0, 1.0);
+    div()
+        .w_full()
+        .h(px(6.0))
+        .rounded_full()
+        .bg(color.opacity(0.08))
+        .child(
+            div()
+                .h_full()
+                .w(relative(progress_val))
+                .rounded_full()
+                .bg(color),
+        )
+        .into_any_element()
 }
