@@ -167,6 +167,7 @@ pub(super) fn handle_container_command(
         | ContainerCommand::RemoveImage { .. }
         | ContainerCommand::TagImage { .. }
         | ContainerCommand::PushImage { .. }
+        | ContainerCommand::PushTaggedImage { .. }
         | ContainerCommand::BuildImage { .. }
         | ContainerCommand::CreateVolume { .. }
         | ContainerCommand::RemoveVolume { .. }

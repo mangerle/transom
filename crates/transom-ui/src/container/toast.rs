@@ -42,6 +42,13 @@ pub(crate) fn command_toast_label(command: &ContainerCommand) -> Option<String> 
             };
             Some(verb_object("container.action.push", &target))
         }
+        C::PushTaggedImage { repo, tag, .. } => {
+            let target = match tag {
+                Some(t) if !t.is_empty() => format!("{repo}:{t}"),
+                _ => repo.clone(),
+            };
+            Some(verb_object("container.action.push", &target))
+        }
         C::BuildImage { spec, .. } => {
             let target = spec
                 .tags

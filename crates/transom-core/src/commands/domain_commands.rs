@@ -237,6 +237,15 @@ pub enum ContainerCommand {
         tag: Option<String>,
         auth: Option<ContainerRegistryAuth>,
     },
+    /// 先给本地镜像打目标标签，再把目标引用推送到远端仓库。
+    PushTaggedImage {
+        tab_id: TabId,
+        request_id: ContainerRequestId,
+        source_image: String,
+        repo: String,
+        tag: Option<String>,
+        auth: Option<ContainerRegistryAuth>,
+    },
     BuildImage {
         tab_id: TabId,
         request_id: ContainerRequestId,

@@ -235,6 +235,46 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 .await;
             });
         }
+        ContainerCommand::PushTaggedImage {
+            tab_id,
+            request_id,
+            source_image,
+            repo,
+            tag,
+            auth,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(state, ctx, tab_id, request_id, cancel, async move {
+                let mut progress = |current: u64, total: Option<u64>| {
+                    let _ = event_tx.try_send(
+                        ContainerAppEvent::TransferProgress {
+                            request_id,
+                            transferred: current,
+                            total,
+                        }
+                        .into(),
+                    );
+                };
+                // 打标签与推送必须在同一任务里顺序执行；拆成两条命令会让 push
+                // 抢在 tag 完成前到达引擎，目标标签不存在时随机失败。
+                let error = match engine.tag_image(&source_image, &repo, tag.as_deref()).await {
+                    Ok(()) => engine
+                        .push_image(&repo, tag.as_deref(), auth.as_ref(), &mut progress)
+                        .await
+                        .err()
+                        .map(AppError::from),
+                    Err(error) => Some(AppError::from(error)),
+                };
+                send_event(
+                    &event_tx,
+                    ContainerAppEvent::ActionFinished { request_id, error },
+                )
+                .await;
+            });
+        }
         ContainerCommand::BuildImage {
             tab_id,
             request_id,

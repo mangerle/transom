@@ -117,43 +117,21 @@ impl AppShell {
             return;
         }
 
-        // 构造鉴权凭证
-        let auth = if !registry.username.is_empty() {
-            Some(transom_core::ContainerRegistryAuth {
-                username: registry.username,
-                password: registry.password,
-                server_address: Some(registry.url),
-                identity_token: None,
-            })
-        } else {
-            None
-        };
-
-        let target_full_ref = format!("{repo}:{tag}");
+        // 私有仓库补域名；已带域名时不重复拼接。
+        let target_repo = registry.qualify_reference(&repo, "");
+        let target_full_ref = format!("{target_repo}:{tag}");
+        let auth = registry.auth();
         let request_id = ContainerRequestId::new();
 
-        // 如果目标镜像名和源镜像名不同，先执行打标签
-        let tag_request_id = ContainerRequestId::new();
-        self.send_tracked(
-            tab_id,
-            tag_request_id,
-            ContainerCommand::TagImage {
-                tab_id,
-                request_id: tag_request_id,
-                image: image_id,
-                repo: repo.clone(),
-                tag: Some(tag.clone()),
-            },
-        );
-
-        // 紧接着发起推送
+        // 打标签与推送放在同一条命令里顺序执行，避免 push 抢在 tag 完成之前。
         self.send_tracked(
             tab_id,
             request_id,
-            ContainerCommand::PushImage {
+            ContainerCommand::PushTaggedImage {
                 tab_id,
                 request_id,
-                image: repo,
+                source_image: image_id,
+                repo: target_repo,
                 tag: Some(tag),
                 auth,
             },
