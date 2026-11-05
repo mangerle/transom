@@ -9,6 +9,9 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_core::ContainerRequestId;
 
+/// 构建日志保留的最大行数；超出时丢弃最旧行，避免长构建吃满内存。
+pub(crate) const BUILD_LOG_LIMIT: usize = 2000;
+
 /// 从 Dockerfile 构建镜像弹窗状态。
 pub(crate) struct ContainerBuildDialog {
     /// 构建上下文所在的本地目录路径输入框。
@@ -17,6 +20,12 @@ pub(crate) struct ContainerBuildDialog {
     pub(crate) dockerfile: Entity<InputState>,
     /// 构建生成的镜像标签输入框（如 "myapp:latest"）。
     pub(crate) tag: Entity<InputState>,
+    /// 多阶段构建目标阶段（`--target`）。
+    pub(crate) target: Entity<InputState>,
+    /// 目标平台（`--platform`，如 `linux/arm64`）。
+    pub(crate) platform: Entity<InputState>,
+    /// 构建参数，格式 `KEY=VALUE,KEY2=VALUE2`。
+    pub(crate) build_args: Entity<InputState>,
     /// 是否开启免缓存构建 (--no-cache)。
     pub(crate) no_cache: bool,
     /// 是否正在执行构建。

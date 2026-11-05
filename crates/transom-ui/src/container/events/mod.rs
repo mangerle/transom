@@ -461,6 +461,11 @@ impl AppShell {
                         .filter(|b| b.request_id == Some(request_id))
                     {
                         b.logs.push(line);
+                        if b.logs.len() > crate::container::types::BUILD_LOG_LIMIT {
+                            let excess =
+                                b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
+                            b.logs.drain(..excess);
+                        }
                     }
                 }
             }

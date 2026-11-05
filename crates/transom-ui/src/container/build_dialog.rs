@@ -14,6 +14,7 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use std::collections::HashMap;
 use transom_core::{ContainerBuildSpec, ContainerCommand, ContainerRequestId, TabId};
 
 impl AppShell {
@@ -39,6 +40,18 @@ impl AppShell {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.build.tag_placeholder").to_string())
         });
+        let target = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.build.target_placeholder").to_string())
+        });
+        let platform = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.build.platform_placeholder").to_string())
+        });
+        let build_args = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("container.build.build_args_placeholder").to_string())
+        });
 
         let sub1 = cx.subscribe(&context_path, move |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
@@ -57,19 +70,37 @@ impl AppShell {
                 this.submit_container_build_dialog(tab_id, cx);
             }
         });
+        let sub4 = cx.subscribe(&target, move |this, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::PressEnter { .. }) {
+                this.submit_container_build_dialog(tab_id, cx);
+            }
+        });
+        let sub5 = cx.subscribe(&platform, move |this, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::PressEnter { .. }) {
+                this.submit_container_build_dialog(tab_id, cx);
+            }
+        });
+        let sub6 = cx.subscribe(&build_args, move |this, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::PressEnter { .. }) {
+                this.submit_container_build_dialog(tab_id, cx);
+            }
+        });
 
         if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
             workspace.build_dialog = Some(ContainerBuildDialog {
                 context_path,
                 dockerfile,
                 tag,
+                target,
+                platform,
+                build_args,
                 no_cache: false,
                 building: false,
                 request_id: None,
                 logs: Vec::new(),
                 error: None,
                 success: false,
-                _subscriptions: vec![sub1, sub2, sub3],
+                _subscriptions: vec![sub1, sub2, sub3, sub4, sub5, sub6],
             });
         }
         cx.notify();
@@ -98,7 +129,7 @@ impl AppShell {
 
     /// 提交镜像构建任务。
     pub(crate) fn submit_container_build_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let (context_path_val, dockerfile_val, tag_val) = {
+        let (context_path_val, dockerfile_val, tag_val, target_val, platform_val, build_args_val) = {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
@@ -112,6 +143,9 @@ impl AppShell {
                 build.context_path.read(cx).value().trim().to_string(),
                 build.dockerfile.read(cx).value().trim().to_string(),
                 build.tag.read(cx).value().trim().to_string(),
+                build.target.read(cx).value().trim().to_string(),
+                build.platform.read(cx).value().trim().to_string(),
+                build.build_args.read(cx).value().trim().to_string(),
             )
         };
 
@@ -140,6 +174,18 @@ impl AppShell {
         } else {
             Some(dockerfile_val)
         };
+        let build_args = match parse_build_args(&build_args_val) {
+            Ok(args) => args,
+            Err(error) => {
+                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                    if let Some(build) = workspace.build_dialog.as_mut() {
+                        build.error = Some(error);
+                    }
+                }
+                cx.notify();
+                return;
+            }
+        };
 
         let request_id = ContainerRequestId::new();
         let no_cache = {
@@ -162,7 +208,9 @@ impl AppShell {
             dockerfile: dockerfile_opt,
             tags: vec![tag_val],
             no_cache,
-            ..Default::default()
+            build_args,
+            target: (!target_val.is_empty()).then_some(target_val),
+            platform: (!platform_val.is_empty()).then_some(platform_val),
         };
 
         self.send_tracked(
@@ -196,6 +244,9 @@ impl AppShell {
         let context_path = build.context_path.clone();
         let dockerfile = build.dockerfile.clone();
         let tag = build.tag.clone();
+        let target = build.target.clone();
+        let platform = build.platform.clone();
+        let build_args = build.build_args.clone();
         let no_cache = build.no_cache;
         let building = build.building;
         let logs = build.logs.clone();
@@ -267,6 +318,45 @@ impl AppShell {
                             )
                             .child(Input::new(&tag).w_full()),
                     ),
+            )
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child(rust_i18n::t!("container.build.target").to_string()),
+                            )
+                            .child(Input::new(&target).w_full()),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child(rust_i18n::t!("container.build.platform").to_string()),
+                            )
+                            .child(Input::new(&platform).w_full()),
+                    ),
+            )
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("container.build.build_args").to_string()),
+                    )
+                    .child(Input::new(&build_args).w_full()),
             )
             .child(
                 h_flex()
@@ -441,5 +531,44 @@ impl AppShell {
                     ),
             )
             .into_any_element()
+    }
+}
+
+/// 解析 `KEY=VALUE,KEY2=VALUE2` 形式的构建参数；也接受换行分隔。
+fn parse_build_args(raw: &str) -> Result<HashMap<String, String>, String> {
+    let mut args = HashMap::new();
+    for entry in raw.split([',', '\n']) {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(format!("构建参数必须是 KEY=VALUE 形式: {entry}"));
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(format!("构建参数的键不能为空: {entry}"));
+        }
+        args.insert(key.to_string(), value.trim().to_string());
+    }
+    Ok(args)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_build_args;
+
+    #[test]
+    fn build_args_parse_comma_and_newline_forms() {
+        let args = parse_build_args("HTTP_PROXY=http://proxy,NPM_TOKEN=abc\nEMPTY=").expect("解析成功");
+        assert_eq!(args.get("HTTP_PROXY").map(String::as_str), Some("http://proxy"));
+        assert_eq!(args.get("NPM_TOKEN").map(String::as_str), Some("abc"));
+        assert_eq!(args.get("EMPTY").map(String::as_str), Some(""));
+    }
+
+    #[test]
+    fn build_args_reject_missing_equals_and_empty_key() {
+        assert!(parse_build_args("NO_EQUALS").is_err());
+        assert!(parse_build_args("=value").is_err());
     }
 }

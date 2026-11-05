@@ -4694,6 +4694,24 @@ container:
     tag_placeholder:
       en: 'e.g. myapp:latest'
       zh-CN: '例如 myapp:latest'
+    target:
+      en: Target Stage
+      zh-CN: 目标构建阶段
+    target_placeholder:
+      en: Optional, for multi-stage builds (--target)
+      zh-CN: 可选，多阶段构建目标 (--target)
+    platform:
+      en: Target Platform
+      zh-CN: 目标平台
+    platform_placeholder:
+      en: 'Optional, e.g. linux/arm64 (--platform)'
+      zh-CN: '可选，例如 linux/arm64 (--platform)'
+    build_args:
+      en: Build Arguments
+      zh-CN: 构建参数
+    build_args_placeholder:
+      en: 'KEY=VALUE,KEY2=VALUE2'
+      zh-CN: 'KEY=VALUE,KEY2=VALUE2'
     no_cache:
       en: Do not use cache (--no-cache)
       zh-CN: 免缓存构建 (--no-cache)
