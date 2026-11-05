@@ -291,13 +291,27 @@ pub async fn write_file_bytes(
         });
     }
 
+    // 覆盖已有文件时保留原 mode/uid/gid/mtime；新文件使用 0644 与当前时间。
+    let existing = read_existing_metadata(&api, container, &path).await;
     let tar_bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, std::io::Error> {
         let mut tar_buf = Vec::with_capacity(data.len() + 1024);
+        let (mode, uid, gid, mtime) = existing
+            .map(|metadata| (metadata.mode, metadata.uid, metadata.gid, metadata.mtime))
+            .unwrap_or_else(|| {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_secs())
+                    .unwrap_or(0);
+                (0o644, 0, 0, now)
+            });
         {
             let mut builder = tar::Builder::new(&mut tar_buf);
             let mut header = tar::Header::new_gnu();
             header.set_size(data.len() as u64);
-            header.set_mode(0o644);
+            header.set_mode(mode);
+            header.set_uid(uid);
+            header.set_gid(gid);
+            header.set_mtime(mtime);
             header.set_cksum();
             builder.append_data(&mut header, &name, data.as_slice())?;
             builder.finish()?;
@@ -419,6 +433,51 @@ pub async fn rename(
         });
     }
     Ok(())
+}
+
+/// 容器内已有文件的元数据快照。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ArchiveMetadata {
+    mode: u32,
+    uid: u64,
+    gid: u64,
+    mtime: u64,
+}
+
+/// 从归档流读取首个条目头；不读取正文，读完头即可停止。
+fn metadata_from_archive<R: Read>(reader: R) -> Option<ArchiveMetadata> {
+    let mut archive = tar::Archive::new(reader);
+    let mut entries = archive.entries().ok()?;
+    let entry = entries.next()?.ok()?;
+    let header = entry.header();
+    Some(ArchiveMetadata {
+        mode: header.mode().ok()?,
+        uid: header.uid().ok()?,
+        gid: header.gid().ok()?,
+        mtime: header.mtime().ok()?,
+    })
+}
+
+/// 读取已有文件元数据；文件不存在或引擎不支持时返回 `None`，由调用方使用默认值。
+async fn read_existing_metadata(
+    api: &crate::api::DockerApi,
+    container: &str,
+    path: &str,
+) -> Option<ArchiveMetadata> {
+    let (reader, task) = match open_archive(api, container, path).await {
+        Ok(archive) => archive,
+        Err(ContainerError::NotFound { .. }) => return None,
+        Err(error) => {
+            log::debug!("读取容器文件元数据失败，路径: {path}，原因: {error}");
+            return None;
+        }
+    };
+    let metadata = tokio::task::spawn_blocking(move || metadata_from_archive(reader))
+        .await
+        .ok()
+        .flatten();
+    task.abort();
+    metadata
 }
 
 /// 打开归档流：后台任务把 HTTP 响应体泵入有界通道，阻塞侧按需读取。
@@ -800,7 +859,7 @@ impl Read for ProgressReader {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_listing, relativize, validate_container_path};
+    use super::{metadata_from_archive, parse_listing, relativize, validate_container_path};
     use std::io::Cursor;
     use transom_core::ContainerFileKind;
 
@@ -828,6 +887,27 @@ mod tests {
             relativize("etc/ssl/certs/ca.pem", "etc").as_deref(),
             Some("ssl/certs/ca.pem")
         );
+    }
+
+    #[test]
+    fn archive_metadata_keeps_mode_owner_and_mtime() {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(4);
+        header.set_mode(0o750);
+        header.set_uid(1000);
+        header.set_gid(1001);
+        header.set_mtime(1_700_000_000);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "config", Cursor::new(b"data"))
+            .expect("写入 tar 条目");
+        let bytes = builder.into_inner().expect("结束 tar");
+        let metadata = metadata_from_archive(Cursor::new(bytes)).expect("必须读到元数据");
+        assert_eq!(metadata.mode, 0o750);
+        assert_eq!(metadata.uid, 1000);
+        assert_eq!(metadata.gid, 1001);
+        assert_eq!(metadata.mtime, 1_700_000_000);
     }
 
     #[test]
