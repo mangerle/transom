@@ -43,7 +43,6 @@ pub(crate) struct RunContainerFormState {
     pub(crate) cpus: Entity<InputState>,
     pub(crate) restart: Option<String>,
     pub(crate) preset: RunPreset,
-    pub(crate) advanced_open: bool,
     pub(crate) error: Option<String>,
     pub(crate) copy_toast: bool,
 }
@@ -86,7 +85,6 @@ impl RunContainerFormState {
             cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: Some("unless-stopped".to_string()),
             preset: RunPreset::Daemon,
-            advanced_open: false,
             error: None,
             copy_toast: false,
         }
@@ -146,8 +144,6 @@ impl RunContainerFormState {
             }
         }
 
-        let advanced_open = !envs.is_empty() || !volumes.is_empty();
-
         Self {
             tab_id,
             name: run_input("container.run.name_placeholder", name_hint, window, cx),
@@ -172,7 +168,6 @@ impl RunContainerFormState {
             cpus: run_input("container.run.cpus_placeholder", None, window, cx),
             restart: details.restart_policy.clone(),
             preset: RunPreset::Daemon,
-            advanced_open,
             error: None,
             copy_toast: false,
         }

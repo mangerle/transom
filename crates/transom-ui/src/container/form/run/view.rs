@@ -2,7 +2,7 @@
 //!
 //! 设计原理（Why）：
 //! - 左侧 65% 聚焦结构化配置输入，右侧 35% 实时反馈 CLI 命令与镜像看板；
-//! - 高频项优先显式呈现，低频选项规范折叠，兼顾清晰易懂与深度定制。
+//! - 基础配置与高级选项直观平铺展开，兼顾清晰易懂与深度定制。
 
 use crate::app::AppShell;
 use crate::container::form::RUN_RESTART_POLICIES;
@@ -11,7 +11,6 @@ use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Icon, Selectable, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 impl AppShell {
@@ -30,7 +29,6 @@ impl AppShell {
         let tab_id = form.tab_id;
         let restart = form.restart.clone();
         let error = form.error.clone();
-        let advanced_open = form.advanced_open;
 
         // 左侧核心配置区 (65%)
         let mut left_panel = v_flex()
@@ -64,128 +62,85 @@ impl AppShell {
             .child(self.render_port_mappings_section(app, p))
             // 3. 结构化数据卷挂载
             .child(self.render_volume_mappings_section(app, p))
-            // 4. 高级选项折叠切换
+            // 4. 高级选项（直接展开平铺呈现）
+            .child(
+                div()
+                    .pt_1()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.foreground)
+                    .child(rust_i18n::t!("container.run.advanced_title").to_string()),
+            )
+            // 结构化环境变量
+            .child(self.render_env_vars_section(app, p))
+            // 自定义启动命令
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("container.run.command").to_string(),
+                form.command.clone(),
+                p,
+            ))
+            // 资源限额
             .child(
                 h_flex()
-                    .id("container-run-advanced-toggle")
+                    .gap_2()
                     .w_full()
-                    .py_1p5()
-                    .px_2()
-                    .rounded(p.radius.sm)
-                    .hover(|s| s.bg(p.muted.opacity(0.12)))
-                    .cursor_pointer()
-                    .items_center()
-                    .justify_between()
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        move |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.containers.run_form.as_mut() {
-                                form.advanced_open = !form.advanced_open;
-                                cx.notify();
-                            }
-                        },
-                    ))
                     .child(
-                        h_flex()
-                            .items_center()
-                            .gap_1p5()
-                            .child(
-                                Icon::new(if advanced_open {
-                                    IconName::ChevronDown
-                                } else {
-                                    IconName::ChevronRight
-                                })
-                                .xsmall()
-                                .text_color(p.muted_foreground),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("container.run.advanced_title").to_string()),
-                            ),
+                        h_flex().flex_1().child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.memory").to_string(),
+                            form.memory.clone(),
+                            p,
+                        )),
+                    )
+                    .child(
+                        h_flex().flex_1().child(crate::widgets::form_field(
+                            rust_i18n::t!("container.run.cpus").to_string(),
+                            form.cpus.clone(),
+                            p,
+                        )),
                     ),
             )
-            .when(advanced_open, |this| {
-                this.child(
-                    v_flex()
-                        .gap_3()
-                        .pl_2()
-                        .border_l_2()
-                        .border_color(p.border.opacity(0.4))
-                        // 结构化环境变量
-                        .child(self.render_env_vars_section(app, p))
-                        // 自定义启动命令
-                        .child(crate::widgets::form_field(
-                            rust_i18n::t!("container.run.command").to_string(),
-                            form.command.clone(),
-                            p,
-                        ))
-                        // 资源限额
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .w_full()
-                                .child(
-                                    h_flex().flex_1().child(crate::widgets::form_field(
-                                        rust_i18n::t!("container.run.memory").to_string(),
-                                        form.memory.clone(),
-                                        p,
-                                    )),
-                                )
-                                .child(
-                                    h_flex().flex_1().child(crate::widgets::form_field(
-                                        rust_i18n::t!("container.run.cpus").to_string(),
-                                        form.cpus.clone(),
-                                        p,
-                                    )),
-                                ),
-                        )
-                        // 重启策略胶囊组
-                        .child(
-                            v_flex()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(p.muted_foreground)
-                                        .child(rust_i18n::t!("container.run.restart").to_string()),
-                                 )
-                                .child(h_flex().gap_1().children(RUN_RESTART_POLICIES.iter().map(
-                                    |policy| {
-                                        Button::new(ElementId::Name(
-                                            format!("container-run-restart-{policy}").into(),
-                                        ))
-                                        .xsmall()
-                                        .ghost()
-                                        .selected(restart.as_deref() == Some(*policy))
-                                        .label((*policy).to_string())
-                                        .on_click(
-                                            crate::dialog_host::on_event(
-                                                app,
-                                                move |this, _: &ClickEvent, _, cx| {
-                                                    let Some(form) =
-                                                        this.state.containers.run_form.as_mut()
-                                                    else {
-                                                        return;
-                                                    };
-                                                    form.restart = if form.restart.as_deref()
-                                                        == Some(*policy)
-                                                    {
-                                                        None
-                                                    } else {
-                                                        Some((*policy).to_string())
-                                                    };
-                                                    cx.notify();
-                                                },
-                                            ),
-                                        )
+            // 重启策略胶囊组
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child(rust_i18n::t!("container.run.restart").to_string()),
+                    )
+                    .child(h_flex().gap_1().children(RUN_RESTART_POLICIES.iter().map(
+                        |policy| {
+                            Button::new(ElementId::Name(
+                                format!("container-run-restart-{policy}").into(),
+                            ))
+                            .xsmall()
+                            .ghost()
+                            .selected(restart.as_deref() == Some(*policy))
+                            .label((*policy).to_string())
+                            .on_click(
+                                crate::dialog_host::on_event(
+                                    app,
+                                    move |this, _: &ClickEvent, _, cx| {
+                                        let Some(form) =
+                                            this.state.containers.run_form.as_mut()
+                                        else {
+                                            return;
+                                        };
+                                        form.restart = if form.restart.as_deref()
+                                            == Some(*policy)
+                                        {
+                                            None
+                                        } else {
+                                            Some((*policy).to_string())
+                                        };
+                                        cx.notify();
                                     },
-                                ))),
-                        ),
-                )
-            });
+                                ),
+                            )
+                        },
+                    ))),
+            );
 
         if let Some(err) = error {
             left_panel = left_panel.child(
