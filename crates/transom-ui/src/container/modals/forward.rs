@@ -32,54 +32,80 @@ impl AppShell {
         };
 
         let container_name = dialog.container_name.clone();
-        let remote_port = dialog.remote_port;
+        let private_port = dialog.private_port;
+        let published_port = dialog.published_port;
         let has_sessions = !dialog.ssh_sessions.is_empty();
         let selected_index = dialog.selected_ssh_index;
 
         // 顶部目标信息卡片
-        let info_card = h_flex()
-            .gap_4()
-            .p_2p5()
-            .rounded_md()
-            .bg(p.list_background)
-            .border_1()
-            .border_color(p.border)
-            .child(
-                v_flex()
-                    .gap_1()
-                    .flex_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.forward.target_container").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_family(p.mono_font_family.clone())
-                            .text_color(p.foreground)
-                            .child(container_name),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .gap_1()
-                    .flex_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.forward.remote_port").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_family(p.mono_font_family.clone())
-                            .text_color(p.primary)
-                            .child(remote_port.to_string()),
-                    ),
-            );
+        let info_card =
+            h_flex()
+                .gap_4()
+                .p_2p5()
+                .rounded_md()
+                .bg(p.list_background)
+                .border_1()
+                .border_color(p.border)
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .flex_1()
+                        .child(
+                            div().text_xs().text_color(p.muted_foreground).child(
+                                rust_i18n::t!("container.forward.target_container").to_string(),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(p.foreground)
+                                .child(container_name),
+                        ),
+                )
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .flex_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("container.forward.remote_port").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(p.primary)
+                                .child(private_port.to_string()),
+                        ),
+                )
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .flex_1()
+                        .child(
+                            div().text_xs().text_color(p.muted_foreground).child(
+                                rust_i18n::t!("container.forward.published_port").to_string(),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_family(p.mono_font_family.clone())
+                                .text_color(if published_port.is_some() {
+                                    p.primary
+                                } else {
+                                    p.muted_foreground
+                                })
+                                .child(
+                                    published_port
+                                        .map(|port| port.to_string())
+                                        .unwrap_or_else(|| "—".to_string()),
+                                ),
+                        ),
+                );
 
         // SSH 会话选择区
         let mut session_section = v_flex().gap_1p5().child(
@@ -184,11 +210,29 @@ impl AppShell {
                     .child(Input::new(&dialog.target_host_input).w_full()),
             );
 
-        let content = v_flex()
-            .gap_3()
-            .child(info_card)
-            .child(session_section)
-            .child(inputs_section);
+        let mut content = v_flex().gap_3().child(info_card);
+        if published_port.is_none() {
+            content =
+                content.child(
+                    h_flex()
+                        .gap_2()
+                        .p_2()
+                        .rounded_md()
+                        .bg(p.warning.opacity(0.1))
+                        .border_1()
+                        .border_color(p.warning)
+                        .items_center()
+                        .child(
+                            Icon::new(IconName::TriangleAlert)
+                                .size(px(14.0))
+                                .text_color(p.warning),
+                        )
+                        .child(div().text_xs().text_color(p.warning).child(
+                            rust_i18n::t!("container.forward.unpublished_hint").to_string(),
+                        )),
+                );
+        }
+        let content = content.child(session_section).child(inputs_section);
 
         let cancel = crate::widgets::dialog_cancel_button(
             "cancel-container-forward",

@@ -19,7 +19,8 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         container_name: &str,
-        remote_port: u16,
+        private_port: u16,
+        published_port: Option<u16>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -45,7 +46,7 @@ impl AppShell {
 
         let local_port_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .default_value(remote_port.to_string())
+                .default_value(published_port.unwrap_or(private_port).to_string())
                 .placeholder(rust_i18n::t!("container.forward.local_port_placeholder").to_string())
         });
 
@@ -61,7 +62,8 @@ impl AppShell {
 
         workspace.forward_dialog = Some(ContainerForwardDialog {
             container_name: container_name.to_string(),
-            remote_port,
+            private_port,
+            published_port,
             local_port_input,
             target_host_input,
             ssh_sessions,
@@ -139,10 +141,11 @@ impl AppShell {
         };
 
         let container_name = dialog.container_name.clone();
-        let remote_port = dialog.remote_port;
+        let private_port = dialog.private_port;
+        let target_port = forward_target_port(private_port, dialog.published_port);
 
         let rule = ForwardRule::new(
-            format!("{container_name}:{remote_port}"),
+            format!("{container_name}:{private_port}"),
             ForwardKind::Local {
                 bind: BindAddress {
                     host: "127.0.0.1".into(),
@@ -150,7 +153,7 @@ impl AppShell {
                 },
                 target: TargetAddress {
                     host: target_host,
-                    port: remote_port,
+                    port: target_port,
                 },
             },
         );
@@ -170,11 +173,27 @@ impl AppShell {
                     "container.forward.success",
                     container = container_name,
                     local = local_port,
-                    remote = remote_port
+                    remote = target_port
                 )
                 .to_string(),
             );
         }
         cx.notify();
+    }
+}
+
+/// 转发目标端口：优先使用宿主机实际发布的端口。
+fn forward_target_port(private_port: u16, published_port: Option<u16>) -> u16 {
+    published_port.unwrap_or(private_port)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forward_target_port;
+
+    #[test]
+    fn forwarding_targets_published_port_before_container_port() {
+        assert_eq!(forward_target_port(80, Some(8080)), 8080);
+        assert_eq!(forward_target_port(80, None), 80);
     }
 }

@@ -10,7 +10,10 @@ use transom_core::{ConnectionId, TabId};
 /// 容器端口建立本地端口转发弹窗状态。
 pub(crate) struct ContainerForwardDialog {
     pub(crate) container_name: String,
-    pub(crate) remote_port: u16,
+    /// 容器内服务端口。
+    pub(crate) private_port: u16,
+    /// 已发布到宿主机的端口；未发布时转发目标只能退回容器端口。
+    pub(crate) published_port: Option<u16>,
     pub(crate) local_port_input: Entity<InputState>,
     pub(crate) target_host_input: Entity<InputState>,
     /// 可用 SSH 会话列表：(会话名称, tab_id, connection_id)

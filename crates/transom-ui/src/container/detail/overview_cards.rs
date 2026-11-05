@@ -141,6 +141,7 @@ pub(super) fn render_port_chips(
 
     let chips = ports.iter().map(|port| {
         let private_port = port.private_port;
+        let published_port = port.public_port;
         let protocol = if port.protocol.is_empty() {
             "tcp"
         } else {
@@ -158,6 +159,7 @@ pub(super) fn render_port_chips(
                         tab_id,
                         &container_name,
                         private_port,
+                        published_port,
                         window,
                         cx,
                     );

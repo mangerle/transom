@@ -4737,6 +4737,12 @@ container:
     remote_port:
       en: Container Port
       zh-CN: 容器内端口
+    published_port:
+      en: Published Host Port
+      zh-CN: 宿主机发布端口
+    unpublished_hint:
+      en: This port is not published on the host. Forwarding to the container port may fail unless the container uses host networking.
+      zh-CN: 该端口未发布到宿主机；除非容器使用 host 网络，否则转发到容器端口可能失败。
     ssh_session:
       en: SSH Tunnel Session
       zh-CN: 隧道 SSH 会话
