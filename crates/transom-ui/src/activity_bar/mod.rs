@@ -35,9 +35,15 @@ impl AppShell {
     fn activity_item_selected(&self, id: ActivityItemId, monitor_open: bool, cx: &App) -> bool {
         match id {
             ActivityItemId::Sessions => {
-                self.state.sidebar.visible && !self.state.vertical_tabs_open
+                self.state.sidebar.visible
+                    && !self.state.containers.sidebar_open
+                    && !self.state.vertical_tabs_open
             }
-            ActivityItemId::Tabs => self.state.sidebar.visible && self.state.vertical_tabs_open,
+            ActivityItemId::Tabs => {
+                self.state.sidebar.visible
+                    && !self.state.containers.sidebar_open
+                    && self.state.vertical_tabs_open
+            }
             ActivityItemId::Forwards => self
                 .state
                 .workspace
@@ -51,7 +57,9 @@ impl AppShell {
                 .and_then(|tab_id| self.state.workspace.tab(tab_id)?.sftp_view())
                 .is_some_and(|view| view.read(cx).state.open),
             ActivityItemId::Monitor => monitor_open,
-            ActivityItemId::Containers => self.state.containers.sidebar_open,
+            ActivityItemId::Containers => {
+                self.state.sidebar.visible && self.state.containers.sidebar_open
+            }
             ActivityItemId::Keys => self.state.modals.tools.key_wizard.is_some(),
             _ => false,
         }
@@ -213,13 +221,16 @@ impl AppShell {
     ) {
         match id {
             ActivityItemId::Sessions => {
-                // 会话树与标签面板共用左侧槽位：点击非当前视图时切过去，
-                // 点击当前视图时收起槽位，与原有的侧栏开关习惯一致。
-                self.state.containers.sidebar_open = false;
-                if self.state.sidebar.visible && !self.state.vertical_tabs_open {
+                // 会话树、纵向标签面板与容器面板共用左侧槽位：
+                // 点击当前已展示的视图时收起槽位；点击非当前视图时切过去并确保展开。
+                let is_current = self.state.sidebar.visible
+                    && !self.state.containers.sidebar_open
+                    && !self.state.vertical_tabs_open;
+                if is_current {
                     self.state.sidebar.visible = false;
                 } else {
                     self.state.sidebar.visible = true;
+                    self.state.containers.sidebar_open = false;
                     self.state.vertical_tabs_open = false;
                 }
                 cx.notify();
@@ -228,11 +239,14 @@ impl AppShell {
                 if app_settings(cx).window.tab_position != TabPosition::Left {
                     return;
                 }
-                self.state.containers.sidebar_open = false;
-                if self.state.sidebar.visible && self.state.vertical_tabs_open {
+                let is_current = self.state.sidebar.visible
+                    && !self.state.containers.sidebar_open
+                    && self.state.vertical_tabs_open;
+                if is_current {
                     self.state.sidebar.visible = false;
                 } else {
                     self.state.sidebar.visible = true;
+                    self.state.containers.sidebar_open = false;
                     self.state.vertical_tabs_open = true;
                 }
                 cx.notify();
@@ -242,10 +256,14 @@ impl AppShell {
             ActivityItemId::Sftp => self.toggle_sftp(window, cx),
             ActivityItemId::Monitor => self.toggle_monitor(window, cx),
             ActivityItemId::Containers => {
-                let opening = !(self.state.containers.sidebar_open && self.state.sidebar.visible);
-                self.state.containers.sidebar_open = opening;
-                self.state.sidebar.visible = opening;
-                if opening {
+                let is_current =
+                    self.state.sidebar.visible && self.state.containers.sidebar_open;
+                if is_current {
+                    self.state.sidebar.visible = false;
+                    self.state.containers.sidebar_open = false;
+                } else {
+                    self.state.sidebar.visible = true;
+                    self.state.containers.sidebar_open = true;
                     self.state.vertical_tabs_open = false;
                 }
                 cx.notify();

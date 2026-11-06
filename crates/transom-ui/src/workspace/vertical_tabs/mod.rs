@@ -134,10 +134,14 @@ impl AppShell {
         if app_settings(cx).window.tab_position != TabPosition::Left {
             return;
         }
-        if self.state.sidebar.visible && self.state.vertical_tabs_open {
+        if self.state.sidebar.visible
+            && !self.state.containers.sidebar_open
+            && self.state.vertical_tabs_open
+        {
             return;
         }
         self.state.sidebar.visible = true;
+        self.state.containers.sidebar_open = false;
         self.state.vertical_tabs_open = true;
         cx.notify();
     }
