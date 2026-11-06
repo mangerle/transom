@@ -2,7 +2,8 @@
 
 use super::handler::{ClientHandler, RemoteForwardTasks};
 use crate::timeout::{
-    CHANNEL_OPEN_TIMEOUT, DISCONNECT_TIMEOUT, FORWARD_REQUEST_TIMEOUT, with_timeout,
+    CHANNEL_OPEN_TIMEOUT, CHANNEL_REQUEST_TIMEOUT, DISCONNECT_TIMEOUT, FORWARD_REQUEST_TIMEOUT,
+    with_timeout,
 };
 use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelMsg, Disconnect};
@@ -60,6 +61,22 @@ impl SshRemote {
             self.inner.channel_open_session(),
         )
         .await
+    }
+
+    /// 打开一个会话通道并以非交互方式执行指定命令，返回包装好的双向异步流。
+    pub async fn open_exec_stream(
+        &self,
+        command: &str,
+    ) -> Result<crate::bridge::AsyncChannelStream, AppError> {
+        let channel = self.open_session().await?;
+        with_timeout(
+            CHANNEL_REQUEST_TIMEOUT,
+            ErrorCode::ChannelFailed,
+            "请求执行远端命令",
+            channel.exec(true, command),
+        )
+        .await?;
+        Ok(crate::bridge::AsyncChannelStream::new(channel))
     }
 
     pub(crate) async fn open_direct_tcpip(

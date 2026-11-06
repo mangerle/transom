@@ -6,7 +6,7 @@ mod presentation;
 mod secrets;
 
 pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
-pub(crate) use secrets::session_host;
+pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
@@ -14,7 +14,7 @@ use crate::app::{AppShell, AppState, TabStatus, TerminalTab};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use secrets::{ConnectPayload, collect_connection_secrets, collect_jump_hops};
+use secrets::{ConnectPayload, collect_jump_hops};
 use transom_core::{
     AppError, ConnectParams, Connection, ConnectionId, ErrorCode, PromptInfo, SecretKind,
     SecretOwner, Session, SessionId, TabId, TerminalCommand, TerminalSize,

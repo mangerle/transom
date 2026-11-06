@@ -8446,7 +8446,9 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "transom-core",
+ "transom-net",
  "webpki-roots",
+ "zeroize",
 ]
 
 [[package]]

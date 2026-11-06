@@ -25,6 +25,31 @@ impl AppShell {
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Connected;
                 }
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    let profile = workspace.profile.clone();
+                    let mut exists = false;
+                    for saved in &mut self.state.catalog.engines {
+                        if saved.id == profile.id
+                            || (saved.engine.kind == profile.engine.kind
+                                && saved.engine.endpoint.describe()
+                                    == profile.engine.endpoint.describe())
+                        {
+                            exists = true;
+                            if saved.engine.endpoint != profile.engine.endpoint {
+                                saved.engine.endpoint = profile.engine.endpoint.clone();
+                                saved.touch();
+                                self.state.persist_catalog();
+                                cx.notify();
+                            }
+                            break;
+                        }
+                    }
+                    if !exists {
+                        self.state.catalog.engines.push(profile);
+                        self.state.persist_catalog();
+                        cx.notify();
+                    }
+                }
                 self.refresh_container_workspace_all(tab_id);
             }
             ContainerAppEvent::ConnectFailed { tab_id, error } => {

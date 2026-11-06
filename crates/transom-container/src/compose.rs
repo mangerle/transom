@@ -437,6 +437,9 @@ mod tests {
             port: Some(2222),
             user: Some("deploy".to_string()),
             identity_file: None,
+            password: None,
+            use_sudo: false,
+            sudo_password: None,
         };
         assert_eq!(
             endpoint_cli_args(&ssh),

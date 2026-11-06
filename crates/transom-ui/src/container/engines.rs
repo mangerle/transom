@@ -68,10 +68,40 @@ impl AppShell {
             return;
         };
 
+        let (secrets, _) = crate::connection::collect_connection_secrets(
+            self.state.services.secret_store.as_ref(),
+            session,
+        );
+
+        let password = secrets.password.map(|p| p.to_string());
         let identity_file = match &ssh.auth {
             transom_core::AuthMethod::PrivateKey { path, .. } => Some(path.display().to_string()),
             _ => None,
         };
+
+        let (use_sudo, sudo_password) = self
+            .state
+            .catalog
+            .engines
+            .iter()
+            .find_map(|p| match &p.engine.endpoint {
+                ContainerEndpoint::Ssh {
+                    host,
+                    port,
+                    user,
+                    use_sudo,
+                    sudo_password,
+                    ..
+                } if host == &ssh.host
+                    && *port == (if ssh.port != 22 { Some(ssh.port) } else { None })
+                    && user.as_deref()
+                        == (!ssh.username.is_empty()).then_some(ssh.username.as_str()) =>
+                {
+                    Some((*use_sudo, sudo_password.clone()))
+                }
+                _ => None,
+            })
+            .unwrap_or((false, None));
 
         let endpoint = ContainerEndpoint::Ssh {
             host: ssh.host.clone(),
@@ -82,6 +112,9 @@ impl AppShell {
                 None
             },
             identity_file,
+            password,
+            use_sudo,
+            sudo_password,
         };
 
         let engine = ContainerEngineRef {

@@ -169,6 +169,15 @@ pub enum ContainerEndpoint {
         /// 私钥文件路径；`None` 时按 SSH 默认规则（`~/.ssh/id_*`）查找。
         #[serde(default, skip_serializing_if = "Option::is_none")]
         identity_file: Option<String>,
+        /// 登录密码；若配置则优先使用密码认证。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
+        /// 是否使用 sudo 提权执行容器命令。
+        #[serde(default)]
+        use_sudo: bool,
+        /// sudo 密码；若启用 sudo 且未提供此字段，则默认复用登录密码。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sudo_password: Option<String>,
     },
     /// WSL 发行版内的 CLI 兜底。
     Wsl { distro: String },
@@ -420,6 +429,9 @@ mod tests {
                 port: Some(22),
                 user: Some("root".to_string()),
                 identity_file: None,
+                password: None,
+                use_sudo: false,
+                sudo_password: None,
             }
             .browser_host(),
             "remote.server.org"

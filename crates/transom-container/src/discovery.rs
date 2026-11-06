@@ -105,18 +105,25 @@ pub(crate) fn explicit_candidate(
             port,
             user,
             identity_file,
+            password,
+            use_sudo,
+            sudo_password,
         } => {
-            let args = build_ssh_dial_stdio_args(
-                kind,
-                host,
-                *port,
-                user.as_deref(),
-                identity_file.as_deref(),
-            );
+            let command = format!("{} system dial-stdio", kind.cli_program());
             (
-                Some(EngineTransport::Stdio {
-                    program: "ssh".to_string(),
-                    args,
+                Some(EngineTransport::Ssh {
+                    host: host.clone(),
+                    port: port.unwrap_or(22),
+                    user: user.clone().unwrap_or_else(|| {
+                        std::env::var("USER")
+                            .or_else(|_| std::env::var("USERNAME"))
+                            .unwrap_or_else(|_| "root".to_string())
+                    }),
+                    password: password.clone(),
+                    identity_file: identity_file.clone(),
+                    use_sudo: *use_sudo,
+                    sudo_password: sudo_password.clone(),
+                    command,
                 }),
                 None,
             )
@@ -393,51 +400,12 @@ fn parse_ssh_endpoint(s: &str) -> ContainerEndpoint {
         port,
         user,
         identity_file: None,
+        password: None,
+        use_sudo: false,
+        sudo_password: None,
     }
 }
 
-/// 构造通过 SSH 远程执行 `docker system dial-stdio` 的子进程参数。
-fn build_ssh_dial_stdio_args(
-    kind: ContainerEngineKind,
-    host: &str,
-    port: Option<u16>,
-    user: Option<&str>,
-    identity_file: Option<&str>,
-) -> Vec<String> {
-    let mut args = vec![
-        "-T".to_string(),
-        "-o".to_string(),
-        "BatchMode=yes".to_string(),
-        "-o".to_string(),
-        // 不在首次连接时静默信任未知主机密钥；用户应先用 SSH 会话确认指纹，
-        // 或自行把主机写入 known_hosts，避免中间人攻击。
-        "StrictHostKeyChecking=yes".to_string(),
-        "-o".to_string(),
-        "ConnectTimeout=10".to_string(),
-        "-o".to_string(),
-        "ServerAliveInterval=15".to_string(),
-        "-o".to_string(),
-        "ServerAliveCountMax=3".to_string(),
-    ];
-    if let Some(port) = port {
-        args.push("-p".to_string());
-        args.push(port.to_string());
-    }
-    if let Some(identity) = identity_file {
-        args.push("-i".to_string());
-        args.push(identity.to_string());
-    }
-    let target = if let Some(user) = user {
-        format!("{user}@{host}")
-    } else {
-        host.to_string()
-    };
-    args.push(target);
-    args.push(kind.cli_program().to_string());
-    args.push("system".to_string());
-    args.push("dial-stdio".to_string());
-    args
-}
 
 /// CLI 兜底候选：只有可执行文件存在时才加入，避免无意义的探测。
 fn cli_candidate(kind: ContainerEngineKind) -> Option<EngineCandidate> {
@@ -696,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn ssh_endpoint_constructs_stdio_transport() {
+    fn ssh_endpoint_constructs_ssh_transport() {
         use crate::transport::EngineTransport;
         use transom_core::ContainerEngineKind;
 
@@ -705,21 +673,35 @@ mod tests {
             port: Some(2222),
             user: Some("ubuntu".to_string()),
             identity_file: Some("/home/ubuntu/.ssh/id_ed25519".to_string()),
+            password: Some("mypassword".to_string()),
+            use_sudo: true,
+            sudo_password: Some("sudopass".to_string()),
         };
         let cands = super::candidates(ContainerEngineKind::Docker, &ep);
         assert_eq!(cands.len(), 1);
         let cand = &cands[0];
         assert_eq!(cand.kind, ContainerEngineKind::Docker);
-        let Some(EngineTransport::Stdio { program, args }) = &cand.transport else {
-            panic!("必须构造出 Stdio 通道");
+        let Some(EngineTransport::Ssh {
+            host,
+            port,
+            user,
+            password,
+            identity_file,
+            use_sudo,
+            sudo_password,
+            command,
+        }) = &cand.transport
+        else {
+            panic!("必须构造出 Ssh 通道");
         };
-        assert_eq!(program, "ssh");
-        assert!(args.contains(&"-p".to_string()));
-        assert!(args.contains(&"2222".to_string()));
-        assert!(args.contains(&"-i".to_string()));
-        assert!(args.contains(&"/home/ubuntu/.ssh/id_ed25519".to_string()));
-        assert!(args.contains(&"ubuntu@example.com".to_string()));
-        assert!(args.contains(&"dial-stdio".to_string()));
+        assert_eq!(host, "example.com");
+        assert_eq!(*port, 2222);
+        assert_eq!(user, "ubuntu");
+        assert_eq!(password.as_deref(), Some("mypassword"));
+        assert_eq!(identity_file.as_deref(), Some("/home/ubuntu/.ssh/id_ed25519"));
+        assert!(*use_sudo);
+        assert_eq!(sudo_password.as_deref(), Some("sudopass"));
+        assert_eq!(command, "docker system dial-stdio");
     }
 
     #[test]

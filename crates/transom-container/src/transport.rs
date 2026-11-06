@@ -36,6 +36,18 @@ pub enum EngineTransport {
     /// 子进程 stdio：WSL 的 `docker system dial-stdio` 等场景复用同一条
     /// HTTP 客户端，不为此再写一套 CLI 解析。
     Stdio { program: String, args: Vec<String> },
+    /// 原生 SSH 隧道：通过内置 russh 客户端直接打开通道执行远端命令，
+    /// 完整支持账号密码、私钥与 sudo -S 提权注入。
+    Ssh {
+        host: String,
+        port: u16,
+        user: String,
+        password: Option<String>,
+        identity_file: Option<String>,
+        use_sudo: bool,
+        sudo_password: Option<String>,
+        command: String,
+    },
 }
 
 impl EngineTransport {
@@ -57,6 +69,16 @@ impl EngineTransport {
                 } else {
                     format!("stdio://{program} {}", args.join(" "))
                 }
+            }
+            Self::Ssh {
+                host,
+                port,
+                user,
+                use_sudo,
+                ..
+            } => {
+                let sudo_str = if *use_sudo { " (sudo)" } else { "" };
+                format!("ssh://{user}@{host}:{port}{sudo_str}")
             }
         }
     }
@@ -195,7 +217,164 @@ impl EngineTransport {
                     stdout,
                 }))
             }
+            Self::Ssh {
+                host,
+                port,
+                user,
+                password,
+                identity_file,
+                use_sudo,
+                sudo_password,
+                command,
+            } => {
+                let mut connection = transom_core::SshConnection::new(host.clone(), user.clone());
+                connection.port = *port;
+                if let Some(path) = identity_file {
+                    connection.auth = transom_core::AuthMethod::PrivateKey {
+                        path: PathBuf::from(path),
+                        save_passphrase: false,
+                        cert_path: None,
+                    };
+                } else if password.is_some() {
+                    connection.auth = transom_core::AuthMethod::Password { save: false };
+                } else {
+                    connection.auth = transom_core::AuthMethod::Agent;
+                }
+
+                let mut credentials = transom_core::ConnectionSecrets::default();
+                if let Some(pwd) = password {
+                    credentials.password = Some(zeroize::Zeroizing::new(pwd.clone()));
+                }
+
+                let prompter = if let Some(pwd) = password {
+                    std::sync::Arc::new(transom_net::PasswordPrompter::new(pwd.clone()))
+                } else {
+                    std::sync::Arc::new(transom_net::PasswordPrompter::new(""))
+                };
+                let known_hosts = std::sync::Arc::new(transom_net::AutoTrustKnownHosts::new());
+
+                let params = transom_net::SshRemoteConnectParams {
+                    connection: &connection,
+                    jumps: &[],
+                    credentials,
+                    prompter,
+                    known_hosts,
+                    proxy: transom_core::OutboundProxy::default(),
+                    allow_sha1_publickey_auth: true,
+                };
+
+                let remote = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    transom_net::connect_ssh_remote(params),
+                )
+                .await
+                .map_err(|_| ContainerError::Connect {
+                    endpoint: self.describe(),
+                    source: std::io::Error::new(std::io::ErrorKind::TimedOut, "SSH 连接超时"),
+                })?
+                .map_err(|err| ContainerError::Connect {
+                    endpoint: self.describe(),
+                    source: std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        err.to_string(),
+                    ),
+                })?;
+
+                let full_command = if *use_sudo {
+                    format!("sudo -S -p '' {command}")
+                } else {
+                    command.clone()
+                };
+
+                let mut channel_stream = remote
+                    .open_exec_stream(&full_command)
+                    .await
+                    .map_err(|err| ContainerError::Connect {
+                        endpoint: self.describe(),
+                        source: std::io::Error::new(
+                            std::io::ErrorKind::ConnectionAborted,
+                            err.to_string(),
+                        ),
+                    })?;
+
+                if *use_sudo {
+                    use tokio::io::AsyncWriteExt;
+                    let effective_pwd = sudo_password
+                        .as_deref()
+                        .or(password.as_deref())
+                        .unwrap_or_default();
+                    channel_stream
+                        .write_all(format!("{effective_pwd}\n").as_bytes())
+                        .await
+                        .map_err(|err| ContainerError::Connect {
+                            endpoint: self.describe(),
+                            source: std::io::Error::new(
+                                std::io::ErrorKind::PermissionDenied,
+                                format!("向 sudo 注入密码失败: {err}"),
+                            ),
+                        })?;
+                    channel_stream
+                        .flush()
+                        .await
+                        .map_err(|err| ContainerError::Connect {
+                            endpoint: self.describe(),
+                            source: std::io::Error::new(
+                                std::io::ErrorKind::PermissionDenied,
+                                format!("刷新 sudo 密码缓冲区失败: {err}"),
+                            ),
+                        })?;
+                }
+
+                Ok(Box::new(SshEngineStream {
+                    stream: channel_stream,
+                    _remote: remote,
+                }))
+            }
         }
+    }
+}
+
+/// 原生 SSH 命令执行流包装。
+struct SshEngineStream {
+    stream: transom_net::AsyncChannelStream,
+    _remote: transom_net::SshRemote,
+}
+
+impl AsyncRead for SshEngineStream {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.stream).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for SshEngineStream {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.stream).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.stream).poll_shutdown(cx)
     }
 }
 

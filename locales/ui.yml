@@ -5621,6 +5621,21 @@ container:
     ssh_identity_placeholder:
       en: ~/.ssh/id_rsa or ~/.ssh/id_ed25519
       zh-CN: ~/.ssh/id_rsa 或 ~/.ssh/id_ed25519
+    ssh_password:
+      en: Password
+      zh-CN: 登录密码
+    ssh_password_placeholder:
+      en: Leave blank to use SSH key or agent
+      zh-CN: 留空则使用私钥或免密登录
+    ssh_use_sudo:
+      en: Run container commands with sudo
+      zh-CN: 使用 sudo 提权执行容器命令
+    ssh_sudo_password:
+      en: Sudo Password
+      zh-CN: Sudo 提权密码
+    ssh_sudo_password_placeholder:
+      en: Leave blank to reuse login password
+      zh-CN: 留空则默认复用登录密码
     local_endpoint:
       en: Local connection
       zh-CN: 本地连接
@@ -5724,6 +5739,9 @@ container:
     wslc:
       en: WSLC
       zh-CN: WSLC
+    cli:
+      en: Custom CLI
+      zh-CN: 自定义 CLI
   health:
     failing_streak:
       en: Failing streak

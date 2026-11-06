@@ -276,11 +276,12 @@ impl AppShell {
     /// SSH 端点字段：主机 + 端口/用户（同排）+ 私钥路径。
     fn render_engine_form_ssh_fields(
         &self,
-        _app: &Entity<AppShell>,
+        app: &Entity<AppShell>,
         form: &ContainerFormState,
         p: &Palette,
     ) -> AnyElement {
-        v_flex()
+        let use_sudo = form.ssh.use_sudo;
+        let mut fields = v_flex()
             .gap_3()
             // 主机（单独一行，最常填的字段）
             .child(crate::widgets::form_field(
@@ -303,13 +304,54 @@ impl AppShell {
                         p,
                     ))),
             )
+            // 登录密码（单独一行）
+            .child(crate::widgets::form_field(
+                rust_i18n::t!("container.form.ssh_password").to_string(),
+                form.ssh.password.clone(),
+                p,
+            ))
             // 私钥文件（单独一行）
             .child(crate::widgets::form_field(
                 rust_i18n::t!("container.form.ssh_identity").to_string(),
                 form.ssh.identity_file.clone(),
                 p,
             ))
-            .into_any_element()
+            // sudo 提权开关
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        Checkbox::new("container-form-ssh-sudo")
+                            .small()
+                            .checked(use_sudo)
+                            .on_click(crate::dialog_host::on_event(
+                                app,
+                                |this, &checked, _, cx| {
+                                    if let Some(form) = this.state.containers.form.as_mut() {
+                                        form.ssh.use_sudo = checked;
+                                        form.test_status = None;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(rust_i18n::t!("container.form.ssh_use_sudo").to_string()),
+                    ),
+            );
+
+        if use_sudo {
+            fields = fields.child(crate::widgets::form_field(
+                rust_i18n::t!("container.form.ssh_sudo_password").to_string(),
+                form.ssh.sudo_password.clone(),
+                p,
+            ));
+        }
+
+        fields.into_any_element()
     }
 
     // -------------------------------------------------------------------------

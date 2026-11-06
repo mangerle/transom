@@ -16,8 +16,12 @@ mod telnet;
 mod timeout;
 mod traffic;
 
-pub use auth::{AuthPrompter, PasswordPrompter};
-pub use client::{CommandOutput, SshConnectParams, SshRemote, SshSession, connect_ssh};
+pub use auth::{AuthPrompter, AutoTrustKnownHosts, PasswordPrompter};
+pub use bridge::AsyncChannelStream;
+pub use client::{
+    CommandOutput, SshConnectParams, SshRemote, SshRemoteConnectParams, SshSession, connect_ssh,
+    connect_ssh_remote,
+};
 pub use error::NetError;
 pub use forward::{ForwardTask, start_forward};
 pub use host::{probe_tcp, send_wake_on_lan};

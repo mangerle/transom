@@ -40,6 +40,64 @@ pub struct SshConnectParams<'a> {
     pub allow_sha1_publickey_auth: bool,
 }
 
+/// 纯 SSH 隧道/命令执行建连参数（不申请交互式 PTY）。
+pub struct SshRemoteConnectParams<'a> {
+    pub connection: &'a SshConnection,
+    pub jumps: &'a [SshHop],
+    pub credentials: ConnectionSecrets,
+    pub prompter: Arc<dyn AuthPrompter>,
+    pub known_hosts: Arc<dyn KnownHostsStore>,
+    pub proxy: OutboundProxy,
+    pub allow_sha1_publickey_auth: bool,
+}
+
+/// 仅建立 SSH 隧道与认证连接，返回可执行远端命令的 SshRemote 句柄（不申请伪终端）。
+pub async fn connect_ssh_remote(params: SshRemoteConnectParams<'_>) -> Result<SshRemote, AppError> {
+    let SshRemoteConnectParams {
+        connection,
+        jumps,
+        credentials,
+        prompter,
+        known_hosts,
+        proxy,
+        allow_sha1_publickey_auth,
+    } = params;
+    if connection.host.trim().is_empty() {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            "主机地址为空",
+        ));
+    }
+    if connection.username.trim().is_empty() {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            "用户名为空",
+        ));
+    }
+
+    let remote_forwards = Arc::new(Mutex::new(HashMap::new()));
+    let forward_tasks = handler::RemoteForwardTasks::new();
+    let (session, _traffic, jump_handles) = jump::establish_chain(jump::ChainParams {
+        target: connection,
+        jumps,
+        credentials,
+        prompter,
+        known_hosts,
+        remote_forwards: remote_forwards.clone(),
+        forward_tasks: forward_tasks.clone(),
+        proxy,
+        allow_sha1_publickey_auth,
+    })
+    .await?;
+
+    Ok(SshRemote::new(
+        session.into(),
+        remote_forwards,
+        forward_tasks,
+        jump_handles,
+    ))
+}
+
 pub async fn connect_ssh(params: SshConnectParams<'_>) -> Result<SshSession, AppError> {
     let SshConnectParams {
         connection,

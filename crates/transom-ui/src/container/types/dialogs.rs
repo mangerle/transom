@@ -296,6 +296,9 @@ impl EndpointChoice {
                 port: None,
                 user: None,
                 identity_file: None,
+                password: None,
+                use_sudo: false,
+                sudo_password: None,
             },
             Self::Wsl => ContainerEndpoint::Wsl {
                 distro: value.to_string(),

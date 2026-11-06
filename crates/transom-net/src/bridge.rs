@@ -14,12 +14,12 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 ///   这里只做一层透明转发，不再自行维护缓冲区；
 /// - 代价与局限：关闭语义跟随通道（EOF/Close），无法像 TCP 那样半关闭后继续
 ///   读；这对隧道场景是正确行为——通道关闭即整条链路结束。
-pub(crate) struct AsyncChannelStream {
+pub struct AsyncChannelStream {
     inner: ChannelStream<Msg>,
 }
 
 impl AsyncChannelStream {
-    pub(crate) fn new(channel: Channel<Msg>) -> Self {
+    pub fn new(channel: Channel<Msg>) -> Self {
         Self {
             inner: channel.into_stream(),
         }

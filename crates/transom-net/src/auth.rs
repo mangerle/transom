@@ -1,6 +1,56 @@
 use async_trait::async_trait;
-use transom_core::{AppError, ErrorCode, PromptInfo, PromptKind};
+use std::sync::Mutex;
+use transom_core::{
+    AppError, ErrorCode, HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, PromptInfo,
+    PromptKind,
+};
 use zeroize::Zeroizing;
+
+/// 内存维护的主机密钥存储；适用于无界面/隧道/容器连接场景，首次连接自动信任记录。
+#[derive(Default)]
+pub struct AutoTrustKnownHosts {
+    entries: Mutex<Vec<(String, u16, String)>>,
+}
+
+impl AutoTrustKnownHosts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl KnownHostsStore for AutoTrustKnownHosts {
+    fn check(&self, host: &str, port: u16, info: &HostKeyInfo) -> Result<HostKeyStatus, AppError> {
+        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, _, fp)) = entries.iter().find(|(h, p, _)| h == host && *p == port) {
+            if fp == &info.fingerprint {
+                Ok(HostKeyStatus::Match)
+            } else {
+                Ok(HostKeyStatus::Mismatch {
+                    previous_fingerprint: fp.clone(),
+                })
+            }
+        } else {
+            Ok(HostKeyStatus::Unknown)
+        }
+    }
+
+    fn record(&self, host: &str, port: u16, info: &HostKeyInfo) -> Result<(), AppError> {
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        entries.retain(|(h, p, _)| !(h == host && *p == port));
+        entries.push((host.to_string(), port, info.fingerprint.clone()));
+        Ok(())
+    }
+
+    fn remove(&self, host: &str, port: u16) -> Result<(), AppError> {
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        entries.retain(|(h, p, _)| !(h == host && *p == port));
+        Ok(())
+    }
+
+    fn list(&self) -> Result<Vec<HostKeyRecord>, AppError> {
+        Ok(Vec::new())
+    }
+}
 
 #[async_trait]
 pub trait AuthPrompter: Send + Sync {

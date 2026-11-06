@@ -13,6 +13,12 @@ pub(crate) struct SshFormFields {
     pub(crate) user: Entity<InputState>,
     /// 私钥文件路径；留空表示按 SSH 默认规则查找。
     pub(crate) identity_file: Entity<InputState>,
+    /// 登录密码输入框；留空表示走私钥或 Agent 免密。
+    pub(crate) password: Entity<InputState>,
+    /// 是否使用 sudo 提权执行容器命令。
+    pub(crate) use_sudo: bool,
+    /// 独立的 sudo 提权密码输入框；留空表示复用登录密码。
+    pub(crate) sudo_password: Entity<InputState>,
 }
 
 /// TCP TLS 附加字段的表单状态。
@@ -62,6 +68,8 @@ impl ContainerFormState {
             self.ssh.port.read(cx).value().to_string(),
             self.ssh.user.read(cx).value().to_string(),
             self.ssh.identity_file.read(cx).value().to_string(),
+            self.ssh.password.read(cx).value().to_string(),
+            self.ssh.sudo_password.read(cx).value().to_string(),
             self.tls.ca_cert.read(cx).value().to_string(),
             self.tls.client_cert.read(cx).value().to_string(),
             self.tls.client_key.read(cx).value().to_string(),
@@ -95,6 +103,9 @@ impl ContainerFormState {
             ssh_port,
             ssh_user,
             ssh_identity_file,
+            ssh_password,
+            ssh_use_sudo,
+            ssh_sudo_password,
             tls_enabled,
             tls_ca,
             tls_cert,
@@ -107,6 +118,9 @@ impl ContainerFormState {
                     String::new(),
                     String::new(),
                     String::new(),
+                    String::new(),
+                    false,
+                    String::new(),
                     false,
                     String::new(),
                     String::new(),
@@ -117,12 +131,18 @@ impl ContainerFormState {
                 port,
                 user,
                 identity_file,
+                password,
+                use_sudo,
+                sudo_password,
                 ..
             } => (
                 String::new(),
                 port.map(|p| p.to_string()).unwrap_or_default(),
                 user.clone().unwrap_or_default(),
                 identity_file.clone().unwrap_or_default(),
+                password.clone().unwrap_or_default(),
+                *use_sudo,
+                sudo_password.clone().unwrap_or_default(),
                 false,
                 String::new(),
                 String::new(),
@@ -135,6 +155,9 @@ impl ContainerFormState {
                     String::new(),
                     String::new(),
                     String::new(),
+                    String::new(),
+                    false,
+                    String::new(),
                     tls.is_some(),
                     tls.map(|t| t.ca_cert.clone()).unwrap_or_default(),
                     tls.map(|t| t.client_cert.clone()).unwrap_or_default(),
@@ -145,6 +168,9 @@ impl ContainerFormState {
                 String::new(),
                 String::new(),
                 String::new(),
+                String::new(),
+                String::new(),
+                false,
                 String::new(),
                 false,
                 String::new(),
@@ -183,6 +209,20 @@ impl ContainerFormState {
                 .default_value(ssh_identity_file)
                 .placeholder(rust_i18n::t!("container.form.ssh_identity_placeholder").to_string())
         });
+        let ssh_password_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .default_value(ssh_password)
+                .masked(true)
+                .placeholder(rust_i18n::t!("container.form.ssh_password_placeholder").to_string())
+        });
+        let ssh_sudo_password_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .default_value(ssh_sudo_password)
+                .masked(true)
+                .placeholder(
+                    rust_i18n::t!("container.form.ssh_sudo_password_placeholder").to_string(),
+                )
+        });
         let tls_ca_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .default_value(tls_ca)
@@ -219,6 +259,9 @@ impl ContainerFormState {
                 port: ssh_port_input,
                 user: ssh_user_input,
                 identity_file: ssh_identity_input,
+                password: ssh_password_input,
+                use_sudo: ssh_use_sudo,
+                sudo_password: ssh_sudo_password_input,
             },
             tls: TlsFormFields {
                 enabled: tls_enabled,
@@ -286,11 +329,28 @@ impl ContainerFormState {
                 } else {
                     Some(identity_str)
                 };
+                let pwd_str = self.ssh.password.read(cx).value().trim().to_string();
+                let password = if pwd_str.is_empty() { None } else { Some(pwd_str) };
+                let sudo_pwd_str = self
+                    .ssh
+                    .sudo_password
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .to_string();
+                let sudo_password = if sudo_pwd_str.is_empty() {
+                    None
+                } else {
+                    Some(sudo_pwd_str)
+                };
                 ContainerEndpoint::Ssh {
                     host: main_value,
                     port,
                     user,
                     identity_file,
+                    password,
+                    use_sudo: self.ssh.use_sudo,
+                    sudo_password,
                 }
             }
             EndpointChoice::Tcp => {
