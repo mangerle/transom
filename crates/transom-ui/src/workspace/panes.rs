@@ -286,6 +286,12 @@ impl AppShell {
                 view.render_monitor_tab_content(params, window, cx, p)
             });
         }
+        if matches!(
+            &self.state.workspace.tabs[index].content,
+            crate::app::TabContent::Git(_)
+        ) {
+            return self.render_git_tab(tab_id, window, cx, p);
+        }
         if let Some(terminal) = self.state.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
             // 最小外包块，绝对定位因此不受侧栏与面板列宽度变化的影响。

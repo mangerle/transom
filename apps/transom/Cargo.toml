@@ -24,6 +24,7 @@ transom-container.workspace = true
 transom-zmodem.workspace = true
 transom-sync.workspace = true
 transom-store.workspace = true
+transom-git.workspace = true
 transom-ui.workspace = true
 tokio.workspace = true
 flume.workspace = true

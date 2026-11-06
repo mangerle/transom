@@ -5,6 +5,7 @@
 
 mod domain_commands;
 mod domain_events;
+mod git;
 
 pub use domain_commands::{
     ConnectParams, ContainerCommand, ForwardCommand, HostCommand, SftpCommand, SyncCommand,
@@ -14,6 +15,7 @@ pub use domain_events::{
     ContainerAppEvent, DeepLinkRequest, ForwardAppEvent, HostAppEvent, SftpAppEvent, SyncAppEvent,
     TerminalAppEvent, ZmodemAppEvent,
 };
+pub use git::{GitAppEvent, GitCommand};
 
 /// 应用顶层命令：按业务领域划分为子枚举。
 pub enum AppCommand {
@@ -25,6 +27,7 @@ pub enum AppCommand {
     Zmodem(ZmodemCommand),
     /// 容器命令体量明显大于其它领域，装箱避免整个 AppCommand 被撑大。
     Container(Box<ContainerCommand>),
+    Git(GitCommand),
 }
 
 impl From<TerminalCommand> for AppCommand {
@@ -69,6 +72,12 @@ impl From<ContainerCommand> for AppCommand {
     }
 }
 
+impl From<GitCommand> for AppCommand {
+    fn from(cmd: GitCommand) -> Self {
+        Self::Git(cmd)
+    }
+}
+
 /// 应用顶层事件：按业务领域划分为子枚举。
 pub enum AppEvent {
     Terminal(TerminalAppEvent),
@@ -78,6 +87,7 @@ pub enum AppEvent {
     Sync(SyncAppEvent),
     Zmodem(ZmodemAppEvent),
     Container(ContainerAppEvent),
+    Git(GitAppEvent),
     DeepLink { request: DeepLinkRequest },
 }
 
@@ -120,6 +130,12 @@ impl From<ZmodemAppEvent> for AppEvent {
 impl From<ContainerAppEvent> for AppEvent {
     fn from(event: ContainerAppEvent) -> Self {
         Self::Container(event)
+    }
+}
+
+impl From<GitAppEvent> for AppEvent {
+    fn from(event: GitAppEvent) -> Self {
+        Self::Git(event)
     }
 }
 

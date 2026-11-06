@@ -49,6 +49,9 @@ fn main() -> anyhow::Result<()> {
     let serial_ports: Arc<dyn SerialPortProvider> = Arc::new(SystemSerialPortProvider);
     let backup: Arc<dyn BackupService> = Arc::new(CatalogBackupService::new(secret_store.clone()));
     let history: Arc<dyn HistoryStore> = Arc::new(JsonHistoryStore::new(paths::history_path()));
+    let git_projects: Arc<dyn transom_core::GitProjectStore> = Arc::new(
+        transom_store::JsonGitProjectStore::new(paths::git_projects_path()),
+    );
 
     let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
 
@@ -66,6 +69,7 @@ fn main() -> anyhow::Result<()> {
         serial_ports,
         backup,
         history,
+        git_projects,
         command_tx: controller.command_sender(),
         event_rx: controller.event_receiver(),
     };

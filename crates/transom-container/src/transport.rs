@@ -286,16 +286,17 @@ impl EngineTransport {
                     command.clone()
                 };
 
-                let mut channel_stream = remote
-                    .open_exec_stream(&full_command)
-                    .await
-                    .map_err(|err| ContainerError::Connect {
-                        endpoint: self.describe(),
-                        source: std::io::Error::new(
-                            std::io::ErrorKind::ConnectionAborted,
-                            err.to_string(),
-                        ),
-                    })?;
+                let mut channel_stream =
+                    remote
+                        .open_exec_stream(&full_command)
+                        .await
+                        .map_err(|err| ContainerError::Connect {
+                            endpoint: self.describe(),
+                            source: std::io::Error::new(
+                                std::io::ErrorKind::ConnectionAborted,
+                                err.to_string(),
+                            ),
+                        })?;
 
                 if *use_sudo {
                     use tokio::io::AsyncWriteExt;

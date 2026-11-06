@@ -21,6 +21,7 @@ serde_json.workspace = true
 transom-core.workspace = true
 transom-store.workspace = true
 transom-desktop.workspace = true
+transom-git.workspace = true
 transom-terminal.workspace = true
 gpui-kit.workspace = true
 flume.workspace = true

@@ -251,6 +251,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         sidebar_visible,
         vertical_tabs_open,
     } = input;
+    let git_registry = services.git_projects.load().unwrap_or_default();
     AppState {
         services,
         catalog: prepared.catalog,
@@ -317,6 +318,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         open_modals: crate::dialog_host::OpenModals::default(),
         dialog_hint: None,
         containers: crate::container::ContainerUiState::default(),
+        git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
         toast_seq: 0,
         last_toast: None,
     }

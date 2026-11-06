@@ -70,6 +70,17 @@ pub enum ErrorCode {
     ContainerNotFound,
     /// 操作与容器当前状态冲突（如重复启动、运行中强制删除失败）。
     ContainerConflict,
+    /// 本机没有可用的 git 可执行文件，或调用它时被系统拒绝。
+    ///
+    /// 与 [`Self::GitCommandFailed`] 分开：前者是环境缺失（要提示安装），
+    /// 后者是仓库状态问题（要提示具体子命令与输出），恢复路径完全不同。
+    GitUnavailable,
+    /// 目标目录不在任何 Git 仓库内：首次添加项目属预期状态，界面走「初始化」分支。
+    GitNotARepo,
+    /// git 子命令返回非零状态：参数、仓库状态或冲突导致。
+    GitCommandFailed,
+    /// 仓库索引或引用被其他 git 进程锁定，稍后重试即可恢复。
+    GitBusy,
 }
 
 /// 跨层保留的失败现场。

@@ -45,6 +45,8 @@ pub(crate) mod events;
 pub(crate) mod forward;
 #[path = "../app_frame_effects.rs"]
 mod frame_effects;
+#[path = "../git/mod.rs"]
+pub(crate) mod git;
 #[path = "../identity/mod.rs"]
 pub(crate) mod identity;
 #[path = "../keys/mod.rs"]
@@ -243,6 +245,16 @@ impl AppShell {
             });
         })
         .detach();
+    }
+
+    /// 向命令通道投递一条应用命令。
+    pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
+        self.state.send_command(command)
+    }
+
+    /// 设置底部状态栏错误提示文案。
+    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
+        self.state.set_error(message);
     }
 
     /// 打开偏好设置弹窗；`page` 为 `Some` 时直接定位到指定页。

@@ -58,3 +58,9 @@ id_type!(EngineProfileId);
 id_type!(IdentityId);
 // 终端触发器规则标识：编辑/删除时唯一定位规则。
 id_type!(TriggerId);
+// Git 项目记录标识：侧栏列表按它定位项目，路径改名不会让它失效。
+id_type!(GitProjectId);
+// Git 项目分组标识：与会话的 FolderId 分开命名，避免两种分组 id 在同一处串台。
+id_type!(GitFolderId);
+// Git 查询请求标识：一次日志/差异请求可能迟到，界面据此丢弃已关闭视图的结果。
+id_type!(GitRequestId);

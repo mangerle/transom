@@ -330,14 +330,12 @@ impl ContainerFormState {
                     Some(identity_str)
                 };
                 let pwd_str = self.ssh.password.read(cx).value().trim().to_string();
-                let password = if pwd_str.is_empty() { None } else { Some(pwd_str) };
-                let sudo_pwd_str = self
-                    .ssh
-                    .sudo_password
-                    .read(cx)
-                    .value()
-                    .trim()
-                    .to_string();
+                let password = if pwd_str.is_empty() {
+                    None
+                } else {
+                    Some(pwd_str)
+                };
+                let sudo_pwd_str = self.ssh.sudo_password.read(cx).value().trim().to_string();
                 let sudo_password = if sudo_pwd_str.is_empty() {
                     None
                 } else {

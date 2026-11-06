@@ -24,6 +24,7 @@ use transom_zmodem::ZmodemConfig;
 
 mod commands;
 mod container_ops;
+mod git_ops;
 mod host_exec;
 mod internal;
 mod lifecycle;
@@ -295,6 +296,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         action_permits: Arc::new(tokio::sync::Semaphore::new(
             host_exec::MAX_CONCURRENT_ACTIONS,
         )),
+        git: Arc::new(transom_git::GitService::new()),
     };
     let mut state = ControllerState::new();
 

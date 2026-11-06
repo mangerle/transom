@@ -126,4 +126,6 @@ pub(crate) mod dialog {
     pub const AUDIT: f32 = 56.25;
     pub const CONTAINER_RUN: f32 = 54.0;
     pub const REPLAY: f32 = 35.0;
+    pub const GIT_FORM: f32 = 41.25;
+    pub const GIT_CLONE: f32 = 45.0;
 }

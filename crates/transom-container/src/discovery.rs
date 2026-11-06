@@ -406,7 +406,6 @@ fn parse_ssh_endpoint(s: &str) -> ContainerEndpoint {
     }
 }
 
-
 /// CLI 兜底候选：只有可执行文件存在时才加入，避免无意义的探测。
 fn cli_candidate(kind: ContainerEngineKind) -> Option<EngineCandidate> {
     let program = kind.cli_program();
@@ -698,7 +697,10 @@ mod tests {
         assert_eq!(*port, 2222);
         assert_eq!(user, "ubuntu");
         assert_eq!(password.as_deref(), Some("mypassword"));
-        assert_eq!(identity_file.as_deref(), Some("/home/ubuntu/.ssh/id_ed25519"));
+        assert_eq!(
+            identity_file.as_deref(),
+            Some("/home/ubuntu/.ssh/id_ed25519")
+        );
         assert!(*use_sudo);
         assert_eq!(sudo_password.as_deref(), Some("sudopass"));
         assert_eq!(command, "docker system dial-stdio");

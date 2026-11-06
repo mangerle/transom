@@ -30,7 +30,7 @@ mod properties;
 pub(crate) use properties::FileProperties;
 mod queue_actions;
 mod queue_view;
-mod quick_paths;
+pub(crate) mod quick_paths;
 mod remote_actions;
 mod remote_content;
 mod remote_nav;

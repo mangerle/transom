@@ -32,7 +32,7 @@ mod window_appearance;
 // 之类的引用；模块的真实父级仍是 `app`，因此不会绕过状态封装。
 pub(crate) use app::{
     activity_bar, audit_viewer, backup, clipboard_prompt, cloud_sync, connection, container,
-    dialog_host, diff_viewer, editor, forward, identity, keys, monitor, notify, record,
+    dialog_host, diff_viewer, editor, forward, git, identity, keys, monitor, notify, record,
     session_appearance, session_form, settings, sftp, sidebar, snippets, status_bar, tiling,
     trigger_panel, workspace, zmodem,
 };
@@ -59,6 +59,7 @@ pub struct UiServices {
     pub backup: Arc<dyn BackupService>,
     /// 命令历史读写（独立于会话目录的一份本地文件）。
     pub history: Arc<dyn transom_core::HistoryStore>,
+    pub git_projects: Arc<dyn transom_core::GitProjectStore>,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
 }

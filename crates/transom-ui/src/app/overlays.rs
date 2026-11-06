@@ -112,6 +112,9 @@ impl AppShell {
         if let Some(tab_id) = self.state.containers.fullscreen {
             overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
         }
+        if let Some(clone_task) = self.render_git_clone_task(window, cx, &p) {
+            overlays.push(clone_task);
+        }
         overlays
     }
 }

@@ -1,0 +1,25 @@
+[package]
+name = "transom-git"
+description = "System-git backed repository inspection and local operations for Transom."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+transom-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+parking_lot.workspace = true
+log.workspace = true
+tokio = { workspace = true, features = ["process", "time", "fs"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }

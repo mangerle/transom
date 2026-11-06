@@ -4,9 +4,14 @@
 //! 画的东西：图标资产名与色值。映射集中在一处，标签栏、侧栏与新建表单读的是
 //! 同一份定义，不会出现"表单里选了数据库、标签栏画成服务器"的分裂。
 
-use crate::app::TerminalTab;
+use crate::app::{AppShell, TerminalTab};
 use crate::app_assets::AppIcon;
+use crate::palette::Palette;
 use gpui_kit::assets::IconName;
+use gpui_kit::base::{Selectable, h_flex};
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_core::{SessionColor, SessionIcon};
 
@@ -95,4 +100,122 @@ impl crate::app::AppState {
             color: session_color(session.color),
         }
     }
+}
+
+/// 色块直径。
+const SWATCH_SIZE: f32 = 18.0;
+
+/// 图标选择行（通用）。
+pub(crate) fn render_appearance_icon_row<F>(
+    id_prefix: &'static str,
+    default_icon: IconName,
+    icon: SessionIcon,
+    on_icon: F,
+    app: &Entity<AppShell>,
+    _cx: &App,
+) -> AnyElement
+where
+    F: Fn(&mut AppShell, SessionIcon, &mut Context<AppShell>) + Copy + 'static,
+{
+    let auto_app = app.clone();
+    h_flex()
+        .gap_1()
+        .child(
+            Button::new(ElementId::Name(format!("{id_prefix}-icon-auto").into()))
+                .small()
+                .icon(default_icon)
+                .selected(icon == SessionIcon::Auto)
+                .tooltip(rust_i18n::t!("form.icon_auto").to_string())
+                .on_click(move |_, _window, cx| {
+                    auto_app.update(cx, |this, cx| {
+                        on_icon(this, SessionIcon::Auto, cx);
+                    });
+                }),
+        )
+        .children(SESSION_ICON_CHOICES.into_iter().map(|choice| {
+            let Some(name) = session_icon(choice) else {
+                return div().into_any_element();
+            };
+            let choice_app = app.clone();
+            Button::new(ElementId::Name(
+                format!("{id_prefix}-icon-{choice:?}").into(),
+            ))
+            .small()
+            .icon(name)
+            .selected(icon == choice)
+            .on_click(move |_, _window, cx| {
+                choice_app.update(cx, |this, cx| {
+                    on_icon(this, choice, cx);
+                });
+            })
+            .into_any_element()
+        }))
+        .into_any_element()
+}
+
+/// 环境色选择行（通用）。
+pub(crate) fn render_appearance_color_row<G>(
+    id_prefix: &'static str,
+    color: SessionColor,
+    on_color: G,
+    p: &Palette,
+    app: &Entity<AppShell>,
+    _cx: &App,
+) -> AnyElement
+where
+    G: Fn(&mut AppShell, SessionColor, &mut Context<AppShell>) + Copy + 'static,
+{
+    let none_app = app.clone();
+    h_flex()
+        .gap_2()
+        .child(
+            div()
+                .id(ElementId::Name(format!("{id_prefix}-color-none").into()))
+                .size(px(SWATCH_SIZE))
+                .rounded_full()
+                .border_1()
+                .border_color(if color == SessionColor::None {
+                    p.primary
+                } else {
+                    p.border
+                })
+                .bg(p.background)
+                .cursor_pointer()
+                .tooltip(move |_window, cx| {
+                    Tooltip::new(rust_i18n::t!("form.color_none").to_string()).build(_window, cx)
+                })
+                .on_click(move |_, _window, cx| {
+                    none_app.update(cx, |this, cx| {
+                        on_color(this, SessionColor::None, cx);
+                    });
+                })
+                .into_any_element(),
+        )
+        .children(SESSION_COLOR_CHOICES.into_iter().map(|choice| {
+            let Some(value) = session_color(choice) else {
+                return div().into_any_element();
+            };
+            let choice_app = app.clone();
+            div()
+                .id(ElementId::Name(
+                    format!("{id_prefix}-color-{choice:?}").into(),
+                ))
+                .size(px(SWATCH_SIZE))
+                .rounded_full()
+                .bg(value)
+                .border_1()
+                .border_color(if color == choice {
+                    p.foreground
+                } else {
+                    p.border
+                })
+                .cursor_pointer()
+                .on_click(move |_, _window, cx| {
+                    choice_app.update(cx, |this, cx| {
+                        on_color(this, choice, cx);
+                    });
+                })
+                .into_any_element()
+        }))
+        .into_any_element()
 }

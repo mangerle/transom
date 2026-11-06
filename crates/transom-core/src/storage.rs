@@ -4,6 +4,7 @@ use crate::backup::{
 };
 use crate::error::AppError;
 use crate::model::catalog::SessionCatalog;
+use crate::model::git::GitRegistry;
 use crate::model::settings::AppSettings;
 use crate::secrets::SecretKey;
 use std::path::Path;
@@ -16,6 +17,18 @@ use zeroize::Zeroizing;
 pub trait SessionStore: Send + Sync {
     fn load(&self) -> Result<SessionCatalog, AppError>;
     fn save(&self, catalog: &SessionCatalog) -> Result<(), AppError>;
+}
+
+/// Git 项目登记表存储（项目 + 分组一起读写）。
+///
+/// 设计原理（Why）：与会话目录分文件存放——Git 项目记的是本机绝对路径，
+/// 跟着会话目录一起同步到另一台机器只会得到一堆失效条目；分开后备份/合并
+/// 逻辑不需要为它新增一种载荷，删除会话也不会连带丢项目。
+/// 载荷用 [`GitRegistry`] 而不是裸 `Vec<GitProject>`：分组和项目必须同一次落盘，
+/// 分两次写就会出现「分组已更新、项目的 `folder_id` 还指着旧表」的撕裂状态。
+pub trait GitProjectStore: Send + Sync {
+    fn load(&self) -> Result<GitRegistry, AppError>;
+    fn save(&self, registry: &GitRegistry) -> Result<(), AppError>;
 }
 
 pub trait SettingsStore: Send + Sync {

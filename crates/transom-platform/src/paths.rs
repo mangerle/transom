@@ -31,6 +31,15 @@ pub fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }
 
+/// Git 项目列表文件。
+///
+/// 为什么单独成文件：里面是本机绝对路径，不参与会话目录的备份与三路合并
+/// （见 `transom_core::GitProjectStore` 的说明），混进 sessions.json 会让
+/// 同步把失效路径推到另一台机器。
+pub fn git_projects_path() -> PathBuf {
+    config_dir().join("git_projects.json")
+}
+
 /// 运行期私有目录（XDG runtime），存放只在进程存活期间有意义的文件。
 ///
 /// 为什么与配置目录分开：套接字这类 IPC 端点不该被备份/同步波及，且

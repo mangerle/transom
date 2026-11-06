@@ -8411,6 +8411,7 @@ dependencies = [
  "tokio",
  "transom-container",
  "transom-core",
+ "transom-git",
  "transom-net",
  "transom-platform",
  "transom-store",
@@ -8492,6 +8493,19 @@ dependencies = [
  "tempfile",
  "transom-core",
  "transom-platform",
+]
+
+[[package]]
+name = "transom-git"
+version = "1.6.1"
+dependencies = [
+ "log",
+ "parking_lot",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "transom-core",
 ]
 
 [[package]]
@@ -8617,6 +8631,7 @@ dependencies = [
  "tokio",
  "transom-core",
  "transom-desktop",
+ "transom-git",
  "transom-platform",
  "transom-store",
  "transom-terminal",

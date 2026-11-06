@@ -63,6 +63,10 @@ pub(super) async fn handle_command(
             handle_container_command(state, ctx, *cmd);
             LoopControl::Continue
         }
+        AppCommand::Git(cmd) => {
+            super::git_ops::handle_git_command(state, ctx, cmd);
+            LoopControl::Continue
+        }
     }
 }
 
@@ -469,5 +473,7 @@ pub(super) async fn shutdown(
         workspace.shutdown();
     }
     state.container_ops.shutdown().await;
+    // Git 请求全部是自带超时的子进程，限时等完即可，不需要单独中止。
+    state.git_set.shutdown().await;
     let _ = shutdown_tx.send(());
 }

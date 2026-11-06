@@ -54,6 +54,8 @@ pub(super) struct ControllerState {
     pub(super) container_connects: HashMap<TabId, tokio::task::JoinHandle<()>>,
     /// 容器一次性查询（列表/检视/启停/卷/网络）：短任务集合，停机统一等待。
     pub(super) container_ops: JoinSet<()>,
+    /// Git 面板的一次性读写请求：全部子进程自带超时，停机统一限时等待。
+    pub(super) git_set: JoinSet<()>,
 }
 
 impl ControllerState {
@@ -75,6 +77,7 @@ impl ControllerState {
             container_workspaces: HashMap::new(),
             container_connects: HashMap::new(),
             container_ops: JoinSet::new(),
+            git_set: JoinSet::new(),
         }
     }
 
@@ -138,6 +141,8 @@ pub(super) struct ControllerCtx {
     pub(super) container: Arc<transom_container::ContainerService>,
     /// 主机动作的跨批次并发闸门：用户连点两次也不会翻倍占用在途连接数。
     pub(super) action_permits: Arc<tokio::sync::Semaphore>,
+    /// Git 请求登记表：界面关闭视图后按 id 丢弃迟到的子进程结果。
+    pub(super) git: Arc<transom_git::GitService>,
 }
 
 #[cfg(test)]

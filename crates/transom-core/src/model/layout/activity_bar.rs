@@ -18,6 +18,8 @@ pub enum ActivityItemId {
     Monitor,
     /// 容器引擎连接列表与管理入口。
     Containers,
+    /// Git 项目列表与仓库操作面板。
+    Git,
     Language,
     ImportSshConfig,
     KnownHosts,
@@ -35,7 +37,7 @@ impl ActivityItemId {
     /// `ToggleSnippets` 快捷键上，活动栏再放一个是重复入口。旧设置文件里残留的
     /// `"snippets"` 条目会经 `#[serde(other)]` 归为 `Unknown` 并被 `normalize`
     /// 剔除，因此不需要数据迁移。
-    pub const DEFAULT_ORDER: [Self; 12] = [
+    pub const DEFAULT_ORDER: [Self; 13] = [
         Self::Sessions,
         Self::Tabs,
         Self::QuickOpen,
@@ -43,6 +45,7 @@ impl ActivityItemId {
         Self::Sftp,
         Self::Monitor,
         Self::Containers,
+        Self::Git,
         Self::Language,
         Self::ImportSshConfig,
         Self::KnownHosts,
@@ -51,7 +54,7 @@ impl ActivityItemId {
     ];
 
     /// 默认顶部条目数量，也是 `split_at` 的默认值。
-    pub const DEFAULT_SPLIT_AT: usize = 7;
+    pub const DEFAULT_SPLIT_AT: usize = 8;
 
     /// 供界面元素 ID 与设置项复用的稳定键名。
     ///
@@ -66,6 +69,7 @@ impl ActivityItemId {
             Self::Sftp => "sftp",
             Self::Monitor => "monitor",
             Self::Containers => "containers",
+            Self::Git => "git",
             Self::Language => "language",
             Self::ImportSshConfig => "import_ssh_config",
             Self::KnownHosts => "known_hosts",

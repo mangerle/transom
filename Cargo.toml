@@ -6,6 +6,7 @@ members = [
     "crates/transom-crypto",
     "crates/transom-store",
     "crates/transom-desktop",
+    "crates/transom-git",
     "crates/transom-net",
     "crates/transom-container",
     "crates/transom-sync",
@@ -110,6 +111,7 @@ transom-platform = { path = "crates/transom-platform" }
 transom-crypto = { path = "crates/transom-crypto" }
 transom-store = { path = "crates/transom-store" }
 transom-desktop = { path = "crates/transom-desktop" }
+transom-git = { path = "crates/transom-git" }
 transom-net = { path = "crates/transom-net" }
 transom-container = { path = "crates/transom-container" }
 transom-sync = { path = "crates/transom-sync" }

@@ -12,6 +12,9 @@ impl ModalKind {
         if let Some(open) = self.container_is_open(shell) {
             return open;
         }
+        if let Some(open) = self.git_is_open(shell) {
+            return open;
+        }
         match self {
             ModalKind::AuthPrompt => shell.state.modals.connection.auth_prompt.is_some(),
             ModalKind::HostKeyConfirm => shell.state.modals.connection.host_key_confirm.is_some(),
@@ -59,6 +62,9 @@ impl ModalKind {
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
         if let Some(values) = self.container_field_values(shell, cx) {
+            return values;
+        }
+        if let Some(values) = self.git_field_values(shell, cx) {
             return values;
         }
         match self {
@@ -158,6 +164,9 @@ impl ModalKind {
         }
         shell.state.dialog_hint = None;
         if let Some(handled) = self.container_cancel(shell, cx) {
+            return handled;
+        }
+        if let Some(handled) = self.git_cancel(shell, cx) {
             return handled;
         }
         match self {
@@ -286,6 +295,9 @@ impl ModalKind {
         if self.container_commit(shell, window, cx).is_some() {
             return;
         }
+        if self.git_commit(shell, window, cx).is_some() {
+            return;
+        }
         match self {
             ModalKind::SftpConfirm => {
                 shell.sftp_confirm_delete(cx);
@@ -357,6 +369,9 @@ impl ModalKind {
     /// 清空，这一帧仍可能渲染一次；用 `expect` 会把这条正常路径变成 panic。
     pub(super) fn focus_target(self, shell: &AppShell) -> ModalFocus {
         if let Some(target) = self.container_focus_target(shell) {
+            return target;
+        }
+        if let Some(target) = self.git_focus_target(shell) {
             return target;
         }
         match self {

@@ -61,11 +61,33 @@ pub(crate) struct ToolModals {
     pub(crate) key_wizard: Option<crate::keys::KeyWizardState>,
 }
 
+/// Git 仓库管理、克隆与分支操作类弹窗。
+pub(crate) struct GitModals {
+    pub(crate) project: Option<crate::git::GitProjectModal>,
+    pub(crate) clone: Option<crate::git::GitCloneModal>,
+    pub(crate) worktree: Option<crate::git::GitWorktreeModal>,
+    pub(crate) name: Option<crate::git::GitNameModal>,
+    pub(crate) rebase: Option<crate::git::GitRebaseModal>,
+}
+
+impl GitModals {
+    fn new() -> Self {
+        Self {
+            project: None,
+            clone: None,
+            worktree: None,
+            name: None,
+            rebase: None,
+        }
+    }
+}
+
 /// 聚合应用内全部顶层交互弹窗与表单状态。
 pub(crate) struct ModalHub {
     pub(crate) session: SessionModals,
     pub(crate) connection: ConnectionModals,
     pub(crate) tools: ToolModals,
+    pub(crate) git: GitModals,
     /// 设置弹窗已经实体化，这里只保留句柄。
     pub(crate) settings: Entity<SettingsView>,
 }
@@ -107,6 +129,7 @@ impl ModalHub {
                 confirm_forward_any: None,
                 key_wizard: None,
             },
+            git: GitModals::new(),
             settings,
         }
     }

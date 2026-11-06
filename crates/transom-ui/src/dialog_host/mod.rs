@@ -23,11 +23,10 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::actions::{Cancel, Confirm};
-use gpui_kit::component::WindowExt;
-use gpui_kit::component::dialog::DialogEntrance;
 use gpui_kit::component::input::{
     Enter as InputEnter, Escape as InputEscape, InputState, TextareaState,
 };
+use gpui_kit::component::{WindowExt, dialog::DialogEntrance};
 use gpui_kit::*;
 
 /// 进入组件库弹窗栈的模态种类。
@@ -125,6 +124,16 @@ pub(crate) enum ModalKind {
     ShortcutCapture,
     /// 分栏差异对比。
     DiffViewer,
+    /// Git 项目管理与设置。
+    GitProject,
+    /// Git 仓库克隆向导。
+    GitClone,
+    /// Git 工作树管理。
+    GitWorktree,
+    /// Git 命名输入（新建分支/标签/重命名等）。
+    GitName,
+    /// Git 变基操作确认。
+    GitRebase,
 }
 
 /// 单个弹窗的渲染元数据；宽度与 slug 同一处定义，新增弹窗不再漏改列表。
@@ -181,6 +190,11 @@ impl ModalKind {
         ModalKind::ContainerQuadlet,
         ModalKind::SftpSearch,
         ModalKind::SnippetForm,
+        ModalKind::GitProject,
+        ModalKind::GitClone,
+        ModalKind::GitWorktree,
+        ModalKind::GitName,
+        ModalKind::GitRebase,
     ];
 
     /// 弹窗元数据：宽度与元素标识。
@@ -190,6 +204,15 @@ impl ModalKind {
     /// 因此这里以 `Window` 为参数，而不是把宽度散落回各调用点。
     fn spec(self, window: &Window) -> ModalSpec {
         let rem = window.rem_size();
+        if let Some((px_width, slug)) = self.git_spec() {
+            return ModalSpec {
+                width: px_width.map_or(
+                    rem * crate::theme::tokens::size::DIALOG_MAX_WIDTH,
+                    |width| rem * width,
+                ),
+                slug,
+            };
+        }
         let (px_width, slug) = match self {
             ModalKind::AuthPrompt => (Some(crate::theme::tokens::dialog::AUTH), "auth"),
             ModalKind::HostKeyConfirm => (Some(crate::theme::tokens::dialog::AUTH), "host-key"),
@@ -321,6 +344,7 @@ impl ModalKind {
                     slug: "diff-viewer",
                 };
             }
+            _ => unreachable!("other modal kinds are handled by submodules"),
         };
         ModalSpec {
             width: px_width.map_or(
@@ -334,6 +358,7 @@ impl ModalKind {
 
 mod body;
 mod container;
+mod git;
 mod stack;
 mod state;
 
@@ -370,6 +395,9 @@ impl ModalKind {
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
+        if let Some(element) = self.render_git_dialog_body(shell, app, window, cx, p) {
+            return element;
+        }
         match self {
             ModalKind::SftpConfirm => shell.render_sftp_confirm_body(app, cx, p),
             ModalKind::HostKeyConfirm => shell.render_host_key_confirm_body(app, cx, p),
@@ -463,72 +491,10 @@ impl ModalKind {
             }
             ModalKind::ShortcutCapture => shell.render_shortcut_capture_body(app, window, cx, p),
             ModalKind::DiffViewer => shell.render_diff_viewer_body(app, window, cx, p),
+            _ => div().into_any_element(),
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::ModalKind;
-
-    /// 全部弹窗种类；新增变体时必须同步本表，顺序测试会校验 `ORDER` 不漏不重。
-    const ALL: &[ModalKind] = &[
-        ModalKind::AuthPrompt,
-        ModalKind::HostKeyConfirm,
-        ModalKind::ClipboardPrompt,
-        ModalKind::ForwardConfirm,
-        ModalKind::SftpConfirm,
-        ModalKind::SftpInput,
-        ModalKind::SftpChmod,
-        ModalKind::SftpProperties,
-        ModalKind::SftpFilter,
-        ModalKind::SftpSearch,
-        ModalKind::SftpSync,
-        ModalKind::EditorGotoLine,
-        ModalKind::ContainerForm,
-        ModalKind::ContainerFolderForm,
-        ModalKind::ContainerRunForm,
-        ModalKind::ContainerCreate,
-        ModalKind::ContainerConfirm,
-        ModalKind::ContainerRename,
-        ModalKind::ContainerTagImage,
-        ModalKind::ContainerCommit,
-        ModalKind::ContainerUpdate,
-        ModalKind::ContainerNetworkConnect,
-        ModalKind::ContainerExportConfig,
-        ModalKind::ContainerFileRename,
-        ModalKind::ContainerFileNewDir,
-        ModalKind::ContainerHub,
-        ModalKind::ContainerPush,
-        ModalKind::ContainerSystemDf,
-        ModalKind::ContainerBuild,
-        ModalKind::ContainerForward,
-        ModalKind::ContainerPods,
-        ModalKind::ContainerQuadlet,
-        ModalKind::SessionForm,
-        ModalKind::FolderForm,
-        ModalKind::BatchEdit,
-        ModalKind::SnippetForm,
-        ModalKind::KnownHosts,
-        ModalKind::KeyWizard,
-        ModalKind::BackupPrompt,
-        ModalKind::AuditViewer,
-        ModalKind::Replay,
-        ModalKind::Settings,
-        ModalKind::ShortcutCapture,
-        ModalKind::DiffViewer,
-    ];
-
-    #[test]
-    fn order_covers_every_kind_exactly_once() {
-        assert_eq!(
-            ALL.len(),
-            ModalKind::ORDER.len(),
-            "ORDER 漏掉或多出弹窗种类"
-        );
-        for kind in ALL {
-            let count = ModalKind::ORDER.iter().filter(|item| *item == kind).count();
-            assert_eq!(count, 1, "弹窗种类 {:?} 在 ORDER 中必须恰好出现一次", kind);
-        }
-    }
-}
+mod tests;

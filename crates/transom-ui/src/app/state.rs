@@ -71,6 +71,8 @@ pub(crate) struct AppState {
     pub(in crate::app) monitor: Entity<crate::monitor::MonitorView>,
     /// 容器引擎连接侧栏、表单与工作区顶层状态。
     pub(in crate::app) containers: crate::container::ContainerUiState,
+    /// Git 子系统的全局状态（项目列表、分组、徽标与在途任务）。
+    pub(in crate::app) git: crate::git::GitHub,
     /// 远端文本编辑面板实体：面板集合、关闭拦截与渲染都归它。
     pub(in crate::app) editors: Entity<EditorPanels>,
     /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。

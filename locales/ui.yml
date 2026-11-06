@@ -142,6 +142,9 @@ activity:
   switch_to_chinese:
     en: Switch to Chinese
     zh-CN: 切换为中文
+  git:
+    en: Git
+    zh-CN: Git
 common:
   close:
     en: Close
@@ -6926,3 +6929,870 @@ container:
       zh-CN: '系统清理完成，但有 %{count} 个步骤失败，已释放 %{reclaimed}：%{errors}'
 
 
+git:
+  sidebar:
+    title:
+      en: "Git Repositories"
+      zh-CN: "Git 仓库"
+    add:
+      en: "Add Repository"
+      zh-CN: "添加仓库"
+    refresh:
+      en: "Refresh"
+      zh-CN: "刷新"
+    refresh_all:
+      en: "Refresh All"
+      zh-CN: "刷新全部"
+    empty:
+      en: "No repositories yet. Add a local Git project to start."
+      zh-CN: "还没有仓库。添加一个本机 Git 项目开始使用。"
+    loading:
+      en: "Reading repository..."
+      zh-CN: "正在读取仓库..."
+    unavailable:
+      en: "Unavailable"
+      zh-CN: "不可用"
+    new_folder:
+      en: "New Group"
+      zh-CN: "新建分组"
+  folder:
+    new_title:
+      en: "New Group"
+      zh-CN: "新建分组"
+    rename_title:
+      en: "Rename Group"
+      zh-CN: "重命名分组"
+    name_hint:
+      en: "A label only you read. It is not passed to git."
+      zh-CN: "只是侧栏里给你自己看的标签，不会传给 git。"
+    rename:
+      en: "Rename Group"
+      zh-CN: "重命名分组"
+    delete:
+      en: "Delete Group"
+      zh-CN: "删除分组"
+    none_yet:
+      en: "No groups yet - type a name to create one"
+      zh-CN: "还没有分组，直接输入名字即可新建"
+    new_project:
+      en: "Add Repository to This Group"
+      zh-CN: "在此分组添加仓库"
+  browser:
+    loading:
+      en: "Reading folder..."
+      zh-CN: "正在读取目录..."
+    empty:
+      en: "No subfolders here"
+      zh-CN: "这里没有子目录"
+    truncated:
+      en: "Too many subfolders; showing the first 400"
+      zh-CN: "子目录过多，仅列出前 400 个"
+    mkdir:
+      en: "New Folder"
+      zh-CN: "在此新建目录"
+    mkdir_failed:
+      en: "Cannot create folder"
+      zh-CN: "无法创建目录"
+    read_failed:
+      en: "Cannot read this folder"
+      zh-CN: "无法读取该目录"
+    bad_name:
+      en: "Folder name cannot be empty, contain / \\ or .."
+      zh-CN: "目录名不能为空，也不能包含 / 、\\ 或 .."
+  project:
+    title:
+      en: "Open a Local Repository"
+      zh-CN: "打开本机仓库"
+    path_placeholder:
+      en: "/path/to/repository"
+      zh-CN: "/路径/到/仓库"
+    folder_label:
+      en: "Group"
+      zh-CN: "分组"
+    folder_root:
+      en: "No Group"
+      zh-CN: "不归组"
+    folder_placeholder:
+      en: "Group name; a new name creates the group"
+      zh-CN: "分组名；输入新名字会新建分组"
+    init_label:
+      en: "Initialize this folder as a Git repository"
+      zh-CN: "把这个目录初始化为 Git 仓库"
+    probing:
+      en: "Detecting..."
+      zh-CN: "正在检测..."
+    is_repo:
+      en: "Git repository"
+      zh-CN: "是 Git 仓库"
+    not_repo:
+      en: "Not a Git repository yet"
+      zh-CN: "还不是 Git 仓库"
+    hint:
+      en: "Pick a folder, then add or initialize it"
+      zh-CN: "选择目录后可直接添加或初始化"
+    cancel:
+      en: "Cancel"
+      zh-CN: "取消"
+    duplicate:
+      en: "This folder is already in the list"
+      zh-CN: "该目录已在列表中"
+  clone:
+    title:
+      en: "Clone Repository"
+      zh-CN: "克隆仓库"
+    url_label:
+      en: "Repository URL"
+      zh-CN: "仓库地址"
+    url_placeholder:
+      en: "https://host/org/repo.git, ssh://user@host:port/org/repo or git@host:org/repo.git"
+      zh-CN: "https://主机/组织/仓库.git、ssh://用户@主机:端口/组织/仓库 或 git@主机:组织/仓库.git"
+    dest_label:
+      en: "Target Folder"
+      zh-CN: "目标目录"
+    dest_placeholder:
+      en: "~/coding/repository"
+      zh-CN: "~/coding/仓库名"
+    browse:
+      en: "Choose Folder"
+      zh-CN: "选择目录"
+    shallow_before:
+      en: "Shallow clone, last"
+      zh-CN: "浅层化克隆，历史记录被截断为"
+    shallow_after:
+      en: "commits"
+      zh-CN: "提交"
+    start:
+      en: "Clone"
+      zh-CN: "开始克隆"
+    cancel:
+      en: "Cancel"
+      zh-CN: "取消"
+    close:
+      en: "Close"
+      zh-CN: "关闭"
+    running:
+      en: "Cloning..."
+      zh-CN: "正在克隆..."
+    task_title:
+      en: "Cloning %{repo}"
+      zh-CN: "正在克隆 %{repo}"
+    task_failed:
+      en: "Clone failed"
+      zh-CN: "克隆失败"
+    busy:
+      en: "Another clone is still running"
+      zh-CN: "已有克隆任务在进行"
+    depth_invalid:
+      en: "Shallow clone depth must be a positive integer"
+      zh-CN: "浅克隆深度必须是大于 0 的整数"
+    need_fields:
+      en: "Fill in both the URL and the target folder"
+      zh-CN: "仓库地址与目标目录都要填"
+  menu:
+    refresh:
+      en: "Refresh"
+      zh-CN: "刷新"
+    open:
+      en: "Open Git Panel"
+      zh-CN: "打开 Git 面板"
+    remove:
+      en: "Remove from List"
+      zh-CN: "从列表移除"
+    move_to:
+      en: "Move to"
+      zh-CN: "移到分组"
+    move_to_root:
+      en: "Move Out of Group"
+      zh-CN: "移出分组"
+    stage:
+      en: "Stage"
+      zh-CN: "暂存"
+    unstage:
+      en: "Unstage"
+      zh-CN: "取消暂存"
+    discard:
+      en: "Rollback"
+      zh-CN: "回滚"
+    show_diff:
+      en: "Show Diff"
+      zh-CN: "显示差异"
+    copy_path:
+      en: "Copy Path"
+      zh-CN: "复制路径"
+    copy_oid:
+      en: "Copy Commit Hash"
+      zh-CN: "复制提交号"
+    create_patch:
+      en: "Create Patch..."
+      zh-CN: "创建补丁…"
+    browse:
+      en: "Browse on Remote"
+      zh-CN: "在浏览器中查看"
+    push_up_to:
+      en: "Push All Previous Commits"
+      zh-CN: "推送此前所有提交"
+    rebase_from_here:
+      en: "Interactively Rebase from Here..."
+      zh-CN: "从这里交互式变基…"
+    jump_parent:
+      en: "Go to Parent Commit"
+      zh-CN: "转到父提交"
+    jump_child:
+      en: "Go to Child Commit"
+      zh-CN: "转到子提交"
+    new_branch_from:
+      en: "New Branch from Here..."
+      zh-CN: "从此提交新建分支..."
+    rename_branch:
+      en: "Rename Branch..."
+      zh-CN: "重命名分支…"
+    cherry_pick:
+      en: "Cherry-pick"
+      zh-CN: "拣选此提交"
+    checkout:
+      en: Checkout
+      zh-CN: 签出
+    update:
+      en: Update Project
+      zh-CN: 更新项目
+    push:
+      en: Push
+      zh-CN: 推送
+    new_worktree:
+      en: New Worktree from Here
+      zh-CN: 从这里新建工作树
+    new_tag_from:
+      en: New Tag from Here
+      zh-CN: 从此提交新建标签
+    delete:
+      en: Delete
+      zh-CN: 删除
+    merge_into:
+      en: Merge into Current
+      zh-CN: 合并到当前分支
+    rebase_into:
+      en: Rebase Current onto This
+      zh-CN: 将当前分支变基到此分支
+    rebase_abort:
+      en: Abort Rebase
+      zh-CN: 中止变基
+    remove_worktree:
+      en: Remove Worktree
+      zh-CN: 删除工作树
+    lock_worktree:
+      en: "Lock Worktree"
+      zh-CN: "锁定工作树"
+    unlock_worktree:
+      en: "Unlock Worktree"
+      zh-CN: "解锁工作树"
+    squash_parent:
+      en: "Squash Into Parent Commit"
+      zh-CN: "压缩到父提交"
+    fixup_parent:
+      en: "Fixup Into Parent Commit"
+      zh-CN: "优选到父提交"
+    copied:
+      en: Copied to clipboard
+      zh-CN: 已复制到剪贴板
+    revert_commit:
+      en: Revert Commit
+      zh-CN: 撤销提交
+    reset:
+      en: Reset Current Branch to Here
+      zh-CN: 将当前分支重置到此处
+    stage_all:
+      en: Stage All
+      zh-CN: 全部暂存
+    unstage_all:
+      en: Unstage All
+      zh-CN: 全部取消暂存
+    delete_all:
+      en: Delete All
+      zh-CN: 全部删除
+    discard_all:
+      en: Rollback All
+      zh-CN: 全部回滚
+  toolbar:
+    commit:
+      en: "Commit"
+      zh-CN: "提交"
+    operations:
+      en: "Log"
+      zh-CN: "日志"
+    fetch:
+      en: "Fetch"
+      zh-CN: "抓取"
+    pull:
+      en: "Pull"
+      zh-CN: "拉取"
+    push:
+      en: "Push"
+      zh-CN: "推送"
+  push:
+    no_branch:
+      en: "HEAD is not on a branch, so there is no branch to push to"
+      zh-CN: "头指针未挂在分支上，没有可推送的分支"
+  name:
+    branch:
+      en: "New Branch"
+      zh-CN: "新建分支"
+    tag:
+      en: "New Tag"
+      zh-CN: "新建标签"
+    rename:
+      en: "Rename Branch"
+      zh-CN: "重命名分支"
+    label:
+      en: "Name"
+      zh-CN: "名称"
+    confirm:
+      en: "OK"
+      zh-CN: "确定"
+    hint:
+      en: 'Names cannot start with - or . and cannot contain spaces or ~ ^ : ? * [ \ @ { }'
+      zh-CN: "名称不能以 - 或 . 开头，不能含空格与 ~ ^ : ? * [ \\ @ { }"
+    need_name:
+      en: "Enter a name"
+      zh-CN: "请输入名称"
+  browse:
+    no_link:
+      en: "Cannot determine this repository's web address (no remote or unknown hosting service)"
+      zh-CN: "无法确定该仓库的网页地址（没有远端或托管服务形态不认识）"
+  rebase:
+    title:
+      en: "Interactively Rebase"
+      zh-CN: "交互式变基"
+    hint:
+      en: "Commits above the baseline are rewritten. Click the action to cycle pick / squash / fixup / drop / reword; conflicts stop the rebase and you can abort it from the commit menu."
+      zh-CN: "基线之上的提交会被改写。点动作格依次切换 pick / squash / fixup / drop / reword；冲突时变基会停在原地，可在提交菜单里「中止变基」回退。"
+    loading:
+      en: "Reading commit list..."
+      zh-CN: "正在读取提交清单..."
+    empty:
+      en: "No commits above the selected baseline"
+      zh-CN: "所选基线之上没有提交"
+    run:
+      en: "Start Rebase"
+      zh-CN: "开始变基"
+    pick:
+      en: "pick"
+      zh-CN: "保留"
+    reword:
+      en: "reword"
+      zh-CN: "改说明"
+    squash:
+      en: "squash"
+      zh-CN: "压缩"
+    fixup:
+      en: "fixup"
+      zh-CN: "优选"
+    drop:
+      en: "drop"
+      zh-CN: "丢弃"
+  patch:
+    saved:
+      en: "Patch written to %{path}"
+      zh-CN: "补丁已写入 %{path}"
+  shelf:
+    title:
+      en: Shelve
+      zh-CN: 搁置
+    hint:
+      en: Shelves are git stashes; Apply keeps the entry, Pop removes it.
+      zh-CN: 搁置即 git stash；「应用」保留栈项，「弹出」会移除栈项。
+    empty:
+      en: No shelves yet
+      zh-CN: 还没有搁置项
+    files_loading:
+      en: Reading shelf content...
+      zh-CN: 正在读取搁置内容...
+    no_files:
+      en: This shelf contains no files
+      zh-CN: 该搁置项不含文件
+    apply:
+      en: Apply
+      zh-CN: 应用
+    pop:
+      en: Apply and Pop
+      zh-CN: 应用并弹出
+    drop:
+      en: Delete Shelf
+      zh-CN: 删除搁置
+    create:
+      en: Shelve Changes
+      zh-CN: 搁置更改
+    auto_message:
+      en: Shelved working changes
+      zh-CN: 搁置当前改动
+  reset:
+    soft:
+      en: "Reset: Soft (keep index and working tree)"
+      zh-CN: "软重置（保留索引与工作区）"
+    mixed:
+      en: "Reset: Mixed (keep working tree)"
+      zh-CN: "混合重置（保留工作区改动）"
+    hard:
+      en: "Reset: Hard (discard working tree)"
+      zh-CN: "硬重置（丢弃工作区改动）"
+  worktree:
+    title:
+      en: New Worktree
+      zh-CN: 新建工作树
+    hint:
+      en: The folder is created next to the repository unless you type an absolute path.
+      zh-CN: 不填绝对路径时，新目录创建在仓库的同级目录下。
+    path_label:
+      en: Worktree directory
+      zh-CN: 工作树目录
+    path_placeholder:
+      en: e.g. myrepo-feature-work
+      zh-CN: 例如 myrepo-feature-work
+    branch_label:
+      en: New branch name
+      zh-CN: 新分支名
+    branch_placeholder:
+      en: feature/xxx
+      zh-CN: feature/xxx
+    checkout:
+      en: Check out the new branch in the worktree
+      zh-CN: 在工作树中检出该分支
+    confirm:
+      en: Create
+      zh-CN: 创建
+    need_fields:
+      en: Directory and branch name are both required
+      zh-CN: 目录与分支名都不能为空
+    locked:
+      en: "Locked"
+      zh-CN: "已锁定"
+    prunable:
+      en: "Can be cleaned up"
+      zh-CN: "可清理"
+  scope:
+    current:
+      en: "Current Branch"
+      zh-CN: "当前分支"
+    all:
+      en: "All References"
+      zh-CN: "全部引用"
+  refs:
+    worktrees:
+      en: Worktrees
+      zh-CN: 工作树
+    local:
+      en: "Branches"
+      zh-CN: "分支"
+    remote:
+      en: "Remote"
+      zh-CN: "远程分支"
+    tags:
+      en: "Tags"
+      zh-CN: "标签"
+  log:
+    empty:
+      en: "No commits"
+      zh-CN: "没有提交"
+    loading:
+      en: "Loading history..."
+      zh-CN: "正在读取历史..."
+    load_more:
+      en: "Load more"
+      zh-CN: "加载更多"
+    jump_missing:
+      en: "Target commit is not reachable in this history"
+      zh-CN: "在这段历史里找不到要跳转的提交"
+    column:
+      subject:
+        en: "Summary"
+        zh-CN: "概要"
+      author:
+        en: "Author"
+        zh-CN: "作者"
+      time:
+        en: "Date"
+        zh-CN: "时间"
+  files:
+    need_commit:
+      en: "Select a commit to list its files"
+      zh-CN: "选择一条提交以查看其变更文件"
+    title:
+      en: "Changed Files"
+      zh-CN: "变更文件"
+    empty:
+      en: "No files in this commit"
+      zh-CN: "本次提交没有文件变更"
+  diff:
+    toolbar:
+      en: Diff
+      zh-CN: 差异
+    side_by_side:
+      en: Side by Side
+      zh-CN: 并排显示
+    unified:
+      en: Unified
+      zh-CN: 统一视图
+    ignore_none:
+      en: None
+      zh-CN: 无
+    ignore_trim:
+      en: Trim whitespace
+      zh-CN: 修整空白
+    ignore_all:
+      en: Ignore whitespace
+      zh-CN: 忽略空格
+    ignore_blank:
+      en: Ignore whitespace and blank lines
+      zh-CN: 忽略空格和空行
+    highlight_line:
+      en: Line
+      zh-CN: 行数
+    highlight_word:
+      en: Word
+      zh-CN: 单词
+    highlight_none:
+      en: None
+      zh-CN: 无
+    ignore_title:
+      en: Ignore Differences
+      zh-CN: 忽略差异
+    highlight_title:
+      en: Highlight Differences
+      zh-CN: 高亮显示差异
+    show_line_numbers:
+      en: Show Line Numbers
+      zh-CN: 显示行号
+    wrap_lines:
+      en: Wrap Lines
+      zh-CN: 自动换行
+    align_changes:
+      en: Align Changes
+      zh-CN: 对齐更改
+    sync_scroll:
+      en: Synchronized Scrolling
+      zh-CN: 同步滚动
+    open_in_window:
+      en: Show Diff in Separate Window
+      zh-CN: 在单独的窗口中显示差异
+    all_files:
+      en: Show All Files in Single Diff View
+      zh-CN: 在单个差异视图中显示所有文件
+    settings:
+      en: Appearance
+      zh-CN: 外观
+    none:
+      en: "Select a file to compare"
+      zh-CN: "选择一个文件查看差异"
+    loading:
+      en: "Loading diff..."
+      zh-CN: "正在读取差异..."
+    binary:
+      en: "Binary file, text comparison unavailable"
+      zh-CN: "二进制文件，无法按文本比较"
+    truncated:
+      en: "File is too large, content truncated"
+      zh-CN: "文件过大，内容已截断"
+    head:
+      en: "HEAD"
+      zh-CN: "头指针"
+    index:
+      en: "Index"
+      zh-CN: "索引"
+    worktree:
+      en: "Working Tree"
+      zh-CN: "工作区"
+    baseline:
+      en: "Before Shelf"
+      zh-CN: "搁置前"
+    stashed:
+      en: "Shelved"
+      zh-CN: "搁置内容"
+    parent:
+      en: "Parent"
+      zh-CN: "父提交"
+    commit:
+      en: "Commit"
+      zh-CN: "本提交"
+  group:
+    by:
+      en: Group By
+      zh-CN: 分组依据
+    flat:
+      en: "No Grouping"
+      zh-CN: 不分组
+    by_directory:
+      en: Directories
+      zh-CN: 目录
+    expand_all:
+      en: "Expand All"
+      zh-CN: "全部展开"
+    collapse_all:
+      en: "Collapse All"
+      zh-CN: "全部收起"
+    root:
+      en: "(repository root)"
+      zh-CN: "（仓库根）"
+    clean:
+      en: Working tree clean
+      zh-CN: 工作区干净
+    staged:
+      en: "Staged Changes"
+      zh-CN: "已暂存的更改"
+    changes:
+      en: "Changes"
+      zh-CN: "更改"
+    unversioned:
+      en: "Unversioned Files"
+      zh-CN: "未进行版本管理的文件"
+    ignored:
+      en: "Ignored Files"
+      zh-CN: "已忽略的文件"
+  change:
+    added:
+      en: "Added"
+      zh-CN: "新增"
+    modified:
+      en: "Modified"
+      zh-CN: "修改"
+    deleted:
+      en: "Deleted"
+      zh-CN: "删除"
+    renamed:
+      en: "Renamed"
+      zh-CN: "重命名"
+    copied:
+      en: "Copied"
+      zh-CN: "复制"
+    conflict:
+      en: "Conflicted"
+      zh-CN: "冲突"
+    untracked:
+      en: "Unversioned"
+      zh-CN: "未跟踪"
+    ignored:
+      en: "Ignored"
+      zh-CN: "忽略"
+    unmodified:
+      en: "Unchanged"
+      zh-CN: "未变"
+    unknown:
+      en: "Unknown"
+      zh-CN: "未知"
+  commit:
+    last_commit:
+      en: Last Commit
+      zh-CN: 上次提交
+    no_commit:
+      en: (no commit yet)
+      zh-CN: （尚无提交）
+    title:
+      en: "Commit"
+      zh-CN: "提交"
+    changes_count:
+      en: "%{count} files changed"
+      zh-CN: "更改 %{count} 个文件"
+    checked_count:
+      en: "%{count} modified"
+      zh-CN: "%{count} 已修改"
+    amend_group:
+      en: "Last commit · %{oid} %{subject}"
+      zh-CN: "上次提交 · %{oid} %{subject}"
+    file_count:
+      en: "%{count} files"
+      zh-CN: "%{count} 个文件"
+    amend_empty:
+      en: "No files in this commit"
+      zh-CN: "该提交没有文件"
+    message_placeholder:
+      en: "Commit message"
+      zh-CN: "提交消息"
+    empty_message:
+      en: "Enter a commit message"
+      zh-CN: "请填写提交消息"
+    nothing_selected:
+      en: "Select at least one file"
+      zh-CN: "请至少勾选一个文件"
+    amend:
+      en: "Amend"
+      zh-CN: "修正"
+    submit:
+      en: "Commit"
+      zh-CN: "提交"
+    cancel:
+      en: "Cancel"
+      zh-CN: "取消"
+    target:
+      en: "Commit to %{branch}"
+      zh-CN: "提交到 %{branch}"
+    push_after:
+      en: "Commit and Push"
+      zh-CN: "提交并推送"
+    and_push:
+      en: "Commit and Push"
+      zh-CN: "提交并推送"
+  overview:
+    title:
+      en: "Local Changes"
+      zh-CN: "本地更改"
+    loading:
+      en: "Reading working tree..."
+      zh-CN: "正在读取工作区..."
+  repo:
+    init_action:
+      en: "Initialize Git Repository"
+      zh-CN: "初始化 Git 仓库"
+    init_running:
+      en: "Initializing repository..."
+      zh-CN: "正在初始化仓库..."
+    not_repo:
+      en: "This folder is not a Git repository"
+      zh-CN: "这个目录还不是 Git 仓库"
+  filter:
+    search_placeholder:
+      en: Text or hash
+      zh-CN: 文本或哈希
+    author_placeholder:
+      en: User
+      zh-CN: 用户
+    date_all:
+      en: Date
+      zh-CN: 日期
+    date_today:
+      en: Today
+      zh-CN: 今天
+    date_week:
+      en: Last 7 days
+      zh-CN: 近 7 天
+    date_month:
+      en: Last 30 days
+      zh-CN: 近 30 天
+    path_all:
+      en: Paths
+      zh-CN: 路径
+    loading_paths:
+      en: Loading file list...
+      zh-CN: 正在读取文件清单...
+    placeholder:
+      en: "Filter by message"
+      zh-CN: "按提交消息过滤"
+  time:
+    future:
+      en: "in the future"
+      zh-CN: "即将发生"
+    seconds_ago:
+      en: "%{count} seconds ago"
+      zh-CN: "%{count} 秒前"
+    minutes_ago:
+      en: "%{count} minutes ago"
+      zh-CN: "%{count} 分钟前"
+    hours_ago:
+      en: "%{count} hours ago"
+      zh-CN: "%{count} 小时前"
+    days_ago:
+      en: "%{count} days ago"
+      zh-CN: "%{count} 天前"
+  action:
+    reset:
+      en: Branch reset
+      zh-CN: 分支已重置
+    revert:
+      en: Commit reverted
+      zh-CN: 已生成反向提交
+    cherry_pick:
+      en: Commit cherry-picked
+      zh-CN: 已拣选提交
+    merge:
+      en: Merge finished
+      zh-CN: 合并完成
+    rebase:
+      en: Rebase finished
+      zh-CN: 变基完成
+    rebase_abort:
+      en: Rebase aborted
+      zh-CN: 已中止变基
+    remove_worktree:
+      en: Worktree removed
+      zh-CN: 工作树已删除
+    lock_worktree:
+      en: Worktree locked
+      zh-CN: 工作树已锁定
+    unlock_worktree:
+      en: Worktree unlocked
+      zh-CN: 工作树已解锁
+    squash_parent:
+      en: Commit squashed into parent
+      zh-CN: 已压缩到父提交
+    fixup_parent:
+      en: Commit fixed up into parent
+      zh-CN: 已优选到父提交
+    stash_save:
+      en: Changes shelved
+      zh-CN: 已创建搁置
+    stash_apply:
+      en: Shelf applied
+      zh-CN: 已应用搁置
+    stash_pop:
+      en: Shelf applied and popped
+      zh-CN: 已应用并弹出搁置
+    stash_drop:
+      en: Shelf deleted
+      zh-CN: 搁置已删除
+    create_patch:
+      en: "Patch created"
+      zh-CN: 补丁已创建
+    push_up_to:
+      en: "Pushed commits up to selection"
+      zh-CN: 已推送到所选提交
+    rebase_run:
+      en: "History rebased"
+      zh-CN: 历史已按清单变基
+    stage:
+      en: "Staged"
+      zh-CN: "已暂存"
+    stage_all:
+      en: "Staged all changes"
+      zh-CN: "已暂存全部更改"
+    unstage:
+      en: "Unstaged"
+      zh-CN: "已取消暂存"
+    discard:
+      en: "Changes rolled back"
+      zh-CN: "已回滚更改"
+    delete_untracked:
+      en: "Unversioned files deleted"
+      zh-CN: "已删除未跟踪文件"
+    commit:
+      en: "Committed"
+      zh-CN: "提交完成"
+    checkout:
+      en: "Branch switched"
+      zh-CN: "已切换分支"
+    create_branch:
+      en: "Branch created"
+      zh-CN: "分支已创建"
+    rename_branch:
+      en: "Branch renamed"
+      zh-CN: "分支已重命名"
+    delete_branch:
+      en: "Branch deleted"
+      zh-CN: "分支已删除"
+    create_tag:
+      en: "Tag created"
+      zh-CN: "标签已创建"
+    delete_tag:
+      en: "Tag deleted"
+      zh-CN: "标签已删除"
+    add_worktree:
+      en: "Worktree created"
+      zh-CN: "工作树已创建"
+    fetch:
+      en: "Fetch finished"
+      zh-CN: "抓取完成"
+    push:
+      en: "Push finished"
+      zh-CN: "推送完成"
+    pull:
+      en: "Pull finished"
+      zh-CN: "拉取完成"
+    init:
+      en: "Repository initialized"
+      zh-CN: "仓库已初始化"

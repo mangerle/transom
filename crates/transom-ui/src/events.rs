@@ -39,6 +39,9 @@ impl AppShell {
             AppEvent::Container(container_event) => {
                 self.dispatch_container_event(container_event, window, cx);
             }
+            AppEvent::Git(git_event) => {
+                self.dispatch_git_event(git_event, cx);
+            }
             AppEvent::DeepLink { request } => {
                 self.handle_deep_link(request, window, cx);
             }

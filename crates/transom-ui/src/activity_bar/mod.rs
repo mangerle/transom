@@ -60,6 +60,7 @@ impl AppShell {
             ActivityItemId::Containers => {
                 self.state.sidebar.visible && self.state.containers.sidebar_open
             }
+            ActivityItemId::Git => self.state.sidebar.visible && self.state.git.sidebar_open,
             ActivityItemId::Keys => self.state.modals.tools.key_wizard.is_some(),
             _ => false,
         }
@@ -256,8 +257,7 @@ impl AppShell {
             ActivityItemId::Sftp => self.toggle_sftp(window, cx),
             ActivityItemId::Monitor => self.toggle_monitor(window, cx),
             ActivityItemId::Containers => {
-                let is_current =
-                    self.state.sidebar.visible && self.state.containers.sidebar_open;
+                let is_current = self.state.sidebar.visible && self.state.containers.sidebar_open;
                 if is_current {
                     self.state.sidebar.visible = false;
                     self.state.containers.sidebar_open = false;
@@ -277,6 +277,7 @@ impl AppShell {
             }
             ActivityItemId::Keys => self.open_key_wizard(window, cx),
             ActivityItemId::Settings => self.open_settings_modal(None, window, cx),
+            ActivityItemId::Git => self.toggle_git_sidebar(cx),
             ActivityItemId::Unknown => {}
         }
     }
@@ -334,6 +335,7 @@ mod labels {
             ActivityItemId::KnownHosts => IconName::ShieldCheck.into(),
             ActivityItemId::Keys => IconName::KeyRound.into(),
             ActivityItemId::Settings => IconName::Settings.into(),
+            ActivityItemId::Git => IconName::GitBranch.into(),
             ActivityItemId::Unknown => IconName::CircleAlert.into(),
         }
     }
@@ -347,6 +349,7 @@ mod labels {
             ActivityItemId::Sftp => "sftp.title",
             ActivityItemId::Monitor => "monitor.title",
             ActivityItemId::Containers => "container.title",
+            ActivityItemId::Git => "activity.git",
             ActivityItemId::Language => "activity.language",
             ActivityItemId::ImportSshConfig => "app.import_ssh_config",
             ActivityItemId::KnownHosts => "known_hosts.title",

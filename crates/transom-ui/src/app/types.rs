@@ -66,6 +66,8 @@ pub(crate) enum TabContent {
     Monitor(TabId),
     /// 容器引擎管理工作区（顶部分类标签 + 列表 / 详情双栏）。
     Containers(Box<crate::container::ContainerWorkspaceState>),
+    /// Git 仓库管理工作区（提交页、日志页与差异分栏）。
+    Git(Box<crate::git::GitWorkspaceState>),
 }
 
 /// 实时通信会话窗格关联的所有运行期状态。
@@ -111,6 +113,27 @@ impl TerminalTab {
     /// 是否为全屏主机监控看板标签。
     pub(crate) fn is_monitor(&self) -> bool {
         matches!(self.content, TabContent::Monitor(_))
+    }
+
+    /// 是否为 Git 仓库工作区标签。
+    pub(crate) fn is_git(&self) -> bool {
+        matches!(self.content, TabContent::Git(_))
+    }
+
+    /// 快捷访问 Git 工作区状态。
+    pub(crate) fn git(&self) -> Option<&crate::git::GitWorkspaceState> {
+        match &self.content {
+            TabContent::Git(state) => Some(state.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// 快捷访问 Git 工作区可变状态。
+    pub(crate) fn git_mut(&mut self) -> Option<&mut crate::git::GitWorkspaceState> {
+        match &mut self.content {
+            TabContent::Git(state) => Some(state.as_mut()),
+            _ => None,
+        }
     }
 
     /// 获取关联的录像播放器视图句柄（若存在）。
@@ -172,7 +195,7 @@ impl TerminalTab {
     /// 始终不被 OSC 标题改写；tooltip、状态栏、通知等需要稳定身份的场景读它，
     /// 标签栏的可见标题读 [`Self::tab_label`]。
     pub(crate) fn display_name(&self) -> String {
-        if self.is_player() {
+        if self.is_player() || self.is_git() {
             return self.title.clone();
         }
         let name = self.session.name.trim();
@@ -252,6 +275,25 @@ impl TerminalTab {
             cwd: None,
             status: TabStatus::Connected,
             content: TabContent::Monitor(target_tab_id),
+        }
+    }
+
+    /// 构造已就绪的 Git 仓库工作区独立标签页。
+    pub(crate) fn git_tab(
+        id: TabId,
+        session: Session,
+        title: String,
+        state: crate::git::GitWorkspaceState,
+    ) -> Self {
+        Self {
+            id,
+            session_id: session.id,
+            session,
+            connection_id: None,
+            title,
+            cwd: None,
+            status: TabStatus::Connected,
+            content: TabContent::Git(Box::new(state)),
         }
     }
 }

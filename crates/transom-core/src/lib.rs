@@ -25,14 +25,15 @@ pub use backup::{
 };
 pub use commands::{
     AppCommand, AppEvent, ConnectParams, ContainerAppEvent, ContainerCommand, DeepLinkRequest,
-    ForwardAppEvent, ForwardCommand, HostAppEvent, HostCommand, SftpAppEvent, SftpCommand,
-    SyncAppEvent, SyncCommand, SystemStats, TerminalAppEvent, TerminalCommand, ZmodemAppEvent,
-    ZmodemCommand,
+    ForwardAppEvent, ForwardCommand, GitAppEvent, GitCommand, HostAppEvent, HostCommand,
+    SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats, TerminalAppEvent,
+    TerminalCommand, ZmodemAppEvent, ZmodemCommand,
 };
 pub use error::{AppError, ErrorCode, ErrorContext};
 pub use ids::{
-    ConnectionId, ContainerRequestId, EngineProfileId, FolderId, ForwardId, GroupId, IdentityId,
-    SessionId, SnippetId, SplitId, TabId, TransferId, TriggerId,
+    ConnectionId, ContainerRequestId, EngineProfileId, FolderId, ForwardId, GitFolderId,
+    GitProjectId, GitRequestId, GroupId, IdentityId, SessionId, SnippetId, SplitId, TabId,
+    TransferId, TriggerId,
 };
 pub use model::catalog::{
     CatalogError, DropSide, EngineFolder, FolderInheritedDefaults, MAX_PROXY_JUMP_DEPTH,
@@ -59,6 +60,7 @@ pub use model::forward::{
     BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
     TargetAddress,
 };
+pub use model::git::*;
 pub use model::history::{
     HISTORY_LIMIT, SUGGESTION_LIMIT, record as record_command, suggestions as command_suggestions,
 };
@@ -124,7 +126,9 @@ pub use protocol::system_stats::{
 pub use protocol::traffic::{NetworkTraffic, TrafficCounter};
 pub use protocol::zmodem::{ZmodemDirection, ZmodemEvent, ZmodemFinished, ZmodemSettings};
 pub use secrets::{ConnectionSecrets, SecretKey, SecretKind, SecretOwner};
-pub use storage::{BackupService, HistoryStore, SecretStore, SessionStore, SettingsStore};
+pub use storage::{
+    BackupService, GitProjectStore, HistoryStore, SecretStore, SessionStore, SettingsStore,
+};
 pub use transport::{
     SessionCleanup, TerminalControl, TerminalControlHandle, TerminalIo, TerminalSize,
 };
