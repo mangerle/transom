@@ -1,3 +1,17 @@
+transom (1.6.1) unstable; urgency=medium
+
+  * 远端容器管理支持 SSH 密码认证与 Sudo 提权：采用内置原生 SSH 客户端
+    替代系统 ssh 命令行，支持密码认证；增加远端 sudo -S 提权及标准输入
+    静默密码写入机制，避免密码提示污染 Docker HTTP 协议流。
+  * 容器引擎配置与多语言完善：引擎连接表单新增登录密码输入、Sudo 提权
+    开关与独立 Sudo 密码输入；补全 endpoint.cli 多语言国际化翻译。
+  * 主机会话右键联动与自动去重入库：主机会话右键"管理此主机的容器"自动
+    继承已存密码凭据与提权配置；远端引擎连接成功后自动去重保存至引擎列表。
+  * 修复活动栏在容器侧栏与会话侧栏之间点击切换时误收起的问题，确保左侧
+    抽屉在各面板间平滑切换。
+
+ -- wangle <wangle@agree.com.cn>  Fri, 06 Nov 2026 15:00:00 +0800
+
 transom (1.6.0) unstable; urgency=medium
 
   * 新增 Docker/Podman 容器管理工作区：支持本地 socket、SSH 远端桥接、
