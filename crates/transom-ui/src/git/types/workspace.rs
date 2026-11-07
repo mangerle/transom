@@ -166,6 +166,17 @@ impl GitWorkspaceState {
         let commit_split = cx.new(|_| ResizableState::default());
         let bottom_log_split = cx.new(|_| ResizableState::default());
         let right_split = cx.new(|_| ResizableState::default());
+        let git_settings = &crate::app::app_settings(cx).git;
+        let mut diff_options = GitDiffOptions::default();
+        if git_settings.ignore_whitespace {
+            diff_options.ignore_whitespace = super::diff::IgnoreWhitespace::All;
+        }
+        if git_settings.default_diff_mode == "unified" {
+            diff_options.side_by_side = false;
+        } else if git_settings.default_diff_mode == "split" {
+            diff_options.side_by_side = true;
+        }
+
         Self {
             project,
             view: GitView::default(),
@@ -191,7 +202,7 @@ impl GitWorkspaceState {
             group_by_directory: false,
             collapsed_dirs: HashSet::new(),
             query: transom_core::LogQuery::default(),
-            diff_options: GitDiffOptions::default(),
+            diff_options,
             last_diff: None,
             search_input,
             author_input,
