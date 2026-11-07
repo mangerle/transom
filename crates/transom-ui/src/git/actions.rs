@@ -407,6 +407,8 @@ impl AppShell {
         if let Some(tab_id) = self.git_tab_for_project(id) {
             self.cancel_git_tab(tab_id, cx);
         }
+        self.persist_git_projects(cx);
+        cx.notify();
     }
 
     /// 按项目 id 取标签页状态。
