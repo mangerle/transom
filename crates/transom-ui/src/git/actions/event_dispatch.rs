@@ -172,10 +172,9 @@ impl AppShell {
                         state.status_error = Some(message.clone());
                     }
                 }
-                if let Some(badge) = self.state.git.badges.get_mut(&project_id) {
-                    badge.loading = false;
-                    badge.error = Some(message.clone());
-                }
+                let badge = self.state.git.badges.entry(project_id).or_default();
+                badge.loading = false;
+                badge.error = Some(message.clone());
                 if !not_repo {
                     self.set_error(message);
                 }
@@ -377,14 +376,13 @@ impl AppShell {
                 .as_deref()
                 .map(|oid| oid.chars().take(7).collect()),
         };
-        if let Some(badge) = self.state.git.badges.get_mut(&project_id) {
-            badge.branch = branch;
-            badge.dirty = dirty;
-            badge.ahead = status.ahead;
-            badge.behind = status.behind;
-            badge.loading = false;
-            badge.error = None;
-        }
+        let badge = self.state.git.badges.entry(project_id).or_default();
+        badge.branch = branch;
+        badge.dirty = dirty;
+        badge.ahead = status.ahead;
+        badge.behind = status.behind;
+        badge.loading = false;
+        badge.error = None;
         if let Some(state) = self.git_state_mut(project_id) {
             state.status_error = None;
             state.status_loading = false;
@@ -451,10 +449,9 @@ impl AppShell {
                     state.log.loading = false;
                     state.log.error = Some(message.clone());
                 }
-                if let Some(badge) = self.state.git.badges.get_mut(&project_id) {
-                    badge.loading = false;
-                    badge.error = Some(message.clone());
-                }
+                let badge = self.state.git.badges.entry(project_id).or_default();
+                badge.loading = false;
+                badge.error = Some(message.clone());
                 self.set_error(message);
             }
             None => {
@@ -471,10 +468,9 @@ impl AppShell {
                     state.log.loading = false;
                     state.log.error = None;
                 }
-                if let Some(badge) = self.state.git.badges.get_mut(&project_id) {
-                    badge.loading = false;
-                    badge.error = None;
-                }
+                let badge = self.state.git.badges.entry(project_id).or_default();
+                badge.loading = false;
+                badge.error = None;
                 if let Some(project) = project {
                     self.git_refresh(&project, cx);
                     if let Some(tab_id) = self.git_tab_for_project(project_id) {

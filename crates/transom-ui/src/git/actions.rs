@@ -75,10 +75,9 @@ impl AppShell {
 
     /// 采集单个项目的状态快照（侧栏徽标与标签页共用同一条命令）。
     pub(crate) fn git_refresh(&mut self, project: &GitProject, cx: &mut Context<Self>) {
-        if let Some(badge) = self.state.git.badges.get_mut(&project.id) {
-            badge.loading = true;
-            badge.error = None;
-        }
+        let badge = self.state.git.badges.entry(project.id).or_default();
+        badge.loading = true;
+        badge.error = None;
         self.send_command(GitCommand::Refresh {
             project: project.clone(),
         });

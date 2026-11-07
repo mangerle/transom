@@ -140,11 +140,26 @@ impl AppShell {
         let id = project.id;
         let badge = self.state.git.badges.get(&id).cloned().unwrap_or_default();
         let name = project.display_name();
-        let branch = badge.branch.clone().unwrap_or_else(|| {
+        let active_branch = self
+            .git_tab_for_project(id)
+            .and_then(|tab_id| self.git_state_of_tab(tab_id))
+            .and_then(|s| s.status.as_ref())
+            .and_then(|status| match &status.head {
+                transom_core::HeadState::OnBranch(name) => Some(name.clone()),
+                transom_core::HeadState::Initial { branch } => Some(branch.clone()),
+                transom_core::HeadState::Detached => status
+                    .oid
+                    .as_deref()
+                    .map(|oid| oid.chars().take(7).collect()),
+            });
+
+        let branch = badge.branch.clone().or(active_branch).unwrap_or_else(|| {
             if badge.error.is_some() {
                 rust_i18n::t!("git.sidebar.unavailable").to_string()
-            } else {
+            } else if badge.loading {
                 rust_i18n::t!("git.sidebar.loading").to_string()
+            } else {
+                "-".to_string()
             }
         });
         let app_entity = cx.entity().clone();
