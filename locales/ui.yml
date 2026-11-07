@@ -7671,15 +7671,33 @@ git:
       en: "All References"
       zh-CN: "全部引用"
   refs:
+    hide:
+      en: "Hide Branches"
+      zh-CN: "隐藏分支栏"
+    update_selected:
+      en: "Update Current Branch"
+      zh-CN: "更新当前分支"
+    delete_selected:
+      en: "Delete Selected"
+      zh-CN: "删除所选引用"
+    settings:
+      en: "Git Settings"
+      zh-CN: "Git 设置"
+    panel_toggle:
+      en: "Branches and Tags"
+      zh-CN: "分支与标签"
+    head_current:
+      en: "HEAD (Current Branch)"
+      zh-CN: "HEAD(当前分支)"
     worktrees:
       en: Worktrees
       zh-CN: 工作树
     local:
-      en: "Branches"
-      zh-CN: "分支"
+      en: "Local"
+      zh-CN: "本地"
     remote:
       en: "Remote"
-      zh-CN: "远程分支"
+      zh-CN: "远程"
     tags:
       en: "Tags"
       zh-CN: "标签"
@@ -8022,6 +8040,9 @@ git:
     search_placeholder:
       en: Text or hash
       zh-CN: 文本或哈希
+    branch_scope:
+      en: "Branch: %{branch}"
+      zh-CN: "分支: %{branch}"
     author_placeholder:
       en: User
       zh-CN: 用户

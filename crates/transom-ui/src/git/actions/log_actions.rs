@@ -296,20 +296,42 @@ impl AppShell {
     }
 
     /// 折叠 / 展开引用栏的一个分组。
-    pub(crate) fn toggle_git_refs_group(&mut self, key: &str, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_git_refs_group(
+        &mut self,
+        key: &str,
+        default_expanded: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(tab_id) = self.active_git_tab() else {
             return;
         };
         let Some(state) = self.git_state_of_tab_mut(tab_id) else {
             return;
         };
-        let default_expanded = matches!(key, "HEAD" | "git.refs.local")
-            || state.refs_expanded.get(key).copied().unwrap_or(false);
-        let next = match state.refs_expanded.get(key) {
-            Some(current) => !current,
-            None => !default_expanded,
+        let current = state
+            .refs_expanded
+            .get(key)
+            .copied()
+            .unwrap_or(default_expanded);
+        state.refs_expanded.insert(key.to_string(), !current);
+        cx.notify();
+    }
+
+    /// 一次性展开或收起引用栏的四个引用分组。
+    pub(crate) fn git_set_all_ref_groups_expanded(
+        &mut self,
+        expanded: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(tab_id) = self.active_git_tab() else {
+            return;
         };
-        state.refs_expanded.insert(key.to_string(), next);
+        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+            return;
+        };
+        for key in ["HEAD", "git.refs.local", "git.refs.remote", "git.refs.tags"] {
+            state.refs_expanded.insert(key.to_string(), expanded);
+        }
         cx.notify();
     }
 

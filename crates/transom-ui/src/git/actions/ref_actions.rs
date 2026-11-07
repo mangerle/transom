@@ -118,7 +118,6 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 检出分支或标签。
     /// 检出指定项目的分支或标签。
     pub(crate) fn git_checkout_project_ref(
         &mut self,
@@ -127,13 +126,6 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.git_ref_action(project, GitRefAction::Checkout(name.to_string()), cx);
-    }
-
-    pub(crate) fn git_checkout_ref(&mut self, name: &str, cx: &mut Context<Self>) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            return;
-        };
-        self.git_checkout_project_ref(&project, name, cx);
     }
 
     /// 删除指定项目的分支或标签：名字带 `refs/tags/` 语义时按标签删。

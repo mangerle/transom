@@ -276,7 +276,7 @@ impl AppShell {
                         .ghost()
                         .xsmall()
                         .icon(IconName::PanelLeftOpen)
-                        .tooltip(rust_i18n::t!("git.refs.local").to_string())
+                        .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
                         .on_click(move |_, _, cx| {
                             toggle_app.update(cx, |this, cx| {
                                 this.git_toggle_refs_panel(tab_id, cx);
@@ -286,7 +286,7 @@ impl AppShell {
             })
             .children(left)
             .child(
-                // 中间栏：顶部是过滤条（分支/文本/用户/日期等），下方是提交图谱与历史表格
+                // 中间栏：顶部是过滤条（文本/分支/用户/日期等），下方是提交图谱与历史表格
                 v_flex()
                     .size_full()
                     .flex_1()

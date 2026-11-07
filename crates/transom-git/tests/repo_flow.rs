@@ -183,11 +183,47 @@ async fn diff_reads_both_sides_from_index_and_worktree() {
 async fn branch_listing_create_and_switch() {
     let dir = repo_with_initial_commit();
     git(dir.path(), &["branch", "feature/x"]);
+    git(dir.path(), &["branch", "origin"]);
+    let head = git(dir.path(), &["rev-parse", "HEAD"]);
+    git(
+        dir.path(),
+        &["update-ref", "refs/remotes/origin/main", &head],
+    );
+    git(
+        dir.path(),
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
     let repo = Repo::open(dir.path()).await.expect("打开仓库");
 
     let branches = repo.branches().await.expect("分支列表成功");
     let names: Vec<&str> = branches.iter().map(|branch| branch.name.as_str()).collect();
-    assert!(names.contains(&"main") && names.contains(&"feature/x"));
+    assert!(names.contains(&"main") && names.contains(&"feature/x") && names.contains(&"origin"));
+    assert!(
+        !names.contains(&"origin/HEAD"),
+        "远端 HEAD 符号引用不应出现在列表中"
+    );
+    assert!(
+        branches
+            .iter()
+            .any(|branch| branch.name == "feature/x" && !branch.remote),
+        "含斜杠的本地分支不能被误判为远程分支"
+    );
+    assert!(
+        branches
+            .iter()
+            .any(|branch| branch.name == "origin" && !branch.remote),
+        "名为 origin 的本地分支仍是本地分支"
+    );
+    assert!(
+        branches
+            .iter()
+            .any(|branch| branch.name == "origin/main" && branch.remote),
+        "refs/remotes 下的引用必须标记为远程分支"
+    );
     assert!(
         branches
             .iter()

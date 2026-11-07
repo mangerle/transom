@@ -61,7 +61,7 @@ pub(crate) struct GitWorkspaceState {
     pub diff: Option<GitDiffState>,
     /// 左侧引用栏是否展开。
     pub refs_panel: bool,
-    /// 引用栏各分组的展开态（本地/分支/远程/标签）。
+    /// 引用栏各分组的展开态（HEAD/本地/远程/标签）。
     pub refs_expanded: HashMap<String, bool>,
     /// 概览里勾选的文件路径（提交面板的待提交集）。
     pub checked: HashSet<String>,

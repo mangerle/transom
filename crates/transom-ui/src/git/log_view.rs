@@ -5,8 +5,8 @@
 //!   `workspace.tabs` 里，若渲染期间持有 `&mut GitWorkspaceState` 又去调用
 //!   `AppShell` 的方法，借用检查器直接判死。句柄回调把变更推迟到点击时刻，
 //!   既解开借用，也让每个面板可独立测试；
-//! - 引用栏按 IDEA 分组（本地 / 远程分支 / 标签），默认只展开「本地」：分支多
-//!   的仓库全展开会把可视区吃光；
+//! - 引用栏按 IDEA 分组（HEAD / 本地 / 远程 / 标签 / 工作树），默认展开
+//!   「HEAD」「本地」与「远程」；标签与工作树保持紧凑；
 //! - 提交图由 `graph_paint` 在 canvas 上自绘节点与贝塞尔连线：gpui 的 div 布局
 //!   画不出跨行的分叉连线，用竖线加圆点近似会在合并提交上画错。
 //! - 详情区点文件才发差异请求：一次合并提交可能上百个文件，预取全部差异会
@@ -28,13 +28,15 @@ use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{HeadState, TabId};
 
+mod branch_tree;
 mod files_tree;
 mod log_details;
 mod log_refs;
 mod log_table;
 pub(crate) mod menus;
+mod ref_toolbar;
 mod worktrees_group;
 
 use menus::{render_date_menu, render_path_menu};
@@ -61,11 +63,14 @@ pub(crate) fn render_filter_bar(
         .filter(|branch| !branch.remote)
         .map(|branch| branch.name.clone())
         .collect();
-    let scope_label = match &state.query.scope {
-        transom_core::LogScope::CurrentBranch => rust_i18n::t!("git.scope.current").to_string(),
+    let scope_name = match &state.query.scope {
+        transom_core::LogScope::CurrentBranch => current_head_name(state)
+            .unwrap_or_else(|| rust_i18n::t!("git.scope.current").to_string()),
         transom_core::LogScope::AllRefs => rust_i18n::t!("git.scope.all").to_string(),
         transom_core::LogScope::Ref(name) => name.clone(),
     };
+    let scope_label =
+        rust_i18n::t!("git.filter.branch_scope", branch = scope_name.as_str()).to_string();
     let date_label = match state.query.since.as_deref() {
         None => rust_i18n::t!("git.filter.date_all").to_string(),
         Some(since) => since.to_string(),
@@ -85,6 +90,43 @@ pub(crate) fn render_filter_bar(
         .flex_none()
         .border_color(p.divider(p.border))
         .border_b_1()
+        .child(
+            div()
+                .w(px(240.0))
+                .flex_none()
+                .min_w_0()
+                .child(Input::new(&search_state).xsmall()),
+        )
+        .child(
+            Button::new("git-filter-regex")
+                .ghost()
+                .xsmall()
+                .label(".*")
+                .when(state.query.regex, |btn| btn.primary())
+                .on_click({
+                    let click_app = app.clone();
+                    move |_, _, cx| {
+                        click_app.update(cx, |this, cx| {
+                            this.git_toggle_filter_flag(tab_id, true, cx);
+                        });
+                    }
+                }),
+        )
+        .child(
+            Button::new("git-filter-case")
+                .ghost()
+                .xsmall()
+                .label("Cc")
+                .when(state.query.case_sensitive, |btn| btn.primary())
+                .on_click({
+                    let click_app = app.clone();
+                    move |_, _, cx| {
+                        click_app.update(cx, |this, cx| {
+                            this.git_toggle_filter_flag(tab_id, false, cx);
+                        });
+                    }
+                }),
+        )
         .child(
             Button::new("git-filter-scope")
                 .ghost()
@@ -149,43 +191,7 @@ pub(crate) fn render_filter_bar(
                     }
                 }),
         )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .child(Input::new(&search_state).xsmall()),
-        )
         .child(div().w(px(140.0)).child(Input::new(&author_state).xsmall()))
-        .child(
-            Button::new("git-filter-regex")
-                .ghost()
-                .xsmall()
-                .label(".*")
-                .when(state.query.regex, |btn| btn.primary())
-                .on_click({
-                    let click_app = app.clone();
-                    move |_, _, cx| {
-                        click_app.update(cx, |this, cx| {
-                            this.git_toggle_filter_flag(tab_id, true, cx);
-                        });
-                    }
-                }),
-        )
-        .child(
-            Button::new("git-filter-case")
-                .ghost()
-                .xsmall()
-                .label("Cc")
-                .when(state.query.case_sensitive, |btn| btn.primary())
-                .on_click({
-                    let click_app = app.clone();
-                    move |_, _, cx| {
-                        click_app.update(cx, |this, cx| {
-                            this.git_toggle_filter_flag(tab_id, false, cx);
-                        });
-                    }
-                }),
-        )
         .child(
             Button::new("git-filter-date")
                 .ghost()
@@ -244,6 +250,15 @@ pub(crate) fn render_filter_bar(
                 }),
         )
         .into_any_element()
+}
+
+/// 当前 HEAD 指向的分支短名；游离头指针或状态尚未加载时返回 `None`。
+fn current_head_name(state: &State) -> Option<String> {
+    let status = state.status.as_ref()?;
+    match &status.head {
+        HeadState::OnBranch(name) | HeadState::Initial { branch: name } => Some(name.clone()),
+        HeadState::Detached => None,
+    }
 }
 
 fn placeholder(text: String, p: &Palette) -> AnyElement {

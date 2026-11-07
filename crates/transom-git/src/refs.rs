@@ -28,7 +28,7 @@ const RECORD: &str = "%1e";
 /// 列出本地与远程分支。
 pub(crate) async fn branches(root: &Path) -> Result<Vec<BranchEntry>, GitError> {
     let format = format!(
-        "%(refname:short){}%(objectname){}%(HEAD){}%(upstream:short){RECORD}",
+        "%(refname){}%(objectname){}%(HEAD){}%(upstream:short){RECORD}",
         "%1f", "%1f", "%1f"
     );
     let output = run(
@@ -56,11 +56,25 @@ pub(crate) async fn branches(root: &Path) -> Result<Vec<BranchEntry>, GitError> 
                 reason: format!("引用记录字段不足: {}", lossy(record)),
             });
         }
-        let name = lossy(fields[0]);
+        let full_name = lossy(fields[0]);
+        // 不使用 `%(refname:short)`：本地分支名为 `origin` 时会得到歧义的
+        // `heads/origin`，远端 HEAD 还可能被压成 `origin`。直接按完整引用名剥离前缀，
+        // 才能稳定区分本地分支、远程分支与同名引用。
+        let (name, is_remote) = if let Some(name) = full_name.strip_prefix("refs/heads/") {
+            (name, false)
+        } else if let Some(name) = full_name.strip_prefix("refs/remotes/") {
+            // `refs/remotes/origin/HEAD` 是远端默认分支的符号引用，不是可检出分支。
+            if name.ends_with("/HEAD") {
+                continue;
+            }
+            (name, true)
+        } else {
+            continue;
+        };
         entries.push(BranchEntry {
-            remote: name.contains('/'),
+            remote: is_remote,
             current: lossy(fields[2]).trim() == "*",
-            name,
+            name: name.to_string(),
             oid: lossy(fields[1]),
             upstream: Some(lossy(fields[3])).filter(|text| !text.is_empty()),
             ahead: 0,
