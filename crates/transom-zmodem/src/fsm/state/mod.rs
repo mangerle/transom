@@ -1,7 +1,10 @@
 //! ZMODEM 会话状态机核心执行逻辑与文件 I/O 驱动。
+//!
+//! 协议状态推进留在本模块，本地文件打开/读写抽到 files.rs。
+
+mod file_io;
 
 use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
@@ -10,14 +13,13 @@ use std::sync::atomic::Ordering;
 use transom_core::{ZmodemDirection, ZmodemEvent, ZmodemFinished};
 
 use super::super::attach::{Shared, ZmodemConfig};
-use super::super::files::{self, DownloadWriter, UploadFile};
+use super::super::files::DownloadWriter;
 use super::super::frames::{ZFILE, ZRINIT, ZRQINIT, ZSINIT, cancel_sequence};
 use super::super::receiver::{Receiver, RecvAction, RecvPhase};
 use super::super::scanner::{HeaderEvent, HeaderScanner, SubpacketEvent, SubpacketScanner};
-use super::super::sender::{BLOCK_SIZE, SendAction, Sender};
+use super::super::sender::{SendAction, Sender};
 use super::types::{FsmChannels, Mode, ZmodemCommand};
 
-/// 协议驱动线程的核心状态（与线程壳分离，便于用合成字节流直接测试）。
 pub(crate) struct Fsm {
     pub(crate) mode: Mode,
     pub(crate) receiver: Receiver,
@@ -302,94 +304,6 @@ impl Fsm {
     fn emit_progress(&self, event: ZmodemEvent) {
         if self.events.try_send(event).is_err() {
             log::debug!("ZMODEM 进度事件通道已满，丢弃本次快照");
-        }
-    }
-
-    /// 打开下载文件；失败按 lrzsz 语义请求对端跳过当前文件。
-    fn open_download_file(&mut self, name: String) {
-        match DownloadWriter::create(&self.config.download_dir, &name) {
-            Ok(writer) => {
-                log::info!("ZMODEM 下载开始写入文件: {}", writer.path().display());
-                self.download_file = Some(writer);
-            }
-            Err(error) => {
-                log::warn!("ZMODEM 下载文件创建失败，将请求对端跳过: {name}，原因: {error}");
-                let actions = self.receiver.notify_create_failed();
-                self.run_recv(actions);
-            }
-        }
-    }
-
-    /// 追加写盘；写失败即中止会话（磁盘满或句柄失效都无继续价值）。
-    fn append_download_data(&mut self, data: Vec<u8>) {
-        let Some(writer) = self.download_file.as_mut() else {
-            return;
-        };
-        if let Err(error) = writer.write(&data) {
-            log::error!("ZMODEM 下载数据写盘失败，传输中止: {error}");
-            let actions = self.receiver.cancel();
-            self.run_recv(actions);
-        }
-    }
-
-    /// 文件收尾：冲刷缓冲并强制同步，再释放句柄。
-    ///
-    /// 同步失败只告警不改变协议结局：数据已全部收到，磁盘层面的失败
-    /// 不应把一次成功的传输改判为失败，但必须留下排查线索。
-    fn close_download_file(&mut self) {
-        if let Some(mut writer) = self.download_file.take()
-            && let Err(error) = writer.finish()
-        {
-            log::warn!(
-                "ZMODEM 下载文件收尾同步失败: {}，原因: {error}",
-                writer.path().display()
-            );
-        }
-    }
-
-    /// 打开待上传文件；失败跳过并推进到下一个。
-    fn open_upload_file(&mut self, path: PathBuf) {
-        match files::open_upload_file(&path) {
-            Ok(opened) => {
-                let UploadFile {
-                    file,
-                    size,
-                    mtime,
-                    name,
-                } = opened;
-                self.upload_file = Some(file);
-                self.sender.set_current_file(name);
-                let actions = self.sender.notify_file_ready(size, mtime);
-                self.run_send(actions);
-            }
-            Err(error) => {
-                log::warn!(
-                    "ZMODEM 上传文件打开失败，跳过该文件: {}，原因: {error}",
-                    path.display()
-                );
-                let actions = self.sender.notify_open_failed();
-                self.run_send(actions);
-            }
-        }
-    }
-
-    /// 从上传文件按状态机给定偏移读取下一块并推送。
-    fn read_upload_block(&mut self, offset: u64) {
-        let Some(file) = self.upload_file.as_mut() else {
-            return;
-        };
-        let mut chunk = vec![0u8; BLOCK_SIZE];
-        match files::read_block(file, offset, &mut chunk) {
-            Ok(count) => {
-                chunk.truncate(count);
-                let actions = self.sender.push_data(&chunk, count < BLOCK_SIZE);
-                self.run_send(actions);
-            }
-            Err(error) => {
-                log::error!("ZMODEM 上传文件读写失败，传输中止，偏移: {offset}，原因: {error}");
-                let actions = self.sender.cancel();
-                self.run_send(actions);
-            }
         }
     }
 
