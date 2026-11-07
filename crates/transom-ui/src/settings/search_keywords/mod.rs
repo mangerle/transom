@@ -206,6 +206,9 @@ mod tests {
         GroupSearch::MonitorBehavior,
         GroupSearch::About,
         GroupSearch::ContainerRegistries,
+        GroupSearch::GitExecutable,
+        GroupSearch::GitCommitPush,
+        GroupSearch::GitDiff,
     ];
 
     /// 翻译结果仍是原键名，说明资源里没有这条文案（rust-i18n 缺键时原样返回键）。

@@ -22,6 +22,14 @@ fn default_protected_branches() -> String {
     "main, master".to_string()
 }
 
+fn default_follow_tags() -> String {
+    "follow".to_string()
+}
+
+fn default_auto_fetch() -> u32 {
+    15
+}
+
 /// Git 版本控制偏好设置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitSettings {
@@ -31,12 +39,21 @@ pub struct GitSettings {
     /// 窗口聚焦时自动刷新仓库状态（`git status`）。
     #[serde(default = "default_true")]
     pub auto_update_on_focus: bool,
+    /// 定时自动抓取远端更新的间隔分钟数（0 表示关闭）。
+    #[serde(default = "default_auto_fetch")]
+    pub auto_fetch_interval: u32,
     /// 执行推送前始终弹出推送提交核对对话框（Push Commits Dialog）。
     #[serde(default = "default_true")]
     pub push_dialog: bool,
     /// 提交成功后自动清理提交消息输入框草稿。
     #[serde(default = "default_true")]
     pub clear_message_on_commit: bool,
+    /// 提交前若存在未跟踪改动则发出告警提示。
+    #[serde(default = "default_true")]
+    pub warn_uncommitted: bool,
+    /// 默认推送标签策略（"none"、"follow" 或 "all"）。
+    #[serde(default = "default_follow_tags")]
+    pub default_push_tags: String,
     /// 默认差异对比视图形态（"unified" 单栏合并 或 "split" 双栏并排）。
     #[serde(default = "default_diff_mode")]
     pub default_diff_mode: String,
@@ -59,13 +76,41 @@ impl Default for GitSettings {
         Self {
             executable_path: default_executable_path(),
             auto_update_on_focus: true,
+            auto_fetch_interval: default_auto_fetch(),
             push_dialog: true,
             clear_message_on_commit: true,
+            warn_uncommitted: true,
+            default_push_tags: default_follow_tags(),
             default_diff_mode: default_diff_mode(),
             ignore_whitespace: false,
             protected_branches: default_protected_branches(),
             author_name: String::new(),
             author_email: String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_settings_default_and_roundtrip() {
+        let defaults = GitSettings::default();
+        assert_eq!(defaults.executable_path, "git");
+        assert!(defaults.auto_update_on_focus);
+        assert_eq!(defaults.auto_fetch_interval, 15);
+        assert!(defaults.push_dialog);
+        assert_eq!(defaults.default_push_tags, "follow");
+        assert_eq!(defaults.protected_branches, "main, master");
+
+        let json = serde_json::to_string(&defaults).unwrap();
+        let loaded: GitSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(defaults, loaded);
+
+        // 缺省旧 JSON 反序列化平滑降级
+        let legacy: GitSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.executable_path, "git");
+        assert!(legacy.warn_uncommitted);
     }
 }

@@ -85,6 +85,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) git_protected_branches: Entity<InputState>,
     pub(crate) git_author_name: Entity<InputState>,
     pub(crate) git_author_email: Entity<InputState>,
+    pub(crate) git_test_result: Option<Result<String, String>>,
+    pub(crate) git_testing: bool,
     /// 打开弹窗时从监控面板取来的采样档位快照：设置页只读它，变更以事件上报。
     pub(crate) monitor_interval: crate::monitor::SampleIntervalMode,
 }
@@ -295,6 +297,8 @@ impl SettingsModalState {
             git_protected_branches,
             git_author_name,
             git_author_email,
+            git_test_result: None,
+            git_testing: false,
             sync_form,
             monitor_interval: crate::monitor::SampleIntervalMode::default(),
         }

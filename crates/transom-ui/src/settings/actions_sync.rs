@@ -130,5 +130,7 @@ impl SettingsView {
                 state.set_value(value, window, cx);
             });
         }
+        self.state.git_test_result = None;
+        self.state.git_testing = false;
     }
 }

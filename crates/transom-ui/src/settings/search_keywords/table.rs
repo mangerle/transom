@@ -409,8 +409,11 @@ impl GroupSearch {
                 &[
                     "settings.git_executable_path",
                     "settings.git_executable_path_desc",
+                    "settings.git_test_executable",
                     "settings.git_auto_update_on_focus",
                     "settings.git_auto_update_on_focus_desc",
+                    "settings.git_auto_fetch_interval",
+                    "settings.git_auto_fetch_interval_desc",
                 ],
             ),
             GroupSearch::GitCommitPush => (
@@ -420,6 +423,10 @@ impl GroupSearch {
                     "settings.git_push_dialog_desc",
                     "settings.git_clear_message",
                     "settings.git_clear_message_desc",
+                    "settings.git_warn_uncommitted",
+                    "settings.git_warn_uncommitted_desc",
+                    "settings.git_default_push_tags",
+                    "settings.git_default_push_tags_desc",
                     "settings.git_protected_branches",
                     "settings.git_protected_branches_desc",
                     "settings.git_author_name",
@@ -431,6 +438,8 @@ impl GroupSearch {
             GroupSearch::GitDiff => (
                 "settings.git_diff_group",
                 &[
+                    "settings.git_default_diff_mode",
+                    "settings.git_default_diff_mode_desc",
                     "settings.git_ignore_whitespace",
                     "settings.git_ignore_whitespace_desc",
                 ],

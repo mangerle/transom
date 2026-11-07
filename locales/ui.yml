@@ -2943,12 +2943,42 @@ settings:
   git_executable_path_desc:
     en: Path to the git binary executable or command name in system PATH (default "git").
     zh-CN: git 二进制可执行文件绝对路径或系统 PATH 中的命令名称（默认 "git"）。
+  git_test_executable:
+    en: Test
+    zh-CN: 测试
+  git_testing_executable:
+    en: Testing...
+    zh-CN: 检测中...
+  git_test_success:
+    en: "Git detected: %{version}"
+    zh-CN: "检测成功: %{version}"
+  git_test_failed:
+    en: "Failed to detect Git: %{error}"
+    zh-CN: "无法识别 Git: %{error}"
+  git_process_exit_status:
+    en: "Process exit status: %{status}"
+    zh-CN: "进程退出状态: %{status}"
+  git_probe_thread_failed:
+    en: Failed to create background probe thread
+    zh-CN: 创建后台探测线程失败
   git_auto_update_on_focus:
     en: Auto-refresh on Window Focus
     zh-CN: 窗口获得焦点时自动刷新状态
   git_auto_update_on_focus_desc:
     en: Automatically re-scan git status and local branch state when Transom window gets focus.
     zh-CN: 当 Transom 窗口重新获得焦点时自动重新扫描工作区状态（git status）与分支变动。
+  git_auto_fetch_interval:
+    en: Periodic Fetch Interval
+    zh-CN: 定时自动抓取远端间隔
+  git_auto_fetch_interval_desc:
+    en: Periodically check and fetch new commits from remotes in the background (0 to disable).
+    zh-CN: 在后台定期自动从远端仓库拉取（fetch）最新提交元数据，保持分支状态与远端同步（设为从不则关闭）。
+  git_auto_fetch_never:
+    en: Never (Manual only)
+    zh-CN: 从不（仅手动抓取）
+  git_auto_fetch_mins:
+    en: "%{count} minutes"
+    zh-CN: "%{count} 分钟"
   git_commit_push_group:
     en: Commit & Push Safety
     zh-CN: 提交与推送安全
@@ -2964,6 +2994,27 @@ settings:
   git_clear_message_desc:
     en: Automatically clear commit message input field after commit is successfully created.
     zh-CN: 本地提交成功写入仓库后自动清理提交说明输入框中的文字草稿。
+  git_warn_uncommitted:
+    en: Warn About Uncommitted Changes
+    zh-CN: 存在未提交修改时提醒
+  git_warn_uncommitted_desc:
+    en: Warn before switching branches or stashing when there are modified files in workspace.
+    zh-CN: 当工作区存在未提交或未暂存的文件改动时，在切换分支等关键操作前给出明确安全提示。
+  git_default_push_tags:
+    en: Default Push Tags Policy
+    zh-CN: 默认推送标签策略
+  git_default_push_tags_desc:
+    en: Default tag push behavior when executing git push.
+    zh-CN: 执行推送时的默认标签附带策略。
+  git_push_tags_none:
+    en: Do not push tags
+    zh-CN: 不推送标签
+  git_push_tags_follow:
+    en: Push associated tags (--follow-tags)
+    zh-CN: 推送关联标签 (--follow-tags)
+  git_push_tags_all:
+    en: Push all local tags (--tags)
+    zh-CN: 推送所有本地标签 (--tags)
   git_protected_branches:
     en: Protected Branches
     zh-CN: 受保护的分支
@@ -2997,6 +3048,12 @@ settings:
   git_default_diff_mode_desc:
     en: Preferred layout for diff view (Unified or Side-by-side).
     zh-CN: 比较代码改动时的默认布局展示形态（单栏统一或双栏并排）。
+  git_diff_mode_unified:
+    en: Unified View
+    zh-CN: 单栏统一视图 (Unified)
+  git_diff_mode_split:
+    en: Side-by-side View
+    zh-CN: 双栏并排视图 (Split)
   git_ignore_whitespace:
     en: Ignore Whitespace Changes in Diff
     zh-CN: 差异对比默认忽略空白字符改动
