@@ -129,4 +129,5 @@ pub(crate) mod dialog {
     pub const GIT_FORM: f32 = 41.25;
     pub const GIT_CLONE: f32 = 45.0;
     pub const GIT_PUSH: f32 = 48.0;
+    pub const GIT_CONFLICT: f32 = 62.0;
 }

@@ -401,6 +401,33 @@ pub(super) fn handle_write_command(
                 },
             );
         }
+        GitCommand::ResolveConflictOurs { project, paths } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::ResolveConflictOurs,
+                move |repo| async move { repo.resolve_ours(&paths).await },
+            );
+        }
+        GitCommand::ResolveConflictTheirs { project, paths } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::ResolveConflictTheirs,
+                move |repo| async move { repo.resolve_theirs(&paths).await },
+            );
+        }
+        GitCommand::ResolveConflictMark { project, paths } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::ResolveConflictMark,
+                move |repo| async move { repo.mark_resolved(&paths).await },
+            );
+        }
         _ => {}
     }
 }

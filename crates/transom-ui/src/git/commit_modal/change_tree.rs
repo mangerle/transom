@@ -11,6 +11,7 @@ use crate::git::actions::GitDiffRequest;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Icon, Sizable};
@@ -70,6 +71,55 @@ impl AppShell {
             .collect();
 
         let mut list = v_flex().gap_1().flex_1().min_h_0().overflow_y_scrollbar();
+
+        let conflict_count = status.conflicts().len();
+        if conflict_count > 0 {
+            let conflict_project = project.clone();
+            let app_resolve = cx.entity().clone();
+            let banner = h_flex()
+                .w_full()
+                .h(px(28.0))
+                .px_2()
+                .items_center()
+                .justify_between()
+                .bg(p.warning.opacity(0.12))
+                .border_1()
+                .border_color(p.warning.opacity(0.35))
+                .rounded(px(4.0))
+                .child(
+                    h_flex()
+                        .gap_1p5()
+                        .items_center()
+                        .child(
+                            Icon::new(IconName::TriangleAlert)
+                                .xsmall()
+                                .text_color(p.warning),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(p.warning)
+                                .child(
+                                    rust_i18n::t!("git.conflict.banner", count = conflict_count)
+                                        .to_string(),
+                                ),
+                        ),
+                )
+                .child(
+                    Button::new("btn-open-conflict-resolver")
+                        .primary()
+                        .xsmall()
+                        .label(rust_i18n::t!("git.conflict.resolve_btn").to_string())
+                        .on_click(move |_, _, cx| {
+                            app_resolve.update(cx, |this, cx| {
+                                this.open_git_conflict_modal(&conflict_project, cx);
+                            });
+                        }),
+                );
+            list = list.child(banner);
+        }
+
         for (group, entries) in [
             (ChangeGroup::Staged, &staged),
             (ChangeGroup::Unstaged, &unstaged),

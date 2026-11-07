@@ -268,7 +268,19 @@ fn render_file_menu(
     let copy_path = path.clone();
     let refresh_app = app.clone();
     let refresh_project = project.clone();
+    let conflict_app = app.clone();
+    let conflict_project = project.clone();
     let mut menu = menu.item(menu_item(
+        rust_i18n::t!("git.conflict.resolve_menu").to_string(),
+        IconName::GitMerge,
+        move |_, _, cx| {
+            let p = conflict_project.clone();
+            conflict_app.update(cx, |this, cx| {
+                this.open_git_conflict_modal(&p, cx);
+            });
+        },
+    ));
+    menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.show_diff").to_string(),
         IconName::GitCompare,
         move |_, _, cx| {

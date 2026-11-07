@@ -274,6 +274,26 @@ pub(super) fn handle_read_command(
             });
             true
         }
+        GitCommand::LoadConflictSides {
+            project,
+            request_id,
+            path,
+        } => {
+            let project_id = project.id;
+            let project = project.clone();
+            let request_id = *request_id;
+            let path = path.clone();
+            spawn_read(state, ctx, project, request_id, move |repo| async move {
+                let sides = repo.conflict_sides(&path).await?;
+                Ok(GitAppEvent::ConflictSidesLoaded {
+                    project_id,
+                    request_id,
+                    path,
+                    sides: Box::new(sides),
+                })
+            });
+            true
+        }
         GitCommand::Cancel { request_id } => {
             if !ctx.git.cancel(*request_id) {
                 log::debug!("取消的 Git 请求已结束或不存在，请求: {request_id}");

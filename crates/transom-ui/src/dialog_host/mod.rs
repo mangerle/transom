@@ -136,6 +136,8 @@ pub(crate) enum ModalKind {
     GitRebase,
     /// Git 推送提交确认。
     GitPush,
+    /// Git 冲突解决器。
+    GitConflict,
 }
 
 /// 单个弹窗的渲染元数据；宽度与 slug 同一处定义，新增弹窗不再漏改列表。
@@ -198,6 +200,7 @@ impl ModalKind {
         ModalKind::GitName,
         ModalKind::GitRebase,
         ModalKind::GitPush,
+        ModalKind::GitConflict,
     ];
 
     /// 弹窗元数据：宽度与元素标识。

@@ -31,6 +31,7 @@ mod workspace;
 pub(crate) mod worktree_modal;
 
 mod clone_modal;
+mod conflict_modal;
 mod dir_browser;
 mod folder_field;
 mod helpers;
@@ -38,6 +39,7 @@ mod patch;
 mod web_link;
 
 pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
+pub(crate) use conflict_modal::GitConflictModal;
 pub(crate) use form::{GitProjectDraft, GitProjectModal};
 pub(crate) use name_modal::{GitNameModal, GitNamePurpose};
 pub(crate) use push_modal::GitPushModal;

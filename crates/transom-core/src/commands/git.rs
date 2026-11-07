@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use crate::error::AppError;
 use crate::ids::{GitProjectId, GitRequestId};
 use crate::model::git::{
-    BranchEntry, CommitEntry, CommitFile, DiffContent, GitAction, GitCheckout, GitFoldMode,
-    GitProject, GitPushOptions, GitRebaseStep, GitResetKind, GitSide, LogPage, LogQuery, RepoInfo,
-    RepoStatus, StashEntry, StashFile, TagEntry, WorktreeEntry,
+    BranchEntry, CommitEntry, CommitFile, ConflictSides, DiffContent, GitAction, GitCheckout,
+    GitFoldMode, GitProject, GitPushOptions, GitRebaseStep, GitResetKind, GitSide, LogPage,
+    LogQuery, RepoInfo, RepoStatus, StashEntry, StashFile, TagEntry, WorktreeEntry,
 };
 
 /// Git 领域命令：全部发往控制器派发的后台任务。
@@ -289,6 +289,27 @@ pub enum GitCommand {
         /// 浅克隆深度；`None` 表示拉完整历史。
         depth: Option<u32>,
     },
+    /// 解决冲突：采用本地/当前版本。
+    ResolveConflictOurs {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 解决冲突：采用传入版本。
+    ResolveConflictTheirs {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 标记冲突文件已手动解决。
+    ResolveConflictMark {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 读取冲突文件的三方内容视图。
+    LoadConflictSides {
+        project: GitProject,
+        request_id: GitRequestId,
+        path: String,
+    },
     /// 中止在途读请求（视图关闭时）。
     Cancel {
         request_id: GitRequestId,
@@ -410,5 +431,12 @@ pub enum GitAppEvent {
         request_id: GitRequestId,
         path: PathBuf,
         error: Option<AppError>,
+    },
+    /// 冲突文件的三方内容加载完成。
+    ConflictSidesLoaded {
+        project_id: GitProjectId,
+        request_id: GitRequestId,
+        path: String,
+        sides: Box<ConflictSides>,
     },
 }

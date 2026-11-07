@@ -357,4 +357,27 @@ impl Repo {
     pub async fn rebase_abort(&self) -> Result<(), GitError> {
         history::rebase_abort(self.root()).await
     }
+
+    /// 采用本地/当前分支版本解决冲突并暂存。
+    pub async fn resolve_ours(&self, paths: &[String]) -> Result<(), GitError> {
+        ops::resolve_ours(self.root(), paths).await
+    }
+
+    /// 采用传入版本解决冲突并暂存。
+    pub async fn resolve_theirs(&self, paths: &[String]) -> Result<(), GitError> {
+        ops::resolve_theirs(self.root(), paths).await
+    }
+
+    /// 标记冲突文件已手动解决。
+    pub async fn mark_resolved(&self, paths: &[String]) -> Result<(), GitError> {
+        ops::mark_resolved(self.root(), paths).await
+    }
+
+    /// 读取冲突文件的三方阶段内容。
+    pub async fn conflict_sides(
+        &self,
+        path: &str,
+    ) -> Result<transom_core::ConflictSides, GitError> {
+        ops::conflict_sides(self.root(), path).await
+    }
 }

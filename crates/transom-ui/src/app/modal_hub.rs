@@ -69,6 +69,7 @@ pub(crate) struct GitModals {
     pub(crate) name: Option<crate::git::GitNameModal>,
     pub(crate) rebase: Option<crate::git::GitRebaseModal>,
     pub(crate) push: Option<crate::git::GitPushModal>,
+    pub(crate) conflict: Option<crate::git::GitConflictModal>,
 }
 
 impl GitModals {
@@ -80,6 +81,7 @@ impl GitModals {
             name: None,
             rebase: None,
             push: None,
+            conflict: None,
         }
     }
 }

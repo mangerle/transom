@@ -279,6 +279,38 @@ impl AppShell {
                 if matches!(action, GitAction::Push) {
                     self.git_handle_push_result(project_id, message.clone(), cx);
                 }
+                if matches!(
+                    action,
+                    GitAction::ResolveConflictOurs
+                        | GitAction::ResolveConflictTheirs
+                        | GitAction::ResolveConflictMark
+                ) && let Some(modal) = self.state.modals.git.conflict.as_mut()
+                {
+                    modal.resolving = false;
+                    if message.is_none() {
+                        let idx = modal.selected_index;
+                        if idx < modal.files.len() {
+                            modal.files.remove(idx);
+                        }
+                        if modal.files.is_empty() {
+                            self.state.modals.git.conflict = None;
+                        } else {
+                            modal.selected_index = modal.selected_index.min(modal.files.len() - 1);
+                            modal.loading = true;
+                            modal.sides = None;
+                            let next_file = modal.files[modal.selected_index].clone();
+                            let project = modal.project.clone();
+                            let req = transom_core::GitRequestId::new();
+                            self.send_command(GitCommand::LoadConflictSides {
+                                project,
+                                request_id: req,
+                                path: next_file,
+                            });
+                        }
+                    } else {
+                        modal.error = message.clone();
+                    }
+                }
                 if matches!(action, GitAction::Commit)
                     && let Some(tab_id) = self.git_tab_for_project(project_id)
                 {
@@ -395,6 +427,21 @@ impl AppShell {
             }
             GitAppEvent::CloneProgress { .. } | GitAppEvent::CloneDone { .. } => {
                 self.apply_git_clone_event(event, cx);
+            }
+            GitAppEvent::ConflictSidesLoaded {
+                project_id,
+                path,
+                sides,
+                ..
+            } => {
+                if let Some(modal) = self.state.modals.git.conflict.as_mut()
+                    && modal.project.id == project_id
+                    && modal.active_file().is_some_and(|f| f == path)
+                {
+                    modal.sides = Some(*sides);
+                    modal.loading = false;
+                    cx.notify();
+                }
             }
         }
     }

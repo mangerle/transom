@@ -23,8 +23,8 @@ pub use log::{
     TagEntry,
 };
 pub use ops::{
-    GitAction, GitCheckout, GitPushOptions, GitRebaseAction, GitRebaseStep, GitResetKind,
-    PushTagsMode, ShelfEntry, StashEntry, StashFile, WorktreeEntry,
+    ConflictSides, GitAction, GitCheckout, GitPushOptions, GitRebaseAction, GitRebaseStep,
+    GitResetKind, PushTagsMode, ShelfEntry, StashEntry, StashFile, WorktreeEntry,
 };
 pub use project::{GitFolder, GitProject, GitRegistry};
 pub use status::{ChangeCode, HeadState, RepoStatus, StatusEntry, StatusRecord};

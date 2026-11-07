@@ -54,6 +54,7 @@ const ALL: &[ModalKind] = &[
     ModalKind::GitName,
     ModalKind::GitRebase,
     ModalKind::GitPush,
+    ModalKind::GitConflict,
 ];
 
 #[test]

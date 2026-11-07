@@ -46,6 +46,9 @@ pub enum GitAction {
     StashPop,
     StashDrop,
     CreatePatch,
+    ResolveConflictOurs,
+    ResolveConflictTheirs,
+    ResolveConflictMark,
 }
 
 impl GitAction {
@@ -87,6 +90,9 @@ impl GitAction {
             Self::StashPop => "git.action.stash_pop",
             Self::StashDrop => "git.action.stash_drop",
             Self::CreatePatch => "git.action.create_patch",
+            Self::ResolveConflictOurs => "git.action.resolve_ours",
+            Self::ResolveConflictTheirs => "git.action.resolve_theirs",
+            Self::ResolveConflictMark => "git.action.resolve_mark",
         }
     }
 }
@@ -288,4 +294,17 @@ pub struct ShelfEntry {
     pub files: Vec<String>,
     /// 补丁文本（unified diff 格式）。
     pub patch: String,
+}
+
+/// 冲突文件的三方内容视图。
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct ConflictSides {
+    /// 共同祖先版本（Stage 1，如有）。
+    pub base: Option<String>,
+    /// 本地/当前分支版本（Stage 2: Ours）。
+    pub ours: Option<String>,
+    /// 传入分支版本（Stage 3: Theirs）。
+    pub theirs: Option<String>,
+    /// 当前工作区文件内容（包含冲突标记或用户已编辑的内容）。
+    pub working: String,
 }

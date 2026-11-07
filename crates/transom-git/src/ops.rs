@@ -10,7 +10,7 @@
 //!   顺手清掉忽略文件，误删范围必须由界面的勾选决定。
 
 use crate::error::GitError;
-use crate::process::{RunOptions, run};
+use crate::process::{RunOptions, run, run_allow_fail};
 use crate::repo;
 use std::path::Path;
 
@@ -232,4 +232,62 @@ pub(crate) async fn apply_patch(root: &Path, patch: &str) -> Result<(), GitError
     .await;
     let _ = tokio::fs::remove_file(&temp_path).await;
     result.map(|_| ())
+}
+
+/// 采用本地/当前分支版本解决冲突并暂存。
+pub(crate) async fn resolve_ours(root: &Path, paths: &[String]) -> Result<(), GitError> {
+    let mut args = vec!["checkout", "--ours", "--"];
+    push_paths(&mut args, paths);
+    run(root, &args, RunOptions::write()).await?;
+    stage(root, paths).await
+}
+
+/// 采用传入版本解决冲突并暂存。
+pub(crate) async fn resolve_theirs(root: &Path, paths: &[String]) -> Result<(), GitError> {
+    let mut args = vec!["checkout", "--theirs", "--"];
+    push_paths(&mut args, paths);
+    run(root, &args, RunOptions::write()).await?;
+    stage(root, paths).await
+}
+
+/// 标记冲突文件已手动解决（直接加入暂存区）。
+pub(crate) async fn mark_resolved(root: &Path, paths: &[String]) -> Result<(), GitError> {
+    stage(root, paths).await
+}
+
+/// 读取冲突文件在三方阶段的内容（Base、Ours、Theirs）以及当前工作区文本。
+pub(crate) async fn conflict_sides(
+    root: &Path,
+    path: &str,
+) -> Result<transom_core::ConflictSides, GitError> {
+    let read_stage = |stage: u8| async move {
+        let spec = format!(":{stage}:{path}");
+        let output = run_allow_fail(
+            root,
+            &["show", "--end-of-options", &spec],
+            RunOptions::default(),
+        )
+        .await?;
+        if output.ok() {
+            Ok(Some(String::from_utf8_lossy(&output.stdout).to_string()))
+        } else {
+            Ok(None)
+        }
+    };
+
+    let base = read_stage(1).await?;
+    let ours = read_stage(2).await?;
+    let theirs = read_stage(3).await?;
+    let working_path = repo::resolve_in(root, path)?;
+    let working = match tokio::fs::read(&working_path).await {
+        Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+        Err(_) => String::new(),
+    };
+
+    Ok(transom_core::ConflictSides {
+        base,
+        ours,
+        theirs,
+        working,
+    })
 }

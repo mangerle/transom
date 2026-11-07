@@ -8168,3 +8168,55 @@ git:
     init:
       en: "Repository initialized"
       zh-CN: "仓库已初始化"
+    resolve_ours:
+      en: "Resolved with our version"
+      zh-CN: "已采用本地版本解决冲突"
+    resolve_theirs:
+      en: "Resolved with their version"
+      zh-CN: "已采用传入版本解决冲突"
+    resolve_mark:
+      en: "Marked as resolved"
+      zh-CN: "已标记冲突解决并暂存"
+  conflict:
+    title:
+      en: "Resolve Merge Conflicts"
+      zh-CN: "解决合并冲突"
+    banner:
+      en: "There are %{count} conflict files"
+      zh-CN: "存在 %{count} 个冲突文件待解决"
+    resolve_btn:
+      en: "Resolve Conflicts..."
+      zh-CN: "解决冲突..."
+    resolve_menu:
+      en: "Resolve Conflicts..."
+      zh-CN: "解决冲突..."
+    accept_ours:
+      en: "Accept Ours"
+      zh-CN: "接受本地版本"
+    accept_theirs:
+      en: "Accept Theirs"
+      zh-CN: "接受传入版本"
+    mark_resolved:
+      en: "Mark Resolved"
+      zh-CN: "标记为已解决"
+    resolving:
+      en: "Resolving..."
+      zh-CN: "正在解决..."
+    files_list:
+      en: "Conflict Files"
+      zh-CN: "冲突文件清单"
+    loading_content:
+      en: "Loading 3-way version content..."
+      zh-CN: "正在读取三方版本内容..."
+    col_ours:
+      en: "Local (Ours)"
+      zh-CN: "本地版本 (Ours)"
+    col_result:
+      en: "Result (Working)"
+      zh-CN: "合并结果 (Result)"
+    col_theirs:
+      en: "Incoming (Theirs)"
+      zh-CN: "传入版本 (Theirs)"
+    footer_tip:
+      en: "Accepting a side will checkout and stage that file automatically"
+      zh-CN: "选择采用任一侧版本将自动检出并加入暂存区"
