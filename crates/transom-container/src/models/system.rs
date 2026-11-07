@@ -78,11 +78,12 @@ impl VersionResponse {
 }
 
 /// 系统全局磁盘占用响应（GET /system/df）。
+///
+/// 只声明聚合用量真正读取的字段；引擎新增的其余字段由 serde 直接忽略，
+/// 避免为了“字段齐全”保留永远不读的占位字段。
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 pub struct SystemDfResponse {
-    pub layers_size: Option<u64>,
     #[serde(default)]
     pub images: Option<Vec<DfImageItem>>,
     #[serde(default)]
@@ -95,40 +96,29 @@ pub struct SystemDfResponse {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 pub struct DfImageItem {
-    pub id: Option<String>,
     #[serde(default)]
     pub size: u64,
-    #[serde(default)]
-    pub shared_size: u64,
     #[serde(default)]
     pub containers: i64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 pub struct DfContainerItem {
-    pub id: Option<String>,
     #[serde(default)]
     pub size_rw: u64,
-    #[serde(default)]
-    pub size_root_fs: u64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 pub struct DfVolumeItem {
-    pub name: Option<String>,
     #[serde(default)]
     pub usage_data: Option<DfVolumeUsageData>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 pub struct DfVolumeUsageData {
     #[serde(default)]
     pub size: i64,
@@ -138,16 +128,11 @@ pub struct DfVolumeUsageData {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-#[allow(dead_code)]
 pub struct DfBuildCacheItem {
-    #[serde(rename = "ID")]
-    pub id: Option<String>,
     #[serde(default)]
     pub size: u64,
     #[serde(default)]
     pub in_use: bool,
-    #[serde(default)]
-    pub shared: bool,
 }
 
 /// Docker 原生流式事件消息（GET /events）。
