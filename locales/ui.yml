@@ -7954,6 +7954,12 @@ git:
     message_placeholder:
       en: "Commit message"
       zh-CN: "提交消息"
+    recent_messages:
+      en: "Recent Commit Messages"
+      zh-CN: "最近提交说明"
+    no_recent_messages:
+      en: "No recent commit messages"
+      zh-CN: "暂无最近提交说明"
     empty_message:
       en: "Enter a commit message"
       zh-CN: "请填写提交消息"

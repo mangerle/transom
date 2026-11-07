@@ -6,10 +6,12 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
+use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Textarea, TextareaState};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
@@ -35,6 +37,57 @@ impl AppShell {
         let tab_id = props.tab_id;
         let submitting = props.submitting;
 
+        let history: Vec<String> = self
+            .git_state_of_tab(tab_id)
+            .map(|s| {
+                s.log
+                    .entries
+                    .iter()
+                    .map(|e| e.subject.clone())
+                    .filter(|subj| !subj.trim().is_empty())
+                    .fold(Vec::new(), |mut acc, item| {
+                        if !acc.contains(&item) && acc.len() < 10 {
+                            acc.push(item);
+                        }
+                        acc
+                    })
+            })
+            .unwrap_or_default();
+
+        let recent_btn = Button::new("git-commit-recent-messages")
+            .ghost()
+            .xsmall()
+            .icon(IconName::Clock)
+            .tooltip(rust_i18n::t!("git.commit.recent_messages").to_string())
+            .dropdown_menu({
+                let message_input = props.message.clone();
+                move |mut menu, _window, _cx| {
+                    if history.is_empty() {
+                        menu = menu.item(
+                            PopupMenuItem::new(
+                                rust_i18n::t!("git.commit.no_recent_messages").to_string(),
+                            )
+                            .disabled(true),
+                        );
+                    } else {
+                        for text in &history {
+                            let text_clone = text.clone();
+                            let input = message_input.clone();
+                            menu = menu.item(menu_item(
+                                text.clone(),
+                                IconName::Clock,
+                                move |_event, window, cx| {
+                                    input.update(cx, |input, cx| {
+                                        input.set_value(&text_clone, window, cx);
+                                    });
+                                },
+                            ));
+                        }
+                    }
+                    menu
+                }
+            });
+
         v_flex()
             .w_full()
             .h_full()
@@ -50,6 +103,7 @@ impl AppShell {
                     .child(props.amend_toggle)
                     .child(props.amend_target)
                     .child(div().flex_1())
+                    .child(recent_btn)
                     .child(
                         div().text_xs().text_color(p.primary).child(
                             rust_i18n::t!("git.commit.checked_count", count = props.checked_count)
