@@ -149,11 +149,89 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
         _ => (p.background, p.primary.opacity(0.30)),
     };
     if !options.side_by_side {
-        // 统一视图：只显示有内容的一侧，前缀标出增删。
-        let (cell, sign) = match row.tone {
-            Tone::Added | Tone::Paired => (row.right.clone(), "+"),
-            Tone::Removed => (row.left.clone(), "-"),
-            Tone::Context => (row.left.clone(), " "),
+        // 统一视图（Unified Diff）：修改行按标准双行显示（先删后增并互相词级比对）。
+        if row.tone == Tone::Paired {
+            let left_cell = row.left.as_ref();
+            let right_cell = row.right.as_ref();
+            let del_bg = p.danger.opacity(0.12);
+            let del_word_bg = p.danger.opacity(0.30);
+            let add_bg = p.success.opacity(0.12);
+            let add_word_bg = p.success.opacity(0.30);
+
+            let mut group = gpui_kit::base::v_flex().w_full();
+            if let Some(left) = left_cell {
+                group = group.child(
+                    h_flex()
+                        .id(ElementId::Name(
+                            format!("git-diff-u-{}-del", left.number).into(),
+                        ))
+                        .w_full()
+                        .h(px(LINE_HEIGHT))
+                        .items_center()
+                        .bg(del_bg)
+                        .when(!options.wrap_lines, |el| el.truncate())
+                        .child(gutter(
+                            options.show_line_numbers.then_some(left.number.to_string()),
+                            p,
+                        ))
+                        .child(text_line(
+                            &left.text,
+                            right_cell.map(|r| r.text.as_str()),
+                            options,
+                            del_word_bg,
+                            p,
+                        )),
+                );
+            }
+            if let Some(right) = right_cell {
+                group = group.child(
+                    h_flex()
+                        .id(ElementId::Name(
+                            format!("git-diff-u-{}-add", right.number).into(),
+                        ))
+                        .w_full()
+                        .h(px(LINE_HEIGHT))
+                        .items_center()
+                        .bg(add_bg)
+                        .when(!options.wrap_lines, |el| el.truncate())
+                        .child(gutter(
+                            options
+                                .show_line_numbers
+                                .then_some(right.number.to_string()),
+                            p,
+                        ))
+                        .child(text_line(
+                            &right.text,
+                            left_cell.map(|l| l.text.as_str()),
+                            options,
+                            add_word_bg,
+                            p,
+                        )),
+                );
+            }
+            return group.into_any_element();
+        }
+
+        // 纯新增、纯删除或上下文行
+        let (cell, sign, row_bg, row_word_bg) = match row.tone {
+            Tone::Added => (
+                row.right.clone(),
+                "+",
+                p.success.opacity(0.12),
+                p.success.opacity(0.30),
+            ),
+            Tone::Removed => (
+                row.left.clone(),
+                "-",
+                p.danger.opacity(0.12),
+                p.danger.opacity(0.30),
+            ),
+            _ => (
+                row.right.or(row.left),
+                " ",
+                p.background,
+                p.primary.opacity(0.30),
+            ),
         };
         let Some(cell) = cell else {
             return div().into_any_element();
@@ -165,13 +243,13 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
             .w_full()
             .h(px(LINE_HEIGHT))
             .items_center()
-            .bg(bg)
+            .bg(row_bg)
             .when(!options.wrap_lines, |el| el.truncate())
             .child(gutter(
                 options.show_line_numbers.then_some(cell.number.to_string()),
                 p,
             ))
-            .child(text_line(&cell.text, None, options, word_bg, p))
+            .child(text_line(&cell.text, None, options, row_word_bg, p))
             .into_any_element();
     }
 
