@@ -26,6 +26,34 @@ use tokio::process::Command;
 
 static GIT_PROGRAM: RwLock<String> = RwLock::new(String::new());
 
+/// 全局 Git 提交作者配置（姓名与邮箱）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitAuthorConfig {
+    pub name: String,
+    pub email: String,
+}
+
+static GIT_AUTHOR: RwLock<GitAuthorConfig> = RwLock::new(GitAuthorConfig {
+    name: String::new(),
+    email: String::new(),
+});
+
+/// 配置全局提交作者信息（当 name 或 email 非空时在底层 git 命令中注入对应环境变量）。
+pub fn set_git_author(name: impl Into<String>, email: impl Into<String>) {
+    if let Ok(mut w) = GIT_AUTHOR.write() {
+        w.name = name.into();
+        w.email = email.into();
+    }
+}
+
+/// 获取当前配置的 Git 提交作者信息。
+pub fn git_author() -> GitAuthorConfig {
+    if let Ok(r) = GIT_AUTHOR.read() {
+        return r.clone();
+    }
+    GitAuthorConfig::default()
+}
+
 /// 配置底层 Git 命令的可执行文件路径（为空或默认时回退到系统 `"git"`）。
 pub fn set_git_program(path: impl Into<String>) {
     if let Ok(mut w) = GIT_PROGRAM.write() {
@@ -147,6 +175,15 @@ pub(crate) fn build_command(
         // 杜绝任何分页与编辑器接管输出。
         .env("GIT_PAGER", "cat")
         .env("GIT_EDITOR", "true");
+    let author = git_author();
+    if !author.name.trim().is_empty() {
+        command.env("GIT_AUTHOR_NAME", author.name.trim());
+        command.env("GIT_COMMITTER_NAME", author.name.trim());
+    }
+    if !author.email.trim().is_empty() {
+        command.env("GIT_AUTHOR_EMAIL", author.email.trim());
+        command.env("GIT_COMMITTER_EMAIL", author.email.trim());
+    }
     if let Some(todo) = &opts.sequence_todo {
         // git 通过 shell 调用序列编辑器并把自身的 todo 路径追加为最后一个参数，
         // 于是 `cp <我们的清单>` 正好覆盖它。路径含单引号会让这条 shell 语句变形，
@@ -341,5 +378,19 @@ mod tests {
         assert_eq!(redact_url("origin"), "origin");
         // 路径里出现 @ 不算凭据，不能误伤。
         assert_eq!(redact_url("file:///srv/@repo"), "file:///srv/@repo");
+    }
+
+    #[test]
+    fn author_and_program_config_roundtrip() {
+        super::set_git_program("/usr/bin/git-custom");
+        assert_eq!(super::git_program(), "/usr/bin/git-custom");
+        super::set_git_program("");
+        assert_eq!(super::git_program(), "git");
+
+        super::set_git_author("测试作者", "test@example.com");
+        let a = super::git_author();
+        assert_eq!(a.name, "测试作者");
+        assert_eq!(a.email, "test@example.com");
+        super::set_git_author("", "");
     }
 }
