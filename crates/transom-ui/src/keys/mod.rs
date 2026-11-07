@@ -12,7 +12,6 @@ use crate::app::{AppShell, AppState, TabStatus};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use keygen::{GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys};
-use std::path::PathBuf;
 use transom_core::{AppError, Connection, HostCommand};
 use zeroize::Zeroizing;
 
@@ -131,16 +130,19 @@ impl AppShell {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    generate_keypair(
+                    // 生成与随后的公钥目录扫描都属于阻塞 IO：一并放到后台线程，
+                    // 避免生成完成后在 UI 线程重新扫描整个 ssh 目录。
+                    let generated = generate_keypair(
                         algorithm,
                         &comment,
                         &private_path,
                         (!passphrase.is_empty()).then_some(passphrase.as_str()),
-                    )
+                    )?;
+                    Ok((generated, scan_public_keys(&ssh_dir)))
                 })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.finish_key_generation(result, ssh_dir, window, cx);
+                this.finish_key_generation(result, window, cx);
             });
         });
         self.state.tasks.background.keygen = Some(task);
@@ -149,8 +151,7 @@ impl AppShell {
 
     fn finish_key_generation(
         &mut self,
-        result: Result<GeneratedKey, AppError>,
-        ssh_dir: PathBuf,
+        result: Result<(GeneratedKey, Result<Vec<PublicKeyInfo>, AppError>), AppError>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -160,8 +161,7 @@ impl AppShell {
         self.state.tasks.background.keygen = None;
         let passphrase_input = wizard.passphrase;
         match result {
-            Ok(generated) => {
-                let scanned = scan_public_keys(&ssh_dir);
+            Ok((generated, scanned)) => {
                 let message = rust_i18n::t!(
                     "keys.generated",
                     algorithm = generated.public_key.algorithm.as_str(),
