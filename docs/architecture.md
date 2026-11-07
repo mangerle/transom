@@ -188,7 +188,8 @@ crates/transom-container/src/
   files/        容器文件传输：read / write / archive / listing 分层
   engine/       引擎实例：mod.rs 核心与分派宏、operations.rs 操作面、
                 discovery.rs 发现/显式探测
-  transport.rs / http.rs / build.rs / logs.rs / exec.rs
+  transport.rs / http/（请求入口、连接池、响应体读取）
+  build.rs / logs.rs / exec.rs
                 通道、归档与长任务
 
 apps/transom/src/controller/
