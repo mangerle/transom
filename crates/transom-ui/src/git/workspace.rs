@@ -263,38 +263,37 @@ impl AppShell {
         let table = log_view::render_log_table(state, app.clone(), tab_id, p);
         let right = log_view::render_right_panel(state, app.clone(), tab_id, details_width, p);
         let toggle_app = app.clone();
-        v_flex()
+        h_flex()
             .flex_1()
             .min_h_0()
+            .items_stretch()
             .overflow_hidden()
-            .child(filter_bar)
+            .when(!refs_open, |el| {
+                el.child(
+                    Button::new("git-refs-toggle-open")
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::PanelLeftOpen)
+                        .tooltip(rust_i18n::t!("git.refs.local").to_string())
+                        .on_click(move |_, _, cx| {
+                            toggle_app.update(cx, |this, cx| {
+                                this.git_toggle_refs_panel(tab_id, cx);
+                            });
+                        }),
+                )
+            })
+            .children(left)
             .child(
-                h_flex()
+                // 中间栏：顶部是过滤条（分支/文本/用户/日期等），下方是提交图谱与历史表格
+                v_flex()
                     .flex_1()
+                    .min_w_0()
                     .min_h_0()
-                    .items_stretch()
-                    .overflow_hidden()
-                    .when(!refs_open, |el| {
-                        el.child(
-                            Button::new("git-refs-toggle-open")
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::PanelLeftOpen)
-                                .tooltip(rust_i18n::t!("git.refs.local").to_string())
-                                .on_click(move |_, _, cx| {
-                                    toggle_app.update(cx, |this, cx| {
-                                        this.git_toggle_refs_panel(tab_id, cx);
-                                    });
-                                }),
-                        )
-                    })
-                    .children(left)
-                    .child(
-                        // 中间栏纯粹展示提交图谱与历史记录表格，占满全部中间空间
-                        v_flex().flex_1().min_w_0().min_h_0().h_full().child(table),
-                    )
-                    .child(right),
+                    .h_full()
+                    .child(filter_bar)
+                    .child(table),
             )
+            .child(right)
             .into_any_element()
     }
 }
