@@ -7424,6 +7424,18 @@ git:
     force_push:
       en: "Force Push"
       zh-CN: "强制推送"
+    no_verify:
+      en: "Skip hooks (--no-verify)"
+      zh-CN: "跳过钩子 (--no-verify)"
+    protected_branch_warning:
+      en: "Protected branch"
+      zh-CN: "受保护分支"
+    follow_tags:
+      en: "Relevant tags (--follow-tags)"
+      zh-CN: "关联标签 (--follow-tags)"
+    all_tags:
+      en: "All tags (--tags)"
+      zh-CN: "所有标签 (--tags)"
     no_branch:
       en: "HEAD is not on a branch, so there is no branch to push to"
       zh-CN: "头指针未挂在分支上，没有可推送的分支"

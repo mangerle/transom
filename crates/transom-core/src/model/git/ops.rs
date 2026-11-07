@@ -244,3 +244,31 @@ pub struct WorktreeEntry {
     /// 界面用来解释「为什么这一行是灰的、清理会发生什么」。
     pub prune_reason: Option<String>,
 }
+
+/// 推送附带标签的模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum PushTagsMode {
+    #[default]
+    None,
+    /// 仅推送带注释且可达的关联标签（git push --follow-tags）。
+    FollowTags,
+    /// 推送所有本地标签（git push --tags）。
+    AllTags,
+}
+
+/// 高级 Git 推送参数。
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GitPushOptions {
+    /// 目标远端名称，如 "origin"
+    pub remote: Option<String>,
+    /// 本地分支名称
+    pub branch: Option<String>,
+    /// 目标远端分支名称（如与本地分支不一致则通过 refspec 推送）
+    pub remote_branch: Option<String>,
+    /// 是否启用安全租约强制推送（--force-with-lease）
+    pub force_with_lease: bool,
+    /// 标签推送模式
+    pub tags: PushTagsMode,
+    /// 是否跳过预推送 Git 钩子（--no-verify）
+    pub no_verify: bool,
+}

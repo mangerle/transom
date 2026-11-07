@@ -30,23 +30,163 @@ pub(crate) async fn fetch(root: &Path) -> Result<(), GitError> {
     Ok(())
 }
 
-/// 推送分支；`tags` 为真时附带 `--follow-tags`。
-pub(crate) async fn push(root: &Path, branch: Option<&str>, tags: bool) -> Result<(), GitError> {
-    let mut args: Vec<&str> = vec!["push"];
-    if tags {
-        args.push("--follow-tags");
+use transom_core::{CommitEntry, GitPushOptions, PushTagsMode};
+
+/// 高级推送：支持自定义目标远端、目标分支、强推租约、标签模式与跳过钩子。
+pub(crate) async fn push_advanced(root: &Path, opts: &GitPushOptions) -> Result<(), GitError> {
+    let mut args: Vec<String> = vec!["push".to_string()];
+    if opts.force_with_lease {
+        args.push("--force-with-lease".to_string());
     }
-    match branch {
-        Some(branch) => {
-            args.push("origin");
-            args.push(branch);
-        }
-        None => {
-            // 无参数时按 push.default 配置推送当前分支，与命令行行为一致。
-        }
+    if opts.no_verify {
+        args.push("--no-verify".to_string());
     }
-    run(root, &args, network()).await?;
+    match opts.tags {
+        PushTagsMode::FollowTags => args.push("--follow-tags".to_string()),
+        PushTagsMode::AllTags => args.push("--tags".to_string()),
+        PushTagsMode::None => {}
+    }
+    let remote = match &opts.remote {
+        Some(r) if !r.trim().is_empty() => r.trim().to_string(),
+        _ => match &opts.branch {
+            Some(b) => upstream_remote(root, b).await,
+            None => "origin".to_string(),
+        },
+    };
+    args.push(remote);
+
+    match (&opts.branch, &opts.remote_branch) {
+        (Some(local), Some(remote)) if !local.is_empty() && !remote.is_empty() => {
+            if local == remote {
+                args.push(local.clone());
+            } else {
+                args.push(format!("{local}:{remote}"));
+            }
+        }
+        (Some(local), None) if !local.is_empty() => {
+            args.push(local.clone());
+        }
+        _ => {}
+    }
+
+    let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    run(root, &str_args, network()).await?;
     Ok(())
+}
+
+/// 兼容传统调用的简单推送。
+pub(crate) async fn push(root: &Path, branch: Option<&str>, tags: bool) -> Result<(), GitError> {
+    push_advanced(
+        root,
+        &GitPushOptions {
+            branch: branch.map(str::to_string),
+            tags: if tags {
+                PushTagsMode::FollowTags
+            } else {
+                PushTagsMode::None
+            },
+            ..Default::default()
+        },
+    )
+    .await
+}
+
+/// 查询待推送到目标远端分支的提交列表（Outgoing Commits）。
+pub(crate) async fn outgoing_commits(
+    root: &Path,
+    branch: &str,
+    remote: Option<&str>,
+    remote_branch: Option<&str>,
+) -> Result<Vec<CommitEntry>, GitError> {
+    if branch.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let target_remote = match remote {
+        Some(r) if !r.trim().is_empty() => r.trim().to_string(),
+        _ => upstream_remote(root, branch).await,
+    };
+    let target_branch = match remote_branch {
+        Some(b) if !b.trim().is_empty() => b.trim().to_string(),
+        _ => branch.to_string(),
+    };
+
+    let remote_ref = format!("refs/remotes/{target_remote}/{target_branch}");
+    let upstream_ref = format!("{branch}@{{upstream}}");
+
+    let has_remote_ref = match run_allow_fail(
+        root,
+        &["rev-parse", "--verify", "--quiet", &remote_ref],
+        RunOptions::default(),
+    )
+    .await
+    {
+        Ok(out) => out.ok(),
+        Err(_) => false,
+    };
+
+    let range = if has_remote_ref {
+        format!("{remote_ref}..{branch}")
+    } else {
+        let has_upstream = match run_allow_fail(
+            root,
+            &["rev-parse", "--verify", "--quiet", &upstream_ref],
+            RunOptions::default(),
+        )
+        .await
+        {
+            Ok(out) => out.ok(),
+            Err(_) => false,
+        };
+        if has_upstream {
+            format!("{upstream_ref}..{branch}")
+        } else {
+            let base_main = match run_allow_fail(
+                root,
+                &["rev-parse", "--verify", "--quiet", "refs/heads/main"],
+                RunOptions::default(),
+            )
+            .await
+            {
+                Ok(out) if out.ok() && branch != "main" => Some("main"),
+                _ => None,
+            };
+            if let Some(base) = base_main {
+                format!("{base}..{branch}")
+            } else {
+                branch.to_string()
+            }
+        }
+    };
+
+    let args = [
+        "log",
+        &format!("--pretty=format:{}", crate::log::FORMAT),
+        "--topo-order",
+        "--no-color",
+        "-n",
+        "100",
+        &range,
+    ];
+
+    let output = match run_allow_fail(root, &args, RunOptions::default()).await {
+        Ok(out) if out.ok() => out,
+        _ => {
+            let fallback_args = [
+                "log",
+                &format!("--pretty=format:{}", crate::log::FORMAT),
+                "--topo-order",
+                "--no-color",
+                "-n",
+                "20",
+                branch,
+            ];
+            run(root, &fallback_args, RunOptions::default()).await?
+        }
+    };
+
+    let page = crate::log::parse_records(&output.stdout)?;
+    Ok(page.entries)
 }
 
 /// 把「到此提交为止」的历史推到远端同名分支：`git push <remote> <oid>:refs/heads/<branch>`。

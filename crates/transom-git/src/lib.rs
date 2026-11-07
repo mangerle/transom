@@ -189,6 +189,21 @@ impl Repo {
         remote::push(self.root(), branch, tags).await
     }
 
+    /// 高级推送：支持自定义目标远端、目标分支、强推租约、标签模式与跳过钩子。
+    pub async fn push_advanced(&self, opts: &transom_core::GitPushOptions) -> Result<(), GitError> {
+        remote::push_advanced(self.root(), opts).await
+    }
+
+    /// 查询待推送到目标分支的提交列表（Outgoing Commits）。
+    pub async fn outgoing_commits(
+        &self,
+        branch: &str,
+        remote: Option<&str>,
+        remote_branch: Option<&str>,
+    ) -> Result<Vec<CommitEntry>, GitError> {
+        remote::outgoing_commits(self.root(), branch, remote, remote_branch).await
+    }
+
     /// 把「到此提交为止」的历史推到该分支的上游远端（不改本地状态）。
     pub async fn push_up_to(&self, oid: &str, branch: &str) -> Result<(), GitError> {
         remote::push_up_to(self.root(), oid, branch).await

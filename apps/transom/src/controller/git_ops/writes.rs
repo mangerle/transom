@@ -175,17 +175,13 @@ pub(super) fn handle_write_command(
                 move |repo| async move { repo.fetch().await },
             );
         }
-        GitCommand::Push {
-            project,
-            branch,
-            tags,
-        } => {
+        GitCommand::Push { project, options } => {
             spawn_write(
                 state,
                 ctx,
                 project,
                 GitAction::Push,
-                move |repo| async move { repo.push(branch.as_deref(), tags).await },
+                move |repo| async move { repo.push_advanced(&options).await },
             );
         }
         GitCommand::PushUpTo {

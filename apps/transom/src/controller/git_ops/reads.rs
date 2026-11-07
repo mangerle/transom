@@ -80,6 +80,34 @@ pub(super) fn handle_read_command(
             });
             true
         }
+        GitCommand::LoadOutgoingCommits {
+            project,
+            request_id,
+            branch,
+            remote,
+            remote_branch,
+        } => {
+            let project_id = project.id;
+            let project = project.clone();
+            let request_id = *request_id;
+            let branch = branch.clone();
+            let remote = remote.clone();
+            let remote_branch = remote_branch.clone();
+            spawn_read(state, ctx, project, request_id, move |repo| async move {
+                let commits = repo
+                    .outgoing_commits(&branch, remote.as_deref(), remote_branch.as_deref())
+                    .await?;
+                let effective_remote_branch = remote_branch.unwrap_or_else(|| branch.clone());
+                Ok(GitAppEvent::OutgoingCommitsLoaded {
+                    project_id,
+                    request_id,
+                    branch,
+                    remote_branch: effective_remote_branch,
+                    commits,
+                })
+            });
+            true
+        }
         GitCommand::LoadRefs { project } => {
             let project_id = project.id;
             let project = project.clone();

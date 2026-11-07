@@ -26,6 +26,7 @@ use transom_core::{
 
 mod diff_actions;
 mod event_dispatch;
+mod init_event;
 mod log_actions;
 mod ref_actions;
 mod shelf_actions;

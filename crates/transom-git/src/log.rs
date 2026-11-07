@@ -27,7 +27,7 @@ const RECORD: u8 = 0x1e;
 /// 字段数：oid/parents/作者名/邮箱/时间/装饰/标题/正文。
 const FIELD_COUNT: usize = 8;
 /// `--pretty=format:` 的字段顺序，必须与 [`FIELD_COUNT`] 及解析顺序一致。
-const FORMAT: &str = "%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x1f%b";
+pub(crate) const FORMAT: &str = "%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x1f%b";
 
 /// 执行一次日志查询。
 ///

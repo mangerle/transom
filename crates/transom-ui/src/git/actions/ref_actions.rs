@@ -100,8 +100,7 @@ impl AppShell {
             },
             GitRemoteAction::Push => GitCommand::Push {
                 project: project.clone(),
-                branch: None,
-                tags: false,
+                options: transom_core::GitPushOptions::default(),
             },
             GitRemoteAction::Pull { rebase } => GitCommand::Pull {
                 project: project.clone(),

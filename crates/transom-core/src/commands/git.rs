@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use crate::error::AppError;
 use crate::ids::{GitProjectId, GitRequestId};
 use crate::model::git::{
-    BranchEntry, CommitFile, DiffContent, GitAction, GitCheckout, GitFoldMode, GitProject,
-    GitRebaseStep, GitResetKind, GitSide, LogPage, LogQuery, RepoInfo, RepoStatus, StashEntry,
-    StashFile, TagEntry, WorktreeEntry,
+    BranchEntry, CommitEntry, CommitFile, DiffContent, GitAction, GitCheckout, GitFoldMode,
+    GitProject, GitPushOptions, GitRebaseStep, GitResetKind, GitSide, LogPage, LogQuery, RepoInfo,
+    RepoStatus, StashEntry, StashFile, TagEntry, WorktreeEntry,
 };
 
 /// Git 领域命令：全部发往控制器派发的后台任务。
@@ -116,9 +116,16 @@ pub enum GitCommand {
     },
     Push {
         project: GitProject,
-        /// 目标分支；`None` 表示当前分支。
-        branch: Option<String>,
-        tags: bool,
+        /// 推送详细选项。
+        options: GitPushOptions,
+    },
+    /// 查询待推送到目标分支的提交列表（Outgoing Commits）。
+    LoadOutgoingCommits {
+        project: GitProject,
+        request_id: GitRequestId,
+        branch: String,
+        remote: Option<String>,
+        remote_branch: Option<String>,
     },
     Pull {
         project: GitProject,
@@ -308,6 +315,14 @@ pub enum GitAppEvent {
         request_id: GitRequestId,
         oid: String,
         files: Vec<CommitFile>,
+    },
+    /// 待推送提交列表加载完成。
+    OutgoingCommitsLoaded {
+        project_id: GitProjectId,
+        request_id: GitRequestId,
+        branch: String,
+        remote_branch: String,
+        commits: Vec<CommitEntry>,
     },
     RefsLoaded {
         project_id: GitProjectId,
