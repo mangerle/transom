@@ -10,6 +10,7 @@
 //!   `request_id` 丢弃迟到的结果，避免快速切换仓库时旧数据覆盖新视图。
 
 pub(crate) mod actions;
+mod bottom_log;
 mod commit_modal;
 mod commit_page;
 mod diff_view;

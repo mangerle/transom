@@ -7661,7 +7661,16 @@ git:
   view:
     log:
       en: "Commit History"
-      zh-CN: "显示提交记录"
+      zh-CN: "提交记录"
+    log_with_branch:
+      en: "Log: %{branch}"
+      zh-CN: "日志: %{branch}"
+    expand_log:
+      en: "Show Git Log"
+      zh-CN: "展开提交记录"
+    collapse_log:
+      en: "Hide Git Log"
+      zh-CN: "收起提交记录"
   overview:
 
     title:

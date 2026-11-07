@@ -113,16 +113,30 @@ impl AppShell {
             });
 
         let make_git_log_btn = |id: TabId, app_entity: Entity<AppShell>| {
-            Button::new("status-bar-git-log")
-                .ghost()
+            let is_open = self
+                .git_state_of_tab(id)
+                .map(|s| s.bottom_log_open)
+                .unwrap_or(false);
+            let tooltip_text = if is_open {
+                rust_i18n::t!("git.view.collapse_log")
+            } else {
+                rust_i18n::t!("git.view.expand_log")
+            };
+            let mut btn = Button::new("status-bar-git-log")
                 .xsmall()
                 .icon(IconName::GitCommitHorizontal)
-                .tooltip(rust_i18n::t!("git.view.log").to_string())
+                .tooltip(tooltip_text.to_string())
                 .on_click(move |_, _, cx| {
                     app_entity.update(cx, |this, cx| {
-                        this.open_git_log_modal(id, cx);
+                        this.toggle_git_bottom_log(id, cx);
                     });
-                })
+                });
+            if is_open {
+                btn = btn.primary();
+            } else {
+                btn = btn.ghost();
+            }
+            btn
         };
 
         if divider_x > px(0.0) {

@@ -11,10 +11,12 @@
 use super::log_view;
 use super::types::{GitView, GitWorkspaceState};
 use crate::app::AppShell;
+use crate::divider::v_resizable;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{GitProject, GitProjectId, TabId};
@@ -31,14 +33,47 @@ impl AppShell {
         let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return div().into_any_element();
         };
-        let Some(state) = self.state.workspace.tabs[index].git() else {
-            return div().into_any_element();
+        let (view, project, bottom_log_open, bottom_log_split) = {
+            let Some(state) = self.state.workspace.tabs[index].git() else {
+                return div().into_any_element();
+            };
+            (
+                state.view,
+                state.project.clone(),
+                state.bottom_log_open,
+                state.bottom_log_split.clone(),
+            )
         };
-        let view = state.view;
-        let project = state.project.clone();
         let body = match view {
             GitView::Log => self.render_git_log_body(tab_id, p, cx),
-            GitView::Overview => self.render_git_commit_page(tab_id, window, cx, p),
+            GitView::Overview => {
+                let commit_page = self.render_git_commit_page(tab_id, window, cx, p);
+                if bottom_log_open {
+                    let bottom_panel =
+                        self.render_git_bottom_log_panel(tab_id, cx.entity().clone(), p);
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .size_full()
+                        .child(
+                            v_resizable(ElementId::Name(
+                                format!("git-bottom-log-split-{tab_id}").into(),
+                            ))
+                            .with_state(&bottom_log_split)
+                            .child(resizable_panel().child(commit_page))
+                            .child(
+                                resizable_panel()
+                                    .size(px(320.0))
+                                    .size_range(px(180.0)..px(600.0))
+                                    .fixed()
+                                    .child(bottom_panel),
+                            ),
+                        )
+                        .into_any_element()
+                } else {
+                    commit_page
+                }
+            }
         };
         let mut root = v_flex().size_full().bg(p.background);
         // 提交页自带页签与工具条；只有日志页还用这条顶部工具条。
@@ -179,87 +214,6 @@ impl AppShell {
                     .text_xs()
                     .text_color(p.muted_foreground)
                     .child(format!("↑{} ↓{}", badge.ahead, badge.behind)),
-            )
-            .into_any_element()
-    }
-
-    /// 打开 Git 提交记录模态弹窗。
-    pub(crate) fn open_git_log_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.state.modals.git.log = Some(tab_id);
-        if let Some(state) = self.git_state_of_tab(tab_id) {
-            let project = state.project.clone();
-            self.git_refresh(&project, cx);
-            self.git_load_log(tab_id, 0, cx);
-        }
-        cx.notify();
-    }
-
-    /// 关闭 Git 提交记录模态弹窗。
-    pub(crate) fn close_git_log_modal(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.git.log = None;
-        cx.notify();
-    }
-
-    /// 渲染 Git 提交记录模态弹窗主体（大尺寸居中弹窗，呈现图 4 样式）。
-    pub(crate) fn render_git_log_modal_body(
-        &self,
-        app: &Entity<AppShell>,
-        window: &Window,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(tab_id) = self.state.modals.git.log else {
-            return div().into_any_element();
-        };
-        let bounds = window.bounds();
-        let height = (bounds.size.height * 0.88).max(px(500.0));
-        let close_app = app.clone();
-
-        v_flex()
-            .w_full()
-            .h(height)
-            .min_h_0()
-            .overflow_hidden()
-            .child(
-                h_flex()
-                    .w_full()
-                    .px_3()
-                    .py_1p5()
-                    .items_center()
-                    .justify_between()
-                    .border_color(p.divider(p.border))
-                    .border_b_1()
-                    .bg(p.muted)
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(Icon::new(IconName::GitCommitHorizontal).text_color(p.primary))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(p.foreground)
-                                    .child(rust_i18n::t!("git.view.log").to_string()),
-                            ),
-                    )
-                    .child(
-                        Button::new("git-log-modal-close")
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::X)
-                            .on_click(move |_, _, cx| {
-                                close_app.update(cx, |this, cx| {
-                                    this.close_git_log_modal(cx);
-                                });
-                            }),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(self.render_git_log_view(tab_id, app.clone(), p)),
             )
             .into_any_element()
     }

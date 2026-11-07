@@ -127,6 +127,10 @@ pub(crate) struct GitWorkspaceState {
     pub diff_tabs: Vec<GitDiffState>,
     /// 当前激活的文件差异标签索引。
     pub active_diff_tab: Option<usize>,
+    /// 底部提交记录（Git Log）面板是否展开（对齐 IDEA 底部 Git 抽屉）。
+    pub bottom_log_open: bool,
+    /// 提交页与底部日志面板垂直分栏的拖拽状态。
+    pub bottom_log_split: Entity<ResizableState>,
 }
 
 impl GitWorkspaceState {
@@ -148,6 +152,7 @@ impl GitWorkspaceState {
                 .placeholder(rust_i18n::t!("git.commit.message_placeholder").to_string())
         });
         let commit_split = cx.new(|_| ResizableState::default());
+        let bottom_log_split = cx.new(|_| ResizableState::default());
         Self {
             project,
             view: GitView::default(),
@@ -197,6 +202,8 @@ impl GitWorkspaceState {
             amend_target: None,
             diff_tabs: Vec::new(),
             active_diff_tab: None,
+            bottom_log_open: false,
+            bottom_log_split,
         }
     }
 

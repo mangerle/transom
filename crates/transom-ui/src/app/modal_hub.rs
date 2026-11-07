@@ -68,7 +68,6 @@ pub(crate) struct GitModals {
     pub(crate) worktree: Option<crate::git::GitWorktreeModal>,
     pub(crate) name: Option<crate::git::GitNameModal>,
     pub(crate) rebase: Option<crate::git::GitRebaseModal>,
-    pub(crate) log: Option<transom_core::TabId>,
 }
 
 impl GitModals {
@@ -79,7 +78,6 @@ impl GitModals {
             worktree: None,
             name: None,
             rebase: None,
-            log: None,
         }
     }
 }
