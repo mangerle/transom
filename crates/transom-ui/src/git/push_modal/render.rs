@@ -13,6 +13,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::PushTagsMode;
 
@@ -39,7 +40,7 @@ pub(super) fn render_push_dialog(
     let no_verify = modal.no_verify;
     let commits_count = modal.commits.len();
     let files_count = modal.commit_files.len();
-    let is_protected = shell.is_git_branch_protected(remote_branch);
+    let is_protected = shell.is_git_branch_protected(remote_branch, _cx);
     let tab_id = shell.git_tab_for_project(modal.project.id);
 
     // 1. 顶部目标路径胶囊与统计
@@ -111,6 +112,27 @@ pub(super) fn render_push_dialog(
                         .child(format!("{remote} : {remote_branch}")),
                 ),
         )
+        .when(is_protected, |this| {
+            this.child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .px_1p5()
+                    .py_0p5()
+                    .rounded_sm()
+                    .bg(p.warning.opacity(0.15))
+                    .border_1()
+                    .border_color(p.warning.opacity(0.3))
+                    .child(Icon::new(IconName::Shield).xsmall().text_color(p.warning))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.warning)
+                            .child(rust_i18n::t!("git.settings.protected_branches").to_string()),
+                    ),
+            )
+        })
         .child(div().flex_1())
         .child(
             div()

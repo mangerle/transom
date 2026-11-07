@@ -76,12 +76,22 @@ impl GitPushModal {
 
 impl AppShell {
     /// 判断目标分支是否属于受保护分支（禁止直接无条件强推）。
-    pub(crate) fn is_git_branch_protected(&self, branch: &str) -> bool {
-        let pattern_list = ["main", "master", "release", "prod"];
+    pub(crate) fn is_git_branch_protected(&self, branch: &str, cx: &App) -> bool {
         let target = branch.trim().to_lowercase();
-        pattern_list
-            .iter()
-            .any(|pat| target == *pat || target.starts_with(&format!("{pat}/")))
+        let settings = crate::app::app_settings(cx);
+        let raw = settings.git.protected_branches.trim();
+        let patterns: Vec<&str> = if raw.is_empty() {
+            vec!["main", "master", "release", "prod"]
+        } else {
+            raw.split([',', '，', ';', ' '])
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect()
+        };
+        patterns.iter().any(|pat| {
+            let p = pat.to_lowercase();
+            !p.is_empty() && (target == p || target.starts_with(&format!("{p}/")))
+        })
     }
 
     /// 唤起 Git 推送模态弹窗并异步加载真实的待推送提交。
@@ -245,7 +255,7 @@ impl AppShell {
             .git
             .push
             .as_ref()
-            .map(|m| self.is_git_branch_protected(&m.remote_branch))
+            .map(|m| self.is_git_branch_protected(&m.remote_branch, cx))
             .unwrap_or(false);
         if is_protected {
             return;
@@ -266,12 +276,25 @@ impl AppShell {
 
     /// 执行推送动作。
     pub(crate) fn submit_git_push_modal(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.push.as_mut() else {
+        let Some(modal) = self.state.modals.git.push.as_ref() else {
             return;
         };
         if modal.running {
             return;
         }
+        let force = modal.force;
+        let remote_branch = modal.remote_branch.clone();
+        if force && self.is_git_branch_protected(&remote_branch, cx) {
+            if let Some(m) = self.state.modals.git.push.as_mut() {
+                m.error = Some(rust_i18n::t!("git.push.protected_branch_warning").to_string());
+            }
+            cx.notify();
+            return;
+        }
+
+        let Some(modal) = self.state.modals.git.push.as_mut() else {
+            return;
+        };
         modal.running = true;
         modal.error = None;
         let project = modal.project.clone();

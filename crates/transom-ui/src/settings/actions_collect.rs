@@ -62,8 +62,8 @@ impl SettingsView {
                 s.git.executable_path = exe.clone();
             }
             s.git.protected_branches = protected;
-            s.git.author_name = author_name;
-            s.git.author_email = author_email;
+            s.git.author_name = author_name.clone();
+            s.git.author_email = author_email.clone();
         });
         transom_git::set_git_program(&exe);
         transom_git::set_git_author(&author_name, &author_email);
