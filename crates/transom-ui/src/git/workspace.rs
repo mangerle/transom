@@ -264,6 +264,7 @@ impl AppShell {
         let right = log_view::render_right_panel(state, app.clone(), tab_id, details_width, p);
         let toggle_app = app.clone();
         h_flex()
+            .size_full()
             .flex_1()
             .min_h_0()
             .items_stretch()
@@ -286,10 +287,11 @@ impl AppShell {
             .child(
                 // 中间栏：顶部是过滤条（分支/文本/用户/日期等），下方是提交图谱与历史表格
                 v_flex()
+                    .size_full()
                     .flex_1()
                     .min_w_0()
                     .min_h_0()
-                    .h_full()
+                    .overflow_hidden()
                     .child(filter_bar)
                     .child(table),
             )

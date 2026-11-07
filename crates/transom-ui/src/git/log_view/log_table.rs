@@ -93,6 +93,7 @@ pub(crate) fn render_log_table(
     let context_columns = state.log.columns;
     let context_app = app.clone();
     v_flex()
+        .w_full()
         .flex_1()
         .min_w_0()
         .min_h_0()
