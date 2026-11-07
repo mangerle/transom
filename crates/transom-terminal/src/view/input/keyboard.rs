@@ -2,9 +2,7 @@
 
 use super::custom_keys::is_control_or_function_key;
 use super::{SendBacktab, SendTab, TerminalCopy, TerminalPaste, TerminalView};
-use crate::input::{
-    KeyEventKind, keystroke_event_to_bytes, tab_bytes,
-};
+use crate::input::{KeyEventKind, keystroke_event_to_bytes, tab_bytes};
 use alacritty_terminal::term::TermMode;
 use gpui_kit::*;
 

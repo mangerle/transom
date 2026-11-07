@@ -3,9 +3,7 @@
 //! 键盘按键与自定义键映射分别放在 keyboard.rs / custom_keys.rs。
 
 use super::{SendBacktab, SendTab, TerminalCopy, TerminalPaste, TerminalView};
-use crate::input::{
-    MouseButtonCode, encode_mouse,
-};
+use crate::input::{MouseButtonCode, encode_mouse};
 use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::index::Side;
 use alacritty_terminal::selection::SelectionType;
