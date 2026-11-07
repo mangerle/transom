@@ -1,174 +1,32 @@
+//! SOCKS5 动态转发：握手、CONNECT 与 UDP ASSOCIATE。
+
+use super::{ForwardTask, bind_listener, forward_error, serve_listener};
 use crate::client::SshRemote;
 use crate::timeout::SOCKS5_HANDSHAKE_TIMEOUT;
-use futures::future::BoxFuture;
 use russh::Channel;
 use russh::client::Msg;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
-use tokio::sync::{Semaphore, watch};
-use tokio::task::{JoinHandle, JoinSet};
-use transom_core::{
-    AppError, BindAddress, ErrorCode, ForwardKind, ForwardRule, SocksAuth, TargetAddress,
-};
+use tokio::net::{TcpStream, UdpSocket};
+use tokio::sync::watch;
+use transom_core::{AppError, BindAddress, ErrorCode};
 
-/// 单条本地/动态转发的最大并发连接数。
-///
-/// 满员时暂停 accept，让内核 backlog 形成反压；无上限 spawn 会把文件描述符
-/// 与任务表打满，EMFILE 后还会退化成 accept 失败空转。
-const MAX_FORWARD_CONNECTIONS: usize = 64;
-/// accept 失败后的退避窗口：EMFILE 等瞬时错误下避免 100% CPU 忙等。
-const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(500);
-
-struct RemoteForwardInfo {
-    remote: SshRemote,
-    host: String,
-    port: u16,
+/// SOCKS5 协商完成后的转发形态。
+enum Socks5Route {
+    /// CONNECT：已建立到目标地址的 SSH 通道。
+    Connect(Channel<Msg>),
+    /// UDP ASSOCIATE：保留本地 UDP 套接字，交给中继循环。
+    Udp {
+        inbound: UdpSocket,
+        outbound: UdpSocket,
+    },
 }
 
-pub struct ForwardTask {
-    pub bound_port: Option<u16>,
-    stop: watch::Sender<bool>,
-    join: Option<JoinHandle<()>>,
-    remote_forward: Option<RemoteForwardInfo>,
-}
-
-impl ForwardTask {
-    pub async fn stop(mut self) {
-        let _ = self.stop.send(true);
-        if let Some(join) = self.join.take() {
-            let _ = join.await;
-        }
-        if let Some(info) = self.remote_forward.take() {
-            info.remote.unregister_remote_target(info.port);
-            let _ = info
-                .remote
-                .cancel_tcpip_forward(&info.host, info.port)
-                .await;
-        }
-    }
-}
-
-impl Drop for ForwardTask {
-    fn drop(&mut self) {
-        let _ = self.stop.send(true);
-        if let Some(info) = self.remote_forward.take() {
-            log::warn!(
-                "端口转发任务未经 stop 被丢弃，远端监听端口 {} 可能保留到会话断开",
-                info.port
-            );
-            info.remote.unregister_remote_target(info.port);
-        }
-    }
-}
-
-pub async fn start_forward(
-    remote: &SshRemote,
-    rule: &ForwardRule,
-) -> Result<ForwardTask, AppError> {
-    match &rule.kind {
-        ForwardKind::Local { bind, target } => start_local(remote, bind, target).await,
-        ForwardKind::Dynamic { bind, socks } => {
-            if !matches!(socks.auth, SocksAuth::None) {
-                return Err(AppError::with_detail(
-                    ErrorCode::ForwardFailed,
-                    "动态转发暂不支持 SOCKS 认证",
-                ));
-            }
-            start_dynamic(remote, bind).await
-        }
-        ForwardKind::Remote { bind, target } => start_remote(remote, bind, target).await,
-        _ => Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            "不支持的转发模式",
-        )),
-    }
-}
-
-async fn start_local(
+pub(super) async fn start_dynamic(
     remote: &SshRemote,
     bind: &BindAddress,
-    target: &TargetAddress,
 ) -> Result<ForwardTask, AppError> {
-    let listener = bind_listener(bind).await?;
-    let bound_port = listener.local_addr().ok().map(|address| address.port());
-    let (stop, stop_rx) = watch::channel(false);
-    let remote = remote.clone();
-    let target_host = target.host.clone();
-    let target_port = target.port;
-
-    let join = tokio::spawn(serve_listener(
-        listener,
-        stop_rx,
-        Arc::new(move |tcp| {
-            let remote = remote.clone();
-            let host = target_host.clone();
-            Box::pin(async move {
-                relay_local_connection(remote, tcp, host, target_port).await;
-            })
-        }),
-    ));
-
-    Ok(ForwardTask {
-        bound_port,
-        stop,
-        join: Some(join),
-        remote_forward: None,
-    })
-}
-
-/// 本地/动态转发的监听骨架：并发准入、accept 退避与停止回收。
-///
-/// 没有这层收敛时，两个入口各自复制循环，且都没有并发上限与错误退避：
-/// 被本机或外部进程刷连接时会耗尽 FD，accept 失败后还会立即重试空转。
-async fn serve_listener(
-    listener: TcpListener,
-    mut stop_rx: watch::Receiver<bool>,
-    handler: Arc<dyn Fn(TcpStream) -> BoxFuture<'static, ()> + Send + Sync>,
-) {
-    let mut connections = JoinSet::new();
-    let slots = Arc::new(Semaphore::new(MAX_FORWARD_CONNECTIONS));
-    loop {
-        let permit = match Arc::clone(&slots).try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(_) => {
-                // 满员：停止 accept，等一条连接结束或停止信号。内核 backlog
-                // 负责在 accept 暂停期间挡住新连接，形成天然反压。
-                tokio::select! {
-                    _ = stop_rx.changed() => break,
-                    _ = connections.join_next(), if !connections.is_empty() => {}
-                }
-                continue;
-            }
-        };
-        let accepted = tokio::select! {
-            _ = stop_rx.changed() => break,
-            accepted = listener.accept() => accepted,
-        };
-        match accepted {
-            Ok((tcp, _)) => {
-                let future = handler(tcp);
-                connections.spawn(async move {
-                    let _permit = permit;
-                    future.await;
-                });
-            }
-            Err(error) => {
-                drop(permit);
-                log::warn!("转发监听接受连接失败，将退避后重试，原因: {error}");
-                tokio::time::sleep(ACCEPT_RETRY_DELAY).await;
-            }
-        }
-        while connections.try_join_next().is_some() {}
-    }
-    // 停止转发必须同时断开在途连接：abort 取消 copy_bidirectional 后，
-    // 本地套接字与 SSH 通道随 future 一起释放，客户端立即看到连接关闭。
-    abort_connections(&mut connections).await;
-}
-
-async fn start_dynamic(remote: &SshRemote, bind: &BindAddress) -> Result<ForwardTask, AppError> {
     let listener = bind_listener(bind).await?;
     let bound_port = listener.local_addr().ok().map(|address| address.port());
     let (stop, stop_rx) = watch::channel(false);
@@ -195,40 +53,13 @@ async fn start_dynamic(remote: &SshRemote, bind: &BindAddress) -> Result<Forward
     })
 }
 
-async fn start_remote(
-    remote: &SshRemote,
-    bind: &BindAddress,
-    target: &TargetAddress,
-) -> Result<ForwardTask, AppError> {
-    let actual_port = remote.tcpip_forward(&bind.host, bind.port).await?;
-    let actual_port = actual_port.min(u16::MAX as u32) as u16;
-    remote.register_remote_target(actual_port, target.host.clone(), target.port);
-    let (stop, _stop_rx) = watch::channel(false);
-
-    Ok(ForwardTask {
-        bound_port: Some(actual_port),
-        stop,
-        join: None,
-        remote_forward: Some(RemoteForwardInfo {
-            remote: remote.clone(),
-            host: bind.host.clone(),
-            port: actual_port,
-        }),
-    })
-}
-
-async fn bind_listener(bind: &BindAddress) -> Result<TcpListener, AppError> {
-    TcpListener::bind((bind.host.as_str(), bind.port))
-        .await
-        .map_err(forward_error)
-}
-
-fn forward_error(error: std::io::Error) -> AppError {
-    AppError::with_detail(ErrorCode::ForwardFailed, error.to_string())
-}
-
 /// 本地转发单条连接：建立远端通道后双向复制，任一方向结束即关闭两端。
-async fn relay_local_connection(remote: SshRemote, mut tcp: TcpStream, host: String, port: u16) {
+pub(super) async fn relay_local_connection(
+    remote: SshRemote,
+    mut tcp: TcpStream,
+    host: String,
+    port: u16,
+) {
     let channel = match remote.open_direct_tcpip(&host, port).await {
         Ok(channel) => channel,
         Err(error) => {
@@ -238,17 +69,6 @@ async fn relay_local_connection(remote: SshRemote, mut tcp: TcpStream, host: Str
     };
     let mut stream = channel.into_stream();
     let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
-}
-
-/// SOCKS5 协商完成后的转发形态。
-enum Socks5Route {
-    /// CONNECT：已建立到目标地址的 SSH 通道。
-    Connect(Channel<Msg>),
-    /// UDP ASSOCIATE：保留本地 UDP 套接字，交给中继循环。
-    Udp {
-        inbound: UdpSocket,
-        outbound: UdpSocket,
-    },
 }
 
 /// SOCKS5 入口：先限时完成协商，再进入不设总时限的数据中继。
@@ -521,15 +341,6 @@ async fn run_socks5_udp_relay(
     Ok(())
 }
 
-/// 中止并等待全部在途连接退出。
-///
-/// abort 会取消 `copy_bidirectional`/协商 future，套接字与 SSH 通道随
-/// future 一起释放；`join_next` 再逐个回收，保证返回时任务集合已清空。
-async fn abort_connections(connections: &mut JoinSet<()>) {
-    connections.abort_all();
-    while connections.join_next().await.is_some() {}
-}
-
 /// 解析 SOCKS5 UDP 请求头，返回目标主机、端口与载荷起始偏移。
 ///
 /// 只接受 RSV=0、FRAG=0 的单包请求；地址类型 1/3/4 分别对应 IPv4、
@@ -604,107 +415,8 @@ fn build_udp_response(remote: SocketAddr, payload: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        MAX_FORWARD_CONNECTIONS, abort_connections, build_udp_response, parse_udp_target,
-        serve_listener,
-    };
-    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
-    use tokio::net::{TcpListener, TcpStream};
-    use tokio::sync::watch;
-    use tokio::task::JoinSet;
+    use super::*;
 
-    /// 并发准入：同时处理的连接不得超过上限，满员后的连接由内核 backlog
-    /// 挡住，而不是无限 spawn 耗尽文件描述符。
-    #[tokio::test]
-    async fn serve_listener_caps_concurrent_connections() {
-        let listener = TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .expect("绑定本地端口");
-        let address = listener.local_addr().expect("读取监听地址");
-        let (stop, stop_rx) = watch::channel(false);
-        let (release_tx, release_rx) = watch::channel(false);
-        let active = Arc::new(AtomicUsize::new(0));
-        let peak = Arc::new(AtomicUsize::new(0));
-        let handler_active = Arc::clone(&active);
-        let handler_peak = Arc::clone(&peak);
-
-        let join = tokio::spawn(serve_listener(
-            listener,
-            stop_rx,
-            Arc::new(move |_tcp| {
-                let active = Arc::clone(&handler_active);
-                let peak = Arc::clone(&handler_peak);
-                let mut release_rx = release_rx.clone();
-                Box::pin(async move {
-                    let current = active.fetch_add(1, Ordering::Relaxed) + 1;
-                    peak.fetch_max(current, Ordering::Relaxed);
-                    let _ = release_rx.wait_for(|released| *released).await;
-                    active.fetch_sub(1, Ordering::Relaxed);
-                })
-            }),
-        ));
-
-        let mut clients = Vec::new();
-        for _ in 0..(MAX_FORWARD_CONNECTIONS + 8) {
-            if let Ok(client) = TcpStream::connect(address).await {
-                clients.push(client);
-            }
-        }
-        for _ in 0..200 {
-            if peak.load(Ordering::Relaxed) >= MAX_FORWARD_CONNECTIONS {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-
-        assert_eq!(
-            peak.load(Ordering::Relaxed),
-            MAX_FORWARD_CONNECTIONS,
-            "并发连接应恰好吃满上限"
-        );
-        assert!(
-            peak.load(Ordering::Relaxed) <= MAX_FORWARD_CONNECTIONS,
-            "并发连接不得超过上限"
-        );
-
-        let _ = stop.send(true);
-        let _ = join.await;
-        let _ = release_tx.send(true);
-        drop(clients);
-    }
-
-    /// 停止转发时，在途连接必须被取消并回收，而不是继续跑完。
-    #[tokio::test]
-    async fn abort_connections_cancels_in_flight_tasks() {
-        let cancelled = Arc::new(AtomicUsize::new(0));
-        let mut connections = JoinSet::new();
-        for _ in 0..3 {
-            let cancelled = cancelled.clone();
-            connections.spawn(async move {
-                struct Guard(Arc<AtomicUsize>);
-                impl Drop for Guard {
-                    fn drop(&mut self) {
-                        self.0.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-                let _guard = Guard(cancelled);
-                std::future::pending::<()>().await;
-            });
-        }
-        tokio::task::yield_now().await;
-        abort_connections(&mut connections).await;
-        assert_eq!(
-            cancelled.load(Ordering::Relaxed),
-            3,
-            "停止转发必须取消全部在途连接"
-        );
-        assert!(connections.is_empty(), "回收后任务集合必须为空");
-    }
-
-    /// IPv4、域名与 IPv6 三种地址类型都能解析出目标与载荷偏移。
     #[test]
     fn parse_udp_target_supports_all_address_types() {
         let mut ipv4 = vec![0, 0, 0, 1, 127, 0, 0, 1, 0x1f, 0x90];
@@ -733,7 +445,6 @@ mod tests {
         assert_eq!(&ipv6[offset..], b"v6");
     }
 
-    /// 分片、保留位非零与长度不足的包一律丢弃。
     #[test]
     fn parse_udp_target_rejects_fragmented_and_truncated_packets() {
         assert!(parse_udp_target(&[0, 0, 1, 1, 127, 0, 0, 1], 8).is_none());
@@ -743,7 +454,6 @@ mod tests {
         assert!(parse_udp_target(&[0, 0, 0, 3, 10, b'a'], 6).is_none());
     }
 
-    /// 响应头按目标地址族编码，载荷原样跟在后面。
     #[test]
     fn build_udp_response_encodes_address_family() {
         let v4 = build_udp_response(SocketAddr::from((Ipv4Addr::new(10, 0, 0, 1), 8080)), b"ok");
