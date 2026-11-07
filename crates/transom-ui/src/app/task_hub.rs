@@ -49,6 +49,7 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) diff_viewer: Option<Subscription>,
     /// 订阅本身即生命周期守卫，无需读取。
     pub(crate) _status_metrics: Option<Subscription>,
+    pub(crate) _git_focus: Option<Subscription>,
 }
 
 impl PanelSubscriptions {
@@ -61,6 +62,7 @@ impl PanelSubscriptions {
             settings: None,
             diff_viewer: None,
             _status_metrics: None,
+            _git_focus: None,
         }
     }
 }

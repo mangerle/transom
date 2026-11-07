@@ -148,8 +148,8 @@ use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppSettings, PanelSide, SessionCatalog, StartupTabs, TabId, TabPosition,
-    UiThemeMode,
+    AppCommand, AppSettings, GitCommand, PanelSide, SessionCatalog, StartupTabs, TabId,
+    TabPosition, UiThemeMode,
 };
 
 pub(crate) use types::*;
@@ -408,6 +408,20 @@ impl AppShell {
             .map_or(0, |git| git.interval_minutes);
         if self.state.git_sync_schedule.tick(interval) {
             self.start_git_sync_scheduled(cx);
+        }
+    }
+
+    /// 每分钟节拍：达到 Git 自动抓取配置间隔时，对所有打开的 Git 项目触发一次 git fetch。
+    fn tick_git_auto_fetch(&mut self, cx: &mut Context<Self>) {
+        let interval = app_settings(cx).git.auto_fetch_interval as u64;
+        if interval == 0 {
+            return;
+        }
+        if self.state.git.auto_fetch_schedule.tick(interval) {
+            let projects = self.state.git.projects.clone();
+            for project in projects {
+                self.send_command(GitCommand::Fetch { project });
+            }
         }
     }
 }

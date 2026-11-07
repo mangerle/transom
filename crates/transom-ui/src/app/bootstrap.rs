@@ -108,8 +108,25 @@ impl AppShell {
         })
     }
 
+    /// 安装窗口可见性观察器：当窗口重新可见或恢复前台时，若开启 auto_update_on_focus，自动刷新所有打开的 Git 项目状态。
+    fn observe_window_focus(window: &mut Window, cx: &mut Context<Self>) -> Subscription {
+        let app_entity = cx.entity();
+        window.observe_window_visibility(move |visibility, _window, cx| {
+            if visibility.is_visible() {
+                app_entity.update(cx, |shell, cx| {
+                    if app_settings(cx).git.auto_update_on_focus {
+                        shell.git_refresh_active_projects(cx);
+                    }
+                });
+            }
+        })
+    }
+
     /// 安装面板事件订阅与输入框联动；全部订阅由 `TaskHub` 托管生命周期。
     fn bootstrap_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let git_focus = Self::observe_window_focus(window, cx);
+        self.state.tasks.subscriptions._git_focus = Some(git_focus);
+
         // 监控面板的意图事件由外壳订阅处理。
         let monitor_subscription = cx.subscribe(
             &self.state.monitor,
@@ -199,6 +216,7 @@ impl AppShell {
                 if this
                     .update(cx, |this, cx| {
                         this.tick_git_sync(cx);
+                        this.tick_git_auto_fetch(cx);
                         this.tick_container_cleanup(cx);
                     })
                     .is_err()

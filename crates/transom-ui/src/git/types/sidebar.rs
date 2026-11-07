@@ -26,6 +26,8 @@ pub(crate) struct GitHub {
     pub pending_init: Option<(transom_core::GitRequestId, crate::git::GitProjectDraft)>,
     /// 在途的已有项目初始化请求。
     pub pending_project_init: Option<(transom_core::GitRequestId, transom_core::GitProjectId)>,
+    /// 定时自动抓取远端更新的调度节拍器。
+    pub auto_fetch_schedule: crate::cloud_sync::GitSyncScheduler,
 }
 
 impl GitHub {
@@ -38,6 +40,7 @@ impl GitHub {
             clone_task: None,
             pending_init: None,
             pending_project_init: None,
+            auto_fetch_schedule: crate::cloud_sync::GitSyncScheduler::default(),
         }
     }
 }

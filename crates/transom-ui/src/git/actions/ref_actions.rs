@@ -351,6 +351,14 @@ impl AppShell {
         });
         cx.notify();
     }
+
+    /// 刷新所有处于管理状态的 Git 项目状态（用于窗口重新聚焦时自动刷新）。
+    pub(crate) fn git_refresh_active_projects(&mut self, cx: &mut Context<Self>) {
+        let projects = self.state.git.projects.clone();
+        for project in projects {
+            self.git_refresh(&project, cx);
+        }
+    }
 }
 
 /// 分支/标签类动作（界面侧的意图，落到具体命令）。
