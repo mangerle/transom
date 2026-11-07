@@ -63,10 +63,10 @@ pub fn set_git_program(path: impl Into<String>) {
 
 /// 获取当前生效的 Git 可执行文件路径。
 pub fn git_program() -> String {
-    if let Ok(r) = GIT_PROGRAM.read() {
-        if !r.trim().is_empty() {
-            return r.clone();
-        }
+    if let Ok(r) = GIT_PROGRAM.read()
+        && !r.trim().is_empty()
+    {
+        return r.clone();
     }
     "git".to_string()
 }
