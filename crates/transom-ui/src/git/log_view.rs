@@ -32,11 +32,12 @@ use transom_core::TabId;
 
 mod files_tree;
 mod log_details;
-mod log_menus;
 mod log_refs;
 mod log_table;
+pub(crate) mod menus;
+mod worktrees_group;
 
-use log_menus::{render_date_menu, render_path_menu};
+use menus::{render_date_menu, render_path_menu};
 
 // 外部（工作区/其它面板）仍按 `crate::git::log_view::*` 引用日志面板的主入口，
 // 拆模块只是把实现挪到同级的子模块里，不改变对外的形状。

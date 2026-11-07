@@ -7212,6 +7212,105 @@ git:
     discard_all:
       en: Rollback All
       zh-CN: 全部回滚
+    show_diff_in_new_tab:
+      en: "Show Diff in New Tab"
+      zh-CN: "在新标签页中显示差异"
+    compare_with_local:
+      en: "Compare with Local"
+      zh-CN: "与本地比较"
+    compare_before_with_local:
+      en: "Compare Before with Local"
+      zh-CN: "将之前版本与本地版本进行比较"
+    edit_source:
+      en: "Edit Source"
+      zh-CN: "编辑源"
+    open_repo_version:
+      en: "Open Repository Version"
+      zh-CN: "打开仓库版本"
+    revert_selected_changes:
+      en: "Rollback Selected Changes"
+      zh-CN: "还原所选更改"
+    cherry_pick_selected_changes:
+      en: "Cherry-pick Selected Changes"
+      zh-CN: "优选所选更改"
+    extract_to_commit:
+      en: "Extract Selected Changes into Separate Commit..."
+      zh-CN: "将所选更改提取到单独的提交…"
+    delete_selected_changes:
+      en: "Delete Selected Changes"
+      zh-CN: "删除所选更改"
+    get_from_revision:
+      en: "Get from Revision"
+      zh-CN: "从修订中获取"
+    history_up_to_here:
+      en: "History up to Here"
+      zh-CN: "迄今为止的历史记录"
+    show_parent_changes:
+      en: "Show Changes to Parent"
+      zh-CN: "显示对父项的更改"
+    add_to_agent_context:
+      en: "Add to Agent Context"
+      zh-CN: "添加到智能体上下文"
+    checkout_revision:
+      en: "Checkout Revision"
+      zh-CN: "签出修订"
+    browse_repo_at_revision:
+      en: "Show Repository at Revision"
+      zh-CN: "在修订版中显示仓库"
+    reset_current_branch_here:
+      en: "Reset Current Branch to Here..."
+      zh-CN: "将当前分支重置到此处…"
+    undo_commit:
+      en: "Undo Commit..."
+      zh-CN: "撤销提交…"
+    edit_commit_message:
+      en: "Edit Commit Message..."
+      zh-CN: "编辑提交信息…"
+    drop_commit:
+      en: "Delete Commit"
+      zh-CN: "删除提交"
+    rebase_current_onto_selected:
+      en: "Rebase '%{branch}' onto Selected Commit"
+      zh-CN: "将 '%{branch}' 变基到所选提交"
+    new_branch_from_ref:
+      en: "New Branch from '%{branch}'..."
+      zh-CN: "从 '%{branch}' 新建分支…"
+    show_diff_with_worktree:
+      en: "Show Diff with Working Tree"
+      zh-CN: "显示与工作树的差异"
+    new_worktree_from_ref:
+      en: "New Worktree from '%{branch}'..."
+      zh-CN: "从 '%{branch}' 新建工作树…"
+    tracked_branch:
+      en: "Tracked Branch '%{upstream}'"
+      zh-CN: "跟踪的分支 '%{upstream}'"
+    delete_ref:
+      en: "Delete(D)"
+      zh-CN: "删除(D)"
+    checkout_and_rebase:
+      en: "Checkout and Rebase onto '%{current}'"
+      zh-CN: "签出并变基到 '%{current}'"
+    compare_with_branch:
+      en: "Compare with '%{current}'"
+      zh-CN: "与 '%{current}' 比较"
+    rebase_current_onto_ref:
+      en: "Rebase '%{current}' onto '%{branch}'"
+      zh-CN: "将 '%{current}' 变基到 '%{branch}'"
+    merge_ref_into_current:
+      en: "Merge '%{branch}' into '%{current}'"
+      zh-CN: "将 '%{branch}' 合并到 '%{current}' 中"
+    pull_with_rebase:
+      en: "Pull into '%{current}' Using Rebase"
+      zh-CN: "使用“变基”拉入 '%{current}'"
+    pull_with_merge:
+      en: "Pull into '%{current}' Using Merge"
+      zh-CN: "使用“合并”拉入 '%{current}'"
+    merge_tag_into:
+      en: "Merge '%{tag}' into '%{branch}'"
+      zh-CN: "将 '%{tag}' 合并到 '%{branch}' 中"
+    push_to_remote:
+      en: "Push to %{remote}"
+      zh-CN: "推送到 %{remote}"
   toolbar:
     commit:
       en: "Commit"

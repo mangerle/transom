@@ -4,8 +4,8 @@
 //! 引用栏分开成模块，改列宽/列开关时只碰这一处；行渲染需要的「本行图形态」
 //! 收进 [`RowShape`]，避免七个平铺入参越过规范上限。
 
-use super::log_menus::{CommitMenuTarget, render_commit_menu};
 use super::log_refs::ref_chip;
+use super::menus::{CommitMenuTarget, render_commit_menu};
 use super::{placeholder, placeholder_colored};
 use crate::app::AppShell;
 use crate::git::graph_paint::{self, GraphCell};
@@ -55,6 +55,10 @@ pub(crate) fn render_log_table(
     } else if state.log.entries.is_empty() {
         rows.push(placeholder(rust_i18n::t!("git.log.empty").to_string(), p));
     }
+    let cur_branch = state.status.as_ref().and_then(|status| match &status.head {
+        transom_core::HeadState::OnBranch(name) => Some(name.clone()),
+        _ => None,
+    });
     for (index, entry) in state.log.entries.iter().enumerate() {
         let shape = RowShape {
             cell: GraphCell::at(&state.log.rows, index),
@@ -67,6 +71,7 @@ pub(crate) fn render_log_table(
                 state.status.as_ref().map(|status| &status.head),
                 Some(transom_core::HeadState::OnBranch(_))
             ),
+            current_branch: cur_branch.clone(),
         };
         rows.push(render_commit_row(tab_id, index, entry, &shape, &app, p));
     }
@@ -131,6 +136,8 @@ struct RowShape {
     can_fold: bool,
     /// 这一行是否就是分支头提交：它之上没有可重排的提交，不能当变基基线。
     is_tip: bool,
+    /// 当前活跃分支名。
+    current_branch: Option<String>,
 }
 
 /// 一行提交。
@@ -153,6 +160,7 @@ fn render_commit_row(
     // 菜单闭包要活过本次渲染，因此把需要的字段先取成局部值，不留 `shape` 的借用。
     let on_branch = shape.on_branch;
     let is_tip = shape.is_tip;
+    let current_branch = shape.current_branch.clone();
     h_flex()
         .id(ElementId::Name(format!("git-commit-{index}").into()))
         .h(px(ROW_HEIGHT))
@@ -218,6 +226,7 @@ fn render_commit_row(
                     on_branch,
                     can_fold,
                     is_tip,
+                    current_branch: current_branch.clone(),
                 },
             )
         })

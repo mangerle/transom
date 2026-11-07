@@ -11,11 +11,14 @@ use crate::git::{ChangeAccent, change_visual};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::BTreeMap;
 use transom_core::{ChangeCode, CommitFile, TabId};
+
+use super::menus::render_file_tree_menu;
 
 /// 单个树节点行高（紧凑 IDE 规范）。
 const TREE_ROW_HEIGHT: f32 = 22.0;
@@ -184,8 +187,10 @@ pub(crate) fn render_tree_nodes(
 
                 let click_app = app.clone();
                 let dbl_click_app = app.clone();
+                let menu_app = app.clone();
                 let path_clone = full_path.clone();
                 let dbl_path = full_path.clone();
+                let menu_path = full_path.clone();
 
                 let file_row = h_flex()
                     .id(ElementId::Name(format!("git-tree-file-{full_path}").into()))
@@ -239,6 +244,9 @@ pub(crate) fn render_tree_nodes(
                                 this.git_diff_commit_file(tab_id, &path_clone, cx);
                             });
                         }
+                    })
+                    .context_menu(move |menu, _window, _cx| {
+                        render_file_tree_menu(menu, menu_app.clone(), tab_id, menu_path.clone())
                     });
 
                 elements.push(file_row.into_any_element());

@@ -263,6 +263,16 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 回滚单个文件路径的更改。
+    pub(crate) fn git_rollback_single_path(
+        &mut self,
+        project: &GitProject,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.git_run_paths(project, GitAction::Discard, vec![path.to_string()], cx);
+    }
+
     /// 提交当前标签页的已暂存内容；`push_after` 决定是否顺带推送。
     pub(crate) fn submit_git_commit(
         &mut self,

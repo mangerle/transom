@@ -3,13 +3,13 @@
 //! 设计原理（Why）：引用栏按 IDEA 分组，默认只展开「本地分支」——分支多的仓库
 //! 全展开会把可视区吃光；工作树与引用同栏是因为在 IDEA 里它们就是同一棵树里的条目。
 
-use super::log_menus::render_ref_menu;
+use super::menus::{render_local_branch_menu, render_remote_branch_menu, render_tag_menu};
+use super::worktrees_group::render_worktree_group;
 use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::widgets::{MenuItem, menu_item};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
@@ -134,8 +134,8 @@ pub(crate) fn render_refs_panel(
                         title: "HEAD",
                         names: &head,
                         default_expanded: true,
-                        renameable: false,
                         is_local_branches: false,
+                        kind: RefKind::HeadAt,
                     },
                     p,
                 ))
@@ -146,8 +146,8 @@ pub(crate) fn render_refs_panel(
                         title: rust_i18n::t!("git.refs.local").as_ref(),
                         names: &local,
                         default_expanded: true,
-                        renameable: true,
                         is_local_branches: true,
+                        kind: RefKind::Branch,
                     },
                     p,
                 ))
@@ -158,8 +158,8 @@ pub(crate) fn render_refs_panel(
                         title: rust_i18n::t!("git.refs.remote").as_ref(),
                         names: &remote,
                         default_expanded: false,
-                        renameable: false,
                         is_local_branches: false,
+                        kind: RefKind::RemoteBranch,
                     },
                     p,
                 ))
@@ -170,8 +170,8 @@ pub(crate) fn render_refs_panel(
                         title: rust_i18n::t!("git.refs.tags").as_ref(),
                         names: &tags,
                         default_expanded: false,
-                        renameable: false,
                         is_local_branches: false,
+                        kind: RefKind::Tag,
                     },
                     p,
                 ))
@@ -206,8 +206,8 @@ struct RefsGroupConfig<'a> {
     title: &'a str,
     names: &'a [String],
     default_expanded: bool,
-    renameable: bool,
     is_local_branches: bool,
+    kind: RefKind,
 }
 
 fn render_refs_group(
@@ -251,7 +251,8 @@ fn render_refs_group(
                 });
             }),
     );
-    let renameable = cfg.renameable;
+    let group_kind = cfg.kind;
+    let current_branch_name = current.first().cloned();
     if expanded {
         for name in cfg.names {
             let display = name.clone();
@@ -259,6 +260,7 @@ fn render_refs_group(
             let menu_name = name.clone();
             let click_app = app.clone();
             let menu_app = app.clone();
+            let cur_branch = current_branch_name.clone();
             let is_current = current.iter().any(|head| head == name);
 
             // 本地分支领先/落后角标
@@ -331,144 +333,30 @@ fn render_refs_group(
                             this.git_checkout_ref(&click_name, cx);
                         });
                     })
-                    .context_menu(move |menu, _window, _cx| {
-                        render_ref_menu(menu, menu_app.clone(), menu_name.clone(), renameable)
+                    .context_menu(move |menu, _window, _cx| match group_kind {
+                        RefKind::Branch | RefKind::HeadAt => render_local_branch_menu(
+                            menu,
+                            menu_app.clone(),
+                            menu_name.clone(),
+                            cur_branch.clone(),
+                            None,
+                            is_current,
+                        ),
+                        RefKind::RemoteBranch => render_remote_branch_menu(
+                            menu,
+                            menu_app.clone(),
+                            menu_name.clone(),
+                            cur_branch.clone(),
+                        ),
+                        RefKind::Tag => render_tag_menu(
+                            menu,
+                            menu_app.clone(),
+                            menu_name.clone(),
+                            cur_branch.clone(),
+                        ),
                     }),
             );
         }
-    }
-    block.into_any_element()
-}
-
-/// 工作树分组：一行一个工作树，右键可删除登记。
-fn render_worktree_group(app: &Entity<AppShell>, state: &State, p: &Palette) -> AnyElement {
-    let mut block = v_flex().child(
-        div()
-            .px_1()
-            .py_0p5()
-            .text_xs()
-            .font_weight(FontWeight::BOLD)
-            .text_color(p.muted_foreground)
-            .child(rust_i18n::t!("git.refs.worktrees").to_string()),
-    );
-    for worktree in &state.worktrees {
-        let display = worktree
-            .path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| worktree.path.display().to_string());
-        let subtitle = match &worktree.branch {
-            Some(branch) => branch.clone(),
-            None => worktree.head.chars().take(7).collect(),
-        };
-        // 锁定原因与可清理原因都按 git 给的原文显示：删不掉时用户要看的
-        // 就是这句话，藏起来只会让人回来问「为什么点了没反应」。
-        let notice = worktree
-            .lock_reason
-            .as_deref()
-            .map(|reason| format!("{} · {reason}", rust_i18n::t!("git.worktree.locked")))
-            .or_else(|| {
-                worktree
-                    .prune_reason
-                    .as_ref()
-                    .map(|reason| format!("{} · {reason}", rust_i18n::t!("git.worktree.prunable")))
-            });
-        let is_main = worktree.path == state.project.path || worktree.bare;
-        let locked = worktree.locked;
-        let path_text = worktree.path.display().to_string();
-        let item_app = app.clone();
-        let menu_app = app.clone();
-        let remove_path = path_text.clone();
-        let lock_path = path_text.clone();
-        block = block.child(
-            h_flex()
-                .id(ElementId::Name(format!("git-worktree-{path_text}").into()))
-                .pl_4()
-                .pr_1()
-                .py_0p5()
-                .gap_1()
-                .items_center()
-                .cursor_pointer()
-                .hover(|style| style.bg(p.list_hover))
-                .child(
-                    Icon::new(if locked {
-                        IconName::Lock
-                    } else {
-                        IconName::FolderGit
-                    })
-                    .xsmall()
-                    .text_color(if locked { p.warning } else { p.primary }),
-                )
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .child(
-                            div()
-                                .text_xs()
-                                .overflow_hidden()
-                                .truncate()
-                                .child(format!("{display} · {subtitle}")),
-                        )
-                        .when(notice.is_some(), |el| {
-                            el.child(
-                                div()
-                                    .text_xs()
-                                    .overflow_hidden()
-                                    .text_color(p.muted_foreground)
-                                    .child(notice.clone().unwrap_or_default()),
-                            )
-                        }),
-                )
-                .on_click({
-                    let open_app = item_app.clone();
-                    let open_path = path_text.clone();
-                    move |_, _, cx| {
-                        let path = open_path.clone();
-                        open_app.update(cx, |this, cx| {
-                            this.git_open_worktree_path(&path, cx);
-                        });
-                    }
-                })
-                .context_menu(move |menu, _window, _cx| {
-                    let lock_app = menu_app.clone();
-                    let lock_owned = lock_path.clone();
-                    let remove_app = menu_app.clone();
-                    let remove_owned = remove_path.clone();
-                    let toggle_key = if locked {
-                        "git.menu.unlock_worktree"
-                    } else {
-                        "git.menu.lock_worktree"
-                    };
-                    menu.item(menu_item(
-                        rust_i18n::t!(toggle_key).to_string(),
-                        IconName::Lock,
-                        move |_, _, cx| {
-                            let path = lock_owned.clone();
-                            lock_app.update(cx, |this, cx| {
-                                this.git_set_worktree_locked(path, !locked, cx);
-                            });
-                        },
-                    ))
-                    .item(PopupMenuItem::separator())
-                    .item(
-                        // 主工作树与裸仓库不是「可删除的工作树」，被锁住的工作树
-                        // 也要先解锁：两种情况都置灰说明原因，而不是点下去吃一个 git 错误。
-                        MenuItem::new(
-                            rust_i18n::t!("git.menu.remove_worktree").to_string(),
-                            IconName::Trash,
-                        )
-                        .disabled(is_main || locked)
-                        .render(move |_, _, cx| {
-                            let path = remove_owned.clone();
-                            remove_app.update(cx, |this, cx| {
-                                this.git_remove_current_worktree(path, false, cx);
-                            });
-                        }),
-                    )
-                }),
-        );
     }
     block.into_any_element()
 }
