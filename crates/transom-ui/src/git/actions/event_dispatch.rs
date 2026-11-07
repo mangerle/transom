@@ -8,7 +8,7 @@ use crate::app::AppShell;
 use crate::palette::localized_error;
 use gpui_kit::*;
 use std::collections::HashSet;
-use transom_core::{ErrorCode, GitAction, GitAppEvent, GitProjectId};
+use transom_core::{ErrorCode, GitAction, GitAppEvent, GitCommand, GitProjectId};
 
 impl AppShell {
     /// Git 事件落地。
@@ -295,7 +295,8 @@ impl AppShell {
                         if message.is_none() {
                             state.checked = HashSet::new();
                             state.commit_amend = false;
-                            state.commit_clear_pending = true;
+                            state.commit_clear_pending =
+                                crate::app::app_settings(cx).git.clear_message_on_commit;
                             // 让下一次状态刷新重新选中第一个改动并拉差异。
                             state.diff = None;
                             state.last_diff = None;
@@ -313,7 +314,15 @@ impl AppShell {
                                 .find(|item| item.id == project_id)
                                 .cloned()
                         {
-                            self.open_git_push_modal(&project, None, cx);
+                            let show_dialog = crate::app::app_settings(cx).git.push_dialog;
+                            if show_dialog {
+                                self.open_git_push_modal(&project, None, cx);
+                            } else {
+                                self.send_command(GitCommand::Push {
+                                    project,
+                                    options: transom_core::GitPushOptions::default(),
+                                });
+                            }
                         }
                     }
                 }

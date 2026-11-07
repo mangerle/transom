@@ -98,10 +98,17 @@ impl AppShell {
             GitRemoteAction::Fetch => GitCommand::Fetch {
                 project: project.clone(),
             },
-            GitRemoteAction::Push => GitCommand::Push {
-                project: project.clone(),
-                options: transom_core::GitPushOptions::default(),
-            },
+            GitRemoteAction::Push => {
+                let show_dialog = crate::app::app_settings(cx).git.push_dialog;
+                if show_dialog {
+                    self.open_git_push_modal(project, None, cx);
+                    return;
+                }
+                GitCommand::Push {
+                    project: project.clone(),
+                    options: transom_core::GitPushOptions::default(),
+                }
+            }
             GitRemoteAction::Pull { rebase } => GitCommand::Pull {
                 project: project.clone(),
                 rebase,
@@ -291,14 +298,27 @@ impl AppShell {
         self.git_remote_action(project, GitRemoteAction::Pull { rebase }, cx);
     }
 
-    /// 推送指定项目分支（弹出对齐 openidea / IDEA 的推送模态弹窗）。
+    /// 推送指定项目分支（根据设置决定是直接推送还是弹出推送模态弹窗）。
     pub(crate) fn git_push_project(
         &mut self,
         project: &GitProject,
         target: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_git_push_modal(project, target, cx);
+        let show_dialog = crate::app::app_settings(cx).git.push_dialog;
+        if show_dialog {
+            self.open_git_push_modal(project, target, cx);
+        } else {
+            let options = transom_core::GitPushOptions {
+                branch: target,
+                ..Default::default()
+            };
+            self.send_command(GitCommand::Push {
+                project: project.clone(),
+                options,
+            });
+            cx.notify();
+        }
     }
 
     /// 「推送此前所有提交」：把选中之前的历史推到该分支的上游远端。
