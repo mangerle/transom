@@ -13,8 +13,6 @@ use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::scroll::ScrollableElement;
-
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
@@ -33,13 +31,14 @@ pub(crate) fn render_diff_tab_bar(
         .id("git-diff-tab-bar")
         .w_full()
         .h(px(28.0))
+        .flex_none()
         .bg(p.muted)
         .border_color(p.divider(p.border))
         .border_b_1()
         .items_center()
         .px_1()
         .gap_1()
-        .overflow_x_scrollbar()
+        .overflow_hidden()
         .children(state.diff_tabs.iter().enumerate().map(|(idx, tab_item)| {
             let is_active = state.active_diff_tab == Some(idx);
             let file_name = Path::new(&tab_item.path)
@@ -130,17 +129,17 @@ pub(crate) fn render_diff_columns_header(
     if !side_by_side {
         return None;
     }
-    let left_title = format!("{} {}", diff.left_label, diff.path);
-    let right_title = if diff.right_label.is_empty() {
-        rust_i18n::t!("git.diff.current_version", path = diff.path.as_str()).to_string()
+    let right_label = if diff.right_label.is_empty() {
+        rust_i18n::t!("git.diff.current_version_label").to_string()
     } else {
-        format!("{} {}", diff.right_label, diff.path)
+        diff.right_label.clone()
     };
 
     let header = h_flex()
         .id("git-diff-columns-header")
         .w_full()
         .h(px(24.0))
+        .flex_none()
         .bg(p.muted)
         .border_color(p.divider(p.border))
         .border_b_1()
@@ -152,12 +151,34 @@ pub(crate) fn render_diff_columns_header(
                 .items_center()
                 .child(div().w(px(GUTTER_WIDTH)).flex_none())
                 .child(
-                    div()
+                    h_flex()
                         .flex_1()
                         .min_w_0()
+                        .h_full()
+                        .gap_1p5()
+                        .items_center()
                         .overflow_hidden()
-                        .text_color(p.muted_foreground)
-                        .child(left_title),
+                        .child(
+                            Icon::new(IconName::GitCommitHorizontal)
+                                .xsmall()
+                                .text_color(p.muted_foreground),
+                        )
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.foreground)
+                                .child(diff.left_label.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .whitespace_nowrap()
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .text_color(p.muted_foreground)
+                                .child(diff.path.clone()),
+                        ),
                 ),
         )
         .child(
@@ -169,12 +190,29 @@ pub(crate) fn render_diff_columns_header(
                 .border_l_1()
                 .child(div().w(px(GUTTER_WIDTH)).flex_none())
                 .child(
-                    div()
+                    h_flex()
                         .flex_1()
                         .min_w_0()
+                        .h_full()
+                        .gap_1p5()
+                        .items_center()
                         .overflow_hidden()
-                        .text_color(p.muted_foreground)
-                        .child(right_title),
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.foreground)
+                                .child(right_label),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .whitespace_nowrap()
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .text_color(p.muted_foreground)
+                                .child(diff.path.clone()),
+                        ),
                 ),
         );
     Some(header.into_any_element())

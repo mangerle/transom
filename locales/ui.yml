@@ -7509,6 +7509,15 @@ git:
     current_version:
       en: "Current Version: %{path}"
       zh-CN: "当前版本: %{path}"
+    current_version_label:
+      en: "Current Version:"
+      zh-CN: "当前版本:"
+    files_indicator:
+      en: "%{current}/%{total} files"
+      zh-CN: "%{current}/%{total} 个文件"
+    single_file_indicator:
+      en: "1 file"
+      zh-CN: "1 个文件"
     head:
 
 

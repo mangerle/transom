@@ -24,9 +24,9 @@ use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -83,47 +83,6 @@ pub(crate) fn render(
     let current_tab_idx = state.active_diff_tab.unwrap_or(0);
     let prev_app = app.clone();
     let next_app = app.clone();
-    let file_nav = (total_tabs > 1).then(|| {
-        h_flex()
-            .gap_0p5()
-            .items_center()
-            .child(
-                Button::new("git-diff-prev-file")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::ChevronLeft)
-                    .tooltip(rust_i18n::t!("git.diff.prev_file").to_string())
-                    .disabled(current_tab_idx == 0)
-                    .on_click(move |_, _, cx| {
-                        if current_tab_idx > 0 {
-                            prev_app.update(cx, |this, cx| {
-                                this.git_select_diff_tab(tab_id, current_tab_idx - 1, cx);
-                            });
-                        }
-                    }),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(format!("{}/{}", current_tab_idx + 1, total_tabs)),
-            )
-            .child(
-                Button::new("git-diff-next-file")
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::ChevronRight)
-                    .tooltip(rust_i18n::t!("git.diff.next_file").to_string())
-                    .disabled(current_tab_idx + 1 >= total_tabs)
-                    .on_click(move |_, _, cx| {
-                        if current_tab_idx + 1 < total_tabs {
-                            next_app.update(cx, |this, cx| {
-                                this.git_select_diff_tab(tab_id, current_tab_idx + 1, cx);
-                            });
-                        }
-                    }),
-            )
-    });
 
     let (rows, diff_summary) = match diff.content.as_ref() {
         Some(content) if !content.binary => {
@@ -135,46 +94,83 @@ pub(crate) fn render(
         _ => (None, None),
     };
 
+    let file_count_text = if total_tabs > 1 {
+        rust_i18n::t!(
+            "git.diff.files_indicator",
+            current = current_tab_idx + 1,
+            total = total_tabs
+        )
+        .to_string()
+    } else {
+        rust_i18n::t!("git.diff.single_file_indicator").to_string()
+    };
+
     let header = h_flex()
         .id("git-diff-header")
+        .w_full()
+        .h(px(28.0))
+        .flex_none()
         .px_2()
-        .py_1()
-        .gap_2()
+        .gap_1p5()
         .items_center()
         .text_xs()
-        .flex_none()
+        .bg(p.background)
         .border_color(p.divider(p.border))
         .border_b_1()
         .child(
-            Icon::new(IconName::GitCompare)
+            Button::new("git-diff-prev-diff")
+                .ghost()
                 .xsmall()
-                .text_color(p.primary),
+                .icon(IconName::ChevronUp)
+                .tooltip(rust_i18n::t!("git.diff.prev_difference").to_string()),
         )
-        .children(file_nav)
+        .child(
+            Button::new("git-diff-next-diff")
+                .ghost()
+                .xsmall()
+                .icon(IconName::ChevronDown)
+                .tooltip(rust_i18n::t!("git.diff.next_difference").to_string()),
+        )
+        .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
+        .child(
+            Button::new("git-diff-prev-file")
+                .ghost()
+                .xsmall()
+                .icon(IconName::ChevronLeft)
+                .tooltip(rust_i18n::t!("git.diff.prev_file").to_string())
+                .disabled(current_tab_idx == 0)
+                .on_click(move |_, _, cx| {
+                    if current_tab_idx > 0 {
+                        prev_app.update(cx, |this, cx| {
+                            this.git_select_diff_tab(tab_id, current_tab_idx - 1, cx);
+                        });
+                    }
+                }),
+        )
         .child(
             div()
-                .font_weight(FontWeight::BOLD)
-                .text_color(p.foreground)
-                .child(diff.path.clone()),
-        )
-        .children(diff_summary.map(|s| {
-            div()
-                .px_1p5()
-                .py_0p5()
-                .rounded(px(2.0))
-                .bg(p.muted)
                 .text_xs()
                 .text_color(p.muted_foreground)
-                .child(s)
-        }))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .overflow_hidden()
-                .text_color(p.muted_foreground)
-                .child(format!("{} → {}", diff.left_label, diff.right_label)),
+                .child(file_count_text),
         )
+        .child(
+            Button::new("git-diff-next-file")
+                .ghost()
+                .xsmall()
+                .icon(IconName::ChevronRight)
+                .tooltip(rust_i18n::t!("git.diff.next_file").to_string())
+                .disabled(total_tabs <= 1 || current_tab_idx + 1 >= total_tabs)
+                .on_click(move |_, _, cx| {
+                    if current_tab_idx + 1 < total_tabs {
+                        next_app.update(cx, |this, cx| {
+                            this.git_select_diff_tab(tab_id, current_tab_idx + 1, cx);
+                        });
+                    }
+                }),
+        )
+        .child(div().flex_1())
+        .children(diff_summary.map(|s| div().text_xs().text_color(p.muted_foreground).child(s)))
+        .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
         .child(render_mode_toggle(
             app.clone(),
             tab_id,

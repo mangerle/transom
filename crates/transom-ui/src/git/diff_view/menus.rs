@@ -74,7 +74,7 @@ pub(crate) fn render_ignore_menu(
         .ghost()
         .xsmall()
         .icon(IconName::EyeOff)
-        .label(rust_i18n::t!("git.diff.ignore_title").to_string())
+        .tooltip(rust_i18n::t!("git.diff.ignore_title").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
             for (key, level) in [
@@ -119,7 +119,7 @@ pub(crate) fn render_highlight_menu(
         .ghost()
         .xsmall()
         .icon(IconName::Highlighter)
-        .label(rust_i18n::t!("git.diff.highlight_title").to_string())
+        .tooltip(rust_i18n::t!("git.diff.highlight_title").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
             for (key, level) in [
@@ -163,7 +163,7 @@ pub(crate) fn render_appearance_menu(
         .ghost()
         .xsmall()
         .icon(IconName::Palette)
-        .label(rust_i18n::t!("git.diff.settings").to_string())
+        .tooltip(rust_i18n::t!("git.diff.settings").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let numbers_app = app.clone();
             let wrap_app = app.clone();
@@ -215,6 +215,7 @@ pub(crate) fn render_settings_menu() -> AnyElement {
         .ghost()
         .xsmall()
         .icon(IconName::Settings)
+        .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             menu.item(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.align_changes").to_string())
