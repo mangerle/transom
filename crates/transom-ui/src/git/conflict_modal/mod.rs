@@ -298,17 +298,14 @@ impl AppShell {
                             }),
                     ),
             )
-            .child(
-                modal
-                    .resolving
-                    .then(|| {
-                        div()
-                            .text_xs()
-                            .text_color(p.primary)
-                            .child(rust_i18n::t!("git.conflict.resolving").to_string())
-                    })
-                    .unwrap_or_else(div),
-            )
+            .child(if modal.resolving {
+                div()
+                    .text_xs()
+                    .text_color(p.primary)
+                    .child(rust_i18n::t!("git.conflict.resolving").to_string())
+            } else {
+                div()
+            })
     }
 
     fn render_conflict_footer(&self, app: &Entity<Self>, p: &Palette) -> Div {

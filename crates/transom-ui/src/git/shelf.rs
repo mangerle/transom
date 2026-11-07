@@ -403,11 +403,9 @@ impl AppShell {
             let repo = transom_git::Repo::at(project.path.clone());
             if let Ok(()) = repo.apply_patch(&entry.patch).await {
                 let _ = this.update(cx, |this, cx| {
-                    if pop {
-                        if let Some(state) = this.git_state_of_tab_mut(tab_id) {
-                            state.shelves.retain(|s| s.id != target_id);
-                            let _ = save_project_shelves(&project_id_str, &state.shelves);
-                        }
+                    if pop && let Some(state) = this.git_state_of_tab_mut(tab_id) {
+                        state.shelves.retain(|s| s.id != target_id);
+                        let _ = save_project_shelves(&project_id_str, &state.shelves);
                     }
                     this.git_refresh(&project, cx);
                 });
