@@ -68,6 +68,7 @@ pub(crate) struct GitModals {
     pub(crate) worktree: Option<crate::git::GitWorktreeModal>,
     pub(crate) name: Option<crate::git::GitNameModal>,
     pub(crate) rebase: Option<crate::git::GitRebaseModal>,
+    pub(crate) push: Option<crate::git::GitPushModal>,
 }
 
 impl GitModals {
@@ -78,6 +79,7 @@ impl GitModals {
             worktree: None,
             name: None,
             rebase: None,
+            push: None,
         }
     }
 }

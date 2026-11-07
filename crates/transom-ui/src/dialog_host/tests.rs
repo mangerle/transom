@@ -53,6 +53,7 @@ const ALL: &[ModalKind] = &[
     ModalKind::GitWorktree,
     ModalKind::GitName,
     ModalKind::GitRebase,
+    ModalKind::GitPush,
 ];
 
 #[test]

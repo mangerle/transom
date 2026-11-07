@@ -34,6 +34,7 @@ pub(crate) fn render_local_branch_menu(
     let name_rename = branch.clone();
     let name_delete = branch.clone();
     let name_diff = branch.clone();
+    let name_push = branch.clone();
 
     let upstream_display = upstream.unwrap_or_else(|| {
         format!(
@@ -91,7 +92,12 @@ pub(crate) fn render_local_branch_menu(
             IconName::ArrowUpFromLine,
             "Ctrl+Shift+K",
             move |_, _, cx| {
-                app_push.update(cx, |this, cx| this.git_push_current(cx));
+                let target = name_push.clone();
+                app_push.update(cx, |this, cx| {
+                    if let Some(project) = this.git_project_of_tab(None) {
+                        this.open_git_push_modal(&project, Some(target), cx);
+                    }
+                });
             },
         ))
         // 6. 跟踪的分支 '{upstream}'

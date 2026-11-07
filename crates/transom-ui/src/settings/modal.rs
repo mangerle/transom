@@ -219,6 +219,21 @@ static SETTINGS_PAGES: &[PageSpec] = &[
         ],
     },
     PageSpec {
+        title_key: "settings.tab_git",
+        icon: IconName::GitBranch,
+        groups: &[
+            plain(
+                GroupSearch::GitExecutable,
+                SettingsView::render_settings_git_executable,
+            ),
+            plain(
+                GroupSearch::GitCommitPush,
+                SettingsView::render_settings_git_commit_push,
+            ),
+            plain(GroupSearch::GitDiff, SettingsView::render_settings_git_diff),
+        ],
+    },
+    PageSpec {
         title_key: "settings.tab_containers",
         icon: IconName::Container,
         groups: &[plain(

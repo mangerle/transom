@@ -81,6 +81,10 @@ pub(crate) struct SettingsModalState {
     pub(crate) identity_edit: Option<IdentityEditState>,
     pub(crate) trigger_edit: Option<TriggerEditState>,
     pub(crate) registry_edit: Option<RegistryEditState>,
+    pub(crate) git_executable_path: Entity<InputState>,
+    pub(crate) git_protected_branches: Entity<InputState>,
+    pub(crate) git_author_name: Entity<InputState>,
+    pub(crate) git_author_email: Entity<InputState>,
     /// 打开弹窗时从监控面板取来的采样档位快照：设置页只读它，变更以事件上报。
     pub(crate) monitor_interval: crate::monitor::SampleIntervalMode,
 }
@@ -241,6 +245,26 @@ impl SettingsModalState {
         });
         let proxy = ProxyFormInputs::from_settings(window, cx, settings);
         // 云同步表单：端点字段回填设置值，凭据掩码框恒为空。
+        let git_executable_path = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("git")
+                .default_value(&settings.git.executable_path)
+        });
+        let git_protected_branches = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("main, master")
+                .default_value(&settings.git.protected_branches)
+        });
+        let git_author_name = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.git_author_name_placeholder").to_string())
+                .default_value(&settings.git.author_name)
+        });
+        let git_author_email = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.git_author_email_placeholder").to_string())
+                .default_value(&settings.git.author_email)
+        });
         let sync_form = SyncFormInputs::new(window, cx);
 
         Self {
@@ -267,6 +291,10 @@ impl SettingsModalState {
             identity_edit: None,
             trigger_edit: None,
             registry_edit: None,
+            git_executable_path,
+            git_protected_branches,
+            git_author_name,
+            git_author_email,
             sync_form,
             monitor_interval: crate::monitor::SampleIntervalMode::default(),
         }

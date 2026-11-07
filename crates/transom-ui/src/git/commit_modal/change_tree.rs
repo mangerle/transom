@@ -69,13 +69,7 @@ impl AppShell {
             .cloned()
             .collect();
 
-        let mut list = v_flex()
-            .gap_1()
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scrollbar()
-            .border_color(p.divider(p.border))
-            .border_1();
+        let mut list = v_flex().gap_1().flex_1().min_h_0().overflow_y_scrollbar();
         for (group, entries) in [
             (ChangeGroup::Staged, &staged),
             (ChangeGroup::Unstaged, &unstaged),

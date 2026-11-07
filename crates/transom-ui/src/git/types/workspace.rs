@@ -123,6 +123,8 @@ pub(crate) struct GitWorkspaceState {
     pub amend_request: Option<GitRequestId>,
     /// 「修正」目标提交的 OID（None 表示 HEAD，Some(oid) 表示选中的历史未推送提交）。
     pub amend_target: Option<String>,
+    /// 是否在本次提交成功后自动唤起推送弹窗（「提交并推送」）。
+    pub push_after_commit: bool,
     /// 已打开的文件差异标签列表（「一个标签一个名字」）。
     pub diff_tabs: Vec<GitDiffState>,
     /// 当前激活的文件差异标签索引。
@@ -211,6 +213,7 @@ impl GitWorkspaceState {
             amend_files_loading: false,
             amend_request: None,
             amend_target: None,
+            push_after_commit: false,
             diff_tabs: Vec::new(),
             active_diff_tab: None,
             bottom_log_open: false,

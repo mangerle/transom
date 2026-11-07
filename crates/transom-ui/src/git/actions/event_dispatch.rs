@@ -115,20 +115,21 @@ impl AppShell {
             GitAppEvent::CommitFilesLoaded {
                 project_id,
                 request_id,
+                oid,
                 files,
-                ..
             } => {
                 if let Some(state) = self.git_state_mut(project_id) {
                     state.drop_request(request_id);
                     if state.amend_request == Some(request_id) {
-                        state.amend_files = files;
+                        state.amend_files = files.clone();
                         state.amend_files_loading = false;
                         state.amend_request = None;
                     } else {
-                        state.commit_files = files;
+                        state.commit_files = files.clone();
                         state.commit_files_loading = false;
                     }
                 }
+                self.git_apply_push_commit_files(&oid, files);
                 cx.notify();
             }
             GitAppEvent::DiffLoaded {
@@ -265,6 +266,7 @@ impl AppShell {
                 if matches!(action, GitAction::Commit)
                     && let Some(tab_id) = self.git_tab_for_project(project_id)
                 {
+                    let mut should_push = false;
                     if let Some(state) = self
                         .state
                         .workspace
@@ -281,10 +283,22 @@ impl AppShell {
                             // 让下一次状态刷新重新选中第一个改动并拉差异。
                             state.diff = None;
                             state.last_diff = None;
+                            should_push = std::mem::take(&mut state.push_after_commit);
                         }
                     }
                     if message.is_none() {
                         self.git_load_log(tab_id, 0, cx);
+                        if should_push
+                            && let Some(project) = self
+                                .state
+                                .git
+                                .projects
+                                .iter()
+                                .find(|item| item.id == project_id)
+                                .cloned()
+                        {
+                            self.open_git_push_modal(&project, None, cx);
+                        }
                     }
                 }
                 cx.notify();

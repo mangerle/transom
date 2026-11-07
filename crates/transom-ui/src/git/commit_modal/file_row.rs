@@ -186,7 +186,14 @@ impl AppShell {
         if group.actionable() {
             let click_project = project.clone();
             let click_path = path.clone();
-            row = row.on_click(cx.listener(move |this, _, _window, cx| {
+            let dbl_path = path.clone();
+            row = row.on_click(cx.listener(move |this, event: &ClickEvent, _window, cx| {
+                if event.click_count() >= 2
+                    && let Some(tab_id) = this.git_tab_for_project(click_project.id)
+                {
+                    this.git_open_diff_modal(tab_id, &dbl_path, cx);
+                    return;
+                }
                 this.git_open_worktree_diff(&click_project, group, click_path.clone(), cx);
             }));
         }

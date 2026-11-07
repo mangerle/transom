@@ -118,6 +118,7 @@ impl SettingsView {
         });
         self.fill_sync_form(window, cx);
         self.fill_proxy_form(window, cx);
+        self.fill_git_form(window, cx);
         self.state.open = true;
         cx.notify();
     }

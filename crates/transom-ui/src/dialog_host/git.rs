@@ -15,6 +15,7 @@ impl ModalKind {
             ModalKind::GitWorktree => shell.state.modals.git.worktree.is_some(),
             ModalKind::GitName => shell.state.modals.git.name.is_some(),
             ModalKind::GitRebase => shell.state.modals.git.rebase.is_some(),
+            ModalKind::GitPush => shell.state.modals.git.push.is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -65,7 +66,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| vec![modal.input.read(cx).value().to_string()])
                 .unwrap_or_default(),
-            ModalKind::GitRebase => Vec::new(),
+            ModalKind::GitRebase | ModalKind::GitPush => Vec::new(),
             _ => return None,
         };
         Some(values)
@@ -98,6 +99,10 @@ impl ModalKind {
                 shell.git_close_rebase_modal(cx);
                 Some(true)
             }
+            ModalKind::GitPush => {
+                shell.close_git_push_modal(cx);
+                Some(true)
+            }
             _ => None,
         }
     }
@@ -128,6 +133,10 @@ impl ModalKind {
             }
             ModalKind::GitRebase => {
                 shell.git_rebase_run(cx);
+                Some(())
+            }
+            ModalKind::GitPush => {
+                shell.submit_git_push_modal(cx);
                 Some(())
             }
             _ => None,
@@ -169,7 +178,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| ModalFocus::Input(modal.input.clone()))
                 .unwrap_or(ModalFocus::None),
-            ModalKind::GitRebase => ModalFocus::None,
+            ModalKind::GitRebase | ModalKind::GitPush => ModalFocus::None,
             _ => return None,
         };
         Some(focus)
@@ -190,6 +199,7 @@ impl ModalKind {
             ModalKind::GitWorktree => shell.render_git_worktree_dialog_body(app, window, cx, p),
             ModalKind::GitName => shell.render_git_name_dialog_body(app, cx, p),
             ModalKind::GitRebase => shell.render_git_rebase_dialog_body(app, window, cx, p),
+            ModalKind::GitPush => shell.render_git_push_dialog_body(app, window, cx, p),
             _ => return None,
         };
         Some(element)
@@ -206,6 +216,7 @@ impl ModalKind {
             }
             ModalKind::GitName => (Some(crate::theme::tokens::dialog::INPUT), "git-name"),
             ModalKind::GitRebase => (Some(crate::theme::tokens::dialog::GIT_FORM), "git-rebase"),
+            ModalKind::GitPush => (Some(crate::theme::tokens::dialog::GIT_PUSH), "git-push"),
             _ => return None,
         };
 

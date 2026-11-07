@@ -98,6 +98,12 @@ pub(super) enum GroupSearch {
     About,
     /// 容器与镜像源页：镜像仓库源管理组。
     ContainerRegistries,
+    /// Git 版本控制页：可执行程序与自动刷新组。
+    GitExecutable,
+    /// Git 版本控制页：提交与推送安全组。
+    GitCommitPush,
+    /// Git 版本控制页：差异对比组。
+    GitDiff,
 }
 
 impl GroupSearch {
@@ -128,6 +134,7 @@ impl GroupSearch {
                 "settings.tab_general"
             }
             MonitorSections | MonitorBehavior => "settings.tab_monitor",
+            GitExecutable | GitCommitPush | GitDiff => "settings.tab_git",
             ContainerRegistries => "settings.tab_containers",
             About => "settings.tab_about",
         }

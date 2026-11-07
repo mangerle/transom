@@ -2931,6 +2931,78 @@ settings:
   tab_monitor:
     en: System Monitor
     zh-CN: 主机监控
+  tab_git:
+    en: Version Control (Git)
+    zh-CN: 版本控制 (Git)
+  git_executable_group:
+    en: Git Executable & Environment
+    zh-CN: Git 可执行程序与环境
+  git_executable_path:
+    en: Git Executable Path
+    zh-CN: Git 可执行程序路径
+  git_executable_path_desc:
+    en: Path to the git binary executable or command name in system PATH (default "git").
+    zh-CN: git 二进制可执行文件绝对路径或系统 PATH 中的命令名称（默认 "git"）。
+  git_auto_update_on_focus:
+    en: Auto-refresh on Window Focus
+    zh-CN: 窗口获得焦点时自动刷新状态
+  git_auto_update_on_focus_desc:
+    en: Automatically re-scan git status and local branch state when Transom window gets focus.
+    zh-CN: 当 Transom 窗口重新获得焦点时自动重新扫描工作区状态（git status）与分支变动。
+  git_commit_push_group:
+    en: Commit & Push Safety
+    zh-CN: 提交与推送安全
+  git_push_dialog:
+    en: Show Push Dialog Before Push
+    zh-CN: 推送前始终显示推送对话框
+  git_push_dialog_desc:
+    en: Review outgoing commits and changed file list in dialog before executing git push (recommended).
+    zh-CN: 执行 git push 推送前弹出推送提交对话框，方便核对待推送的提交列表与变更文件清单（推荐开启）。
+  git_clear_message:
+    en: Clear Commit Message After Commit
+    zh-CN: 提交成功后自动清空提交说明
+  git_clear_message_desc:
+    en: Automatically clear commit message input field after commit is successfully created.
+    zh-CN: 本地提交成功写入仓库后自动清理提交说明输入框中的文字草稿。
+  git_protected_branches:
+    en: Protected Branches
+    zh-CN: 受保护的分支
+  git_protected_branches_desc:
+    en: Comma-separated branch names that trigger confirmation prompts before force pushing or deleting.
+    zh-CN: 以逗号分隔的关键分支名称列表（如 main, master），在强制推送或删除时提供防呆拦截。
+  git_author_name:
+    en: Global Commit Author Name
+    zh-CN: 提交者姓名（覆盖）
+  git_author_name_desc:
+    en: Optional custom author name for git commits in this workspace (leave blank to follow .gitconfig).
+    zh-CN: 可选自定义 Git 提交者姓名（留空表示遵循系统或仓库原本的 .gitconfig 配置）。
+  git_author_name_placeholder:
+    en: Leave blank to follow gitconfig
+    zh-CN: 留空表示遵循系统 .gitconfig
+  git_author_email:
+    en: Global Commit Author Email
+    zh-CN: 提交者邮箱（覆盖）
+  git_author_email_desc:
+    en: Optional custom author email for git commits in this workspace (leave blank to follow .gitconfig).
+    zh-CN: 可选自定义 Git 提交者邮箱（留空表示遵循系统或仓库原本的 .gitconfig 配置）。
+  git_author_email_placeholder:
+    en: Leave blank to follow gitconfig
+    zh-CN: 留空表示遵循系统 .gitconfig
+  git_diff_group:
+    en: Diff & Compare Preferences
+    zh-CN: 差异对比偏好
+  git_default_diff_mode:
+    en: Default Diff View Mode
+    zh-CN: 默认差异对比模式
+  git_default_diff_mode_desc:
+    en: Preferred layout for diff view (Unified or Side-by-side).
+    zh-CN: 比较代码改动时的默认布局展示形态（单栏统一或双栏并排）。
+  git_ignore_whitespace:
+    en: Ignore Whitespace Changes in Diff
+    zh-CN: 差异对比默认忽略空白字符改动
+  git_ignore_whitespace_desc:
+    en: Ignore changes in amount of whitespace (space, tabs, line breaks) when comparing files.
+    zh-CN: 在对比文件差异时忽略空格、制表符及换行符等纯空白格式修改。
   tab_containers:
     en: Containers & Registries
     zh-CN: 容器与镜像源
@@ -7328,6 +7400,30 @@ git:
       en: "Push"
       zh-CN: "推送"
   push:
+    title:
+      en: "Push Commits"
+      zh-CN: "推送提交"
+    commits:
+      en: "Outgoing Commits"
+      zh-CN: "待推送提交"
+    commits_count:
+      en: "%{count} commits"
+      zh-CN: "共 %{count} 次提交"
+    empty_commits:
+      en: "No outgoing commits to push"
+      zh-CN: "没有待推送的提交"
+    no_files:
+      en: "No files changed in this commit"
+      zh-CN: "该提交无文件变更"
+    push_tags:
+      en: "Push tags"
+      zh-CN: "推送标签"
+    force:
+      en: "Force push"
+      zh-CN: "强制推送"
+    force_push:
+      en: "Force Push"
+      zh-CN: "强制推送"
     no_branch:
       en: "HEAD is not on a branch, so there is no branch to push to"
       zh-CN: "头指针未挂在分支上，没有可推送的分支"
@@ -7782,6 +7878,9 @@ git:
     and_push:
       en: "Commit and Push"
       zh-CN: "提交并推送"
+    settings:
+      en: "Commit Checks & Settings"
+      zh-CN: "提交检查与设置"
   view:
     log:
       en: "Commit History"

@@ -11,6 +11,7 @@
 
 pub(crate) mod actions;
 mod bottom_log;
+mod commit_box;
 mod commit_modal;
 mod commit_page;
 mod diff_modal;
@@ -20,6 +21,7 @@ pub(crate) mod graph_paint;
 pub(crate) mod log_view;
 mod name_modal;
 mod project_modal;
+pub(crate) mod push_modal;
 mod rebase_modal;
 mod shelf;
 mod sidebar;
@@ -37,6 +39,7 @@ mod web_link;
 pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
 pub(crate) use form::{GitProjectDraft, GitProjectModal};
 pub(crate) use name_modal::{GitNameModal, GitNamePurpose};
+pub(crate) use push_modal::GitPushModal;
 pub(crate) use rebase_modal::GitRebaseModal;
 pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};
 pub(crate) use worktree_modal::GitWorktreeModal;

@@ -17,6 +17,7 @@ mod files_page;
 mod font_field;
 mod font_select;
 mod general_page;
+mod git_page;
 mod input_page;
 mod layout_page;
 mod logs_page;
@@ -34,6 +35,9 @@ mod window_page;
 
 pub(crate) use font_field::FontFieldSpec;
 pub(crate) use modal_state::{ProxyProtocol, SettingsModalState, WindowAppearanceSnapshot};
+
+/// Git 设置页在偏好设置中心的分页序号。
+pub(crate) const GIT_PAGE_INDEX: usize = 8;
 
 use crate::app::AppShell;
 use crate::app::app_settings;
@@ -60,6 +64,7 @@ pub(crate) fn page_entries() -> Vec<(&'static str, IconName)> {
         ("settings.tab_window_layout", IconName::PanelLeft),
         ("settings.tab_general", IconName::Globe),
         ("settings.tab_monitor", IconName::Gauge),
+        ("settings.tab_git", IconName::GitBranch),
         ("settings.tab_containers", IconName::Container),
         ("settings.tab_about", IconName::Info),
     ]

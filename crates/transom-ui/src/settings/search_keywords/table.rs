@@ -404,6 +404,37 @@ impl GroupSearch {
                     "settings.registry_default",
                 ],
             ),
+            GroupSearch::GitExecutable => (
+                "settings.git_executable_group",
+                &[
+                    "settings.git_executable_path",
+                    "settings.git_executable_path_desc",
+                    "settings.git_auto_update_on_focus",
+                    "settings.git_auto_update_on_focus_desc",
+                ],
+            ),
+            GroupSearch::GitCommitPush => (
+                "settings.git_commit_push_group",
+                &[
+                    "settings.git_push_dialog",
+                    "settings.git_push_dialog_desc",
+                    "settings.git_clear_message",
+                    "settings.git_clear_message_desc",
+                    "settings.git_protected_branches",
+                    "settings.git_protected_branches_desc",
+                    "settings.git_author_name",
+                    "settings.git_author_name_desc",
+                    "settings.git_author_email",
+                    "settings.git_author_email_desc",
+                ],
+            ),
+            GroupSearch::GitDiff => (
+                "settings.git_diff_group",
+                &[
+                    "settings.git_ignore_whitespace",
+                    "settings.git_ignore_whitespace_desc",
+                ],
+            ),
         }
     }
 }

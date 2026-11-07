@@ -426,6 +426,11 @@ impl AppShell {
             })
             .and_then(|tab| tab.git_mut())
     }
+
+    /// 打开偏好设置弹窗并直接定位到 Git 版本控制设置页。
+    pub(crate) fn open_git_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_settings_modal(Some(crate::settings::GIT_PAGE_INDEX), window, cx);
+    }
 }
 
 /// Git 标签页需要的占位会话。

@@ -22,7 +22,49 @@ impl SettingsView {
         self.collect_terminal_profile(cx);
         self.sync_terminal_palette(cx);
         self.commit_proxy_form(cx);
+        self.collect_git_preferences(cx);
         true
+    }
+
+    /// 收集 Git 版本控制偏好设置。
+    pub(super) fn collect_git_preferences(&mut self, cx: &mut Context<Self>) {
+        let exe = self
+            .state
+            .git_executable_path
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let protected = self
+            .state
+            .git_protected_branches
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let author_name = self
+            .state
+            .git_author_name
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        let author_email = self
+            .state
+            .git_author_email
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+
+        update_app_settings(cx, |s| {
+            if !exe.is_empty() {
+                s.git.executable_path = exe;
+            }
+            s.git.protected_branches = protected;
+            s.git.author_name = author_name;
+            s.git.author_email = author_email;
+        });
     }
 
     /// 自定义按键映射先整体校验：一行写错就整份不落盘，并保持弹窗打开，

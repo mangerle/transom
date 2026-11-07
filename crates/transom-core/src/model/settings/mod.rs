@@ -7,6 +7,7 @@
 //! 保持外部公开类型引用的完整平滑兼容。
 
 mod appearance;
+mod git;
 mod subsystems;
 mod sync;
 mod window;
@@ -17,6 +18,7 @@ mod tests;
 pub use appearance::{
     AppearanceSettings, DividerColor, DividerSettings, DividerWidth, UiDensity, UiThemeMode,
 };
+pub use git::GitSettings;
 pub use subsystems::{
     AuditSettings, BlockViewSettings, BlockViewStyle, HistorySettings, LogLevel, LogSettings,
     SftpSettings, ShortcutSettings, Snippet, SnippetSettings,
@@ -104,6 +106,9 @@ pub struct AppSettings {
     /// 容器资源自动清理；默认关闭，避免未经确认就删除悬空资源。
     #[serde(default)]
     pub container_automation: ContainerAutomationSettings,
+    /// Git 版本控制偏好；旧配置缺省时使用默认。
+    #[serde(default)]
+    pub git: GitSettings,
 }
 
 /// 容器自动化设置。
@@ -210,6 +215,7 @@ impl Default for AppSettings {
             monitor: MonitorSettings::default(),
             container_registries: default_container_registries(),
             container_automation: ContainerAutomationSettings::default(),
+            git: GitSettings::default(),
         }
     }
 }

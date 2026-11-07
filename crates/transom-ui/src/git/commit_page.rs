@@ -13,18 +13,18 @@
 //! - 提交页与日志页共享 `state.diff`：在日志里看过的提交差异会带到这里，切回来
 //!   仍是那份内容，直到用户点新的文件；这样做省掉两份 diff 状态，但不会自动清空。
 
+use super::commit_box::CommitBoxProps;
 use super::commit_modal::{GroupDisplay, amend_file_row};
 use super::diff_view;
 use crate::app::AppShell;
-use crate::divider::h_resizable;
+use crate::divider::{h_resizable, v_resizable};
 use crate::git::GitCommitTab;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Textarea;
 use gpui_kit::component::resizable::resizable_panel;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
@@ -207,6 +207,10 @@ impl AppShell {
                 let branch_chip = self.render_git_branch_chip(project.id, p);
                 let refresh_project = project.clone();
                 let rollback_project = project.clone();
+                let tree_project = project.clone();
+                let expand_project = project.clone();
+                let collapse_project = project.clone();
+                let by_directory = display.by_directory;
                 let toolbar_actions = h_flex()
                     .gap_1()
                     .items_center()
@@ -250,6 +254,37 @@ impl AppShell {
                                 this.git_shelve_checked(tab_id, cx);
                             })),
                     )
+                    .child(
+                        Button::new("git-commit-group-tree")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::FolderTree)
+                            .when(by_directory, |btn| btn.bg(p.muted.opacity(0.8)))
+                            .tooltip(rust_i18n::t!("git.group.by_directory").to_string())
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.git_toggle_group_by_directory(&tree_project, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("git-commit-expand-all")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::ChevronDown)
+                            .tooltip(rust_i18n::t!("git.group.expand_all").to_string())
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.git_expand_all_groups(&expand_project, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("git-commit-collapse-all")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::ChevronRight)
+                            .tooltip(rust_i18n::t!("git.group.collapse_all").to_string())
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.git_collapse_all_groups(&collapse_project, cx);
+                            })),
+                    )
                     .child(grouping);
                 let amend_toggle = self.git_check_toggle(
                     "git-commit-amend",
@@ -260,23 +295,24 @@ impl AppShell {
                         this.git_toggle_commit_amend(tab_id, window, cx);
                     }),
                 );
-                v_flex()
+
+                let commit_box = self.render_commit_box(
+                    CommitBoxProps {
+                        tab_id,
+                        amend_toggle,
+                        amend_target,
+                        checked_count,
+                        message: &message,
+                        submitting,
+                    },
+                    p,
+                    cx,
+                );
+
+                let upper_tree = v_flex()
                     .w_full()
-                    .flex_1()
+                    .h_full()
                     .min_h_0()
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .px_2()
-                            .py_1()
-                            .gap_2()
-                            .items_center()
-                            .border_color(p.divider(p.border))
-                            .border_b_1()
-                            .child(branch_chip)
-                            .child(div().flex_1())
-                            .child(toolbar_actions),
-                    )
                     .child(
                         h_flex()
                             .w_full()
@@ -353,71 +389,42 @@ impl AppShell {
                         }
                         el.child(group)
                     })
-                    .child(files)
+                    .child(files);
+
+                let tree_panel = resizable_panel()
+                    .size(px(280.0))
+                    .size_range(px(100.0)..px(800.0))
+                    .child(upper_tree);
+                let box_panel = resizable_panel()
+                    .size(px(220.0))
+                    .size_range(px(120.0)..px(600.0))
+                    .child(commit_box);
+
+                v_flex()
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
                     .child(
-                        v_flex()
+                        h_flex()
                             .w_full()
-                            .p_2()
+                            .px_2()
+                            .py_1()
                             .gap_2()
+                            .items_center()
                             .border_color(p.divider(p.border))
-                            .border_t_1()
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(amend_toggle)
-                                    .child(amend_target)
-                                    .child(div().flex_1())
-                                    .child(
-                                        div().text_xs().text_color(p.primary).child(
-                                            rust_i18n::t!(
-                                                "git.commit.checked_count",
-                                                count = checked_count
-                                            )
-                                            .to_string(),
-                                        ),
-                                    ),
-                            )
-                            .child(Textarea::new(&message).h(px(150.0)).w_full())
-                            .child(
-                                h_flex()
-                                    .w_full()
-                                    .gap_2()
-                                    .items_center()
-                                    .child(
-                                        Button::new("git-commit-submit")
-                                            .primary()
-                                            .small()
-                                            .label(rust_i18n::t!("git.commit.submit").to_string())
-                                            .disabled(submitting)
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.submit_git_commit(tab_id, false, cx);
-                                            })),
-                                    )
-                                    .child(
-                                        Button::new("git-commit-and-push")
-                                            .primary()
-                                            .small()
-                                            .icon(IconName::ArrowUpFromLine)
-                                            .label(rust_i18n::t!("git.commit.and_push").to_string())
-                                            .disabled(submitting)
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.submit_git_commit(tab_id, true, cx);
-                                            })),
-                                    )
-                                    .child(div().flex_1())
-                                    .child(
-                                        Button::new("git-commit-toggle-history")
-                                            .ghost()
-                                            .small()
-                                            .icon(IconName::GitCommitHorizontal)
-                                            .tooltip(rust_i18n::t!("git.view.log").to_string())
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.toggle_git_bottom_log(tab_id, cx);
-                                            })),
-                                    ),
-                            ),
+                            .border_b_1()
+                            .child(branch_chip)
+                            .child(div().flex_1())
+                            .child(toolbar_actions),
+                    )
+                    .child(
+                        div().w_full().flex_1().min_h_0().child(
+                            v_resizable(ElementId::Name(
+                                format!("git-commit-inner-split-{tab_id}").into(),
+                            ))
+                            .child(tree_panel)
+                            .child(box_panel),
+                        ),
                     )
                     .into_any_element()
             }

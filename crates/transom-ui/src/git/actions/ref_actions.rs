@@ -43,12 +43,10 @@ impl AppShell {
         });
 
         if push_after {
-            // 推送排在提交之后：控制器按入队顺序执行同一项目的写动作。
-            self.send_command(GitCommand::Push {
-                project: project.clone(),
-                branch: None,
-                tags: false,
-            });
+            // 提交成功后自动唤起推送弹窗（与在分支上右键推送展示一致）。
+            if let Some(state) = self.git_state_mut(project.id) {
+                state.push_after_commit = true;
+            }
         }
         cx.notify();
     }
@@ -262,12 +260,12 @@ impl AppShell {
         self.git_remote_action(&project, GitRemoteAction::Pull { rebase: false }, cx);
     }
 
-    /// 推送当前分支。
+    /// 推送当前分支（弹出对齐 openidea / IDEA 的推送模态弹窗）。
     pub(crate) fn git_push_current(&mut self, cx: &mut Context<Self>) {
         let Some(project) = self.git_project_of_tab(None) else {
             return;
         };
-        self.git_remote_action(&project, GitRemoteAction::Push, cx);
+        self.open_git_push_modal(&project, None, cx);
     }
 
     /// 「推送此前所有提交」：把选中之前的历史推到该分支的上游远端。

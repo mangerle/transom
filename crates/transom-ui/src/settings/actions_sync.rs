@@ -112,4 +112,23 @@ impl SettingsView {
         }
         update_app_settings(cx, |s| s.proxy = proxy);
     }
+
+    /// 将全局 Git 偏好设置回填到设置弹窗的输入框。
+    pub(super) fn fill_git_form(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let git = &app_settings(cx).git;
+        let inputs = [
+            (&self.state.git_executable_path, git.executable_path.clone()),
+            (
+                &self.state.git_protected_branches,
+                git.protected_branches.clone(),
+            ),
+            (&self.state.git_author_name, git.author_name.clone()),
+            (&self.state.git_author_email, git.author_email.clone()),
+        ];
+        for (input, value) in inputs {
+            input.clone().update(cx, |state, cx| {
+                state.set_value(value, window, cx);
+            });
+        }
+    }
 }
