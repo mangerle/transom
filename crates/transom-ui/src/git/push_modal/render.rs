@@ -129,7 +129,7 @@ pub(super) fn render_push_dialog(
                             .text_xs()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(p.warning)
-                            .child(rust_i18n::t!("git.settings.protected_branches").to_string()),
+                            .child(rust_i18n::t!("settings.git_protected_branches").to_string()),
                     ),
             )
         })
