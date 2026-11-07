@@ -131,6 +131,12 @@ pub(crate) struct GitWorkspaceState {
     pub bottom_log_open: bool,
     /// 提交页与底部日志面板垂直分栏的拖拽状态。
     pub bottom_log_split: Entity<ResizableState>,
+    /// 引用栏的分支与标签搜索输入框。
+    pub refs_search_input: Entity<InputState>,
+    /// 右侧详情栏（文件清单与提交详情）上下垂直切分状态。
+    pub right_split: Entity<ResizableState>,
+    /// 是否打开全功能独立 Diff 差异对比弹窗。
+    pub diff_modal_open: bool,
 }
 
 impl GitWorkspaceState {
@@ -147,12 +153,17 @@ impl GitWorkspaceState {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("git.filter.author_placeholder").to_string())
         });
+        let refs_search_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("git.refs.search_placeholder").to_string())
+        });
         let commit_message = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .placeholder(rust_i18n::t!("git.commit.message_placeholder").to_string())
         });
         let commit_split = cx.new(|_| ResizableState::default());
         let bottom_log_split = cx.new(|_| ResizableState::default());
+        let right_split = cx.new(|_| ResizableState::default());
         Self {
             project,
             view: GitView::default(),
@@ -204,6 +215,9 @@ impl GitWorkspaceState {
             active_diff_tab: None,
             bottom_log_open: false,
             bottom_log_split,
+            refs_search_input,
+            right_split,
+            diff_modal_open: false,
         }
     }
 

@@ -13,6 +13,7 @@ pub(crate) mod actions;
 mod bottom_log;
 mod commit_modal;
 mod commit_page;
+mod diff_modal;
 mod diff_view;
 mod form;
 pub(crate) mod graph_paint;

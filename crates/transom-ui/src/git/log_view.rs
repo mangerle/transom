@@ -17,30 +17,29 @@
 //!   再导出，调用方的引用路径不变。
 
 use crate::app::AppShell;
-use crate::git::{change_visual, relative_time};
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::menu::PopupMenuItem;
-use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
 
+mod log_details;
 mod log_menus;
 mod log_refs;
 mod log_table;
 
 use log_menus::{render_date_menu, render_path_menu};
-use log_table::ROW_HEIGHT;
 
-// 外部（工作区/其它面板）仍按 `crate::git::log_view::*` 引用日志面板的三个主入口，
+// 外部（工作区/其它面板）仍按 `crate::git::log_view::*` 引用日志面板的主入口，
 // 拆模块只是把实现挪到同级的子模块里，不改变对外的形状。
+pub(crate) use log_details::render_right_panel;
 pub(crate) use log_refs::render_refs_panel;
 pub(crate) use log_table::render_log_table;
 
@@ -242,147 +241,6 @@ pub(crate) fn render_filter_bar(
                     }
                 }),
         )
-        .into_any_element()
-}
-
-/// 选中提交的文件清单。
-pub(crate) fn render_commit_files(
-    state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
-    p: &Palette,
-) -> AnyElement {
-    let mut rows: Vec<AnyElement> = Vec::with_capacity(state.commit_files.len() + 1);
-    if state.commit_files_loading {
-        rows.push(placeholder(rust_i18n::t!("git.log.loading").to_string(), p));
-    } else if state.selected_commit.is_none() {
-        // 没选提交时不能说「本次提交没有文件变更」——那是在描述一条不存在的提交。
-        rows.push(placeholder(
-            rust_i18n::t!("git.files.need_commit").to_string(),
-            p,
-        ));
-    } else if state.commit_files.is_empty() {
-        rows.push(placeholder(rust_i18n::t!("git.files.empty").to_string(), p));
-    }
-    for file in &state.commit_files {
-        let visual = change_visual(file.change);
-        let display = file.path.clone();
-        let click_app = app.clone();
-        let path = file.path.clone();
-        rows.push(
-            h_flex()
-                .id(ElementId::Name(format!("git-file-{display}").into()))
-                .px_2()
-                .h(px(ROW_HEIGHT))
-                .gap_2()
-                .items_center()
-                .cursor_pointer()
-                .hover(|style| style.bg(p.list_hover))
-                .child(Icon::new(visual.icon).xsmall().text_color(p.primary))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .text_sm()
-                        .child(display.clone()),
-                )
-                .child(
-                    file.old_path
-                        .as_ref()
-                        .map(|old| {
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(old.clone())
-                                .into_any_element()
-                        })
-                        .unwrap_or_else(|| div().into_any_element()),
-                )
-                .on_click(move |_, _, cx| {
-                    click_app.update(cx, |this, cx| {
-                        this.git_diff_commit_file(tab_id, &path, cx);
-                    });
-                })
-                .into_any_element(),
-        );
-    }
-    v_flex()
-        .h(px(190.0))
-        .flex_none()
-        .border_color(p.divider(p.border))
-        .border_t_1()
-        .child(
-            div()
-                .px_2()
-                .py_1()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("git.files.title").to_string()),
-        )
-        .child(
-            v_flex()
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scrollbar()
-                .children(rows),
-        )
-        .into_any_element()
-}
-
-/// 右栏：提交详情 + 差异。
-pub(crate) fn render_details(
-    state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
-    width: f32,
-    p: &Palette,
-) -> AnyElement {
-    let head = match state.selected_entry() {
-        Some(entry) => v_flex()
-            .p_2()
-            .gap_1()
-            .flex_none()
-            .border_color(p.divider(p.border))
-            .border_b_1()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(entry.subject.clone()),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(format!(
-                        "{} · {} · {}",
-                        entry.short_oid(),
-                        entry.author_name,
-                        relative_time(entry.author_time)
-                    )),
-            )
-            .when(!entry.body.is_empty(), |el| {
-                el.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(entry.body.clone()),
-                )
-            })
-            .into_any_element(),
-        None => div().into_any_element(),
-    };
-    let diff = crate::git::diff_view::render(state, app, tab_id, p);
-    v_flex()
-        .w(px(width))
-        .flex_none()
-        .min_h_0()
-        .overflow_hidden()
-        .border_color(p.divider(p.border))
-        .border_l_1()
-        .child(head)
-        .child(diff)
         .into_any_element()
 }
 

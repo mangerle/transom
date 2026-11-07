@@ -7388,6 +7388,12 @@ git:
     tags:
       en: "Tags"
       zh-CN: "标签"
+    search_placeholder:
+      en: "Branch or Tag"
+      zh-CN: "分支或标签"
+    new_branch:
+      en: "New Branch"
+      zh-CN: "新建分支"
   log:
     empty:
       en: "No commits"
@@ -7413,14 +7419,33 @@ git:
         zh-CN: "时间"
   files:
     need_commit:
-      en: "Select a commit to list its files"
-      zh-CN: "选择一条提交以查看其变更文件"
+      en: "Select a commit to list its files and details"
+      zh-CN: "选择一条提交以查看其变更文件与详细说明"
     title:
       en: "Changed Files"
       zh-CN: "变更文件"
+    count:
+      en: "%{count} files"
+      zh-CN: "%{count} 个文件"
     empty:
       en: "No files in this commit"
       zh-CN: "本次提交没有文件变更"
+  details:
+    title:
+      en: "Commit Details"
+      zh-CN: "提交详情"
+    branches:
+      en: "In %{count} branches: %{branches}"
+      zh-CN: "在 %{count} 个分支中: %{branches}"
+    open_in_tab:
+      en: "Open Diff in Tab"
+      zh-CN: "在标签页中打开差异"
+    compare_diff:
+      en: "Compare Diff (Double Click)"
+      zh-CN: "查看差异 (双击文件)"
+    author_prefix:
+      en: "Author"
+      zh-CN: "作者"
   diff:
     toolbar:
       en: Diff

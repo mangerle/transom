@@ -18,6 +18,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitProject, GitProjectId, TabId};
 
@@ -75,12 +76,14 @@ impl AppShell {
                 }
             }
         };
-        let mut root = v_flex().size_full().bg(p.background);
+        let mut root = v_flex().size_full().bg(p.background).relative();
         // 提交页自带页签与工具条；只有日志页还用这条顶部工具条。
         if matches!(view, GitView::Log) {
             root = root.child(self.render_git_toolbar(tab_id, &project, p, cx));
         }
-        root.child(body).into_any_element()
+        root = root.child(body);
+        let diff_modal = self.render_git_diff_modal(tab_id, cx.entity().clone(), p);
+        root.child(diff_modal).into_any_element()
     }
 
     /// 顶部工具条（日志页）：分支角标 + 远程动作。
@@ -255,11 +258,10 @@ impl AppShell {
         let refs_open = state.refs_panel;
         let refs_width = state.refs_width;
         let details_width = state.details_width;
-        let left =
-            refs_open.then(|| log_view::render_refs_panel(state, app.clone(), refs_width, p));
+        let left = refs_open
+            .then(|| log_view::render_refs_panel(state, app.clone(), tab_id, refs_width, p));
         let table = log_view::render_log_table(state, app.clone(), tab_id, p);
-        let files = log_view::render_commit_files(state, app.clone(), tab_id, p);
-        let right = log_view::render_details(state, app.clone(), tab_id, details_width, p);
+        let right = log_view::render_right_panel(state, app.clone(), tab_id, details_width, p);
         let toggle_app = app.clone();
         v_flex()
             .flex_1()
@@ -267,44 +269,29 @@ impl AppShell {
             .overflow_hidden()
             .child(filter_bar)
             .child(
-                // h_flex 的交叉轴默认是「居中」而不是拉伸（见 gpui 的
-                // `h_flex_centers_and_v_flex_stretches_on_the_cross_axis`）：
-                // 三栏必须显式 items_stretch，否则每栏只按自身内容高度居中，
-                // 表格与引用栏会一起缩成中间一条，看起来就是「界面乱成一团」。
                 h_flex()
                     .flex_1()
                     .min_h_0()
                     .items_stretch()
                     .overflow_hidden()
+                    .when(!refs_open, |el| {
+                        el.child(
+                            Button::new("git-refs-toggle-open")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::PanelLeftOpen)
+                                .tooltip(rust_i18n::t!("git.refs.local").to_string())
+                                .on_click(move |_, _, cx| {
+                                    toggle_app.update(cx, |this, cx| {
+                                        this.git_toggle_refs_panel(tab_id, cx);
+                                    });
+                                }),
+                        )
+                    })
+                    .children(left)
                     .child(
-                        h_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .items_stretch()
-                            .child(
-                                Button::new("git-refs-toggle")
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(if refs_open {
-                                        IconName::PanelLeftClose
-                                    } else {
-                                        IconName::PanelLeftOpen
-                                    })
-                                    .on_click(move |_, _, cx| {
-                                        toggle_app.update(cx, |this, cx| {
-                                            this.git_toggle_refs_panel(tab_id, cx);
-                                        });
-                                    }),
-                            )
-                            .children(left)
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .min_h_0()
-                                    .child(table)
-                                    .child(files),
-                            ),
+                        // 中间栏纯粹展示提交图谱与历史记录表格，占满全部中间空间
+                        v_flex().flex_1().min_w_0().min_h_0().h_full().child(table),
                     )
                     .child(right),
             )
