@@ -73,6 +73,21 @@ pub(crate) fn render_refs_panel(
                 }),
         )
         .child(
+            Button::new("git-refs-new-branch-btn")
+                .ghost()
+                .xsmall()
+                .icon(IconName::Plus)
+                .tooltip(rust_i18n::t!("git.refs.new_branch").to_string())
+                .on_click({
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.git_create_branch_from("HEAD", window, cx);
+                        });
+                    }
+                }),
+        )
+        .child(
             Button::new("git-refs-refresh-btn")
                 .ghost()
                 .xsmall()
@@ -130,6 +145,7 @@ pub(crate) fn render_refs_panel(
                 .child(render_refs_group(
                     &app,
                     state,
+                    tab_id,
                     RefsGroupConfig {
                         title: "HEAD",
                         names: &head,
@@ -142,6 +158,7 @@ pub(crate) fn render_refs_panel(
                 .child(render_refs_group(
                     &app,
                     state,
+                    tab_id,
                     RefsGroupConfig {
                         title: rust_i18n::t!("git.refs.local").as_ref(),
                         names: &local,
@@ -154,6 +171,7 @@ pub(crate) fn render_refs_panel(
                 .child(render_refs_group(
                     &app,
                     state,
+                    tab_id,
                     RefsGroupConfig {
                         title: rust_i18n::t!("git.refs.remote").as_ref(),
                         names: &remote,
@@ -166,6 +184,7 @@ pub(crate) fn render_refs_panel(
                 .child(render_refs_group(
                     &app,
                     state,
+                    tab_id,
                     RefsGroupConfig {
                         title: rust_i18n::t!("git.refs.tags").as_ref(),
                         names: &tags,
@@ -213,6 +232,7 @@ struct RefsGroupConfig<'a> {
 fn render_refs_group(
     app: &Entity<AppShell>,
     state: &State,
+    tab_id: TabId,
     cfg: RefsGroupConfig<'_>,
     p: &Palette,
 ) -> AnyElement {
@@ -259,12 +279,22 @@ fn render_refs_group(
             let click_name = name.clone();
             let menu_name = name.clone();
             let click_app = app.clone();
+            let dbl_click_app = app.clone();
             let menu_app = app.clone();
             let cur_branch = current_branch_name.clone();
-            let is_current = current.iter().any(|head| head == name);
+            let is_head = current.iter().any(|head| head == name);
+
+            // 判断中间提交历史面板是否正在展示当前引用的提交
+            let is_selected = match &state.query.scope {
+                transom_core::LogScope::CurrentBranch => {
+                    group_kind == RefKind::HeadAt || (cfg.is_local_branches && is_head)
+                }
+                transom_core::LogScope::AllRefs => false,
+                transom_core::LogScope::Ref(scope_name) => scope_name == name,
+            };
 
             // 本地分支领先/落后角标
-            let ahead_badge = if cfg.is_local_branches && is_current {
+            let ahead_badge = if cfg.is_local_branches && is_head {
                 state
                     .status
                     .as_ref()
@@ -274,6 +304,14 @@ fn render_refs_group(
             };
             let is_star_branch =
                 !cfg.is_local_branches && (name == "origin/master" || name == "origin/main");
+
+            let target_scope = if group_kind == RefKind::HeadAt {
+                transom_core::LogScope::CurrentBranch
+            } else {
+                transom_core::LogScope::Ref(click_name.clone())
+            };
+            let dbl_name = click_name.clone();
+            let can_checkout = cfg.is_local_branches;
 
             block = block.child(
                 h_flex()
@@ -285,21 +323,27 @@ fn render_refs_group(
                     .items_center()
                     .cursor_pointer()
                     .rounded(px(3.0))
-                    .when(is_current, |style| style.bg(p.list_active))
-                    .when(!is_current, |style| {
+                    .when(is_selected, |style| style.bg(p.list_active))
+                    .when(!is_selected, |style| {
                         style.hover(|hover| hover.bg(p.list_hover))
                     })
                     .when(is_star_branch, |el| {
                         el.child(Icon::new(IconName::Star).xsmall().text_color(p.warning))
                     })
                     .child(
-                        Icon::new(IconName::GitBranch)
-                            .xsmall()
-                            .text_color(if is_current {
-                                p.primary
-                            } else {
-                                p.muted_foreground
-                            }),
+                        Icon::new(if is_head && cfg.is_local_branches {
+                            IconName::Check
+                        } else {
+                            IconName::GitBranch
+                        })
+                        .xsmall()
+                        .text_color(if is_selected {
+                            p.primary
+                        } else if is_head {
+                            p.success
+                        } else {
+                            p.muted_foreground
+                        }),
                     )
                     .child(
                         div()
@@ -307,12 +351,12 @@ fn render_refs_group(
                             .min_w_0()
                             .overflow_hidden()
                             .text_xs()
-                            .font_weight(if is_current {
+                            .font_weight(if is_head || is_selected {
                                 FontWeight::BOLD
                             } else {
                                 FontWeight::NORMAL
                             })
-                            .text_color(if is_current {
+                            .text_color(if is_selected || is_head {
                                 p.foreground
                             } else {
                                 p.muted_foreground
@@ -328,10 +372,19 @@ fn render_refs_group(
                                 .child(format!("↗ {ahead}")),
                         )
                     })
-                    .on_click(move |_, _, cx| {
-                        click_app.update(cx, |this, cx| {
-                            this.git_checkout_ref(&click_name, cx);
-                        });
+                    .on_click(move |event, _, cx| {
+                        if event.click_count() >= 2 && can_checkout {
+                            // 双击本地分支执行检出（对齐 openidea）
+                            dbl_click_app.update(cx, |this, cx| {
+                                this.git_checkout_ref(&dbl_name, cx);
+                            });
+                        } else {
+                            // 单击切换中间面板的提交日志查看范围（对齐 openidea）
+                            let scope = target_scope.clone();
+                            click_app.update(cx, |this, cx| {
+                                this.git_set_log_scope(tab_id, scope, cx);
+                            });
+                        }
                     })
                     .context_menu(move |menu, _window, _cx| match group_kind {
                         RefKind::Branch | RefKind::HeadAt => render_local_branch_menu(
@@ -340,7 +393,7 @@ fn render_refs_group(
                             menu_name.clone(),
                             cur_branch.clone(),
                             None,
-                            is_current,
+                            is_head,
                         ),
                         RefKind::RemoteBranch => render_remote_branch_menu(
                             menu,
