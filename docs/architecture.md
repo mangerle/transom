@@ -186,8 +186,10 @@ crates/transom-container/src/
   models/       线格式结构体：按资源域拆分，转换逻辑随类型就近放置
   cli/          CLI 兜底后端：按子命令拆分，共享进程执行管线留在 mod.rs
   files/        容器文件传输：read / write / archive / listing 分层
-  engine.rs / discovery.rs / transport.rs / http.rs / build.rs / logs.rs / exec.rs
-                引擎探测、通道、归档与长任务
+  engine/       引擎实例：mod.rs 核心与分派宏、operations.rs 操作面、
+                discovery.rs 发现/显式探测
+  transport.rs / http.rs / build.rs / logs.rs / exec.rs
+                通道、归档与长任务
 
 apps/transom/src/controller/
   mod.rs       接线与主循环（约 300 行：收事件、委托处理、判定停机）
