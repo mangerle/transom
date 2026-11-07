@@ -51,7 +51,7 @@ impl AppShell {
                 let commit_page = self.render_git_commit_page(tab_id, window, cx, p);
                 if bottom_log_open {
                     let bottom_panel =
-                        self.render_git_bottom_log_panel(tab_id, cx.entity().clone(), p);
+                        self.render_git_bottom_log_panel(tab_id, cx.entity().clone(), p, cx);
                     div()
                         .flex_1()
                         .min_h_0()
@@ -227,7 +227,7 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_git_log_view(tab_id, cx.entity().clone(), p)
+        self.render_git_log_view(tab_id, cx.entity().clone(), p, cx)
     }
 
     /// 日志工作区三栏主体视图。
@@ -236,6 +236,7 @@ impl AppShell {
         tab_id: TabId,
         app: Entity<Self>,
         p: &Palette,
+        cx: &App,
     ) -> AnyElement {
         let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return div().into_any_element();
@@ -259,7 +260,7 @@ impl AppShell {
         let refs_width = state.refs_width;
         let details_width = state.details_width;
         let left = refs_open
-            .then(|| log_view::render_refs_panel(state, app.clone(), tab_id, refs_width, p));
+            .then(|| log_view::render_refs_panel(state, app.clone(), tab_id, refs_width, p, cx));
         let table = log_view::render_log_table(state, app.clone(), tab_id, p);
         let right = log_view::render_right_panel(state, app.clone(), tab_id, details_width, p);
         let toggle_app = app.clone();

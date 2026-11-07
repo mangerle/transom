@@ -31,20 +31,36 @@ pub(crate) fn render_refs_panel(
     tab_id: TabId,
     width: f32,
     p: &Palette,
+    cx: &App,
 ) -> AnyElement {
+    let query = state
+        .refs_search_input
+        .read(cx)
+        .value()
+        .trim()
+        .to_lowercase();
+    let searching = !query.is_empty();
+
     let local: Vec<String> = state
         .branches
         .iter()
         .filter(|branch| !branch.remote)
         .map(|branch| branch.name.clone())
+        .filter(|name| !searching || name.to_lowercase().contains(&query))
         .collect();
     let remote: Vec<String> = state
         .branches
         .iter()
         .filter(|branch| branch.remote)
         .map(|branch| branch.name.clone())
+        .filter(|name| !searching || name.to_lowercase().contains(&query))
         .collect();
-    let tags: Vec<String> = state.tags.iter().map(|tag| tag.name.clone()).collect();
+    let tags: Vec<String> = state
+        .tags
+        .iter()
+        .map(|tag| tag.name.clone())
+        .filter(|name| !searching || name.to_lowercase().contains(&query))
+        .collect();
     let head = current_head_name(state);
 
     let search_input = state.refs_search_input.clone();
@@ -178,7 +194,7 @@ pub(crate) fn render_refs_panel(
                     RefsGroupConfig {
                         title: rust_i18n::t!("git.refs.remote").as_ref(),
                         names: &remote,
-                        default_expanded: false,
+                        default_expanded: searching,
                         is_local_branches: false,
                         kind: RefKind::RemoteBranch,
                     },
@@ -191,7 +207,7 @@ pub(crate) fn render_refs_panel(
                     RefsGroupConfig {
                         title: rust_i18n::t!("git.refs.tags").as_ref(),
                         names: &tags,
-                        default_expanded: false,
+                        default_expanded: searching,
                         is_local_branches: false,
                         kind: RefKind::Tag,
                     },

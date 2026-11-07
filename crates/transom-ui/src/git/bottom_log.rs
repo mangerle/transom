@@ -35,6 +35,7 @@ impl AppShell {
         tab_id: TabId,
         app: Entity<Self>,
         p: &Palette,
+        cx: &App,
     ) -> AnyElement {
         let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return div().into_any_element();
@@ -150,7 +151,7 @@ impl AppShell {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .child(self.render_git_log_view(tab_id, app, p)),
+                    .child(self.render_git_log_view(tab_id, app, p, cx)),
             )
             .into_any_element()
     }
