@@ -141,13 +141,6 @@ fn normalize(line: &str, level: IgnoreWhitespace) -> String {
 
 /// 渲染一行。
 pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> AnyElement {
-    // 采用专业 IDE 标准配色：修改行使用清透青蓝，新增使用浅绿，删除使用浅红。
-    let (bg, word_bg) = match (row.tone, options.highlight == DiffHighlight::None) {
-        (Tone::Added, false) => (p.success.opacity(0.12), p.success.opacity(0.30)),
-        (Tone::Removed, false) => (p.danger.opacity(0.12), p.danger.opacity(0.30)),
-        (Tone::Paired, false) => (p.primary.opacity(0.12), p.primary.opacity(0.30)),
-        _ => (p.background, p.primary.opacity(0.30)),
-    };
     if !options.side_by_side {
         // 统一视图（Unified Diff）：修改行按标准双行显示（先删后增并互相词级比对）。
         if row.tone == Tone::Paired {
@@ -257,7 +250,7 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
         row.left.as_ref(),
         row.right.as_ref().filter(|_| row.tone == Tone::Paired),
         options,
-        word_bg,
+        row.tone,
         false,
         p,
     );
@@ -265,7 +258,7 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
         row.right.as_ref(),
         row.left.as_ref().filter(|_| row.tone == Tone::Paired),
         options,
-        word_bg,
+        row.tone,
         true,
         p,
     );
@@ -282,7 +275,6 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
         .w_full()
         .h(px(LINE_HEIGHT))
         .items_center()
-        .bg(bg)
         .when(!options.wrap_lines, |el| el.truncate())
         .child(left_side)
         .child(right_side)
@@ -296,22 +288,36 @@ fn side(
     cell: Option<&Cell>,
     counterpart: Option<&Cell>,
     options: &GitDiffOptions,
-    word_bg: Hsla,
+    tone: Tone,
     is_right: bool,
     p: &Palette,
 ) -> AnyElement {
+    let (side_bg, word_bg) = match (cell.is_some(), tone) {
+        (false, _) => (p.muted.opacity(0.12), p.primary.opacity(0.30)),
+        (true, Tone::Added) => (p.success.opacity(0.14), p.success.opacity(0.32)),
+        (true, Tone::Removed) => (p.danger.opacity(0.14), p.danger.opacity(0.32)),
+        (true, Tone::Paired) => {
+            if is_right {
+                (p.success.opacity(0.12), p.success.opacity(0.30))
+            } else {
+                (p.danger.opacity(0.12), p.danger.opacity(0.30))
+            }
+        }
+        (true, Tone::Context) => (p.background, p.primary.opacity(0.30)),
+    };
+
     let base = h_flex()
         .w_1_2()
         .h_full()
         .min_w_0()
         .items_center()
+        .bg(side_bg)
         .when(is_right, |el| {
             el.border_color(p.divider(p.border)).border_l_1()
         });
 
     let Some(cell) = cell else {
         return base
-            .bg(p.muted.opacity(0.08))
             .child(gutter(None, p))
             .child(div().flex_1())
             .into_any_element();
