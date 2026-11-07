@@ -19,9 +19,29 @@
 use crate::error::GitError;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::RwLock;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+
+static GIT_PROGRAM: RwLock<String> = RwLock::new(String::new());
+
+/// 配置底层 Git 命令的可执行文件路径（为空或默认时回退到系统 `"git"`）。
+pub fn set_git_program(path: impl Into<String>) {
+    if let Ok(mut w) = GIT_PROGRAM.write() {
+        *w = path.into();
+    }
+}
+
+/// 获取当前生效的 Git 可执行文件路径。
+pub fn git_program() -> String {
+    if let Ok(r) = GIT_PROGRAM.read() {
+        if !r.trim().is_empty() {
+            return r.clone();
+        }
+    }
+    "git".to_string()
+}
 
 /// 只读查询的默认超时：本地仓库的 status/log 远小于此，超过即视为仓库异常。
 pub(crate) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -108,7 +128,7 @@ pub(crate) fn build_command(
     args: &[&str],
     opts: &RunOptions,
 ) -> Result<Command, GitError> {
-    let mut command = Command::new("git");
+    let mut command = Command::new(git_program());
     command
         .args(args)
         .current_dir(cwd)

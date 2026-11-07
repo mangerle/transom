@@ -59,12 +59,13 @@ impl SettingsView {
 
         update_app_settings(cx, |s| {
             if !exe.is_empty() {
-                s.git.executable_path = exe;
+                s.git.executable_path = exe.clone();
             }
             s.git.protected_branches = protected;
             s.git.author_name = author_name;
             s.git.author_email = author_email;
         });
+        transom_git::set_git_program(&exe);
     }
 
     /// 自定义按键映射先整体校验：一行写错就整份不落盘，并保持弹窗打开，

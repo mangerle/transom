@@ -83,6 +83,7 @@ pub fn run(services: UiServices) {
     }
     let language = i18n::resolve_language(&settings.language);
     reassert_default_terminal(&settings);
+    transom_git::set_git_program(&settings.git.executable_path);
     // 应用装配日志时还不知道配置值，这里补上用户设的级别。
     //
     // 环境变量仍然优先：报障场景下 `TRANSOM_LOG=debug` 必须能盖过配置里的 `info`，

@@ -45,6 +45,7 @@ pub use error::GitError;
 pub use graph::{GraphRow, GraphState, assign_lanes};
 pub use history::ResetKind;
 pub use patch::MAX_PATCH_BYTES;
+pub use process::{git_program, set_git_program};
 pub use repo::Repo;
 pub use repo::{init, probe};
 pub use service::GitService;
