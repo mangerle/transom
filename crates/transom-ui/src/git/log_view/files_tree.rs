@@ -113,13 +113,15 @@ impl TempDirNode {
 
     /// 递归压缩单路径目录（如 `crates` 下只有 `transom-ui` 则压缩为 `crates/transom-ui`）。
     fn compress_single_child(self, current_name: String) -> (String, TempDirNode) {
-        if self.files.is_empty() && self.subdirs.len() == 1 {
-            let (sub_name, sub_node) = self.subdirs.into_iter().next().unwrap();
+        let TempDirNode { files, mut subdirs } = self;
+        if files.is_empty()
+            && subdirs.len() == 1
+            && let Some((sub_name, sub_node)) = subdirs.pop_first()
+        {
             let merged_name = format!("{current_name}/{sub_name}");
-            sub_node.compress_single_child(merged_name)
-        } else {
-            (current_name, self)
+            return sub_node.compress_single_child(merged_name);
         }
+        (current_name, TempDirNode { files, subdirs })
     }
 }
 
