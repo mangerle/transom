@@ -106,7 +106,7 @@ SSH 通道 / PTY / 串口 / TCP
 UI（try_send，满则提示）
   └─ 命令通道 256 ──> 控制平面主循环
                           ├─ commands.rs：连接 / SFTP / 转发 / 云同步 / 进程 / 停机
-                          ├─ internal.rs：连接接入 / 断开 / SFTP-转发提交
+                          ├─ internal/：连接接入 / 断开 / SFTP-转发提交（按事件类型分成子模块）
                           └─ state.rs：ControllerState（全部状态表）
   └─ 事件通道 1024 <── 控制平面（状态迁移用 send_async 反压；可覆盖样本 try_send）
   └─ 内部通道 64   （建连任务与主循环之间的完成/断开通知）
@@ -181,11 +181,21 @@ crates/transom-zmodem/src/
 crates/transom-net/src/
   system_stats/ Linux 宿主与远端资源采样输出解析器与状态机
 
+crates/transom-container/src/
+  api/          Docker/Podman REST 客户端：按资源域拆分（容器/镜像/卷/网络/系统/exec）
+  models/       线格式结构体：按资源域拆分，转换逻辑随类型就近放置
+  cli/          CLI 兜底后端：按子命令拆分，共享进程执行管线留在 mod.rs
+  files/        容器文件传输：read / write / archive / listing 分层
+  engine.rs / discovery.rs / transport.rs / http.rs / build.rs / logs.rs / exec.rs
+                引擎探测、通道、归档与长任务
+
 apps/transom/src/controller/
   mod.rs       接线与主循环（约 300 行：收事件、委托处理、判定停机）
   state.rs     ControllerState（全部状态表）与 ControllerCtx（共享句柄）
   commands.rs  用户命令处理
-  internal.rs  内部完成事件处理与单一接入路径
+  internal/    内部完成事件处理与单一接入路径：
+               mod.rs 只做分发，connected / disconnected / sftp / forward / container
+               各处理一类事件
   lifecycle.rs 连接接入/清理/停机的公共流程
   pty.rs / samplers/ / sftp_exec/（dispatch + 按域拆分的 ops）/ sftp_finish.rs / sync_exec.rs / host_exec.rs
 ```
@@ -212,7 +222,7 @@ apps/transom/src/controller/
 
 - **新增一条 AppCommand**：`crates/transom-core/src/commands/mod.rs` 加变体 → `controller/commands.rs`
   加处理分支（UI 侧构造点按其语义选择 try_send/send_command）；
-- **新增连接类型**：`ReadyConnection` 加变体 → `internal.rs` 加差异化收尾
+- **新增连接类型**：`ReadyConnection` 加变体 → `internal/connected.rs` 的 `adopt_*` 加差异化收尾
   → `pty.rs` 的派发点构造新变体；
 - **新增持久化文件**：走 `file_io::write_atomic`（禁止自写临时文件流程）；
 - **新增周期任务**：必须持有 `JoinHandle` 并纳入 `ControllerState` 的对应
