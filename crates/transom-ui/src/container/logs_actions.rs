@@ -1,6 +1,7 @@
 //! 容器日志采样：拉取、跟随、行数与时间戳切换。
 
 use super::*;
+use crate::sftp::spawn_blocking_local;
 
 impl AppShell {
     pub(crate) fn ensure_container_logs(&mut self, tab_id: TabId) {
@@ -115,12 +116,7 @@ impl AppShell {
     }
 
     /// 将当前日志缓冲导出为本地 .log 文件。
-    pub(crate) fn export_container_logs(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn export_container_logs(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let (name, text) = match self.state.container_workspace(tab_id) {
             Some(workspace) => {
                 let name = if workspace.section == ContainerSection::Compose {
@@ -150,16 +146,50 @@ impl AppShell {
             return;
         };
 
-        if let Err(e) = std::fs::write(&local_path, text.as_bytes()) {
-            log::error!("写入容器日志文件失败: {e}");
-        } else {
-            let path_str = local_path.display().to_string();
-            self.show_toast(
-                rust_i18n::t!("container.logs.export_success", path = path_str),
-                true,
-                window,
-                cx,
-            );
-        }
+        // 日志可能上百 KB，写盘不能在渲染/点击线程同步做：交给阻塞线程池，
+        // 完成后再回到 UI 线程弹提示，避免大文件落盘卡住下一帧。
+        let write_path = local_path.clone();
+        cx.spawn(async move |this, cx| {
+            let outcome = spawn_blocking_local(move || {
+                std::fs::write(&write_path, text.as_bytes()).map_err(|error| error.to_string())
+            })
+            .await;
+            let _ = this.update_in(cx, |this, window, cx| match outcome {
+                Some(Ok(())) => {
+                    let path_str = local_path.display().to_string();
+                    this.show_toast(
+                        rust_i18n::t!("container.logs.export_success", path = path_str),
+                        true,
+                        window,
+                        cx,
+                    );
+                }
+                Some(Err(error)) => {
+                    log::error!(
+                        "写入容器日志文件失败，路径: {}，原因: {error}",
+                        local_path.display()
+                    );
+                    this.show_toast(
+                        rust_i18n::t!("container.logs.export_failed", error = error),
+                        false,
+                        window,
+                        cx,
+                    );
+                }
+                None => {
+                    log::error!(
+                        "写入容器日志文件失败，路径: {}，原因: 后台写入线程不可用",
+                        local_path.display()
+                    );
+                    this.show_toast(
+                        rust_i18n::t!("container.logs.export_thread_failed").to_string(),
+                        false,
+                        window,
+                        cx,
+                    );
+                }
+            });
+        })
+        .detach();
     }
 }

@@ -259,9 +259,9 @@ pub(crate) fn render_logs(
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("container.logs.export").to_string(),
                 IconName::Download,
-                move |_, window, cx| {
+                move |_, _window, cx| {
                     app4.update(cx, |this, cx| {
-                        this.export_container_logs(tab_id, window, cx);
+                        this.export_container_logs(tab_id, cx);
                     });
                 },
             ))

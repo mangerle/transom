@@ -6393,6 +6393,12 @@ container:
     export_success:
       en: Logs exported to %{path}
       zh-CN: 日志已导出至 %{path}
+    export_failed:
+      en: 'Failed to export logs: %{error}'
+      zh-CN: '导出日志失败：%{error}'
+    export_thread_failed:
+      en: 'Failed to export logs: background write thread unavailable'
+      zh-CN: '导出日志失败：无法启动后台写入线程'
     matched_lines:
       en: "%{matched}/%{total} lines"
       zh-CN: "%{matched}/%{total} 行"
