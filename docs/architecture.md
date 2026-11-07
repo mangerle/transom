@@ -190,6 +190,7 @@ crates/transom-container/src/
                 discovery.rs 发现/显式探测
   discovery/    候选发现：parse/unix/cli/windows 分平台
   registry/     仓库检索与鉴权：search/auth/tags/io
+  volume_files/ 数据卷文件访问：probe/backup/直接读写
   transport.rs / http/（请求入口、连接池、响应体读取）
   build/（ignore/stream/http/cli）/ logs.rs / exec.rs
                 通道、归档与长任务
