@@ -29,10 +29,14 @@ pub(super) fn spawn_read<F, Fut>(
         let event = match work(Repo::at(project.path.clone())).await {
             Ok(event) => Some(event),
             Err(error) => {
-                log::warn!(
-                    "Git 读取请求失败，项目: {}，原因: {error}",
-                    project.path.display()
-                );
+                if error.is_not_repo() {
+                    log::debug!("Git 目录尚未初始化为仓库，项目: {}", project.path.display());
+                } else {
+                    log::warn!(
+                        "Git 读取请求失败，项目: {}，原因: {error}",
+                        project.path.display()
+                    );
+                }
                 Some(GitAppEvent::ReadFailed {
                     project_id,
                     request_id,

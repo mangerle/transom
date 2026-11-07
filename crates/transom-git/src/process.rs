@@ -258,11 +258,16 @@ pub(crate) fn exit_code(status: &std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(-1)
 }
 
-/// 把非零退出转成具体错误：锁冲突单独成类，其余归为命令失败。
+/// 把非零退出转成具体错误：锁冲突与非仓库目录单独成类，其余归为命令失败。
 fn failure(cwd: &Path, args: &[&str], output: GitOutput) -> GitError {
     let stderr = output.stderr.clone();
     if stderr.contains(".lock") && stderr.contains("fatal") {
         return GitError::Locked {
+            path: cwd.display().to_string(),
+        };
+    }
+    if stderr.contains("not a git repository") {
+        return GitError::NotRepo {
             path: cwd.display().to_string(),
         };
     }

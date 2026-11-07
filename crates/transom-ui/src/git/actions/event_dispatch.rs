@@ -154,7 +154,11 @@ impl AppShell {
             } => {
                 let message = localized_error(&error);
                 let not_repo = error.code == ErrorCode::GitNotARepo;
-                log::error!("Git 读取失败，项目: {project_id}，原因: {message}");
+                if not_repo {
+                    log::debug!("Git 项目尚未初始化为仓库: {project_id}");
+                } else {
+                    log::error!("Git 读取失败，项目: {project_id}，原因: {message}");
+                }
                 if let Some(state) = self.git_state_mut(project_id) {
                     state.drop_request(request_id);
                     state.log.loading = false;
@@ -176,7 +180,9 @@ impl AppShell {
                     badge.loading = false;
                     badge.error = Some(message.clone());
                 }
-                self.set_error(message);
+                if !not_repo {
+                    self.set_error(message);
+                }
                 cx.notify();
             }
             GitAppEvent::ActionDone {
