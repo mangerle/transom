@@ -7,25 +7,22 @@
 //! - 下半部分为提交说明（标题、换行正文、Hash、作者与邮箱、所属分支）；
 //! - 上下两部分由垂直拖拽切分器（v_resizable）组织，用户可按需自由调整高低比例。
 
+use super::files_tree::{FileTreeNode, render_tree_nodes};
 use super::placeholder;
 use crate::app::AppShell;
 use crate::divider::v_resizable;
-use crate::git::change_visual;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
 
 type State = crate::git::GitWorkspaceState;
-
-/// 单个文件行高。
-const ROW_HEIGHT: f32 = 26.0;
 
 /// 渲染右侧面板（变更文件树 + 提交说明）。
 pub(crate) fn render_right_panel(
@@ -76,102 +73,38 @@ fn render_files_section(
     let file_count = state.commit_files.len();
     let count_text = rust_i18n::t!("git.files.count", count = file_count).to_string();
 
-    let mut rows: Vec<AnyElement> = Vec::with_capacity(file_count + 1);
-    if state.commit_files_loading {
-        rows.push(placeholder(rust_i18n::t!("git.log.loading").to_string(), p));
+    let rows: Vec<AnyElement> = if state.commit_files_loading {
+        vec![placeholder(rust_i18n::t!("git.log.loading").to_string(), p)]
     } else if state.selected_commit.is_none() {
-        rows.push(placeholder(
+        vec![placeholder(
             rust_i18n::t!("git.files.need_commit").to_string(),
             p,
-        ));
+        )]
     } else if state.commit_files.is_empty() {
-        rows.push(placeholder(rust_i18n::t!("git.files.empty").to_string(), p));
-    }
-
-    // 尝试获取当前激活文件路径
-    let active_path = state.active_diff().map(|d| d.path.as_str());
-
-    for file in &state.commit_files {
-        let visual = change_visual(file.change);
-        let display = file.path.clone();
-        let path = file.path.clone();
-        let is_selected = active_path == Some(path.as_str());
-
-        let click_app = app.clone();
-        let dbl_click_app = app.clone();
-        let path_clone = path.clone();
-        let dbl_path = path.clone();
-
-        rows.push(
-            h_flex()
-                .id(ElementId::Name(format!("git-file-{display}").into()))
-                .px_2()
-                .h(px(ROW_HEIGHT))
-                .gap_2()
-                .items_center()
-                .cursor_pointer()
-                .when(is_selected, |style| style.bg(p.list_active))
-                .when(!is_selected, |style| {
-                    style.hover(|hover| hover.bg(p.list_hover))
-                })
-                .child(Icon::new(visual.icon).xsmall().text_color(p.primary))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .text_xs()
-                        .text_color(if is_selected {
-                            p.foreground
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(display),
-                )
-                .child(
-                    file.old_path
-                        .as_ref()
-                        .map(|old| {
-                            div()
-                                .text_xs()
-                                .text_color(p.muted_foreground)
-                                .child(format!("← {old}"))
-                                .into_any_element()
-                        })
-                        .unwrap_or_else(|| div().into_any_element()),
-                )
-                .on_click(move |event, _, cx| {
-                    if event.click_count() >= 2 {
-                        dbl_click_app.update(cx, |this, cx| {
-                            this.git_open_diff_modal(tab_id, &dbl_path, cx);
-                        });
-                    } else {
-                        click_app.update(cx, |this, cx| {
-                            this.git_diff_commit_file(tab_id, &path_clone, cx);
-                        });
-                    }
-                })
-                .into_any_element(),
-        );
-    }
+        vec![placeholder(rust_i18n::t!("git.files.empty").to_string(), p)]
+    } else {
+        // 构建 IDEA 风格层级目录树并自动压缩单子目录
+        let active_path = state.active_diff().map(|d| d.path.as_str());
+        let tree = FileTreeNode::build_tree(&state.commit_files);
+        render_tree_nodes(&tree, 0, active_path, &app, tab_id, p)
+    };
 
     let toolbar_app = app.clone();
     let first_file_path = state.commit_files.first().map(|f| f.path.clone());
 
     let toolbar = h_flex()
         .w_full()
-        .h(px(26.0))
+        .h(px(24.0))
         .flex_none()
         .px_2()
         .items_center()
         .justify_between()
         .border_color(p.divider(p.border))
         .border_b_1()
-        .bg(p.muted)
         .child(
             div()
                 .text_xs()
-                .font_weight(FontWeight::BOLD)
+                .font_weight(FontWeight::MEDIUM)
                 .text_color(p.muted_foreground)
                 .child(if state.selected_commit.is_some() {
                     count_text
@@ -312,14 +245,13 @@ fn render_details_section(state: &State, p: &Palette) -> AnyElement {
                     )
                 }),
         )
-        // 底部元数据栏
+        // 底部元数据栏（自然融入背景，无突兀灰底）
         .child(
             v_flex()
                 .flex_none()
                 .px_3()
                 .py_2()
                 .gap_1()
-                .bg(p.muted)
                 .border_color(p.divider(p.border))
                 .border_t_1()
                 .text_xs()
@@ -337,7 +269,11 @@ fn render_details_section(state: &State, p: &Palette) -> AnyElement {
                         .child(div().child(author_text))
                         .child(div().child(time_text)),
                 )
-                .child(div().text_color(p.muted_foreground).child(branches_text)),
+                .child(
+                    div()
+                        .text_color(p.muted_foreground.opacity(0.75))
+                        .child(branches_text),
+                ),
         )
         .into_any_element()
 }

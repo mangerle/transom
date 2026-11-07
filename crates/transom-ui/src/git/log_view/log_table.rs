@@ -90,67 +90,21 @@ pub(crate) fn render_log_table(
                 .into_any_element(),
         );
     }
+    let context_columns = state.log.columns;
+    let context_app = app.clone();
     v_flex()
         .flex_1()
         .min_w_0()
         .min_h_0()
-        .child(log_header(tab_id, state.log.columns, &app, p))
-        .child(
-            v_flex()
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scrollbar()
-                .children(rows),
-        )
-        .into_any_element()
-}
-
-/// 日志表头：信息列恒定，作者/日期由右键菜单勾选。
-///
-/// 设计原理（Why）：与 IDEA 一致，列开关只影响宽度分配，不改取数——
-/// 关掉作者列不该让一次 `git log` 重新发起。
-fn log_header(
-    tab_id: TabId,
-    columns: LogColumns,
-    app: &Entity<AppShell>,
-    p: &Palette,
-) -> AnyElement {
-    let menu_app = app.clone();
-    h_flex()
-        .id(ElementId::Name("git-log-header".into()))
-        .px_2()
-        .py_1()
-        .gap_2()
-        .text_xs()
-        .text_color(p.muted_foreground)
-        .border_color(p.divider(p.border))
-        .border_b_1()
-        .child(
-            div()
-                .flex_1()
-                .child(rust_i18n::t!("git.log.column.subject").to_string()),
-        )
-        .when(columns.author, |head| {
-            head.child(
-                div()
-                    .w(px(AUTHOR_WIDTH))
-                    .child(rust_i18n::t!("git.log.column.author").to_string()),
-            )
-        })
-        .when(columns.time, |head| {
-            head.child(
-                div()
-                    .w(px(TIME_WIDTH))
-                    .child(rust_i18n::t!("git.log.column.time").to_string()),
-            )
-        })
+        .overflow_y_scrollbar()
+        .children(rows)
         .context_menu(move |mut menu, _window, _cx| {
-            let menu_app = menu_app.clone();
+            let menu_app = context_app.clone();
             for column in [LogColumn::Author, LogColumn::Time] {
                 let item_app = menu_app.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!(column.i18n_key()).to_string())
-                        .checked(column.is_shown(&columns))
+                        .checked(column.is_shown(&context_columns))
                         .on_click(move |_, _, cx| {
                             item_app.update(cx, |this, cx| {
                                 this.git_toggle_log_column(tab_id, column, cx);

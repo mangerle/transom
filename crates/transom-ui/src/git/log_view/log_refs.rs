@@ -473,19 +473,22 @@ fn render_worktree_group(app: &Entity<AppShell>, state: &State, p: &Palette) -> 
     block.into_any_element()
 }
 
-/// 引用装饰徽标。
+/// 引用装饰徽标（IDEA 风格半透明圆角细线胶囊）。
 pub(crate) fn ref_chip(kind: RefKind, name: &str, p: &Palette) -> AnyElement {
     let color = match kind {
         RefKind::HeadAt => p.primary,
         RefKind::Branch => p.success,
-        RefKind::RemoteBranch => p.secondary_foreground,
+        RefKind::RemoteBranch => p.muted_foreground,
         RefKind::Tag => p.warning,
     };
-    div()
+    h_flex()
+        .h(px(16.0))
         .px_1()
-        .rounded(px(2.0))
+        .items_center()
+        .rounded(px(3.0))
+        .bg(color.opacity(0.12))
         .border_1()
-        .border_color(color)
+        .border_color(color.opacity(0.35))
         .text_xs()
         .text_color(color)
         .child(name.to_string())

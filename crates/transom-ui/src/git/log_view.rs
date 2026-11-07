@@ -30,6 +30,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
 
+mod files_tree;
 mod log_details;
 mod log_menus;
 mod log_refs;
