@@ -235,7 +235,17 @@ impl Repo {
         web::commit_url(self.root(), oid).await
     }
 
-    /// 某个搁置项包含的文件清单（含未跟踪侧标记）。
+    /// 导出指定路径的工作区补丁（Unified Diff 格式）。
+    pub async fn export_patch(&self, paths: &[String]) -> Result<String, GitError> {
+        ops::export_patch(self.root(), paths).await
+    }
+
+    /// 应用补丁文本到工作区。
+    pub async fn apply_patch(&self, patch: &str) -> Result<(), GitError> {
+        ops::apply_patch(self.root(), patch).await
+    }
+
+    /// 某个贮藏项包含的文件清单（含未跟踪侧标记）。
     pub async fn stash_files(
         &self,
         selector: &str,
@@ -243,22 +253,22 @@ impl Repo {
         stash::files(self.root(), selector).await
     }
 
-    /// 新建搁置项。
+    /// 新建贮藏项。
     pub async fn stash_save(&self, message: &str, include_untracked: bool) -> Result<(), GitError> {
         stash::save(self.root(), message, include_untracked).await
     }
 
-    /// 应用搁置项（保留栈项）。
+    /// 应用贮藏项（保留栈项）。
     pub async fn stash_apply(&self, selector: &str) -> Result<(), GitError> {
         stash::apply(self.root(), selector).await
     }
 
-    /// 应用并弹出搁置项。
+    /// 应用并弹出贮藏项。
     pub async fn stash_pop(&self, selector: &str) -> Result<(), GitError> {
         stash::pop(self.root(), selector).await
     }
 
-    /// 丢弃搁置项。
+    /// 丢弃贮藏项。
     pub async fn stash_drop(&self, selector: &str) -> Result<(), GitError> {
         stash::drop(self.root(), selector).await
     }

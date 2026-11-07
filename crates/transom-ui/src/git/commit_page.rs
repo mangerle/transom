@@ -29,11 +29,9 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
 
-/// 提交页左栏初始宽度：改动树 + 消息够用，右侧还能留下可读的 diff。
-/// 实际宽度由可拖拽分隔条控制，范围见 `size_range`。
+/// 提交页左栏初始宽度：改动树 + 消息够用，实际宽度由可拖拽分隔条控制（范围见 `size_range`）。
 const COMMIT_PANEL_WIDTH: f32 = 440.0;
-const COMMIT_PANEL_MIN_WIDTH: f32 = 320.0;
-const COMMIT_PANEL_MAX_WIDTH: f32 = 720.0;
+const COMMIT_PANEL_RANGE: (f32, f32) = (320.0, 720.0);
 
 impl AppShell {
     /// 渲染标签页的提交页。
@@ -45,18 +43,18 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         // 提交成功后消息框的清理要 Window；事件落地时没有，先在这里补一次。
-        let clear_pending = self
+        if self
             .git_state_of_tab(tab_id)
-            .is_some_and(|state| state.commit_clear_pending);
-        if clear_pending {
+            .is_some_and(|s| s.commit_clear_pending)
+        {
             if let Some(state) = self.git_state_of_tab_mut(tab_id) {
                 state.commit_clear_pending = false;
             }
             cx.defer_in(window, move |this, window, cx| {
                 if let Some(state) = this.git_state_of_tab_mut(tab_id) {
-                    state.commit_message.update(cx, |input, cx| {
-                        input.set_value("", window, cx);
-                    });
+                    state
+                        .commit_message
+                        .update(cx, |input, cx| input.set_value("", window, cx));
                 }
             });
         }
@@ -70,6 +68,7 @@ impl AppShell {
             count,
             commit_tab,
             shelf_count,
+            stash_count,
             split,
             amend_files,
             amend_files_loading,
@@ -126,6 +125,7 @@ impl AppShell {
                 message,
                 count,
                 state.commit_tab,
+                state.shelves.len(),
                 state.stashes.len(),
                 state.commit_split.clone(),
                 state.amend_files.clone(),
@@ -142,6 +142,11 @@ impl AppShell {
         } else {
             rust_i18n::t!("git.shelf.title").to_string()
         };
+        let stash_label = if stash_count > 0 {
+            format!("{} ({stash_count})", rust_i18n::t!("git.stash.title"))
+        } else {
+            rust_i18n::t!("git.stash.title").to_string()
+        };
         let tabs = h_flex()
             .w_full()
             .px_2()
@@ -149,52 +154,33 @@ impl AppShell {
             .items_center()
             .border_color(p.divider(p.border))
             .border_b_1()
-            .child(
-                div()
-                    .id("git-commit-tab-commit")
-                    .px_2()
-                    .py_1()
-                    .text_sm()
-                    .cursor_pointer()
-                    .font_weight(if commit_tab == GitCommitTab::Commit {
-                        FontWeight::BOLD
-                    } else {
-                        FontWeight::NORMAL
-                    })
-                    .border_b_2()
-                    .border_color(if commit_tab == GitCommitTab::Commit {
-                        p.primary
-                    } else {
-                        p.background
-                    })
-                    .child(rust_i18n::t!("git.commit.title").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.git_set_commit_tab(tab_id, GitCommitTab::Commit, cx);
-                    })),
-            )
-            .child(
-                div()
-                    .id("git-commit-tab-shelf")
-                    .px_2()
-                    .py_1()
-                    .text_sm()
-                    .cursor_pointer()
-                    .font_weight(if commit_tab == GitCommitTab::Shelf {
-                        FontWeight::BOLD
-                    } else {
-                        FontWeight::NORMAL
-                    })
-                    .border_b_2()
-                    .border_color(if commit_tab == GitCommitTab::Shelf {
-                        p.primary
-                    } else {
-                        p.background
-                    })
-                    .child(shelf_label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.git_set_commit_tab(tab_id, GitCommitTab::Shelf, cx);
-                    })),
-            );
+            .child(commit_tab_btn(
+                "git-commit-tab-commit",
+                rust_i18n::t!("git.commit.title").to_string(),
+                commit_tab == GitCommitTab::Commit,
+                p,
+                cx.listener(move |this, _, _, cx| {
+                    this.git_set_commit_tab(tab_id, GitCommitTab::Commit, cx);
+                }),
+            ))
+            .child(commit_tab_btn(
+                "git-commit-tab-shelf",
+                shelf_label,
+                commit_tab == GitCommitTab::Shelf,
+                p,
+                cx.listener(move |this, _, _, cx| {
+                    this.git_set_commit_tab(tab_id, GitCommitTab::Shelf, cx);
+                }),
+            ))
+            .child(commit_tab_btn(
+                "git-commit-tab-stash",
+                stash_label,
+                commit_tab == GitCommitTab::Stash,
+                p,
+                cx.listener(move |this, _, _, cx| {
+                    this.git_set_commit_tab(tab_id, GitCommitTab::Stash, cx);
+                }),
+            ));
 
         let content = match commit_tab {
             GitCommitTab::Commit => {
@@ -249,9 +235,19 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::PackagePlus)
-                            .tooltip(rust_i18n::t!("git.shelf.title").to_string())
+                            .tooltip(rust_i18n::t!("git.shelf.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_shelve_checked(tab_id, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("git-commit-stash")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Archive)
+                            .tooltip(rust_i18n::t!("git.stash.create").to_string())
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.git_stash_checked(tab_id, cx);
                             })),
                     )
                     .child(
@@ -433,6 +429,11 @@ impl AppShell {
                 .min_h_0()
                 .child(self.render_git_shelf_panel(tab_id, p, cx))
                 .into_any_element(),
+            GitCommitTab::Stash => div()
+                .flex_1()
+                .min_h_0()
+                .child(self.render_git_stash_panel(tab_id, p, cx))
+                .into_any_element(),
         };
 
         let left = v_flex()
@@ -455,7 +456,7 @@ impl AppShell {
 
         let left_panel = resizable_panel()
             .size(px(COMMIT_PANEL_WIDTH))
-            .size_range(px(COMMIT_PANEL_MIN_WIDTH)..px(COMMIT_PANEL_MAX_WIDTH))
+            .size_range(px(COMMIT_PANEL_RANGE.0)..px(COMMIT_PANEL_RANGE.1))
             .child(left);
         let right_panel = resizable_panel().child(right);
         div()
@@ -470,4 +471,29 @@ impl AppShell {
             )
             .into_any_element()
     }
+}
+
+/// 提交页顶部单个页签胶囊按钮。
+fn commit_tab_btn(
+    id: &'static str,
+    label: String,
+    active: bool,
+    p: &Palette,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .px_2()
+        .py_1()
+        .text_sm()
+        .cursor_pointer()
+        .font_weight(if active {
+            FontWeight::BOLD
+        } else {
+            FontWeight::NORMAL
+        })
+        .border_b_2()
+        .border_color(if active { p.primary } else { p.background })
+        .child(label)
+        .on_click(on_click)
 }

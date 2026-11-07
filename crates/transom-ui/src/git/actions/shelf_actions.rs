@@ -11,7 +11,7 @@ use transom_core::{GitAction, GitCommand, GitProject, GitRequestId, GitSide, Tab
 use super::{GitDiffRequest, GitRefAction};
 
 impl AppShell {
-    /// 在提交页左栏切换「提交 / 搁置」；首次进入搁置页拉一次列表。
+    /// 在提交页左栏切换「提交 / 搁置 / 贮藏」；首次进入分别拉取对应列表。
     pub(crate) fn git_set_commit_tab(
         &mut self,
         tab_id: TabId,
@@ -25,14 +25,23 @@ impl AppShell {
             return;
         }
         state.commit_tab = tab;
-        if tab == GitCommitTab::Shelf {
-            let project = state.project.clone();
-            let request_id = GitRequestId::new();
-            state.pending.push(request_id);
-            self.send_command(GitCommand::ListStashes {
-                project,
-                request_id,
-            });
+        match tab {
+            GitCommitTab::Shelf => {
+                let project_id = state.project.id.to_string();
+                if let Ok(shelves) = transom_store::load_project_shelves(&project_id) {
+                    state.shelves = shelves;
+                }
+            }
+            GitCommitTab::Stash => {
+                let project = state.project.clone();
+                let request_id = GitRequestId::new();
+                state.pending.push(request_id);
+                self.send_command(GitCommand::ListStashes {
+                    project,
+                    request_id,
+                });
+            }
+            GitCommitTab::Commit => {}
         }
         cx.notify();
     }

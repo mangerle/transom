@@ -30,8 +30,10 @@ pub(crate) enum GitCommitTab {
     /// 提交：改动树 + 消息 + 提交按钮。
     #[default]
     Commit,
-    /// 搁置：内联的搁置列表，与提交页签在左栏内切换。
+    /// 搁置：IDE 独立离线补丁集（Patch Set）。
     Shelf,
+    /// 贮藏：原生 Git Stash 栈。
+    Stash,
 }
 
 /// 一个仓库标签页的全部状态。
@@ -94,15 +96,19 @@ pub(crate) struct GitWorkspaceState {
     /// 目前恒为登记：`git worktree add` 成功即说明目录可用，列表里多一份条目
     /// 是用户点「创建」时预期的结果，不再另设开关。
     pub pending_worktree: Option<(String, bool)>,
-    /// 搁置项列表。
+    /// 贮藏项列表（Git Stash）。
     pub stashes: Vec<transom_core::StashEntry>,
-    /// 展开的搁置项选择器；同一时刻只展开一条，与 IDEA 的搁置树一致。
+    /// 展开的贮藏项选择器。
     pub expanded_stash: Option<String>,
-    /// 展开项的文件清单：只存当前展开这一条，收起即清空，避免整栈常驻内存。
+    /// 展开项的文件清单。
     pub stash_files: Vec<transom_core::StashFile>,
-    /// 清单是否在读：读回前不给第二次子进程，防止连点展开堆请求。
+    /// 清单是否在读。
     pub stash_files_loading: bool,
-    /// 搁置页 / 提交页的当前页签。
+    /// 离线搁置项列表（Shelf Entries）。
+    pub shelves: Vec<transom_core::ShelfEntry>,
+    /// 展开的搁置项 ID。
+    pub expanded_shelf: Option<String>,
+    /// 提交页当前页签（Commit / Shelf / Stash）。
     pub commit_tab: GitCommitTab,
     /// 本次「创建补丁」的目标路径：对话框选完就记下来，写成功时用它报落盘位置。
     pub patch_target: Option<PathBuf>,
@@ -213,6 +219,8 @@ impl GitWorkspaceState {
             expanded_stash: None,
             stash_files: Vec::new(),
             stash_files_loading: false,
+            shelves: Vec::new(),
+            expanded_shelf: None,
             commit_tab: GitCommitTab::default(),
             patch_target: None,
             commit_message,

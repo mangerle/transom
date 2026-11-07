@@ -24,7 +24,7 @@ pub use log::{
 };
 pub use ops::{
     GitAction, GitCheckout, GitPushOptions, GitRebaseAction, GitRebaseStep, GitResetKind,
-    PushTagsMode, StashEntry, StashFile, WorktreeEntry,
+    PushTagsMode, ShelfEntry, StashEntry, StashFile, WorktreeEntry,
 };
 pub use project::{GitFolder, GitProject, GitRegistry};
 pub use status::{ChangeCode, HeadState, RepoStatus, StatusEntry, StatusRecord};

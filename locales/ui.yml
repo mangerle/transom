@@ -7562,8 +7562,8 @@ git:
       en: Shelve
       zh-CN: 搁置
     hint:
-      en: Shelves are git stashes; Apply keeps the entry, Pop removes it.
-      zh-CN: 搁置即 git stash；「应用」保留栈项，「弹出」会移除栈项。
+      en: Shelves are offline IDE patch sets independent of git stashes.
+      zh-CN: 搁置是独立于 Git Stash 的 IDE 离线补丁集。
     empty:
       en: No shelves yet
       zh-CN: 还没有搁置项
@@ -7588,6 +7588,37 @@ git:
     auto_message:
       en: Shelved working changes
       zh-CN: 搁置当前改动
+  stash:
+    title:
+      en: Stash
+      zh-CN: 贮藏
+    hint:
+      en: Git stash stack; Apply keeps the entry, Pop removes it.
+      zh-CN: 原生 Git Stash 栈；「应用」保留栈项，「弹出」会移除栈项。
+    empty:
+      en: No stashes yet
+      zh-CN: 暂无贮藏项
+    files_loading:
+      en: Reading stash content...
+      zh-CN: 正在读取贮藏内容...
+    no_files:
+      en: This stash contains no files
+      zh-CN: 该贮藏项不含文件
+    apply:
+      en: Apply Stash
+      zh-CN: 应用贮藏
+    pop:
+      en: Pop Stash
+      zh-CN: 弹出贮藏
+    drop:
+      en: Drop Stash
+      zh-CN: 丢弃贮藏
+    create:
+      en: Stash Changes
+      zh-CN: 贮藏更改
+    auto_message:
+      en: Stashed working changes
+      zh-CN: 贮藏当前改动
   reset:
     soft:
       en: "Reset: Soft (keep index and working tree)"

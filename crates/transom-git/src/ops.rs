@@ -187,3 +187,49 @@ pub(crate) async fn rename_branch(root: &Path, old: &str, new: &str) -> Result<(
     run(root, &["branch", "-m", old, new], RunOptions::write()).await?;
     Ok(())
 }
+
+/// 导出指定路径的工作区补丁（Unified Diff 格式）。
+///
+/// 当 paths 为空时导出整个工作区的变动；优先比对 HEAD。
+pub(crate) async fn export_patch(root: &Path, paths: &[String]) -> Result<String, GitError> {
+    let has_head = repo::resolve(root, "HEAD").await?.is_some();
+    let mut args: Vec<&str> = if has_head {
+        vec!["diff", "HEAD", "--binary", "--"]
+    } else {
+        vec!["diff", "--cached", "--binary", "--"]
+    };
+    push_paths(&mut args, paths);
+    let output = run(root, &args, RunOptions::default()).await?;
+    let mut patch = String::from_utf8_lossy(&output.stdout).to_string();
+    if patch.trim().is_empty() {
+        let mut fallback_args: Vec<&str> = vec!["diff", "--binary", "--"];
+        push_paths(&mut fallback_args, paths);
+        let fb_output = run(root, &fallback_args, RunOptions::default()).await?;
+        patch = String::from_utf8_lossy(&fb_output.stdout).to_string();
+    }
+    Ok(patch)
+}
+
+/// 应用补丁文本到工作区。
+pub(crate) async fn apply_patch(root: &Path, patch: &str) -> Result<(), GitError> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let temp_path = std::env::temp_dir().join(format!("transom_shelf_{stamp}.patch"));
+    tokio::fs::write(&temp_path, patch.as_bytes())
+        .await
+        .map_err(|source| GitError::Spawn {
+            command: "write shelf patch".to_string(),
+            source,
+        })?;
+    let path_str = temp_path.to_string_lossy().to_string();
+    let result = run(
+        root,
+        &["apply", "--whitespace=nowarn", &path_str],
+        RunOptions::write(),
+    )
+    .await;
+    let _ = tokio::fs::remove_file(&temp_path).await;
+    result.map(|_| ())
+}

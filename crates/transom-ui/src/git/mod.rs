@@ -25,6 +25,7 @@ pub(crate) mod push_modal;
 mod rebase_modal;
 mod shelf;
 mod sidebar;
+mod stash;
 pub(crate) mod types;
 mod workspace;
 pub(crate) mod worktree_modal;

@@ -3,6 +3,7 @@
 mod file_io;
 mod git_projects;
 mod history;
+pub mod shelf;
 
 pub mod backup;
 pub mod known_hosts;
@@ -21,3 +22,4 @@ pub use known_hosts::JsonKnownHostsStore;
 pub use secrets::KeyringSecretStore;
 pub use sessions::JsonSessionStore;
 pub use settings::JsonSettingsStore;
+pub use shelf::{load_project_shelves, save_project_shelves};

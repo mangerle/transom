@@ -272,3 +272,20 @@ pub struct GitPushOptions {
     /// 是否跳过预推送 Git 钩子（--no-verify）
     pub no_verify: bool,
 }
+
+/// 离线搁置项（Shelf Item）：独立于 Git stash 栈的本地补丁集合。
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ShelfEntry {
+    /// 搁置项唯一标识。
+    pub id: String,
+    /// 搁置项标题/说明。
+    pub name: String,
+    /// 搁置时所在的分支名称。
+    pub branch: String,
+    /// 创建时间字符串。
+    pub created_at: String,
+    /// 补丁包含的文件路径清单。
+    pub files: Vec<String>,
+    /// 补丁文本（unified diff 格式）。
+    pub patch: String,
+}

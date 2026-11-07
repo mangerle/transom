@@ -40,6 +40,11 @@ pub fn git_projects_path() -> PathBuf {
     config_dir().join("git_projects.json")
 }
 
+/// 离线 Git 搁置集（Shelf）存放目录。
+pub fn shelf_dir() -> PathBuf {
+    config_dir().join("shelf")
+}
+
 /// 运行期私有目录（XDG runtime），存放只在进程存活期间有意义的文件。
 ///
 /// 为什么与配置目录分开：套接字这类 IPC 端点不该被备份/同步波及，且

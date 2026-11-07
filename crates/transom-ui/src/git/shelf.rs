@@ -1,16 +1,15 @@
-//! 搁置（Shelve）面板。
+//! 离线搁置项（Shelf）面板：IDE 独立离线补丁集管理。
 //!
 //! 设计原理（Why）：
-//! - 形态对齐 IDEA 的「搁置」页签：一列搁置项，每项可应用 / 弹出 / 删除，
-//!   顶部一个「新建搁置」入口。这里做成模态框而不是第四个常驻页签，是因为
-//!   工具窗口已经三栏占满，搁置是低频但需要完整列表的操作；
-//! - 「应用」与「弹出」分列两个按钮：前者保留栈项、可反复应用到多个分支，
-//!   后者会把栈项吃掉——这个区别必须让界面说清楚，不能合成一个按钮；
-//! - 删除是破坏性且不可恢复的（`git stash drop` 之后只能靠 reflog 找回），
-//!   因此删除走独立确认，不与列表点击混在一起。
+//! - 形态对齐 IDEA 的「搁置（Shelf）」：与 Git Stash 严格区分，搁置是保存在本地磁盘
+//!   的离线补丁集，不依赖 Git 仓库内部的 stash 栈；
+//! - 支持一键将勾选变更生成补丁并从工作区抽离，也可随时将补丁应用（Apply）、
+//!   弹回（Pop，即应用后删除）或彻底删除（Drop）；
+//! - 即使切换了分支或在不同工作树中，离线补丁永不丢失。
 
-use super::commit_modal::{accent_color, split_path};
+use super::commit_modal::split_path;
 use crate::app::AppShell;
+use crate::git::types::GitDiffRequest;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
@@ -22,7 +21,8 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{GitAction, GitProject, TabId};
+use transom_core::{GitSide, HeadState, ShelfEntry, TabId};
+use transom_store::{load_project_shelves, save_project_shelves};
 
 impl AppShell {
     /// 搁置内联面板：提交页左栏的「搁置」页签内容。
@@ -36,10 +36,8 @@ impl AppShell {
             return div().into_any_element();
         };
         let project = state.project.clone();
-        let entries = state.stashes.clone();
-        let expanded = state.expanded_stash.clone();
-        let files = state.stash_files.clone();
-        let loading = state.stash_files_loading;
+        let entries = state.shelves.clone();
+        let expanded = state.expanded_shelf.clone();
 
         let refresh_project = project.clone();
         let toolbar = h_flex()
@@ -58,7 +56,7 @@ impl AppShell {
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_refresh(&refresh_project, cx);
-                        this.git_reload_stashes(cx);
+                        this.git_reload_shelves(tab_id, cx);
                     })),
             )
             .child(
@@ -98,22 +96,9 @@ impl AppShell {
                     .child(rust_i18n::t!("git.shelf.empty").to_string()),
             );
         }
-        for entry in entries {
-            let shown = if expanded.as_deref() == Some(entry.selector.as_str()) {
-                files.as_slice()
-            } else {
-                &[]
-            };
-            let view = ShelfRowView {
-                project: &project,
-                selector: &entry.selector,
-                display: entry.display(),
-                expanded: expanded.as_deref() == Some(entry.selector.as_str()),
-                loading,
-                files: shown,
-                tab_id,
-            };
-            list = list.child(self.shelf_row(&view, p, cx));
+        for entry in &entries {
+            let is_expanded = expanded.as_deref() == Some(entry.id.as_str());
+            list = list.child(self.render_shelf_entry_row(tab_id, entry, is_expanded, p, cx));
         }
 
         v_flex()
@@ -125,26 +110,30 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 一条搁置项：标题行 + 展开后的文件清单。
-    ///
-    /// 设计原理（Why）：折叠交互挂在标题上而不是整行——这一行右侧已有「应用」
-    /// 「弹出」两个按钮，整行吞点击会让按按钮同时把清单展开，观感上像出了 bug。
-    fn shelf_row(
+    /// 单个搁置项：标题行与展开的文件列表。
+    fn render_shelf_entry_row(
         &mut self,
-        view: &ShelfRowView<'_>,
+        tab_id: TabId,
+        entry: &ShelfEntry,
+        expanded: bool,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let selector = view.selector.to_string();
+        let entry_id = entry.id.clone();
+        let toggle_id = entry.id.clone();
+        let apply_id = entry.id.clone();
+        let pop_id = entry.id.clone();
+        let menu_id = entry.id.clone();
+
         let toggle_area = h_flex()
-            .id(ElementId::Name(format!("git-shelf-head-{selector}").into()))
+            .id(ElementId::Name(format!("git-shelf-head-{entry_id}").into()))
             .flex_1()
             .min_w_0()
             .gap_2()
             .items_center()
             .cursor_pointer()
             .child(
-                Icon::new(if view.expanded {
+                Icon::new(if expanded {
                     IconName::ChevronDown
                 } else {
                     IconName::ChevronRight
@@ -163,23 +152,20 @@ impl AppShell {
                             .truncate()
                             .text_sm()
                             .text_color(p.foreground)
-                            .child(view.display.to_string()),
+                            .child(entry.name.clone()),
                     )
                     .child(
                         div()
                             .truncate()
                             .text_xs()
                             .text_color(p.muted_foreground)
-                            .child(selector.clone()),
+                            .child(format!("{} · {}", entry.branch, entry.created_at)),
                     ),
             )
-            .on_click(cx.listener({
-                let project = view.project.clone();
-                let target = selector.clone();
-                move |this, _, _window, cx| {
-                    this.git_toggle_stash_files(&project, &target, cx);
-                }
+            .on_click(cx.listener(move |this, _, _window, cx| {
+                this.git_toggle_shelf_expanded(tab_id, &toggle_id, cx);
             }));
+
         let title = h_flex()
             .px_2()
             .py_1p5()
@@ -188,45 +174,30 @@ impl AppShell {
             .child(toggle_area)
             .child(
                 Button::new(ElementId::Name(
-                    format!("git-shelf-apply-{selector}").into(),
+                    format!("git-shelf-apply-{entry_id}").into(),
                 ))
                 .ghost()
                 .xsmall()
                 .icon(IconName::Play)
                 .tooltip(rust_i18n::t!("git.shelf.apply").to_string())
-                .on_click(cx.listener({
-                    let project = view.project.clone();
-                    let target = selector.clone();
-                    move |this, _, _window, cx| {
-                        this.git_stash_action(&project, GitAction::StashApply, target.clone(), cx);
-                    }
+                .on_click(cx.listener(move |this, _, _window, cx| {
+                    this.git_apply_shelf(tab_id, &apply_id, false, cx);
                 })),
             )
             .child(
-                Button::new(ElementId::Name(format!("git-shelf-pop-{selector}").into()))
+                Button::new(ElementId::Name(format!("git-shelf-pop-{entry_id}").into()))
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowDownToLine)
                     .tooltip(rust_i18n::t!("git.shelf.pop").to_string())
-                    .on_click(cx.listener({
-                        let project = view.project.clone();
-                        let target = selector.clone();
-                        move |this, _, _window, cx| {
-                            this.git_stash_action(
-                                &project,
-                                GitAction::StashPop,
-                                target.clone(),
-                                cx,
-                            );
-                        }
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        this.git_apply_shelf(tab_id, &pop_id, true, cx);
                     })),
             )
             .context_menu({
                 let app: Entity<AppShell> = cx.entity().clone();
-                let project = view.project.clone();
-                let target = selector.clone();
                 move |menu, _window, _cx| {
-                    render_shelf_menu(menu, app.clone(), &project, target.clone())
+                    render_shelf_popup_menu(menu, app.clone(), tab_id, menu_id.clone())
                 }
             });
 
@@ -235,15 +206,10 @@ impl AppShell {
             .border_color(p.divider(p.border))
             .border_b_1()
             .child(title);
-        if !view.expanded {
+        if !expanded {
             return rows.into_any_element();
         }
-        if view.files.is_empty() {
-            let text = if view.loading {
-                rust_i18n::t!("git.shelf.files_loading").to_string()
-            } else {
-                rust_i18n::t!("git.shelf.no_files").to_string()
-            };
+        if entry.files.is_empty() {
             return rows
                 .child(
                     div()
@@ -251,37 +217,37 @@ impl AppShell {
                         .py_1()
                         .text_xs()
                         .text_color(p.muted_foreground)
-                        .child(text),
+                        .child(rust_i18n::t!("git.shelf.no_files").to_string()),
                 )
                 .into_any_element();
         }
-        for file in view.files {
-            rows = rows.child(self.shelf_file_row(view, file, p, cx));
+        for file in &entry.files {
+            rows = rows.child(self.render_shelf_file_row(tab_id, entry, file, p, cx));
         }
         rows.into_any_element()
     }
 
-    /// 搁置清单里的一行文件：点击即看「搁置前 vs 搁置后」的差异。
-    fn shelf_file_row(
+    /// 搁置清单内单行文件项。
+    fn render_shelf_file_row(
         &mut self,
-        view: &ShelfRowView<'_>,
-        file: &transom_core::StashFile,
+        tab_id: TabId,
+        entry: &ShelfEntry,
+        file_path: &str,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let visual = crate::git::change_visual(file.change);
-        let (name, dir_prefix) = split_path(&file.path);
-        let selector = view.selector.to_string();
-        let tab_id = view.tab_id;
-        let open_file = file.clone();
+        let (name, dir_prefix) = split_path(file_path);
+        let path_str = file_path.to_string();
         let selected = self
             .git_state_of_tab(tab_id)
             .and_then(|state| state.diff.as_ref())
-            .is_some_and(|diff| diff.path == file.path);
-        let tooltip_path = file.path.clone();
+            .is_some_and(|diff| diff.path == path_str);
+        let tooltip_path = path_str.clone();
+        let file_for_diff = path_str.clone();
+        let entry_for_diff = entry.clone();
         h_flex()
             .id(ElementId::Name(
-                format!("git-shelf-file-{selector}-{}", file.path).into(),
+                format!("git-shelf-file-{}-{path_str}", entry.id).into(),
             ))
             .h(px(22.0))
             .pl_6()
@@ -294,9 +260,9 @@ impl AppShell {
             .when(selected, |el| el.bg(p.list_active))
             .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx))
             .child(
-                Icon::new(visual.icon)
+                Icon::new(IconName::FileText)
                     .xsmall()
-                    .text_color(accent_color(visual.accent, p)),
+                    .text_color(p.muted_foreground),
             )
             .child(
                 div()
@@ -317,119 +283,202 @@ impl AppShell {
                     .text_color(p.muted_foreground)
                     .child(dir_prefix),
             )
-            .child(
-                file.old_path
-                    .as_ref()
-                    .map(|old| {
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(old.clone())
-                            .into_any_element()
-                    })
-                    .unwrap_or_else(|| div().into_any_element()),
-            )
             .on_click(cx.listener(move |this, _, _window, cx| {
-                this.git_open_stash_diff(tab_id, &selector, &open_file, cx);
+                this.git_open_shelf_file_diff(tab_id, &entry_for_diff, &file_for_diff, cx);
             }))
             .into_any_element()
     }
 
-    /// 把勾选中的改动收进一个新搁置项（IDEA 的「搁置更改」）。
-    ///
-    /// 一个文件都没勾时按「全部改动」处理：搁置的常见意图就是"把手上的活先放
-    /// 下"，此时要求用户先勾满反而更啰嗦；未跟踪文件不裹进去，避免误收构建产物。
-    pub(crate) fn git_shelve_checked(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
-            return;
-        };
-        let message = if state.checked.is_empty() {
-            rust_i18n::t!("git.shelf.auto_message").to_string()
-        } else {
-            format!(
-                "{} ({})",
-                rust_i18n::t!("git.shelf.title"),
-                state.checked.len()
-            )
-        };
-        let project = state.project.clone();
-        self.git_stash_save(&project, message, false, cx);
+    /// 展开或折叠一个搁置项。
+    pub(crate) fn git_toggle_shelf_expanded(
+        &mut self,
+        tab_id: TabId,
+        entry_id: &str,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-            state.checked.clear();
+            state.expanded_shelf = if state.expanded_shelf.as_deref() == Some(entry_id) {
+                None
+            } else {
+                Some(entry_id.to_string())
+            };
         }
         cx.notify();
     }
 
-    /// 重新拉取搁置列表。
-    fn git_reload_stashes(&mut self, cx: &mut Context<Self>) {
-        let Some(tab_id) = self.active_git_tab() else {
-            return;
-        };
+    /// 重新从本地存储中加载搁置项列表。
+    pub(crate) fn git_reload_shelves(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(state) = self.git_state_of_tab_mut(tab_id) else {
             return;
         };
-        let project = state.project.clone();
-        let request_id = transom_core::GitRequestId::new();
-        state.pending.push(request_id);
-        self.send_command(transom_core::GitCommand::ListStashes {
-            project,
-            request_id,
-        });
+        let project_id = state.project.id.to_string();
+        if let Ok(shelves) = load_project_shelves(&project_id) {
+            state.shelves = shelves;
+        }
         cx.notify();
+    }
+
+    /// 把工作区勾选的改动创建为独立离线搁置项（Shelf）。
+    pub(crate) fn git_shelve_checked(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(state) = self.git_state_of_tab(tab_id) else {
+            return;
+        };
+        let project = state.project.clone();
+        let checked_files: Vec<String> = if state.checked.is_empty() {
+            state
+                .status
+                .as_ref()
+                .map(|s| s.entries.iter().map(|e| e.path.clone()).collect())
+                .unwrap_or_default()
+        } else {
+            state.checked.iter().cloned().collect()
+        };
+        if checked_files.is_empty() {
+            return;
+        }
+
+        let branch = match state.status.as_ref().map(|s| &s.head) {
+            Some(HeadState::OnBranch(b)) => b.clone(),
+            Some(HeadState::Initial { branch }) => branch.clone(),
+            _ => "HEAD".to_string(),
+        };
+        let project_id_str = project.id.to_string();
+        let files_count = checked_files.len();
+        let name = format!("{} ({files_count})", rust_i18n::t!("git.shelf.title"));
+
+        cx.spawn(async move |this, cx| {
+            let repo = transom_git::Repo::at(project.path.clone());
+            let Ok(patch) = repo.export_patch(&checked_files).await else {
+                return;
+            };
+            if patch.trim().is_empty() {
+                return;
+            }
+            // 撤销工作区已搁置的已跟踪修改
+            let _ = repo.discard(&checked_files).await;
+
+            let now = chrono::Local::now();
+            let created_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
+            let entry = ShelfEntry {
+                id: format!("shelf_{}", now.timestamp_millis()),
+                name,
+                branch,
+                created_at,
+                files: checked_files,
+                patch,
+            };
+
+            let _ = this.update(cx, |this, cx| {
+                if let Some(state) = this.git_state_of_tab_mut(tab_id) {
+                    state.shelves.insert(0, entry.clone());
+                    state.checked.clear();
+                    state.commit_tab = crate::git::GitCommitTab::Shelf;
+                    let _ = save_project_shelves(&project_id_str, &state.shelves);
+                }
+                this.git_refresh(&project, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// 应用或弹回搁置项。
+    pub(crate) fn git_apply_shelf(
+        &mut self,
+        tab_id: TabId,
+        entry_id: &str,
+        pop: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.git_state_of_tab(tab_id) else {
+            return;
+        };
+        let project = state.project.clone();
+        let Some(entry) = state.shelves.iter().find(|s| s.id == entry_id).cloned() else {
+            return;
+        };
+        let project_id_str = project.id.to_string();
+        let target_id = entry_id.to_string();
+
+        cx.spawn(async move |this, cx| {
+            let repo = transom_git::Repo::at(project.path.clone());
+            if let Ok(()) = repo.apply_patch(&entry.patch).await {
+                let _ = this.update(cx, |this, cx| {
+                    if pop {
+                        if let Some(state) = this.git_state_of_tab_mut(tab_id) {
+                            state.shelves.retain(|s| s.id != target_id);
+                            let _ = save_project_shelves(&project_id_str, &state.shelves);
+                        }
+                    }
+                    this.git_refresh(&project, cx);
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// 删除指定搁置项。
+    pub(crate) fn git_drop_shelf(&mut self, tab_id: TabId, entry_id: &str, cx: &mut Context<Self>) {
+        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+            return;
+        };
+        let project_id_str = state.project.id.to_string();
+        state.shelves.retain(|s| s.id != entry_id);
+        let _ = save_project_shelves(&project_id_str, &state.shelves);
+        cx.notify();
+    }
+
+    /// 打开搁置项中某文件的差异。
+    fn git_open_shelf_file_diff(
+        &mut self,
+        tab_id: TabId,
+        entry: &ShelfEntry,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.git_open_diff(
+            tab_id,
+            GitDiffRequest {
+                path: path.to_string(),
+                old: GitSide::Commit("HEAD".to_string()),
+                new: GitSide::Worktree,
+                left_label: format!("{} ({})", rust_i18n::t!("git.diff.baseline"), entry.branch),
+                right_label: rust_i18n::t!("git.shelf.title").to_string(),
+            },
+            cx,
+        );
     }
 }
 
-/// 搁置行的展示参数包：项目、选择器、标题、展开态、在途标记与清单一次传齐，
-/// 平铺入参会超过规范上限，收成一个视图结构。
-struct ShelfRowView<'a> {
-    project: &'a GitProject,
-    selector: &'a str,
-    display: &'a str,
-    expanded: bool,
-    loading: bool,
-    files: &'a [transom_core::StashFile],
-    tab_id: TabId,
-}
-
 /// 搁置项右键菜单。
-fn render_shelf_menu(
+fn render_shelf_popup_menu(
     menu: PopupMenu,
     app: Entity<AppShell>,
-    project: &GitProject,
-    selector: String,
+    tab_id: TabId,
+    entry_id: String,
 ) -> PopupMenu {
-    let drop_app = app.clone();
-    let drop_project = project.clone();
-    let drop_selector = selector.clone();
+    let app_apply = app.clone();
+    let apply_id = entry_id.clone();
+    let app_pop = app.clone();
+    let pop_id = entry_id.clone();
+    let drop_id = entry_id;
     menu.item(menu_item(
         rust_i18n::t!("git.shelf.apply").to_string(),
         IconName::Play,
-        {
-            let item_app = app.clone();
-            let item_project = project.clone();
-            let item_selector = selector.clone();
-            move |_, _, cx| {
-                let project = item_project.clone();
-                let selector = item_selector.clone();
-                item_app.update(cx, |this, cx| {
-                    this.git_stash_action(&project, GitAction::StashApply, selector, cx);
-                });
-            }
+        move |_, _, cx| {
+            let id = apply_id.clone();
+            app_apply.update(cx, |this, cx| {
+                this.git_apply_shelf(tab_id, &id, false, cx);
+            });
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.shelf.pop").to_string(),
         IconName::ArrowDownToLine,
-        {
-            let item_app = app.clone();
-            let item_project = project.clone();
-            move |_, _, cx| {
-                let project = item_project.clone();
-                let selector = selector.clone();
-                item_app.update(cx, |this, cx| {
-                    this.git_stash_action(&project, GitAction::StashPop, selector, cx);
-                });
-            }
+        move |_, _, cx| {
+            let id = pop_id.clone();
+            app_pop.update(cx, |this, cx| {
+                this.git_apply_shelf(tab_id, &id, true, cx);
+            });
         },
     ))
     .item(PopupMenuItem::separator())
@@ -437,10 +486,9 @@ fn render_shelf_menu(
         rust_i18n::t!("git.shelf.drop").to_string(),
         IconName::Trash,
         move |_, _, cx| {
-            let project = drop_project.clone();
-            let selector = drop_selector.clone();
-            drop_app.update(cx, |this, cx| {
-                this.git_stash_action(&project, GitAction::StashDrop, selector, cx);
+            let id = drop_id.clone();
+            app.update(cx, |this, cx| {
+                this.git_drop_shelf(tab_id, &id, cx);
             });
         },
     ))

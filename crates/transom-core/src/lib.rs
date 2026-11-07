@@ -61,7 +61,7 @@ pub use model::forward::{
     TargetAddress,
 };
 pub use model::git::*;
-pub use model::git::{GitPushOptions, PushTagsMode};
+pub use model::git::{GitPushOptions, PushTagsMode, ShelfEntry};
 pub use model::history::{
     HISTORY_LIMIT, SUGGESTION_LIMIT, record as record_command, suggestions as command_suggestions,
 };
