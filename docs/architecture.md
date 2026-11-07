@@ -189,6 +189,7 @@ crates/transom-container/src/
   engine/       引擎实例：mod.rs 核心与分派宏、operations.rs 操作面、
                 discovery.rs 发现/显式探测
   discovery/    候选发现：parse/unix/cli/windows 分平台
+  registry/     仓库检索与鉴权：search/auth/tags/io
   transport.rs / http/（请求入口、连接池、响应体读取）
   build/（ignore/stream/http/cli）/ logs.rs / exec.rs
                 通道、归档与长任务
