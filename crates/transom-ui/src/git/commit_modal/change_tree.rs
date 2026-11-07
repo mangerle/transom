@@ -263,8 +263,9 @@ impl AppShell {
             }));
         // 右键菜单会换掉元素类型，只能在链尾按可操作性挂载。
         if group.actionable() {
+            let menu_project = view.project.clone();
             row.context_menu(move |menu, _window, _cx| {
-                render_group_menu(menu, app.clone(), group, &menu_paths)
+                render_group_menu(menu, app.clone(), &menu_project, group, &menu_paths)
             })
             .into_any_element()
         } else {
@@ -336,9 +337,10 @@ impl AppShell {
                 this.git_toggle_group(&toggle_project, &group_key, cx);
             }));
         if group.actionable() {
+            let menu_project = project.clone();
             header
                 .context_menu(move |menu, _window, _cx| {
-                    render_group_menu(menu, app.clone(), group, &menu_paths)
+                    render_group_menu(menu, app.clone(), &menu_project, group, &menu_paths)
                 })
                 .into_any_element()
         } else {

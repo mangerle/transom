@@ -9,7 +9,7 @@ use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
-use transom_core::GitAction;
+use transom_core::{GitAction, GitProject};
 
 /// 分组头右键菜单：整组暂存/取消暂存/删除与整组回滚。
 ///
@@ -18,6 +18,7 @@ use transom_core::GitAction;
 pub(crate) fn render_group_menu(
     menu: PopupMenu,
     app: Entity<AppShell>,
+    project: &GitProject,
     group: ChangeGroup,
     paths: &[String],
 ) -> PopupMenu {
@@ -26,21 +27,29 @@ pub(crate) fn render_group_menu(
     };
     let paths = paths.to_vec();
     let stage_app = app.clone();
+    let stage_project = project.clone();
     let discard_app = app.clone();
+    let discard_project = project.clone();
     let stage_paths = paths.clone();
     let discard_paths = paths.clone();
     menu.item(menu_item(
         rust_i18n::t!(action_label(action)).to_string(),
         IconName::CirclePlus,
         move |_, _, cx| {
-            run_group_action(&stage_app, action, &stage_paths, cx);
+            run_group_action(&stage_app, &stage_project, action, &stage_paths, cx);
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.menu.discard_all").to_string(),
         IconName::Undo2,
         move |_, _, cx| {
-            run_group_action(&discard_app, GitAction::Discard, &discard_paths, cx);
+            run_group_action(
+                &discard_app,
+                &discard_project,
+                GitAction::Discard,
+                &discard_paths,
+                cx,
+            );
         },
     ))
 }
@@ -54,13 +63,17 @@ fn action_label(action: GitAction) -> &'static str {
     }
 }
 
-/// 整组动作：按路径批量执行。
-fn run_group_action(app: &Entity<AppShell>, action: GitAction, paths: &[String], cx: &mut App) {
+/// 整组动作：按路径批量执行（直接操作确定的项目仓库，不再依赖外部标签页盲查）。
+fn run_group_action(
+    app: &Entity<AppShell>,
+    project: &GitProject,
+    action: GitAction,
+    paths: &[String],
+    cx: &mut App,
+) {
     let paths = paths.to_vec();
+    let project = project.clone();
     app.update(cx, |this, cx| {
-        let Some(project) = this.git_project_of_tab(None) else {
-            return;
-        };
         if matches!(action, GitAction::Discard) {
             this.git_run_paths(&project, GitAction::Discard, paths, cx);
             return;

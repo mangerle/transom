@@ -86,7 +86,7 @@ fn render_files_section(
         // 构建 IDEA 风格层级目录树并自动压缩单子目录
         let active_path = state.active_diff().map(|d| d.path.as_str());
         let tree = FileTreeNode::build_tree(&state.commit_files);
-        render_tree_nodes(&tree, 0, active_path, &app, tab_id, p)
+        render_tree_nodes(&tree, 0, active_path, &app, &state.project, tab_id, p)
     };
 
     let toolbar_app = app.clone();

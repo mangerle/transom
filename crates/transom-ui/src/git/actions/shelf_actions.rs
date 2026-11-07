@@ -89,57 +89,27 @@ impl AppShell {
         );
     }
 
-    /// 从某分支新建工作树（菜单直接触发时先弹对话框）。
-    pub(crate) fn git_new_worktree_from(
+    /// 锁定或解锁指定项目下的一个工作树。
+    pub(crate) fn git_set_project_worktree_locked(
         &mut self,
-        branch: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            return;
-        };
-        self.open_git_worktree_modal(project, branch, window, cx);
-    }
-
-    /// 锁定或解锁一个工作树（`locked` 是目标状态，不是当前状态）。
-    ///
-    /// 设计原理（Why）：锁定用的是一次点击的布尔翻转，不弹原因输入框——
-    /// git 的 `--reason` 只是给人看的注释，加一个对话框只会让常用动作变啰嗦。
-    pub(crate) fn git_set_worktree_locked(
-        &mut self,
+        project: &GitProject,
         path: String,
         locked: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            self.set_error(rust_i18n::t!("git.diff.none").to_string());
-            return;
-        };
         self.send_command(if locked {
             GitCommand::LockWorktree {
-                project,
+                project: project.clone(),
                 path,
                 reason: None,
             }
         } else {
-            GitCommand::UnlockWorktree { project, path }
+            GitCommand::UnlockWorktree {
+                project: project.clone(),
+                path,
+            }
         });
         cx.notify();
-    }
-
-    /// 删除当前项目下的一个工作树。
-    pub(crate) fn git_remove_current_worktree(
-        &mut self,
-        path: String,
-        force: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            self.set_error(rust_i18n::t!("git.diff.none").to_string());
-            return;
-        };
-        self.git_remove_worktree(&project, path, force, cx);
     }
 
     /// 删除工作树。

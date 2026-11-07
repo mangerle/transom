@@ -109,40 +109,49 @@ pub(crate) fn render_worktree_group(
                         });
                     }
                 })
-                .context_menu(move |menu, _window, _cx| {
-                    let lock_app = menu_app.clone();
-                    let lock_owned = lock_path.clone();
-                    let remove_app = menu_app.clone();
-                    let remove_owned = remove_path.clone();
-                    let toggle_key = if locked {
-                        "git.menu.unlock_worktree"
-                    } else {
-                        "git.menu.lock_worktree"
-                    };
-                    menu.item(menu_item(
-                        rust_i18n::t!(toggle_key).to_string(),
-                        IconName::Lock,
-                        move |_, _, cx| {
-                            let path = lock_owned.clone();
-                            lock_app.update(cx, |this, cx| {
-                                this.git_set_worktree_locked(path, !locked, cx);
-                            });
-                        },
-                    ))
-                    .item(PopupMenuItem::separator())
-                    .item(
-                        MenuItem::new(
-                            rust_i18n::t!("git.menu.remove_worktree").to_string(),
-                            IconName::Trash,
+                .context_menu({
+                    let menu_project = state.project.clone();
+                    move |menu, _window, _cx| {
+                        let lock_app = menu_app.clone();
+                        let lock_project = menu_project.clone();
+                        let lock_owned = lock_path.clone();
+                        let remove_app = menu_app.clone();
+                        let remove_project = menu_project.clone();
+                        let remove_owned = remove_path.clone();
+                        let toggle_key = if locked {
+                            "git.menu.unlock_worktree"
+                        } else {
+                            "git.menu.lock_worktree"
+                        };
+                        menu.item(menu_item(
+                            rust_i18n::t!(toggle_key).to_string(),
+                            IconName::Lock,
+                            move |_, _, cx| {
+                                let path = lock_owned.clone();
+                                let project = lock_project.clone();
+                                lock_app.update(cx, |this, cx| {
+                                    this.git_set_project_worktree_locked(
+                                        &project, path, !locked, cx,
+                                    );
+                                });
+                            },
+                        ))
+                        .item(PopupMenuItem::separator())
+                        .item(
+                            MenuItem::new(
+                                rust_i18n::t!("git.menu.remove_worktree").to_string(),
+                                IconName::Trash,
+                            )
+                            .disabled(is_main || locked)
+                            .render(move |_, _, cx| {
+                                let path = remove_owned.clone();
+                                let project = remove_project.clone();
+                                remove_app.update(cx, |this, cx| {
+                                    this.git_remove_worktree(&project, path, false, cx);
+                                });
+                            }),
                         )
-                        .disabled(is_main || locked)
-                        .render(move |_, _, cx| {
-                            let path = remove_owned.clone();
-                            remove_app.update(cx, |this, cx| {
-                                this.git_remove_current_worktree(path, false, cx);
-                            });
-                        }),
-                    )
+                    }
                 }),
         );
     }

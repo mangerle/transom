@@ -112,18 +112,30 @@ impl AppShell {
     }
 
     /// 检出分支或标签。
+    /// 检出指定项目的分支或标签。
+    pub(crate) fn git_checkout_project_ref(
+        &mut self,
+        project: &GitProject,
+        name: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.git_ref_action(project, GitRefAction::Checkout(name.to_string()), cx);
+    }
+
     pub(crate) fn git_checkout_ref(&mut self, name: &str, cx: &mut Context<Self>) {
         let Some(project) = self.git_project_of_tab(None) else {
             return;
         };
-        self.git_ref_action(&project, GitRefAction::Checkout(name.to_string()), cx);
+        self.git_checkout_project_ref(&project, name, cx);
     }
 
-    /// 删除分支或标签：名字带 `refs/tags/` 语义时按标签删。
-    pub(crate) fn git_delete_ref(&mut self, name: &str, cx: &mut Context<Self>) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            return;
-        };
+    /// 删除指定项目的分支或标签：名字带 `refs/tags/` 语义时按标签删。
+    pub(crate) fn git_delete_project_ref(
+        &mut self,
+        project: &GitProject,
+        name: &str,
+        cx: &mut Context<Self>,
+    ) {
         let is_tag = self
             .git_state_of(project.id)
             .is_some_and(|state| state.tags.iter().any(|tag| tag.name == name));
@@ -135,23 +147,20 @@ impl AppShell {
                 force: false,
             }
         };
-        self.git_ref_action(&project, action, cx);
+        self.git_ref_action(project, action, cx);
     }
 
-    /// 从某提交/引用新建分支（按提示名创建并切换）。
-    /// 从某提交新建分支：弹名称框，不再自动生成 `branch-<短号>` 这种没法读的名字。
-    pub(crate) fn git_create_branch_from(
+    /// 从指定项目的某提交/引用新建分支（弹出名称输入框）。
+    pub(crate) fn git_create_project_branch_from(
         &mut self,
+        project: &GitProject,
         start: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            return;
-        };
         let suggestion = format!("branch-{}", start.chars().take(7).collect::<String>());
         self.open_git_name_modal(
-            &project,
+            project,
             GitNamePurpose::CreateBranch {
                 start: Some(start.to_string()),
             },
@@ -161,19 +170,30 @@ impl AppShell {
         );
     }
 
-    /// 在某提交上打标签：同样弹名称框。
-    pub(crate) fn git_create_tag_from(
+    /// 从某提交/引用新建分支（按提示名创建并切换）。
+    pub(crate) fn git_create_branch_from(
         &mut self,
-        oid: &str,
+        start: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(project) = self.git_project_of_tab(None) else {
             return;
         };
+        self.git_create_project_branch_from(&project, start, window, cx);
+    }
+
+    /// 在指定项目的某提交上打标签：弹名称框。
+    pub(crate) fn git_create_project_tag_from(
+        &mut self,
+        project: &GitProject,
+        oid: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let suggestion = format!("tag-{}", oid.chars().take(7).collect::<String>());
         self.open_git_name_modal(
-            &project,
+            project,
             GitNamePurpose::CreateTag {
                 target: oid.to_string(),
             },
@@ -220,6 +240,16 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 在指定 Git 项目上执行历史改写整合动作。
+    pub(crate) fn git_history_on_project(
+        &mut self,
+        project: &GitProject,
+        action: GitHistoryAction,
+        cx: &mut Context<Self>,
+    ) {
+        self.git_history_action(project, action, cx);
+    }
+
     /// 在当前 Git 项目上执行历史动作：菜单回调只带得住提交号，项目由这里定位。
     pub(crate) fn git_history_on_current(
         &mut self,
@@ -230,7 +260,7 @@ impl AppShell {
             self.set_error(rust_i18n::t!("git.diff.none").to_string());
             return;
         };
-        self.git_history_action(&project, action, cx);
+        self.git_history_on_project(&project, action, cx);
     }
 
     /// 把分支头提交压进它的父提交：`squash` 保留两条说明，否则只留父提交说明。
@@ -251,20 +281,24 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 拉取当前分支上游。
-    pub(crate) fn git_pull_current(&mut self, cx: &mut Context<Self>) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            return;
-        };
-        self.git_remote_action(&project, GitRemoteAction::Pull { rebase: false }, cx);
+    /// 拉取指定项目分支上游。
+    pub(crate) fn git_pull_project(
+        &mut self,
+        project: &GitProject,
+        rebase: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.git_remote_action(project, GitRemoteAction::Pull { rebase }, cx);
     }
 
-    /// 推送当前分支（弹出对齐 openidea / IDEA 的推送模态弹窗）。
-    pub(crate) fn git_push_current(&mut self, cx: &mut Context<Self>) {
-        let Some(project) = self.git_project_of_tab(None) else {
-            return;
-        };
-        self.open_git_push_modal(&project, None, cx);
+    /// 推送指定项目分支（弹出对齐 openidea / IDEA 的推送模态弹窗）。
+    pub(crate) fn git_push_project(
+        &mut self,
+        project: &GitProject,
+        target: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_git_push_modal(project, target, cx);
     }
 
     /// 「推送此前所有提交」：把选中之前的历史推到该分支的上游远端。

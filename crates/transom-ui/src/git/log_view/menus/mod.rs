@@ -8,9 +8,13 @@
 mod commit_menu;
 mod file_menu;
 mod filter_menus;
-mod ref_menus;
+mod local_branch_menu;
+mod remote_branch_menu;
+mod tag_menu;
 
 pub(crate) use commit_menu::{CommitMenuTarget, render_commit_menu};
 pub(crate) use file_menu::render_file_tree_menu;
 pub(crate) use filter_menus::{render_date_menu, render_path_menu};
-pub(crate) use ref_menus::{render_local_branch_menu, render_remote_branch_menu, render_tag_menu};
+pub(crate) use local_branch_menu::{LocalBranchMenuTarget, render_local_branch_menu};
+pub(crate) use remote_branch_menu::{RemoteBranchMenuTarget, render_remote_branch_menu};
+pub(crate) use tag_menu::{TagMenuTarget, render_tag_menu};

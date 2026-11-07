@@ -16,7 +16,7 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::BTreeMap;
-use transom_core::{ChangeCode, CommitFile, TabId};
+use transom_core::{ChangeCode, CommitFile, GitProject, TabId};
 
 use super::menus::render_file_tree_menu;
 
@@ -129,6 +129,7 @@ pub(crate) fn render_tree_nodes(
     depth: usize,
     active_path: Option<&str>,
     app: &Entity<AppShell>,
+    project: &GitProject,
     tab_id: TabId,
     p: &Palette,
 ) -> Vec<AnyElement> {
@@ -172,7 +173,7 @@ pub(crate) fn render_tree_nodes(
                 elements.push(dir_row.into_any_element());
                 // 默认展开子节点
                 let child_elements =
-                    render_tree_nodes(children, depth + 1, active_path, app, tab_id, p);
+                    render_tree_nodes(children, depth + 1, active_path, app, project, tab_id, p);
                 elements.extend(child_elements);
             }
             FileTreeNode::File {
@@ -188,6 +189,7 @@ pub(crate) fn render_tree_nodes(
                 let click_app = app.clone();
                 let dbl_click_app = app.clone();
                 let menu_app = app.clone();
+                let menu_project = project.clone();
                 let path_clone = full_path.clone();
                 let dbl_path = full_path.clone();
                 let menu_path = full_path.clone();
@@ -246,7 +248,13 @@ pub(crate) fn render_tree_nodes(
                         }
                     })
                     .context_menu(move |menu, _window, _cx| {
-                        render_file_tree_menu(menu, menu_app.clone(), tab_id, menu_path.clone())
+                        render_file_tree_menu(
+                            menu,
+                            menu_app.clone(),
+                            menu_project.clone(),
+                            tab_id,
+                            menu_path.clone(),
+                        )
                     });
 
                 elements.push(file_row.into_any_element());

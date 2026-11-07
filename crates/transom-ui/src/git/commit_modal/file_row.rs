@@ -198,8 +198,9 @@ impl AppShell {
             }));
         }
         if group.actionable() {
+            let menu_project = project.clone();
             row.context_menu(move |menu, _window, _cx| {
-                render_file_menu(menu, app.clone(), group, menu_path.clone())
+                render_file_menu(menu, app.clone(), &menu_project, group, menu_path.clone())
             })
             .into_any_element()
         } else {
@@ -212,32 +213,48 @@ impl AppShell {
 fn render_file_menu(
     menu: PopupMenu,
     app: Entity<AppShell>,
+    project: &GitProject,
     group: ChangeGroup,
     path: String,
 ) -> PopupMenu {
     let mut menu = menu;
     if group != ChangeGroup::Staged {
         let app_stage = app.clone();
+        let stage_project = project.clone();
         let stage_path = path.clone();
         menu = menu.item(menu_item(
             rust_i18n::t!("git.menu.stage").to_string(),
             IconName::CirclePlus,
             move |_, _, cx| {
-                run_paths(&app_stage, GitAction::Stage, &stage_path, cx);
+                run_paths(
+                    &app_stage,
+                    &stage_project,
+                    GitAction::Stage,
+                    &stage_path,
+                    cx,
+                );
             },
         ));
     } else {
         let app_unstage = app.clone();
+        let unstage_project = project.clone();
         let unstage_path = path.clone();
         menu = menu.item(menu_item(
             rust_i18n::t!("git.menu.unstage").to_string(),
             IconName::CircleMinus,
             move |_, _, cx| {
-                run_paths(&app_unstage, GitAction::Unstage, &unstage_path, cx);
+                run_paths(
+                    &app_unstage,
+                    &unstage_project,
+                    GitAction::Unstage,
+                    &unstage_path,
+                    cx,
+                );
             },
         ));
     }
     let app_discard = app.clone();
+    let discard_project = project.clone();
     let discard_path = path.clone();
     let discard_label = if group == ChangeGroup::Untracked {
         rust_i18n::t!("git.menu.delete").to_string()
@@ -245,19 +262,20 @@ fn render_file_menu(
         rust_i18n::t!("git.menu.discard").to_string()
     };
     let diff_app = app.clone();
+    let diff_project = project.clone();
     let diff_path = path.clone();
     let copy_app = app.clone();
     let copy_path = path.clone();
     let refresh_app = app.clone();
+    let refresh_project = project.clone();
     let mut menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.show_diff").to_string(),
         IconName::GitCompare,
         move |_, _, cx| {
+            let project = diff_project.clone();
+            let path = diff_path.clone();
             diff_app.update(cx, |this, cx| {
-                let Some(project) = this.git_project_of_tab(None) else {
-                    return;
-                };
-                this.git_open_worktree_diff(&project, group, diff_path.clone(), cx);
+                this.git_open_worktree_diff(&project, group, path, cx);
             });
         },
     ));
@@ -270,7 +288,7 @@ fn render_file_menu(
             } else {
                 GitAction::Discard
             };
-            run_paths(&app_discard, action, &discard_path, cx);
+            run_paths(&app_discard, &discard_project, action, &discard_path, cx);
         },
     ));
     menu = menu.item(menu_item(
@@ -286,23 +304,25 @@ fn render_file_menu(
         rust_i18n::t!("git.menu.refresh").to_string(),
         IconName::RotateCw,
         move |_, _, cx| {
+            let project = refresh_project.clone();
             refresh_app.update(cx, |this, cx| {
-                let Some(project) = this.git_project_of_tab(None) else {
-                    return;
-                };
                 this.git_refresh(&project, cx);
             });
         },
     ))
 }
 
-/// 菜单动作统一走「按路径批量执行」。
-fn run_paths(app: &Entity<AppShell>, action: GitAction, path: &str, cx: &mut App) {
+/// 菜单动作统一走「按路径批量执行」（直接操作确定的项目仓库）。
+fn run_paths(
+    app: &Entity<AppShell>,
+    project: &GitProject,
+    action: GitAction,
+    path: &str,
+    cx: &mut App,
+) {
     let path = path.to_string();
+    let project = project.clone();
     app.update(cx, |this, cx| {
-        let Some(project) = this.git_project_of_tab(None) else {
-            return;
-        };
         this.git_run_paths(&project, action, vec![path], cx);
     });
 }

@@ -19,7 +19,7 @@ use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{GitProject, TabId};
 
 type State = crate::git::GitWorkspaceState;
 
@@ -61,6 +61,7 @@ pub(crate) fn render_log_table(
     });
     for (index, entry) in state.log.entries.iter().enumerate() {
         let shape = RowShape {
+            project: state.project.clone(),
             cell: GraphCell::at(&state.log.rows, index),
             lanes: lane_count,
             selected: selected == Some(index),
@@ -126,6 +127,7 @@ pub(crate) fn render_log_table(
 /// 一行的图形态：泳道数据 + 本页列数 + 是否选中 + 列开关 + 头指针态。
 #[derive(Clone)]
 struct RowShape {
+    project: GitProject,
     cell: GraphCell,
     lanes: usize,
     selected: bool,
@@ -152,6 +154,7 @@ fn render_commit_row(
     let (cell, lane_count, selected, columns) =
         (&shape.cell, shape.lanes, shape.selected, shape.columns);
     // 菜单闭包要活过本次渲染，需要的字段一律先取成局部值。
+    let project = shape.project.clone();
     let can_fold = shape.can_fold;
     let select_app = app.clone();
     let menu_app = app.clone();
@@ -220,6 +223,7 @@ fn render_commit_row(
                 menu,
                 menu_app.clone(),
                 CommitMenuTarget {
+                    project: project.clone(),
                     tab_id,
                     oid: oid.clone(),
                     parents: parents.clone(),

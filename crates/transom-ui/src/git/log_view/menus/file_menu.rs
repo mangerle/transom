@@ -12,12 +12,13 @@ use crate::widgets::{MenuItem, menu_item, menu_item_with_shortcut};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{GitProject, TabId};
 
 /// 变更文件树节点的右键上下文菜单。
 pub(crate) fn render_file_tree_menu(
     menu: PopupMenu,
     app: Entity<AppShell>,
+    project: GitProject,
     tab_id: TabId,
     full_path: String,
 ) -> PopupMenu {
@@ -33,6 +34,11 @@ pub(crate) fn render_file_tree_menu(
     let parent_app = app.clone();
     let patch_app = app.clone();
     let ai_app = app.clone();
+
+    let edit_project = project.clone();
+    let revert_project = project.clone();
+    let delete_project = project.clone();
+    let patch_project = project;
 
     let path_diff = full_path.clone();
     let path_new_tab = full_path.clone();
@@ -101,15 +107,15 @@ pub(crate) fn render_file_tree_menu(
             rust_i18n::t!("git.menu.edit_source").to_string(),
             IconName::FileCode,
             "F4",
-            move |_, _, cx| {
-                let path = path_edit.clone();
-                edit_app.update(cx, |this, cx| {
-                    let Some(project) = this.git_project_of_tab(Some(tab_id)) else {
-                        return;
-                    };
+            {
+                let project = edit_project;
+                move |_, _, cx| {
+                    let path = path_edit.clone();
                     let full_file_path = project.path.join(&path);
-                    this.write_clipboard(&full_file_path.to_string_lossy(), cx);
-                });
+                    edit_app.update(cx, |this, cx| {
+                        this.write_clipboard(&full_file_path.to_string_lossy(), cx);
+                    });
+                }
             },
         ))
         // 6. 打开仓库版本
@@ -132,14 +138,15 @@ pub(crate) fn render_file_tree_menu(
                 rust_i18n::t!("git.menu.revert_selected_changes").to_string(),
                 IconName::Undo2,
             )
-            .render(move |_, _, cx| {
-                let path = path_revert.clone();
-                revert_app.update(cx, |this, cx| {
-                    let Some(project) = this.git_project_of_tab(Some(tab_id)) else {
-                        return;
-                    };
-                    this.git_rollback_single_path(&project, &path, cx);
-                });
+            .render({
+                let project = revert_project;
+                move |_, _, cx| {
+                    let path = path_revert.clone();
+                    let project = project.clone();
+                    revert_app.update(cx, |this, cx| {
+                        this.git_rollback_single_path(&project, &path, cx);
+                    });
+                }
             }),
         )
         // 8. 优选所选更改
@@ -166,28 +173,30 @@ pub(crate) fn render_file_tree_menu(
                 rust_i18n::t!("git.menu.delete_selected_changes").to_string(),
                 IconName::Trash,
             )
-            .render(move |_, _, cx| {
-                let path = path_delete.clone();
-                delete_app.update(cx, |this, cx| {
-                    let Some(project) = this.git_project_of_tab(Some(tab_id)) else {
-                        return;
-                    };
-                    this.git_rollback_single_path(&project, &path, cx);
-                });
+            .render({
+                let project = delete_project;
+                move |_, _, cx| {
+                    let path = path_delete.clone();
+                    let project = project.clone();
+                    delete_app.update(cx, |this, cx| {
+                        this.git_rollback_single_path(&project, &path, cx);
+                    });
+                }
             }),
         )
         // 11. 创建补丁...
         .item(menu_item(
             rust_i18n::t!("git.menu.create_patch").to_string(),
             IconName::Download,
-            move |_, _, cx| {
-                let path = path_patch.clone();
-                patch_app.update(cx, |this, cx| {
-                    let Some(project) = this.git_project_of_tab(Some(tab_id)) else {
-                        return;
-                    };
-                    this.git_create_patch(&project, &path, cx);
-                });
+            {
+                let project = patch_project;
+                move |_, _, cx| {
+                    let path = path_patch.clone();
+                    let project = project.clone();
+                    patch_app.update(cx, |this, cx| {
+                        this.git_create_patch(&project, &path, cx);
+                    });
+                }
             },
         ))
         // 12. 从修订中获取

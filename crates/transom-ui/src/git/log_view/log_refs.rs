@@ -3,7 +3,10 @@
 //! 设计原理（Why）：引用栏按 IDEA 分组，默认只展开「本地分支」——分支多的仓库
 //! 全展开会把可视区吃光；工作树与引用同栏是因为在 IDEA 里它们就是同一棵树里的条目。
 
-use super::menus::{render_local_branch_menu, render_remote_branch_menu, render_tag_menu};
+use super::menus::{
+    LocalBranchMenuTarget, RemoteBranchMenuTarget, TagMenuTarget, render_local_branch_menu,
+    render_remote_branch_menu, render_tag_menu,
+};
 use super::worktrees_group::render_worktree_group;
 use crate::app::AppShell;
 use crate::palette::Palette;
@@ -313,6 +316,7 @@ fn render_refs_group(
             let dbl_name = click_name.clone();
             let can_checkout = cfg.is_local_branches;
 
+            let menu_project = state.project.clone();
             block = block.child(
                 h_flex()
                     .id(ElementId::Name(format!("git-ref-{display}").into()))
@@ -390,22 +394,34 @@ fn render_refs_group(
                         RefKind::Branch | RefKind::HeadAt => render_local_branch_menu(
                             menu,
                             menu_app.clone(),
-                            menu_name.clone(),
-                            cur_branch.clone(),
-                            None,
-                            is_head,
+                            LocalBranchMenuTarget {
+                                project: menu_project.clone(),
+                                tab_id,
+                                branch: menu_name.clone(),
+                                current_branch: cur_branch.clone(),
+                                upstream: None,
+                                is_current: is_head,
+                            },
                         ),
                         RefKind::RemoteBranch => render_remote_branch_menu(
                             menu,
                             menu_app.clone(),
-                            menu_name.clone(),
-                            cur_branch.clone(),
+                            RemoteBranchMenuTarget {
+                                project: menu_project.clone(),
+                                tab_id,
+                                remote_branch: menu_name.clone(),
+                                current_branch: cur_branch.clone(),
+                            },
                         ),
                         RefKind::Tag => render_tag_menu(
                             menu,
                             menu_app.clone(),
-                            menu_name.clone(),
-                            cur_branch.clone(),
+                            TagMenuTarget {
+                                project: menu_project.clone(),
+                                tab_id,
+                                tag: menu_name.clone(),
+                                current_branch: cur_branch.clone(),
+                            },
                         ),
                     }),
             );
