@@ -10,6 +10,7 @@
 
 mod menus;
 mod rows;
+mod tabs;
 
 use menus::{
     render_appearance_menu, render_highlight_menu, render_ignore_menu, render_mode_toggle,
@@ -21,9 +22,12 @@ use crate::app::AppShell;
 use crate::git::GitWorkspaceState as State;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
+use gpui_kit::base::Disableable;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Icon, Sizable};
+
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
@@ -69,10 +73,68 @@ pub(crate) fn render(
     tab_id: TabId,
     p: &Palette,
 ) -> AnyElement {
-    let Some(diff) = state.diff.as_ref() else {
+    let Some(diff) = state.active_diff() else {
         return placeholder(rust_i18n::t!("git.diff.none").to_string(), p);
     };
     let options = state.diff_options;
+    let tab_bar = tabs::render_diff_tab_bar(state, app.clone(), tab_id, p);
+
+    let total_tabs = state.diff_tabs.len();
+    let current_tab_idx = state.active_diff_tab.unwrap_or(0);
+    let prev_app = app.clone();
+    let next_app = app.clone();
+    let file_nav = (total_tabs > 1).then(|| {
+        h_flex()
+            .gap_0p5()
+            .items_center()
+            .child(
+                Button::new("git-diff-prev-file")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::ChevronLeft)
+                    .tooltip(rust_i18n::t!("git.diff.prev_file").to_string())
+                    .disabled(current_tab_idx == 0)
+                    .on_click(move |_, _, cx| {
+                        if current_tab_idx > 0 {
+                            prev_app.update(cx, |this, cx| {
+                                this.git_select_diff_tab(tab_id, current_tab_idx - 1, cx);
+                            });
+                        }
+                    }),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(format!("{}/{}", current_tab_idx + 1, total_tabs)),
+            )
+            .child(
+                Button::new("git-diff-next-file")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::ChevronRight)
+                    .tooltip(rust_i18n::t!("git.diff.next_file").to_string())
+                    .disabled(current_tab_idx + 1 >= total_tabs)
+                    .on_click(move |_, _, cx| {
+                        if current_tab_idx + 1 < total_tabs {
+                            next_app.update(cx, |this, cx| {
+                                this.git_select_diff_tab(tab_id, current_tab_idx + 1, cx);
+                            });
+                        }
+                    }),
+            )
+    });
+
+    let (rows, diff_summary) = match diff.content.as_ref() {
+        Some(content) if !content.binary => {
+            let r = build_rows(&content.old_text, &content.new_text, &options);
+            let count = r.iter().filter(|row| row.tone != Tone::Context).count();
+            let summary = rust_i18n::t!("git.diff.differences_count", count = count).to_string();
+            (Some(r), Some(summary))
+        }
+        _ => (None, None),
+    };
+
     let header = h_flex()
         .id("git-diff-header")
         .px_2()
@@ -88,12 +150,23 @@ pub(crate) fn render(
                 .xsmall()
                 .text_color(p.primary),
         )
+        .children(file_nav)
         .child(
             div()
                 .font_weight(FontWeight::BOLD)
                 .text_color(p.foreground)
                 .child(diff.path.clone()),
         )
+        .children(diff_summary.map(|s| {
+            div()
+                .px_1p5()
+                .py_0p5()
+                .rounded(px(2.0))
+                .bg(p.muted)
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(s)
+        }))
         .child(
             div()
                 .flex_1()
@@ -120,6 +193,12 @@ pub(crate) fn render(
         .child(render_appearance_menu(app.clone(), tab_id, options))
         .child(render_settings_menu());
 
+    let columns_header = if !diff.loading && diff.error.is_none() {
+        tabs::render_diff_columns_header(diff, options.side_by_side, p)
+    } else {
+        None
+    };
+
     let body = if diff.loading {
         placeholder(rust_i18n::t!("git.diff.loading").to_string(), p)
     } else if let Some(error) = diff.error.clone() {
@@ -131,7 +210,8 @@ pub(crate) fn render(
                 placeholder(rust_i18n::t!("git.diff.binary").to_string(), p)
             }
             Some(content) => {
-                let rows = build_rows(&content.old_text, &content.new_text, &options);
+                let row_list = rows
+                    .unwrap_or_else(|| build_rows(&content.old_text, &content.new_text, &options));
                 v_flex()
                     .flex_1()
                     .min_h_0()
@@ -142,15 +222,18 @@ pub(crate) fn render(
                             p,
                         ))
                     })
-                    .children(rows.into_iter().map(|row| render_row(row, &options, p)))
+                    .children(row_list.into_iter().map(|row| render_row(row, &options, p)))
                     .into_any_element()
             }
         }
     };
+
     v_flex()
         .flex_1()
         .min_h_0()
+        .children(tab_bar)
         .child(header)
+        .children(columns_header)
         .child(body)
         .into_any_element()
 }

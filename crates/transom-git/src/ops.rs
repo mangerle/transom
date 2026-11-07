@@ -71,6 +71,12 @@ pub(crate) async fn commit(root: &Path, message: &str, amend: bool) -> Result<()
     Ok(())
 }
 
+/// 针对指定的历史提交创建 fixup 提交。
+pub(crate) async fn commit_fixup(root: &Path, oid: &str) -> Result<(), GitError> {
+    run(root, &["commit", "--fixup", oid], RunOptions::write()).await?;
+    Ok(())
+}
+
 /// 切换分支；`None` 表示切回当前分支（不做任何事）。
 pub(crate) async fn checkout(root: &Path, branch: &str) -> Result<(), GitError> {
     run(root, &["switch", branch], RunOptions::write()).await?;

@@ -138,13 +138,9 @@ impl AppShell {
             } => {
                 if let Some(state) = self.git_state_mut(project_id) {
                     state.drop_request(request_id);
-                    if let Some(current) = state.diff.as_mut()
-                        && current.request_id == request_id
-                    {
-                        current.content = Some(*diff);
-                        current.loading = false;
-                    }
+                    state.apply_diff_loaded(request_id, *diff);
                 }
+
                 cx.notify();
             }
             GitAppEvent::ReadFailed {

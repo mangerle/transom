@@ -22,11 +22,26 @@ impl AppShell {
             self.set_error(rust_i18n::t!("git.commit.empty_message").to_string());
             return;
         }
+        let fixup_target = if amend {
+            self.git_state_of(project.id).and_then(|state| {
+                let target = state.amend_target.as_ref()?;
+                let head_oid = state.log.entries.first().map(|e| &e.oid);
+                if head_oid != Some(target) {
+                    Some(target.clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
         self.send_command(GitCommand::Commit {
             project: project.clone(),
             message,
             amend,
+            fixup_target,
         });
+
         if push_after {
             // 推送排在提交之后：控制器按入队顺序执行同一项目的写动作。
             self.send_command(GitCommand::Push {

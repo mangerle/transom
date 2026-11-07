@@ -24,6 +24,7 @@ use transom_core::{
     Session, TabId,
 };
 
+mod diff_actions;
 mod event_dispatch;
 mod log_actions;
 mod ref_actions;
@@ -102,7 +103,7 @@ impl AppShell {
         self.git_open_diff(tab_id, worktree_diff_request(group, path), cx);
     }
 
-    /// 勾选/取消「修正」：勾上时回填上一次提交信息并读取其文件清单。
+    /// 勾选/取消「修正」：勾上时回填目标提交信息并读取其文件清单。
     pub(crate) fn git_toggle_commit_amend(
         &mut self,
         tab_id: TabId,
@@ -115,24 +116,87 @@ impl AppShell {
             state.commit_amend = next;
             if !next {
                 state.amend_files_loading = false;
-            } else if let Some(entry) = state.log.entries.first().cloned() {
-                let mut message = entry.subject.clone();
-                let body = entry.body.trim();
-                if !body.is_empty() {
-                    message.push_str("\n\n");
-                    message.push_str(body);
+            } else {
+                let target_oid = state.amend_target.clone();
+                let entry = target_oid
+                    .as_ref()
+                    .and_then(|oid| state.log.entries.iter().find(|e| &e.oid == oid))
+                    .or_else(|| state.log.entries.first())
+                    .cloned();
+                if let Some(entry) = entry {
+                    let mut message = entry.subject.clone();
+                    let body = entry.body.trim();
+                    if !body.is_empty() {
+                        message.push_str("\n\n");
+                        message.push_str(body);
+                    }
+                    let request_id = GitRequestId::new();
+                    state.amend_request = Some(request_id);
+                    state.amend_files_loading = true;
+                    state.amend_files.clear();
+                    state.pending.push(request_id);
+                    pending = Some((
+                        state.project.clone(),
+                        request_id,
+                        message,
+                        entry.oid.clone(),
+                    ));
                 }
-                let request_id = GitRequestId::new();
-                state.amend_request = Some(request_id);
-                state.amend_files_loading = true;
-                state.amend_files.clear();
-                state.pending.push(request_id);
-                pending = Some((
-                    state.project.clone(),
-                    request_id,
-                    message,
-                    entry.oid.clone(),
-                ));
+            }
+        }
+        if let Some((project, request_id, message, oid)) = pending {
+            if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+                state
+                    .commit_message
+                    .update(cx, |input, cx| input.set_value(message, window, cx));
+            }
+            self.send_command(GitCommand::LoadCommitFiles {
+                project,
+                request_id,
+                oid,
+            });
+        }
+        cx.notify();
+    }
+
+    /// 选择修正目标提交：更新 amend_target，若当前已开启修正则回填消息并加载文件。
+    pub(crate) fn git_select_amend_target(
+        &mut self,
+        tab_id: TabId,
+        oid: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut pending = None;
+        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+            state.amend_target = Some(oid.clone());
+            if state.commit_amend {
+                let entry = state
+                    .log
+                    .entries
+                    .iter()
+                    .find(|e| e.oid == oid)
+                    .or_else(|| state.log.entries.first())
+                    .cloned();
+                if let Some(entry) = entry {
+                    let mut message = entry.subject.clone();
+                    let body = entry.body.trim();
+                    if !body.is_empty() {
+                        message.push_str("\n\n");
+                        message.push_str(body);
+                    }
+                    let request_id = GitRequestId::new();
+                    state.amend_request = Some(request_id);
+                    state.amend_files_loading = true;
+                    state.amend_files.clear();
+                    state.pending.push(request_id);
+                    pending = Some((
+                        state.project.clone(),
+                        request_id,
+                        message,
+                        entry.oid.clone(),
+                    ));
+                }
             }
         }
         if let Some((project, request_id, message, oid)) = pending {

@@ -56,6 +56,7 @@ impl Default for GitDiffOptions {
 }
 
 /// 差异面板状态。
+#[derive(Clone)]
 pub(crate) struct GitDiffState {
     pub path: String,
     /// 差异来源标签：如「工作区 vs 索引」。

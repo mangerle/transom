@@ -7,7 +7,8 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::{AppContext, Context, Entity, Window};
 use transom_core::{
-    BranchEntry, CommitEntry, CommitFile, GitProject, GitRequestId, RepoStatus, TagEntry,
+    BranchEntry, CommitEntry, CommitFile, DiffContent, GitProject, GitRequestId, RepoStatus,
+    TagEntry,
 };
 
 use super::diff::{GitDiffOptions, GitDiffState};
@@ -120,6 +121,12 @@ pub(crate) struct GitWorkspaceState {
     pub amend_files_loading: bool,
     /// 在途的修正文件请求：事件按它区分提交文件的两种用途。
     pub amend_request: Option<GitRequestId>,
+    /// 「修正」目标提交的 OID（None 表示 HEAD，Some(oid) 表示选中的历史未推送提交）。
+    pub amend_target: Option<String>,
+    /// 已打开的文件差异标签列表（「一个标签一个名字」）。
+    pub diff_tabs: Vec<GitDiffState>,
+    /// 当前激活的文件差异标签索引。
+    pub active_diff_tab: Option<usize>,
 }
 
 impl GitWorkspaceState {
@@ -187,7 +194,17 @@ impl GitWorkspaceState {
             amend_files: Vec::new(),
             amend_files_loading: false,
             amend_request: None,
+            amend_target: None,
+            diff_tabs: Vec::new(),
+            active_diff_tab: None,
         }
+    }
+
+    /// 获取当前激活的差异状态：优先多标签，标签为空时降级到单一 `diff`。
+    pub(crate) fn active_diff(&self) -> Option<&GitDiffState> {
+        self.active_diff_tab
+            .and_then(|idx| self.diff_tabs.get(idx))
+            .or(self.diff.as_ref())
     }
 
     /// 当前选中的提交。
@@ -198,5 +215,22 @@ impl GitWorkspaceState {
 
     pub(crate) fn drop_request(&mut self, request_id: transom_core::GitRequestId) {
         self.pending.retain(|item| *item != request_id);
+    }
+
+    /// 将读取到的差异内容填入主 diff 与对应多标签项。
+    pub(crate) fn apply_diff_loaded(&mut self, request_id: GitRequestId, content: DiffContent) {
+        if let Some(current) = self.diff.as_mut()
+            && current.request_id == request_id
+        {
+            current.content = Some(content.clone());
+            current.loading = false;
+        }
+        for tab in &mut self.diff_tabs {
+            if tab.request_id == request_id {
+                tab.content = Some(content);
+                tab.loading = false;
+                break;
+            }
+        }
     }
 }

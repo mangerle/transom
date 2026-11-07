@@ -183,20 +183,110 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 日志工作区三栏。
+    /// 打开 Git 提交记录模态弹窗。
+    pub(crate) fn open_git_log_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        self.state.modals.git.log = Some(tab_id);
+        if let Some(state) = self.git_state_of_tab(tab_id) {
+            let project = state.project.clone();
+            self.git_refresh(&project, cx);
+            self.git_load_log(tab_id, 0, cx);
+        }
+        cx.notify();
+    }
+
+    /// 关闭 Git 提交记录模态弹窗。
+    pub(crate) fn close_git_log_modal(&mut self, cx: &mut Context<Self>) {
+        self.state.modals.git.log = None;
+        cx.notify();
+    }
+
+    /// 渲染 Git 提交记录模态弹窗主体（大尺寸居中弹窗，呈现图 4 样式）。
+    pub(crate) fn render_git_log_modal_body(
+        &self,
+        app: &Entity<AppShell>,
+        window: &Window,
+        _cx: &App,
+        p: &Palette,
+    ) -> AnyElement {
+        let Some(tab_id) = self.state.modals.git.log else {
+            return div().into_any_element();
+        };
+        let bounds = window.bounds();
+        let height = (bounds.size.height * 0.88).max(px(500.0));
+        let close_app = app.clone();
+
+        v_flex()
+            .w_full()
+            .h(height)
+            .min_h_0()
+            .overflow_hidden()
+            .child(
+                h_flex()
+                    .w_full()
+                    .px_3()
+                    .py_1p5()
+                    .items_center()
+                    .justify_between()
+                    .border_color(p.divider(p.border))
+                    .border_b_1()
+                    .bg(p.muted)
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .items_center()
+                            .child(Icon::new(IconName::GitCommitHorizontal).text_color(p.primary))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::BOLD)
+                                    .text_color(p.foreground)
+                                    .child(rust_i18n::t!("git.view.log").to_string()),
+                            ),
+                    )
+                    .child(
+                        Button::new("git-log-modal-close")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::X)
+                            .on_click(move |_, _, cx| {
+                                close_app.update(cx, |this, cx| {
+                                    this.close_git_log_modal(cx);
+                                });
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.render_git_log_view(tab_id, app.clone(), p)),
+            )
+            .into_any_element()
+    }
+
     fn render_git_log_body(
         &mut self,
         tab_id: TabId,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let app = cx.entity().clone();
+        self.render_git_log_view(tab_id, cx.entity().clone(), p)
+    }
+
+    /// 日志工作区三栏主体视图。
+    pub(crate) fn render_git_log_view(
+        &self,
+        tab_id: TabId,
+        app: Entity<Self>,
+        p: &Palette,
+    ) -> AnyElement {
         let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return div().into_any_element();
         };
         let Some(state) = self.state.workspace.tabs[index].git() else {
             return div().into_any_element();
         };
+
         if state.not_repo {
             let error = state
                 .log

@@ -7491,7 +7491,27 @@ git:
     truncated:
       en: "File is too large, content truncated"
       zh-CN: "文件过大，内容已截断"
+    prev_file:
+      en: "Previous File"
+      zh-CN: "上一个文件"
+    next_file:
+      en: "Next File"
+      zh-CN: "下一个文件"
+    prev_difference:
+      en: "Previous Difference"
+      zh-CN: "上一个差异"
+    next_difference:
+      en: "Next Difference"
+      zh-CN: "下一个差异"
+    differences_count:
+      en: "%{count} differences"
+      zh-CN: "%{count} 处差异"
+    current_version:
+      en: "Current Version: %{path}"
+      zh-CN: "当前版本: %{path}"
     head:
+
+
       en: "HEAD"
       zh-CN: "头指针"
     index:
@@ -7629,7 +7649,12 @@ git:
     and_push:
       en: "Commit and Push"
       zh-CN: "提交并推送"
+  view:
+    log:
+      en: "Commit History"
+      zh-CN: "显示提交记录"
   overview:
+
     title:
       en: "Local Changes"
       zh-CN: "本地更改"

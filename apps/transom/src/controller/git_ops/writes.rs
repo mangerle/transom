@@ -60,15 +60,23 @@ pub(super) fn handle_write_command(
             project,
             message,
             amend,
+            fixup_target,
         } => {
             spawn_write(
                 state,
                 ctx,
                 project,
                 GitAction::Commit,
-                move |repo| async move { repo.commit(&message, amend).await },
+                move |repo| async move {
+                    if let Some(target) = fixup_target {
+                        repo.commit_fixup(&target).await
+                    } else {
+                        repo.commit(&message, amend).await
+                    }
+                },
             );
         }
+
         GitCommand::Checkout { project, target } => {
             spawn_write(
                 state,

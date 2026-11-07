@@ -129,6 +129,11 @@ impl Repo {
         ops::commit(self.root(), message, amend).await
     }
 
+    /// 针对指定的历史提交创建 fixup 提交。
+    pub async fn commit_fixup(&self, oid: &str) -> Result<(), GitError> {
+        ops::commit_fixup(self.root(), oid).await
+    }
+
     /// 切换分支。
     pub async fn checkout(&self, branch: &str) -> Result<(), GitError> {
         ops::checkout(self.root(), branch).await

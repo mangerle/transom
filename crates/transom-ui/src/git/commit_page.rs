@@ -202,7 +202,8 @@ impl AppShell {
                 let grouping =
                     self.git_grouping_menu(cx.entity(), project.clone(), display.by_directory);
                 let files = self.render_git_group_list(&project, &display, p, cx);
-                let amend_target = self.git_amend_target_button(&project, p);
+                let amend_target = self.git_amend_target_button(cx.entity(), tab_id, &project, p);
+
                 let branch_chip = self.render_git_branch_chip(project.id, p);
                 let refresh_project = project.clone();
                 let rollback_project = project.clone();

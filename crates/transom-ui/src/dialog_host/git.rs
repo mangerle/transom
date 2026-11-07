@@ -15,6 +15,7 @@ impl ModalKind {
             ModalKind::GitWorktree => shell.state.modals.git.worktree.is_some(),
             ModalKind::GitName => shell.state.modals.git.name.is_some(),
             ModalKind::GitRebase => shell.state.modals.git.rebase.is_some(),
+            ModalKind::GitLog => shell.state.modals.git.log.is_some(),
             _ => return None,
         };
         Some(is_open)
@@ -96,6 +97,10 @@ impl ModalKind {
             }
             ModalKind::GitRebase => {
                 shell.git_close_rebase_modal(cx);
+                Some(true)
+            }
+            ModalKind::GitLog => {
+                shell.close_git_log_modal(cx);
                 Some(true)
             }
             _ => None,
@@ -190,14 +195,16 @@ impl ModalKind {
             ModalKind::GitWorktree => shell.render_git_worktree_dialog_body(app, window, cx, p),
             ModalKind::GitName => shell.render_git_name_dialog_body(app, cx, p),
             ModalKind::GitRebase => shell.render_git_rebase_dialog_body(app, window, cx, p),
+            ModalKind::GitLog => shell.render_git_log_modal_body(app, window, cx, p),
             _ => return None,
         };
         Some(element)
     }
 
     /// Git 弹窗尺寸规格与唯一标识。
-    pub(super) fn git_spec(self) -> Option<(Option<f32>, &'static str)> {
-        let spec = match self {
+    pub(super) fn git_spec(self, window: &Window) -> Option<super::ModalSpec> {
+        let rem = window.rem_size();
+        let (px_width, slug) = match self {
             ModalKind::GitProject => (Some(crate::theme::tokens::dialog::GIT_FORM), "git-project"),
             ModalKind::GitClone => (Some(crate::theme::tokens::dialog::GIT_CLONE), "git-clone"),
             ModalKind::GitWorktree => {
@@ -205,8 +212,20 @@ impl ModalKind {
             }
             ModalKind::GitName => (Some(crate::theme::tokens::dialog::INPUT), "git-name"),
             ModalKind::GitRebase => (Some(crate::theme::tokens::dialog::GIT_FORM), "git-rebase"),
+            ModalKind::GitLog => {
+                let width = (window.bounds().size.width * 0.94).max(px(720.0));
+                return Some(super::ModalSpec {
+                    width,
+                    slug: "git-log",
+                });
+            }
             _ => return None,
         };
-        Some(spec)
+
+        let width = px_width.map_or(
+            rem * crate::theme::tokens::size::DIALOG_MAX_WIDTH,
+            |width| rem * width,
+        );
+        Some(super::ModalSpec { width, slug })
     }
 }

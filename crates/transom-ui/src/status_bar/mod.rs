@@ -23,12 +23,13 @@ use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{NetworkTraffic, StatusItemId};
+use transom_core::{NetworkTraffic, StatusItemId, TabId};
 
 // 数值槽与徽标度量以 rem 表达（标准档 16px 基准），密度切换时随字号等比放大，
 // 大字号下数字不会挤爆固定槽；底栏高度在 theme::tokens::size 集中定义。
@@ -98,6 +99,32 @@ impl AppShell {
             .context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app));
         bar = bar.divider_edge(DividerEdge::Top, p.divider_width);
 
+        let active_git_tab = self
+            .state
+            .workspace
+            .active_tab
+            .filter(|tab_id| self.git_state_of_tab(*tab_id).is_some())
+            .or_else(|| {
+                self.state
+                    .workspace
+                    .tabs
+                    .iter()
+                    .find_map(|t| if t.is_git() { Some(t.id) } else { None })
+            });
+
+        let make_git_log_btn = |id: TabId, app_entity: Entity<AppShell>| {
+            Button::new("status-bar-git-log")
+                .ghost()
+                .xsmall()
+                .icon(IconName::GitCommitHorizontal)
+                .tooltip(rust_i18n::t!("git.view.log").to_string())
+                .on_click(move |_, _, cx| {
+                    app_entity.update(cx, |this, cx| {
+                        this.open_git_log_modal(id, cx);
+                    });
+                })
+        };
+
         if divider_x > px(0.0) {
             // 左段宽到侧栏右缘，连接状态过长时在段内截断；右段的左边框续上
             // 侧栏右边框，形成一条贯穿到窗口底边的分界线。
@@ -107,8 +134,10 @@ impl AppShell {
                 .h_full()
                 .items_center()
                 .gap_2()
+                .pl_1()
                 .pr_3()
                 .border_color(p.divider(p.border))
+                .children(active_git_tab.map(|id| make_git_log_btn(id, app.clone())))
                 .children(entries.snippets)
                 .children(entries.broadcast)
                 .children(entries.recording)
@@ -137,6 +166,7 @@ impl AppShell {
                     .pr_3()
                     .gap_2()
                     .child(connection_pill)
+                    .children(active_git_tab.map(|id| make_git_log_btn(id, app.clone())))
                     .children(entries.snippets)
                     .children(entries.broadcast)
                     .children(entries.recording)

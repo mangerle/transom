@@ -4,14 +4,12 @@
 //! 借用边界（先取数据结束借用，再 `send_command`）与请求登记口径。
 
 use crate::app::AppShell;
-use crate::git::types::GitDiffState;
+use crate::git::types::GitDiffRequest;
 use gpui_kit::*;
 use transom_core::{GitAction, GitCommand, GitProject, GitRequestId, GitSide, TabId};
 
 /// 日志单页条数：一屏约 40 行，5 页滚动内不必再发请求。
 const LOG_PAGE_SIZE: usize = 200;
-
-use super::GitDiffRequest;
 
 impl AppShell {
     /// 分页加载提交历史；`skip` 为 0 时整页替换，否则追加（下拉加载）。
@@ -35,45 +33,6 @@ impl AppShell {
             project,
             request_id,
             query,
-        });
-        cx.notify();
-    }
-
-    /// 打开一个文件的差异视图。
-    ///
-    /// 参数收进 [`GitDiffRequest`]：一次差异需要"比什么、跟谁比、两侧标签怎么
-    /// 叫"，平铺成七个入参既超预算也容易在调用点把两侧顺序传反。
-    pub(crate) fn git_open_diff(
-        &mut self,
-        tab_id: TabId,
-        request: GitDiffRequest,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab_index) = self.state.workspace.tab_index(tab_id) else {
-            return;
-        };
-        let Some(state) = self.state.workspace.tabs[tab_index].git_mut() else {
-            return;
-        };
-        let project = state.project.clone();
-        let request_id = GitRequestId::new();
-        state.pending.push(request_id);
-        state.last_diff = Some(request.clone());
-        state.diff = Some(GitDiffState {
-            path: request.path.clone(),
-            left_label: request.left_label.clone(),
-            right_label: request.right_label.clone(),
-            content: None,
-            loading: true,
-            error: None,
-            request_id,
-        });
-        self.send_command(GitCommand::LoadDiff {
-            project,
-            request_id,
-            path: request.path,
-            old: request.old,
-            new: request.new,
         });
         cx.notify();
     }

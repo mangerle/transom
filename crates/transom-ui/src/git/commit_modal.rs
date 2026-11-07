@@ -30,37 +30,98 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::HashSet;
-use transom_core::{GitAction, GitProject};
+use transom_core::{CommitEntry, GitAction, GitProject, TabId};
 
 impl AppShell {
-    /// 「修正」旁边的目标提交展示：对应 IDEA 的「上次提交 ▾」。
-    ///
-    /// 为什么不做成可下拉选任意提交：`git commit --amend` 只能改写 HEAD，
-    /// 改写历史中间的提交要走 fixup + 自动压缩（交互式变基），那是另一条
-    /// 尚未实现的能力。给一个能选但选了不生效的下拉框等于骗人。
+    /// 「修正」旁边的目标提交展示与选择：
+    /// 只显示哈希，悬停显示完整说明，小倒三角点击下拉选择未推送到远端的本地提交。
     pub(crate) fn git_amend_target_button(
         &mut self,
+        app: Entity<AppShell>,
+        tab_id: TabId,
         project: &GitProject,
         p: &Palette,
     ) -> AnyElement {
-        let head = self
-            .git_state_of(project.id)
-            .and_then(|state| state.log.entries.first())
-            .map(|entry| format!("{}  {}", entry.short_oid(), entry.subject))
-            .unwrap_or_else(|| rust_i18n::t!("git.commit.no_commit").to_string());
-        h_flex()
-            .gap_1()
-            .items_center()
-            .px_2()
-            .py_0p5()
-            .rounded(px(3.0))
-            .bg(p.muted)
-            .child(
-                Icon::new(IconName::GitCommitHorizontal)
-                    .xsmall()
-                    .text_color(p.primary),
-            )
-            .child(div().text_xs().text_color(p.muted_foreground).child(head))
+        let (candidates, selected) = if let Some(state) = self.git_state_of(project.id) {
+            let ahead = state.status.as_ref().map(|s| s.ahead as usize).unwrap_or(0);
+            let has_upstream = state
+                .status
+                .as_ref()
+                .and_then(|s| s.upstream.as_ref())
+                .is_some();
+            let entries = &state.log.entries;
+            let list: Vec<CommitEntry> = if has_upstream {
+                if ahead > 0 {
+                    entries.iter().take(ahead).cloned().collect()
+                } else {
+                    entries.iter().take(1).cloned().collect()
+                }
+            } else {
+                entries.iter().take(20).cloned().collect()
+            };
+
+            let current = state
+                .amend_target
+                .as_ref()
+                .and_then(|oid| list.iter().find(|e| &e.oid == oid))
+                .or_else(|| list.first())
+                .cloned();
+            (list, current)
+        } else {
+            (Vec::new(), None)
+        };
+
+        let Some(selected) = selected else {
+            return h_flex()
+                .gap_1()
+                .items_center()
+                .px_2()
+                .py_0p5()
+                .rounded(px(3.0))
+                .bg(p.muted)
+                .child(
+                    Icon::new(IconName::GitCommitHorizontal)
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
+                .child(div().text_xs().text_color(p.muted_foreground).child("-"))
+                .into_any_element();
+        };
+
+        let short_oid = selected.short_oid();
+        let tooltip = format!("{}  {}", short_oid, selected.subject);
+        let selected_oid = selected.oid.clone();
+
+        Button::new("git-amend-target")
+            .ghost()
+            .xsmall()
+            .icon(IconName::GitCommitHorizontal)
+            .label(short_oid)
+            .tooltip(tooltip)
+            .dropdown_menu(move |menu, _window, _cx| {
+                let mut menu = menu;
+                for item in &candidates {
+                    let item_app = app.clone();
+                    let item_oid = item.oid.clone();
+                    let is_active = item.oid == selected_oid;
+                    let label = format!("{}  {}", item.short_oid(), item.subject);
+                    menu = menu.item(menu_item(
+                        label,
+                        if is_active {
+                            IconName::Check
+                        } else {
+                            IconName::Circle
+                        },
+                        move |_menu, window, cx| {
+                            let oid = item_oid.clone();
+                            item_app.update(cx, |this, cx| {
+                                this.git_select_amend_target(tab_id, oid, window, cx);
+                            });
+                        },
+                    ));
+                }
+                menu
+            })
             .into_any_element()
     }
 

@@ -134,6 +134,8 @@ pub(crate) enum ModalKind {
     GitName,
     /// Git 变基操作确认。
     GitRebase,
+    /// Git 提交记录历史弹窗。
+    GitLog,
 }
 
 /// 单个弹窗的渲染元数据；宽度与 slug 同一处定义，新增弹窗不再漏改列表。
@@ -195,24 +197,16 @@ impl ModalKind {
         ModalKind::GitWorktree,
         ModalKind::GitName,
         ModalKind::GitRebase,
+        ModalKind::GitLog,
     ];
 
     /// 弹窗元数据：宽度与元素标识。
-    ///
-    /// 宽度沿用迁移前的档位；除设置、密钥向导、同步弹窗与差异对比外都是固定
-    /// 像素。差异对比按视口比例，设置弹窗按密度 rem 缩放，二者需要窗口尺寸，
-    /// 因此这里以 `Window` 为参数，而不是把宽度散落回各调用点。
     fn spec(self, window: &Window) -> ModalSpec {
-        let rem = window.rem_size();
-        if let Some((px_width, slug)) = self.git_spec() {
-            return ModalSpec {
-                width: px_width.map_or(
-                    rem * crate::theme::tokens::size::DIALOG_MAX_WIDTH,
-                    |width| rem * width,
-                ),
-                slug,
-            };
+        if let Some(spec) = self.git_spec(window) {
+            return spec;
         }
+
+        let rem = window.rem_size();
         let (px_width, slug) = match self {
             ModalKind::AuthPrompt => (Some(crate::theme::tokens::dialog::AUTH), "auth"),
             ModalKind::HostKeyConfirm => (Some(crate::theme::tokens::dialog::AUTH), "host-key"),

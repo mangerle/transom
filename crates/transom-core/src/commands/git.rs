@@ -70,7 +70,9 @@ pub enum GitCommand {
         project: GitProject,
         message: String,
         amend: bool,
+        fixup_target: Option<String>,
     },
+
     Checkout {
         project: GitProject,
         target: GitCheckout,
