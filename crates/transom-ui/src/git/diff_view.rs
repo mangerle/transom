@@ -33,9 +33,9 @@ use gpui_kit::*;
 use transom_core::TabId;
 
 /// 行高与行号列宽（px）。
-pub(crate) const LINE_HEIGHT: f32 = 18.0;
+pub(crate) const LINE_HEIGHT: f32 = 20.0;
 
-pub(crate) const GUTTER_WIDTH: f32 = 44.0;
+pub(crate) const GUTTER_WIDTH: f32 = 46.0;
 
 /// 一行的语义。
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -108,7 +108,7 @@ pub(crate) fn render(
     let header = h_flex()
         .id("git-diff-header")
         .w_full()
-        .h(px(28.0))
+        .h(px(26.0))
         .flex_none()
         .px_2()
         .gap_1p5()
@@ -169,7 +169,17 @@ pub(crate) fn render(
                 }),
         )
         .child(div().flex_1())
-        .children(diff_summary.map(|s| div().text_xs().text_color(p.muted_foreground).child(s)))
+        .children(diff_summary.map(|s| {
+            h_flex()
+                .h(px(18.0))
+                .px_1p5()
+                .items_center()
+                .rounded(px(3.0))
+                .bg(p.muted.opacity(0.35))
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(s)
+        }))
         .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
         .child(render_mode_toggle(
             app.clone(),

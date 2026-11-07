@@ -9,8 +9,8 @@ use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
 
@@ -62,12 +62,12 @@ impl AppShell {
 
         let header = h_flex()
             .w_full()
-            .h(px(34.0))
+            .h(px(30.0))
             .flex_none()
             .px_3()
             .items_center()
             .justify_between()
-            .bg(p.muted)
+            .bg(p.background)
             .border_color(p.divider(p.border))
             .border_b_1()
             .child(
@@ -75,16 +75,14 @@ impl AppShell {
                     .gap_2()
                     .items_center()
                     .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("git.diff.toolbar").to_string()),
+                        Icon::new(IconName::GitCompare)
+                            .xsmall()
+                            .text_color(p.primary),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .font_weight(FontWeight::BOLD)
+                            .font_weight(FontWeight::MEDIUM)
                             .text_color(p.foreground)
                             .child(file_path),
                     ),

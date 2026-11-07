@@ -63,9 +63,9 @@ impl AppShell {
 
         let header = h_flex()
             .w_full()
-            .h(px(28.0))
+            .h(px(26.0))
             .flex_none()
-            .bg(p.muted)
+            .bg(p.background)
             .border_color(p.divider(p.border))
             .border_b_1()
             .items_center()

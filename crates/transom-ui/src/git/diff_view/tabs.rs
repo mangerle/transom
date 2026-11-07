@@ -30,9 +30,8 @@ pub(crate) fn render_diff_tab_bar(
     let bar = h_flex()
         .id("git-diff-tab-bar")
         .w_full()
-        .h(px(28.0))
+        .h(px(26.0))
         .flex_none()
-        .bg(p.muted)
         .border_color(p.divider(p.border))
         .border_b_1()
         .items_center()
@@ -53,7 +52,7 @@ pub(crate) fn render_diff_tab_bar(
                 .gap_1p5()
                 .px_2()
                 .py_0p5()
-                .rounded(px(3.0))
+                .rounded(px(2.0))
                 .cursor_pointer()
                 .bg(if is_active {
                     p.background
@@ -71,7 +70,13 @@ pub(crate) fn render_diff_tab_bar(
                     gpui::transparent_black()
                 })
                 .border_b_2()
-                .hover(|s| if !is_active { s.bg(p.muted) } else { s })
+                .hover(|s| {
+                    if !is_active {
+                        s.bg(p.muted.opacity(0.35))
+                    } else {
+                        s
+                    }
+                })
                 .child(
                     Icon::new(IconName::FileCode)
                         .xsmall()
@@ -85,7 +90,7 @@ pub(crate) fn render_diff_tab_bar(
                     div()
                         .text_xs()
                         .font_weight(if is_active {
-                            FontWeight::BOLD
+                            FontWeight::MEDIUM
                         } else {
                             FontWeight::NORMAL
                         })
@@ -120,7 +125,7 @@ pub(crate) fn render_diff_tab_bar(
     Some(bar.into_any_element())
 }
 
-/// 渲染双栏对比列头：左侧基准版本与文件，右侧当前版本。
+/// 渲染双栏对比列头：左侧基准版本，右侧当前版本（对齐 IDEA 样式，去除长路径重复截断）。
 pub(crate) fn render_diff_columns_header(
     diff: &GitDiffState,
     side_by_side: bool,
@@ -135,12 +140,16 @@ pub(crate) fn render_diff_columns_header(
         diff.right_label.clone()
     };
 
+    let short_path = Path::new(&diff.path)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| diff.path.clone());
+
     let header = h_flex()
         .id("git-diff-columns-header")
         .w_full()
-        .h(px(24.0))
+        .h(px(22.0))
         .flex_none()
-        .bg(p.muted)
         .border_color(p.divider(p.border))
         .border_b_1()
         .text_xs()
@@ -161,23 +170,18 @@ pub(crate) fn render_diff_columns_header(
                         .child(
                             Icon::new(IconName::GitCommitHorizontal)
                                 .xsmall()
-                                .text_color(p.muted_foreground),
+                                .text_color(p.primary),
                         )
                         .child(
                             div()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.foreground)
                                 .child(diff.left_label.clone()),
                         )
                         .child(
                             div()
-                                .flex_1()
-                                .min_w_0()
-                                .whitespace_nowrap()
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .text_color(p.muted_foreground)
-                                .child(diff.path.clone()),
+                                .text_color(p.muted_foreground.opacity(0.75))
+                                .child(short_path),
                         ),
                 ),
         )
@@ -194,24 +198,13 @@ pub(crate) fn render_diff_columns_header(
                         .flex_1()
                         .min_w_0()
                         .h_full()
-                        .gap_1p5()
                         .items_center()
-                        .overflow_hidden()
+                        .gap_1p5()
                         .child(
                             div()
-                                .font_weight(FontWeight::BOLD)
+                                .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.foreground)
                                 .child(right_label),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .whitespace_nowrap()
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .text_color(p.muted_foreground)
-                                .child(diff.path.clone()),
                         ),
                 ),
         );

@@ -405,6 +405,17 @@ impl AppShell {
                                             .on_click(cx.listener(move |this, _, _, cx| {
                                                 this.submit_git_commit(tab_id, true, cx);
                                             })),
+                                    )
+                                    .child(div().flex_1())
+                                    .child(
+                                        Button::new("git-commit-toggle-history")
+                                            .ghost()
+                                            .small()
+                                            .icon(IconName::GitCommitHorizontal)
+                                            .tooltip(rust_i18n::t!("git.view.log").to_string())
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.toggle_git_bottom_log(tab_id, cx);
+                                            })),
                                     ),
                             ),
                     )

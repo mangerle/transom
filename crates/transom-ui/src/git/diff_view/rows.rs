@@ -141,12 +141,12 @@ fn normalize(line: &str, level: IgnoreWhitespace) -> String {
 
 /// 渲染一行。
 pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> AnyElement {
-    // 「高亮 = 无」时不着色，只保留行首标记：有人就是要看结构不看颜色。
-    let (bg, marker) = match (row.tone, options.highlight == DiffHighlight::None) {
-        (Tone::Added, false) => (p.success.opacity(0.14), "+"),
-        (Tone::Removed, false) => (p.danger.opacity(0.14), "-"),
-        (Tone::Paired, false) => (p.warning.opacity(0.12), "~"),
-        _ => (p.background, " "),
+    // 采用专业 IDE 标准配色：修改行使用清透青蓝，新增使用浅绿，删除使用浅红。
+    let (bg, word_bg) = match (row.tone, options.highlight == DiffHighlight::None) {
+        (Tone::Added, false) => (p.success.opacity(0.12), p.success.opacity(0.30)),
+        (Tone::Removed, false) => (p.danger.opacity(0.12), p.danger.opacity(0.30)),
+        (Tone::Paired, false) => (p.primary.opacity(0.12), p.primary.opacity(0.30)),
+        _ => (p.background, p.primary.opacity(0.30)),
     };
     if !options.side_by_side {
         // 统一视图：只显示有内容的一侧，前缀标出增删。
@@ -162,17 +162,36 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
             .id(ElementId::Name(
                 format!("git-diff-u-{}-{}", cell.number, sign).into(),
             ))
+            .w_full()
             .h(px(LINE_HEIGHT))
-            .items_start()
+            .items_center()
             .bg(bg)
             .when(!options.wrap_lines, |el| el.truncate())
             .child(gutter(
                 options.show_line_numbers.then_some(cell.number.to_string()),
                 p,
             ))
-            .child(text_line(&cell.text, None, options, p))
+            .child(text_line(&cell.text, None, options, word_bg, p))
             .into_any_element();
     }
+
+    let left_side = side(
+        row.left.as_ref(),
+        row.right.as_ref().filter(|_| row.tone == Tone::Paired),
+        options,
+        word_bg,
+        false,
+        p,
+    );
+    let right_side = side(
+        row.right.as_ref(),
+        row.left.as_ref().filter(|_| row.tone == Tone::Paired),
+        options,
+        word_bg,
+        true,
+        p,
+    );
+
     h_flex()
         .id(ElementId::Name(
             format!(
@@ -182,29 +201,13 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
             )
             .into(),
         ))
+        .w_full()
         .h(px(LINE_HEIGHT))
-        .items_start()
+        .items_center()
         .bg(bg)
         .when(!options.wrap_lines, |el| el.truncate())
-        .child(side(
-            row.left.as_ref(),
-            row.right.as_ref().filter(|_| row.tone == Tone::Paired),
-            options,
-            p,
-        ))
-        .child(side(
-            row.right.as_ref(),
-            row.left.as_ref().filter(|_| row.tone == Tone::Paired),
-            options,
-            p,
-        ))
-        .child(
-            div()
-                .w(px(10.0))
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(marker),
-        )
+        .child(left_side)
+        .child(right_side)
         .into_any_element()
 }
 
@@ -215,31 +218,39 @@ fn side(
     cell: Option<&Cell>,
     counterpart: Option<&Cell>,
     options: &GitDiffOptions,
+    word_bg: Hsla,
+    is_right: bool,
     p: &Palette,
 ) -> AnyElement {
+    let base = h_flex()
+        .w_1_2()
+        .h_full()
+        .min_w_0()
+        .items_center()
+        .when(is_right, |el| {
+            el.border_color(p.divider(p.border)).border_l_1()
+        });
+
     let Some(cell) = cell else {
-        return h_flex()
-            .flex_1()
-            .min_w_0()
+        return base
+            .bg(p.muted.opacity(0.08))
             .child(gutter(None, p))
             .child(div().flex_1())
-            .bg(p.muted.opacity(0.18))
             .into_any_element();
     };
-    h_flex()
-        .flex_1()
-        .min_w_0()
-        .child(gutter(
-            options.show_line_numbers.then_some(cell.number.to_string()),
-            p,
-        ))
-        .child(text_line(
-            &cell.text,
-            counterpart.map(|other| other.text.as_str()),
-            options,
-            p,
-        ))
-        .into_any_element()
+
+    base.child(gutter(
+        options.show_line_numbers.then_some(cell.number.to_string()),
+        p,
+    ))
+    .child(text_line(
+        &cell.text,
+        counterpart.map(|other| other.text.as_str()),
+        options,
+        word_bg,
+        p,
+    ))
+    .into_any_element()
 }
 
 /// 一行文本：按高亮档位切成若干段。
@@ -250,6 +261,7 @@ fn text_line(
     text: &str,
     counterpart: Option<&str>,
     options: &GitDiffOptions,
+    word_bg: Hsla,
     p: &Palette,
 ) -> AnyElement {
     let use_words =
@@ -258,6 +270,7 @@ fn text_line(
         return div()
             .flex_1()
             .min_w_0()
+            .pl_2()
             .overflow_hidden()
             .text_xs()
             .font_family(p.mono_font_family.clone())
@@ -269,6 +282,7 @@ fn text_line(
     h_flex()
         .flex_1()
         .min_w_0()
+        .pl_2()
         .overflow_hidden()
         .text_xs()
         .font_family(p.mono_font_family.clone())
@@ -276,8 +290,9 @@ fn text_line(
             div()
                 .flex_none()
                 .px_0p5()
+                .rounded(px(2.0))
                 .text_color(p.foreground)
-                .when(segment.changed, |el| el.bg(p.warning.opacity(0.45)))
+                .when(segment.changed, |el| el.bg(word_bg))
                 .child(segment.text)
         }))
         .into_any_element()
@@ -311,10 +326,14 @@ fn gutter(number: Option<String>, p: &Palette) -> AnyElement {
     div()
         .w(px(GUTTER_WIDTH))
         .flex_none()
-        .text_right()
-        .pr_1()
+        .h_full()
+        .flex()
+        .items_center()
+        .justify_end()
+        .pr_2()
         .text_xs()
-        .text_color(p.muted_foreground)
+        .font_family(p.mono_font_family.clone())
+        .text_color(p.muted_foreground.opacity(0.55))
         .child(number.unwrap_or_default())
         .into_any_element()
 }
