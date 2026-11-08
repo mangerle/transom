@@ -63,15 +63,12 @@ impl AppState {
         self.refresh_tab_sessions();
         self.persist_catalog();
     }
-
-    pub(crate) fn cancel_auth_prompt(&mut self) {
-        self.modals.connection.auth_prompt = None;
-    }
 }
 
 impl AppShell {
     pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.state.modals.connection.auth_prompt.take() else {
+        let prompts = self.state.modals.connection.prompts.clone();
+        let Some(state) = prompts.update(cx, |view, cx| view.take_auth(cx)) else {
             return;
         };
         let answers: Vec<String> = state
@@ -143,7 +140,8 @@ impl AppShell {
     /// 连接失败时丢弃待保存凭据。
     /// 用户信任首连主机指纹。
     pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.state.modals.connection.host_key_confirm.take() {
+        let prompts = self.state.modals.connection.prompts.clone();
+        if let Some(state) = prompts.update(cx, |view, cx| view.take_host_key(cx)) {
             let _ = state.responder.try_send(true);
             cx.notify();
         }
@@ -151,7 +149,8 @@ impl AppShell {
 
     /// 用户拒绝首连主机指纹。
     pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
-        if let Some(state) = self.state.modals.connection.host_key_confirm.take() {
+        let prompts = self.state.modals.connection.prompts.clone();
+        if let Some(state) = prompts.update(cx, |view, cx| view.take_host_key(cx)) {
             let _ = state.responder.try_send(false);
             cx.notify();
         }
@@ -179,8 +178,8 @@ impl AppShell {
                     "cancel-auth",
                     rust_i18n::t!("common.cancel").to_string(),
                     crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.state.cancel_auth_prompt();
-                        cx.notify();
+                        let prompts = this.state.modals.connection.prompts.clone();
+                        prompts.update(cx, |view, cx| view.close_auth(cx));
                     }),
                 ))
                 .child(crate::widgets::dialog_confirm_button(
@@ -199,10 +198,10 @@ impl AppShell {
     pub(crate) fn render_auth_prompt_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(prompt) = self.state.modals.connection.auth_prompt.as_ref() else {
+        let Some(prompt) = self.state.modals.connection.prompts.read(cx).auth() else {
             return div().into_any_element();
         };
         let client_generated = prompt
@@ -257,12 +256,8 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, checked: &bool, _, cx| {
-                                    if let Some(state) =
-                                        this.state.modals.connection.auth_prompt.as_mut()
-                                    {
-                                        state.save = *checked;
-                                    }
-                                    cx.notify();
+                                    let prompts = this.state.modals.connection.prompts.clone();
+                                    prompts.update(cx, |view, cx| view.set_save(*checked, cx));
                                 },
                             )),
                     ),
@@ -292,10 +287,10 @@ impl AppShell {
     pub(crate) fn render_host_key_confirm_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.connection.host_key_confirm.as_ref() else {
+        let Some(state) = self.state.modals.connection.prompts.read(cx).host_key() else {
             return div().into_any_element();
         };
         let body = rust_i18n::t!(

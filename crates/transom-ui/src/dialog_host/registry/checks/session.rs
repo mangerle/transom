@@ -40,16 +40,34 @@ pub(in crate::app::dialog_host) fn batch_edit_values(shell: &AppShell, cx: &App)
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn auth_prompt_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.connection.auth_prompt.is_some()
+pub(in crate::app::dialog_host) fn auth_prompt_open(shell: &AppShell, cx: &App) -> bool {
+    shell
+        .state
+        .modals
+        .connection
+        .prompts
+        .read(cx)
+        .is_auth_open()
 }
 
-pub(in crate::app::dialog_host) fn host_key_confirm_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.connection.host_key_confirm.is_some()
+pub(in crate::app::dialog_host) fn host_key_confirm_open(shell: &AppShell, cx: &App) -> bool {
+    shell
+        .state
+        .modals
+        .connection
+        .prompts
+        .read(cx)
+        .is_host_key_open()
 }
 
-pub(in crate::app::dialog_host) fn clipboard_prompt_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.connection.clipboard_request.is_some()
+pub(in crate::app::dialog_host) fn clipboard_prompt_open(shell: &AppShell, cx: &App) -> bool {
+    shell
+        .state
+        .modals
+        .connection
+        .prompts
+        .read(cx)
+        .is_clipboard_open()
 }
 
 pub(in crate::app::dialog_host) fn known_hosts_open(shell: &AppShell, cx: &App) -> bool {

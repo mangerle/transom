@@ -130,17 +130,22 @@ impl AppShell {
             Some(PromptKind::Passphrase) => Some(SecretKind::KeyPassphrase),
             _ => None,
         };
-        self.state.modals.connection.auth_prompt = Some(AuthPromptState {
-            connection_id,
-            name,
-            instructions,
-            prompts,
-            inputs,
-            responder,
-            error: None,
-            session_id,
-            secret_kind,
-            save: false,
+        self.state.modals.connection.prompts.update(cx, |view, cx| {
+            view.open_auth(
+                AuthPromptState {
+                    connection_id,
+                    name,
+                    instructions,
+                    prompts,
+                    inputs,
+                    responder,
+                    error: None,
+                    session_id,
+                    secret_kind,
+                    save: false,
+                },
+                cx,
+            );
         });
         true
     }
@@ -148,7 +153,11 @@ impl AppShell {
     /// 首连指纹确认：仅在连接仍现任时弹出核对窗口。
     ///
     /// 返回 `false` 表示连接已过期，不弹出提示。
-    pub(crate) fn on_host_key_confirm(&mut self, event: TerminalAppEvent) -> bool {
+    pub(crate) fn on_host_key_confirm(
+        &mut self,
+        event: TerminalAppEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let TerminalAppEvent::HostKeyConfirm {
             tab_id,
             connection_id,
@@ -167,12 +176,17 @@ impl AppShell {
         if tab.connection_id != Some(connection_id) {
             return false;
         }
-        self.state.modals.connection.host_key_confirm = Some(HostKeyConfirmState {
-            host,
-            port,
-            key_type,
-            fingerprint,
-            responder,
+        self.state.modals.connection.prompts.update(cx, |view, cx| {
+            view.open_host_key(
+                HostKeyConfirmState {
+                    host,
+                    port,
+                    key_type,
+                    fingerprint,
+                    responder,
+                },
+                cx,
+            );
         });
         true
     }

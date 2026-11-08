@@ -347,6 +347,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     let audit_viewer = cx.new(|_| crate::audit_viewer::AuditViewerView::new());
     let key_wizard = cx.new(|_| KeyWizardView::new(default_ssh_dir(), services.command_tx.clone()));
     let replay = cx.new(|_| crate::record::ReplayModalView::new());
+    let connection_prompts = cx.new(|_| crate::connection::ConnectionPromptsView::new());
     AppState {
         services,
         catalog: prepared.catalog,
@@ -360,6 +361,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         modals: ModalHub::new(
             session_form,
             known_hosts_view,
+            connection_prompts,
             settings_view,
             ToolModalEntities {
                 backup_prompt,

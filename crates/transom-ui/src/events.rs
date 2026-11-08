@@ -60,7 +60,7 @@ impl AppShell {
             TerminalAppEvent::ConnectionFailed { .. } => self.on_connection_failed(event, cx),
             TerminalAppEvent::Disconnected { .. } => self.on_disconnected(event, cx),
             TerminalAppEvent::AuthPrompt { .. } => self.on_auth_prompt(event, window, cx),
-            TerminalAppEvent::HostKeyConfirm { .. } => self.on_host_key_confirm(event),
+            TerminalAppEvent::HostKeyConfirm { .. } => self.on_host_key_confirm(event, cx),
         };
         if should_notify {
             cx.notify();

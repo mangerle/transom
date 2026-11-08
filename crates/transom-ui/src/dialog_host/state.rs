@@ -71,7 +71,12 @@ impl ModalKind {
                 true
             }
             ModalKind::AuthPrompt => {
-                shell.state.cancel_auth_prompt();
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .prompts
+                    .update(cx, |view, cx| view.close_auth(cx));
                 true
             }
             ModalKind::SftpInput => shell.close_sftp_modal(|hub| hub.input = None, window, cx),

@@ -3,9 +3,11 @@
 mod auth_dialog;
 mod local_and_quick;
 mod presentation;
+mod prompts_view;
 mod secrets;
 
 pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
+pub(crate) use prompts_view::ConnectionPromptsView;
 pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;

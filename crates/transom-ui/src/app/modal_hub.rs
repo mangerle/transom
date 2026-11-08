@@ -7,13 +7,13 @@
 //!
 //! # 代价与局限
 //! 分组只解决可读性与归属提示，不改变“外壳统一持有”的事实；设置、已知主机、
-//! 备份、审计查看器、密钥向导、会话回放与会话表单已经独立为实体，后续应把
-//! 连接确认也按同一路径迁成实体，最终让本容器退化为“实体句柄集合”。
+//! 备份、审计查看器、密钥向导、会话回放、会话表单与连接确认弹窗已经独立为实体，
+//! 本容器正逐步退化为“实体句柄集合”。
 
 use super::batch::BatchEditForm;
 use crate::audit_viewer::AuditViewerView;
 use crate::backup::BackupPromptView;
-use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
+use crate::connection::{ConnectionPromptsView, PendingCredential};
 use crate::keys::{KeyWizardView, KnownHostsView};
 use crate::record::ReplayModalView;
 use crate::session_form::SessionFormView;
@@ -43,10 +43,8 @@ impl SessionModals {
 
 /// 连接建立过程中的确认与授权弹窗。
 pub(crate) struct ConnectionModals {
-    pub(crate) auth_prompt: Option<AuthPromptState>,
-    pub(crate) host_key_confirm: Option<HostKeyConfirmState>,
-    /// 远端 OSC 52 写剪贴板的待裁决请求（默认拒绝，按会话授权）。
-    pub(crate) clipboard_request: Option<crate::clipboard_prompt::ClipboardWritePrompt>,
+    /// SSH 鉴权、首连指纹与 OSC 52 授权三个窗口级弹窗；打开状态与应答通道归实体。
+    pub(crate) prompts: Entity<ConnectionPromptsView>,
     pub(crate) pending_credential: Option<PendingCredential>,
     pub(crate) known_hosts: Entity<KnownHostsView>,
 }
@@ -128,6 +126,7 @@ impl ModalHub {
     pub(crate) fn new(
         session_form: Entity<SessionFormView>,
         known_hosts: Entity<KnownHostsView>,
+        connection_prompts: Entity<ConnectionPromptsView>,
         settings: Entity<SettingsView>,
         tools: ToolModalEntities,
         quick_open_state: Entity<CommandState>,
@@ -136,9 +135,7 @@ impl ModalHub {
         Self {
             session: SessionModals::new(session_form),
             connection: ConnectionModals {
-                auth_prompt: None,
-                host_key_confirm: None,
-                clipboard_request: None,
+                prompts: connection_prompts,
                 pending_credential: None,
                 known_hosts,
             },
