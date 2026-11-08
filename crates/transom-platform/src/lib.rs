@@ -13,4 +13,5 @@ pub mod system;
 #[cfg(windows)]
 pub mod named_pipe;
 
+pub mod filesystem;
 pub mod opener;

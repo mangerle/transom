@@ -316,14 +316,8 @@ fn run_local_fs(op: LocalFsOp) -> LocalFsOutcome {
             },
         },
         LocalFsOp::Symlink(target, link) => {
-            #[cfg(unix)]
-            let result =
-                std::os::unix::fs::symlink(&target, &link).map_err(|error| error.to_string());
-            #[cfg(not(unix))]
-            let result = {
-                let _ = target;
-                Err(rust_i18n::t!("sftp.file_ops.local_symlink_unsupported").to_string())
-            };
+            let result = transom_platform::filesystem::create_symlink(&target, &link)
+                .map_err(|error| error.to_string());
             match result {
                 Ok(()) => LocalFsOutcome {
                     status: Some(
