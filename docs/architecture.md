@@ -125,8 +125,9 @@ impl 面板                                       →  面板自己的动作
 实体句柄 + Palette”的参数对象模式迁出为容器模块内的自由渲染函数；头部需要
 外壳弹窗/全屏时经 `ContainerWorkspaceEvent` 事件上交，订阅按标签持有并在
 `prune_tab_overlays` 统一回收。中栏列表与工具条（筛选/排序/更多菜单、行内动作）也已迁出；需要 `Window`
-的动作经 `ContainerWorkspaceEvent` → `WindowRequests` 排到渲染期执行。其余
-组件沿用同一模式继续下沉，最终删除迁移桥。
+的动作经 `ContainerWorkspaceEvent` → `WindowRequests` 排到渲染期执行。右侧基础信息与原始 inspect 页也已迁出：字段行、端口、存储、环境变量与健康
+时间线的复制/跳转只依赖实体句柄与状态快照，端口转发经工作区事件排队执行。
+其余组件沿用同一模式继续下沉，最终删除迁移桥。
 
 Git 侧已迁 `GitWorkspace::load_log` 与实体命令通道；其余 Git 动作仍在外壳。
 
