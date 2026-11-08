@@ -5,6 +5,7 @@
 mod header;
 
 use crate::app::AppShell;
+use crate::container::detail::{ContainerDetailParams, render_container_detail};
 use crate::container::list::render_container_list;
 use crate::container::types::ContainerWorkspaceStatus;
 use crate::divider::h_resizable;
@@ -63,7 +64,31 @@ impl AppShell {
             .overflow_hidden()
             .child(list)
             .into_any_element();
-        let detail = self.render_container_detail(tab_id, window, cx, p);
+        let detail = {
+            let workspace = view.read(cx);
+            let state = &workspace.state;
+            // 输入框与编辑器文本必须经 App 读取；详情渲染函数只消费快照。
+            let compose_yaml_text = state
+                .compose_yaml_editor
+                .as_ref()
+                .map(|(_, _, editor, _)| editor.read(cx).value())
+                .unwrap_or_default();
+            let logs_filter = state.logs_search_query(cx);
+            let changes_search_value = state.changes_search.read(cx).value().to_string();
+            let inspect_keyword = state.inspect_search.read(cx).value().trim().to_string();
+            render_container_detail(
+                ContainerDetailParams {
+                    tab_id,
+                    view: &view,
+                    workspace: state,
+                    compose_yaml_text: &compose_yaml_text,
+                    logs_filter: &logs_filter,
+                    changes_search_value: &changes_search_value,
+                    inspect_keyword: &inspect_keyword,
+                },
+                p,
+            )
+        };
         // 列表与详情宽度可拖拽：长容器名与镜像引用在固定宽度下必然截断，详情区在
         // 小窗下又铺不开，与主窗口其他分区一样交给用户拖。默认值只是首次打开的起点。
         let list_split = self
