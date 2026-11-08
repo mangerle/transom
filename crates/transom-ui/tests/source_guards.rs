@@ -976,7 +976,8 @@ fn replay_modal_is_owned_by_entity() {
 }
 
 /// 已下沉的容器渲染切片不得重新挂回 `impl AppShell`：这些文件只允许
-/// 自由渲染函数或实体方法，动作通过实体句柄/事件完成。
+/// 自由渲染函数或实体方法，动作通过实体句柄/事件完成；代码行也不得再出现
+/// `Context<AppShell>`（文档注释里的历史说明不计）。
 #[test]
 fn migrated_container_render_slices_do_not_return_to_shell() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -988,6 +989,12 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/detail/overview.rs",
         "src/container/detail/overview_cards/mod.rs",
         "src/container/detail/logs.rs",
+        "src/container/detail/network.rs",
+        "src/container/detail/volume.rs",
+        "src/container/detail/image.rs",
+        "src/container/detail/image_history.rs",
+        "src/container/detail/raw_inspect.rs",
+        "src/container/detail/header_container.rs",
         "src/container/logs_actions.rs",
         "src/container/stats.rs",
         "src/container/stats/toolbar.rs",
@@ -1001,7 +1008,11 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         let Ok(content) = std::fs::read_to_string(&path) else {
             continue;
         };
-        if content.contains("impl AppShell") {
+        let uses_shell_context = content.lines().any(|line| {
+            let line = line.trim_start();
+            !line.starts_with("//") && line.contains("Context<AppShell>")
+        });
+        if content.contains("impl AppShell") || uses_shell_context {
             offenders.push(file.to_string());
         }
     }

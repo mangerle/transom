@@ -7,10 +7,13 @@
 //!
 //! 代价与局限：事件只表达意图，实际状态仍在工作区实体与 `ContainerUiState` 里；
 //! 新增需要外壳动作的按钮时必须同时补一个变体与处理分支，遗漏会表现为点击无响应。
-//! 需要 `Window` 的变体由外壳推进 `window_requests`，在渲染期统一执行。
+//! 需要 `Window` 或不能在事件派发期执行的动作由外壳推进 `window_requests`，
+//! 在渲染期统一执行。
 
 use super::ContainerWorkspace;
-use super::types::{ContainerPruneTarget, ContainerSection, RowAction, RowTarget};
+use super::types::{
+    ContainerDetailTab, ContainerPruneTarget, ContainerSection, RowAction, RowTarget,
+};
 use crate::app::AppShell;
 use gpui_kit::{Context, EventEmitter};
 use transom_core::TabId;
@@ -60,6 +63,28 @@ pub(crate) enum ContainerWorkspaceEvent {
     /// 卷详情只显示「浏览文件」入口；切到文件页签与拉取根目录都要走外壳既有的
     /// 目录加载链路，因此以事件上报，由外壳在渲染期执行。
     OpenVolumeFiles,
+    /// 打开容器资源配置更新表单；容器名随事件携带。
+    OpenContainerUpdate(String),
+    /// 打开容器配置反向导出弹窗；容器名随事件携带。
+    OpenContainerExport(String),
+    /// 打开容器提交镜像表单；容器名随事件携带。
+    OpenContainerCommit(String),
+    /// 以既有容器为模板打开克隆运行表单。
+    CloneContainer {
+        /// 源容器 id。
+        id: String,
+        /// 源容器名。
+        name: String,
+    },
+    /// 以既有容器配置重建容器。
+    RecreateContainer {
+        /// 源容器 id。
+        id: String,
+        /// 源容器名。
+        name: String,
+    },
+    /// 切换到指定详情页签；终端等页签需要外壳初始化会话。
+    SetDetailTab(ContainerDetailTab),
     /// 对列表行执行动作；具体分发由外壳统一完成，其中部分动作需要窗口。
     RunRowAction {
         target: RowTarget,
@@ -73,9 +98,9 @@ impl AppShell {
     /// 处理容器工作区发来的动作意图。
     ///
     /// 设计原理（Why）：`tab_id` 由订阅创建时捕获传入，事件本身只表达动作；
-    /// 处理函数不反查容器实体来确定归属，也不读它的状态。不需要窗口的动作直接
-    /// 调用既有外壳方法；需要窗口的动作（输入表单、弹窗）推进 `window_requests`，
-    /// 由渲染期统一执行，避免在事件派发阶段缺少 `Window` 时丢失动作。
+    /// 处理函数不反查容器实体来确定归属，也不读它的状态。不需要窗口且只改外壳
+    /// 状态的动作直接调用既有外壳方法；需要窗口（输入表单、弹窗）或必须在实体
+    /// 派发结束之后才能读写的动作推进 `window_requests`，由渲染期统一执行。
     pub(crate) fn on_container_workspace_event(
         &mut self,
         tab_id: TabId,
@@ -124,6 +149,12 @@ impl AppShell {
             | ContainerWorkspaceEvent::OpenBuildDialog
             | ContainerWorkspaceEvent::OpenPortForward { .. }
             | ContainerWorkspaceEvent::OpenVolumeFiles
+            | ContainerWorkspaceEvent::OpenContainerUpdate(_)
+            | ContainerWorkspaceEvent::OpenContainerExport(_)
+            | ContainerWorkspaceEvent::OpenContainerCommit(_)
+            | ContainerWorkspaceEvent::CloneContainer { .. }
+            | ContainerWorkspaceEvent::RecreateContainer { .. }
+            | ContainerWorkspaceEvent::SetDetailTab(_)
             | ContainerWorkspaceEvent::RunRowAction { .. } => {
                 self.state
                     .window_requests

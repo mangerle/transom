@@ -10,8 +10,6 @@ pub(crate) struct ContainerHeaderView<'a> {
     /// 详情页签按钮组：容器分类有页签，直接占掉标题的位置（标题与中栏高亮行
     /// 重复）；其它分类只有基础信息，页签为 `None`，仍显示标题。
     pub(super) tabs: Option<AnyElement>,
-    /// 基础信息当前是否显示原始 inspect：头部的小按钮用它显示选中态。
-    pub(super) overview_raw: bool,
     /// 当前详情页签：原始 inspect 按钮只在基础信息页出现。
     pub(super) detail_tab: ContainerDetailTab,
     pub(super) container: &'a Option<ContainerSummary>,
@@ -38,7 +36,6 @@ impl AppShell {
             section,
             title,
             tabs,
-            overview_raw,
             detail_tab,
             container,
             details,
@@ -73,13 +70,11 @@ impl AppShell {
         let mut actions = h_flex().gap_1().items_center().flex_shrink_0();
         match section {
             ContainerSection::Containers => {
-                if let Some(container) = container {
+                if let Some(container) = container
+                    && let Some(workspace) = self.state.container_workspace(tab_id)
+                {
                     actions = actions.children(super::header_container::container_header_actions(
-                        tab_id,
-                        container,
-                        detail_tab,
-                        overview_raw,
-                        cx,
+                        &workspace, container, detail_tab,
                     ));
                 }
             }

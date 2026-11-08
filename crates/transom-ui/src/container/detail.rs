@@ -234,7 +234,6 @@ impl AppShell {
                 section,
                 title,
                 tabs,
-                overview_raw,
                 detail_tab,
                 container: &selected_container,
                 details: &details,

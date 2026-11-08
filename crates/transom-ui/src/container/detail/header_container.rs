@@ -3,23 +3,41 @@
 //! 设计原理（Why）：
 //! - 将容器专用的操作按钮从 `header.rs` 剥离，避免单文件行数超出 500 行规范；
 //! - 遵循「一屏一个主行动」原则，运行中仅展示「停止」与「终端」，非运行展示「启动」，
-//!   重启、更新、导出、提交、克隆与删除等全部收纳进「更多」下拉菜单，并在删除前加分隔线。
+//!   重启、更新、导出、提交、克隆与删除等全部收纳进「更多」下拉菜单，并在删除前加分隔线；
+//! - 渲染只持有工作区实体句柄：生命周期、删除确认等实体动作直接 `update` 实体，
+//!   更新、导出、提交、克隆、重建与终端跳转需要外壳表单或窗口，统一发事件上报。
 
 use super::*;
+use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
-use transom_core::{ContainerSummary, TabId};
+use transom_core::{ContainerLifecycleAction, ContainerSummary};
+
+/// 把生命周期动作接到工作区实体：按钮样式在调用点声明，回调只投递命令。
+fn lifecycle_button(
+    view: &Entity<ContainerWorkspace>,
+    name: &str,
+    action: ContainerLifecycleAction,
+    button: Button,
+) -> AnyElement {
+    let view = view.clone();
+    let name = name.to_string();
+    button
+        .on_click(move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.container_lifecycle(name.clone(), action.clone(), cx);
+            });
+        })
+        .into_any_element()
+}
 
 /// 构建容器详情头部右侧的精简操作组。
 pub(super) fn container_header_actions(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     container: &ContainerSummary,
     detail_tab: ContainerDetailTab,
-    _overview_raw: bool,
-    cx: &mut Context<AppShell>,
 ) -> Vec<AnyElement> {
     let mut actions = Vec::new();
-    let app = cx.entity().clone();
     let name = container.name.clone();
     let id = container.id.clone();
 
@@ -27,114 +45,66 @@ pub(super) fn container_header_actions(
     let paused = container.state == transom_core::ContainerState::Paused;
 
     if paused {
-        actions.push(
+        actions.push(lifecycle_button(
+            view,
+            &name,
+            ContainerLifecycleAction::Unpause,
             Button::new("container-unpause")
                 .xsmall()
                 .primary()
                 .icon(IconName::Play)
-                .label(rust_i18n::t!("container.action.unpause").to_string())
-                .on_click(cx.listener({
-                    let name = name.clone();
-                    move |this, _, _, cx| {
-                        if let Some(workspace) = this.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.container_lifecycle(
-                                    name.clone(),
-                                    transom_core::ContainerLifecycleAction::Unpause,
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-                }))
-                .into_any_element(),
-        );
-        actions.push(
+                .label(rust_i18n::t!("container.action.unpause").to_string()),
+        ));
+        actions.push(lifecycle_button(
+            view,
+            &name,
+            ContainerLifecycleAction::Stop,
             Button::new("container-stop")
                 .xsmall()
                 .ghost()
                 .icon(IconName::Square)
-                .label(rust_i18n::t!("container.action.stop").to_string())
-                .on_click(cx.listener({
-                    let name = name.clone();
-                    move |this, _, _, cx| {
-                        if let Some(workspace) = this.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.container_lifecycle(
-                                    name.clone(),
-                                    transom_core::ContainerLifecycleAction::Stop,
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-                }))
-                .into_any_element(),
-        );
+                .label(rust_i18n::t!("container.action.stop").to_string()),
+        ));
     } else if running {
-        actions.push(
+        actions.push(lifecycle_button(
+            view,
+            &name,
+            ContainerLifecycleAction::Stop,
             Button::new("container-stop")
                 .xsmall()
                 .ghost()
                 .icon(IconName::Square)
-                .label(rust_i18n::t!("container.action.stop").to_string())
-                .on_click(cx.listener({
-                    let name = name.clone();
-                    move |this, _, _, cx| {
-                        if let Some(workspace) = this.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.container_lifecycle(
-                                    name.clone(),
-                                    transom_core::ContainerLifecycleAction::Stop,
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-                }))
-                .into_any_element(),
-        );
+                .label(rust_i18n::t!("container.action.stop").to_string()),
+        ));
         if detail_tab != ContainerDetailTab::Terminal {
+            let terminal_view = view.clone();
             actions.push(
                 Button::new("container-jump-terminal")
                     .xsmall()
                     .ghost()
                     .icon(IconName::Terminal)
                     .label(rust_i18n::t!("container.detail.terminal").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.set_container_detail_tab(
-                            tab_id,
-                            ContainerDetailTab::Terminal,
-                            window,
-                            cx,
-                        );
-                    }))
+                    .on_click(move |_, _, cx| {
+                        terminal_view.update(cx, |_, cx| {
+                            cx.emit(ContainerWorkspaceEvent::SetDetailTab(
+                                ContainerDetailTab::Terminal,
+                            ));
+                        });
+                    })
                     .into_any_element(),
             );
         }
     } else {
-        actions.push(
+        actions.push(lifecycle_button(
+            view,
+            &name,
+            ContainerLifecycleAction::Start,
             Button::new("container-start")
                 .xsmall()
                 .primary()
                 .icon(IconName::Play)
-                .label(rust_i18n::t!("container.action.start").to_string())
-                .on_click(cx.listener({
-                    let name = name.clone();
-                    move |this, _, _, cx| {
-                        if let Some(workspace) = this.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.container_lifecycle(
-                                    name.clone(),
-                                    transom_core::ContainerLifecycleAction::Start,
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-                }))
-                .into_any_element(),
-        );
+                .label(rust_i18n::t!("container.action.start").to_string()),
+        ));
     }
 
     let more_btn = Button::new("container-detail-more")
@@ -143,146 +113,139 @@ pub(super) fn container_header_actions(
         .icon(IconName::Ellipsis)
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu({
-            let app = app.clone();
+            let view = view.clone();
             let name = name.clone();
             let id = id.clone();
             move |menu, _, _| {
                 let mut menu = menu;
 
                 if running {
-                    let app_p = app.clone();
-                    let name_p = name.clone();
+                    let action_view = view.clone();
+                    let action_name = name.clone();
                     menu = menu.item(
                         PopupMenuItem::new(rust_i18n::t!("container.action.pause").to_string())
                             .on_click(move |_, _, cx| {
-                                app_p.update(cx, |this, cx| {
-                                    if let Some(workspace) = this.state.container_workspace(tab_id)
-                                    {
-                                        workspace.update(cx, |workspace, cx| {
-                                            workspace.container_lifecycle(
-                                                name_p.clone(),
-                                                transom_core::ContainerLifecycleAction::Pause,
-                                                cx,
-                                            );
-                                        });
-                                    }
+                                action_view.update(cx, |workspace, cx| {
+                                    workspace.container_lifecycle(
+                                        action_name.clone(),
+                                        ContainerLifecycleAction::Pause,
+                                        cx,
+                                    );
                                 });
                             }),
                     );
                 }
 
                 if running || paused {
-                    let app_r = app.clone();
-                    let name_r = name.clone();
+                    let restart_view = view.clone();
+                    let restart_name = name.clone();
                     menu = menu.item(
                         PopupMenuItem::new(rust_i18n::t!("container.action.restart").to_string())
                             .on_click(move |_, _, cx| {
-                                app_r.update(cx, |this, cx| {
-                                    if let Some(workspace) = this.state.container_workspace(tab_id)
-                                    {
-                                        workspace.update(cx, |workspace, cx| {
-                                            workspace.container_lifecycle(
-                                                name_r.clone(),
-                                                transom_core::ContainerLifecycleAction::Restart,
-                                                cx,
-                                            );
-                                        });
-                                    }
+                                restart_view.update(cx, |workspace, cx| {
+                                    workspace.container_lifecycle(
+                                        restart_name.clone(),
+                                        ContainerLifecycleAction::Restart,
+                                        cx,
+                                    );
                                 });
                             }),
                     );
-                    let app_k = app.clone();
-                    let name_k = name.clone();
+                    let kill_view = view.clone();
+                    let kill_name = name.clone();
                     menu = menu.item(
                         PopupMenuItem::new(rust_i18n::t!("container.action.kill").to_string())
                             .on_click(move |_, _, cx| {
-                                app_k.update(cx, |this, cx| {
-                                    if let Some(workspace) = this.state.container_workspace(tab_id)
-                                    {
-                                        workspace.update(cx, |workspace, cx| {
-                                            workspace.container_lifecycle(
-                                                name_k.clone(),
-                                                transom_core::ContainerLifecycleAction::Kill {
-                                                    signal: None,
-                                                },
-                                                cx,
-                                            );
-                                        });
-                                    }
+                                kill_view.update(cx, |workspace, cx| {
+                                    workspace.container_lifecycle(
+                                        kill_name.clone(),
+                                        ContainerLifecycleAction::Kill { signal: None },
+                                        cx,
+                                    );
                                 });
                             }),
                     );
                     menu = menu.item(PopupMenuItem::separator());
                 }
 
-                let app_u = app.clone();
-                let name_u = name.clone();
+                let update_view = view.clone();
+                let update_name = name.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!("container.action.update").to_string())
-                        .on_click(move |_, window, cx| {
-                            app_u.update(cx, |this, cx| {
-                                this.open_container_update(tab_id, name_u.clone(), window, cx);
+                        .on_click(move |_, _, cx| {
+                            update_view.update(cx, |_, cx| {
+                                cx.emit(ContainerWorkspaceEvent::OpenContainerUpdate(
+                                    update_name.clone(),
+                                ));
                             });
                         }),
                 );
 
-                let app_e = app.clone();
-                let name_e = name.clone();
+                let export_view = view.clone();
+                let export_name = name.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!("container.action.export_config").to_string())
                         .on_click(move |_, _, cx| {
-                            app_e.update(cx, |this, cx| {
-                                this.open_container_export(tab_id, name_e.clone(), cx);
+                            export_view.update(cx, |_, cx| {
+                                cx.emit(ContainerWorkspaceEvent::OpenContainerExport(
+                                    export_name.clone(),
+                                ));
                             });
                         }),
                 );
 
-                let app_c = app.clone();
-                let name_c = name.clone();
+                let commit_view = view.clone();
+                let commit_name = name.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!("container.action.commit").to_string())
-                        .on_click(move |_, window, cx| {
-                            app_c.update(cx, |this, cx| {
-                                this.open_container_commit(tab_id, name_c.clone(), window, cx);
+                        .on_click(move |_, _, cx| {
+                            commit_view.update(cx, |_, cx| {
+                                cx.emit(ContainerWorkspaceEvent::OpenContainerCommit(
+                                    commit_name.clone(),
+                                ));
                             });
                         }),
                 );
 
-                let app_cl = app.clone();
-                let id_cl = id.clone();
-                let name_cl = name.clone();
+                let clone_view = view.clone();
+                let clone_id = id.clone();
+                let clone_name = name.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!("container.action.clone").to_string())
-                        .on_click(move |_, window, cx| {
-                            app_cl.update(cx, |this, cx| {
-                                this.clone_container(tab_id, &id_cl, &name_cl, window, cx);
+                        .on_click(move |_, _, cx| {
+                            clone_view.update(cx, |_, cx| {
+                                cx.emit(ContainerWorkspaceEvent::CloneContainer {
+                                    id: clone_id.clone(),
+                                    name: clone_name.clone(),
+                                });
                             });
                         }),
                 );
 
-                let app_rc = app.clone();
-                let id_rc = id.clone();
-                let name_rc = name.clone();
+                let recreate_view = view.clone();
+                let recreate_id = id.clone();
+                let recreate_name = name.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!("container.detail.recreate_menu").to_string())
-                        .on_click(move |_, window, cx| {
-                            app_rc.update(cx, |this, cx| {
-                                this.recreate_container(tab_id, &id_rc, &name_rc, window, cx);
+                        .on_click(move |_, _, cx| {
+                            recreate_view.update(cx, |_, cx| {
+                                cx.emit(ContainerWorkspaceEvent::RecreateContainer {
+                                    id: recreate_id.clone(),
+                                    name: recreate_name.clone(),
+                                });
                             });
                         }),
                 );
 
                 menu = menu.item(PopupMenuItem::separator());
-                let app_d = app.clone();
-                let name_d = name.clone();
+                let delete_view = view.clone();
+                let delete_name = name.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!("common.delete").to_string()).on_click(
                         move |_, _, cx| {
-                            app_d.update(cx, |this, cx| {
-                                this.with_container_mut(tab_id, cx, |workspace| {
-                                    workspace.confirm =
-                                        Some(ContainerConfirm::Container(name_d.clone()));
-                                });
+                            delete_view.update(cx, |workspace, cx| {
+                                workspace.state.confirm =
+                                    Some(ContainerConfirm::Container(delete_name.clone()));
                                 cx.notify();
                             });
                         },

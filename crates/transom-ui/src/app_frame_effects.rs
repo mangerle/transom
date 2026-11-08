@@ -204,11 +204,12 @@ impl AppShell {
         }
     }
 
-    /// 执行一条需要窗口的容器工作区动作。
+    /// 执行一条在事件派发期不能直接完成的容器工作区动作。
     ///
-    /// 设计原理（Why）：事件在标签实体派发阶段产生，那里拿不到 `Window`；外壳
-    /// 先把事件连同订阅捕获的标签 id 入队，渲染期再调用既有打开方法。这里只
-    /// 处理需要窗口的分支，不需要窗口的动作已在事件处理函数里直接完成。
+    /// 设计原理（Why）：事件在标签实体派发阶段产生，那里既拿不到 `Window`，
+    /// 也不能在实体正被租借时回读它；外壳先把事件连同订阅捕获的标签 id 入队，
+    /// 渲染期再调用既有打开/切换方法。这里只处理需要延后的分支，纯实体动作已
+    /// 在事件处理函数之外由工作区自己完成。
     fn handle_container_request(
         &mut self,
         tab_id: transom_core::TabId,
@@ -245,6 +246,24 @@ impl AppShell {
                     });
                 }
                 self.load_container_dir(tab_id, "/".to_string(), cx);
+            }
+            ContainerWorkspaceEvent::OpenContainerUpdate(name) => {
+                self.open_container_update(tab_id, name.clone(), window, cx);
+            }
+            ContainerWorkspaceEvent::OpenContainerExport(name) => {
+                self.open_container_export(tab_id, name.clone(), cx);
+            }
+            ContainerWorkspaceEvent::OpenContainerCommit(name) => {
+                self.open_container_commit(tab_id, name.clone(), window, cx);
+            }
+            ContainerWorkspaceEvent::CloneContainer { id, name } => {
+                self.clone_container(tab_id, id, name, window, cx);
+            }
+            ContainerWorkspaceEvent::RecreateContainer { id, name } => {
+                self.recreate_container(tab_id, id, name, window, cx);
+            }
+            ContainerWorkspaceEvent::SetDetailTab(tab) => {
+                self.set_container_detail_tab(tab_id, *tab, window, cx);
             }
             ContainerWorkspaceEvent::RunRowAction { target, action } => {
                 self.run_row_action(tab_id, target.clone(), *action, window, cx);
