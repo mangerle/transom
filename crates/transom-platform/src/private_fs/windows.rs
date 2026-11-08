@@ -29,7 +29,7 @@ use windows::Win32::Security::{
 };
 use windows::Win32::Storage::FileSystem::{
     CREATE_ALWAYS, CreateDirectoryW, CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_WRITE,
-    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_ALWAYS,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_ALWAYS, WRITE_DAC,
 };
 use windows::Win32::System::SystemServices::SECURITY_DESCRIPTOR_REVISION;
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -184,10 +184,11 @@ fn open_private(
 ) -> io::Result<File> {
     let security = PrivateSecurity::new(false)?;
     let wide = wide_path(path);
+    // FILE_GENERIC_WRITE 不包含 WRITE_DAC；缺少该权限时后续 SetSecurityInfo 会失败。
     let handle = unsafe {
         CreateFileW(
             PCWSTR(wide.as_ptr()),
-            FILE_GENERIC_WRITE.0,
+            FILE_GENERIC_WRITE.0 | WRITE_DAC.0,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             Some(security.attributes_ptr()),
             disposition,

@@ -43,6 +43,10 @@ pub struct LaunchRequest {
 ///
 /// `-e` 与 `--` 是命令分隔符：其后所有参数都属于命令，逐字节保留（含空格
 /// 与以 `-` 开头的参数），不再参与本函数的任何选项解析。
+///
+/// macOS 的 URL 由 LaunchServices 在运行期回调，不读取 argv；该函数只在测试
+/// 与非 macOS 启动路径编译，避免 release 构建出现未使用代码。
+#[cfg(any(not(target_os = "macos"), test))]
 pub fn request_from_args<I: IntoIterator<Item = String>>(args: I) -> LaunchRequest {
     let mut request = LaunchRequest::default();
     let mut argv = args.into_iter().skip(1).peekable();
@@ -78,7 +82,7 @@ pub fn request_from_args<I: IntoIterator<Item = String>>(args: I) -> LaunchReque
             continue;
         }
         // 裸位置参数只在形如绝对路径时才可能是目录请求。
-        if arg.starts_with('/') {
+        if Path::new(&arg).is_absolute() {
             request.set_dir(&arg);
         }
     }
@@ -87,6 +91,7 @@ pub fn request_from_args<I: IntoIterator<Item = String>>(args: I) -> LaunchReque
 
 impl LaunchRequest {
     /// 记录第一个可信目录；后续目录参数忽略并留痕（歧义不猜）。
+    #[cfg(any(not(target_os = "macos"), test))]
     fn set_dir(&mut self, raw: &str) {
         if self.dir.is_some() {
             log::warn!("启动参数中出现第二个目录请求，已忽略: {raw}");

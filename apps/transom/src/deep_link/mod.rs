@@ -14,7 +14,9 @@ mod windows;
 #[cfg(test)]
 mod tests;
 
-pub use types::{LaunchRequest, request_from_args};
+pub use types::LaunchRequest;
+#[cfg(any(not(target_os = "macos"), test))]
+pub use types::request_from_args;
 #[cfg(unix)]
 pub use unix::acquire_primary;
 #[cfg(windows)]
