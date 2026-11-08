@@ -13,12 +13,12 @@ use transom_zmodem::{ZmodemConfig, attach_zmodem};
 use super::Internal;
 use super::session_context::ManagedSessionContext;
 
-/// 注销一个标签的本地统计订阅；订阅清空后采样器自行退出。
-pub(super) fn drop_local_stats(
-    local_stats_tabs: &Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
+/// 注销一个标签的本地宿主采样订阅；订阅清空后采样器自行退出。
+pub(super) fn drop_local_host(
+    tabs: &Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
     tab_id: TabId,
 ) {
-    if let Ok(mut tabs) = local_stats_tabs.lock() {
+    if let Ok(mut tabs) = tabs.lock() {
         tabs.retain(|(tab, _)| *tab != tab_id);
     }
 }
@@ -123,8 +123,7 @@ pub(super) struct ShutdownTables<'a> {
     pub(super) sessions: &'a mut HashMap<TabId, ManagedSessionContext>,
     pub(super) sftp_tasks: &'a mut HashMap<(TabId, TransferId), tokio::task::JoinHandle<()>>,
     pub(super) cleanup: &'a mut JoinSet<()>,
-    pub(super) local_stats_task: &'a mut Option<tokio::task::JoinHandle<()>>,
-    pub(super) local_traffic_task: &'a mut Option<tokio::task::JoinHandle<()>>,
+    pub(super) local_host_task: &'a mut Option<tokio::task::JoinHandle<()>>,
 }
 
 /// 优雅停机：停掉全部后台任务、断开全部远端并限时等待收尾，不再让任务
@@ -138,8 +137,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
         sessions,
         sftp_tasks,
         cleanup,
-        local_stats_task,
-        local_traffic_task,
+        local_host_task,
     } = tables;
     // 待连接任务：建连中的握手与认证随停机中止
     for (_, entry) in connecting.drain() {
@@ -152,10 +150,7 @@ pub(super) async fn shutdown_all(tables: ShutdownTables<'_>) {
     for (_, session) in sessions.drain() {
         session.shutdown(cleanup, "application shutdown");
     }
-    if let Some(task) = local_stats_task.take() {
-        task.abort();
-    }
-    if let Some(task) = local_traffic_task.take() {
+    if let Some(task) = local_host_task.take() {
         task.abort();
     }
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), async {

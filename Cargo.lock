@@ -8712,6 +8712,7 @@ name = "transom-platform"
 version = "1.6.1"
 dependencies = [
  "directories",
+ "sysinfo",
  "tempfile",
 ]
 

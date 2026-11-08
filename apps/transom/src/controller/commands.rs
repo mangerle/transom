@@ -8,7 +8,7 @@ use super::Internal;
 use super::container_ops::handle_container_command;
 use super::host_exec::run_batch;
 use super::lifecycle::{
-    ConnectingTab, KeyDeployParams, ShutdownTables, deploy_key, drop_local_stats, shutdown_all,
+    ConnectingTab, KeyDeployParams, ShutdownTables, deploy_key, drop_local_host, shutdown_all,
 };
 use super::pty::{ConnectDispatch, dispatch_connect};
 use super::samplers;
@@ -215,6 +215,7 @@ async fn handle_host_command(
                     tab_id,
                     connection_id,
                     event_tx: ctx.event_tx.clone(),
+                    local: ctx.local_processes.clone(),
                 }));
         }
         HostCommand::SampleProcessCount {
@@ -228,6 +229,7 @@ async fn handle_host_command(
                     tab_id,
                     connection_id,
                     event_tx: ctx.event_tx.clone(),
+                    local: ctx.local_processes.clone(),
                 }));
         }
         HostCommand::KillProcess {
@@ -242,6 +244,7 @@ async fn handle_host_command(
                     tab_id,
                     connection_id,
                     event_tx: ctx.event_tx.clone(),
+                    local: ctx.local_processes.clone(),
                 },
                 pid,
                 force,
@@ -421,8 +424,7 @@ fn close_tab(state: &mut ControllerState, ctx: &ControllerCtx, tab_id: TabId) {
     if let Some(entry) = state.connecting.remove(&tab_id) {
         entry.task.abort();
     }
-    drop_local_stats(&state.local_traffic_tabs, tab_id);
-    drop_local_stats(&state.local_stats_tabs, tab_id);
+    drop_local_host(&state.local_host_tabs, tab_id);
     state.terminate_session(tab_id, "tab closed");
     state.sftp_tasks.retain(|(t, _), handle| {
         if *t == tab_id {
@@ -460,8 +462,7 @@ pub(super) async fn shutdown(
         sessions: &mut state.sessions,
         sftp_tasks: &mut state.sftp_tasks,
         cleanup: &mut state.cleanup_set,
-        local_stats_task: &mut state.local_stats_task,
-        local_traffic_task: &mut state.local_traffic_task,
+        local_host_task: &mut state.local_host_task,
     })
     .await;
     state.monitor_set.shutdown().await;

@@ -263,13 +263,13 @@ async fn stream_stats_with_reconnect(
                     samples = samples.saturating_add(1);
                     if (samples == 1 || samples.is_multiple_of(5))
                         && local_engine
-                        && let Ok(Ok(text)) = tokio::time::timeout(
+                        && let Ok(Ok(load)) = tokio::time::timeout(
                             Duration::from_secs(1),
-                            tokio::fs::read_to_string("/proc/loadavg"),
+                            tokio::task::spawn_blocking(transom_platform::system::load_average),
                         )
                         .await
                     {
-                        cached_host_load = parse_loadavg(text.as_bytes());
+                        cached_host_load = Some(load);
                     }
                     stats.host_load = cached_host_load;
                     let event = ContainerAppEvent::StatsUpdated {

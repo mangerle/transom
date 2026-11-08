@@ -8,3 +8,4 @@
 pub mod os_release;
 pub mod paths;
 pub mod private_fs;
+pub mod system;

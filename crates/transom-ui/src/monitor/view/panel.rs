@@ -1,6 +1,7 @@
 //! 主机监控抽屉主面板。
 
 use super::*;
+use gpui_kit::prelude::FluentBuilder;
 
 impl MonitorView {
     /// 渲染右侧监控抽屉。
@@ -30,8 +31,10 @@ impl MonitorView {
                 .child(self.render_memory_section_card(stats, cx, p))
                 .child(self.render_disk_section_card(stats, cx, p))
                 .child(self.render_network_section_card(stats, cx, p))
-                .child(self.render_ports_section_card(stats, cx, p, "drawer"))
-                .child(self.render_services_section_card(stats, cx, p));
+                .when(stats.capabilities.linux_diagnostics, |this| {
+                    this.child(self.render_ports_section_card(stats, cx, p, "drawer"))
+                        .child(self.render_services_section_card(stats, cx, p))
+                });
         } else {
             body = body.child(
                 div()

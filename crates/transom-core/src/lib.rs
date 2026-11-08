@@ -27,7 +27,7 @@ pub use commands::{
     AppCommand, AppEvent, ConnectParams, ContainerAppEvent, ContainerCommand, DeepLinkRequest,
     ForwardAppEvent, ForwardCommand, GitAppEvent, GitCommand, GitShelfOperation, HostAppEvent,
     HostCommand, SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats,
-    TerminalAppEvent, TerminalCommand, ZmodemAppEvent, ZmodemCommand,
+    SystemStatsCapabilities, TerminalAppEvent, TerminalCommand, ZmodemAppEvent, ZmodemCommand,
 };
 pub use error::{AppError, ErrorCode, ErrorContext};
 pub use ids::{

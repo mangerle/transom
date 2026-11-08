@@ -93,6 +93,10 @@ impl StatsSamplerState {
             ports,
             failed_services,
             recent_oom,
+            capabilities: transom_core::SystemStatsCapabilities {
+                cpu_breakdown: true,
+                linux_diagnostics: true,
+            },
         }
     }
 }

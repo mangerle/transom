@@ -4,8 +4,8 @@
 //! SFTP 传输、端口转发与心跳保活都会被统一计入，与用户对"当前连接网速"的
 //! 直觉一致，也不会因为多开 SFTP 通道而漏算。
 //!
-//! 本地终端没有 SSH 传输层，改为读取 `/proc/net/dev` 汇总非回环网卡的累计
-//! 收发字节，得到的是本机系统级网速；两者共用 [`NetworkTraffic`] 的差值换算。
+//! 本地终端没有 SSH 传输层，由平台层宿主采样器汇总非回环网卡的累计收发
+//! 字节，得到本机系统级网速；两者共用 [`NetworkTraffic`] 的差值换算。
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};

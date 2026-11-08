@@ -94,6 +94,10 @@ pub fn parse_combined_stats(
             ports,
             failed_services,
             recent_oom,
+            capabilities: transom_core::SystemStatsCapabilities {
+                cpu_breakdown: true,
+                linux_diagnostics: true,
+            },
         },
         curr_cpu,
     )

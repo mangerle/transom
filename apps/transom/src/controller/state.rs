@@ -11,7 +11,7 @@
 use super::Internal;
 use super::container_ops::ContainerWorkspace;
 use super::lifecycle::ConnectingTab;
-use super::samplers::LocalTrafficTabs;
+use super::samplers::LocalHostTabs;
 use super::session_context::ManagedSessionContext;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -37,13 +37,9 @@ pub(super) struct ControllerState {
     /// 待连接意图表：发起连接即登记，完成事件必须匹配当前意图才接入；
     /// 同标签的新连接会顶掉并取消旧建连任务，迟到的旧结果被拒收。
     pub(super) connecting: HashMap<TabId, ConnectingTab>,
-    /// 本地终端共享一份系统统计采集：/proc 读取与 df 子进程按机器计一次，
-    /// 采样器在首个本地连接时拉起、标签清空后退出。
-    pub(super) local_stats_tabs: Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
-    pub(super) local_stats_task: Option<tokio::task::JoinHandle<()>>,
-    /// 本地网络流量同样是机器级属性：共享采样按机器计一份读取，逐标签广播。
-    pub(super) local_traffic_tabs: LocalTrafficTabs,
-    pub(super) local_traffic_task: Option<tokio::task::JoinHandle<()>>,
+    /// 本地终端的系统指标与网络流量共享同一份机器级采样。
+    pub(super) local_host_tabs: LocalHostTabs,
+    pub(super) local_host_task: Option<tokio::task::JoinHandle<()>>,
     /// 系统统计采样开关：由 UI 按“是否有可见消费方”下发，默认开启。
     pub(super) stats_sampling: Arc<std::sync::atomic::AtomicBool>,
     /// 主机动作（拨测/唤醒）批次任务：停机时统一等待。
@@ -70,10 +66,8 @@ impl ControllerState {
             sync_task: None,
             cleanup_set: JoinSet::new(),
             connecting: HashMap::new(),
-            local_stats_tabs: Arc::new(std::sync::Mutex::new(Vec::new())),
-            local_stats_task: None,
-            local_traffic_tabs: Arc::new(std::sync::Mutex::new(Vec::new())),
-            local_traffic_task: None,
+            local_host_tabs: Arc::new(std::sync::Mutex::new(Vec::new())),
+            local_host_task: None,
             stats_sampling: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             host_action_tasks: JoinSet::new(),
             monitor_set: JoinSet::new(),
@@ -149,6 +143,8 @@ pub(super) struct ControllerCtx {
     /// Git 子进程配置的唯一快照：界面只投递 `GitCommand::Configure`，
     /// 控制平面写入，任务派发时读取一次并绑定到 [`Repo`]。
     pub(super) git_config: Arc<RwLock<GitConfig>>,
+    /// 本地进程采样器：跨请求保留上一轮进程表，CPU 使用率才能形成差值。
+    pub(super) local_processes: Arc<parking_lot::Mutex<transom_platform::system::ProcessSampler>>,
 }
 
 impl ControllerCtx {

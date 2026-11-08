@@ -5,6 +5,7 @@ use crate::monitor::types::{usage_bar, usage_color};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::SystemStats;
 
@@ -144,58 +145,60 @@ fn render_cpu_metrics(stats: &SystemStats, color: Hsla, p: &Palette) -> AnyEleme
             ))),
     );
 
-    // 细分状态 (User / System / I/O Wait)
-    content = content.child(
-        h_flex()
-            .justify_between()
-            .text_xs()
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("monitor.cpu_section.user").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_color(p.foreground)
-                            .child(format!("{:.1}%", stats.cpu_user_percent)),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("monitor.cpu_section.system").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_color(p.foreground)
-                            .child(format!("{:.1}%", stats.cpu_system_percent)),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("monitor.cpu_section.iowait").to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_color(if stats.cpu_iowait_percent > 20.0 {
-                                p.danger
-                            } else {
-                                p.foreground
-                            })
-                            .child(format!("{:.1}%", stats.cpu_iowait_percent)),
-                    ),
-            ),
-    );
+    // 细分状态 (User / System / I/O Wait)：只有数据源明确支持时才展示。
+    content = content.when(stats.capabilities.cpu_breakdown, |this| {
+        this.child(
+            h_flex()
+                .justify_between()
+                .text_xs()
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("monitor.cpu_section.user").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_color(p.foreground)
+                                .child(format!("{:.1}%", stats.cpu_user_percent)),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("monitor.cpu_section.system").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_color(p.foreground)
+                                .child(format!("{:.1}%", stats.cpu_system_percent)),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_color(p.muted_foreground)
+                                .child(rust_i18n::t!("monitor.cpu_section.iowait").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_color(if stats.cpu_iowait_percent > 20.0 {
+                                    p.danger
+                                } else {
+                                    p.foreground
+                                })
+                                .child(format!("{:.1}%", stats.cpu_iowait_percent)),
+                        ),
+                ),
+        )
+    });
 
     content.into_any_element()
 }

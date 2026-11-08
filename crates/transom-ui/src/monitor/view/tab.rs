@@ -1,6 +1,7 @@
 //! 全屏主机监控标签页内容。
 
 use super::*;
+use gpui_kit::prelude::FluentBuilder;
 
 impl MonitorView {
     /// 渲染全屏监控看板。
@@ -79,8 +80,10 @@ impl MonitorView {
                 .min_w_0()
                 .gap_3()
                 .child(self.render_network_section_card(stats, cx, p))
-                .child(self.render_ports_section_card(stats, cx, p, "tab"))
-                .child(self.render_services_section_card(stats, cx, p));
+                .when(stats.capabilities.linux_diagnostics, |this| {
+                    this.child(self.render_ports_section_card(stats, cx, p, "tab"))
+                        .child(self.render_services_section_card(stats, cx, p))
+                });
 
             let main_grid = h_flex().w_full().gap_3().child(left_col).child(right_col);
             let process_card = self.render_process_section_card(cx, p, "tab");

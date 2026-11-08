@@ -6,9 +6,9 @@
 //!   做成可点入口，便于直接附上现场文件；
 //! - 核心优势：信息全部来自构建期常量与只读系统调用，本页没有任何可写状态，
 //!   因此不参与设置弹窗的保存/取消回滚语义，也不新增设置项；
-//! - 代价与局限：发行版名读 `/etc/os-release`（仅 Linux 有效），其余平台退回
-//!   `std::env::consts::OS`；rustc 版本与 git 提交号无法显示，因为工程刻意没有
-//!   build.rs 注入构建元数据，避免每次改动都触发全量重编。
+//! - 代价与局限：系统名称来自平台探针，极简环境可能只能拿到 OS 族名；
+//!   rustc 版本与 git 提交号无法显示，因为工程刻意没有 build.rs 注入构建
+//!   元数据，避免每次改动都触发全量重编。
 
 use crate::brand;
 use crate::palette::Palette;
@@ -24,18 +24,17 @@ const LOGO_SIZE: f32 = 3.0;
 
 /// 本机运行环境标识：`发行版 · 架构`。
 ///
-/// 渲染每帧都会走到这里，故文件读取只做一次并缓存；读不到（非 Linux 或文件
-/// 缺失）退回 OS 族名——宁可粗略也不留空白，且绝不因为一个可选信息报错。
+/// 渲染每帧都会走到这里，故查询只做一次并缓存；平台无法给出完整名称时
+/// 退回 OS 族名，宁可粗略也不留空白。
 fn platform_label() -> &'static str {
     static LABEL: OnceLock<String> = OnceLock::new();
     LABEL
         .get_or_init(|| {
-            let distro = std::fs::read_to_string("/etc/os-release")
-                .ok()
-                .map(|content| transom_core::protocol::system_stats::parse_os_name(&content))
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| std::env::consts::OS.to_string());
-            format!("{distro} · {}", std::env::consts::ARCH)
+            format!(
+                "{} · {}",
+                transom_platform::system::os_name(),
+                std::env::consts::ARCH
+            )
         })
         .as_str()
 }

@@ -299,6 +299,9 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         )),
         git: Arc::new(GitService::new()),
         git_config: Arc::new(parking_lot::RwLock::new(GitConfig::default())),
+        local_processes: Arc::new(parking_lot::Mutex::new(
+            transom_platform::system::ProcessSampler::new(),
+        )),
     };
     let mut state = ControllerState::new();
 

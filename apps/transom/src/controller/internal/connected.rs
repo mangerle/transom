@@ -4,8 +4,7 @@ use crate::controller::lifecycle::{
     Admission, AdoptConnection, admit_connection, adopt_connection,
 };
 use crate::controller::samplers::{
-    run_local_stats_sampler, run_local_traffic_sampler, spawn_remote_stats_sampler,
-    spawn_traffic_sampler,
+    run_local_host_sampler, spawn_remote_stats_sampler, spawn_traffic_sampler,
 };
 use crate::controller::state::{ControllerCtx, ControllerState};
 use crate::controller::{Internal, ReadyConnection};
@@ -345,33 +344,19 @@ fn register_local_shared_samplers(
     tab_id: TabId,
     connection_id: ConnectionId,
 ) {
-    if let Ok(mut tabs) = state.local_stats_tabs.lock() {
+    if let Ok(mut tabs) = state.local_host_tabs.lock() {
         tabs.retain(|(tab, _)| *tab != tab_id);
         tabs.push((tab_id, connection_id));
     }
     if state
-        .local_stats_task
+        .local_host_task
         .as_ref()
         .is_none_or(|task| task.is_finished())
     {
-        state.local_stats_task = Some(tokio::spawn(run_local_stats_sampler(
+        state.local_host_task = Some(tokio::spawn(run_local_host_sampler(
             ctx.event_tx.clone(),
-            state.local_stats_tabs.clone(),
+            state.local_host_tabs.clone(),
             state.stats_sampling.clone(),
-        )));
-    }
-    if let Ok(mut tabs) = state.local_traffic_tabs.lock() {
-        tabs.retain(|(tab, _)| *tab != tab_id);
-        tabs.push((tab_id, connection_id));
-    }
-    if state
-        .local_traffic_task
-        .as_ref()
-        .is_none_or(|task| task.is_finished())
-    {
-        state.local_traffic_task = Some(tokio::spawn(run_local_traffic_sampler(
-            ctx.event_tx.clone(),
-            state.local_traffic_tabs.clone(),
         )));
     }
 }

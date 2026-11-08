@@ -1,11 +1,12 @@
 //! 进程采样与信号控制操作。
 
 use super::stats::COMMAND_TIMEOUT;
-use tokio::process::Command;
-use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, HostAppEvent, TabId};
+use std::sync::Arc;
+use transom_core::{AppError, AppEvent, ConnectionId, ErrorCode, HostAppEvent, ProcessInfo, TabId};
 use transom_net::SshRemote;
+use transom_platform::system::{ProcessInfo as HostProcessInfo, ProcessSampler};
 
-/// 进程采样/信号控制的目标：SSH 会话走远端 exec 通道，本地终端跑本机命令。
+/// 进程采样/信号控制的目标：SSH 会话走远端 exec 通道，本地终端使用宿主采样器。
 ///
 /// 串口与 Telnet 不参与进程面板：控制器只在远端已登记或调用方确认本地终端时
 /// 才会收到命令，按 `remote` 是否为 `Some` 选择执行位置。
@@ -14,24 +15,30 @@ pub(crate) struct ProcessTarget {
     pub(crate) tab_id: TabId,
     pub(crate) connection_id: ConnectionId,
     pub(crate) event_tx: flume::Sender<AppEvent>,
+    pub(crate) local: Arc<parking_lot::Mutex<ProcessSampler>>,
 }
 
 pub(crate) async fn run_process_sample(target: ProcessTarget) {
     // 不排序、不截断：进程表要完整可搜，排序在界面侧按当前列完成，
     // 远端多排一次全表既浪费又和界面排序口径重复。
-    let command = "ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args";
-    let result = exec_sample_command(target.remote.as_ref(), command, "进程采样").await;
+    let result = match &target.remote {
+        Some(remote) => remote_sample_command(
+            remote,
+            "ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args",
+            "进程采样",
+        )
+        .await
+        .map(|output| transom_net::system_stats::parse_processes(&output)),
+        None => sample_local_processes(&target.local).await,
+    };
 
     let event: AppEvent = match result {
-        Ok(output) => {
-            let processes = transom_net::system_stats::parse_processes(&output);
-            HostAppEvent::ProcessesSampled {
-                tab_id: target.tab_id,
-                connection_id: target.connection_id,
-                processes,
-            }
-            .into()
+        Ok(processes) => HostAppEvent::ProcessesSampled {
+            tab_id: target.tab_id,
+            connection_id: target.connection_id,
+            processes,
         }
+        .into(),
         Err(error) => HostAppEvent::ProcessesSampleFailed {
             tab_id: target.tab_id,
             connection_id: target.connection_id,
@@ -44,13 +51,20 @@ pub(crate) async fn run_process_sample(target: ProcessTarget) {
 
 /// 折叠态采样：只取进程总数，用窄列输出把每轮传输量压到数 KB。
 pub(crate) async fn run_process_count(target: ProcessTarget) {
-    let result = exec_sample_command(target.remote.as_ref(), "ps -eo pid=", "进程计数采样").await;
+    let result = match &target.remote {
+        Some(remote) => remote_sample_command(remote, "ps -eo pid=", "进程计数采样")
+            .await
+            .map(|output| transom_net::system_stats::parse_process_count(&output)),
+        None => sample_local_processes(&target.local)
+            .await
+            .map(|processes| u32::try_from(processes.len()).unwrap_or(u32::MAX)),
+    };
 
     let event: AppEvent = match result {
-        Ok(output) => HostAppEvent::ProcessCountSampled {
+        Ok(count) => HostAppEvent::ProcessCountSampled {
             tab_id: target.tab_id,
             connection_id: target.connection_id,
-            count: transom_net::system_stats::parse_process_count(&output),
+            count,
         }
         .into(),
         Err(error) => HostAppEvent::ProcessesSampleFailed {
@@ -63,22 +77,16 @@ pub(crate) async fn run_process_count(target: ProcessTarget) {
     let _ = target.event_tx.send_async(event).await;
 }
 
-/// 执行采样命令并取回标准输出：SSH 会话走远端 exec 通道，本地终端跑本机命令。
-async fn exec_sample_command(
-    remote: Option<&SshRemote>,
+/// 执行远端采样命令并取回标准输出。
+async fn remote_sample_command(
+    remote: &SshRemote,
     command: &str,
     action: &str,
 ) -> Result<String, AppError> {
-    match remote {
-        Some(remote) => {
-            match tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command_capture(command)).await
-            {
-                Ok(Ok(output)) => Ok(output.stdout),
-                Ok(Err(error)) => Err(error),
-                Err(_) => Err(command_timeout(action)),
-            }
-        }
-        None => local_command_output(command).await,
+    match tokio::time::timeout(COMMAND_TIMEOUT, remote.exec_command_capture(command)).await {
+        Ok(Ok(output)) => Ok(output.stdout),
+        Ok(Err(error)) => Err(error),
+        Err(_) => Err(command_timeout(action)),
     }
 }
 
@@ -107,10 +115,17 @@ pub(crate) async fn run_process_kill(target: ProcessTarget, pid: u32, force: boo
                     Err(_) => Some(command_timeout("终止进程")),
                 }
             }
-            None => match local_kill(pid, signal).await {
-                Ok(()) => None,
-                Err(reason) => Some(AppError::with_detail(ErrorCode::Io, reason)),
-            },
+            None => {
+                let sampler = Arc::clone(&target.local);
+                match tokio::task::spawn_blocking(move || sampler.lock().kill(pid, force)).await {
+                    Ok(Ok(())) => None,
+                    Ok(Err(reason)) => Some(AppError::with_detail(ErrorCode::Io, reason)),
+                    Err(error) => Some(AppError::with_detail(
+                        ErrorCode::Io,
+                        format!("本地进程终止任务异常终止: {error}"),
+                    )),
+                }
+            }
         }
     };
     let _ = target
@@ -134,29 +149,27 @@ fn command_timeout(action: &str) -> AppError {
     )
 }
 
-async fn local_command_output(command: &str) -> Result<String, AppError> {
-    let mut child = Command::new("sh");
-    child.arg("-c").arg(command).kill_on_drop(true);
-    match tokio::time::timeout(COMMAND_TIMEOUT, child.output()).await {
-        Ok(Ok(output)) => Ok(String::from_utf8_lossy(&output.stdout).to_string()),
-        Ok(Err(error)) => Err(AppError::with_detail(
-            ErrorCode::Io,
-            format!("执行本地进程采样失败: {error}"),
-        )),
-        Err(_) => Err(command_timeout("本地进程采样")),
-    }
+async fn sample_local_processes(
+    sampler: &Arc<parking_lot::Mutex<ProcessSampler>>,
+) -> Result<Vec<ProcessInfo>, AppError> {
+    let sampler = Arc::clone(sampler);
+    tokio::task::spawn_blocking(move || sampler.lock().sample())
+        .await
+        .map(|processes| processes.into_iter().map(map_process).collect())
+        .map_err(|error| {
+            AppError::with_detail(ErrorCode::Io, format!("本地进程采样任务异常终止: {error}"))
+        })
 }
 
-async fn local_kill(pid: u32, signal: &str) -> Result<(), String> {
-    let mut child = Command::new("kill");
-    child.arg(signal).arg(pid.to_string()).kill_on_drop(true);
-    let status = tokio::time::timeout(COMMAND_TIMEOUT, child.status())
-        .await
-        .map_err(|_| "本地 kill 命令超时".to_string())?
-        .map_err(|error| format!("执行本地 kill 失败: {error}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("本地 kill 返回失败状态: {status}"))
+fn map_process(process: HostProcessInfo) -> ProcessInfo {
+    ProcessInfo {
+        pid: process.pid,
+        ppid: process.ppid,
+        user: process.user,
+        cpu_percent: process.cpu_percent,
+        mem_percent: process.mem_percent,
+        rss_bytes: process.rss_bytes,
+        cmdline: process.cmdline,
+        args: process.args,
     }
 }

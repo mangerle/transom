@@ -1,6 +1,6 @@
 //! 断开通知：仅当连接归属匹配时清理附属任务与远端句柄。
 
-use crate::controller::lifecycle::drop_local_stats;
+use crate::controller::lifecycle::drop_local_host;
 use crate::controller::state::{ControllerCtx, ControllerState};
 use transom_core::{ConnectionId, TabId, TerminalAppEvent};
 
@@ -16,8 +16,7 @@ pub(super) async fn handle_disconnected(
         return;
     }
     state.terminate_session(tab_id, "connection lost");
-    drop_local_stats(&state.local_stats_tabs, tab_id);
-    drop_local_stats(&state.local_traffic_tabs, tab_id);
+    drop_local_host(&state.local_host_tabs, tab_id);
     state.sftp_tasks.retain(|(t, _), handle| {
         if *t == tab_id {
             handle.abort();

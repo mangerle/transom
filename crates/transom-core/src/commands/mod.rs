@@ -185,4 +185,20 @@ pub struct SystemStats {
     /// 近期内核 OOM 警报。
     #[serde(default)]
     pub recent_oom: Option<crate::protocol::system_stats::OomAlert>,
+    /// 当前数据源实际支持的能力；缺失能力不得用零值伪装成真实数据。
+    #[serde(default)]
+    pub capabilities: SystemStatsCapabilities,
+}
+
+/// 系统统计的能力边界。
+///
+/// Linux `/proc` 与 systemd 诊断能提供完整信息，跨平台宿主采样器则只能
+/// 提供通用资源指标。显式建模后，界面可以隐藏不存在的明细，而不是把
+/// “未采集”显示成 0 或“无数据”。
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct SystemStatsCapabilities {
+    /// 是否提供用户态、系统态与 I/O 等待拆分。
+    pub cpu_breakdown: bool,
+    /// 是否提供监听端口、systemd 失败服务与内核 OOM 诊断。
+    pub linux_diagnostics: bool,
 }

@@ -427,16 +427,6 @@ fn is_local_engine(engine: &transom_container::Engine) -> bool {
     )
 }
 
-/// 解析 `/proc/loadavg` 的前三个字段；格式不符时返回 `None`。
-fn parse_loadavg(bytes: &[u8]) -> Option<(f32, f32, f32)> {
-    let text = std::str::from_utf8(bytes).ok()?;
-    let mut fields = text.split_whitespace();
-    let one = fields.next()?.parse().ok()?;
-    let five = fields.next()?.parse().ok()?;
-    let fifteen = fields.next()?.parse().ok()?;
-    Some((one, five, fifteen))
-}
-
 fn engine_for(
     state: &ControllerState,
     ctx: &ControllerCtx,
