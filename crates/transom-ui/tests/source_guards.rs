@@ -974,3 +974,31 @@ fn replay_modal_is_owned_by_entity() {
         "ReplayModalView 必须存在于 record/entity.rs"
     );
 }
+
+/// 已下沉的容器渲染切片不得重新挂回 `impl AppShell`：这些文件只允许
+/// 自由渲染函数或实体方法，动作通过实体句柄/事件完成。
+#[test]
+fn migrated_container_render_slices_do_not_return_to_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let files = [
+        "src/container/pull_drawer.rs",
+        "src/container/view/header.rs",
+        "src/container/list/render.rs",
+        "src/container/list/filters.rs",
+    ];
+    let mut offenders = Vec::new();
+    for file in files {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content.contains("impl AppShell") {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "已下沉的容器渲染文件不得再挂回外壳：\n{}",
+        offenders.join("\n")
+    );
+}
