@@ -72,3 +72,24 @@ fn registry_covers_every_kind_exactly_once() {
         assert_eq!(count, 1, "弹窗种类 {:?} 在注册表中必须恰好出现一次", kind);
     }
 }
+
+/// 注册表内的 slug 必须唯一且非空：slug 用于弹窗元素标识，重复会让 GPUI
+/// 在同一个 `ElementId` 下复用错误的状态，表现为焦点或输入串层。
+#[test]
+fn registry_slugs_are_unique_and_non_empty() {
+    let mut slugs = Vec::with_capacity(super::registry::MODALS.len());
+    for entry in super::registry::MODALS {
+        assert!(
+            !entry.slug.is_empty(),
+            "弹窗 {:?} 的 slug 不能为空",
+            entry.kind
+        );
+        assert!(
+            !slugs.contains(&entry.slug),
+            "弹窗 slug 重复: {}（种类 {:?}）",
+            entry.slug,
+            entry.kind
+        );
+        slugs.push(entry.slug);
+    }
+}
