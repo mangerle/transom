@@ -14,6 +14,16 @@ use crate::model::git::{
 
 /// Git 领域命令：全部发往控制器派发的后台任务。
 pub enum GitCommand {
+    /// 更新控制平面使用的 Git 可执行文件与提交作者配置。
+    ///
+    /// 设计原理（Why）：这两个值是进程级配置，读取方是每次 git 子进程调用。
+    /// 让界面直接写全局静态会让「谁有权改」不可追踪，也让测试之间互相污染；
+    /// 改为命令后，控制平面是唯一写入方，界面只表达意图。
+    Configure {
+        program: String,
+        author_name: String,
+        author_email: String,
+    },
     /// 刷新仓库状态（porcelain status + 领先/落后 + HEAD）。
     ///
     /// `git status` 默认不列忽略项。引擎仍保留读取忽略清单的能力，只是

@@ -83,8 +83,19 @@ pub fn run(services: UiServices) {
     }
     let language = i18n::resolve_language(&settings.language);
     reassert_default_terminal(&settings);
-    transom_git::set_git_program(&settings.git.executable_path);
-    transom_git::set_git_author(&settings.git.author_name, &settings.git.author_email);
+    // Git 配置的写入权归控制平面：这里只投递一次配置命令，避免界面直接改
+    // transom-git 的进程级静态。命令与后续 Git 命令共用同一条有界通道，
+    // 顺序由通道保证，窗口打开前配置已就位。
+    if let Err(error) = services.command_tx.try_send(
+        transom_core::GitCommand::Configure {
+            program: settings.git.executable_path.clone(),
+            author_name: settings.git.author_name.clone(),
+            author_email: settings.git.author_email.clone(),
+        }
+        .into(),
+    ) {
+        log::warn!("启动时投递 Git 配置命令失败，将使用默认配置，原因: {error}");
+    }
     // 应用装配日志时还不知道配置值，这里补上用户设的级别。
     //
     // 环境变量仍然优先：报障场景下 `TRANSOM_LOG=debug` 必须能盖过配置里的 `info`，

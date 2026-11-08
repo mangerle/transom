@@ -29,6 +29,19 @@ pub(super) fn handle_git_command(
     ctx: &ControllerCtx,
     command: GitCommand,
 ) {
+    if let GitCommand::Configure {
+        program,
+        author_name,
+        author_email,
+    } = &command
+    {
+        // 配置只由控制平面写入：界面不再直接碰 transom-git 的进程级静态。
+        log::info!("更新 Git 命令配置，可执行文件: {program}");
+        transom_git::set_git_program(program.clone());
+        transom_git::set_git_author(author_name.clone(), author_email.clone());
+        return;
+    }
+
     if let GitCommand::Clone {
         request_id,
         url,

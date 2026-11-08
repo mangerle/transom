@@ -83,6 +83,14 @@ impl AppShell {
                 self.state.set_error(message.clone());
                 cx.notify();
             }
+            SettingsEvent::RestartForUpdate => {
+                // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
+                // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
+                self.state
+                    .restart_requested
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                cx.quit();
+            }
         }
     }
 
@@ -92,6 +100,12 @@ impl AppShell {
         self.apply_shortcut_settings(cx);
         self.apply_block_view_settings(cx);
         self.apply_triggers_to_terminals(&settings.triggers, cx);
+        // Git 可执行文件与提交作者是进程级配置：界面只投递意图，写入权归控制平面。
+        self.send_command(transom_core::GitCommand::Configure {
+            program: settings.git.executable_path.clone(),
+            author_name: settings.git.author_name.clone(),
+            author_email: settings.git.author_email.clone(),
+        });
         cx.notify();
     }
 
