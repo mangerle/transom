@@ -99,9 +99,14 @@ impl 面板                                       →  面板自己的动作
 - 外壳处理实体事件期间不得回读该实体，否则触发
   “cannot read/update ... while it is already being updated”。
 
-已完成：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）、SFTP 面板
-（`SftpPanelView`）、设置面板（`SettingsView`）。容器与 Git 工作区仍以
-`AppShell` 固有方法承载，属于后续迁移项。
+已完成实体：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）、SFTP 面板
+（`SftpPanelView`）、设置面板（`SettingsView`）、已知主机弹窗（`KnownHostsView`）。
+
+容器与 Git 的**每标签页状态**已收进 `Entity<ContainerWorkspace>` /
+`Entity<GitWorkspace>`：标签内容只存句柄，外壳读写都经 `read`/`update`。
+两者的渲染编排与多数领域动作仍在 `AppShell`，通过显式标注的
+`with_container` / `with_container_mut` 迁移期桥访问状态；下一步是把这些
+动作按领域下沉进实体，再删除桥接方法。
 
 ## 数据流
 
