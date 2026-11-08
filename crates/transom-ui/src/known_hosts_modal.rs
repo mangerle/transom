@@ -1,7 +1,8 @@
-//! 已知主机指纹管理模态框渲染模块。
+//! 已知主机指纹管理弹窗：实体渲染与外壳的事件消费。
 
-use crate::app::{AppShell, AppState};
+use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::keys::{KnownHostsEvent, KnownHostsView};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -11,34 +12,29 @@ use gpui_kit::component::input::Input;
 use gpui_kit::*;
 
 impl AppShell {
-    pub(crate) fn remove_known_host(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
-        if let Err(error) = self.state.services.known_hosts.remove(host, port) {
-            self.state.set_error(localized_error(&error));
-        } else {
-            self.state.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
+    /// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
+    pub(crate) fn on_known_hosts_event(&mut self, event: &KnownHostsEvent, cx: &mut Context<Self>) {
+        match event {
+            KnownHostsEvent::Removed { error: Some(error) } => {
+                self.state.set_error(localized_error(error))
+            }
+            KnownHostsEvent::Removed { error: None } => {
+                self.state.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
+            }
         }
-        self.state.refresh_known_hosts();
         cx.notify();
     }
+}
 
-    pub(crate) fn render_known_hosts_body(
-        &self,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let records = self.state.modals.connection.known_hosts.records.clone();
-        let search_query = self
-            .state
-            .modals
-            .connection
-            .known_hosts
-            .search
-            .read(cx)
-            .value()
-            .trim()
-            .to_lowercase();
+impl KnownHostsView {
+    /// 弹窗主体：记录列表、搜索框与关闭按钮。
+    ///
+    /// 渲染期实体已被租借，因此只读自身状态；按钮回调经 `cx.listener` 回到
+    /// 本实体，不再经外壳转发。
+    pub(crate) fn render_body(&mut self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        let records = self.records().to_vec();
+        let search = self.search().clone();
+        let search_query = search.read(cx).value().trim().to_lowercase();
         let mut rows: Vec<AnyElement> = Vec::new();
         let filtered: Vec<_> = records
             .into_iter()
@@ -64,31 +60,22 @@ impl AppShell {
             );
         } else {
             for (index, record) in filtered.into_iter().enumerate() {
-                rows.push(known_host_row(index, &record, app, p));
+                rows.push(known_host_row(index, &record, cx, p));
             }
         }
 
-        let content = v_flex()
-            .gap_3()
-            .child(Input::new(&self.state.modals.connection.known_hosts.search).w_full())
-            .child(
-                v_flex()
-                    .id(ElementId::Name("known-hosts-list".into()))
-                    .max_h(px(380.0))
-                    .overflow_y_scroll()
-                    .children(rows),
-            );
+        let content = v_flex().gap_3().child(Input::new(&search).w_full()).child(
+            v_flex()
+                .id(ElementId::Name("known-hosts-list".into()))
+                .max_h(px(380.0))
+                .overflow_y_scroll()
+                .children(rows),
+        );
 
         let footer = Button::new("close-kh-btn")
             .ghost()
             .label(rust_i18n::t!("app.close").to_string())
-            .on_click(crate::dialog_host::on_event(
-                app,
-                |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.connection.known_hosts.open = false;
-                    cx.notify();
-                },
-            ));
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx)));
 
         crate::widgets::dialog_body(
             "known-hosts-modal",
@@ -99,19 +86,12 @@ impl AppShell {
         )
     }
 }
-impl AppState {
-    /// 重新读取已知主机记录到弹窗状态。
-    pub(crate) fn refresh_known_hosts(&mut self) {
-        self.modals.connection.known_hosts.records =
-            self.services.known_hosts.list().unwrap_or_default();
-    }
-}
 
 /// 单条已知主机记录：主机/端口、算法、指纹与删除按钮。
 fn known_host_row(
     index: usize,
     record: &transom_core::HostKeyRecord,
-    app: &Entity<AppShell>,
+    cx: &mut Context<KnownHostsView>,
     p: &Palette,
 ) -> AnyElement {
     let host = record.host.clone();
@@ -163,12 +143,9 @@ fn known_host_row(
                 .xsmall()
                 .icon(IconName::Trash)
                 .label(rust_i18n::t!("common.delete").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        this.remove_known_host(&host, port, cx);
-                    },
-                )),
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.remove(&host, port, cx);
+                })),
         )
         .into_any_element()
 }

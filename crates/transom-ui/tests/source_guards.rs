@@ -642,3 +642,52 @@ fn git_workspace_is_owned_by_entity() {
         "GitWorkspace 实体必须存在于 git/entity.rs"
     );
 }
+
+/// 容器工作区必须由实体持有：标签内容存 `Entity<ContainerWorkspace>`，旧的
+/// 可变引用访问器不得复活。实体化后状态生命周期随标签页。
+#[test]
+fn container_workspace_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let types = std::fs::read_to_string(root.join("src/app/types.rs")).expect("读取标签类型失败");
+    assert!(
+        types.contains("Containers(Entity<crate::container::ContainerWorkspace>)"),
+        "TabContent::Containers 必须持有 Entity<ContainerWorkspace>"
+    );
+    let container = std::fs::read_to_string(root.join("src/container/mod.rs"))
+        .expect("读取 container/mod.rs 失败");
+    assert!(
+        !container.contains("fn container_workspace_mut("),
+        "旧的 container_workspace_mut 不得复活"
+    );
+    let entity =
+        std::fs::read_to_string(root.join("src/container/entity.rs")).expect("读取容器实体失败");
+    assert!(
+        entity.contains("pub(crate) struct ContainerWorkspace"),
+        "ContainerWorkspace 实体必须存在于 container/entity.rs"
+    );
+}
+
+/// 已知主机弹窗必须由实体持有，旧的 `AppState` 刷新入口不得复活。
+#[test]
+fn known_hosts_modal_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("known_hosts: Entity<KnownHostsView>"),
+        "ModalHub 的 known_hosts 必须持有 Entity<KnownHostsView>"
+    );
+    let view = std::fs::read_to_string(root.join("src/keys/known_hosts_view.rs"))
+        .expect("读取已知主机实体失败");
+    assert!(
+        view.contains("pub(crate) struct KnownHostsView"),
+        "KnownHostsView 实体必须存在于 keys/known_hosts_view.rs"
+    );
+    let shell = std::fs::read_to_string(root.join("src/known_hosts_modal.rs"))
+        .expect("读取已知主机视图失败");
+    assert!(
+        !shell.contains("fn refresh_known_hosts(")
+            && !shell.contains("fn render_known_hosts_body("),
+        "已知主机的旧外壳入口不得复活"
+    );
+}

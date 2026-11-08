@@ -13,7 +13,7 @@
 use super::batch::BatchEditForm;
 use crate::backup::BackupPromptState;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
-use crate::keys::KnownHostsModalState;
+use crate::keys::KnownHostsView;
 use crate::session_form::SessionForm;
 use crate::settings::SettingsView;
 use crate::sidebar::FolderForm;
@@ -45,7 +45,7 @@ pub(crate) struct ConnectionModals {
     /// 远端 OSC 52 写剪贴板的待裁决请求（默认拒绝，按会话授权）。
     pub(crate) clipboard_request: Option<crate::clipboard_prompt::ClipboardWritePrompt>,
     pub(crate) pending_credential: Option<PendingCredential>,
-    pub(crate) known_hosts: KnownHostsModalState,
+    pub(crate) known_hosts: Entity<KnownHostsView>,
 }
 
 /// 工具类浮层：查看器、备份、快捷入口与一次性确认。
@@ -109,7 +109,7 @@ impl ModalHub {
 
     /// 构造新的模态聚合容器。
     pub(crate) fn new(
-        known_hosts: KnownHostsModalState,
+        known_hosts: Entity<KnownHostsView>,
         settings: Entity<SettingsView>,
         quick_open_state: Entity<CommandState>,
         snippet_panel: SnippetPanelState,

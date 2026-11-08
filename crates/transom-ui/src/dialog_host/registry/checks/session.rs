@@ -59,8 +59,8 @@ pub(in crate::app::dialog_host) fn clipboard_prompt_open(shell: &AppShell, _: &A
     shell.state.modals.connection.clipboard_request.is_some()
 }
 
-pub(in crate::app::dialog_host) fn known_hosts_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.connection.known_hosts.open
+pub(in crate::app::dialog_host) fn known_hosts_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.connection.known_hosts.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn forward_confirm_open(shell: &AppShell, _: &App) -> bool {

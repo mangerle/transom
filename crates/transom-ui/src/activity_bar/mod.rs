@@ -271,9 +271,11 @@ impl AppShell {
             ActivityItemId::Language => self.toggle_language(cx),
             ActivityItemId::ImportSshConfig => self.import_ssh_config(cx),
             ActivityItemId::KnownHosts => {
-                self.state.modals.connection.known_hosts.open = true;
-                self.state.refresh_known_hosts();
-                cx.notify();
+                self.state
+                    .modals
+                    .connection
+                    .known_hosts
+                    .update(cx, |view, cx| view.open(cx));
             }
             ActivityItemId::Keys => self.open_key_wizard(window, cx),
             ActivityItemId::Settings => self.open_settings_modal(None, window, cx),

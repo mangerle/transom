@@ -1,12 +1,14 @@
 //! 密钥生成与管理向导的状态、密钥扫描与部署动作。
 
 mod keygen;
+mod known_hosts_view;
 mod paths;
 mod state;
 mod view;
 
+pub(crate) use known_hosts_view::{KnownHostsEvent, KnownHostsView};
 pub(crate) use paths::{default_ssh_dir, expand_home};
-pub(crate) use state::{KeyTarget, KeyWizardState, KnownHostsModalState};
+pub(crate) use state::{KeyTarget, KeyWizardState};
 
 use crate::app::{AppShell, AppState, TabStatus};
 use crate::palette::localized_error;

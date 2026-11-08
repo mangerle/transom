@@ -3,6 +3,7 @@
 use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
+use crate::keys::{KnownHostsEvent, KnownHostsView};
 
 impl AppShell {
     pub fn new(
@@ -135,6 +136,11 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.monitor = Some(monitor_subscription);
+        let known_hosts_subscription = cx.subscribe(
+            &self.state.modals.connection.known_hosts,
+            |shell, _, event: &KnownHostsEvent, cx| shell.on_known_hosts_event(event, cx),
+        );
+        self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
         let settings_subscription = cx.subscribe(
             &self.state.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
@@ -270,6 +276,13 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         vertical_tabs_open,
     } = input;
     let git_registry = services.git_projects.load().unwrap_or_default();
+    let known_hosts_view = cx.new(|_| {
+        KnownHostsView::new(
+            services.known_hosts.clone(),
+            known_hosts_records,
+            inputs.known_hosts_search.clone(),
+        )
+    });
     AppState {
         services,
         catalog: prepared.catalog,
@@ -281,11 +294,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         vertical_tabs_search: inputs.vertical_tabs_search.clone(),
         vertical_tabs_open,
         modals: ModalHub::new(
-            KnownHostsModalState {
-                open: false,
-                records: known_hosts_records,
-                search: inputs.known_hosts_search.clone(),
-            },
+            known_hosts_view,
             settings_view,
             inputs.quick_open_state.clone(),
             SnippetPanelState {
