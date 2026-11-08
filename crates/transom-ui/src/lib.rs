@@ -89,6 +89,7 @@ pub fn run(services: UiServices) -> bool {
     }
     let language = i18n::resolve_language(&settings.language);
     reassert_default_terminal(&settings);
+    reassert_uri_handler();
     // Git 配置的写入权归控制平面：这里只投递一次配置命令，避免界面直接改
     // transom-git 的进程级静态。命令与后续 Git 命令共用同一条有界通道，
     // 顺序由通道保证，窗口打开前配置已就位。
@@ -233,3 +234,21 @@ fn reassert_default_terminal(settings: &AppSettings) {
 /// 非 Linux 平台没有默认终端规范可对账，开关本身也不在设置页展示。
 #[cfg(not(target_os = "linux"))]
 fn reassert_default_terminal(_settings: &AppSettings) {}
+
+/// 确保平台安装态已登记 `ssh://` 处理程序候选；只注册候选，不改变默认应用。
+fn reassert_uri_handler() {
+    let Ok(exe) = std::env::current_exe() else {
+        log::warn!("无法定位当前可执行文件，ssh URL Scheme 注册校验跳过");
+        return;
+    };
+    if transom_platform::paths::is_dev_exe(&exe) {
+        log::debug!(
+            "当前运行于开发构建目录，跳过 ssh URL Scheme 注册，路径: {}",
+            exe.display()
+        );
+        return;
+    }
+    if let Err(error) = transom_desktop::ensure_uri_handler(&exe) {
+        log::warn!("ssh URL Scheme 注册失败，外部链接唤起暂不可用，原因: {error}");
+    }
+}

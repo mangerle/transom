@@ -8666,6 +8666,7 @@ dependencies = [
  "tempfile",
  "transom-core",
  "transom-platform",
+ "winreg 0.10.1",
 ]
 
 [[package]]
