@@ -7,8 +7,8 @@
 //! 的连接任务。合并为一个实体后，输入控件、应答通道与保存意图随弹窗打开同生
 //! 共死，外壳只持有句柄。
 //!
-//! 实体不反查外壳：凭据归属、终端授权与剪贴板写入等跨域副作用通过实体事件
-//! 上交，事件自带全部数据，外壳处理时禁止回读实体。
+//! 实体不反查外壳：凭据归属、终端授权与剪贴板写入等跨域副作用通过
+//! [`ConnectionPromptsEvent`] 上交，事件自带全部数据，外壳处理时禁止回读实体。
 //!
 //! # 代价与局限
 //! 三个弹窗共享一份状态但彼此独立：本实体不强制三者互斥，互斥与否仍由打开
@@ -18,6 +18,30 @@
 use super::{AuthPromptState, HostKeyConfirmState};
 use crate::clipboard_prompt::ClipboardWritePrompt;
 use gpui_kit::*;
+use transom_core::{ConnectionId, SecretKind, SessionId, TabId};
+use zeroize::Zeroizing;
+
+/// 连接确认弹窗交给外壳处理的意图。
+///
+/// 事件自带全部数据：外壳处理时禁止回读实体，否则会在实体回调期间触发
+/// GPUI 的双重租借崩溃。刻意不实现 `Debug`：`CredentialToSave` 携带明文凭据，
+/// 派生调试输出会让口令顺着日志或 panic 信息泄漏。
+pub(crate) enum ConnectionPromptsEvent {
+    /// 用户勾选保存且答案非空；外壳解析归属后暂存到 `pending_credential`，
+    /// 只有连接真正建立成功才写入钥匙串。
+    CredentialToSave {
+        session_id: SessionId,
+        connection_id: ConnectionId,
+        kind: SecretKind,
+        value: Zeroizing<String>,
+    },
+    /// 用户允许本会话写入剪贴板；外壳负责授予会话级权限、写入剪贴板并写状态栏。
+    ClipboardAllowed { tab_id: TabId, text: String },
+    /// 用户拒绝本次写入；外壳只写状态栏，不改变会话授权状态。
+    Denied,
+}
+
+impl EventEmitter<ConnectionPromptsEvent> for ConnectionPromptsView {}
 
 /// 连接确认弹窗实体。
 pub(crate) struct ConnectionPromptsView {
@@ -107,8 +131,82 @@ impl ConnectionPromptsView {
         }
     }
 
-    /// 取走鉴权问答状态并重绘；提交与取消都先把状态移出实体。
-    pub(crate) fn take_auth(&mut self, cx: &mut Context<Self>) -> Option<AuthPromptState> {
+    /// 提交鉴权问答：读取输入答案、上缴保存意图并回给等待中的连接任务。
+    ///
+    /// 保存意图只在"我们自己索取的提示 + 勾选保存 + 首项非空"时发出；服务器
+    /// 下发的 keyboard-interactive 文本可能是一次性挑战，`secret_kind` 为空时
+    /// 不提供保存入口。
+    pub(crate) fn submit_auth(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self.take_auth(cx) else {
+            return;
+        };
+        let answers: Vec<String> = state
+            .inputs
+            .iter()
+            .map(|input| input.read(cx).value().to_string())
+            .collect();
+        if let Some(kind) = state.secret_kind
+            && state.save
+            && let Some(value) = answers.first().filter(|value| !value.is_empty())
+        {
+            cx.emit(ConnectionPromptsEvent::CredentialToSave {
+                session_id: state.session_id,
+                connection_id: state.connection_id,
+                kind,
+                value: Zeroizing::new(value.clone()),
+            });
+        }
+        let _ = state.responder.try_send(answers);
+        cx.notify();
+    }
+
+    /// 取消鉴权问答：丢弃状态即关闭应答通道，等待方按取消收尾。
+    pub(crate) fn cancel_auth(&mut self, cx: &mut Context<Self>) {
+        self.close_auth(cx);
+    }
+
+    /// 用户信任首连主机指纹。
+    ///
+    /// 裁决结果必须发回 responder：只清状态会让等待裁决的连接任务永久挂住，
+    /// 因此这里不提供"静默关闭"路径，取消语义由调用方明确绑到拒绝。
+    pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self.take_host_key(cx) else {
+            return;
+        };
+        let _ = state.responder.try_send(true);
+        cx.notify();
+    }
+
+    /// 用户拒绝首连主机指纹。
+    pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self.take_host_key(cx) else {
+            return;
+        };
+        let _ = state.responder.try_send(false);
+        cx.notify();
+    }
+
+    /// 允许本次远端剪贴板写入：先关闭弹窗，再把授权与落盘交给外壳。
+    pub(crate) fn allow_clipboard(&mut self, cx: &mut Context<Self>) {
+        let Some(prompt) = self.take_clipboard(cx) else {
+            return;
+        };
+        cx.emit(ConnectionPromptsEvent::ClipboardAllowed {
+            tab_id: prompt.tab_id,
+            text: prompt.text,
+        });
+        cx.notify();
+    }
+
+    /// 拒绝本次远端剪贴板写入；授权状态不变，下次请求仍会询问。
+    pub(crate) fn deny_clipboard(&mut self, cx: &mut Context<Self>) {
+        self.close_clipboard(cx);
+        cx.emit(ConnectionPromptsEvent::Denied);
+        cx.notify();
+    }
+
+    /// 取走鉴权问答状态并重绘；提交时输入控件仍由取走的状态持有。
+    fn take_auth(&mut self, cx: &mut Context<Self>) -> Option<AuthPromptState> {
         let state = self.auth.take();
         if state.is_some() {
             cx.notify();
@@ -117,7 +215,7 @@ impl ConnectionPromptsView {
     }
 
     /// 取走主机指纹确认状态并重绘。
-    pub(crate) fn take_host_key(&mut self, cx: &mut Context<Self>) -> Option<HostKeyConfirmState> {
+    fn take_host_key(&mut self, cx: &mut Context<Self>) -> Option<HostKeyConfirmState> {
         let state = self.host_key.take();
         if state.is_some() {
             cx.notify();
@@ -126,10 +224,7 @@ impl ConnectionPromptsView {
     }
 
     /// 取走剪贴板请求并重绘。
-    pub(crate) fn take_clipboard(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Option<ClipboardWritePrompt> {
+    fn take_clipboard(&mut self, cx: &mut Context<Self>) -> Option<ClipboardWritePrompt> {
         let prompt = self.clipboard.take();
         if prompt.is_some() {
             cx.notify();

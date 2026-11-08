@@ -165,8 +165,8 @@ pub(crate) use stack::OpenModals;
 
 impl ModalKind {
     /// 弹窗体：内容与页脚仍由各领域自己渲染。
-    /// 设置、已知主机、备份、审计查看器、密钥向导、会话回放与会话表单弹窗的
-    /// 状态归实体，先克隆句柄再进入 `update`，其它弹窗直接读外壳。
+    /// 设置、已知主机、备份、审计查看器、密钥向导、会话回放、会话表单与连接
+    /// 确认弹窗的状态归实体，先克隆句柄再进入 `update`，其它弹窗直接读外壳。
     ///
     /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到实体的可变
     /// `update`”这类借用冲突：实体分支先克隆句柄、立即结束外壳借用。
@@ -211,6 +211,13 @@ impl ModalKind {
             let view = app.read(cx).state.modals.session.form.clone();
             return view.update(cx, |view, cx| view.render_body(window, cx, p));
         }
+        if matches!(
+            self,
+            ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt
+        ) {
+            let view = app.read(cx).state.modals.connection.prompts.clone();
+            return view.update(cx, |view, cx| view.render_body(self, cx, p));
+        }
         let shell = app.read(cx);
         self.render_shell_body(shell, app, window, cx, p)
     }
@@ -229,10 +236,11 @@ impl ModalKind {
         }
         match self {
             ModalKind::SftpConfirm => shell.render_sftp_confirm_body(app, cx, p),
-            ModalKind::HostKeyConfirm => shell.render_host_key_confirm_body(app, cx, p),
-            ModalKind::ClipboardPrompt => shell.render_clipboard_prompt_body(app, cx, p),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt => {
+                div().into_any_element()
+            }
             ModalKind::ForwardConfirm => shell.render_forward_confirm_body(app, cx, p),
-            ModalKind::AuthPrompt => shell.render_auth_prompt_body(app, cx, p),
             ModalKind::SftpInput => shell.render_sftp_input_body(app, cx, p),
             ModalKind::SftpChmod => shell.render_sftp_chmod_body(app, cx, p),
             ModalKind::SftpProperties => shell.render_sftp_properties_body(app, cx, p),

@@ -47,6 +47,8 @@ pub(crate) struct PanelSubscriptions {
     /// 会话表单：保存落目录与删除会话由外壳处理。
     pub(crate) session_form: Option<Subscription>,
     pub(crate) known_hosts: Option<Subscription>,
+    /// 连接确认弹窗：凭据暂存与剪贴板授权由外壳处理。
+    pub(crate) connection_prompts: Option<Subscription>,
     /// 密钥向导：状态栏提示与命令发送失败由外壳处理。
     pub(crate) key_wizard: Option<Subscription>,
     /// 备份弹窗结果：目录合并与状态栏提示由外壳处理。
@@ -71,6 +73,7 @@ impl PanelSubscriptions {
             settings: None,
             session_form: None,
             known_hosts: None,
+            connection_prompts: None,
             key_wizard: None,
             backup: None,
             audit_viewer: None,

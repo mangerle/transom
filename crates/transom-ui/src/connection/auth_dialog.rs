@@ -1,15 +1,24 @@
-//! 密码提示弹窗与主机指纹确认（TOFU）弹窗渲染。
+//! 认证凭据的暂存与落盘。
+//!
+//! 弹窗体（SSH 鉴权问答与首连主机指纹确认）已经迁入
+//! `connection/prompts_view.rs` 与 `connection/prompts_render.rs`；本文件只保留
+//! “认证通过后才写钥匙串”的凭据生命周期：待保存意图、归属解析、成功后落盘与
+//! 连接失败时丢弃。
+//!
+//! 设计原理（Why）：口令被拒绝或连接取消时不能留下半条凭据，否则下次连接会
+//! 用一个已失效的旧口令反复失败。保存意图因此只暂存在内存里，必须等
+//! `TerminalReady` 确认连接真正建立后才写入钥匙串。
+//!
+//! # 代价与局限
+//! 待保存凭据同一时刻只有一条：新一次鉴权问答会作废旧意图，保留旧值可能把
+//! 已被拒绝的口令写进钥匙串。
 
-use super::PendingCredential;
 use super::secrets::enable_auth_save;
-use crate::app::{AppShell, AppState};
-use crate::palette::{Palette, localized_error};
-use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::switch::Switch;
+use crate::app::AppShell;
+use crate::app::AppState;
+use crate::palette::localized_error;
 use gpui_kit::*;
-use transom_core::{Connection, ConnectionId, ErrorCode, PromptKind, SecretKey, SessionId};
-use zeroize::Zeroizing;
+use transom_core::{Connection, ConnectionId, ErrorCode, SecretKey, SessionId};
 
 impl AppState {
     pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
@@ -25,7 +34,10 @@ impl AppState {
     }
 
     /// 会话口令归属：引用凭据模板时归模板。
-    fn secret_owner_for(&self, session_id: SessionId) -> transom_core::SecretOwner {
+    ///
+    /// 外壳在消费 [`crate::connection::ConnectionPromptsEvent::CredentialToSave`]
+    /// 时调用：实体只上报会话标识，不接触目录，归属解析必须先回到目录侧。
+    pub(crate) fn secret_owner_for(&self, session_id: SessionId) -> transom_core::SecretOwner {
         self.catalog
             .sessions
             .iter()
@@ -66,32 +78,6 @@ impl AppState {
 }
 
 impl AppShell {
-    pub(crate) fn submit_auth_prompt(&mut self, cx: &mut Context<Self>) {
-        let prompts = self.state.modals.connection.prompts.clone();
-        let Some(state) = prompts.update(cx, |view, cx| view.take_auth(cx)) else {
-            return;
-        };
-        let answers: Vec<String> = state
-            .inputs
-            .iter()
-            .map(|input| input.read(cx).value().to_string())
-            .collect();
-        if let Some(kind) = state.secret_kind
-            && state.save
-            && let Some(value) = answers.first().filter(|value| !value.is_empty())
-        {
-            self.state.modals.connection.pending_credential = Some(PendingCredential {
-                session_id: state.session_id,
-                owner: self.state.secret_owner_for(state.session_id),
-                connection_id: state.connection_id,
-                kind,
-                value: Zeroizing::new(value.clone()),
-            });
-        }
-        let _ = state.responder.try_send(answers);
-        cx.notify();
-    }
-
     /// 连接成功建立后，把用户勾选保存的凭据写入钥匙串。
     pub(crate) fn flush_pending_credential(
         &mut self,
@@ -135,219 +121,5 @@ impl AppShell {
             });
         })
         .detach();
-    }
-
-    /// 连接失败时丢弃待保存凭据。
-    /// 用户信任首连主机指纹。
-    pub(crate) fn accept_host_key(&mut self, cx: &mut Context<Self>) {
-        let prompts = self.state.modals.connection.prompts.clone();
-        if let Some(state) = prompts.update(cx, |view, cx| view.take_host_key(cx)) {
-            let _ = state.responder.try_send(true);
-            cx.notify();
-        }
-    }
-
-    /// 用户拒绝首连主机指纹。
-    pub(crate) fn reject_host_key(&mut self, cx: &mut Context<Self>) {
-        let prompts = self.state.modals.connection.prompts.clone();
-        if let Some(state) = prompts.update(cx, |view, cx| view.take_host_key(cx)) {
-            let _ = state.responder.try_send(false);
-            cx.notify();
-        }
-    }
-
-    /// SSH 鉴权问答的弹窗体。
-    ///
-    /// Enter 提交不再由这里单独接：`dialog_host` 对每个弹窗体统一接
-    /// 输入框的 Enter 与容器的 Confirm，两条落点同一条逻辑。
-    /// 认证提示页脚：错误、取消与提交。
-    fn render_auth_footer(
-        prompt: &crate::connection::AuthPromptState,
-        app: &Entity<AppShell>,
-        p: &Palette,
-    ) -> AnyElement {
-        let mut footer = v_flex().gap_2().items_end();
-        if let Some(error) = &prompt.error {
-            footer = footer.child(div().text_sm().text_color(p.danger).child(error.clone()));
-        }
-        footer = footer.child(
-            h_flex()
-                .gap_2()
-                .justify_end()
-                .child(crate::widgets::dialog_cancel_button(
-                    "cancel-auth",
-                    rust_i18n::t!("common.cancel").to_string(),
-                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        let prompts = this.state.modals.connection.prompts.clone();
-                        prompts.update(cx, |view, cx| view.close_auth(cx));
-                    }),
-                ))
-                .child(crate::widgets::dialog_confirm_button(
-                    "submit-auth",
-                    rust_i18n::t!("prompt.submit").to_string(),
-                    None,
-                    crate::widgets::DialogConfirmKind::Primary,
-                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.submit_auth_prompt(cx);
-                    }),
-                )),
-        );
-        footer.into_any_element()
-    }
-
-    pub(crate) fn render_auth_prompt_body(
-        &self,
-        app: &Entity<AppShell>,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(prompt) = self.state.modals.connection.prompts.read(cx).auth() else {
-            return div().into_any_element();
-        };
-        let client_generated = prompt
-            .prompts
-            .iter()
-            .any(|info| !matches!(info.kind, PromptKind::Text));
-        let mut content = v_flex()
-            .id(ElementId::Name("auth-prompt-body".into()))
-            .max_h(px(360.0))
-            .overflow_y_scroll()
-            .gap_3();
-        if !prompt.name.is_empty() {
-            content = content.child(div().text_sm().child(prompt.name.clone()));
-        }
-        if !prompt.instructions.is_empty() {
-            content = content.child(
-                div()
-                    .text_sm()
-                    .text_color(p.muted_foreground)
-                    .child(prompt.instructions.clone()),
-            );
-        }
-        for (index, prompt_info) in prompt.prompts.iter().enumerate() {
-            let input = prompt.inputs[index].clone();
-            let label = match prompt_info.kind {
-                PromptKind::Password => rust_i18n::t!("prompt.password_field").to_string(),
-                PromptKind::Passphrase => rust_i18n::t!("prompt.passphrase_field").to_string(),
-                PromptKind::Text => prompt_info.prompt.clone(),
-            };
-            let field = if prompt_info.echo {
-                crate::widgets::form_field(label, input, p)
-            } else {
-                crate::widgets::secret_field(label, input, p)
-            };
-            content = content.child(field);
-        }
-
-        if prompt.secret_kind.is_some() {
-            content = content.child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("prompt.save_credential").to_string()),
-                    )
-                    .child(
-                        Switch::new("toggle-save-credential")
-                            .small()
-                            .checked(prompt.save)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, checked: &bool, _, cx| {
-                                    let prompts = this.state.modals.connection.prompts.clone();
-                                    prompts.update(cx, |view, cx| view.set_save(*checked, cx));
-                                },
-                            )),
-                    ),
-            );
-        }
-
-        let footer = Self::render_auth_footer(prompt, app, p);
-        let hint = if client_generated {
-            rust_i18n::t!("prompt.credential_hint").to_string()
-        } else {
-            rust_i18n::t!("prompt.auth_hint").to_string()
-        };
-        crate::widgets::dialog_body(
-            "auth-prompt-modal",
-            rust_i18n::t!("prompt.auth_title").to_string(),
-            Some(hint),
-            content,
-            Some(footer),
-        )
-    }
-
-    /// TOFU 首连主机指纹确认的弹窗体。
-    ///
-    /// 信任/拒绝与 Esc、右上角关闭件走同两条路：拒绝必须把 `false` 发回
-    /// responder，否则等待裁决的连接任务会永久挂住，因此取消语义在
-    /// `dialog_host::ModalKind::cancel` 里绑的是 `reject_host_key`。
-    pub(crate) fn render_host_key_confirm_body(
-        &self,
-        app: &Entity<AppShell>,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(state) = self.state.modals.connection.prompts.read(cx).host_key() else {
-            return div().into_any_element();
-        };
-        let body = rust_i18n::t!(
-            "prompt.host_key_body",
-            host = state.host.as_str(),
-            port = state.port
-        )
-        .to_string();
-        let content = v_flex()
-            .gap_3()
-            .child(div().text_sm().child(body))
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(format!("{}: {}", state.key_type, state.host)),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_family(p.mono_font_family.clone())
-                            .child(state.fingerprint.clone()),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(p.danger)
-                    .child(rust_i18n::t!("prompt.host_key_warning").to_string()),
-            );
-        let reject = crate::widgets::dialog_cancel_button(
-            "reject-host-key",
-            rust_i18n::t!("prompt.host_key_reject").to_string(),
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                this.reject_host_key(cx)
-            }),
-        );
-        let accept = crate::widgets::dialog_confirm_button(
-            "accept-host-key",
-            rust_i18n::t!("prompt.host_key_trust").to_string(),
-            None,
-            crate::widgets::DialogConfirmKind::Primary,
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                this.accept_host_key(cx)
-            }),
-        );
-        let footer =
-            crate::widgets::dialog_actions([reject.into_any_element(), accept.into_any_element()]);
-        crate::widgets::dialog_body(
-            "host-key-modal",
-            rust_i18n::t!("prompt.host_key_title").to_string(),
-            Some(rust_i18n::t!("prompt.host_key_hint").to_string()),
-            content,
-            Some(footer),
-        )
     }
 }

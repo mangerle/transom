@@ -159,6 +159,13 @@ impl AppShell {
             |shell, _, event: &KnownHostsEvent, cx| shell.on_known_hosts_event(event, cx),
         );
         self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
+        let connection_prompts_subscription = cx.subscribe(
+            &self.state.modals.connection.prompts,
+            |shell, _view, event: &crate::connection::ConnectionPromptsEvent, cx| {
+                shell.on_connection_prompts_event(event, cx);
+            },
+        );
+        self.state.tasks.subscriptions.connection_prompts = Some(connection_prompts_subscription);
         let key_wizard_subscription = cx.subscribe(
             &self.state.modals.tools.key_wizard,
             |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {

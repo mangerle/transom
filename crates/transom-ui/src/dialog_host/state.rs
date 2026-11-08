@@ -59,11 +59,21 @@ impl ModalKind {
                 true
             }
             ModalKind::HostKeyConfirm => {
-                shell.reject_host_key(cx);
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .prompts
+                    .update(cx, |view, cx| view.reject_host_key(cx));
                 true
             }
             ModalKind::ClipboardPrompt => {
-                shell.deny_clipboard_write(cx);
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .prompts
+                    .update(cx, |view, cx| view.deny_clipboard(cx));
                 true
             }
             ModalKind::ForwardConfirm => {
@@ -76,7 +86,7 @@ impl ModalKind {
                     .modals
                     .connection
                     .prompts
-                    .update(cx, |view, cx| view.close_auth(cx));
+                    .update(cx, |view, cx| view.cancel_auth(cx));
                 true
             }
             ModalKind::SftpInput => shell.close_sftp_modal(|hub| hub.input = None, window, cx),
@@ -221,10 +231,31 @@ impl ModalKind {
                 shell.sftp_confirm_delete(cx);
                 shell.focus_active_sftp_panel(window, cx);
             }
-            ModalKind::HostKeyConfirm => shell.accept_host_key(cx),
-            ModalKind::ClipboardPrompt => shell.confirm_clipboard_write(cx),
+            ModalKind::HostKeyConfirm => {
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .prompts
+                    .update(cx, |view, cx| view.accept_host_key(cx));
+            }
+            ModalKind::ClipboardPrompt => {
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .prompts
+                    .update(cx, |view, cx| view.allow_clipboard(cx));
+            }
             ModalKind::ForwardConfirm => shell.confirm_forward_start(cx),
-            ModalKind::AuthPrompt => shell.submit_auth_prompt(cx),
+            ModalKind::AuthPrompt => {
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .prompts
+                    .update(cx, |view, cx| view.submit_auth(cx));
+            }
             ModalKind::SftpInput => {
                 shell.commit_sftp_input_modal(window, cx);
                 shell.focus_active_sftp_panel(window, cx);
