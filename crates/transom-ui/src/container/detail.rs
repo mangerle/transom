@@ -62,6 +62,7 @@ pub(super) use overview::{
     short,
 };
 pub(super) use raw_inspect::{InspectSearch, render_raw_inspect};
+use tab_strip::render_detail_tab_buttons;
 pub(super) use terminal::render_terminal;
 pub(super) use volume::{ContainerVolumeView, render_volume_detail};
 
@@ -223,7 +224,7 @@ impl AppShell {
         }
         .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string());
 
-        let tabs = self.render_detail_tab_buttons(tab_id, section, detail_tab, p, cx);
+        let tabs = render_detail_tab_buttons(&view, workspace, section, detail_tab, p);
         let header = render_detail_header(
             ContainerHeaderView {
                 view: &view,
