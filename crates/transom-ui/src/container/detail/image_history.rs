@@ -8,14 +8,15 @@
 //!   当外部镜像剥离或缺失构建历史元数据时，自动降级为 RootFS.Layers 的 SHA256 散列指纹层展示，确保任何时候都能追踪每一层镜像分层。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
 
 /// 渲染镜像构建历史（History）独立页签时间线。
 pub(crate) fn render_image_history(
+    view: &Entity<ContainerWorkspace>,
     summary: Option<&transom_core::ContainerImageSummary>,
     details: Option<&ContainerImageDetails>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some(details) = details else {
         if summary.is_some() {
@@ -108,10 +109,10 @@ pub(crate) fn render_image_history(
             };
 
             let copy_cmd = copy_button(
+                view,
                 ElementId::Name(format!("copy-layer-cmd-{index}").into()),
                 cmd_raw.clone(),
                 rust_i18n::t!("container.detail.copy_instruction").to_string(),
-                cx,
             );
 
             let layer_advices = &all_advices[index];
@@ -251,10 +252,10 @@ pub(crate) fn render_image_history(
 
         for (index, digest) in details.layer_digests.iter().enumerate() {
             let copy_digest = copy_button(
+                view,
                 ElementId::Name(format!("copy-layer-digest-{index}").into()),
                 digest.clone(),
                 rust_i18n::t!("container.detail.copy_layer_digest").to_string(),
-                cx,
             );
 
             layers_list = layers_list.child(
@@ -320,29 +321,29 @@ pub(crate) fn clean_dockerfile_instruction(raw: &str) -> String {
 }
 
 /// 通用一键复制按钮辅助组件。
+///
+/// 设计原理（Why）：复制只改剪贴板与工作区 `notice`，提示由外壳渲染帧统一转成
+/// 通知；按钮因此只持有工作区实体句柄，不再需要 `Context<AppShell>`。
 pub(crate) fn copy_button(
+    view: &Entity<ContainerWorkspace>,
     id: ElementId,
     text: String,
     tooltip: String,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let view = view.clone();
     Button::new(id)
         .xsmall()
         .ghost()
         .icon(IconName::Copy)
         .tooltip(tooltip)
-        .on_click(cx.listener({
-            let text = text.clone();
-            move |this, _, window, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                this.show_toast(
-                    rust_i18n::t!("container.row.copied", value = text).to_string(),
-                    true,
-                    window,
-                    cx,
-                );
-            }
-        }))
+        .on_click(move |_, _, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+            let message = rust_i18n::t!("container.row.copied", value = text).to_string();
+            view.update(cx, |workspace, cx| {
+                workspace.state.notice = Some(message);
+                cx.notify();
+            });
+        })
         .into_any_element()
 }
 

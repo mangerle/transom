@@ -19,17 +19,6 @@ pub(crate) struct InspectSearch<'a> {
     pub(crate) keyword: &'a str,
 }
 
-/// 其它详情页转入原始 inspect 视图所需的实体与搜索上下文。
-///
-/// 设计原理（Why）：镜像、卷与网络详情共用同一套原始视图，把工作区实体与搜索
-/// 快照收成一个参数，既避免各详情函数继续平铺参数，也保证复制提示与返回动作
-/// 都写回当前标签页的容器工作区实体。
-#[derive(Clone, Copy)]
-pub(crate) struct RawInspectView<'a> {
-    pub(crate) workspace: &'a Entity<ContainerWorkspace>,
-    pub(crate) search: InspectSearch<'a>,
-}
-
 /// 渲染原始 Inspect JSON 视图。
 ///
 /// 设计原理（Why）：复制成功只把文案写进工作区 `notice`，返回结构化视图只改

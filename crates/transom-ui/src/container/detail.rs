@@ -61,7 +61,7 @@ pub(super) use overview::{
     centered_hint, format_unix, kv, linked_containers, render_container_overview, scroll_body,
     short,
 };
-pub(super) use raw_inspect::{InspectSearch, RawInspectView, render_raw_inspect};
+pub(super) use raw_inspect::{InspectSearch, render_raw_inspect};
 pub(super) use terminal::render_terminal;
 pub(super) use volume::render_volume_detail;
 
@@ -206,10 +206,6 @@ impl AppShell {
         let inspect = InspectSearch {
             input: &inspect_search,
             keyword: &inspect_keyword,
-        };
-        let raw_inspect = RawInspectView {
-            workspace: &view,
-            search: inspect,
         };
 
         let title = match section {
@@ -359,16 +355,15 @@ impl AppShell {
                 cx,
             ),
             (ContainerSection::Images, _) => render_image_detail(
+                &view,
                 super::detail::image::ImageDetailView {
-                    tab_id,
                     summary: selected_image.as_ref(),
                     details: image_details.as_ref(),
                     overview_raw,
                     detail_tab,
-                    inspect: raw_inspect,
+                    inspect,
                 },
                 p,
-                cx,
             ),
             (ContainerSection::Volumes, _) => render_volume_detail(
                 &view,
