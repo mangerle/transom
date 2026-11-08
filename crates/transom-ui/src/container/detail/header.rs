@@ -46,6 +46,7 @@ impl AppShell {
             all_containers,
             timeline,
         } = view;
+        let workspace = self.state.container_workspace(tab_id);
         // 健康状态点：healthy 绿、unhealthy 红、starting 等其他状态弱色。
         // 只在镜像声明了 HEALTHCHECK 时出现，没声明就不制造噪声。
         let health_chip: Option<AnyElement> = details
@@ -71,10 +72,10 @@ impl AppShell {
         match section {
             ContainerSection::Containers => {
                 if let Some(container) = container
-                    && let Some(workspace) = self.state.container_workspace(tab_id)
+                    && let Some(workspace) = workspace.as_ref()
                 {
                     actions = actions.children(super::header_container::container_header_actions(
-                        &workspace, container, detail_tab,
+                        workspace, container, detail_tab,
                     ));
                 }
             }
@@ -89,9 +90,11 @@ impl AppShell {
                 }
             }
             ContainerSection::Images => {
-                if let Some(image) = image {
+                if let Some(image) = image
+                    && let Some(workspace) = workspace.as_ref()
+                {
                     actions = actions.children(super::header_actions::image_header_actions(
-                        tab_id, image, cx,
+                        workspace, image,
                     ));
                 }
             }
@@ -119,18 +122,21 @@ impl AppShell {
                                 this.restore_volume(tab_id, Some(vol_name_restore.clone()), cx);
                             })),
                     );
-                    actions = actions.child(delete_button(
-                        "volume-delete",
-                        cx,
-                        tab_id,
-                        ContainerConfirm::Volume(volume.name.clone()),
-                    ));
+                    if let Some(workspace) = workspace.as_ref() {
+                        actions = actions.child(delete_button(
+                            workspace,
+                            "volume-delete",
+                            ContainerConfirm::Volume(volume.name.clone()),
+                        ));
+                    }
                 }
             }
             ContainerSection::Networks => {
-                if let Some(network) = network {
+                if let Some(network) = network
+                    && let Some(workspace) = workspace.as_ref()
+                {
                     actions = actions.children(super::header_actions::network_header_actions(
-                        tab_id, network, cx,
+                        workspace, network,
                     ));
                 }
             }

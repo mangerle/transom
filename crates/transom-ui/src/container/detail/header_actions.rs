@@ -5,6 +5,7 @@
 //! - 降低单文件代码复杂度，使单个文件生产代码行数维持在规范上限以内。
 
 use super::*;
+use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
 use gpui_kit::assets::IconName;
 use transom_core::{
     ComposeAction, ComposeProject, ContainerImageSummary, ContainerNetworkSummary, TabId,
@@ -174,85 +175,83 @@ pub(super) fn compose_header_actions(
 }
 
 pub(super) fn image_header_actions(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     image: &ContainerImageSummary,
-    cx: &mut Context<AppShell>,
 ) -> Vec<AnyElement> {
     let image_id = image.id.clone();
     let push_ref = image.display_name();
+    let tag_view = view.clone();
+    let tag_id = image_id.clone();
+    let push_view = view.clone();
+    let push_id = image_id.clone();
+    let push_reference = push_ref.clone();
+    let save_view = view.clone();
+    let save_id = image_id.clone();
 
     vec![
         Button::new("image-tag")
             .xsmall()
             .icon(IconName::TagPlus)
             .label(rust_i18n::t!("container.action.tag").to_string())
-            .on_click(cx.listener({
-                let image_id = image_id.clone();
-                move |this, _, window, cx| {
-                    this.open_image_tag(tab_id, image_id.clone(), window, cx);
-                }
-            }))
+            .on_click(move |_, _, cx| {
+                tag_view.update(cx, |_, cx| {
+                    cx.emit(ContainerWorkspaceEvent::OpenImageTag(tag_id.clone()));
+                });
+            })
             .into_any_element(),
         Button::new("image-push")
             .xsmall()
             .icon(IconName::Upload)
             .label(rust_i18n::t!("container.action.push").to_string())
-            .on_click(cx.listener({
-                let image_id = image_id.clone();
-                let push_ref = push_ref.clone();
-                move |this, _, window, cx| {
-                    this.open_container_push_dialog(
-                        tab_id,
-                        image_id.clone(),
-                        push_ref.clone(),
-                        window,
-                        cx,
-                    );
-                }
-            }))
+            .on_click(move |_, _, cx| {
+                push_view.update(cx, |_, cx| {
+                    cx.emit(ContainerWorkspaceEvent::OpenImagePush {
+                        id: push_id.clone(),
+                        reference: push_reference.clone(),
+                    });
+                });
+            })
             .into_any_element(),
         Button::new("image-save")
             .xsmall()
             .icon(IconName::Download)
             .label(rust_i18n::t!("container.action.save_image").to_string())
-            .on_click(cx.listener({
-                let image_id = image_id.clone();
-                move |this, _, _, cx| {
-                    this.save_image(tab_id, image_id.clone(), cx);
-                }
-            }))
+            .on_click(move |_, _, cx| {
+                save_view.update(cx, |_, cx| {
+                    cx.emit(ContainerWorkspaceEvent::SaveImage(save_id.clone()));
+                });
+            })
             .into_any_element(),
         delete_button(
+            view,
             "image-delete",
-            cx,
-            tab_id,
             ContainerConfirm::Image(image.id.clone()),
         ),
     ]
 }
 
 pub(super) fn network_header_actions(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     network: &ContainerNetworkSummary,
-    cx: &mut Context<AppShell>,
 ) -> Vec<AnyElement> {
     let network_id = network.id.clone();
+    let connect_view = view.clone();
     vec![
         Button::new("network-connect")
             .xsmall()
             .icon(IconName::Link)
             .label(rust_i18n::t!("container.action.connect_network").to_string())
-            .on_click(cx.listener({
-                let network_id = network_id.clone();
-                move |this, _, window, cx| {
-                    this.open_network_connect(tab_id, network_id.clone(), window, cx);
-                }
-            }))
+            .on_click(move |_, _, cx| {
+                connect_view.update(cx, |_, cx| {
+                    cx.emit(ContainerWorkspaceEvent::OpenNetworkConnect(
+                        network_id.clone(),
+                    ));
+                });
+            })
             .into_any_element(),
         delete_button(
+            view,
             "network-delete",
-            cx,
-            tab_id,
             ContainerConfirm::Network(network.id.clone()),
         ),
     ]

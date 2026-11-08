@@ -996,6 +996,7 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/detail/raw_inspect.rs",
         "src/container/detail/header_container.rs",
         "src/container/detail/changes.rs",
+        "src/container/detail/confirm.rs",
         "src/container/detail/terminal.rs",
         "src/container/detail/file_preview.rs",
         "src/container/detail/files/mod.rs",

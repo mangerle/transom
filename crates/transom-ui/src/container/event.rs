@@ -69,6 +69,21 @@ pub(crate) enum ContainerWorkspaceEvent {
     OpenContainerExport(String),
     /// 打开容器提交镜像表单；容器名随事件携带。
     OpenContainerCommit(String),
+    /// 打开镜像打标签输入条；镜像 ID 随事件携带。
+    OpenImageTag(String),
+    /// 打开镜像推送弹窗；镜像 ID 与源引用随事件携带。
+    ///
+    /// 源引用用于拆分目标仓库与标签，事件自带全部参数，外壳处理时不回读工作区。
+    OpenImagePush {
+        /// 镜像 ID。
+        id: String,
+        /// 源镜像引用（含 tag）。
+        reference: String,
+    },
+    /// 把镜像另存为本地 Tar 归档；镜像 ID 随事件携带。
+    SaveImage(String),
+    /// 打开网络连接容器输入条；网络 ID 随事件携带。
+    OpenNetworkConnect(String),
     /// 以既有容器为模板打开克隆运行表单。
     CloneContainer {
         /// 源容器 id。
@@ -141,6 +156,9 @@ impl AppShell {
             ContainerWorkspaceEvent::RestoreVolume(volume) => {
                 self.restore_volume(tab_id, volume.clone(), cx);
             }
+            ContainerWorkspaceEvent::SaveImage(image) => {
+                self.save_image(tab_id, image.clone(), cx);
+            }
             // 打开输入表单与弹窗需要 `Window`，事件派发阶段拿不到；行动作里的
             // 详情页切换、复制与生命周期也统一交给渲染期执行，避免两套分发逻辑。
             ContainerWorkspaceEvent::OpenRunForm(_)
@@ -152,6 +170,9 @@ impl AppShell {
             | ContainerWorkspaceEvent::OpenContainerUpdate(_)
             | ContainerWorkspaceEvent::OpenContainerExport(_)
             | ContainerWorkspaceEvent::OpenContainerCommit(_)
+            | ContainerWorkspaceEvent::OpenImageTag(_)
+            | ContainerWorkspaceEvent::OpenImagePush { .. }
+            | ContainerWorkspaceEvent::OpenNetworkConnect(_)
             | ContainerWorkspaceEvent::CloneContainer { .. }
             | ContainerWorkspaceEvent::RecreateContainer { .. }
             | ContainerWorkspaceEvent::SetDetailTab(_)

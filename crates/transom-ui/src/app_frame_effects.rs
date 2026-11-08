@@ -256,6 +256,15 @@ impl AppShell {
             ContainerWorkspaceEvent::OpenContainerCommit(name) => {
                 self.open_container_commit(tab_id, name.clone(), window, cx);
             }
+            ContainerWorkspaceEvent::OpenImageTag(image) => {
+                self.open_image_tag(tab_id, image.clone(), window, cx);
+            }
+            ContainerWorkspaceEvent::OpenImagePush { id, reference } => {
+                self.open_container_push_dialog(tab_id, id.clone(), reference.clone(), window, cx);
+            }
+            ContainerWorkspaceEvent::OpenNetworkConnect(network) => {
+                self.open_network_connect(tab_id, network.clone(), window, cx);
+            }
             ContainerWorkspaceEvent::CloneContainer { id, name } => {
                 self.clone_container(tab_id, id, name, window, cx);
             }
