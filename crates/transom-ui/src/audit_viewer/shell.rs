@@ -1,9 +1,10 @@
-//! 审计日志查看器的外壳入口与临时委派方法。
+//! 审计查看器的外壳职责：打开入口与实体事件消费。
 //!
-//! 打开状态、扫描与交互都归 [`AuditViewerView`]；本文件只计算会话信息并转发。
-//! 渲染迁移期间，`select/toggle/delete/copy` 暂留这里供旧视图调用，最终会随
-//! `view.rs` 一起删除。
+//! 查看器状态、扫描与交互都在 `AuditViewerView`；外壳只计算当前会话的
+//! 名称与主机（或标签页、会话目录中的目标），并把结果注入实体。实体上报的
+//! 状态栏提示与错误在此落位，“打开设置”属于窗口级动作，也只能由外壳执行。
 
+use super::entity::AuditViewerEvent;
 use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{Connection, Session, SessionId, TabId};
@@ -81,27 +82,21 @@ impl AppShell {
         }
     }
 
-    /// 委派：切换查看的审计日志文件。
-    pub(crate) fn select_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
-        let view = self.state.modals.tools.audit_viewer.clone();
-        view.update(cx, |view, cx| view.select(index, cx));
-    }
-
-    /// 委派：切换“仅当前会话”与“全部会话”范围。
-    pub(crate) fn toggle_audit_viewer_scope(&mut self, cx: &mut Context<Self>) {
-        let view = self.state.modals.tools.audit_viewer.clone();
-        view.update(cx, |view, cx| view.toggle_scope(cx));
-    }
-
-    /// 委派：复制当前审计日志内容到剪贴板。
-    pub(crate) fn copy_audit_viewer_content(&mut self, cx: &mut Context<Self>) {
-        let view = self.state.modals.tools.audit_viewer.clone();
-        view.update(cx, |view, cx| view.copy_content(cx));
-    }
-
-    /// 委派：删除指定的审计日志文件。
-    pub(crate) fn delete_audit_log(&mut self, index: usize, cx: &mut Context<Self>) {
-        let view = self.state.modals.tools.audit_viewer.clone();
-        view.update(cx, |view, cx| view.delete(index, cx));
+    /// 消费查看器实体上报的意图。
+    ///
+    /// 事件自带全部数据，这里禁止回读实体，否则会在实体 `emit` 期间形成
+    /// 双重租借；错误提示的日志已由实体在失败点记录，此处不再重复。
+    pub(crate) fn on_audit_viewer_event(
+        &mut self,
+        event: &AuditViewerEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            AuditViewerEvent::Notice(message) => self.state.status = Some(message.clone()),
+            AuditViewerEvent::Error(message) => self.state.set_error(message.clone()),
+            AuditViewerEvent::OpenSettings => self.open_settings_modal(None, window, cx),
+        }
+        cx.notify();
     }
 }

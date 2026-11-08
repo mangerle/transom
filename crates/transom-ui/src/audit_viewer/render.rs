@@ -1,7 +1,11 @@
-//! 审计日志查看器模态弹窗渲染。
+//! 审计日志查看器主体渲染：按钮回调经 `cx.listener` 回到实体。
+//!
+//! 渲染期实体已被租借，这里只读 `state`；所有动作在监听器里执行，避免出现
+//! “渲染里再 `update` 自己”的双重租借。空态“打开设置”先关闭查看器，再通过
+//! [`AuditViewerEvent::OpenSettings`] 交回外壳处理窗口级动作。
 
-use super::types::{AuditViewer, format_file_size};
-use crate::app::AppShell;
+use super::entity::{AuditViewerEvent, AuditViewerView};
+use super::types::{AuditLogEntry, AuditViewer, format_file_size};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -10,23 +14,21 @@ use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
+use std::path::PathBuf;
 
-impl AppShell {
+impl AuditViewerView {
     /// 渲染审计日志查看器模态弹窗。
-    pub(crate) fn render_audit_viewer_body(
-        &self,
-        viewer: &AuditViewer,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
+    pub(crate) fn render_body(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        let Some(viewer) = self.viewer() else {
+            return div().into_any_element();
+        };
+
         let title = viewer.target_title.clone();
         let selected_file = viewer.entries.get(viewer.selected_index);
         let current_search = viewer.search_input.read(cx).value().trim().to_string();
 
-        let toolbar = self.render_audit_toolbar(app, viewer);
-        let file_list = self.render_audit_file_list(app, viewer, p);
+        let toolbar = self.render_toolbar(viewer, cx);
+        let file_list = self.render_file_list(viewer, cx, p);
         let right_pane = render_audit_content(viewer, &current_search, p);
 
         let left_pane = v_flex()
@@ -57,13 +59,7 @@ impl AppShell {
                 Button::new("close-audit-viewer")
                     .ghost()
                     .label(rust_i18n::t!("audit_viewer.close").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            let view = this.state.modals.tools.audit_viewer.clone();
-                            view.update(cx, |view, cx| view.close(cx));
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx))),
             );
 
         crate::widgets::dialog_body(
@@ -76,11 +72,7 @@ impl AppShell {
     }
 
     /// 审计查看器顶栏操作：范围切换、定位文件、删除、复制。
-    fn render_audit_toolbar(
-        &self,
-        app: &Entity<AppShell>,
-        viewer: &super::types::AuditViewer,
-    ) -> AnyElement {
+    fn render_toolbar(&self, viewer: &AuditViewer, cx: &mut Context<Self>) -> AnyElement {
         let selected_path = viewer
             .entries
             .get(viewer.selected_index)
@@ -98,17 +90,12 @@ impl AppShell {
                 Button::new("toggle-audit-scope")
                     .outline()
                     .label(scope_button_text)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            this.toggle_audit_viewer_scope(cx);
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_scope(cx))),
             );
         }
 
         toolbar = toolbar.children(audit_file_action_buttons(
-            app,
+            cx,
             selected_path,
             viewer.content.is_empty(),
         ));
@@ -116,10 +103,10 @@ impl AppShell {
     }
 
     /// 审计日志文件列表；空态提供打开设置入口。
-    fn render_audit_file_list(
+    fn render_file_list(
         &self,
-        app: &Entity<AppShell>,
-        viewer: &super::types::AuditViewer,
+        viewer: &AuditViewer,
+        cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
         // 左侧文件列表
@@ -147,14 +134,10 @@ impl AppShell {
                         Button::new("open-settings-from-audit")
                             .outline()
                             .label(rust_i18n::t!("audit_viewer.open_settings").to_string())
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, _: &ClickEvent, window, cx| {
-                                    let view = this.state.modals.tools.audit_viewer.clone();
-                                    view.update(cx, |view, cx| view.close(cx));
-                                    this.open_settings_modal(None, window, cx);
-                                },
-                            )),
+                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                this.close(cx);
+                                cx.emit(AuditViewerEvent::OpenSettings);
+                            })),
                     ),
             );
         } else {
@@ -163,7 +146,7 @@ impl AppShell {
                     idx,
                     entry,
                     idx == viewer.selected_index,
-                    app,
+                    cx,
                     p,
                 ));
             }
@@ -174,11 +157,7 @@ impl AppShell {
 }
 
 /// 右侧日志内容与搜索框；过滤逻辑保持纯函数，便于后续单测。
-fn render_audit_content(
-    viewer: &super::types::AuditViewer,
-    current_search: &str,
-    p: &Palette,
-) -> AnyElement {
+fn render_audit_content(viewer: &AuditViewer, current_search: &str, p: &Palette) -> AnyElement {
     // 右侧内容查看区
     let mut filtered_lines = Vec::new();
     for line in viewer.content.lines() {
@@ -240,9 +219,9 @@ fn render_audit_content(
 /// 单条审计日志行：文件名、时间/大小与删除入口。
 fn audit_file_row(
     idx: usize,
-    entry: &super::types::AuditLogEntry,
+    entry: &AuditLogEntry,
     is_selected: bool,
-    app: &Entity<AppShell>,
+    cx: &mut Context<AuditViewerView>,
     p: &Palette,
 ) -> AnyElement {
     let bg_color = if is_selected {
@@ -255,7 +234,6 @@ fn audit_file_row(
     } else {
         gpui::transparent_black()
     };
-    let item_delete_idx = idx;
     h_flex()
         .id(ElementId::Name(format!("audit-log-item-{idx}").into()))
         .p_2()
@@ -268,12 +246,9 @@ fn audit_file_row(
         .items_center()
         .justify_between()
         .gap_2()
-        .on_click(crate::dialog_host::on_event(
-            app,
-            move |this, _: &ClickEvent, _, cx| {
-                this.select_audit_log(idx, cx);
-            },
-        ))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.select(idx, cx);
+        }))
         .child(
             v_flex()
                 .flex_1()
@@ -304,23 +279,20 @@ fn audit_file_row(
             )
             .size(crate::widgets::IconButtonSize::Compact)
             .render()
-            .on_click(crate::dialog_host::on_event(
-                app,
-                move |this, _: &ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.delete_audit_log(item_delete_idx, cx);
-                },
-            )),
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                cx.stop_propagation();
+                this.delete(idx, cx);
+            })),
         )
         .into_any_element()
 }
 
 /// 选中文件动作：定位、删除与复制内容；未选中时定位/删除禁用。
 fn audit_file_action_buttons(
-    app: &Entity<AppShell>,
-    selected_path: Option<std::path::PathBuf>,
+    cx: &mut Context<AuditViewerView>,
+    selected_path: Option<PathBuf>,
     content_empty: bool,
-) -> Vec<gpui_kit::component::button::Button> {
+) -> Vec<Button> {
     let has_selected = selected_path.is_some();
     let mut buttons = Vec::with_capacity(3);
     if let Some(path) = selected_path {
@@ -349,14 +321,10 @@ fn audit_file_action_buttons(
             .disabled(!has_selected)
             .icon(IconName::Trash)
             .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
-            .on_click(crate::dialog_host::on_event(
-                app,
-                move |this, _: &ClickEvent, _, cx| {
-                    let view = this.state.modals.tools.audit_viewer.clone();
-                    let idx = view.read(cx).selected_index();
-                    view.update(cx, |view, cx| view.delete(idx, cx));
-                },
-            )),
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                let idx = this.selected_index();
+                this.delete(idx, cx);
+            })),
     );
 
     buttons.push(
@@ -365,12 +333,7 @@ fn audit_file_action_buttons(
             .disabled(!has_selected || content_empty)
             .icon(IconName::Copy)
             .label(rust_i18n::t!("audit_viewer.copy_content").to_string())
-            .on_click(crate::dialog_host::on_event(
-                app,
-                |this, _: &ClickEvent, _, cx| {
-                    this.copy_audit_viewer_content(cx);
-                },
-            )),
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.copy_content(cx))),
     );
     buttons
 }

@@ -50,6 +50,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) known_hosts: Option<Subscription>,
     /// 备份弹窗结果：目录合并与状态栏提示由外壳处理。
     pub(crate) backup: Option<Subscription>,
+    /// 审计查看器：状态栏提示、错误与“打开设置”意图由外壳处理。
+    pub(crate) audit_viewer: Option<Subscription>,
     pub(crate) diff_viewer: Option<Subscription>,
     /// 订阅本身即生命周期守卫，无需读取。
     pub(crate) _status_metrics: Option<Subscription>,
@@ -66,6 +68,7 @@ impl PanelSubscriptions {
             settings: None,
             known_hosts: None,
             backup: None,
+            audit_viewer: None,
             diff_viewer: None,
             _status_metrics: None,
             _git_focus: None,

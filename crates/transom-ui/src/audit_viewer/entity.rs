@@ -30,6 +30,8 @@ pub(crate) enum AuditViewerEvent {
     Notice(String),
     /// 操作失败，由外壳转为应用内错误提示。
     Error(String),
+    /// 空态引导：查看器已自行关闭，外壳据此打开设置。
+    OpenSettings,
 }
 
 impl EventEmitter<AuditViewerEvent> for AuditViewerView {}
@@ -59,7 +61,7 @@ impl AuditViewerView {
         self.state.is_some()
     }
 
-    /// 当前打开期的只读状态；渲染在迁移期仍由外壳读取。
+    /// 当前打开期的只读状态；渲染与状态查询共用同一入口。
     pub(crate) fn viewer(&self) -> Option<&AuditViewer> {
         self.state.as_ref()
     }

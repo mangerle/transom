@@ -3,6 +3,7 @@
 use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
+use crate::audit_viewer::AuditViewerEvent;
 use crate::backup::BackupPromptView;
 use crate::keys::{KnownHostsEvent, KnownHostsView};
 use std::sync::atomic::AtomicBool;
@@ -164,6 +165,14 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.backup = Some(backup_subscription);
+        let audit_subscription = cx.subscribe_in(
+            &self.state.modals.tools.audit_viewer,
+            window,
+            |shell, _view, event: &AuditViewerEvent, window, cx| {
+                shell.on_audit_viewer_event(event, window, cx);
+            },
+        );
+        self.state.tasks.subscriptions.audit_viewer = Some(audit_subscription);
         let settings_subscription = cx.subscribe(
             &self.state.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
