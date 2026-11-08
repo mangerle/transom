@@ -80,26 +80,9 @@ pub(crate) fn write_local_text(path: &Path, expected: &str, text: &str) -> Resul
             )
             .to_string()
         })?;
-        match std::fs::rename(&temp, path) {
-            Ok(()) => Ok(()),
-            Err(_) if cfg!(windows) => {
-                // Windows 不允许 rename 覆盖既有文件；回退路径牺牲原子性换取可用性。
-                std::fs::remove_file(path).map_err(|error| {
-                    rust_i18n::t!("diff.error_replace", path = path.display(), error = error)
-                        .to_string()
-                })?;
-                std::fs::rename(&temp, path).map_err(|error| {
-                    rust_i18n::t!("diff.error_replace", path = path.display(), error = error)
-                        .to_string()
-                })
-            }
-            Err(error) => {
-                Err(
-                    rust_i18n::t!("diff.error_replace", path = path.display(), error = error)
-                        .to_string(),
-                )
-            }
-        }
+        transom_platform::filesystem::replace_file(&temp, path).map_err(|error| {
+            rust_i18n::t!("diff.error_replace", path = path.display(), error = error).to_string()
+        })
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(&temp);

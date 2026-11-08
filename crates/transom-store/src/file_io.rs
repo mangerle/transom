@@ -95,15 +95,14 @@ pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), App
 /// - 为什么临时名带 pid 与序号：固定 `.tmp` 名在两个写者并发时互相覆盖，
 ///   可能把交错内容 rename 成正式文件；pid 隔离同机多进程，进程内递增
 ///   序号隔离同进程多线程；
-/// - 为什么显式关闭句柄再 rename：Windows 不允许重命名打开中的文件，
-///   提前关闭让两个平台行为一致；
+/// - 为什么显式关闭句柄再替换：Windows 不允许替换打开中的文件，提前关闭让
+///   两个平台行为一致；
 /// - 为什么 rename 后还要 fsync 父目录：rename 只原子替换目录项，目录项
 ///   本身也是元数据；不同步父目录时，断电后可能仍指向旧文件或丢失新名字。
 /// - 代价与局限：每次保存多一次文件 fsync 与一次目录 fsync（毫秒级），
 ///   写频率低可接受；极端崩溃可能残留唯一命名的 `.tmp` 文件，属无害垃圾，
-///   不会被后续写入读到。Windows 没有等价的可移植目录 fsync，且 rename
-///   不覆盖已存在文件、只能先删除，因此存在短暂缺失窗口；本实现不承诺
-///   Windows 上的掉电持久性，只保证不会留下半份内容。
+///   不会被后续写入读到。Windows 使用 `ReplaceFileW`/`MoveFileExW`
+///   原子替换；仍没有可移植的目录 fsync，因此不承诺目录项的掉电持久性。
 ///
 /// # Errors
 /// 父目录创建、临时文件打开、写入、同步、重命名或目录同步失败时返回
@@ -128,17 +127,15 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
         .sync_all()
         .map_err(|error| write_error(&temp, error))?;
     drop(temp_file);
+    transom_platform::filesystem::replace_file(&temp, path)
+        .map_err(|error| write_error(path, error))?;
     #[cfg(windows)]
     {
-        // Windows rename 不覆盖已存在文件；先删除旧文件。NotFound 表示首次
-        // 写入，其它删除失败必须上报，否则 rename 必然失败、用户以为写成功。
-        if let Err(error) = fs::remove_file(path)
-            && error.kind() != std::io::ErrorKind::NotFound
-        {
-            return Err(write_error(path, error));
-        }
+        // ReplaceFile 可能保留旧目标的 ACL；重新打开一次并应用私有 DACL，
+        // 使旧版本留下的宽权限文件也在本轮写入后完成收紧。
+        let _file =
+            private_fs::open_private_append(path).map_err(|error| write_error(path, error))?;
     }
-    fs::rename(&temp, path).map_err(|error| write_error(path, error))?;
     #[cfg(unix)]
     fs::File::open(parent)
         .and_then(|directory| directory.sync_all())

@@ -39,11 +39,78 @@ pub fn create_symlink(target: &Path, link: &Path) -> io::Result<()> {
     }
 }
 
+/// 用 `source` 原子替换 `target`。
+///
+/// Unix 使用 `rename`；Windows 在目标存在时使用 `ReplaceFileW`，目标首次创建
+/// 时使用带 `MOVEFILE_WRITE_THROUGH` 的 `MoveFileExW`。两者都避免先删除旧文件
+/// 造成目标短暂缺失。
+///
+/// # Errors
+/// 源文件不存在、权限不足、跨卷替换或系统原子替换 API 失败时返回底层 IO 错误。
+pub fn replace_file(source: &Path, target: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::fs::rename(source, target)
+    }
+    #[cfg(windows)]
+    {
+        replace_file_windows(source, target)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        std::fs::rename(source, target)
+    }
+}
+
+#[cfg(windows)]
+fn replace_file_windows(source: &Path, target: &Path) -> io::Result<()> {
+    use windows::Win32::Storage::FileSystem::{
+        MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW, REPLACEFILE_WRITE_THROUGH,
+        ReplaceFileW,
+    };
+    use windows::core::PCWSTR;
+
+    let source = wide_path(source);
+    let target = wide_path(target);
+    match unsafe {
+        ReplaceFileW(
+            PCWSTR(target.as_ptr()),
+            PCWSTR(source.as_ptr()),
+            PCWSTR::null(),
+            REPLACEFILE_WRITE_THROUGH,
+            None,
+            None,
+        )
+    } {
+        Ok(()) => Ok(()),
+        Err(error)
+            if error.code() == windows::Win32::Foundation::ERROR_FILE_NOT_FOUND.to_hresult() =>
+        {
+            unsafe {
+                MoveFileExW(
+                    PCWSTR(source.as_ptr()),
+                    PCWSTR(target.as_ptr()),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            }
+            .map_err(|error| io::Error::other(format!("Windows 原子移动文件失败: {error}")))
+        }
+        Err(error) => Err(io::Error::other(format!(
+            "Windows ReplaceFile 失败: {error}"
+        ))),
+    }
+}
+
+#[cfg(windows)]
+fn wide_path(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    path.as_os_str().encode_wide().chain(Some(0)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(unix)]
     use super::create_symlink;
-    #[cfg(unix)]
     use tempfile::tempdir;
 
     #[cfg(unix)]
@@ -55,5 +122,17 @@ mod tests {
         std::fs::write(&target, b"data").unwrap();
         create_symlink(&target, &link).unwrap();
         assert_eq!(std::fs::read(&link).unwrap(), b"data");
+    }
+
+    #[test]
+    fn replace_file_swaps_complete_contents() {
+        let root = tempdir().unwrap();
+        let target = root.path().join("target.txt");
+        let source = root.path().join("source.txt");
+        std::fs::write(&target, b"old").unwrap();
+        std::fs::write(&source, b"new").unwrap();
+        super::replace_file(&source, &target).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        assert!(!source.exists());
     }
 }
