@@ -196,10 +196,11 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.settings = Some(settings_subscription);
-        let session_form_subscription = cx.subscribe(
+        let session_form_subscription = cx.subscribe_in(
             &self.state.modals.session.form,
-            |shell, _view, event: &crate::session_form::SessionFormEvent, cx| {
-                shell.on_session_form_event(event, cx);
+            window,
+            |shell, _view, event: &crate::session_form::SessionFormEvent, window, cx| {
+                shell.on_session_form_event(event, window, cx);
             },
         );
         self.state.tasks.subscriptions.session_form = Some(session_form_subscription);

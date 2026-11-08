@@ -165,8 +165,8 @@ pub(crate) use stack::OpenModals;
 
 impl ModalKind {
     /// 弹窗体：内容与页脚仍由各领域自己渲染。
-    /// 设置、已知主机、备份、审计查看器、密钥向导与会话回放弹窗的状态归实体，
-    /// 先克隆句柄再进入 `update`，其它弹窗直接读外壳。
+    /// 设置、已知主机、备份、审计查看器、密钥向导、会话回放与会话表单弹窗的
+    /// 状态归实体，先克隆句柄再进入 `update`，其它弹窗直接读外壳。
     ///
     /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到实体的可变
     /// `update`”这类借用冲突：实体分支先克隆句柄、立即结束外壳借用。
@@ -206,6 +206,10 @@ impl ModalKind {
         if self == ModalKind::Replay {
             let view = app.read(cx).state.modals.tools.replay.clone();
             return view.update(cx, |view, cx| view.render_body(cx, p));
+        }
+        if self == ModalKind::SessionForm {
+            let view = app.read(cx).state.modals.session.form.clone();
+            return view.update(cx, |view, cx| view.render_body(window, cx, p));
         }
         let shell = app.read(cx);
         self.render_shell_body(shell, app, window, cx, p)
@@ -301,13 +305,8 @@ impl ModalKind {
                 ),
             ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, cx, p),
             ModalKind::ContainerQuadlet => shell.render_container_quadlet_dialog_body(app, cx, p),
-            ModalKind::SessionForm => {
-                let form = shell.state.modals.session.form.read(cx);
-                form.state().map_or_else(
-                    || div().into_any_element(),
-                    |form| shell.render_session_form_body(form, app, window, cx, p),
-                )
-            }
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::SessionForm => div().into_any_element(),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
             ModalKind::SnippetForm => shell.render_snippet_form_body(app, window, cx, p),

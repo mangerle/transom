@@ -4,9 +4,8 @@
 //! 与串口的选项行共用同一布局基元，保持表单视觉一致。
 
 use super::serial::serial_option_row;
-use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::session_form::SessionForm;
+use crate::session_form::{SessionForm, SessionFormView};
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
@@ -16,8 +15,7 @@ use transom_core::TextEncoding;
 
 pub(crate) fn render_telnet_fields(
     form: &SessionForm,
-    app: &Entity<AppShell>,
-    _cx: &App,
+    cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
     let encoding_buttons = h_flex().gap_1().children(
@@ -32,12 +30,9 @@ pub(crate) fn render_telnet_fields(
                 .small()
                 .label(label)
                 .selected(form.telnet_encoding == encoding)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        this.update_session_form(cx, |form| form.telnet_encoding = encoding);
-                    },
-                ))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.edit(cx, |form| form.telnet_encoding = encoding);
+                }))
         }),
     );
 
@@ -77,14 +72,9 @@ pub(crate) fn render_telnet_fields(
                     Switch::new("toggle-telnet-auto-reconnect")
                         .small()
                         .checked(form.auto_reconnect)
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, checked: &bool, _, cx| {
-                                this.update_session_form(cx, |form| {
-                                    form.auto_reconnect = *checked;
-                                });
-                            },
-                        )),
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.edit(cx, |form| form.auto_reconnect = *checked);
+                        })),
                 ),
         )
         .child(

@@ -5,8 +5,7 @@ use super::*;
 /// 渲染跳板机级联下拉选择与拓扑链展示。
 pub(super) fn render_jump_section(
     form: &SessionForm,
-    app: &Entity<AppShell>,
-    cx: &App,
+    cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
     let jump_label = form
@@ -26,6 +25,7 @@ pub(super) fn render_jump_section(
         format!("{target_host}:{target_port}")
     };
     let topology = form.proxy_topology(&target_label);
+    let entity = cx.entity();
     v_flex()
         .gap_1()
         .child(
@@ -48,19 +48,17 @@ pub(super) fn render_jump_section(
                             let options = form.jump_options.clone();
                             // 下拉的渲染闭包要求 'static：句柄要在构造时就克隆好，
                             // 不能等到闭包体内再借用方法参数。
-                            let dropdown_app = app.clone();
+                            let dropdown_entity = entity.clone();
                             move |menu, _window, _cx| {
-                                let app = dropdown_app.clone();
+                                let entity = dropdown_entity.clone();
                                 let mut menu = menu.item(crate::widgets::menu_item(
                                     rust_i18n::t!("form.proxy_jump_none").to_string(),
                                     IconName::Ban,
                                     {
-                                        let app = app.clone();
+                                        let entity = entity.clone();
                                         move |_, _, cx| {
-                                            app.update(cx, |this, cx| {
-                                                this.update_session_form(cx, |form| {
-                                                    form.jump_choice = None;
-                                                });
+                                            entity.update(cx, |this, cx| {
+                                                this.edit(cx, |form| form.jump_choice = None);
                                             });
                                         }
                                     },
@@ -74,13 +72,13 @@ pub(super) fn render_jump_section(
                                         "{} ({}:{})",
                                         option.name, option.host, option.port
                                     );
-                                    let app = app.clone();
+                                    let entity = entity.clone();
                                     menu = menu.item(crate::widgets::menu_item(
                                         label,
                                         IconName::Route,
                                         move |_, _, cx| {
-                                            app.update(cx, |this, cx| {
-                                                this.update_session_form(cx, |form| {
+                                            entity.update(cx, |this, cx| {
+                                                this.edit(cx, |form| {
                                                     form.jump_choice = Some(id);
                                                 });
                                             });

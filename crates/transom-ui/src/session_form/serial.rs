@@ -1,8 +1,7 @@
 //! 会话表单中的串口连接配置渲染。
 
-use crate::app::AppShell;
 use crate::palette::Palette;
-use crate::session_form::SessionForm;
+use crate::session_form::{SessionForm, SessionFormEvent, SessionFormView};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -12,8 +11,7 @@ use transom_core::{SerialDataBits, SerialFlowControl, SerialParity, SerialStopBi
 
 pub(crate) fn render_serial_fields(
     form: &SessionForm,
-    app: &Entity<AppShell>,
-    cx: &App,
+    cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
     let mut fields = v_flex().gap_3();
@@ -31,15 +29,9 @@ pub(crate) fn render_serial_fields(
                 .xsmall()
                 .label(label)
                 .selected(current_port == port_name)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, window, cx| {
-                        this.state.modals.session.form.update(cx, |view, cx| {
-                            view.select_serial_port(&port_name, window, cx);
-                        });
-                        cx.notify();
-                    },
-                )),
+                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                    this.select_serial_port(&port_name, window, cx);
+                })),
         );
     }
     let ports_hint = form.serial_ports_error.clone().unwrap_or_else(|| {
@@ -58,12 +50,9 @@ pub(crate) fn render_serial_fields(
             .small()
             .label(bits.bits().to_string())
             .selected(form.serial_data_bits == bits)
-            .on_click(crate::dialog_host::on_event(
-                app,
-                move |this, _: &ClickEvent, _, cx| {
-                    this.update_session_form(cx, |form| form.serial_data_bits = bits);
-                },
-            ))
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.edit(cx, |form| form.serial_data_bits = bits);
+            }))
         }));
     let parity_buttons = h_flex().gap_1().children(
         [
@@ -77,12 +66,9 @@ pub(crate) fn render_serial_fields(
                 .small()
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_parity == parity)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        this.update_session_form(cx, |form| form.serial_parity = parity);
-                    },
-                ))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.edit(cx, |form| form.serial_parity = parity);
+                }))
         }),
     );
     let stop_bits_buttons = h_flex().gap_1().children(
@@ -96,12 +82,9 @@ pub(crate) fn render_serial_fields(
                 .small()
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_stop_bits == stop_bits)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        this.update_session_form(cx, |form| form.serial_stop_bits = stop_bits);
-                    },
-                ))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.edit(cx, |form| form.serial_stop_bits = stop_bits);
+                }))
         }),
     );
     let flow_buttons = h_flex().gap_1().children(
@@ -116,12 +99,9 @@ pub(crate) fn render_serial_fields(
                 .small()
                 .label(rust_i18n::t!(label).to_string())
                 .selected(form.serial_flow_control == flow)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        this.update_session_form(cx, |form| form.serial_flow_control = flow);
-                    },
-                ))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.edit(cx, |form| form.serial_flow_control = flow);
+                }))
         }),
     );
 
@@ -143,12 +123,9 @@ pub(crate) fn render_serial_fields(
                                 .small()
                                 .icon(IconName::RefreshCw)
                                 .label(rust_i18n::t!("form.serial_refresh").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, window, cx| {
-                                        this.refresh_serial_ports(window, cx);
-                                    },
-                                )),
+                                .on_click(cx.listener(|_this, _: &ClickEvent, _, cx| {
+                                    cx.emit(SessionFormEvent::RefreshSerialPorts);
+                                })),
                         ),
                 )
                 .child(

@@ -1,7 +1,7 @@
 //! 会话表单中出站代理（Direct, SOCKS5, HTTP, FollowGlobal）配置渲染模块。
 
+use super::SessionFormView;
 use super::types::{ProxyChoice, SessionForm};
-use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
@@ -9,8 +9,7 @@ use gpui_kit::*;
 /// 渲染出站代理配置分栏（跟随全局、直连或会话专属 SOCKS5/HTTP）。
 pub(crate) fn render_proxy_section(
     form: &SessionForm,
-    app: &Entity<AppShell>,
-    _cx: &App,
+    cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
     let proxy_choice = form.proxy_choice;
@@ -27,7 +26,7 @@ pub(crate) fn render_proxy_section(
     );
     // 与设置页同一条下拉：四档选项长短不一，分段按钮在窄表单里会换行，
     // 下拉的触发宽度稳定，选中后下方的凭据字段按档位展开/收起。
-    proxy_section = proxy_section.child(AppShell::setting_dropdown_in_modal(
+    proxy_section = proxy_section.child(crate::widgets::dropdown(
         "dropdown-session-proxy",
         proxy_choice,
         vec![
@@ -49,9 +48,9 @@ pub(crate) fn render_proxy_section(
             ),
         ],
         |this, choice, _window, cx| {
-            this.update_session_form(cx, |form| form.proxy_choice = choice);
+            this.edit(cx, |form| form.proxy_choice = choice);
         },
-        app,
+        cx.entity(),
     ));
     if proxy_choice == ProxyChoice::FollowGlobal {
         proxy_section = proxy_section.child(

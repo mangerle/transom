@@ -14,7 +14,7 @@
 //! 事件只携带结果，外壳不能回读实体补数据；保存成功即关闭，失败则保留
 //! 弹窗并由实体自己写错误文案，两条路径必须各自保持一致。
 
-use super::types::{BuiltSession, SessionForm, SessionFormInit};
+use super::types::{BuiltSession, ConnectionChoice, SessionForm, SessionFormInit};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
@@ -34,6 +34,10 @@ pub(crate) enum SessionFormEvent {
     },
     /// 删除当前编辑的会话；实体已先关闭再发出本事件。
     Delete { session_id: SessionId },
+    /// 文件夹候选被选中；目录默认值由外壳解析后注入。
+    SelectFolder { path: String },
+    /// 重新枚举系统串口；数据由外壳注入，实体不直接访问系统。
+    RefreshSerialPorts,
 }
 
 impl EventEmitter<SessionFormEvent> for SessionFormView {}
@@ -60,11 +64,6 @@ impl SessionFormView {
         self.state.as_ref()
     }
 
-    /// 当前打开期的可变状态；仅供本模块内的动作与迁移期外壳更新使用。
-    pub(crate) fn form_mut(&mut self) -> Option<&mut SessionForm> {
-        self.state.as_mut()
-    }
-
     /// 打开表单并安装文件夹输入联动。
     pub(crate) fn open(
         &mut self,
@@ -80,6 +79,32 @@ impl SessionFormView {
     pub(crate) fn close(&mut self, cx: &mut Context<Self>) {
         self.state = None;
         cx.notify();
+    }
+
+    /// 在表单内就地修改字段并重绘；关闭状态下忽略。
+    pub(super) fn edit(&mut self, cx: &mut Context<Self>, update: impl FnOnce(&mut SessionForm)) {
+        if let Some(form) = self.state.as_mut() {
+            update(form);
+            cx.notify();
+        }
+    }
+
+    /// 回写文件夹候选弹层的展开状态。
+    pub(crate) fn set_folder_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.folder_open = open);
+    }
+
+    /// 切换连接类型；切到串口且尚无设备清单时请求外壳重新枚举。
+    pub(crate) fn set_connection(&mut self, choice: ConnectionChoice, cx: &mut Context<Self>) {
+        let Some(form) = self.state.as_mut() else {
+            return;
+        };
+        form.connection = choice;
+        let needs_ports = choice == ConnectionChoice::Serial && form.serial_ports.is_empty();
+        cx.notify();
+        if needs_ports {
+            cx.emit(SessionFormEvent::RefreshSerialPorts);
+        }
     }
 
     /// 表单全部文本项的当前值，转发给弹窗脏判定。

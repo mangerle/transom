@@ -803,6 +803,60 @@ fn key_wizard_is_owned_by_entity() {
     );
 }
 
+/// 会话表单必须由实体持有：打开状态、输入控件、保存/删除动作与渲染都归
+/// `SessionFormView`，外壳只保留打开入口、目录/钥匙串落盘与串口数据注入。
+#[test]
+fn session_form_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("form: Entity<SessionFormView>"),
+        "ModalHub 的会话表单必须持有 Entity<SessionFormView>"
+    );
+    let entity = std::fs::read_to_string(root.join("src/session_form/entity.rs"))
+        .expect("读取会话表单实体失败");
+    assert!(
+        entity.contains("pub(crate) struct SessionFormView"),
+        "SessionFormView 实体必须存在于 session_form/entity.rs"
+    );
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/session_form")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.contains("impl AppShell {") {
+            offenders.push(entry.display().to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "会话表单的旧外壳渲染/动作不得复活，跨域数据走 SessionFormEvent：\n{}",
+        offenders.join("\n")
+    );
+    let ops = std::fs::read_to_string(root.join("src/workspace/tabs/session_ops.rs"))
+        .expect("读取会话表单外壳事件处理失败");
+    for forbidden in [
+        "fn save_session_form(",
+        "fn delete_session_form(",
+        "fn update_session_form(",
+    ] {
+        assert!(
+            !ops.contains(forbidden),
+            "会话表单保存/删除必须走 SessionFormEvent：{forbidden}"
+        );
+    }
+    let view = std::fs::read_to_string(root.join("src/session_form/view.rs"))
+        .expect("读取会话表单视图失败");
+    assert!(
+        !view.contains("render_session_form_body"),
+        "旧的外壳渲染入口不得复活，弹窗渲染归 SessionFormView::render_body"
+    );
+}
+
 /// 搁置项必须走控制平面：UI 不得直接构造 git 进程或读写搁置项存储。
 #[test]
 fn shelf_operations_use_command_bus() {

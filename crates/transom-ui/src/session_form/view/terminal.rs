@@ -2,12 +2,12 @@
 
 use super::*;
 
-impl AppShell {
+impl SessionFormView {
     pub(super) fn render_session_terminal_attributes_card(
-        form: &crate::session_form::types::SessionForm,
-        app: &Entity<AppShell>,
+        &self,
+        form: &SessionForm,
         p: &Palette,
-        _cx: &App,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let block_choice = form.block_view;
 
@@ -64,14 +64,9 @@ impl AppShell {
                                     .small()
                                     .label(rust_i18n::t!(key).to_string())
                                     .selected(block_choice == value)
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, _, cx| {
-                                            this.update_session_form(cx, |form| {
-                                                form.block_view = value;
-                                            });
-                                        },
-                                    ))
+                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.edit(cx, |form| form.block_view = value);
+                                    }))
                             }),
                         ),
                     )

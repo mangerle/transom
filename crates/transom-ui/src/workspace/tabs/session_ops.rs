@@ -3,7 +3,7 @@
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
-use crate::session_form::{SessionForm, SessionFormView};
+use crate::session_form::SessionFormView;
 use gpui_kit::*;
 use transom_core::{
     AppError, Connection, ErrorCode, SecretKey, SecretKind, SecretStore, Session, SessionId,
@@ -124,37 +124,6 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 在会话表单中清除分组（选择根层级）。
-    pub(crate) fn clear_form_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let view = self.state.modals.session.form.clone();
-        view.update(cx, |view, cx| view.clear_folder(window, cx));
-        cx.notify();
-    }
-
-    /// 关闭会话表单。
-    pub(crate) fn close_session_form(&mut self, cx: &mut Context<Self>) {
-        let view = self.state.modals.session.form.clone();
-        view.update(cx, |view, cx| view.close(cx));
-        cx.notify();
-    }
-
-    /// 迁移期表单更新入口：在实体 update 内改表单字段，并同时刷新外壳。
-    ///
-    /// 渲染下沉到实体后本方法应删除，调用点改用实体自己的动作方法。
-    pub(crate) fn update_session_form<R>(
-        &mut self,
-        cx: &mut Context<Self>,
-        update: impl FnOnce(&mut SessionForm) -> R,
-    ) -> Option<R> {
-        let result = self.state.modals.session.form.update(cx, |view, cx| {
-            let result = view.form_mut().map(update);
-            cx.notify();
-            result
-        });
-        cx.notify();
-        result
-    }
-
     pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let init = crate::session_form::SessionFormInit {
             base: None,
@@ -251,6 +220,7 @@ impl AppShell {
     pub(crate) fn on_session_form_event(
         &mut self,
         event: &crate::session_form::SessionFormEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match event {
@@ -261,6 +231,14 @@ impl AppShell {
             } => self.apply_session_form_save(built, *save_password, *save_passphrase, cx),
             crate::session_form::SessionFormEvent::Delete { session_id } => {
                 self.delete_session_by_id(*session_id, cx);
+            }
+            crate::session_form::SessionFormEvent::SelectFolder { path } => {
+                self.select_form_folder(path, window, cx);
+                let view = self.state.modals.session.form.clone();
+                view.update(cx, |view, cx| view.set_folder_open(false, cx));
+            }
+            crate::session_form::SessionFormEvent::RefreshSerialPorts => {
+                self.refresh_serial_ports(window, cx);
             }
         }
     }

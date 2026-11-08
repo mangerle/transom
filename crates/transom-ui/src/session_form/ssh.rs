@@ -1,8 +1,8 @@
 //! 会话表单中 SSH 连接参数、跳板机与认证凭据渲染模块。
 
+use super::SessionFormView;
 use super::proxy::render_proxy_section;
 use super::types::{AuthChoice, SessionForm};
-use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -20,8 +20,7 @@ use self::jump::render_jump_section;
 
 pub(crate) fn render_ssh_fields(
     form: &SessionForm,
-    app: &Entity<AppShell>,
-    cx: &App,
+    cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
     let auth_password = if form.auth == AuthChoice::Password {
@@ -34,12 +33,9 @@ pub(crate) fn render_ssh_fields(
             .small()
             .label(rust_i18n::t!("form.auth_password").to_string())
     }
-    .on_click(crate::dialog_host::on_event(
-        app,
-        |this, _: &ClickEvent, _, cx| {
-            this.update_session_form(cx, |form| form.auth = AuthChoice::Password);
-        },
-    ));
+    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+        this.edit(cx, |form| form.auth = AuthChoice::Password);
+    }));
 
     let auth_key = if form.auth == AuthChoice::PrivateKey {
         Button::new("auth-key")
@@ -51,12 +47,9 @@ pub(crate) fn render_ssh_fields(
             .small()
             .label(rust_i18n::t!("form.auth_key").to_string())
     }
-    .on_click(crate::dialog_host::on_event(
-        app,
-        |this, _: &ClickEvent, _, cx| {
-            this.update_session_form(cx, |form| form.auth = AuthChoice::PrivateKey);
-        },
-    ));
+    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+        this.edit(cx, |form| form.auth = AuthChoice::PrivateKey);
+    }));
 
     let auth_agent = if form.auth == AuthChoice::Agent {
         Button::new("auth-agent")
@@ -68,12 +61,9 @@ pub(crate) fn render_ssh_fields(
             .small()
             .label(rust_i18n::t!("form.auth_agent").to_string())
     }
-    .on_click(crate::dialog_host::on_event(
-        app,
-        |this, _: &ClickEvent, _, cx| {
-            this.update_session_form(cx, |form| form.auth = AuthChoice::Agent);
-        },
-    ));
+    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+        this.edit(cx, |form| form.auth = AuthChoice::Agent);
+    }));
 
     let mut fields = v_flex().gap_3();
 
@@ -93,8 +83,8 @@ pub(crate) fn render_ssh_fields(
             ))),
     );
 
-    fields = fields.child(render_jump_section(form, app, cx, p));
-    fields = fields.child(render_proxy_section(form, app, cx, p));
+    fields = fields.child(render_jump_section(form, cx, p));
+    fields = fields.child(render_proxy_section(form, cx, p));
 
     if !form.identities.is_empty() {
         fields = fields.child(
@@ -114,14 +104,9 @@ pub(crate) fn render_ssh_fields(
                                 .small()
                                 .label(rust_i18n::t!("form.identity_none").to_string())
                                 .selected(form.identity_choice.is_none())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, _, cx| {
-                                        this.update_session_form(cx, |form| {
-                                            form.identity_choice = None;
-                                        });
-                                    },
-                                )),
+                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                    this.edit(cx, |form| form.identity_choice = None);
+                                })),
                         )
                         .children(form.identities.iter().enumerate().map(|(index, option)| {
                             let identity_id = option.id;
@@ -130,14 +115,11 @@ pub(crate) fn render_ssh_fields(
                                 .small()
                                 .label(option.name.clone())
                                 .selected(selected)
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    move |this, _: &ClickEvent, _, cx| {
-                                        this.update_session_form(cx, |form| {
-                                            form.identity_choice = Some(identity_id);
-                                        });
-                                    },
-                                ))
+                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.edit(cx, |form| {
+                                        form.identity_choice = Some(identity_id);
+                                    });
+                                }))
                         })),
                 ),
         );
@@ -184,14 +166,9 @@ pub(crate) fn render_ssh_fields(
                     Switch::new("toggle-auto-reconnect")
                         .small()
                         .checked(form.auto_reconnect)
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, checked: &bool, _, cx| {
-                                this.update_session_form(cx, |form| {
-                                    form.auto_reconnect = *checked;
-                                });
-                            },
-                        )),
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.edit(cx, |form| form.auto_reconnect = *checked);
+                        })),
                 ),
         )
         .child(
@@ -208,14 +185,9 @@ pub(crate) fn render_ssh_fields(
                     Switch::new("toggle-agent-forward")
                         .small()
                         .checked(form.agent_forward)
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, checked: &bool, _, cx| {
-                                this.update_session_form(cx, |form| {
-                                    form.agent_forward = *checked;
-                                });
-                            },
-                        )),
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.edit(cx, |form| form.agent_forward = *checked);
+                        })),
                 ),
         );
 
@@ -236,7 +208,7 @@ pub(crate) fn render_ssh_fields(
             p,
         ));
 
-    fields = render_auth_credential_fields(fields, form, app, cx, p);
+    fields = render_auth_credential_fields(fields, form, cx, p);
 
     fields.into_any_element()
 }

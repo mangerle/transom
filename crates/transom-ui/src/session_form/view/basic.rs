@@ -1,13 +1,14 @@
 //! 会话表单基本信息卡片与文件夹选择。
 
 use super::*;
+use crate::session_form::SessionFormEvent;
 
-impl AppShell {
+impl SessionFormView {
     pub(super) fn render_session_basic_card(
-        form: &crate::session_form::types::SessionForm,
-        app: &Entity<AppShell>,
+        &self,
+        form: &SessionForm,
         p: &Palette,
-        cx: &App,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         v_flex()
             .gap_3()
@@ -19,18 +20,13 @@ impl AppShell {
                         form.name.clone(),
                         p,
                     )))
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Self::render_folder_field(form, p, app, cx)),
-                    ),
+                    .child(div().flex_1().child(self.render_folder_field(form, p, cx))),
             )
-            .child(Self::render_session_appearance(
+            .child(self.render_session_appearance(
                 default_icon_for(form.connection),
                 form.icon,
                 form.color,
                 p,
-                app,
                 cx,
             ))
             .into_any_element()
@@ -42,17 +38,16 @@ impl AppShell {
     /// "只读选择器 + 隐藏输入"：输入框始终可编辑，Popover 只负责把候选
     /// 挂在下方。展开时把焦点交给输入框自己的 FocusHandle，避免弹层抢走
     /// 焦点打断键入；候选保持完整清单，开始键入路径时收起弹层（见
-    /// install_session_form），不把输入当成过滤词。
+    /// `SessionFormView::install`），不把输入当成过滤词。
     pub(super) fn render_folder_field(
-        form: &crate::session_form::types::SessionForm,
+        &self,
+        form: &SessionForm,
         p: &Palette,
-        app: &Entity<AppShell>,
-        cx: &App,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let options = form.folder_options.clone();
         let focus = form.folder_path.read(cx).focus_handle(cx);
-        let toggle_app = app.clone();
-        let content_app = app.clone();
+        let content_entity = cx.entity();
         let content_palette = p.clone();
 
         let popover = Popover::new("session-form-folder-popover")
@@ -60,12 +55,9 @@ impl AppShell {
             .offset(px(4.0))
             .open(form.folder_open)
             .track_focus(&focus)
-            .on_open_change(move |open, _window, cx| {
-                let open = *open;
-                toggle_app.update(cx, |this, cx| {
-                    this.update_session_form(cx, |form| form.folder_open = open);
-                });
-            })
+            .on_open_change(cx.listener(|this, open: &bool, _, cx| {
+                this.set_folder_open(*open, cx);
+            }))
             .trigger_style(StyleRefinement::default().w_full())
             .trigger(
                 Input::new(&form.folder_path).w_full().suffix(
@@ -75,7 +67,7 @@ impl AppShell {
                 ),
             )
             .content(move |_, _, _cx| {
-                Self::render_folder_options(&content_app, &options, &content_palette)
+                Self::render_folder_options(&content_entity, &options, &content_palette)
             });
 
         v_flex()
@@ -91,12 +83,16 @@ impl AppShell {
     }
 
     /// 文件夹候选列表：根层级固定置顶，其余是全部既有路径。
+    ///
+    /// 候选项的点击回调拿不到 `Context<Self>`（Popover 内容闭包只有 `&mut App`），
+    /// 因此捕获实体句柄后经 `update` 回到实体；目录默认值由外壳在
+    /// [`SessionFormEvent::SelectFolder`] 处理时解析并注入。
     fn render_folder_options(
-        app: &Entity<AppShell>,
+        entity: &Entity<SessionFormView>,
         options: &[String],
         p: &Palette,
     ) -> AnyElement {
-        let root_app = app.clone();
+        let root_entity = entity.clone();
         let mut list = v_flex()
             .min_w(px(240.0))
             .gap_0p5()
@@ -105,10 +101,10 @@ impl AppShell {
                 IconName::FolderTree,
                 rust_i18n::t!("folder.root_level").to_string(),
                 p,
-                move |window, cx| {
-                    root_app.update(cx, |this, cx| {
-                        this.clear_form_folder(window, cx);
-                        this.close_form_folder_menu(cx);
+                move |_: &ClickEvent, window, cx| {
+                    root_entity.update(cx, |this, cx| {
+                        this.clear_folder(window, cx);
+                        this.set_folder_open(false, cx);
                     });
                 },
             ));
@@ -116,17 +112,18 @@ impl AppShell {
             list = list.child(div().h(px(1.0)).my_1().bg(p.foreground.opacity(0.08)));
         }
         for path in options {
-            let pick_app = app.clone();
+            let pick_entity = entity.clone();
             let picked = path.clone();
             list = list.child(Self::folder_option_row(
                 format!("session-folder-{path}"),
                 IconName::Folder,
                 path.clone(),
                 p,
-                move |window, cx| {
-                    pick_app.update(cx, |this, cx| {
-                        this.select_form_folder(&picked, window, cx);
-                        this.close_form_folder_menu(cx);
+                move |_: &ClickEvent, _window, cx| {
+                    let picked = picked.clone();
+                    pick_entity.update(cx, |this, cx| {
+                        this.set_folder_open(false, cx);
+                        cx.emit(SessionFormEvent::SelectFolder { path: picked });
                     });
                 },
             ));
@@ -154,7 +151,7 @@ impl AppShell {
         icon: IconName,
         label: String,
         p: &Palette,
-        on_click: impl Fn(&mut Window, &mut App) + 'static,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> AnyElement {
         h_flex()
             .id(ElementId::Name(id.into()))
@@ -167,12 +164,7 @@ impl AppShell {
             .hover(|style| style.bg(p.list_hover))
             .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
             .child(div().text_sm().text_color(p.foreground).child(label))
-            .on_click(move |_, window, cx| on_click(window, cx))
+            .on_click(on_click)
             .into_any_element()
-    }
-
-    /// 关闭文件夹候选下拉；选中候选或清空后调用，避免弹层继续驻留。
-    fn close_form_folder_menu(&mut self, cx: &mut Context<Self>) {
-        self.update_session_form(cx, |form| form.folder_open = false);
     }
 }

@@ -158,20 +158,6 @@ pub(crate) fn sync_terminal_palette(cx: &mut gpui_kit::App) -> bool {
 }
 
 impl AppShell {
-    /// 弹窗内的下拉选择：供会话表单等非设置实体复用。
-    ///
-    /// 与 [`SettingsView::setting_dropdown_with_window`] 共用同一份通用构建，
-    /// 只把实体类型换成本类型。
-    pub(crate) fn setting_dropdown_in_modal<T: Clone + PartialEq + 'static>(
-        id: impl Into<ElementId>,
-        current_value: T,
-        options: Vec<(T, String)>,
-        on_change: impl Fn(&mut Self, T, &mut Window, &mut Context<Self>) + 'static + Clone,
-        app: &Entity<AppShell>,
-    ) -> AnyElement {
-        crate::widgets::dropdown(id, current_value, options, on_change, app.clone())
-    }
-
     /// 把外观偏好下发到所有已打开的窗格。
     ///
     /// 不做这件事的话，改完字体要重开标签才见效，等于"设置了但没反应"。

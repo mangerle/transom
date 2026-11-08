@@ -6,8 +6,7 @@ use super::*;
 pub(super) fn render_auth_credential_fields(
     mut fields: Div,
     form: &SessionForm,
-    app: &Entity<AppShell>,
-    _cx: &App,
+    cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> Div {
     match form.auth {
@@ -26,14 +25,9 @@ pub(super) fn render_auth_credential_fields(
                         Switch::new("toggle-save-password")
                             .small()
                             .checked(form.save_password)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, checked: &bool, _, cx| {
-                                    this.update_session_form(cx, |form| {
-                                        form.save_password = *checked;
-                                    });
-                                },
-                            )),
+                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                this.edit(cx, |form| form.save_password = *checked);
+                            })),
                     ),
             );
             if form.save_password {
@@ -63,15 +57,9 @@ pub(super) fn render_auth_credential_fields(
                                 .small()
                                 .icon(IconName::FolderOpen)
                                 .label(rust_i18n::t!("form.browse").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, window, cx| {
-                                        this.state.modals.session.form.update(cx, |view, cx| {
-                                            view.pick_private_key_path(window, cx);
-                                        });
-                                        cx.notify();
-                                    },
-                                )),
+                                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                                    this.pick_private_key_path(window, cx);
+                                })),
                         ),
                 )
                 .child(
@@ -89,15 +77,9 @@ pub(super) fn render_auth_credential_fields(
                                 .small()
                                 .icon(IconName::FolderOpen)
                                 .label(rust_i18n::t!("form.browse").to_string())
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, _: &ClickEvent, window, cx| {
-                                        this.state.modals.session.form.update(cx, |view, cx| {
-                                            view.pick_certificate_path(window, cx);
-                                        });
-                                        cx.notify();
-                                    },
-                                )),
+                                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                                    this.pick_certificate_path(window, cx);
+                                })),
                         ),
                 )
                 .child(
@@ -120,14 +102,9 @@ pub(super) fn render_auth_credential_fields(
                             Switch::new("toggle-save-passphrase")
                                 .small()
                                 .checked(form.save_passphrase)
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    |this, checked: &bool, _, cx| {
-                                        this.update_session_form(cx, |form| {
-                                            form.save_passphrase = *checked;
-                                        });
-                                    },
-                                )),
+                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                    this.edit(cx, |form| form.save_passphrase = *checked);
+                                })),
                         ),
                 );
             if form.save_passphrase {
