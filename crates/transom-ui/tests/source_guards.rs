@@ -815,3 +815,31 @@ fn git_config_is_controller_owned() {
         offenders.join("\n")
     );
 }
+
+/// 测试模块声明不能把其后的生产代码一起隐藏：`mod tests;` 是外部测试模块，
+/// 只应屏蔽这一行，后面的硬编码中文仍必须被扫描到。
+#[test]
+fn test_module_declaration_does_not_hide_production_literals() {
+    let src = "#[cfg(test)]\nmod tests;\n\nfn message() -> &'static str {\n    \"未翻译文案\"\n}\n";
+    let found = chinese_literals(src);
+    assert!(
+        found.iter().any(|(_, literal)| literal == "未翻译文案"),
+        "mod tests; 之后的生产代码必须继续参与扫描"
+    );
+}
+
+/// 内联测试模块里的中文（断言/测试数据）不参与扫描，但模块之后的生产代码
+/// 仍要被扫描。
+#[test]
+fn inline_test_module_is_ignored_but_following_code_is_scanned() {
+    let src = "#[cfg(test)]\nmod tests {\n    #[test]\n    fn case() { let _ = \"测试中文\"; }\n}\n\nfn message() -> &'static str {\n    \"生产中文\"\n}\n";
+    let found = chinese_literals(src);
+    assert!(
+        !found.iter().any(|(_, literal)| literal == "测试中文"),
+        "内联测试模块内的中文不应参与扫描"
+    );
+    assert!(
+        found.iter().any(|(_, literal)| literal == "生产中文"),
+        "内联测试模块之后的生产代码必须继续参与扫描"
+    );
+}
