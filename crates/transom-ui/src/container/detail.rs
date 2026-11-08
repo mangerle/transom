@@ -141,6 +141,8 @@ impl AppShell {
         let changes = workspace.changes.clone();
         let changes_loading = workspace.changes_loading;
         let changes_search = workspace.changes_search.clone();
+        // 与原始 inspect 同理：输入框的值必须经 App 读取，进入纯渲染前先快照。
+        let changes_search_value = changes_search.read(cx).value().to_string();
         let stats = workspace.stats.clone();
         let stats_history: Vec<ContainerStats> = workspace.stats_history.iter().cloned().collect();
         let stats_chart = workspace.stats_chart;
@@ -329,13 +331,16 @@ impl AppShell {
             }
             (ContainerSection::Containers, ContainerDetailTab::Changes) => {
                 changes::render_container_changes(
-                    tab_id,
-                    selected.as_deref(),
-                    changes.as_ref(),
-                    changes_loading,
-                    &changes_search,
+                    &view,
+                    changes::ContainerChangesView {
+                        tab_id,
+                        container_id: selected.as_deref(),
+                        changes_data: changes.as_ref(),
+                        loading: changes_loading,
+                        search_input: &changes_search,
+                        search_keyword: &changes_search_value,
+                    },
                     p,
-                    cx,
                 )
             }
             (ContainerSection::Compose, _) => render_compose_detail(

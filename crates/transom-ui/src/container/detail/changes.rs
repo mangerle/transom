@@ -1,21 +1,41 @@
 //! 容器文件系统变更（Diff）列表视图。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
-use transom_core::{
-    ContainerCommand, ContainerFileSystemChange, ContainerPathChangeKind, ContainerRequestId,
-};
+use transom_core::{ContainerFileSystemChange, ContainerPathChangeKind};
+
+/// 变更页渲染参数：容器标识、变更快照、加载态与搜索输入框/关键词快照。
+///
+/// 设计原理（Why）：`InputState` 的当前值必须经 `App` 读取，纯渲染函数拿不到
+/// `App`，因此由外壳在调用前把关键词一并快照进来；输入框实体仍用于渲染工具栏。
+pub(crate) struct ContainerChangesView<'a> {
+    pub(super) tab_id: TabId,
+    pub(super) container_id: Option<&'a str>,
+    pub(super) changes_data: Option<&'a (String, Vec<ContainerFileSystemChange>)>,
+    pub(super) loading: bool,
+    pub(super) search_input: &'a Entity<InputState>,
+    pub(super) search_keyword: &'a str,
+}
 
 /// 渲染容器文件变更页签。
+///
+/// 设计原理（Why）：刷新是实体动作，直接投递变更请求；复制提示写入实体
+/// `notice`，由外壳渲染帧的 `flush_container_notice` 统一转成通知，渲染函数
+/// 不再需要 `Context<AppShell>`。
 pub(crate) fn render_container_changes(
-    tab_id: TabId,
-    container_id: Option<&str>,
-    changes_data: Option<&(String, Vec<ContainerFileSystemChange>)>,
-    loading: bool,
-    search_input: &Entity<InputState>,
+    view: &Entity<ContainerWorkspace>,
+    params: ContainerChangesView<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let ContainerChangesView {
+        tab_id,
+        container_id,
+        changes_data,
+        loading,
+        search_input,
+        search_keyword,
+    } = params;
     let Some(container_id) = container_id else {
         return centered_hint(
             rust_i18n::t!("container.detail.no_selection").to_string(),
@@ -23,7 +43,7 @@ pub(crate) fn render_container_changes(
         );
     };
 
-    let search_keyword = search_input.read(cx).value().trim().to_lowercase();
+    let search_keyword = search_keyword.trim().to_lowercase();
 
     let all_changes = changes_data
         .filter(|(id, _)| id == container_id)
@@ -53,28 +73,18 @@ pub(crate) fn render_container_changes(
         }
     }
 
-    let refresh_cid = container_id.to_string();
+    let refresh_view = view.clone();
     let refresh_btn = Button::new(ElementId::Name(format!("btn-refresh-diff-{tab_id}").into()))
         .ghost()
         .xsmall()
         .icon(IconName::RefreshCw)
         .label(rust_i18n::t!("container.changes.refresh").to_string())
-        .on_click(cx.listener({
-            let cid = refresh_cid.clone();
-            move |this, _, _, cx| {
-                let request_id = ContainerRequestId::new();
-                this.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.changes_loading = true;
-                    workspace.changes_request = Some(request_id);
-                });
-                this.state.send_command(ContainerCommand::DiffContainer {
-                    tab_id,
-                    request_id,
-                    container: cid.clone(),
-                });
+        .on_click(move |_, _, cx| {
+            refresh_view.update(cx, |workspace, cx| {
+                workspace.refresh_container_changes();
                 cx.notify();
-            }
-        }));
+            });
+        });
 
     let stats_badges = h_flex()
         .gap_1p5()
@@ -142,6 +152,7 @@ pub(crate) fn render_container_changes(
 
         let path_text = change.path.clone();
         let copy_path = path_text.clone();
+        let copy_view = view.clone();
 
         let row = h_flex()
             .justify_between()
@@ -188,18 +199,14 @@ pub(crate) fn render_container_changes(
                 .xsmall()
                 .icon(IconName::Copy)
                 .tooltip(rust_i18n::t!("container.detail.copy_path").to_string())
-                .on_click(cx.listener({
-                    let path = copy_path.clone();
-                    move |this, _, window, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
-                        this.show_toast(
-                            rust_i18n::t!("container.detail.copied").to_string(),
-                            true,
-                            window,
-                            cx,
-                        );
-                    }
-                })),
+                .on_click(move |_, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(copy_path.clone()));
+                    let message = rust_i18n::t!("container.detail.copied").to_string();
+                    copy_view.update(cx, |workspace, cx| {
+                        workspace.state.notice = Some(message);
+                        cx.notify();
+                    });
+                }),
             );
 
         rows = rows.child(row);

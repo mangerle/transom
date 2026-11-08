@@ -492,7 +492,11 @@ impl AppShell {
                 }
             }
             ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
-            ContainerDetailTab::Changes => self.ensure_container_changes(tab_id, cx),
+            ContainerDetailTab::Changes => {
+                if let Some(workspace) = workspace.as_ref() {
+                    workspace.update(cx, |workspace, _| workspace.ensure_container_changes());
+                }
+            }
             ContainerDetailTab::Overview
             | ContainerDetailTab::History
             | ContainerDetailTab::Yaml => {}

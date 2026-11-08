@@ -2,62 +2,45 @@
 
 use super::*;
 
-impl AppShell {
+impl ContainerWorkspace {
     /// 确保当前选中容器的文件系统变更已加载。
-    pub(crate) fn ensure_container_changes(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some((_container_id, already_loaded, loading)) = self
-            .with_container(tab_id, cx, |workspace| {
-                let container_id = workspace.selected_container().map(|c| c.id.clone())?;
-                let already_loaded = workspace
-                    .changes
-                    .as_ref()
-                    .map(|(id, _)| id == &container_id)
-                    .unwrap_or(false);
-                Some((container_id, already_loaded, workspace.changes_loading))
-            })
-            .flatten()
-        else {
+    ///
+    /// 设计原理（Why）：变更归属工作区实体，缓存命中判断与在途请求拦截都在
+    /// 实体内部完成；渲染函数拿到句柄后直接调用，不再经外壳转手。
+    pub(crate) fn ensure_container_changes(&mut self) {
+        let Some(container_id) = self.state.selected_container().map(|c| c.id.clone()) else {
             return;
         };
-        if !already_loaded && !loading {
-            self.refresh_container_changes(tab_id, cx);
+        let already_loaded = self
+            .state
+            .changes
+            .as_ref()
+            .map(|(id, _)| id == &container_id)
+            .unwrap_or(false);
+        if !already_loaded && !self.state.changes_loading {
+            self.refresh_container_changes();
         }
     }
 
     /// 重新拉取当前选中容器的文件系统变更。
-    pub(crate) fn refresh_container_changes(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(container_id) = self
-            .with_container(tab_id, cx, |workspace| {
-                workspace.selected_container().map(|c| c.id.clone())
-            })
-            .flatten()
-        else {
+    pub(crate) fn refresh_container_changes(&mut self) {
+        let Some(container_id) = self.state.selected_container().map(|c| c.id.clone()) else {
             return;
         };
         let request_id = ContainerRequestId::new();
-        let previous = self
-            .with_container_mut(tab_id, cx, |workspace| {
-                workspace.changes_loading = true;
-                workspace.changes_request.replace(request_id)
-            })
-            .flatten();
-        if let Some(previous) = previous
-            && let Some(workspace) = self.state.container_workspace(tab_id)
-        {
-            workspace.update(cx, |workspace, _| {
-                workspace.cancel_container_request(previous)
-            });
+        self.state.changes_loading = true;
+        let previous = self.state.changes_request.replace(request_id);
+        if let Some(previous) = previous {
+            self.cancel_container_request(previous);
         }
         log::info!("正在拉取容器文件系统变更，容器: {container_id}，请求: {request_id}");
-        let command = ContainerCommand::DiffContainer {
-            tab_id,
+        self.send_tracked(
             request_id,
-            container: container_id,
-        };
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(request_id, command);
-            });
-        }
+            ContainerCommand::DiffContainer {
+                tab_id: self.tab_id,
+                request_id,
+                container: container_id,
+            },
+        );
     }
 }
