@@ -29,6 +29,7 @@ chrono.workspace = true
 zeroize.workspace = true
 log.workspace = true
 async-trait.workspace = true
+command-group.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

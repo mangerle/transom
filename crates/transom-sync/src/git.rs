@@ -21,7 +21,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Output};
 use std::time::Duration;
 use transom_core::{
     AppError, ErrorCode, GitSyncResult, GitSyncSettings, MergePreference, SessionCatalog,
@@ -30,6 +30,8 @@ use transom_core::{
 use transom_crypto::envelope::{is_envelope, open, seal};
 use transom_platform::private_fs;
 use transom_store::write_atomic;
+
+use crate::process::{RunError, output_with_timeout};
 
 /// 仓库内保存加密信封的文件名。
 pub const GIT_SYNC_FILE: &str = "transom-sync.envelope";
@@ -305,21 +307,16 @@ fn commit_and_push(cache_dir: &Path, branch: &str, auth: &GitAuth) -> Result<(),
 }
 
 fn run_git(cache_dir: &Path, args: &[&str], auth: &GitAuth) -> Result<Output, AppError> {
-    // 用 coreutils 的 timeout 包住 git：它负责超时强杀与子进程收割，
-    // `output()` 同时并发排空 stdout/stderr，避免大信封写满管道造成死锁。
-    let mut command = Command::new("timeout");
+    let mut command = Command::new("git");
     command
-        .arg("-k")
-        .arg("5s")
-        .arg(format!("{}s", GIT_TIMEOUT.as_secs()))
-        .arg("git")
         .arg("-C")
         .arg(cache_dir)
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .env(
+            "GIT_SSH_COMMAND",
+            "ssh -o BatchMode=yes -o ConnectTimeout=15",
+        );
     if let Some(token) = &auth.token {
         // 凭据只进环境变量，不进命令行：`ps` 看不到 token。
         let username = auth.username.as_deref().unwrap_or("x-access-token");
@@ -332,31 +329,29 @@ fn run_git(cache_dir: &Path, args: &[&str], auth: &GitAuth) -> Result<Output, Ap
                 format!("Authorization: Basic {encoded}"),
             );
     }
-    command.env(
-        "GIT_SSH_COMMAND",
-        "ssh -o BatchMode=yes -o ConnectTimeout=15",
-    );
-
-    let output = command.output().map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                "未找到 git 或 timeout 命令，请先安装 Git 后再使用仓库同步",
-            )
-        } else {
-            AppError::with_detail(
-                ErrorCode::CloudSyncFailed,
-                format!("启动 git 失败: {error}"),
-            )
-        }
-    })?;
-    if output.status.code() == Some(124) {
-        return Err(AppError::with_detail(
+    match output_with_timeout(command, GIT_TIMEOUT) {
+        Ok(output) => Ok(output),
+        Err(RunError::Timeout) => Err(AppError::with_detail(
             ErrorCode::CloudSyncFailed,
-            format!("git 操作超时（{} 秒），已终止子进程", GIT_TIMEOUT.as_secs()),
-        ));
+            format!(
+                "Git 操作超时（{} 秒），已终止并回收子进程",
+                GIT_TIMEOUT.as_secs()
+            ),
+        )),
+        Err(RunError::Io(error)) => {
+            let detail = if error.kind() == std::io::ErrorKind::NotFound {
+                "未找到 git 命令，请先安装 Git 后再使用仓库同步".to_string()
+            } else {
+                format!("启动或等待 git 失败: {error}")
+            };
+            let code = if error.kind() == std::io::ErrorKind::NotFound {
+                ErrorCode::Configuration
+            } else {
+                ErrorCode::CloudSyncFailed
+            };
+            Err(AppError::with_detail(code, detail))
+        }
     }
-    Ok(output)
 }
 
 fn git_error(action: &str, stderr: &str) -> AppError {

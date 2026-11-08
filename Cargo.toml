@@ -74,6 +74,9 @@ rust-i18n = "4.2"
 rfd = "0.15"
 open = "5.4"
 notify-rust = "4"
+# 同步子进程的跨平台进程组/Job Object 管理：Unix 使用进程组，Windows
+# 使用 CREATE_SUSPENDED + Job Object，超时时能连同孙进程一起回收。
+command-group = "5.0"
 chrono = "0.4"
 globset = "0.4"
 # 文件行差异：Myers 算法实现，core 产出 hunk 契约，UI 复用同一结果渲染。

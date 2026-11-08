@@ -1,6 +1,7 @@
 //! 云端同步：端点传输（WebDAV/S3）、S3 请求签名与加密备份的推送拉取编排。
 
 mod git;
+mod process;
 mod s3;
 mod service;
 mod sigv4;
