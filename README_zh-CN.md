@@ -33,7 +33,7 @@
 
 ### 会话与协议
 - 会话树支持多层嵌套文件夹、拖拽归类、实时过滤与多选批量改属性。
-- 连接类型：SSH2（密码、键盘交互、公钥、OpenSSH CA 用户证书、Unix 下支持 `ssh-agent`）、本地 PTY Shell、以及面向嵌入式板卡与交换机管理口的串口连接。
+- 连接类型：SSH2（密码、键盘交互、公钥、OpenSSH CA 用户证书、Unix OpenSSH Agent、Windows OpenSSH Agent 或 Pageant）、本地 PTY Shell、以及面向嵌入式板卡与交换机管理口的串口连接。
 - 只保留现代加密套件：AES-128/256-GCM 与 ChaCha20-Poly1305、SHA2-512 MAC、`zlib` 传输压缩，密钥支持 RSA / ECDSA / Ed25519。
 - 连接层默认每 30 秒心跳、连续 3 次无应答断开，避免云厂商防火墙静默掐断空闲连接。
 - 右键单个会话或整个文件夹即可对本组主机批量拨测（逐行显示 TCP 握手耗时，同时在途 16 路），并向会话配置的网卡 MAC 发送 Wake-on-LAN 魔法包。
@@ -77,12 +77,19 @@
 
 ## 平台支持
 
-| 平台 | 状态 |
-| :--- | :--- |
-| Linux（Wayland / X11） | 主要开发与验证平台。 |
-| macOS、Windows | 已有跨平台代码路径（修饰键映射、钥匙串后端、在文件管理器中显示），并由 CI 做编译检查与三端发布打包；仍未在真实 macOS/Windows 桌面上做人工交互验证，请按实验性看待。 |
+| 平台 | 支持等级 | 已验证能力 |
+| :--- | :--- | :--- |
+| Linux（Wayland / X11） | 主要交互开发平台 | 完整原生 CI、deb 与 AppImage 发布构建、XDG 默认终端集成、`ssh://` 单实例转交。 |
+| macOS（Intel / Apple silicon） | 支持 | 原生 CI 测试与 Clippy、Developer ID 签名并公证的 DMG、已签名更新二进制、LaunchServices `ssh://` 注册、系统原生打开能力。 |
+| Windows（x64 / arm64） | 支持 | 原生 CI 测试与 Clippy、Authenticode 签名的主程序与 NSIS 安装包、命名管道/WSL/WSLC 容器发现、`ssh://` 候选注册、系统原生打开能力。 |
 
-`ssh-agent` 认证目前仅支持 Unix；终端超链接通过 `xdg-open` 打开。
+三个平台的 CI 都会真实运行，但属于无头测试；具体硬件、显卡或桌面环境仍应在代表性机器上做发布前冒烟验证。
+
+明确的平台差异：
+
+- 默认终端接管遵循 freedesktop XDG 规范，因此只在 Linux 提供。macOS 没有 XDG 式系统默认终端 API，Windows 也没有等价的全系统默认终端注册；两端只登记 `ssh://` 应用候选，最终默认项由用户选择。
+- macOS 自更新压缩包只替换 `Transom.app/Contents/MacOS/transom`，`Info.plist` 与包内资源保持安装时版本；需要独立更新资源时必须改为 `.pkg` 或整包替换路径。
+- Windows 的 WSL 容器发现、WSL Mosh、OpenSSH Agent/Pageant、Docker Desktop、WSLC 与 Podman machine 集成依赖对应外部工具已安装并配置。Linux 终端超链接依赖 `xdg-open`，macOS 与 Windows 使用系统原生打开接口。
 
 ### 桌面集成（默认终端、`ssh://` 链接）
 
@@ -128,13 +135,13 @@ Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `
 
 推送 `v*` 标签会触发 `.github/workflows/release.yml`，为 Linux、Windows、macOS 的 x86_64 与 arm64 构建并发布 GitHub Release：
 
-| 平台 | 更新通道（写入签名清单 `latest.json`） | 手动分发产物 |
+| 平台 | 更新通道 | 手动分发产物 |
 | :--- | :--- | :--- |
 | Linux | `.deb` 安装器 | `.AppImage` |
-| Windows | NSIS 每用户安装包 | 绿色便携 `.zip` |
-| macOS | 内含可执行文件的 `.zip`（由 shipup 解压后替换 `.app` 内可执行文件） | `.dmg` |
+| Windows | Authenticode 签名的 NSIS 每用户安装包 | 内含已签名主程序的绿色便携 `.zip` |
+| macOS | 内含已签名可执行文件的 `.zip`（由 shipup 解压后替换 `.app` 内可执行文件） | Developer ID 签名、Apple 公证并 stapling 的 `.dmg` |
 
-发布任务用 Ed25519 对每个更新包与合并后的 `latest.json` 签名；公钥编译在 `crates/transom-updater` 内，私钥只保存在仓库 Secret `SHIPUP_PRIVATE_KEY` 与维护者本机。应用内「偏好设置 → 关于 → 软件更新」负责检查清单、下载验签、安装与优雅重启；连续两次启动失败会触发上一版本回滚。
+发布任务先用 Ed25519 对每个更新包与合并后的 `latest.json` 签名，再应用平台原生签名：Windows 使用带 RFC 3161 时间戳的 Authenticode，macOS 使用 Developer ID、Hardened Runtime、Apple 公证与 stapling。全部签名凭据均为必需的 GitHub Secrets；任一缺失时发布前门禁会直接拒绝构建。应用内「偏好设置 → 关于 → 软件更新」负责检查清单、下载验签、安装与优雅重启；连续两次启动失败会触发上一版本回滚。
 
 密钥管理、产物矩阵、本地验证命令与三端更新路径见 [`docs/release.md`](./docs/release.md)。
 
@@ -160,7 +167,7 @@ apps/transom            可执行入口：装配存储层与异步连接控制�
 crates/transom-core     存储契约、会话/设置模型、命令事件契约与转发/高亮规则
 crates/transom-platform 用户目录、私有文件权限与发行版识别
 crates/transom-crypto   TSYN 二进制与 JSON/YAML 加密信封
-crates/transom-desktop  默认终端注册、桌面条目与启动器集成
+crates/transom-desktop  平台桌面集成：Linux 默认终端、macOS/Windows URI 注册
 crates/transom-net      russh 客户端、SFTP、端口转发、串口与 PTY 链路
 crates/transom-sync     WebDAV/S3/Git 云同步编排
 crates/transom-store    JSON 存储、钥匙串、加密备份与原子写
@@ -185,7 +192,7 @@ cargo test
 
 ## 路线图
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 117 项评估过的能力及其完成状态，清单内项目均已实现或由终端内核原生支持。清单之外的已知缺口：安装包尚未做操作系统级代码签名（Windows SmartScreen 与 macOS Gatekeeper 会提示）；更新清单本身由 shipup 做 Ed25519 签名。
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 117 项评估过的能力及其完成状态，清单内项目均已实现或由终端内核原生支持。清单之外仍有运行前提：Windows 的 WSL 能力依赖外部 WSL 工具，Linux 默认终端接管基于 XDG 且按平台设计不适用于 macOS/Windows，macOS 自更新只替换可执行文件。
 
 ## 参与贡献
 

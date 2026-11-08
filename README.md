@@ -33,7 +33,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 
 ### Sessions and protocols
 - Session tree with nested folders, drag-to-organize, live filtering and batch attribute edits.
-- Connection types: SSH2 (password, keyboard-interactive, public key, OpenSSH CA user certificates, `ssh-agent` on Unix), local PTY shell, and serial console for embedded boards and switch management ports.
+- Connection types: SSH2 (password, keyboard-interactive, public key, OpenSSH CA user certificates, Unix OpenSSH agent, and Windows OpenSSH agent or Pageant), local PTY shell, and serial console for embedded boards and switch management ports.
 - Modern crypto only: AES-128/256-GCM and ChaCha20-Poly1305 ciphers, SHA2-512 MACs, `zlib` stream compression, RSA / ECDSA / Ed25519 keys.
 - Keepalive probes every 30 s with 3-strike disconnect, so cloud firewalls cannot silently drop an idle session.
 - Right-click a session or a whole folder to TCP-probe every host in one batch (handshake latency per row, 16 in flight at a time) and to send a Wake-on-LAN magic packet to the MAC stored on the session.
@@ -77,12 +77,19 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 
 ## Platform support
 
-| Platform | Status |
-| :--- | :--- |
-| Linux (Wayland / X11) | Primary development and test target. |
-| macOS, Windows | Cross-platform code paths exist (modifier keys, keyring backends, reveal-in-file-manager) and compile, but they are **not yet verified by CI or a release artifact**. Treat them as experimental. |
+| Platform | Support level | Verified behavior |
+| :--- | :--- | :--- |
+| Linux (Wayland / X11) | Primary interactive target | Full native CI, deb and AppImage release builds, XDG default-terminal integration, `ssh://` single-instance handoff. |
+| macOS (Intel / Apple silicon) | Supported | Native CI tests and Clippy, Developer ID signed and notarized DMG, signed update binary, LaunchServices `ssh://` registration, OS-native opener. |
+| Windows (x64 / arm64) | Supported | Native CI tests and Clippy, Authenticode-signed executable and NSIS installer, named-pipe/WSL/WSLC container discovery, `ssh://` candidate registration, OS-native opener. |
 
-`ssh-agent` authentication is Unix-only today; terminal hyperlinks open via `xdg-open`.
+CI runs on all three operating systems, but it is headless. Hardware- and driver-specific desktop behavior still needs a release smoke test on representative machines.
+
+Explicit platform differences:
+
+- Default-terminal takeover uses the freedesktop XDG specification and is therefore Linux-only. macOS has no XDG-style default-terminal API, and Windows has no equivalent system-wide default-terminal registration; both platforms register `ssh://` as an application candidate and leave the final default choice to the user.
+- The macOS self-update archive replaces only `Transom.app/Contents/MacOS/transom`. `Info.plist` and bundle resources stay at the installed version; independent resources would require a `.pkg` or whole-bundle update path.
+- Windows WSL-backed container discovery, WSL Mosh, OpenSSH agent/Pageant, Docker Desktop, WSLC and Podman machine integration depend on those external tools being installed and configured. Linux terminal hyperlinks depend on `xdg-open`; macOS and Windows use their native opener APIs.
 
 ### Desktop integration (default terminal, `ssh://` links)
 
@@ -128,13 +135,13 @@ Release builds strip symbols and use thin LTO. Logging goes through the `log` fa
 
 Pushing a `v*` tag runs `.github/workflows/release.yml` and publishes a GitHub Release for Linux, Windows and macOS on both x86_64 and arm64:
 
-| Platform | Update channel (signed in `latest.json`) | Manual artifacts |
+| Platform | Update channel | Manual artifacts |
 | :--- | :--- | :--- |
 | Linux | `.deb` installer | `.AppImage` |
-| Windows | NSIS per-user installer | portable `.zip` |
-| macOS | `.zip` containing the executable (`shipup` archive replacement inside the `.app`) | `.dmg` |
+| Windows | Authenticode-signed NSIS per-user installer | portable `.zip` with a signed executable |
+| macOS | `.zip` containing the signed executable (`shipup` archive replacement inside the `.app`) | Developer ID signed, notarized and stapled `.dmg` |
 
-The release job signs every update package and the merged `latest.json` with Ed25519; the public key is compiled into `crates/transom-updater`. The private key lives only in the repository secret `SHIPUP_PRIVATE_KEY` and on the maintainer's machine. In the app, **Preferences → About → Software Updates** checks the manifest, downloads and verifies the package, installs it, and offers a graceful restart; a crash-loop guard rolls back to the previous binary after two failed starts.
+The release job signs every update package and the merged `latest.json` with Ed25519, then applies the platform's native signature: Authenticode with RFC 3161 timestamps for Windows, and Developer ID + Hardened Runtime + Apple notarization/stapling for macOS. All signing credentials are required GitHub Secrets; the release preflight refuses to build when any are missing. In the app, **Preferences → About → Software Updates** checks the manifest, downloads and verifies the package, installs it, and offers a graceful restart; a crash-loop guard rolls back to the previous binary after two failed starts.
 
 See [`docs/release.md`](./docs/release.md) (Chinese) for key management, local verification, the artifact matrix, and the per-platform update path.
 
@@ -160,7 +167,7 @@ apps/transom            binary: wires stores and the async connection controller
 crates/transom-core     storage traits, session/settings models, command/event contracts, rules
 crates/transom-platform user directories, private file permissions, OS release detection
 crates/transom-crypto   TSYN binary and JSON/YAML encryption envelopes
-crates/transom-desktop  default-terminal registration, desktop entries, launcher integration
+crates/transom-desktop  platform desktop integration: Linux default terminal, macOS/Windows URI registration
 crates/transom-net      russh client, SFTP, port forwarding, serial ports, PTY plumbing
 crates/transom-sync     WebDAV/S3/Git cloud-sync orchestration
 crates/transom-store    JSON stores, keyring, encrypted backups, atomic writes
@@ -185,7 +192,7 @@ cargo test
 
 ## Roadmap
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 117 evaluated capabilities with per-item completion status; every listed item is either implemented or natively supported today. Known gaps outside that list: installers are not OS-code-signed yet (Windows SmartScreen and macOS Gatekeeper will warn); update manifests themselves are Ed25519-signed by `shipup`.
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 117 evaluated capabilities with per-item completion status; every listed item is either implemented or natively supported today. Operational prerequisites outside that list remain: WSL-backed Windows features need external WSL tooling, Linux default-terminal takeover uses XDG and is intentionally unavailable on macOS/Windows, and macOS self-updates replace the executable only.
 
 ## Contributing
 
