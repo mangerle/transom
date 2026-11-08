@@ -12,6 +12,7 @@ members = [
     "crates/transom-sync",
     "crates/transom-terminal",
     "crates/transom-zmodem",
+    "crates/transom-updater",
     "crates/transom-ui",
 ]
 resolver = "3"
@@ -19,7 +20,9 @@ resolver = "3"
 [workspace.package]
 version = "1.6.1"
 edition = "2024"
-rust-version = "1.92"
+# shipup 0.5.1 的编译下限为 1.96；自更新是桌面分发的主链路，
+# 因此工作区 MSRV 随之上调，CI 的最低版本门禁也同步改为 1.96。
+rust-version = "1.96"
 license = "Apache-2.0"
 authors = ["wangle"]
 repository = "https://github.com/mangerle/transom"
@@ -105,6 +108,14 @@ rand = "0.10"
 # 单元测试写临时目录用的共享 dev-dependency：core/store/net 三处约束一致，
 # 收敛到 workspace 段后升级只改一行，避免逐个清单漏改导致测试版本分叉。
 tempfile = "3"
+# 桌面自更新：关闭默认特性，避免同时拉入 async 与 native-tls；传输统一走
+# rustls，与工作区既有 reqwest 的 TLS 口径一致。blocking 供 GPUI 专用阻塞
+# 线程调用；archive 用于 macOS 自更新 zip（解压后替换 .app 内可执行文件）。
+shipup = { version = "0.5.1", default-features = false, features = [
+    "blocking",
+    "archive",
+    "rustls-tls",
+] }
 
 transom-core = { path = "crates/transom-core" }
 transom-platform = { path = "crates/transom-platform" }
@@ -117,6 +128,7 @@ transom-container = { path = "crates/transom-container" }
 transom-sync = { path = "crates/transom-sync" }
 transom-terminal = { path = "crates/transom-terminal" }
 transom-zmodem = { path = "crates/transom-zmodem" }
+transom-updater = { path = "crates/transom-updater" }
 transom-ui = { path = "crates/transom-ui" }
 
 [profile.dev.package]

@@ -392,6 +392,18 @@ impl GroupSearch {
                     "settings.about_summary",
                 ],
             ),
+            GroupSearch::Update => (
+                "settings.update_group",
+                &[
+                    "settings.update_title",
+                    "settings.update_desc",
+                    "settings.update_check_action",
+                    "settings.update_download_action",
+                    "settings.update_install_action",
+                    "settings.update_restart_action",
+                    "settings.update_notes_title",
+                ],
+            ),
             GroupSearch::ContainerRegistries => (
                 "settings.container_registries_group",
                 &[

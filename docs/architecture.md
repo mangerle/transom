@@ -24,6 +24,7 @@ apps/transom (组合根 + 控制平面)
   │    │    └─ transom-core
   │    ├─ transom-platform (用户目录 / 私有文件权限 / 发行版识别)
   │    └─ transom-core
+  ├─ transom-updater (shipup 封装：签名清单 / 下载验签 / 崩溃回滚)
   ├─ transom-net (SSH / SFTP / 转发 / 串口 / Telnet / 统计解析)
   │    └─ transom-core
   ├─ transom-container (容器引擎发现 / Docker 兼容 REST / exec 桥 / 归档文件)
@@ -49,6 +50,8 @@ apps/transom (组合根 + 控制平面)
 ```
 
 规则：**依赖只向内**。`transom-net` 不依赖 `transom-store`；`transom-sync` 依赖 `transom-store` 与 `transom-crypto`；加解密信封由独立的 `transom-crypto` 提供；UI 不直接做网络协议；与操作系统打交道的路径与权限经 `transom-platform`，桌面注册经 `transom-desktop`。
+
+自更新链路同样遵守该方向：`transom-updater` 只封装 `shipup` 并暴露稳定的信息/事件模型，不依赖 UI；`transom-ui` 的“关于”页在 `SettingsView` 内维护互斥状态机，检查/下载/安装经 `spawn_blocking_local` 执行，下载进度走容量 1 的有界通道；安装完成后的重启意图经 `SettingsEvent::RestartForUpdate` 交回 `AppShell`，外壳置位 `AppState::restart_requested` 并退出事件循环，`transom_ui::run` 把该标志返回给 `main`，确保控制器优雅停机后才拉起新进程。
 
 ## UI 内部结构
 
@@ -216,6 +219,9 @@ crates/transom-ui/src/
 
 crates/transom-zmodem/src/
   frames / scanner / receiver / sender / fsm / attach：字节级协议与会话驱动
+
+crates/transom-updater/src/
+  lib.rs  shipup 封装：签名清单检查、下载验签、安装、崩溃回滚与重启入口
 
 crates/transom-net/src/
   system_stats/ Linux 宿主与远端资源采样输出解析器与状态机

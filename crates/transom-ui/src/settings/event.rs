@@ -50,6 +50,8 @@ pub(crate) enum SettingsEvent {
     Status(String),
     /// 应用级错误提示。
     Error(String),
+    /// 更新已安装，请求退出事件循环并在优雅停机后重启。
+    RestartForUpdate,
 }
 
 /// 需要窗口句柄才能执行、必须排到渲染期处理的设置请求。

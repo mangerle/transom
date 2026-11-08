@@ -244,10 +244,10 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     PageSpec {
         title_key: "settings.tab_about",
         icon: IconName::Info,
-        groups: &[window(
-            GroupSearch::About,
-            SettingsView::render_settings_about,
-        )],
+        groups: &[
+            window(GroupSearch::About, SettingsView::render_settings_about),
+            plain(GroupSearch::Update, SettingsView::render_settings_update),
+        ],
     },
 ];
 

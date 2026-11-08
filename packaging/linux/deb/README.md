@@ -55,7 +55,8 @@ for f in $(ldd target/release/transom | awk '/=> \//{print $3}'); do echo "$f ->
   `md5sums` 相关实现），不是配置遗漏。影响仅限 `debsums` / `dpkg --verify`
   无法对本包做完整性校验；安装、升级与 apt 依赖解析均不受影响。真要补，
   需要在 `cargo deb` 之后解包生成校验表再重组，属于额外的打包工序。
-- 未签名：Release 附件形态，走 GitHub Release 分发，不进任何 apt 源。
+- 未做操作系统级代码签名：Release 附件形态，走 GitHub Release 分发，不进任何 apt 源。
+- 自更新通道：发布工作流会把 deb 交给 `shipup-cli release` 生成 Ed25519 签名条目，客户端以安装器模式调用 `pkexec dpkg -i`。因此 deb 的控制字段与依赖清单同时影响“能否安装”和“能否自动更新”，改动后必须重跑上面的 `ldd` 复核。
 
 ## 核验命令
 

@@ -23,6 +23,7 @@ transom-store.workspace = true
 transom-desktop.workspace = true
 transom-git.workspace = true
 transom-terminal.workspace = true
+transom-updater.workspace = true
 gpui-kit.workspace = true
 flume.workspace = true
 rust-i18n.workspace = true

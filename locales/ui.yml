@@ -2388,6 +2388,99 @@ settings:
   about_dir_revealed:
     en: Config folder opened in the system file manager
     zh-CN: 已在系统文件管理器中打开配置目录
+  update_group:
+    en: Software Updates
+    zh-CN: 软件更新
+  update_title:
+    en: Application update
+    zh-CN: 应用更新
+  update_desc:
+    en: Check GitHub Releases, verify the Ed25519 signature, then install and restart.
+    zh-CN: 从 GitHub Releases 检查新版本，验签通过后安装并重启。
+  update_idle:
+    en: Not checked yet
+    zh-CN: 尚未检查更新
+  update_checking:
+    en: Checking the release manifest...
+    zh-CN: 正在检查更新清单...
+  update_up_to_date:
+    en: You are running the latest version
+    zh-CN: 当前已是最新版本
+  update_available:
+    en: New version v%{version} is available
+    zh-CN: 发现新版本 v%{version}
+  update_downloading:
+    en: Downloading v%{version}
+    zh-CN: 正在下载 v%{version}
+  update_ready:
+    en: v%{version} downloaded and signature verified
+    zh-CN: v%{version} 已下载并通过签名校验
+  update_installing:
+    en: Installing v%{version}...
+    zh-CN: 正在安装 v%{version}...
+  update_installed:
+    en: v%{version} installed
+    zh-CN: v%{version} 已安装
+  update_failed:
+    en: "Update failed: %{message}"
+    zh-CN: "更新失败：%{message}"
+  update_retrying:
+    en: Retrying %{attempt}/%{max_retries}
+    zh-CN: 正在重试 %{attempt}/%{max_retries}
+  update_stage_checking_manifest:
+    en: Reading release manifest
+    zh-CN: 正在读取发布清单
+  update_stage_download_started:
+    en: Download started
+    zh-CN: 下载已开始
+  update_stage_verifying_checksum:
+    en: Verifying SHA-256
+    zh-CN: 正在校验 SHA-256
+  update_stage_verifying_signature:
+    en: Verifying Ed25519 signature
+    zh-CN: 正在校验 Ed25519 签名
+  update_stage_extracting:
+    en: Extracting update archive
+    zh-CN: 正在解压更新包
+  update_stage_installing:
+    en: Writing installation
+    zh-CN: 正在写入安装结果
+  update_stage_ready_to_restart:
+    en: Ready to restart
+    zh-CN: 已就绪，等待重启
+  update_stage_deferred_to_reboot:
+    en: Will take effect after a system reboot
+    zh-CN: 将在系统重启后生效
+  update_stage_completed:
+    en: Completed
+    zh-CN: 已完成
+  update_stage_other:
+    en: Working
+    zh-CN: 处理中
+  update_check_action:
+    en: Check for updates
+    zh-CN: 检查更新
+  update_download_action:
+    en: Download update
+    zh-CN: 下载更新
+  update_install_action:
+    en: Install update
+    zh-CN: 安装更新
+  update_restart_action:
+    en: Restart now
+    zh-CN: 立即重启
+  update_busy_action:
+    en: Working...
+    zh-CN: 处理中...
+  update_thread_failed:
+    en: Failed to start the background update task
+    zh-CN: 启动后台更新任务失败
+  update_restart_hint:
+    en: Restart to load the new version. Remote sessions will be closed gracefully first.
+    zh-CN: 重启后加载新版本；远端会话会先优雅断开。
+  update_notes_title:
+    en: Release notes
+    zh-CN: 更新日志
   tab_general:
     en: General & Sound
     zh-CN: 通用与声音

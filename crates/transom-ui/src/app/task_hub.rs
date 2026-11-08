@@ -24,6 +24,8 @@ pub(crate) struct BackgroundTasks {
     pub(crate) git_sync: Option<Task<()>>,
     pub(crate) backup: Option<Task<()>>,
     pub(crate) sync_pull: Option<Task<()>>,
+    /// 首帧稳定后的升级确认任务：延迟执行，避免把"窗口刚创建"误判为健康运行。
+    pub(crate) update_confirm: Option<Task<()>>,
 }
 
 impl BackgroundTasks {
@@ -35,6 +37,7 @@ impl BackgroundTasks {
             git_sync: None,
             backup: None,
             sync_pull: None,
+            update_confirm: None,
         }
     }
 }

@@ -1,0 +1,21 @@
+[package]
+name = "transom-updater"
+description = "Transom 跨平台自更新：清单检查、下载验签、崩溃回滚与更新事件模型"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+shipup.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

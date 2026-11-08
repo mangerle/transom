@@ -8,7 +8,7 @@
 
   <p>
     <a href="https://github.com/mangerle/transom/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue" /></a>
-    <img alt="Rust" src="https://img.shields.io/badge/rust-1.92%2B-orange" />
+    <img alt="Rust" src="https://img.shields.io/badge/rust-1.96%2B-orange" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20(primary)%20%7C%20macOS%20%7C%20Windows-informational" />
     <img alt="Status" src="https://img.shields.io/badge/status-alpha-red" />
   </p>
@@ -112,7 +112,7 @@ A deep link opens a new tab in the existing window, connecting without saving a 
 
 ## Build from source
 
-Requirements: Rust **1.92 or newer** (edition 2024) and a desktop session for the GPUI platform layer.
+Requirements: Rust **1.96 or newer** (edition 2024) and a desktop session for the GPUI platform layer.
 
 ```bash
 git clone https://github.com/mangerle/transom.git
@@ -123,6 +123,20 @@ cargo build --release --bin transom  # artifact at target/release/transom
 ```
 
 Release builds strip symbols and use thin LTO. Logging goes through the `log` facade onto a rotating file at `~/.config/transom/logs/transom.log` (5 MiB per file, four backups kept), so the trail survives a crash and is attachable to a bug report. Raise the level in Preferences → General → Application Logs — it applies immediately, no restart — or with `TRANSOM_LOG=debug` / `RUST_LOG=debug ./target/release/transom` at startup, which wins over the saved value. The default level is `info`; stderr only mirrors warnings and above, so a terminal launch stays readable.
+
+## Releases and auto-update
+
+Pushing a `v*` tag runs `.github/workflows/release.yml` and publishes a GitHub Release for Linux, Windows and macOS on both x86_64 and arm64:
+
+| Platform | Update channel (signed in `latest.json`) | Manual artifacts |
+| :--- | :--- | :--- |
+| Linux | `.deb` installer | `.AppImage` |
+| Windows | NSIS per-user installer | portable `.zip` |
+| macOS | `.zip` containing the executable (`shipup` archive replacement inside the `.app`) | `.dmg` |
+
+The release job signs every update package and the merged `latest.json` with Ed25519; the public key is compiled into `crates/transom-updater`. The private key lives only in the repository secret `SHIPUP_PRIVATE_KEY` and on the maintainer's machine. In the app, **Preferences → About → Software Updates** checks the manifest, downloads and verifies the package, installs it, and offers a graceful restart; a crash-loop guard rolls back to the previous binary after two failed starts.
+
+See [`docs/release.md`](./docs/release.md) (Chinese) for key management, local verification, the artifact matrix, and the per-platform update path.
 
 ### Where your data lives
 
@@ -152,6 +166,7 @@ crates/transom-sync     WebDAV/S3/Git cloud-sync orchestration
 crates/transom-store    JSON stores, keyring, encrypted backups, atomic writes
 crates/transom-terminal alacritty_terminal grid, renderer, search, OSC parsing
 crates/transom-zmodem   ZMODEM protocol state machine and terminal attachment
+crates/transom-updater  shipup wrapper: signed manifest check, download, install, crash rollback
 crates/transom-ui       GPUI app, sidebar, tabs, splits, SFTP panes, settings, i18n
 ```
 
@@ -170,7 +185,7 @@ cargo test
 
 ## Roadmap
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 117 evaluated capabilities with per-item completion status; every listed item is either implemented or natively supported today. Known gaps outside that list: no signed installers yet.
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) (Chinese) tracks all 117 evaluated capabilities with per-item completion status; every listed item is either implemented or natively supported today. Known gaps outside that list: installers are not OS-code-signed yet (Windows SmartScreen and macOS Gatekeeper will warn); update manifests themselves are Ed25519-signed by `shipup`.
 
 ## Contributing
 

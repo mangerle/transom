@@ -39,6 +39,27 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     };
 
+    // 启动健康自检必须晚于单实例判定：被转交的第二个进程不是一次真实启动，
+    // 若在这里累加崩溃计数，正常的多开唤起也会被误判成连续崩溃。
+    // 自检只读写可执行文件旁的更新状态标记，失败只告警，不能把用户关在门外。
+    match transom_updater::check_and_recover_on_startup() {
+        Ok(transom_updater::RecoveryStatus::Normal) => {
+            log::debug!("自更新启动自检通过，没有待确认的升级");
+        }
+        Ok(transom_updater::RecoveryStatus::PendingConfirmation { attempts }) => {
+            log::info!("新版本处于健康观察期，当前为第 {attempts} 次启动尝试");
+        }
+        Ok(transom_updater::RecoveryStatus::RolledBack { from_version }) => {
+            log::warn!("新版本 {from_version} 连续启动失败，已自动回滚到上一稳定版本");
+        }
+        Err(error) => {
+            log::warn!("自更新启动自检失败，继续以当前版本启动: {error}");
+        }
+        _ => {
+            log::debug!("自更新启动自检返回未知状态，按正常启动处理");
+        }
+    }
+
     let known_hosts: Arc<dyn KnownHostsStore> =
         Arc::new(JsonKnownHostsStore::new(paths::known_hosts_path())?);
     let session_store: Arc<dyn SessionStore> =
@@ -74,10 +95,15 @@ fn main() -> anyhow::Result<()> {
         event_rx: controller.event_receiver(),
     };
 
-    transom_ui::run(services);
+    let restart_requested = transom_ui::run(services);
     // 优雅停机：控制平面断开全部远端、停止转发并限时收尾，随后关闭运行时。
     // 不能直接 drop：那会让收尾任务随运行时取消，远端收不到 DISCONNECT。
     controller.shutdown();
+    // 更新安装完成后用户点了"立即重启"：此时旧进程的资源已经收尾，
+    // 再拉起当前可执行文件的新进程并退出本进程。
+    if restart_requested && let Err(error) = transom_updater::restart_current_process() {
+        log::error!("更新已安装，但自动重启失败，请手动重新打开应用: {error}");
+    }
     Ok(())
 }
 

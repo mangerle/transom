@@ -98,11 +98,21 @@ dpkg-deb -I target/debian/transom_*_amd64.deb   # 控制字段与维护者脚本
 dpkg-deb -c target/debian/transom_*_amd64.deb   # 布局与权限位
 desktop-file-validate packaging/linux/com.github.mangerle.transom.desktop
 appstreamcli validate packaging/linux/com.github.mangerle.transom.metainfo.xml
+
+# 三端发布包（本地能跑的部分）
+APPIMAGE_EXTRACT_AND_RUN=1 cargo packager --release -p transom --formats appimage
+cargo packager --release -p transom --formats nsis        # 仅 Windows
+cargo packager --release -p transom --formats dmg         # 仅 macOS
 ```
 
 发版时同步 `packaging/linux/deb/changelog`（头部追加一条，版本号与
 workspace 版本一致）与 `packaging/linux/com.github.mangerle.transom.metainfo.xml`
 的 `<releases>`；详细打包口径见 `packaging/linux/deb/README.md`。
+
+推送 `v*` 标签后由 `.github/workflows/release.yml` 完成三端双架构打包、
+shipup Ed25519 清单签名与 GitHub Release 发布。签名私钥只放在仓库 Secret
+`SHIPUP_PRIVATE_KEY`，公钥编译在 `crates/transom-updater`。完整发版步骤、
+密钥轮换与本地验签命令见 [`docs/release.md`](./release.md)。
 
 ## 数据救援
 

@@ -4,6 +4,7 @@ use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::keys::{KnownHostsEvent, KnownHostsView};
+use std::sync::atomic::AtomicBool;
 
 impl AppShell {
     pub fn new(
@@ -11,6 +12,7 @@ impl AppShell {
         cx: &mut Context<Self>,
         services: UiServices,
         mut settings: AppSettings,
+        restart_requested: Arc<AtomicBool>,
     ) -> Self {
         let prepared = prepare_bootstrap(cx, &services, &mut settings);
         let inputs = BootstrapInputs::new(window, cx);
@@ -63,11 +65,24 @@ impl AppShell {
                 known_hosts_records,
                 sidebar_visible,
                 vertical_tabs_open,
+                restart_requested,
             },
             cx,
         );
 
         let mut this = Self { state };
+        // 升级确认放在首帧之后的独立后台任务里：窗口刚创建不代表渲染链路、
+        // 资源加载与事件泵都已稳定，过早确认会让崩溃回滚失去观察窗口。
+        let executor = cx.background_executor().clone();
+        let confirm_task = cx.background_spawn(async move {
+            executor.timer(std::time::Duration::from_secs(3)).await;
+            match spawn_blocking_local(transom_updater::confirm_update_success).await {
+                Some(Ok(())) => log::debug!("升级状态确认完成"),
+                Some(Err(error)) => log::warn!("升级状态确认失败，已保留观察期标记: {error}"),
+                None => log::warn!("创建升级状态确认线程失败，已保留观察期标记"),
+            }
+        });
+        this.state.tasks.background.update_confirm = Some(confirm_task);
         this.bootstrap_subscriptions(window, cx);
 
         this.bootstrap_startup(window, cx);
@@ -257,6 +272,8 @@ struct BootstrapState {
     known_hosts_records: Vec<transom_core::HostKeyRecord>,
     sidebar_visible: bool,
     vertical_tabs_open: bool,
+    /// 安装完成后由关于页置位的重启意图，随 `run` 返回值交回 `main`。
+    restart_requested: Arc<AtomicBool>,
 }
 
 /// 组装 `AppState`：把启动准备、实体句柄与事件订阅一次性收进状态。
@@ -274,6 +291,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         known_hosts_records,
         sidebar_visible,
         vertical_tabs_open,
+        restart_requested,
     } = input;
     let git_registry = services.git_projects.load().unwrap_or_default();
     let known_hosts_view = cx.new(|_| {
@@ -348,6 +366,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
         toast_seq: 0,
         last_toast: None,
+        restart_requested,
     }
 }
 

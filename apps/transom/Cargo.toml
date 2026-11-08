@@ -25,14 +25,14 @@ transom-zmodem.workspace = true
 transom-sync.workspace = true
 transom-store.workspace = true
 transom-git.workspace = true
+transom-updater.workspace = true
+parking_lot.workspace = true
 transom-ui.workspace = true
 tokio.workspace = true
 flume.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
 log.workspace = true
-# Git 配置快照的短临界区读写：parking_lot 无锁中毒，且不引入 tokio 异步锁开销。
-parking_lot.workspace = true
 # `exec:` 深链载荷用 JSON 承载 argv：参数里可能出现空格、引号与换行，
 # 行分隔的朴素编码无法无损表达。
 serde_json.workspace = true
@@ -90,3 +90,36 @@ assets = [
 ]
 maintainer-scripts = "../../packaging/linux/deb"
 
+# cargo-packager 元数据：Windows NSIS、macOS .app/.dmg 与 Linux AppImage 共用。
+# DEB 仍由上面的 cargo-deb 段维护，两者字段口径不同，刻意不强行合并。
+[package.metadata.packager]
+product-name = "Transom"
+identifier = "com.github.mangerle.transom"
+category = "Utility"
+description = "Native SSH, serial console and terminal workspace with SFTP"
+long-description = "Transom 是一款基于 GPUI 的原生终端工作台，支持 SSH、串口、分屏终端、SFTP 文件传输、命令历史、端口转发与审计录像。"
+icons = [
+    "../../packaging/icons/32x32.png",
+    "../../packaging/icons/64x64.png",
+    "../../packaging/icons/128x128.png",
+    "../../packaging/icons/256x256.png",
+    "../../packaging/icons/512x512.png",
+    "../../packaging/icons/1024x1024.png",
+    "../../packaging/icons/icon.ico",
+]
+resources = [
+    { src = "../../LICENSE", target = "licenses/LICENSE" },
+    { src = "../../README.md", target = "licenses/README.md" },
+]
+
+[package.metadata.packager.windows]
+digest-algorithm = "sha256"
+
+[package.metadata.packager.macos]
+# 与 CI 的 macos-latest 运行环境保持一致；GPUI/wgpu 依赖的系统框架在 11.0 起可用。
+minimum-system-version = "11.0"
+
+[package.metadata.packager.nsis]
+# 每用户安装，更新时无需 UAC；安装器图标与窗口图标同源。
+installMode = "currentUser"
+installer-icon = "../../packaging/icons/icon.ico"

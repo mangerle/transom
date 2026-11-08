@@ -1,0 +1,471 @@
+name: Release
+
+# Transom 全平台发布流水线：
+# - Linux: .deb（shipup 安装器更新通道）+ .AppImage（免安装分发）
+# - Windows: NSIS 安装包（shipup 安装器更新通道）+ 绿色便携 zip
+# - macOS: .dmg（手动分发）+ 自更新 zip（shipup archive 通道，内含主程序）
+#
+# 自更新清单 latest.json 由 shipup-cli 生成并做 Ed25519 签名；
+# 客户端内置公钥只接受对应私钥签出的清单与安装包。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已存在的版本标签（例如 v1.6.1）
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: 计算发布版本
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: 检出标签对应代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: 解析标签并校验工作区版本
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ "$TAG" != v* ]]; then
+            echo "::error::发布标签必须以 v 开头，当前为: $TAG"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::标签不符合语义化版本格式: $TAG"
+            exit 1
+          fi
+          WORKSPACE_VERSION="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+          if [ "$WORKSPACE_VERSION" != "$VERSION" ]; then
+            echo "::error::标签版本 $VERSION 与 workspace 版本 $WORKSPACE_VERSION 不一致"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  changelog:
+    name: 生成版本更新日志
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出标签对应的完整提交历史
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      - name: 生成当前版本分类 Changelog
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_CHANGELOG.md
+
+      - name: 上传 Changelog 临时产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-changelog
+          path: RELEASE_CHANGELOG.md
+
+  build-linux:
+    name: 构建 Linux 产物 (${{ matrix.arch }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 配置 Rust 稳定版工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 启用 Rust 依赖缓存
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-${{ matrix.target }}
+
+      - name: 安装 Linux 图形与打包依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libdbus-1-dev \
+            libxcb1-dev \
+            libx11-dev \
+            libxi-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libgl1-mesa-dev \
+            pkg-config \
+            file
+
+      - name: 安装 cargo-deb 与 cargo-packager
+        run: |
+          cargo install cargo-deb --locked
+          cargo install cargo-packager --locked
+
+      - name: 编译 Release 二进制
+        run: cargo build --locked --release -p transom --target ${{ matrix.target }}
+
+      - name: 构建 DEB 安装包
+        run: cargo deb -p transom --no-build --target ${{ matrix.target }}
+
+      - name: 构建 AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: cargo packager --release -p transom --target ${{ matrix.target }} --formats appimage
+
+      - name: 规整产物并重命名
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          DEB="$(find target -path '*/debian/*.deb' -type f | head -n 1)"
+          APPIMAGE="$(find target -name '*.AppImage' -type f | head -n 1)"
+          if [ -z "$DEB" ]; then echo "::error::未找到 DEB 产物"; exit 1; fi
+          if [ -z "$APPIMAGE" ]; then echo "::error::未找到 AppImage 产物"; exit 1; fi
+          cp "$DEB" "dist/transom_${VERSION}_linux_${ARCH}.deb"
+          cp "$APPIMAGE" "dist/transom_${VERSION}_linux_${ARCH}.AppImage"
+          ls -lh dist
+
+      - name: 上传 Linux 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}-artifacts
+          path: dist/*
+
+  build-windows:
+    name: 构建 Windows 产物 (${{ matrix.arch }})
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: aarch64-pc-windows-msvc
+            arch: arm64
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 配置 Rust 稳定版工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 启用 Rust 依赖缓存
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-${{ matrix.target }}
+
+      - name: 安装 cargo-packager
+        run: cargo install cargo-packager --locked
+
+      - name: 编译 Release 二进制
+        run: cargo build --locked --release -p transom --target ${{ matrix.target }}
+
+      - name: 构建 NSIS 安装包
+        run: cargo packager --release -p transom --target ${{ matrix.target }} --formats nsis
+
+      - name: 规整安装包与绿色便携包
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dist = Join-Path $PWD "dist"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          $releaseDir = Join-Path $PWD "target/$env:TARGET/release"
+
+          $setup = Get-ChildItem -Path $releaseDir -Filter "*-setup.exe" -File -Recurse |
+            Select-Object -First 1
+          if (-not $setup) { throw "未找到 NSIS 安装包" }
+          Copy-Item $setup.FullName (Join-Path $dist "transom_$($env:VERSION)_windows_$($env:ARCH)_setup.exe")
+
+          $portable = Join-Path $releaseDir "transom-portable"
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+          Copy-Item (Join-Path $releaseDir "transom.exe") $portable
+          Copy-Item "LICENSE" $portable
+          Copy-Item "README.md" $portable
+          $zip = Join-Path $dist "transom_$($env:VERSION)_windows_$($env:ARCH).zip"
+          Compress-Archive -Path (Join-Path $portable "*") -DestinationPath $zip -Force
+
+          Get-ChildItem $dist | Format-Table Name, Length
+
+      - name: 上传 Windows 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}-artifacts
+          path: dist/*
+
+  build-macos:
+    name: 构建 macOS 产物 (${{ matrix.arch }})
+    needs: prepare
+    runs-on: macos-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x64
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 配置 Rust 稳定版工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 启用 Rust 依赖缓存
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-${{ matrix.target }}
+
+      - name: 安装 cargo-packager
+        run: cargo install cargo-packager --locked
+
+      - name: 编译 Release 二进制
+        run: cargo build --locked --release -p transom --target ${{ matrix.target }}
+
+      - name: 构建 DMG 镜像
+        run: cargo packager --release -p transom --target ${{ matrix.target }} --formats dmg
+
+      - name: 规整 DMG 与自更新 zip
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          DIST="$PWD/dist"
+          mkdir -p "$DIST"
+          BIN="target/${TARGET}/release/transom"
+          DMG="$(find "target/${TARGET}/release" -name '*.dmg' -type f | head -n 1)"
+          if [ ! -f "$BIN" ]; then echo "::error::未找到 macOS 主程序"; exit 1; fi
+          if [ -z "$DMG" ]; then echo "::error::未找到 DMG 产物"; exit 1; fi
+          # 自更新 zip 只放主程序：shipup archive 模式解压后替换
+          # .app/Contents/MacOS/transom，Info.plist 与资源保持安装态。
+          (cd "$(dirname "$BIN")" && zip -j -q "$DIST/transom_${VERSION}_macos_${ARCH}.zip" transom)
+          cp "$DMG" "$DIST/transom_${VERSION}_macos_${ARCH}.dmg"
+          ls -lh dist
+
+      - name: 上传 macOS 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-artifacts
+          path: dist/*
+
+  publish-release:
+    name: 汇总签名并发布 GitHub Release
+    needs: [prepare, changelog, build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出标签对应代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 下载 Changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: release-changelog
+
+      - name: 下载 Linux amd64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-amd64-artifacts
+          path: release-files
+
+      - name: 下载 Linux arm64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-artifacts
+          path: release-files
+
+      - name: 下载 Windows x64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-x64-artifacts
+          path: release-files
+
+      - name: 下载 Windows arm64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-arm64-artifacts
+          path: release-files
+
+      - name: 下载 macOS arm64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm64-artifacts
+          path: release-files
+
+      - name: 下载 macOS x64 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-x64-artifacts
+          path: release-files
+
+      - name: 校验签名私钥是否已配置
+        env:
+          SHIPUP_PRIVATE_KEY: ${{ secrets.SHIPUP_PRIVATE_KEY }}
+        run: |
+          if [ -z "${SHIPUP_PRIVATE_KEY}" ]; then
+            echo "::error::缺少仓库 Secret SHIPUP_PRIVATE_KEY，拒绝发布无法验证的更新清单"
+            exit 1
+          fi
+
+      - name: 安装 shipup-cli
+        run: cargo install shipup-cli --locked
+
+      - name: 生成 Ed25519 签名清单 latest.json
+        env:
+          SHIPUP_PRIVATE_KEY: ${{ secrets.SHIPUP_PRIVATE_KEY }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$SHIPUP_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          NOTES="$(cat RELEASE_CHANGELOG.md)"
+
+          sign_package() {
+            local file="$1"
+            local target="$2"
+            local package_type="$3"
+            shift 3
+            local filename
+            filename="$(basename "$file")"
+            local url="https://github.com/${REPO}/releases/download/${TAG}/${filename}"
+            if [ ! -f "$file" ]; then
+              echo "::error::缺少待签名产物: $file"
+              exit 1
+            fi
+            echo "签名 ${filename} -> ${target} (${package_type})"
+            shipup-cli release \
+              --version "$VERSION" \
+              --target "$target" \
+              --package "$file" \
+              --url "$url" \
+              --package-type "$package_type" \
+              --key "$KEY_FILE" \
+              --manifest release-files/latest.json \
+              --notes "$NOTES" \
+              "$@"
+          }
+
+          sign_package "release-files/transom_${VERSION}_linux_amd64.deb" "x86_64-unknown-linux-gnu" installer --require-elevation --wait-for-exit
+          sign_package "release-files/transom_${VERSION}_linux_arm64.deb" "aarch64-unknown-linux-gnu" installer --require-elevation --wait-for-exit
+          sign_package "release-files/transom_${VERSION}_windows_x64_setup.exe" "x86_64-pc-windows-msvc" installer --wait-for-exit
+          sign_package "release-files/transom_${VERSION}_windows_arm64_setup.exe" "aarch64-pc-windows-msvc" installer --wait-for-exit
+          sign_package "release-files/transom_${VERSION}_macos_arm64.zip" "aarch64-apple-darwin" archive --executable-path transom
+          sign_package "release-files/transom_${VERSION}_macos_x64.zip" "x86_64-apple-darwin" archive --executable-path transom
+
+          ls -lh release-files
+          python3 -m json.tool release-files/latest.json > /dev/null
+
+      - name: 用代码内置公钥复验签名清单
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EMBEDDED_KEY="$(sed -n 's/.*UPDATE_PUBLIC_KEY: &str = "\([^"]*\)";/\1/p' crates/transom-updater/src/lib.rs | head -n 1)"
+          if [ -z "$EMBEDDED_KEY" ]; then
+            echo "::error::未能从 transom-updater 提取内置公钥"
+            exit 1
+          fi
+          verify_package() {
+            local package="$1"
+            local target="$2"
+            echo "复验 ${package} -> ${target}"
+            shipup-cli verify \
+              --manifest release-files/latest.json \
+              --package "$package" \
+              --target "$target" \
+              --public-key "$EMBEDDED_KEY"
+          }
+          verify_package "release-files/transom_${VERSION}_linux_amd64.deb" "x86_64-unknown-linux-gnu"
+          verify_package "release-files/transom_${VERSION}_linux_arm64.deb" "aarch64-unknown-linux-gnu"
+          verify_package "release-files/transom_${VERSION}_windows_x64_setup.exe" "x86_64-pc-windows-msvc"
+          verify_package "release-files/transom_${VERSION}_windows_arm64_setup.exe" "aarch64-pc-windows-msvc"
+          verify_package "release-files/transom_${VERSION}_macos_arm64.zip" "aarch64-apple-darwin"
+          verify_package "release-files/transom_${VERSION}_macos_x64.zip" "x86_64-apple-darwin"
+
+      - name: 发布 GitHub Release 并挂载全部产物
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Transom v${{ needs.prepare.outputs.version }}
+          body_path: RELEASE_CHANGELOG.md
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

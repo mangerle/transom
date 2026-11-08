@@ -8,7 +8,7 @@
 
   <p>
     <a href="https://github.com/mangerle/transom/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue" /></a>
-    <img alt="Rust" src="https://img.shields.io/badge/rust-1.92%2B-orange" />
+    <img alt="Rust" src="https://img.shields.io/badge/rust-1.96%2B-orange" />
     <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20(主)%20%7C%20macOS%20%7C%20Windows-informational" />
     <img alt="Status" src="https://img.shields.io/badge/status-alpha-red" />
   </p>
@@ -80,7 +80,7 @@
 | 平台 | 状态 |
 | :--- | :--- |
 | Linux（Wayland / X11） | 主要开发与验证平台。 |
-| macOS、Windows | 已有跨平台代码路径（修饰键映射、钥匙串后端、在文件管理器中显示）并可编译，但**尚未经 CI 或发布产物验证**，请按实验性看待。 |
+| macOS、Windows | 已有跨平台代码路径（修饰键映射、钥匙串后端、在文件管理器中显示），并由 CI 做编译检查与三端发布打包；仍未在真实 macOS/Windows 桌面上做人工交互验证，请按实验性看待。 |
 
 `ssh-agent` 认证目前仅支持 Unix；终端超链接通过 `xdg-open` 打开。
 
@@ -112,7 +112,7 @@ xdg-mime default com.github.mangerle.transom.desktop x-scheme-handler/ssh   # �
 
 ## 源码构建
 
-前置条件：Rust **1.92 或更新**（edition 2024），以及可供 GPUI 平台层使用的桌面会话。
+前置条件：Rust **1.96 或更新**（edition 2024），以及可供 GPUI 平台层使用的桌面会话。
 
 ```bash
 git clone https://github.com/mangerle/transom.git
@@ -123,6 +123,20 @@ cargo build --release --bin transom  # 产物位于 target/release/transom
 ```
 
 Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `~/.config/transom/logs/transom.log`，按大小轮转（单文件 5 MiB，另留 4 份），崩溃后记录仍在，可以直接附到 issue 里。级别在「偏好设置 → 通用 → 运行日志」里调，改完立即生效、无需重启；也可以用启动时的 `TRANSOM_LOG=debug` 或 `RUST_LOG=debug ./target/release/transom` 覆盖，环境变量优先于配置值。默认级别为 `info`；标准错误输出只镜像警告及以上，从终端拉起时不会被细节刷屏。
+
+## 发布与自动更新
+
+推送 `v*` 标签会触发 `.github/workflows/release.yml`，为 Linux、Windows、macOS 的 x86_64 与 arm64 构建并发布 GitHub Release：
+
+| 平台 | 更新通道（写入签名清单 `latest.json`） | 手动分发产物 |
+| :--- | :--- | :--- |
+| Linux | `.deb` 安装器 | `.AppImage` |
+| Windows | NSIS 每用户安装包 | 绿色便携 `.zip` |
+| macOS | 内含可执行文件的 `.zip`（由 shipup 解压后替换 `.app` 内可执行文件） | `.dmg` |
+
+发布任务用 Ed25519 对每个更新包与合并后的 `latest.json` 签名；公钥编译在 `crates/transom-updater` 内，私钥只保存在仓库 Secret `SHIPUP_PRIVATE_KEY` 与维护者本机。应用内「偏好设置 → 关于 → 软件更新」负责检查清单、下载验签、安装与优雅重启；连续两次启动失败会触发上一版本回滚。
+
+密钥管理、产物矩阵、本地验证命令与三端更新路径见 [`docs/release.md`](./docs/release.md)。
 
 ### 数据存放位置
 
@@ -152,6 +166,7 @@ crates/transom-sync     WebDAV/S3/Git 云同步编排
 crates/transom-store    JSON 存储、钥匙串、加密备份与原子写
 crates/transom-terminal alacritty_terminal 网格、渲染器、检索与 OSC 解析
 crates/transom-zmodem   ZMODEM 协议状态机与终端挂载层
+crates/transom-updater  shipup 封装：签名清单检查、下载、安装与崩溃回滚
 crates/transom-ui       GPUI 应用、侧边栏、标签、分屏、SFTP 面板、设置与 i18n
 ```
 
@@ -170,7 +185,7 @@ cargo test
 
 ## 路线图
 
-[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 117 项评估过的能力及其完成状态，清单内项目均已实现或由终端内核原生支持。清单之外的已知缺口：尚未提供签名安装包。
+[`docs/FEATURES_ROADMAP.md`](./docs/FEATURES_ROADMAP.md) 逐项标注了 117 项评估过的能力及其完成状态，清单内项目均已实现或由终端内核原生支持。清单之外的已知缺口：安装包尚未做操作系统级代码签名（Windows SmartScreen 与 macOS Gatekeeper 会提示）；更新清单本身由 shipup 做 Ed25519 签名。
 
 ## 参与贡献
 

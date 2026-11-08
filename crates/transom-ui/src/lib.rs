@@ -44,6 +44,7 @@ use app_assets::AppAssets;
 use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use transom_core::{
     AppCommand, AppEvent, AppSettings, BackupService, KnownHostsStore, LogLevel, SecretStore,
     SerialPortProvider, SessionStore, SettingsStore,
@@ -64,7 +65,10 @@ pub struct UiServices {
     pub event_rx: flume::Receiver<AppEvent>,
 }
 
-pub fn run(services: UiServices) {
+pub fn run(services: UiServices) -> bool {
+    // 关于页安装完成后只置位本标志并退出事件循环；真正拉起新进程由 `main`
+    // 在控制器优雅停机之后执行，避免 SSH 连接与审计写入被直接截断。
+    let restart_requested = Arc::new(AtomicBool::new(false));
     // 设置文件读不出来时不能把用户关在外面：按默认值起界面，但一定要在日志里留痕，
     // 否则"设置莫名其妙回到默认"这类报障完全没有线索可查。
     let mut settings = match services.settings_store.load() {
@@ -107,6 +111,7 @@ pub fn run(services: UiServices) {
             .to_filter(),
     );
 
+    let restart_flag = restart_requested.clone();
     application().with_assets(AppAssets).run(move |cx| {
         rust_i18n::extend!(gpui_component);
         init(cx);
@@ -161,14 +166,17 @@ pub fn run(services: UiServices) {
             }),
             ..Default::default()
         };
-        open_window(options, cx, |window, cx| {
+        open_window(options, cx, move |window, cx| {
             // 桌面标识用于任务栏分组与 `ssh://` 处理程序回指本应用，必须与
             // packaging/linux 下 .desktop 的 StartupWMClass 保持一致。
             window.set_app_id(transom_platform::paths::APP_ID);
-            cx.new(|cx| AppShell::new(window, cx, services.clone(), settings.clone()))
+            cx.new(move |cx| AppShell::new(window, cx, services, settings, restart_flag))
         })
         .expect("创建并打开主应用窗口失败");
     });
+    // 安装更新后用户点了"立即重启"：把意图交回 main，由它在控制器优雅停机
+    // 之后拉起新进程，而不是在 UI 回调里直接退出。
+    restart_requested.load(Ordering::Relaxed)
 }
 
 /// 开关为"开"时校验并（仅在不一致时）重言默认终端注册。

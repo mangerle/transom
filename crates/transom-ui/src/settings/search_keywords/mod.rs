@@ -96,6 +96,8 @@ pub(super) enum GroupSearch {
     MonitorBehavior,
     /// 关于页：应用信息组。
     About,
+    /// 关于页：软件更新组。
+    Update,
     /// 容器与镜像源页：镜像仓库源管理组。
     ContainerRegistries,
     /// Git 版本控制页：可执行程序与自动刷新组。
@@ -136,7 +138,7 @@ impl GroupSearch {
             MonitorSections | MonitorBehavior => "settings.tab_monitor",
             GitExecutable | GitCommitPush | GitDiff => "settings.tab_git",
             ContainerRegistries => "settings.tab_containers",
-            About => "settings.tab_about",
+            About | Update => "settings.tab_about",
         }
     }
 
@@ -205,6 +207,7 @@ mod tests {
         GroupSearch::MonitorSections,
         GroupSearch::MonitorBehavior,
         GroupSearch::About,
+        GroupSearch::Update,
         GroupSearch::ContainerRegistries,
         GroupSearch::GitExecutable,
         GroupSearch::GitCommitPush,

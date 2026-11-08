@@ -1,3 +1,17 @@
+transom (1.6.2) unstable; urgency=medium
+
+  * 接入 shipup 0.5.1 自更新：设置 → 关于新增软件更新分组，支持检查、
+    下载进度、Ed25519 验签、安装与优雅重启；启动时执行崩溃自检并在
+    首帧稳定后确认升级，连续两次启动失败自动回滚。
+  * 新增 transom-updater 封装 crate，更新清单与安装包均使用 Ed25519
+    签名，工作区 MSRV 提升至 1.96。
+  * 新增 GitHub Actions CI 与 Release 流水线：Linux deb/AppImage、
+    Windows NSIS/zip、macOS dmg/自更新 zip，覆盖 x86_64 与 arm64；
+    发布任务生成并复验 latest.json。
+  * 补充 Windows/macOS 打包图标、cargo-packager 元数据与发布文档。
+
+ -- wangle <wangle@agree.com.cn>  Sun, 08 Nov 2026 16:05:00 +0800
+
 transom (1.6.1) unstable; urgency=medium
 
   * 远端容器管理支持 SSH 密码认证与 Sudo 提权：采用内置原生 SSH 客户端

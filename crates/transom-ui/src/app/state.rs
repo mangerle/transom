@@ -33,6 +33,7 @@ use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::{App, Entity};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use transom_core::{AppCommand, AppSettings, GitProjectId, SessionCatalog, SessionId, TabId};
 
 /// 应用运行期状态。
@@ -106,6 +107,11 @@ pub(crate) struct AppState {
     pub(in crate::app) toast_seq: u64,
     /// 上一条 Toast 提示的内容与时间戳，用于短时间内的相同通知防抖去重。
     pub(in crate::app) last_toast: Option<(String, std::time::Instant)>,
+    /// 关于页请求"安装完成后立即重启"的跨层信号。
+    ///
+    /// 界面只置位并退出事件循环；真正拉起新进程必须等 `main` 完成控制器
+    /// 优雅停机，因此用进程级原子标志把意图带过 `transom_ui::run` 边界。
+    pub(in crate::app) restart_requested: Arc<AtomicBool>,
 }
 
 impl AppState {

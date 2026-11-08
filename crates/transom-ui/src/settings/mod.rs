@@ -31,6 +31,7 @@ pub(crate) mod sync_form;
 mod sync_page;
 mod terminal_page;
 mod terminal_themes;
+mod update;
 mod window_page;
 
 pub(crate) use font_field::FontFieldSpec;
