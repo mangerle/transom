@@ -285,12 +285,13 @@ impl ModalKind {
                 .tools
                 .audit_viewer
                 .update(cx, |view, cx| view.close(cx)),
+            // Enter 与原实现一致只关闭弹窗；打开播放器由页脚主按钮显式触发。
             ModalKind::Replay => shell
                 .state
                 .modals
                 .tools
                 .replay
-                .update(cx, |view, cx| view.confirm(cx)),
+                .update(cx, |view, cx| view.close(cx)),
             ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
             ModalKind::DiffViewer => shell.close_diff_viewer(cx),
