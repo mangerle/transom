@@ -111,7 +111,9 @@ impl 面板                                       →  面板自己的动作
 部署回执由外壳消费事件）、回放选择弹窗（`ReplayModalView`：录制目录扫描、
 选择与渲染归实体，打开播放器/终端回放由外壳消费事件）、会话表单
 （`SessionFormView`：表单状态、校验、保存/删除意图与渲染归实体，目录/钥匙串/
-串口由外壳消费事件）。
+串口由外壳消费事件）、连接确认弹窗（`ConnectionPromptsView`：鉴权问答、
+首连指纹与 OSC 52 授权三段状态/渲染归实体，凭据落盘、终端授权与剪贴板写入
+由外壳消费事件）。
 
 容器与 Git 的**每标签页状态**已收进 `Entity<ContainerWorkspace>` /
 `Entity<GitWorkspace>`：标签内容只存句柄，外壳读写都经 `read`/`update`。
