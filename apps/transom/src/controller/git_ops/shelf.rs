@@ -12,7 +12,6 @@
 //! 没有跨任务锁；两次创建/删除请求若恰好交错，后写者可能覆盖前者的结果。
 //! 界面按点击节奏发起操作，正常使用下不会触发；需要强一致时再引入按项目串行化。
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::super::state::{ControllerCtx, ControllerState};
@@ -30,8 +29,6 @@ use transom_git::{GitService, Repo};
 struct ShelveRequest {
     /// 存储侧的项目 ID（搁置项 JSON 以它命名）。
     project_id: String,
-    /// 仓库工作区根路径。
-    repo_path: PathBuf,
     /// 搁置项标题（含界面本地化文案）。
     name: String,
     /// 搁置时所处的分支名（或 `HEAD`）。
@@ -42,8 +39,6 @@ struct ShelveRequest {
 
 /// 应用搁置项所需的业务输入。
 struct ApplyRequest {
-    /// 仓库工作区根路径。
-    repo_path: PathBuf,
     /// 存储侧的项目 ID，用于 `pop` 时删除条目。
     project_id: String,
     /// 搁置项 ID。
@@ -75,14 +70,15 @@ pub(super) fn handle_shelf_command(
             branch,
             files,
         } => {
+            let repo = ctx.git_repo(project.path.clone());
             spawn_shelve(
                 state,
                 ctx,
                 project.id,
                 *request_id,
+                repo,
                 ShelveRequest {
                     project_id: project.id.to_string(),
-                    repo_path: project.path.clone(),
                     name: name.clone(),
                     branch: branch.clone(),
                     files: files.clone(),
@@ -97,13 +93,14 @@ pub(super) fn handle_shelf_command(
             patch,
             pop,
         } => {
+            let repo = ctx.git_repo(project.path.clone());
             spawn_apply(
                 state,
                 ctx,
                 project.id,
                 *request_id,
+                repo,
                 ApplyRequest {
-                    repo_path: project.path.clone(),
                     project_id: project.id.to_string(),
                     shelf_id: shelf_id.clone(),
                     patch: patch.clone(),
@@ -158,11 +155,12 @@ fn spawn_shelve(
     ctx: &ControllerCtx,
     project_id: GitProjectId,
     request_id: GitRequestId,
+    repo: Repo,
     request: ShelveRequest,
 ) {
     let event_tx = ctx.event_tx.clone();
     state.git_set.spawn(async move {
-        let event = match shelve(request).await {
+        let event = match shelve(repo, request).await {
             Ok(entry) => GitAppEvent::Shelved {
                 project_id,
                 request_id,
@@ -180,13 +178,14 @@ fn spawn_apply(
     ctx: &ControllerCtx,
     project_id: GitProjectId,
     request_id: GitRequestId,
+    repo: Repo,
     request: ApplyRequest,
 ) {
     let event_tx = ctx.event_tx.clone();
     let shelf_id = request.shelf_id.clone();
     let pop = request.pop;
     state.git_set.spawn(async move {
-        let event = match apply_shelf(request).await {
+        let event = match apply_shelf(repo, request).await {
             Ok(cleanup_error) => GitAppEvent::ShelfApplied {
                 project_id,
                 request_id,
@@ -234,8 +233,7 @@ async fn load_shelves(project_id: String) -> Result<Vec<ShelfEntry>, AppError> {
 /// 顺序是数据安全的硬约束：先保存补丁后执行 `discard`。若反过来，
 /// 一旦保存失败，工作区改动已被丢弃而补丁没落盘，用户没有任何恢复路径。
 /// 当前顺序的最坏情况是「补丁在、改动也还在」，可以再次搁置或手动丢弃。
-async fn shelve(request: ShelveRequest) -> Result<ShelfEntry, AppError> {
-    let repo = Repo::at(request.repo_path);
+async fn shelve(repo: Repo, request: ShelveRequest) -> Result<ShelfEntry, AppError> {
     let patch = repo
         .export_patch(&request.files)
         .await
@@ -285,8 +283,7 @@ async fn shelve(request: ShelveRequest) -> Result<ShelfEntry, AppError> {
 ///
 /// 返回值区分两段结果：外层 `Err` 表示补丁应用失败；`Ok(Some(error))` 表示
 /// 补丁已成功应用、但条目删除失败（条目仍在存储中，界面不能按整次失败处理）。
-async fn apply_shelf(request: ApplyRequest) -> Result<Option<AppError>, AppError> {
-    let repo = Repo::at(request.repo_path);
+async fn apply_shelf(repo: Repo, request: ApplyRequest) -> Result<Option<AppError>, AppError> {
     repo.apply_patch(&request.patch)
         .await
         .map_err(to_app_error)?;

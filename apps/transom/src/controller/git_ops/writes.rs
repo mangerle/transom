@@ -207,9 +207,10 @@ pub(super) fn handle_write_command(
             );
         }
         GitCommand::Init { request_id, path } => {
+            let config = ctx.git_config_snapshot();
             let event_tx = ctx.event_tx.clone();
             state.git_set.spawn(async move {
-                let error = match transom_git::init(&path).await {
+                let error = match transom_git::init(&path, &config).await {
                     Ok(_) => None,
                     Err(error) => {
                         log::error!(

@@ -18,6 +18,7 @@ use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ContainerRequestId, ErrorCode, ForwardId,
     KnownHostsStore, SecretStore, SftpOperation, TabId, TerminalCommand, TerminalIo, TransferId,
 };
+use transom_git::{GitConfig, GitService};
 use transom_net::{ForwardTask, SftpClient, SshSession};
 use transom_sync::CloudSyncService;
 use transom_zmodem::ZmodemConfig;
@@ -296,7 +297,8 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         action_permits: Arc::new(tokio::sync::Semaphore::new(
             host_exec::MAX_CONCURRENT_ACTIONS,
         )),
-        git: Arc::new(transom_git::GitService::new()),
+        git: Arc::new(GitService::new()),
+        git_config: Arc::new(parking_lot::RwLock::new(GitConfig::default())),
     };
     let mut state = ControllerState::new();
 

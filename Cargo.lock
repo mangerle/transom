@@ -8406,6 +8406,7 @@ dependencies = [
  "fern",
  "flume",
  "log",
+ "parking_lot",
  "portable-pty",
  "serde_json",
  "tokio",

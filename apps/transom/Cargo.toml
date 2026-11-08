@@ -31,6 +31,8 @@ flume.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
 log.workspace = true
+# Git 配置快照的短临界区读写：parking_lot 无锁中毒，且不引入 tokio 异步锁开销。
+parking_lot.workspace = true
 # `exec:` 深链载荷用 JSON 承载 argv：参数里可能出现空格、引号与换行，
 # 行分隔的朴素编码无法无损表达。
 serde_json.workspace = true

@@ -23,14 +23,16 @@ pub(super) fn spawn_clone(
     depth: Option<u32>,
 ) {
     let service = Arc::clone(&ctx.git);
+    let config = ctx.git_config_snapshot();
     let event_tx = ctx.event_tx.clone();
     let flag = service.register(request_id);
     state.git_set.spawn(async move {
         let mut batch = ProgressBatch::new(&event_tx, request_id);
-        let outcome = transom_git::clone_with_progress(&url, &dest, depth, &flag, |line| {
-            batch.push(line);
-        })
-        .await;
+        let outcome =
+            transom_git::clone_with_progress(&url, &dest, depth, &flag, &config, |line| {
+                batch.push(line);
+            })
+            .await;
         // 收尾前把窗口里剩的半批也发出去，否则最后几行进度永远不显示。
         batch.flush();
         service.finish(request_id);

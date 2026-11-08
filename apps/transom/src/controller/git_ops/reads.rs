@@ -156,11 +156,12 @@ pub(super) fn handle_read_command(
         GitCommand::Probe { request_id, path } => {
             let request_id = *request_id;
             let path = path.clone();
+            let config = ctx.git_config_snapshot();
             let service = Arc::clone(&ctx.git);
             let event_tx = ctx.event_tx.clone();
             let flag = service.register(request_id);
             state.git_set.spawn(async move {
-                let (info, error) = match transom_git::probe(&path).await {
+                let (info, error) = match transom_git::probe(&path, &config).await {
                     Ok(info) => (Some(Box::new(info)), None),
                     Err(transom_git::GitError::NotRepo { .. }) => (None, None),
                     Err(error) => (None, Some(to_app_error(error))),

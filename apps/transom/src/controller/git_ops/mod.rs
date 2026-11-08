@@ -2,8 +2,10 @@
 //!
 //! 设计原理（Why）：
 //! - 控制器不维护「已打开仓库」表：项目路径在添加时就已探测并规范化，命令
-//!   自带 [`transom_core::GitProject`]，这里用 `Repo::at` 零成本构造句柄，避免每条命令再
-//!   跑三趟 `rev-parse`；
+//!   自带 [`transom_core::GitProject`]，这里用当前配置快照零成本构造
+//!   [`transom_git::Repo::with_config`] 句柄，避免每条命令再跑三趟 `rev-parse`；
+//! - Git 可执行文件与提交作者只由 `GitCommand::Configure` 写入本控制平面持有的
+//!   唯一快照，各任务派发时读取一次并绑定到仓库句柄，不存在进程级可变全局；
 //! - 读请求走「取消标志」而不是 abort：git 子进程自带超时，abort 会让管道
 //!   半路废弃；界面关闭视图后迟到的结果按标志丢弃即可；
 //! - 写请求统一回报 [`transom_core::GitAppEvent::ActionDone`]：动作类别由 [`transom_core::GitAction`]
@@ -35,10 +37,24 @@ pub(super) fn handle_git_command(
         author_email,
     } = &command
     {
-        // 配置只由控制平面写入：界面不再直接碰 transom-git 的进程级静态。
-        log::info!("更新 Git 命令配置，可执行文件: {program}");
-        transom_git::set_git_program(program.clone());
-        transom_git::set_git_author(author_name.clone(), author_email.clone());
+        // 配置只由控制平面写入唯一快照；后续命令派发时各自读取一次。
+        let next = transom_git::GitConfig {
+            program: program.clone(),
+            author_name: author_name.clone(),
+            author_email: author_email.clone(),
+        };
+        let resolved_program = next.program().to_string();
+        let author_configured =
+            !next.author_name.trim().is_empty() || !next.author_email.trim().is_empty();
+        *ctx.git_config.write() = next;
+        log::info!(
+            "Git 配置已更新，可执行文件: {resolved_program}，提交作者: {}",
+            if author_configured {
+                "已配置"
+            } else {
+                "未配置"
+            }
+        );
         return;
     }
 

@@ -22,11 +22,12 @@ pub(super) fn spawn_read<F, Fut>(
     Fut: Future<Output = Result<GitAppEvent, GitError>> + Send + 'static,
 {
     let service = Arc::clone(&ctx.git);
+    let repo = ctx.git_repo(project.path.clone());
     let event_tx = ctx.event_tx.clone();
     let project_id = project.id;
     let flag = service.register(request_id);
     state.git_set.spawn(async move {
-        let event = match work(Repo::at(project.path.clone())).await {
+        let event = match work(repo).await {
             Ok(event) => Some(event),
             Err(error) => {
                 if error.is_not_repo() {
@@ -66,10 +67,11 @@ pub(super) fn spawn_write<F, Fut>(
     F: FnOnce(Repo) -> Fut + Send + 'static,
     Fut: Future<Output = Result<(), GitError>> + Send + 'static,
 {
+    let repo = ctx.git_repo(project.path.clone());
     let event_tx = ctx.event_tx.clone();
     let project_id = project.id;
     state.git_set.spawn(async move {
-        let error = match work(Repo::at(project.path.clone())).await {
+        let error = match work(repo).await {
             Ok(()) => None,
             Err(error) => {
                 log::error!(

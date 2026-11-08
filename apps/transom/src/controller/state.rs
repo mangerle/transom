@@ -13,10 +13,13 @@ use super::container_ops::ContainerWorkspace;
 use super::lifecycle::ConnectingTab;
 use super::samplers::LocalTrafficTabs;
 use super::session_context::ManagedSessionContext;
+use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use transom_core::{AppEvent, ConnectionId, KnownHostsStore, TabId, TransferId};
+use transom_git::{GitConfig, Repo};
 use transom_net::SshRemote;
 use transom_sync::CloudSyncService;
 
@@ -143,6 +146,27 @@ pub(super) struct ControllerCtx {
     pub(super) action_permits: Arc<tokio::sync::Semaphore>,
     /// Git 请求登记表：界面关闭视图后按 id 丢弃迟到的子进程结果。
     pub(super) git: Arc<transom_git::GitService>,
+    /// Git 子进程配置的唯一快照：界面只投递 `GitCommand::Configure`，
+    /// 控制平面写入，任务派发时读取一次并绑定到 [`Repo`]。
+    pub(super) git_config: Arc<RwLock<GitConfig>>,
+}
+
+impl ControllerCtx {
+    /// 取当前 Git 配置的不可变快照。
+    ///
+    /// 设计原理（Why）：返回拥有型 [`Arc`] 而不是守卫，任务可以跨 `await`
+    /// 安全持有快照，配置写入也不会阻塞或被子进程执行时长拖住。
+    pub(super) fn git_config_snapshot(&self) -> Arc<GitConfig> {
+        Arc::new(self.git_config.read().clone())
+    }
+
+    /// 以当前配置快照构造仓库句柄。
+    ///
+    /// 所有 Git 命令派发统一走这里：分支不得各自读取配置或使用默认配置的
+    /// [`Repo::at`]，否则用户设置的可执行文件与作者会在该分支悄悄失效。
+    pub(super) fn git_repo(&self, path: PathBuf) -> Repo {
+        Repo::with_config(path, self.git_config_snapshot())
+    }
 }
 
 #[cfg(test)]
