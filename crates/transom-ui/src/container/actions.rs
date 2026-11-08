@@ -257,6 +257,7 @@ impl ContainerWorkspace {
             && let Some(request_id) = stats_processes_request
         {
             self.cancel_container_request(request_id);
+            self.state.stats_processes_request = None;
             self.state.stats_processes_loading = false;
         }
         // 还没建立完的终端：用户已经切走就撤销，避免后台建好后又把页签抢回去。
