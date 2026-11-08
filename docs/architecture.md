@@ -167,6 +167,13 @@ AppCommand::Connect
 - 备份/同步文档：两套信封（`transom-crypto::envelope` 的 TSYN 二进制对象、
   `transom-crypto::backup` 的 JSON/YAML 内嵌字段），Argon2id + XChaCha20-Poly1305。
 
+### Git 配置
+
+Git 可执行文件路径与提交作者是进程级配置，只能由控制平面写入：界面在启动与
+设置保存时投递 `GitCommand::Configure`，控制器调用 `transom-git` 的配置入口。
+界面源码不得直接调用 `set_git_program` / `set_git_author`（守卫：
+`git_config_is_controller_owned`），避免“谁能改全局状态”不可追踪。
+
 ### Git 搁置项（Shelf）
 
 搁置项不再由界面直接操作：`GitCommand::{LoadShelves, Shelve, ApplyShelf, DropShelf}`

@@ -712,3 +712,31 @@ fn shelf_operations_use_command_bus() {
         assert!(shelf.contains(command), "Shelf 入口必须投递 {command}");
     }
 }
+
+/// Git 进程级配置只能由控制平面写入：界面不得再直接调用 set_git_*。
+#[test]
+fn git_config_is_controller_owned() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for pattern in [
+            "transom_git::set_git_program",
+            "transom_git::set_git_author",
+        ] {
+            if content.contains(pattern) {
+                offenders.push(format!("{}: {pattern}", entry.display()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "界面不得直接写 Git 全局配置，请投递 GitCommand::Configure：\n{}",
+        offenders.join("\n")
+    );
+}
