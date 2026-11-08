@@ -692,6 +692,45 @@ fn known_hosts_modal_is_owned_by_entity() {
     );
 }
 
+/// 备份弹窗必须由实体持有：状态、在途任务与渲染都归 `BackupPromptView`，
+/// 旧的外壳提交入口与 `TaskHub` 任务槽不得复活。外壳只消费事件做目录合并。
+#[test]
+fn backup_prompt_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("backup_prompt: Entity<BackupPromptView>"),
+        "ModalHub 的 backup_prompt 必须持有 Entity<BackupPromptView>"
+    );
+    let task_hub =
+        std::fs::read_to_string(root.join("src/app/task_hub.rs")).expect("读取 task_hub.rs 失败");
+    assert!(
+        !task_hub.contains("backup: Option<Task<()>>"),
+        "备份任务句柄必须归实体，TaskHub 不得保留 backup 槽位"
+    );
+    let view = std::fs::read_to_string(root.join("src/backup/view.rs")).expect("读取备份实体失败");
+    assert!(
+        view.contains("pub(crate) struct BackupPromptView")
+            && view.contains("task: Option<Task<()>>"),
+        "BackupPromptView 必须在 backup/view.rs 持有状态与任务句柄"
+    );
+    let backup_mod =
+        std::fs::read_to_string(root.join("src/backup/mod.rs")).expect("读取 backup/mod.rs 失败");
+    assert!(
+        !backup_mod.contains("impl AppShell"),
+        "备份弹窗的旧外壳方法不得复活，跨域收尾走 BackupPromptEvent"
+    );
+    let shell = std::fs::read_to_string(root.join("src/app/backup_prompt.rs"))
+        .expect("读取备份外壳事件处理失败");
+    assert!(
+        shell.contains("fn on_backup_event(")
+            && !shell.contains("fn submit_backup(")
+            && !shell.contains("fn render_backup_prompt_body("),
+        "外壳只允许保留打开入口与事件消费，不得重新接管提交或渲染"
+    );
+}
+
 /// 搁置项必须走控制平面：UI 不得直接构造 git 进程或读写搁置项存储。
 #[test]
 fn shelf_operations_use_command_bus() {
