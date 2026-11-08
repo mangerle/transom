@@ -117,6 +117,10 @@ static SETTINGS_PAGES: &[PageSpec] = &[
                 GroupSearch::TerminalFont,
                 SettingsView::render_settings_terminal_font,
             ),
+            plain(
+                GroupSearch::LocalShell,
+                SettingsView::render_settings_local_shell,
+            ),
             plain(GroupSearch::Cursor, SettingsView::render_settings_cursor),
             plain(
                 GroupSearch::TerminalTheme,

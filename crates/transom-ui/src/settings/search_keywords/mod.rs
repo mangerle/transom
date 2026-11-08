@@ -32,6 +32,8 @@ pub(super) enum GroupSearch {
     Divider,
     /// 终端页：终端字体组。
     TerminalFont,
+    /// 终端页：本地终端默认 Shell 组。
+    LocalShell,
     /// 终端页：光标与滚动组。
     Cursor,
     /// 终端页：终端配色组。
@@ -125,8 +127,8 @@ impl GroupSearch {
         use GroupSearch::*;
         match self {
             UiTheme | UiFont | WindowAppearance | Divider => "settings.tab_appearance",
-            TerminalFont | Cursor | TerminalTheme | Highlight | Trigger | BlockView
-            | KeyBindings => "settings.tab_terminal",
+            TerminalFont | LocalShell | Cursor | TerminalTheme | Highlight | Trigger
+            | BlockView | KeyBindings => "settings.tab_terminal",
             Editor | FilePanel | Transfer | Zmodem | Audit | Identities | History => {
                 "settings.tab_files"
             }

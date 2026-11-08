@@ -23,6 +23,17 @@ pub enum TerminalControl {
     Close,
 }
 
+/// 终端侧 Shell 集成的启动状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellIntegrationMode {
+    /// 交给终端侧探针与注入流程。
+    Auto,
+    /// 启动参数已预装集成，终端侧不得再写入。
+    Preinstalled(crate::protocol::shell_integration::ShellKind),
+    /// 当前 Shell 没有安全集成手段，禁止终端侧探针。
+    Disabled,
+}
+
 #[derive(Clone)]
 pub struct TerminalControlHandle {
     sender: Sender<TerminalControl>,
@@ -102,11 +113,8 @@ pub struct TerminalIo {
     pub reader: Box<dyn Read + Send>,
     pub writer: Box<dyn Write + Send>,
     pub control: TerminalControlHandle,
-    /// 集成脚本是否已在会话启动阶段预装（如本地 Shell 经 rcfile 注入），以及是哪个方言。
-    ///
-    /// 为 `Some` 时终端侧不再自行探测与注入：探针命令本身也会被终端回显，
-    /// 本地会话要做到零可见，就不能对终端有任何写入动作。
-    pub integration_preinstalled: Option<crate::protocol::shell_integration::ShellKind>,
+    /// Shell 集成由预装、自动探测还是明确禁用。
+    pub integration_mode: ShellIntegrationMode,
     /// 会话级清理动作：随本会话资源释放时执行（如本地 Shell 预装用的临时目录）。
     pub cleanup: SessionCleanup,
 }
@@ -121,7 +129,7 @@ impl TerminalIo {
             reader,
             writer,
             control,
-            integration_preinstalled: None,
+            integration_mode: ShellIntegrationMode::Auto,
             cleanup: SessionCleanup::none(),
         }
     }
@@ -131,7 +139,13 @@ impl TerminalIo {
         mut self,
         kind: crate::protocol::shell_integration::ShellKind,
     ) -> Self {
-        self.integration_preinstalled = Some(kind);
+        self.integration_mode = ShellIntegrationMode::Preinstalled(kind);
+        self
+    }
+
+    /// 明确关闭终端侧集成探测；用于无法预装且没有可安全注入脚本的方言。
+    pub fn without_shell_integration(mut self) -> Self {
+        self.integration_mode = ShellIntegrationMode::Disabled;
         self
     }
 }

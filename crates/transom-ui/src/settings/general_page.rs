@@ -6,12 +6,16 @@ use crate::palette::Palette;
 #[cfg(target_os = "linux")]
 use crate::palette::localized_error;
 use crate::settings::ProxyProtocol;
+use crate::settings::modal_state::{LOCAL_SHELL_CUSTOM, LOCAL_SHELL_SYSTEM, shell_program_matches};
 use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+#[cfg(windows)]
+use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{BellStyle, BlockViewStyle};
 
@@ -48,6 +52,112 @@ impl SettingsView {
                 p,
             ))
             .into_any_element()
+    }
+
+    /// 本地终端默认 Shell：系统默认、启动时发现的 Shell 与自定义路径三档。
+    pub(crate) fn render_settings_local_shell(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mut options = Vec::with_capacity(self.services.local_shells.len() + 2);
+        options.push((
+            LOCAL_SHELL_SYSTEM.to_string(),
+            rust_i18n::t!("settings.local_shell_system").to_string(),
+        ));
+        options.extend(
+            self.services
+                .local_shells
+                .iter()
+                .map(|shell| (shell.program.clone(), shell.label.clone())),
+        );
+        options.push((
+            LOCAL_SHELL_CUSTOM.to_string(),
+            rust_i18n::t!("settings.local_shell_custom").to_string(),
+        ));
+        let dropdown = Self::setting_dropdown(
+            "dropdown-local-shell",
+            self.state.local_shell_choice.clone(),
+            options,
+            |this, choice, cx| {
+                this.state.local_shell_choice = choice.clone();
+                if choice == LOCAL_SHELL_SYSTEM {
+                    update_app_settings(cx, |settings| {
+                        settings.local_shell = None;
+                        settings.local_shell_args.clear();
+                    });
+                } else if choice != LOCAL_SHELL_CUSTOM
+                    && let Some(shell) = this
+                        .services
+                        .local_shells
+                        .iter()
+                        .find(|shell| shell_program_matches(&shell.program, &choice))
+                {
+                    let program = shell.program.clone();
+                    let args = shell.args.clone();
+                    let supports_elevation = shell.supports_elevation;
+                    update_app_settings(cx, |settings| {
+                        settings.local_shell = Some(program.clone());
+                        settings.local_shell_args = args.clone();
+                        if !supports_elevation {
+                            settings.local_terminal_run_as_admin = false;
+                        }
+                    });
+                }
+                cx.notify();
+            },
+            cx,
+        );
+
+        let custom_row = crate::widgets::setting_field_row(
+            crate::widgets::form_field(
+                rust_i18n::t!("settings.local_shell_custom_path").to_string(),
+                self.state.local_shell_custom.clone(),
+                p,
+            ),
+            Some(rust_i18n::t!("settings.local_shell_custom_path_desc").to_string()),
+            p,
+        );
+
+        let group = v_flex()
+            .gap_2()
+            .child(crate::widgets::setting_row(
+                "settings.local_shell",
+                Some("settings.local_shell_desc"),
+                dropdown,
+                p,
+            ))
+            .when(
+                self.state.local_shell_choice == LOCAL_SHELL_CUSTOM,
+                |this| this.child(custom_row),
+            );
+
+        #[cfg(windows)]
+        let group = {
+            let supports_elevation = self
+                .services
+                .local_shells
+                .iter()
+                .find(|shell| shell_program_matches(&shell.program, &self.state.local_shell_choice))
+                .is_none_or(|shell| shell.supports_elevation);
+            group.child(crate::widgets::setting_row(
+                "settings.local_shell_admin",
+                Some("settings.local_shell_admin_desc"),
+                Switch::new("toggle-local-shell-admin")
+                    .checked(app_settings(cx).local_terminal_run_as_admin)
+                    .disabled(!supports_elevation)
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |settings| {
+                            settings.local_terminal_run_as_admin = checked;
+                        });
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+        };
+
+        group.into_any_element()
     }
 
     /// 通知与声音组：终端响铃、桌面通知与通知阈值。

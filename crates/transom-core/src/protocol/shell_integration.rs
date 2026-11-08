@@ -9,7 +9,9 @@
 //!   仍需终端侧注入，启动瞬间仍会有一行一闪。
 
 /// 支持自动集成的 Shell 类型。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ShellKind {
     Bash,
     Zsh,

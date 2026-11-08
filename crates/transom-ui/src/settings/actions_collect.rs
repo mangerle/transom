@@ -15,6 +15,9 @@ impl SettingsView {
         if !self.collect_key_bindings(cx) {
             return false;
         }
+        if !self.collect_local_shell(cx) {
+            return false;
+        }
         self.collect_interface_preferences(cx);
         self.collect_sync_preferences(window, cx);
         // 外观偏好在弹窗内已即时写入，落盘前归一化兜底值，保证文件可回读。
@@ -23,6 +26,63 @@ impl SettingsView {
         self.sync_terminal_palette(cx);
         self.commit_proxy_form(cx);
         self.collect_git_preferences(cx);
+        true
+    }
+
+    /// 收集默认本地 Shell：系统默认、已发现路径与自定义路径三种来源统一落成
+    /// `program + args`，避免界面选择与终端启动各自解释不同格式。
+    pub(super) fn collect_local_shell(&mut self, cx: &mut Context<Self>) -> bool {
+        let choice = self.state.local_shell_choice.clone();
+        if choice == super::modal_state::LOCAL_SHELL_SYSTEM {
+            update_app_settings(cx, |settings| {
+                settings.local_shell = None;
+                settings.local_shell_args.clear();
+            });
+        } else if choice == super::modal_state::LOCAL_SHELL_CUSTOM {
+            let path = self
+                .state
+                .local_shell_custom
+                .read(cx)
+                .value()
+                .trim()
+                .to_string();
+            if path.is_empty() {
+                cx.emit(SettingsEvent::Error(
+                    rust_i18n::t!("settings.local_shell_custom_required").to_string(),
+                ));
+                cx.notify();
+                return false;
+            }
+            update_app_settings(cx, |settings| {
+                settings.local_shell = Some(path.clone());
+                settings.local_shell_args.clear();
+            });
+        } else if let Some(shell) = self
+            .services
+            .local_shells
+            .iter()
+            .find(|shell| super::modal_state::shell_program_matches(&shell.program, &choice))
+        {
+            let program = shell.program.clone();
+            let args = shell.args.clone();
+            let supports_elevation = shell.supports_elevation;
+            update_app_settings(cx, |settings| {
+                settings.local_shell = Some(program.clone());
+                settings.local_shell_args = args.clone();
+                if !supports_elevation {
+                    settings.local_terminal_run_as_admin = false;
+                }
+            });
+        } else {
+            cx.emit(SettingsEvent::Error(
+                rust_i18n::t!("settings.local_shell_missing").to_string(),
+            ));
+            cx.notify();
+            return false;
+        }
+
+        #[cfg(not(windows))]
+        update_app_settings(cx, |settings| settings.local_terminal_run_as_admin = false);
         true
     }
 

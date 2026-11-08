@@ -13,7 +13,7 @@ use transom_net::{
 };
 use transom_zmodem::ZmodemConfig;
 
-use super::{Internal, ReadyConnection, local_shell};
+use super::{Internal, ReadyConnection};
 
 pub(super) struct UiPrompter {
     pub(super) tab_id: TabId,
@@ -91,67 +91,29 @@ pub(super) fn open_local_pty(
     size: TerminalSize,
     shell_integration: bool,
 ) -> Result<(TerminalIo, tokio::sync::oneshot::Receiver<()>), AppError> {
-    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+    #[cfg(windows)]
+    if local.run_as_admin {
+        return crate::pty_broker::open_elevated_pty(local, size, shell_integration);
+    }
+    #[cfg(not(windows))]
+    if local.run_as_admin {
+        return Err(AppError::with_detail(
+            ErrorCode::Configuration,
+            "管理员本地终端目前仅支持 Windows",
+        ));
+    }
+
+    use portable_pty::PtySize;
     use transom_core::{TerminalControl, TerminalControlHandle};
 
-    let pty_system = native_pty_system();
-    let pair = pty_system
-        .openpty(PtySize {
-            rows: size.rows,
-            cols: size.cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| AppError::with_detail(ErrorCode::Io, format!("创建本地伪终端失败: {e}")))?;
-
-    let shell = local.shell.clone().unwrap_or_else(|| {
-        std::env::var("SHELL").unwrap_or_else(|_| {
-            if cfg!(windows) {
-                "powershell.exe".to_string()
-            } else {
-                "/bin/bash".to_string()
-            }
-        })
-    });
-
-    // `X-TerminalArgExec`：按 argv 原样执行，不经 Shell 拼串。空 argv 视为
-    // 未指定（防御脏配置），回落到交互式 Shell。
-    let exec_argv = local
-        .command
-        .as_ref()
-        .filter(|argv| !argv.is_empty())
-        .cloned();
-    let mut command = match &exec_argv {
-        Some(argv) => {
-            let mut builder = CommandBuilder::new(&argv[0]);
-            builder.args(&argv[1..]);
-            builder
-        }
-        None => CommandBuilder::new(&shell),
-    };
-    if let Some(dir) = &local.working_dir {
-        command.cwd(dir);
-    }
-    command.env("TERM", "xterm-256color");
-    command.env("COLORTERM", "truecolor");
-    // 集成预装：能在启动参数里把钩子装好，就不必往终端写任何字节，
-    // 屏幕上不会出现注入痕迹，也没有一闪而过。命令执行模式下不预装：
-    // 目标程序不是交互式 Shell，注入的 rcfile 参数会落到它头上。
-    let preload = if shell_integration && exec_argv.is_none() {
-        local_shell::prepare(&shell)
-    } else {
-        local_shell::LocalShellPreload::none()
-    };
-    command.args(&preload.args);
-    for (key, value) in &preload.env {
-        command.env(key, value);
-    }
-
-    let mut child = pair
-        .slave
-        .spawn_command(command)
-        .map_err(|e| AppError::with_detail(ErrorCode::Io, format!("启动本地 Shell 失败: {e}")))?;
-    drop(pair.slave);
+    let crate::local_pty::LocalPtySession {
+        master,
+        mut child,
+        shell,
+        exec_argv,
+        preload,
+        integration_disabled,
+    } = crate::local_pty::spawn(local, size, shell_integration)?;
     log::info!(
         "本地伪终端已就绪，Shell: {shell}，尺寸: {}x{}，工作目录: {:?}，执行命令: {exec_argv:?}",
         size.cols,
@@ -159,17 +121,14 @@ pub(super) fn open_local_pty(
         local.working_dir
     );
 
-    let reader = pair
-        .master
+    let reader = master
         .try_clone_reader()
         .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
-    let writer = pair
-        .master
+    let writer = master
         .take_writer()
         .map_err(|e| AppError::with_detail(ErrorCode::Io, e.to_string()))?;
 
     let (control, mut control_rx) = TerminalControlHandle::channel(16);
-    let master = pair.master;
     std::thread::Builder::new()
         .name("transom-pty-control".into())
         .spawn(move || {
@@ -207,6 +166,8 @@ pub(super) fn open_local_pty(
     if let Some(kind) = preload.kind {
         io = io.with_preinstalled_integration(kind);
         log::info!("本地 Shell 集成已通过启动参数预装，方言: {}", kind.label());
+    } else if integration_disabled {
+        io = io.without_shell_integration();
     }
     if let Some(cleanup) = preload.cleanup {
         // 清理守卫随会话句柄释放：临时 rcfile 目录必须活到 Shell 读完启动文件，

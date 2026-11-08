@@ -56,6 +56,22 @@ impl GroupSearch {
                     "settings.cjk_font_note",
                 ],
             ),
+            GroupSearch::LocalShell => (
+                "settings.local_shell_group",
+                &[
+                    "settings.local_shell",
+                    "settings.local_shell_desc",
+                    "settings.local_shell_system",
+                    "settings.local_shell_custom",
+                    "settings.local_shell_custom_path",
+                    "settings.local_shell_custom_path_desc",
+                    "settings.local_shell_custom_hint",
+                    "settings.local_shell_custom_required",
+                    "settings.local_shell_missing",
+                    "settings.local_shell_admin",
+                    "settings.local_shell_admin_desc",
+                ],
+            ),
             GroupSearch::Cursor => (
                 "settings.cursor_group",
                 &[

@@ -433,6 +433,8 @@ fn git_placeholder_session(project: &GitProject) -> Session {
         project.display_name(),
         Connection::Local(LocalConnection {
             shell: None,
+            shell_args: Vec::new(),
+            run_as_admin: false,
             working_dir: Some(project.path.clone()),
             command: None,
         }),

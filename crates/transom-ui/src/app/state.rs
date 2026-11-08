@@ -35,10 +35,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use transom_core::{AppCommand, AppSettings, GitProjectId, SessionCatalog, SessionId, TabId};
+use transom_platform::shell::ShellOption;
 
 /// 应用运行期状态。
 pub(crate) struct AppState {
     pub(in crate::app) services: UiServices,
+    /// 启动时发现的本机 Shell 目录；新建终端菜单与设置页共用同一份快照。
+    pub(in crate::app) local_shells: Arc<Vec<ShellOption>>,
     /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
     pub(in crate::app) catalog: SessionCatalog,
     /// 会话目录版本：每次持久化（= 目录被修改）递增，侧栏行缓存以此为失效键。

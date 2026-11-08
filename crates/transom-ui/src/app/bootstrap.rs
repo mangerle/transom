@@ -33,6 +33,7 @@ impl AppShell {
             services.session_store.clone(),
             services.settings_store.clone(),
         );
+        let local_shells = Arc::new(transom_platform::shell::discover_shells());
         let settings_view = cx.new(|cx| {
             crate::settings::SettingsView::new(
                 window,
@@ -43,6 +44,7 @@ impl AppShell {
                     persistence: persistence.clone(),
                     history: prepared.history.clone(),
                     history_store: services.history.clone(),
+                    local_shells: local_shells.clone(),
                 },
                 prepared.catalog.clone(),
             )
@@ -69,6 +71,7 @@ impl AppShell {
                 sidebar_visible,
                 vertical_tabs_open,
                 restart_requested,
+                local_shells,
             },
             cx,
         );
@@ -322,6 +325,7 @@ struct BootstrapState {
     vertical_tabs_open: bool,
     /// 安装完成后由关于页置位的重启意图，随 `run` 返回值交回 `main`。
     restart_requested: Arc<AtomicBool>,
+    local_shells: Arc<Vec<transom_platform::shell::ShellOption>>,
 }
 
 /// 组装 `AppState`：把启动准备、实体句柄与事件订阅一次性收进状态。
@@ -340,6 +344,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         sidebar_visible,
         vertical_tabs_open,
         restart_requested,
+        local_shells,
     } = input;
     let git_registry = services.git_projects.load().unwrap_or_default();
     let session_form = cx.new(|_| crate::session_form::SessionFormView::new());
@@ -357,6 +362,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     let connection_prompts = cx.new(|_| crate::connection::ConnectionPromptsView::new());
     AppState {
         services,
+        local_shells,
         catalog: prepared.catalog,
         catalog_revision: 0,
         sidebar: SidebarState::new(sidebar_visible, inputs.search.clone()),

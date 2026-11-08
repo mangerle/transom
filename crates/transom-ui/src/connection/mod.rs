@@ -2,12 +2,14 @@
 
 mod auth_dialog;
 mod local_and_quick;
+mod local_shell_menu;
 mod presentation;
 mod prompts_render;
 mod prompts_shell;
 mod prompts_view;
 mod secrets;
 
+pub(crate) use local_shell_menu::build_local_terminal_menu;
 pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
 pub(crate) use prompts_view::{ConnectionPromptsEvent, ConnectionPromptsView};
 pub(crate) use secrets::{collect_connection_secrets, session_host};

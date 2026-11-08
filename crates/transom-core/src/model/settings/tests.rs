@@ -93,6 +93,19 @@ fn old_settings_without_tab_groups_still_load() {
     assert_eq!(settings.window.previous_tab_sessions.len(), 0);
 }
 
+/// 本地 Shell 参数与管理员默认值都是后加字段：老配置必须按安全默认值加载。
+#[test]
+fn local_shell_fields_default_for_legacy_settings() {
+    let settings: AppSettings =
+        serde_json::from_str(r#"{"local_shell":"C:\\Program Files\\Git\\bin\\bash.exe"}"#).unwrap();
+    assert_eq!(
+        settings.local_shell.as_deref(),
+        Some(r"C:\Program Files\Git\bin\bash.exe")
+    );
+    assert!(settings.local_shell_args.is_empty());
+    assert!(!settings.local_terminal_run_as_admin);
+}
+
 /// 通知开关是后加的：老设置里没有它时按"开启 + 10 秒阈值"降级，
 /// 而不是让整个窗口设置加载失败。
 #[test]

@@ -15,6 +15,7 @@ use super::SettingsEvent;
 use super::SettingsView;
 use super::WindowAppearanceSnapshot;
 use super::font_select::{CJK_DEFAULT_KEY, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select};
+use super::modal_state::local_shell_choice;
 use crate::app::{app_settings, app_settings_mut, update_app_settings};
 use crate::cloud_sync::DEFAULT_SYNC_DIRECTORY;
 use crate::palette::localized_error;
@@ -74,6 +75,12 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) {
         self.state.jump_page = page.filter(|page| *page < super::page_entries().len());
+        self.state.local_shell_choice =
+            local_shell_choice(app_settings(cx), &self.services.local_shells);
+        let local_shell_path = app_settings(cx).local_shell.clone().unwrap_or_default();
+        self.state.local_shell_custom.update(cx, |input, cx| {
+            input.set_value(&local_shell_path, window, cx);
+        });
         // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
         self.state.appearance_snapshot = Some(app_settings(cx).appearance.clone());
 

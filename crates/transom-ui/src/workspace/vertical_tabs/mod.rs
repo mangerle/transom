@@ -94,7 +94,11 @@ impl AppState {
                 root.push(entry);
             }
         }
-        NewSessionMenuData { root, folders }
+        NewSessionMenuData {
+            root,
+            folders,
+            shells: (*self.local_shells).clone(),
+        }
     }
     fn folder_menu_label(&self, folder: &transom_core::SessionFolder) -> String {
         let mut names = vec![folder.name.clone()];
@@ -280,6 +284,7 @@ struct NewSessionFolder {
 struct NewSessionMenuData {
     root: Vec<NewSessionEntry>,
     folders: Vec<NewSessionFolder>,
+    shells: Vec<transom_platform::shell::ShellOption>,
 }
 
 /// 构建"新增会话"下拉菜单。
@@ -294,6 +299,11 @@ fn build_new_session_menu(
     data: &NewSessionMenuData,
 ) -> PopupMenu {
     let local_app = app.clone();
+    let shell_app = app.clone();
+    let shells = data.shells.clone();
+    let shell_submenu = PopupMenu::build(window, cx, move |menu, window, cx| {
+        crate::connection::build_local_terminal_menu(menu, &shell_app, shells.clone(), window, cx)
+    });
     let mut menu = menu
         .scrollable(true)
         .max_h(px(460.0))
@@ -304,6 +314,13 @@ fn build_new_session_menu(
                 local_app.update(cx, |this, cx| this.open_local_terminal(window, cx));
             },
         ))
+        .item(
+            PopupMenuItem::submenu(
+                rust_i18n::t!("app.local_shell_choose").to_string(),
+                shell_submenu,
+            )
+            .icon(IconName::Terminal),
+        )
         .item(PopupMenuItem::separator());
     for entry in &data.root {
         menu = menu.item(session_menu_item(entry, app));

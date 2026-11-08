@@ -47,6 +47,17 @@ pub struct AppSettings {
     /// shell 是这台机器的属性而非某个会话的属性。
     #[serde(default)]
     pub local_shell: Option<String>,
+    /// 默认 Shell 的固定启动参数；旧配置缺少时为空。
+    ///
+    /// 例如 Git Bash 或将来需要 `--login` 的 Shell 可以在发现项中携带参数，
+    /// 终端控制器不得把参数重新拼进可执行文件路径。
+    #[serde(default)]
+    pub local_shell_args: Vec<String>,
+    /// Windows 上新开本地终端是否默认请求管理员启动。
+    ///
+    /// 默认关闭：UAC 提示属于强交互，必须由用户显式选择；非 Windows 平台忽略。
+    #[serde(default)]
+    pub local_terminal_run_as_admin: bool,
     #[serde(default)]
     pub terminal_interaction: TerminalInteraction,
     #[serde(default)]
@@ -195,6 +206,8 @@ impl Default for AppSettings {
             language: default_language(),
             appearance: AppearanceSettings::default(),
             local_shell: None,
+            local_shell_args: Vec::new(),
+            local_terminal_run_as_admin: false,
             terminal_interaction: TerminalInteraction::default(),
             terminal_profile: TerminalProfile::default(),
             window: WindowSettings::default(),

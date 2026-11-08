@@ -8581,6 +8581,7 @@ dependencies = [
  "log",
  "parking_lot",
  "portable-pty",
+ "serde",
  "serde_json",
  "tokio",
  "transom-container",
@@ -8593,6 +8594,7 @@ dependencies = [
  "transom-ui",
  "transom-updater",
  "transom-zmodem",
+ "uuid",
  "windows 0.62.2",
 ]
 

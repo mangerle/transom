@@ -8,6 +8,12 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct LocalConnection {
     pub shell: Option<String>,
+    /// Shell 固定启动参数；与 `shell` 一起构成可复现的本地终端入口。
+    #[serde(default)]
+    pub shell_args: Vec<String>,
+    /// Windows 上通过提权 PTY 代理把该 Shell 放进当前 Transom 标签运行。
+    #[serde(default)]
+    pub run_as_admin: bool,
     pub working_dir: Option<PathBuf>,
     /// 启动后直接执行的命令（`X-TerminalArgExec` / `-e <命令>`）。
     ///

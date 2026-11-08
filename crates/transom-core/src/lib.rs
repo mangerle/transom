@@ -131,5 +131,6 @@ pub use storage::{
     BackupService, GitProjectStore, HistoryStore, SecretStore, SessionStore, SettingsStore,
 };
 pub use transport::{
-    SessionCleanup, TerminalControl, TerminalControlHandle, TerminalIo, TerminalSize,
+    SessionCleanup, ShellIntegrationMode, TerminalControl, TerminalControlHandle, TerminalIo,
+    TerminalSize,
 };

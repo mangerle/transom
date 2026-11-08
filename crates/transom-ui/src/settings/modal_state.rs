@@ -13,6 +13,7 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::slider::SliderState;
 use gpui_kit::*;
 use transom_core::{AppSettings, AppearanceSettings, WindowBackgroundMode};
+use transom_platform::shell::ShellOption;
 
 use super::font_select::{
     CJK_DEFAULT_KEY, FontSelect, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, new_font_select,
@@ -87,6 +88,10 @@ pub(crate) struct SettingsModalState {
     pub(crate) git_author_email: Entity<InputState>,
     pub(crate) git_test_result: Option<Result<String, String>>,
     pub(crate) git_testing: bool,
+    /// 默认本地 Shell 的下拉取值：系统默认、已发现 Shell 路径或自定义哨兵。
+    pub(crate) local_shell_choice: String,
+    /// 自定义 Shell 路径输入框；只有自定义档位在界面上显示。
+    pub(crate) local_shell_custom: Entity<InputState>,
     /// 打开弹窗时从监控面板取来的采样档位快照：设置页只读它，变更以事件上报。
     pub(crate) monitor_interval: crate::monitor::SampleIntervalMode,
 }
@@ -191,6 +196,7 @@ impl SettingsModalState {
         window: &mut Window,
         cx: &mut Context<SettingsView>,
         settings: &AppSettings,
+        local_shells: &[ShellOption],
     ) -> Self {
         let appearance = AppearanceInputs::new(window, cx, settings);
         let settings_panel_hidden = cx.new(|cx| {
@@ -267,6 +273,12 @@ impl SettingsModalState {
                 .placeholder(rust_i18n::t!("settings.git_author_email_placeholder").to_string())
                 .default_value(&settings.git.author_email)
         });
+        let local_shell_choice = local_shell_choice(settings, local_shells);
+        let local_shell_custom = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("settings.local_shell_custom_hint").to_string())
+                .default_value(settings.local_shell.clone().unwrap_or_default())
+        });
         let sync_form = SyncFormInputs::new(window, cx);
 
         Self {
@@ -299,11 +311,43 @@ impl SettingsModalState {
             git_author_email,
             git_test_result: None,
             git_testing: false,
+            local_shell_choice,
+            local_shell_custom,
             sync_form,
             monitor_interval: crate::monitor::SampleIntervalMode::default(),
         }
     }
 }
+
+/// “系统默认 Shell”下拉哨兵。
+pub(crate) const LOCAL_SHELL_SYSTEM: &str = "__transom_system_shell__";
+/// “自定义 Shell 路径”下拉哨兵。
+pub(crate) const LOCAL_SHELL_CUSTOM: &str = "__transom_custom_shell__";
+
+/// 根据当前设置判断下拉应选系统默认、某个发现项还是自定义路径。
+pub(crate) fn local_shell_choice(settings: &AppSettings, local_shells: &[ShellOption]) -> String {
+    match settings.local_shell.as_deref() {
+        None => LOCAL_SHELL_SYSTEM.to_string(),
+        Some(program)
+            if local_shells
+                .iter()
+                .any(|shell| shell_program_matches(&shell.program, program)) =>
+        {
+            program.to_string()
+        }
+        Some(_) => LOCAL_SHELL_CUSTOM.to_string(),
+    }
+}
+
+/// 比较 Shell 路径；Windows 盘符与文件系统不区分 ASCII 大小写。
+pub(crate) fn shell_program_matches(left: &str, right: &str) -> bool {
+    if cfg!(windows) {
+        left.eq_ignore_ascii_case(right)
+    } else {
+        left == right
+    }
+}
+
 impl ProxyFormInputs {
     /// 由当前出站代理设置回填表单；凭据字段保持明文值供编辑。
     fn from_settings(
@@ -363,5 +407,34 @@ impl ProxyFormInputs {
                     .default_value(proxy_pass_val)
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LOCAL_SHELL_CUSTOM, LOCAL_SHELL_SYSTEM, local_shell_choice};
+    use transom_core::AppSettings;
+    use transom_platform::shell::ShellOption;
+
+    fn shell(program: &str) -> ShellOption {
+        ShellOption {
+            program: program.to_string(),
+            args: Vec::new(),
+            label: program.to_string(),
+            supports_elevation: true,
+        }
+    }
+
+    #[test]
+    fn local_shell_choice_distinguishes_system_known_and_custom() {
+        let shells = vec![shell("/bin/zsh")];
+        let mut settings = AppSettings::default();
+        assert_eq!(local_shell_choice(&settings, &shells), LOCAL_SHELL_SYSTEM);
+
+        settings.local_shell = Some("/bin/zsh".to_string());
+        assert_eq!(local_shell_choice(&settings, &shells), "/bin/zsh");
+
+        settings.local_shell = Some("/opt/custom-shell".to_string());
+        assert_eq!(local_shell_choice(&settings, &shells), LOCAL_SHELL_CUSTOM);
     }
 }

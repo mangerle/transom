@@ -35,37 +35,6 @@ pub(super) struct TiledRow {
     pub(super) focused: bool,
 }
 
-/// 标签栏图标按钮参数属性。
-pub(super) struct TabStripButtonProps<F> {
-    pub(super) id: &'static str,
-    pub(super) icon: IconName,
-    pub(super) tooltip: String,
-    pub(super) enabled: bool,
-    pub(super) on_click: F,
-}
-
-/// 渲染标签栏普通图标按钮。
-pub(super) fn tab_strip_button(
-    props: TabStripButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-    _p: &Palette,
-) -> AnyElement {
-    let TabStripButtonProps {
-        id,
-        icon,
-        tooltip,
-        enabled,
-        on_click,
-    } = props;
-    let button = crate::widgets::IconButton::new(id, icon, tooltip)
-        .size(crate::widgets::IconButtonSize::Compact)
-        .disabled(!enabled);
-    if enabled {
-        button.render().on_click(on_click).into_any_element()
-    } else {
-        button.render().into_any_element()
-    }
-}
-
 /// 构建并排组徽标元素。
 pub(super) fn build_tiled_group_badge(
     shell: &AppShell,

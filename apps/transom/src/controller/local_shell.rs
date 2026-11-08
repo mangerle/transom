@@ -15,20 +15,20 @@ use transom_core::SessionCleanup;
 use transom_core::protocol::shell_integration::{ShellKind, detect_shell, integration_script};
 
 /// 预装产物：装好的方言、附加启动参数、环境变量与清理守卫。
-pub(super) struct LocalShellPreload {
-    /// 预装成功的方言；`None` 表示该方言无法用启动参数预装，调用方应回退终端侧注入。
-    pub(super) kind: Option<ShellKind>,
+pub(crate) struct LocalShellPreload {
+    /// 预装成功的方言；`None` 表示无法用启动参数预装，调用方按方言决定回退注入或禁用。
+    pub(crate) kind: Option<ShellKind>,
     /// 追加到 Shell 命令行后的参数。
-    pub(super) args: Vec<String>,
+    pub(crate) args: Vec<String>,
     /// 追加到子进程的环境变量。
-    pub(super) env: Vec<(String, String)>,
+    pub(crate) env: Vec<(String, String)>,
     /// 临时文件清理守卫；`None` 表示没有产生临时文件。
-    pub(super) cleanup: Option<SessionCleanup>,
+    pub(crate) cleanup: Option<SessionCleanup>,
 }
 
 impl LocalShellPreload {
     /// 不预装：调用方回退到终端侧注入。
-    pub(super) fn none() -> Self {
+    pub(crate) fn none() -> Self {
         Self {
             kind: None,
             args: Vec::new(),
@@ -39,7 +39,7 @@ impl LocalShellPreload {
 }
 
 /// 按方言准备预装产物；任何一步失败都回退到终端侧注入，不影响会话建立。
-pub(super) fn prepare(shell_path: &str) -> LocalShellPreload {
+pub(crate) fn prepare(shell_path: &str) -> LocalShellPreload {
     let attempt = match detect_shell(shell_path) {
         ShellKind::Bash => prepare_bash(),
         ShellKind::Zsh => prepare_zsh(),

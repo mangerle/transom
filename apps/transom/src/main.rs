@@ -1,6 +1,8 @@
 mod controller;
 mod deep_link;
+mod local_pty;
 mod logging;
+mod pty_broker;
 
 use controller::Controller;
 use std::sync::Arc;
@@ -25,6 +27,9 @@ fn main() -> anyhow::Result<()> {
     // 绝不能因为日志把应用关在外面。
     if let Err(error) = logging::init(logging::resolve_level(LogLevel::default())) {
         eprintln!("日志系统装配失败，本次运行只有标准错误输出，原因: {error}");
+    }
+    if pty_broker::run_if_requested()? {
+        return Ok(());
     }
 
     let startup = startup_request();

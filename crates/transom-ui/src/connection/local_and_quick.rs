@@ -5,6 +5,7 @@ use crate::app::{AppShell, TerminalTab};
 use crate::keymap;
 use gpui_kit::*;
 use transom_core::{DeepLinkRequest, LocalConnection, Session, TabId, parse_ssh_config};
+use transom_platform::shell::ShellOption;
 
 impl AppShell {
     pub(crate) fn on_new_local_terminal(
@@ -64,7 +65,42 @@ impl AppShell {
         working_dir: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) {
-        let title = match (
+        self.spawn_local_request(command, working_dir, None, cx);
+    }
+
+    /// 用用户本次明确选择的 Shell 新开标签；与默认设置分离，选择只影响本次。
+    pub(crate) fn spawn_local_shell(
+        &mut self,
+        shell: ShellOption,
+        run_as_admin: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.spawn_local_request(None, None, Some((shell, run_as_admin)), cx);
+    }
+
+    fn spawn_local_request(
+        &mut self,
+        command: Option<Vec<String>>,
+        working_dir: Option<std::path::PathBuf>,
+        shell_override: Option<(ShellOption, bool)>,
+        cx: &mut Context<Self>,
+    ) {
+        let settings = app_settings(cx);
+        let (shell, shell_args, run_as_admin, shell_label) = match shell_override {
+            Some((shell, run_as_admin)) => (
+                Some(shell.program),
+                shell.args,
+                run_as_admin,
+                Some(shell.label),
+            ),
+            None => (
+                settings.local_shell.clone(),
+                settings.local_shell_args.clone(),
+                cfg!(windows) && settings.local_terminal_run_as_admin && command.is_none(),
+                None,
+            ),
+        };
+        let mut title = match (
             &command,
             working_dir.as_deref().and_then(|dir| {
                 dir.file_name()
@@ -80,13 +116,22 @@ impl AppShell {
                 format!("{} · {short}", rust_i18n::t!("app.new_local"))
             }
             (None, Some(name)) => format!("{} · {name}", rust_i18n::t!("app.new_local")),
-            (None, None) => rust_i18n::t!("app.new_local").to_string(),
+            (None, None) => match shell_label {
+                Some(label) => format!("{} · {label}", rust_i18n::t!("app.new_local")),
+                None => rust_i18n::t!("app.new_local").to_string(),
+            },
         };
+        if run_as_admin {
+            title.push_str(" · ");
+            title.push_str(&rust_i18n::t!("app.local_shell_admin_badge"));
+        }
         let tab_id = TabId::new();
         let session = Session::new(
             title,
             transom_core::Connection::Local(LocalConnection {
-                shell: app_settings(cx).local_shell.clone(),
+                shell,
+                shell_args,
+                run_as_admin,
                 working_dir,
                 command,
             }),

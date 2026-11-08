@@ -21,6 +21,7 @@ use crate::app::Persistence;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::{AppSettings, SecretStore, SessionCatalog};
+use transom_platform::shell::ShellOption;
 
 /// 设置实体运行所需的依赖。
 ///
@@ -35,6 +36,8 @@ pub(crate) struct SettingsServices {
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 历史落盘存储：重新开启历史时从文件恢复。
     pub(crate) history_store: Arc<dyn transom_core::HistoryStore>,
+    /// 启动时发现的本机 Shell 目录，供“默认本地 Shell”下拉与自定义路径判断使用。
+    pub(crate) local_shells: Arc<Vec<ShellOption>>,
 }
 
 /// 设置弹窗实体。
@@ -65,7 +68,7 @@ impl SettingsView {
         services: SettingsServices,
         catalog: SessionCatalog,
     ) -> Self {
-        let state = SettingsModalState::new(window, cx, settings);
+        let state = SettingsModalState::new(window, cx, settings, &services.local_shells);
         let mut this = Self {
             state,
             services,

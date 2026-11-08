@@ -11,6 +11,8 @@ use crate::palette::Palette;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::{Button, ButtonVariants, DropdownButton};
 use gpui_kit::*;
 
 impl AppShell {
@@ -47,18 +49,33 @@ impl AppShell {
                     .items_center()
                     .border_color(p.divider(p.border))
                     .divider_edge(DividerEdge::Bottom, p.divider_width)
-                    .child(badges::tab_strip_button(
-                        badges::TabStripButtonProps {
-                            id: "tab-strip-quick-new",
-                            icon: IconName::Plus,
-                            tooltip: rust_i18n::t!("app.new_local").to_string(),
-                            enabled: true,
-                            on_click: cx.listener(|this, _, window, cx| {
+                    .child({
+                        let action = Button::new("tab-strip-quick-new")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Plus)
+                            .tooltip(rust_i18n::t!("app.new_local").to_string())
+                            .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_local_terminal(window, cx);
-                            }),
-                        },
-                        p,
-                    )),
+                            }));
+                        let menu_app = cx.entity().clone();
+                        let shells = (*self.state.local_shells).clone();
+                        DropdownButton::new("tab-strip-quick-new-shells")
+                            .button(action)
+                            .menu_accessibility_label(
+                                rust_i18n::t!("app.local_shell_choose").to_string(),
+                            )
+                            .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, window, cx| {
+                                crate::connection::build_local_terminal_menu(
+                                    menu,
+                                    &menu_app,
+                                    shells.clone(),
+                                    window,
+                                    cx,
+                                )
+                            })
+                            .into_any_element()
+                    }),
             )
             .into_any_element()
     }

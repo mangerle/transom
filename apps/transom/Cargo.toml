@@ -36,6 +36,8 @@ log.workspace = true
 # `exec:` 深链载荷用 JSON 承载 argv：参数里可能出现空格、引号与换行，
 # 行分隔的朴素编码无法无损表达。
 serde_json.workspace = true
+serde.workspace = true
+uuid.workspace = true
 fern.workspace = true
 # 日志时间戳格式化；工作区内已有同一版本，不新增编译单元。
 chrono.workspace = true
@@ -43,8 +45,14 @@ portable-pty.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_IO",
+    "Win32_System_JobObjects",
+    "Win32_System_Registry",
     "Win32_System_RemoteDesktop",
     "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 
 # DEB 打包元数据（cargo-deb）。设计原理（Why）：

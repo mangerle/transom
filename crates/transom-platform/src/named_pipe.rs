@@ -10,14 +10,16 @@
 
 use std::fs::File;
 use std::io;
-use std::os::windows::io::FromRawHandle;
+use std::os::windows::io::{AsRawHandle, FromRawHandle};
+use std::time::Duration;
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, FILE_SHARE_READ,
     FILE_SHARE_WRITE, OPEN_EXISTING, PIPE_ACCESS_DUPLEX,
 };
+use windows::Win32::System::IO::CancelIoEx;
 use windows::Win32::System::Pipes::{
-    CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
-    WaitNamedPipeW,
+    ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeClientProcessId, PIPE_READMODE_BYTE,
+    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT, WaitNamedPipeW,
 };
 use windows::core::PCWSTR;
 
@@ -29,6 +31,8 @@ const PIPE_TIMEOUT_MS: u32 = 2_000;
 const PIPE_BUFFER_BYTES: u32 = 32 * 1024;
 /// 当前连接与其后继监听实例同时存在，避免两次请求之间出现 NotFound 窗口。
 const PIPE_MAX_INSTANCES: u32 = 2;
+/// 提权代理的可执行文件启动与连接上限；用户可在 UAC 提示上停留更久。
+pub const BROKER_PIPE_ACCEPT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// 创建私有命名管道服务端。
 ///
@@ -80,6 +84,83 @@ pub fn connect_private_client(name: &str) -> io::Result<File> {
         }
     }
     Err(last_error.unwrap_or_else(|| io::Error::other("连接命名管道失败")))
+}
+
+/// 创建可阻塞读写的私有命名管道服务端。
+///
+/// 与深链使用的 overlapped 服务端不同，提权 PTY 代理需要把句柄直接包装成
+/// `std::fs::File` 供终端阻塞读写线程使用，因此这里不能设置
+/// `FILE_FLAG_OVERLAPPED`。
+pub fn create_private_blocking_server(name: &str) -> io::Result<File> {
+    let security = PrivateSecurity::new(false)?;
+    let mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS;
+    let name = wide(name);
+    let handle = unsafe {
+        CreateNamedPipeW(
+            PCWSTR(name.as_ptr()),
+            PIPE_ACCESS_DUPLEX,
+            mode,
+            1,
+            PIPE_BUFFER_BYTES,
+            PIPE_BUFFER_BYTES,
+            PIPE_TIMEOUT_MS,
+            Some(security.attributes_ptr()),
+        )
+    };
+    if handle.is_invalid() {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(unsafe { File::from_raw_handle(handle.0) })
+}
+
+/// 等待客户端连接阻塞命名管道，并在超时后取消等待。
+pub fn accept_private_server(server: &File, timeout: Duration) -> io::Result<()> {
+    let raw_handle = server.as_raw_handle() as isize;
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            if done_rx.recv_timeout(timeout).is_err() {
+                // 安全性：只对调用方传入的有效命名管道句柄取消自身发起的 I/O。
+                unsafe {
+                    let _ = CancelIoEx(
+                        windows::Win32::Foundation::HANDLE(raw_handle as *mut _),
+                        None,
+                    );
+                }
+            }
+        });
+        let result = unsafe { ConnectNamedPipe(server_handle(server), None) };
+        let _ = done_tx.send(());
+        if result.is_ok() {
+            return Ok(());
+        }
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() == Some(windows::Win32::Foundation::ERROR_PIPE_CONNECTED.0 as i32) {
+            return Ok(());
+        }
+        if error.raw_os_error()
+            == Some(windows::Win32::Foundation::ERROR_OPERATION_ABORTED.0 as i32)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "等待提权 PTY 代理连接超时",
+            ));
+        }
+        Err(error)
+    })
+}
+
+/// 读取已连接命名管道客户端的进程 id，用于校验提权代理身份。
+pub fn private_server_client_process_id(server: &File) -> io::Result<u32> {
+    let mut process_id = 0;
+    // 安全性：句柄来自已连接的命名管道，输出指针指向栈上有效整数。
+    unsafe { GetNamedPipeClientProcessId(server_handle(server), &mut process_id) }
+        .map_err(io::Error::other)?;
+    Ok(process_id)
+}
+
+fn server_handle(server: &File) -> windows::Win32::Foundation::HANDLE {
+    windows::Win32::Foundation::HANDLE(server.as_raw_handle() as *mut _)
 }
 
 fn open_client(name: &[u16]) -> io::Result<File> {

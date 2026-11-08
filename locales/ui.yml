@@ -51,6 +51,18 @@ app:
   new_local:
     en: Local Terminal
     zh-CN: 本地终端
+  local_shell_default:
+    en: Default shell
+    zh-CN: 默认 Shell
+  local_shell_choose:
+    en: Choose shell
+    zh-CN: 选择 Shell
+  local_shell_admin:
+    en: Run as administrator
+    zh-CN: 以管理员身份运行
+  local_shell_admin_badge:
+    en: Administrator
+    zh-CN: 管理员
   import_ssh_config:
     en: Import SSH Config
     zh-CN: 导入 SSH 配置
@@ -3333,6 +3345,42 @@ settings:
   terminal_font_group:
     en: Terminal Font
     zh-CN: 终端字体
+  local_shell_group:
+    en: Local Terminal Shell
+    zh-CN: 本地终端 Shell
+  local_shell:
+    en: Default Shell
+    zh-CN: 默认 Shell
+  local_shell_desc:
+    en: Used by Ctrl+T, the new-terminal button, and launcher requests. Shells are discovered at application startup.
+    zh-CN: Ctrl+T、新建终端按钮与启动器请求默认使用该 Shell；Shell 列表在应用启动时发现。
+  local_shell_system:
+    en: System Default
+    zh-CN: 系统默认
+  local_shell_custom:
+    en: Custom Path
+    zh-CN: 自定义路径
+  local_shell_custom_path:
+    en: Shell Path
+    zh-CN: Shell 路径
+  local_shell_custom_path_desc:
+    en: Enter an executable path or a command resolvable from PATH.
+    zh-CN: 填写可执行文件的绝对路径，或一个可从 PATH 解析的命令名。
+  local_shell_custom_hint:
+    en: 'Example: C:\Program Files\Git\bin\bash.exe'
+    zh-CN: '示例：C:\Program Files\Git\bin\bash.exe'
+  local_shell_custom_required:
+    en: Enter a shell path before saving.
+    zh-CN: 保存前请填写 Shell 路径。
+  local_shell_missing:
+    en: The selected shell is no longer available. Rescan by restarting Transom or choose another shell.
+    zh-CN: 所选 Shell 已不可用；请重启 Transom 重新发现，或改选其它 Shell。
+  local_shell_admin:
+    en: Open Local Terminals as Administrator
+    zh-CN: 本地终端默认以管理员身份运行
+  local_shell_admin_desc:
+    en: Windows shows a UAC prompt for every new local terminal. The elevated shell still runs inside the current Transom tab.
+    zh-CN: Windows 每次新开本地终端都会弹出 UAC；提权后的 Shell 仍运行在当前 Transom 标签内。
   ui_font_note:
     en: Font size follows the density setting on the theme tab.
     zh-CN: 界面字号跟随"配色方案"页的密度档位，这里只换字体族。

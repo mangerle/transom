@@ -43,6 +43,7 @@
 
 ### 终端
 - 标签内自由分屏：切分方向属于每一刀、可嵌套，分隔线可拖拽，支持单窗格最大化与拆出为独立标签。
+- 本地终端支持设置默认 Shell，也可在每次新建时临时选择。Windows 自动发现命令提示符、Windows PowerShell、PowerShell 7、Git Bash 与 WSL；Linux/macOS 从 `$SHELL` 与 `/etc/shells` 发现。Windows 管理员 Shell 经 UAC 授权后仍运行在当前 Transom 标签内。
 - 缓冲区全文检索带正则开关，右侧刻度带显示整块滚动缓冲区的命中分布并支持点击跳转。
 - 常驻高亮 `ERROR` / `WARN` / `INFO` / `DEBUG`、IPv4 与 UUID，另可加最多 32 个自定义关键词；颜色全部取自主题调色板，跟随配色切换。
 - <kbd>Alt</kbd>+拖拽矩形列选（在 `vim`、`htop` 里同样可用）、双击选词分隔符可自定义、命令耗时超过阈值时通过 OSC 133 / OSC 777 发出桌面通知。
@@ -165,7 +166,7 @@ Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `
 ```
 apps/transom            可执行入口：装配存储层与异步连接控制器
 crates/transom-core     存储契约、会话/设置模型、命令事件契约与转发/高亮规则
-crates/transom-platform 用户目录、私有文件权限与发行版识别
+crates/transom-platform 用户目录、私有文件权限、发行版识别与 Shell 发现
 crates/transom-crypto   TSYN 二进制与 JSON/YAML 加密信封
 crates/transom-desktop  平台桌面集成：Linux 默认终端、macOS/Windows URI 注册
 crates/transom-net      russh 客户端、SFTP、端口转发、串口与 PTY 链路

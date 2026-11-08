@@ -180,13 +180,18 @@ impl TerminalView {
             reader,
             writer,
             control,
-            integration_preinstalled,
+            integration_mode,
             cleanup,
         } = io;
         // 集成已在会话启动阶段预装时直接落终态：终端侧不再发探针，也不再注入。
-        let shell_integration = match integration_preinstalled {
-            Some(kind) => ShellIntegration::preinstalled(kind),
-            None => ShellIntegration::new(shell_integration_enabled),
+        let shell_integration = match integration_mode {
+            transom_core::ShellIntegrationMode::Preinstalled(kind) => {
+                ShellIntegration::preinstalled(kind)
+            }
+            transom_core::ShellIntegrationMode::Disabled => ShellIntegration::new(false),
+            transom_core::ShellIntegrationMode::Auto => {
+                ShellIntegration::new(shell_integration_enabled)
+            }
         };
         let (input_tx, output_rx, reader_task) = Self::spawn_io_tasks(
             tasks::TerminalIoTaskParams {

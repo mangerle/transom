@@ -172,6 +172,8 @@ impl AppShell {
             tab_title.clone(),
             Connection::Local(transom_core::LocalConnection {
                 shell: None,
+                shell_args: Vec::new(),
+                run_as_admin: false,
                 working_dir: None,
                 command: None,
             }),

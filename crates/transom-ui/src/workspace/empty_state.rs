@@ -133,9 +133,17 @@ impl AppShell {
     /// 渲染本地终端快捷卡片。
     fn render_empty_local_terminal_card(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let shell_desc = match app_settings(cx).local_shell.as_deref() {
-            Some(shell) => shell.to_string(),
+            Some(shell) => self
+                .state
+                .local_shells
+                .iter()
+                .find(|option| option.program == shell)
+                .map(|option| option.label.clone())
+                .unwrap_or_else(|| shell.to_string()),
             None => rust_i18n::t!("app.empty_local_shell").to_string(),
         };
+        let menu_app = cx.entity().clone();
+        let shells = (*self.state.local_shells).clone();
 
         empty_card_shell(
             ElementId::Name("empty-quick-local".into()),
@@ -148,6 +156,15 @@ impl AppShell {
         .on_click(cx.listener(|this, _, window, cx| {
             this.open_local_terminal(window, cx);
         }))
+        .context_menu(move |menu, window, cx| {
+            crate::connection::build_local_terminal_menu(
+                menu,
+                &menu_app,
+                shells.clone(),
+                window,
+                cx,
+            )
+        })
         .into_any_element()
     }
 

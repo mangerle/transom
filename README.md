@@ -43,6 +43,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 
 ### Terminal
 - Nested split views (split direction belongs to each cut), draggable dividers, per-pane zoom, and pane detach into a tab.
+- Local terminals can use a configured default shell or a per-launch shell choice. Windows discovers Command Prompt, Windows PowerShell, PowerShell 7, Git Bash and WSL; Linux/macOS discover `$SHELL` and `/etc/shells`. On Windows, elevated shells run inside the current Transom tab through a UAC-approved PTY broker.
 - Buffer search with a regex toggle plus an overview tick band that shows hits across the entire scrollback and jumps on click.
 - Always-on highlighting for `ERROR` / `WARN` / `INFO` / `DEBUG`, IPv4 addresses and UUIDs, and up to 32 custom keywords, all mapped to theme palette slots so they follow your colorscheme.
 - Rectangular column select with <kbd>Alt</kbd>+drag that still works inside `vim` and `htop`, configurable double-click word separators, and OSC 133 / OSC 777 desktop notifications when a command crosses a runtime threshold.
@@ -165,7 +166,7 @@ Generated key pairs default to `~/.ssh`.
 ```
 apps/transom            binary: wires stores and the async connection controller together
 crates/transom-core     storage traits, session/settings models, command/event contracts, rules
-crates/transom-platform user directories, private file permissions, OS release detection
+crates/transom-platform user directories, private file permissions, OS release and shell discovery
 crates/transom-crypto   TSYN binary and JSON/YAML encryption envelopes
 crates/transom-desktop  platform desktop integration: Linux default terminal, macOS/Windows URI registration
 crates/transom-net      russh client, SFTP, port forwarding, serial ports, PTY plumbing
