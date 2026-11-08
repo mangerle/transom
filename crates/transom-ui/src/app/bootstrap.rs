@@ -158,6 +158,13 @@ impl AppShell {
             |shell, _, event: &KnownHostsEvent, cx| shell.on_known_hosts_event(event, cx),
         );
         self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
+        let key_wizard_subscription = cx.subscribe(
+            &self.state.modals.tools.key_wizard,
+            |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {
+                shell.on_key_wizard_event(event, cx);
+            },
+        );
+        self.state.tasks.subscriptions.key_wizard = Some(key_wizard_subscription);
         let backup_subscription = cx.subscribe(
             &self.state.modals.tools.backup_prompt,
             |shell, _view, event: &crate::backup::BackupPromptEvent, cx| {

@@ -1,10 +1,10 @@
 //! 密钥向导与已知主机弹窗的状态定义。
 //!
-//! 设计原理（Why）：这些状态只随弹窗生死，渲染与动作在 keys 模块内完成；
-//! 与外壳动作分离后，状态字段变更不会牵动外壳文件。
+//! 设计原理（Why）：这些状态只随弹窗生死，渲染与动作分别在 `render.rs` 与
+//! 对应实体中完成；状态字段不再暴露给外壳，字段变更也不会牵动外壳文件。
 //!
-//! 已知主机弹窗已独立为 [`super::KnownHostsView`] 实体：记录、搜索与删除
-//! 动作都归实体；密钥向导仍以状态结构由 `ModalHub` 持有，待后续迁移。
+//! 已知主机弹窗由 [`super::KnownHostsView`] 持有记录、搜索与删除；密钥向导
+//! 由 [`super::KeyWizardView`] 持有输入控件、公钥清单与在途生成任务。
 
 use super::keygen::{KeyAlgorithm, PublicKeyInfo};
 use gpui_kit::component::input::InputState;

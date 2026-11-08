@@ -2,7 +2,7 @@
 //!
 //! 设计原理（Why）：任务句柄与订阅必须被持有到窗口退出，否则会在下一帧被
 //! 静默取消。按职责拆成两组：
-//! - [`BackgroundTasks`]：可被替换/取消的异步任务（采样、同步、密钥生成）；
+//! - [`BackgroundTasks`]：可被替换/取消的异步任务（采样、同步）；
 //! - [`PanelSubscriptions`]：实体事件订阅（面板发意图、外壳在此接收）。
 //!
 //! 两者的生命周期语义不同：任务可以被“顶掉”，订阅必须一直存活到实体销毁。
@@ -19,8 +19,6 @@ use transom_core::SessionId;
 pub(crate) struct BackgroundTasks {
     pub(crate) probe_expiry: HashMap<SessionId, Task<()>>,
     pub(crate) monitor: Option<Task<()>>,
-    /// 密钥生成任务。
-    pub(crate) keygen: Option<Task<()>>,
     pub(crate) git_sync: Option<Task<()>>,
     pub(crate) sync_pull: Option<Task<()>>,
     /// 首帧稳定后的升级确认任务：延迟执行，避免把"窗口刚创建"误判为健康运行。
@@ -32,7 +30,6 @@ impl BackgroundTasks {
         Self {
             probe_expiry: HashMap::new(),
             monitor: None,
-            keygen: None,
             git_sync: None,
             sync_pull: None,
             update_confirm: None,
@@ -48,6 +45,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     pub(crate) settings: Option<Subscription>,
     pub(crate) known_hosts: Option<Subscription>,
+    /// 密钥向导：状态栏提示与命令发送失败由外壳处理。
+    pub(crate) key_wizard: Option<Subscription>,
     /// 备份弹窗结果：目录合并与状态栏提示由外壳处理。
     pub(crate) backup: Option<Subscription>,
     /// 审计查看器：状态栏提示、错误与“打开设置”意图由外壳处理。
@@ -67,6 +66,7 @@ impl PanelSubscriptions {
             forward: HashMap::new(),
             settings: None,
             known_hosts: None,
+            key_wizard: None,
             backup: None,
             audit_viewer: None,
             diff_viewer: None,

@@ -165,8 +165,8 @@ pub(crate) use stack::OpenModals;
 
 impl ModalKind {
     /// 弹窗体：内容与页脚仍由各领域自己渲染。
-    /// 设置、已知主机与备份弹窗的状态归实体，先克隆句柄再进入 `update`，
-    /// 其它弹窗直接读外壳。
+    /// 设置、已知主机、备份、审计查看器与密钥向导弹窗的状态归实体，先克隆
+    /// 句柄再进入 `update`，其它弹窗直接读外壳。
     ///
     /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到实体的可变
     /// `update`”这类借用冲突：实体分支先克隆句柄、立即结束外壳借用。
@@ -192,6 +192,16 @@ impl ModalKind {
         if self == ModalKind::AuditViewer {
             let view = app.read(cx).state.modals.tools.audit_viewer.clone();
             return view.update(cx, |view, cx| view.render_body(cx, p));
+        }
+        if self == ModalKind::KeyWizard {
+            let (view, targets) = {
+                let shell = app.read(cx);
+                (
+                    shell.state.modals.tools.key_wizard.clone(),
+                    shell.state.key_targets(),
+                )
+            };
+            return view.update(cx, |view, cx| view.render_body(&targets, cx, p));
         }
         let shell = app.read(cx);
         self.render_shell_body(shell, app, window, cx, p)
@@ -293,13 +303,8 @@ impl ModalKind {
             ModalKind::SnippetForm => shell.render_snippet_form_body(app, window, cx, p),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::KnownHosts => div().into_any_element(),
-            ModalKind::KeyWizard => {
-                let view = shell.state.modals.tools.key_wizard.read(cx);
-                match view.state() {
-                    Some(state) => shell.render_key_wizard_body(state, app, window, cx, p),
-                    None => div().into_any_element(),
-                }
-            }
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::KeyWizard => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::BackupPrompt => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。

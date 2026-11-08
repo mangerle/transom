@@ -767,6 +767,42 @@ fn backup_prompt_is_owned_by_entity() {
     );
 }
 
+/// 密钥向导必须由实体持有：状态、在途生成任务与渲染都归 `KeyWizardView`，
+/// 旧的外壳动作与 `TaskHub` 任务槽不得复活。外壳只消费事件并注入部署目标。
+#[test]
+fn key_wizard_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("key_wizard: Entity<KeyWizardView>"),
+        "ModalHub 的 key_wizard 必须持有 Entity<KeyWizardView>"
+    );
+    let task_hub =
+        std::fs::read_to_string(root.join("src/app/task_hub.rs")).expect("读取 task_hub.rs 失败");
+    assert!(
+        !task_hub.contains("keygen: Option<Task<()>>"),
+        "密钥生成任务句柄必须归实体，TaskHub 不得保留 keygen 槽位"
+    );
+    let entity =
+        std::fs::read_to_string(root.join("src/keys/entity.rs")).expect("读取密钥实体失败");
+    assert!(
+        entity.contains("pub(crate) struct KeyWizardView")
+            && entity.contains("task: Option<Task<()>>"),
+        "KeyWizardView 必须在 keys/entity.rs 持有状态与任务句柄"
+    );
+    let keys_mod =
+        std::fs::read_to_string(root.join("src/keys/mod.rs")).expect("读取 keys/mod.rs 失败");
+    assert!(
+        !keys_mod.contains("impl AppShell"),
+        "密钥向导的旧外壳方法不得复活，跨域提示走 KeyWizardEvent"
+    );
+    assert!(
+        !root.join("src/keys/view.rs").exists(),
+        "旧渲染文件 keys/view.rs 已迁入 keys/render.rs，不得复活"
+    );
+}
+
 /// 搁置项必须走控制平面：UI 不得直接构造 git 进程或读写搁置项存储。
 #[test]
 fn shelf_operations_use_command_bus() {

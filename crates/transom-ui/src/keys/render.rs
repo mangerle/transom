@@ -1,7 +1,12 @@
 //! 密钥生成与管理向导的 GPUI 视图。
+//!
+//! 渲染期实体已被租借，因此这里只读 `state()`；按钮回调统一经 `cx.listener`
+//! 回到 [`KeyWizardView`]。部署目标属于外壳的工作区状态，由调用方以
+//! `&[KeyTarget]` 注入，实体不在渲染中反查外壳。
 
-use super::keygen::KeyAlgorithm;
-use crate::app::AppShell;
+use super::entity::KeyWizardView;
+use super::keygen::{KeyAlgorithm, PublicKeyInfo};
+use super::state::{KeyTarget, KeyWizardState};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, Selectable, h_flex, v_flex};
@@ -10,37 +15,33 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
-impl AppShell {
-    pub(crate) fn render_key_wizard_body(
+impl KeyWizardView {
+    /// 弹窗主体：生成区、公钥列表、部署区与页脚。
+    pub(crate) fn render_body(
         &self,
-        state: &crate::keys::KeyWizardState,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        cx: &App,
+        targets: &[KeyTarget],
+        cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let generate = self.render_key_generate_section(state, app, p, cx);
-        let list = self.render_key_list_section(state, app, p, cx);
-        let deploy = self.render_key_deploy_section(state, app, p, cx);
-        let message = state.message.clone();
-        let error = state.error.clone();
-
+        let Some(state) = self.state() else {
+            return div().into_any_element();
+        };
         let content = v_flex()
             .id(ElementId::Name("key-wizard-content".into()))
             .gap_4()
             .max_h(px(470.0))
             .overflow_y_scroll()
-            .child(generate)
-            .child(list)
-            .child(deploy)
-            .when_some(message, |this, message| {
+            .child(render_generate_section(state, cx, p))
+            .child(render_list_section(state, cx, p))
+            .child(render_deploy_section(state, targets, cx, p))
+            .when_some(state.message.clone(), |this, message| {
                 this.child(crate::widgets::notice(
                     crate::widgets::NoticeKind::Success,
                     message,
                     p,
                 ))
             })
-            .when_some(error, |this, error| {
+            .when_some(state.error.clone(), |this, error| {
                 this.child(crate::widgets::notice(
                     crate::widgets::NoticeKind::Error,
                     error,
@@ -51,10 +52,7 @@ impl AppShell {
         let footer = Button::new("close-key-wizard")
             .ghost()
             .label(rust_i18n::t!("app.close").to_string())
-            .on_click(crate::dialog_host::on_event(
-                app,
-                |this, _: &ClickEvent, _, cx| this.close_key_wizard(cx),
-            ));
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx)));
 
         crate::widgets::dialog_body(
             "key-wizard-modal",
@@ -64,171 +62,158 @@ impl AppShell {
             Some(footer),
         )
     }
-    fn render_key_generate_section(
-        &self,
-        state: &crate::keys::KeyWizardState,
-        app: &Entity<AppShell>,
-        p: &Palette,
-        _cx: &App,
-    ) -> AnyElement {
-        let current_algorithm = state.algorithm;
+}
 
-        v_flex()
-            .gap_3()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("keys.generate_title").to_string()),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("keys.algorithm").to_string()),
-                    )
-                    .children(
-                        [
-                            ("key-alg-ed25519", KeyAlgorithm::Ed25519),
-                            ("key-alg-rsa", KeyAlgorithm::Rsa),
-                        ]
-                        .into_iter()
-                        .map(|(id, algorithm)| {
-                            Button::new(id)
-                                .small()
-                                .label(algorithm.label())
-                                .selected(current_algorithm == algorithm)
-                                .on_click(crate::dialog_host::on_event(
-                                    app,
-                                    move |this, _: &ClickEvent, window, cx| {
-                                        this.select_key_algorithm(algorithm, window, cx);
-                                    },
-                                ))
-                        }),
-                    ),
-            )
-            .child(key_generate_fields(state, app, p))
-            .into_any_element()
-    }
-
-    fn render_key_list_section(
-        &self,
-        state: &crate::keys::KeyWizardState,
-        app: &Entity<AppShell>,
-        p: &Palette,
-        _cx: &App,
-    ) -> AnyElement {
-        let keys = state.keys.clone();
-        let selected = state.selected;
-        let rows: Vec<AnyElement> = keys
-            .into_iter()
-            .enumerate()
-            .map(|(index, key)| key_row(index, &key, selected == Some(index), app, p))
-            .collect();
-
-        v_flex()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("keys.existing_title").to_string()),
-            )
-            .when(rows.is_empty(), |this| {
-                this.child(
+/// 生成区：算法切换与注释/路径/口令字段。
+fn render_generate_section(
+    state: &KeyWizardState,
+    cx: &mut Context<KeyWizardView>,
+    p: &Palette,
+) -> AnyElement {
+    let current_algorithm = state.algorithm;
+    v_flex()
+        .gap_3()
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child(rust_i18n::t!("keys.generate_title").to_string()),
+        )
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
                     div()
                         .text_xs()
                         .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("keys.empty").to_string()),
+                        .child(rust_i18n::t!("keys.algorithm").to_string()),
                 )
-            })
-            .children(rows)
-            .into_any_element()
-    }
+                .children(
+                    [
+                        ("key-alg-ed25519", KeyAlgorithm::Ed25519),
+                        ("key-alg-rsa", KeyAlgorithm::Rsa),
+                    ]
+                    .into_iter()
+                    .map(|(id, algorithm)| {
+                        Button::new(id)
+                            .small()
+                            .label(algorithm.label())
+                            .selected(current_algorithm == algorithm)
+                            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                                this.select_algorithm(algorithm, window, cx);
+                            }))
+                    }),
+                ),
+        )
+        .child(key_generate_fields(state, cx, p))
+        .into_any_element()
+}
 
-    fn render_key_deploy_section(
-        &self,
-        state: &crate::keys::KeyWizardState,
-        app: &Entity<AppShell>,
-        p: &Palette,
-        _cx: &App,
-    ) -> AnyElement {
-        let selected_key = state
-            .selected
-            .and_then(|index| state.keys.get(index))
-            .cloned();
-        let targets = self.state.key_targets();
+/// 公钥清单区：每行可选，选中项显示勾选标记。
+fn render_list_section(
+    state: &KeyWizardState,
+    cx: &mut Context<KeyWizardView>,
+    p: &Palette,
+) -> AnyElement {
+    let selected = state.selected;
+    let rows: Vec<AnyElement> = state
+        .keys
+        .iter()
+        .enumerate()
+        .map(|(index, key)| key_row(index, key, selected == Some(index), cx, p))
+        .collect();
 
-        let selected_summary = selected_key
-            .as_ref()
-            .map(|key| selected_key_summary(app, p, key));
-
-        let deploy_buttons: Vec<AnyElement> = targets
-            .into_iter()
-            .map(|target| {
-                let label =
-                    rust_i18n::t!("keys.deploy_to", name = target.title.clone()).to_string();
-                Button::new(ElementId::Name(
-                    format!("deploy-key-{}", target.tab_id).into(),
-                ))
-                .small()
-                .icon(IconName::Server)
-                .label(label)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        this.deploy_selected_key(target.clone(), cx);
-                    },
-                ))
-                .into_any_element()
-            })
-            .collect();
-
-        v_flex()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(rust_i18n::t!("keys.deploy_title").to_string()),
-            )
-            .when_some(selected_summary, |this, summary| this.child(summary))
-            .when(selected_key.is_none(), |this| {
-                this.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("keys.select_first").to_string()),
-                )
-            })
-            .child(
+    v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child(rust_i18n::t!("keys.existing_title").to_string()),
+        )
+        .when(rows.is_empty(), |this| {
+            this.child(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("keys.deploy_hint").to_string()),
+                    .child(rust_i18n::t!("keys.empty").to_string()),
             )
-            .when(deploy_buttons.is_empty(), |this| {
-                this.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("keys.no_connections").to_string()),
-                )
-            })
-            .children(deploy_buttons)
+        })
+        .children(rows)
+        .into_any_element()
+}
+
+/// 部署区：已选公钥摘要、目标按钮与空态提示。
+fn render_deploy_section(
+    state: &KeyWizardState,
+    targets: &[KeyTarget],
+    cx: &mut Context<KeyWizardView>,
+    p: &Palette,
+) -> AnyElement {
+    let selected_key = state.selected.and_then(|index| state.keys.get(index));
+    let selected_summary = selected_key.map(|key| selected_key_summary(key, cx, p));
+
+    let deploy_buttons: Vec<AnyElement> = targets
+        .iter()
+        .map(|target| {
+            let label = rust_i18n::t!("keys.deploy_to", name = target.title.clone()).to_string();
+            Button::new(ElementId::Name(
+                format!("deploy-key-{}", target.tab_id).into(),
+            ))
+            .small()
+            .icon(IconName::Server)
+            .label(label)
+            .on_click(cx.listener({
+                let target = target.clone();
+                move |this, _: &ClickEvent, _, cx| {
+                    this.deploy_selected_key(&target, cx);
+                }
+            }))
             .into_any_element()
-    }
+        })
+        .collect();
+
+    v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child(rust_i18n::t!("keys.deploy_title").to_string()),
+        )
+        .when_some(selected_summary, |this, summary| this.child(summary))
+        .when(selected_key.is_none(), |this| {
+            this.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("keys.select_first").to_string()),
+            )
+        })
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("keys.deploy_hint").to_string()),
+        )
+        .when(deploy_buttons.is_empty(), |this| {
+            this.child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("keys.no_connections").to_string()),
+            )
+        })
+        .children(deploy_buttons)
+        .into_any_element()
 }
 
 /// 已选公钥摘要：文件名、指纹与复制/导出动作。
 fn selected_key_summary(
-    app: &Entity<AppShell>,
+    key: &PublicKeyInfo,
+    cx: &mut Context<KeyWizardView>,
     p: &Palette,
-    key: &crate::keys::PublicKeyInfo,
 ) -> AnyElement {
     let file_name = key
         .path
@@ -265,35 +250,29 @@ fn selected_key_summary(
                         .small()
                         .icon(IconName::Copy)
                         .label(rust_i18n::t!("common.copy").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, _: &ClickEvent, _, cx| {
-                                this.copy_selected_key(cx);
-                            },
-                        )),
+                        .on_click(
+                            cx.listener(|this, _: &ClickEvent, _, cx| this.copy_selected_key(cx)),
+                        ),
                 )
                 .child(
                     Button::new("export-selected-public-key")
                         .small()
                         .icon(IconName::Download)
                         .label(rust_i18n::t!("keys.export").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, _: &ClickEvent, _, cx| {
-                                this.export_selected_key(cx);
-                            },
-                        )),
+                        .on_click(
+                            cx.listener(|this, _: &ClickEvent, _, cx| this.export_selected_key(cx)),
+                        ),
                 ),
         )
         .into_any_element()
 }
 
-/// 单个公钥行：文件名、指纹/路径、选择态与当前标记。
+/// 单个公钥行：文件名、指纹/注释、选择态与当前标记。
 fn key_row(
     index: usize,
-    key: &crate::keys::PublicKeyInfo,
+    key: &PublicKeyInfo,
     is_selected: bool,
-    app: &Entity<AppShell>,
+    cx: &mut Context<KeyWizardView>,
     p: &Palette,
 ) -> AnyElement {
     let file_name = key
@@ -329,12 +308,9 @@ fn key_row(
                 style.border_color(p.muted_foreground)
             }
         })
-        .on_click(crate::dialog_host::on_event(
-            app,
-            move |this, _: &ClickEvent, _, cx| {
-                this.select_key(index, cx);
-            },
-        ))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.select_key(index, cx);
+        }))
         .child(
             Icon::new(IconName::KeyRound)
                 .small()
@@ -399,8 +375,8 @@ fn key_row(
 
 /// 生成区字段：注释、路径、口令与生成按钮。
 fn key_generate_fields(
-    state: &crate::keys::KeyWizardState,
-    app: &Entity<AppShell>,
+    state: &KeyWizardState,
+    cx: &mut Context<KeyWizardView>,
     p: &Palette,
 ) -> AnyElement {
     v_flex()
@@ -442,12 +418,9 @@ fn key_generate_fields(
                             rust_i18n::t!("keys.generate").to_string()
                         })
                         .disabled(state.generating)
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, _: &ClickEvent, window, cx| {
-                                this.generate_key(window, cx);
-                            },
-                        )),
+                        .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                            this.generate_key(window, cx);
+                        })),
                 ),
         )
         .into_any_element()
