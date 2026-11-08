@@ -13,6 +13,7 @@
 //! - 取不到地址（无远端、形态不认识、提交号非十六进制）返回 `None`，界面据此提示，
 //!   而不是拼一个看起来能用的假地址。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, run, run_allow_fail};
 use std::path::Path;
@@ -116,8 +117,12 @@ fn is_path_char(c: char) -> bool {
 ///
 /// 取哪个远端：优先 `origin`，否则按 `git remote` 给出的顺序取第一个——与
 /// IDEA 一样只浏览一个主远端，不做多远端选择器。
-pub(crate) async fn commit_url(root: &Path, oid: &str) -> Result<Option<String>, GitError> {
-    let output = run(root, &["remote"], RunOptions::default()).await?;
+pub(crate) async fn commit_url(
+    root: &Path,
+    config: &GitConfig,
+    oid: &str,
+) -> Result<Option<String>, GitError> {
+    let output = run(root, config, &["remote"], RunOptions::default()).await?;
     let names = output.lines();
     let Some(selected) = names
         .iter()
@@ -128,6 +133,7 @@ pub(crate) async fn commit_url(root: &Path, oid: &str) -> Result<Option<String>,
     };
     let url = run_allow_fail(
         root,
+        config,
         &["remote", "get-url", selected.as_str()],
         RunOptions::default(),
     )

@@ -9,6 +9,7 @@
 //! - 索引侧与提交侧统一走 `git show <rev>:<path>`：由 git 负责解引用与
 //!   子模块边界，本层不碰对象库文件。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, run_allow_fail};
 use crate::types::DiffContent;
@@ -21,7 +22,12 @@ pub const MAX_SIDE_BYTES: usize = 4 * 1024 * 1024;
 pub type Side = transom_core::GitSide;
 
 /// 读取一侧内容；该侧不存在文件时返回 `None`。
-async fn side_content(root: &Path, side: &Side, path: &str) -> Result<Option<Vec<u8>>, GitError> {
+async fn side_content(
+    root: &Path,
+    config: &GitConfig,
+    side: &Side,
+    path: &str,
+) -> Result<Option<Vec<u8>>, GitError> {
     match side {
         Side::Worktree => {
             let absolute = crate::repo::resolve_in(root, path)?;
@@ -34,15 +40,21 @@ async fn side_content(root: &Path, side: &Side, path: &str) -> Result<Option<Vec
                 }),
             }
         }
-        Side::Index => show(root, &format!(":{path}"), path).await,
-        Side::Commit(oid) => show(root, &format!("{oid}:{path}"), path).await,
+        Side::Index => show(root, config, &format!(":{path}"), path).await,
+        Side::Commit(oid) => show(root, config, &format!("{oid}:{path}"), path).await,
     }
 }
 
 /// `git show <rev>:<path>`；对象不存在按「该侧无此文件」处理。
-async fn show(root: &Path, spec: &str, path: &str) -> Result<Option<Vec<u8>>, GitError> {
+async fn show(
+    root: &Path,
+    config: &GitConfig,
+    spec: &str,
+    path: &str,
+) -> Result<Option<Vec<u8>>, GitError> {
     let output = run_allow_fail(
         root,
+        config,
         &["show", "--end-of-options", spec],
         RunOptions::default(),
     )
@@ -60,12 +72,13 @@ async fn show(root: &Path, spec: &str, path: &str) -> Result<Option<Vec<u8>>, Gi
 /// 路径越出仓库根时返回 [`GitError::InvalidPath`]。
 pub(crate) async fn content(
     root: &Path,
+    config: &GitConfig,
     old: &Side,
     new: &Side,
     path: &str,
 ) -> Result<DiffContent, GitError> {
-    let old_bytes = side_content(root, old, path).await?;
-    let new_bytes = side_content(root, new, path).await?;
+    let old_bytes = side_content(root, config, old, path).await?;
+    let new_bytes = side_content(root, config, new, path).await?;
     let binary =
         old_bytes.as_deref().is_some_and(is_binary) || new_bytes.as_deref().is_some_and(is_binary);
     let (old_text, old_cut) = decode(old_bytes);

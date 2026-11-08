@@ -18,6 +18,7 @@
 //! - 进度按行交出，git 用 `\\r` 刷同一行的百分比，这里按换行切分，所以百分比
 //!   刷新可能成段到达；调用方（控制器）负责按时间窗合并，避免把事件通道打满。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, build_command, display_command, exit_code};
 use std::collections::VecDeque;
@@ -52,6 +53,7 @@ pub async fn clone_with_progress(
     dest: &Path,
     depth: Option<u32>,
     cancel: &AtomicBool,
+    config: &GitConfig,
     mut on_line: impl FnMut(&str),
 ) -> Result<(), GitError> {
     if depth == Some(0) {
@@ -78,7 +80,7 @@ pub async fn clone_with_progress(
     }
     args.extend(["--", url, dest_text.as_str()]);
     let display = display_command(&args);
-    let mut command = build_command(parent, &args, &RunOptions::write())?;
+    let mut command = build_command(parent, config, &args, &RunOptions::write())?;
     // 克隆的 stdout 没有语义，关掉它只留 stderr 一路管道。
     command.stdout(Stdio::null());
     let mut child = command.spawn().map_err(|source| GitError::Spawn {
@@ -196,6 +198,7 @@ fn remember(tail: &mut VecDeque<String>, line: &str) {
 #[cfg(test)]
 mod tests {
     use super::clone_with_progress;
+    use crate::config::GitConfig;
     use std::path::PathBuf;
     use std::sync::atomic::AtomicBool;
 
@@ -233,9 +236,16 @@ mod tests {
         let url = format!("file://{}", source.display());
 
         let mut lines: Vec<String> = Vec::new();
-        let outcome = clone_with_progress(&url, &dest, None, &AtomicBool::new(false), |line| {
-            lines.push(line.to_string());
-        })
+        let outcome = clone_with_progress(
+            &url,
+            &dest,
+            None,
+            &AtomicBool::new(false),
+            &GitConfig::default(),
+            |line| {
+                lines.push(line.to_string());
+            },
+        )
         .await;
 
         assert!(outcome.is_ok(), "本地克隆应当成功: {outcome:?}");
@@ -266,6 +276,7 @@ mod tests {
             &dest,
             None,
             &AtomicBool::new(false),
+            &GitConfig::default(),
             |_| {},
         )
         .await
@@ -288,6 +299,7 @@ mod tests {
             &dest,
             None,
             &cancel,
+            &GitConfig::default(),
             |_| {},
         )
         .await
@@ -310,6 +322,7 @@ mod tests {
             &dest,
             Some(0),
             &AtomicBool::new(false),
+            &GitConfig::default(),
             |_| {},
         )
         .await

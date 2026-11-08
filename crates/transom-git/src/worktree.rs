@@ -6,15 +6,17 @@
 //! 锁定原因走 C 风格引号（`\"`、`\\`、非 ASCII 用八位转义，本机 git 2.53 实测），
 //! 而 `prunable` 的原因是裸文本到行尾——两者规则不同，必须分开处理。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, run};
 use std::path::{Path, PathBuf};
 use transom_core::WorktreeEntry;
 
 /// 列出全部工作树（主工作树在首）。
-pub(crate) async fn list(root: &Path) -> Result<Vec<WorktreeEntry>, GitError> {
+pub(crate) async fn list(root: &Path, config: &GitConfig) -> Result<Vec<WorktreeEntry>, GitError> {
     let output = crate::process::run(
         root,
+        config,
         &["worktree", "list", "--porcelain"],
         RunOptions::default(),
     )
@@ -150,31 +152,47 @@ fn unquote(raw: &str) -> String {
 }
 
 /// 锁定一个工作树（可带原因）：锁定后 git 拒绝删除，也不会被 prune 掉。
-pub(crate) async fn lock(root: &Path, path: &str, reason: Option<&str>) -> Result<(), GitError> {
+pub(crate) async fn lock(
+    root: &Path,
+    config: &GitConfig,
+    path: &str,
+    reason: Option<&str>,
+) -> Result<(), GitError> {
     let mut args: Vec<&str> = vec!["worktree", "lock"];
     if let Some(reason) = reason {
         args.push("--reason");
         args.push(reason);
     }
     args.push(path);
-    run(root, &args, RunOptions::write()).await?;
+    run(root, config, &args, RunOptions::write()).await?;
     Ok(())
 }
 
 /// 解锁一个工作树。
-pub(crate) async fn unlock(root: &Path, path: &str) -> Result<(), GitError> {
-    run(root, &["worktree", "unlock", path], RunOptions::write()).await?;
+pub(crate) async fn unlock(root: &Path, config: &GitConfig, path: &str) -> Result<(), GitError> {
+    run(
+        root,
+        config,
+        &["worktree", "unlock", path],
+        RunOptions::write(),
+    )
+    .await?;
     Ok(())
 }
 
 /// 删除一个工作树的登记（不删文件由 git 自己处理：`remove` 会删目录）。
-pub(crate) async fn remove(root: &Path, path: &str, force: bool) -> Result<(), GitError> {
+pub(crate) async fn remove(
+    root: &Path,
+    config: &GitConfig,
+    path: &str,
+    force: bool,
+) -> Result<(), GitError> {
     let mut args: Vec<&str> = vec!["worktree", "remove"];
     if force {
         args.push("--force");
     }
     args.push(path);
-    run(root, &args, RunOptions::write()).await?;
+    run(root, config, &args, RunOptions::write()).await?;
     Ok(())
 }
 

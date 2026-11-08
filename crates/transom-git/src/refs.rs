@@ -7,6 +7,7 @@
 //!   分支多的仓库会明显卡顿；当前分支的领先/落后已由 `status` 的
 //!   `# branch.ab` 头行给出，列表只需要上游名字。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::fields::{lossy, split_limited};
 use crate::process::{RunOptions, run};
@@ -26,13 +27,17 @@ fn trim_leading_newlines(record: &[u8]) -> &[u8] {
 const RECORD: &str = "%1e";
 
 /// 列出本地与远程分支。
-pub(crate) async fn branches(root: &Path) -> Result<Vec<BranchEntry>, GitError> {
+pub(crate) async fn branches(
+    root: &Path,
+    config: &GitConfig,
+) -> Result<Vec<BranchEntry>, GitError> {
     let format = format!(
         "%(refname){}%(objectname){}%(HEAD){}%(upstream:short){RECORD}",
         "%1f", "%1f", "%1f"
     );
     let output = run(
         root,
+        config,
         &[
             "for-each-ref",
             &format!("--format={format}"),
@@ -85,11 +90,12 @@ pub(crate) async fn branches(root: &Path) -> Result<Vec<BranchEntry>, GitError> 
 }
 
 /// 列出标签，附注标签解引用到目标提交。
-pub(crate) async fn tags(root: &Path) -> Result<Vec<TagEntry>, GitError> {
+pub(crate) async fn tags(root: &Path, config: &GitConfig) -> Result<Vec<TagEntry>, GitError> {
     let format =
         format!("%(refname:short)%1f%(objectname)%1f%(*objectname)%1f%(contents:subject){RECORD}");
     let output = run(
         root,
+        config,
         &["for-each-ref", &format!("--format={format}"), "refs/tags"],
         RunOptions::default(),
     )

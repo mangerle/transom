@@ -7,7 +7,7 @@
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
-use transom_git::{ChangeCode, HeadState, LogQuery, LogScope, Repo, Side, init, probe};
+use transom_git::{ChangeCode, GitConfig, HeadState, LogQuery, LogScope, Repo, Side, init, probe};
 
 /// 在指定目录跑一次 git，失败即 panic 并带上 stderr。
 ///
@@ -793,14 +793,21 @@ async fn linked_worktree_is_detected() {
         ],
     );
     let repo = Repo::open(&target).await.expect("打开链接工作树");
-    let info = probe(&target).await.expect("探测链接工作树");
+    let info = probe(&target, &GitConfig::default())
+        .await
+        .expect("探测链接工作树");
     assert!(info.linked_worktree, "链接工作树必须被识别");
     assert_eq!(info.toplevel, target.canonicalize().unwrap());
     assert_eq!(
         repo.status(false).await.expect("状态采集成功").head,
         HeadState::OnBranch("wt-branch".into())
     );
-    assert!(!probe(dir.path()).await.expect("探测主仓库").linked_worktree);
+    assert!(
+        !probe(dir.path(), &GitConfig::default())
+            .await
+            .expect("探测主仓库")
+            .linked_worktree
+    );
 }
 
 #[tokio::test]
@@ -808,7 +815,9 @@ async fn init_creates_a_usable_repository() {
     let dir = TempDir::new().expect("临时目录");
     let target = dir.path().join("fresh");
     std::fs::create_dir(&target).expect("创建目录");
-    let repo = init(&target).await.expect("初始化仓库");
+    let repo = init(&target, &GitConfig::default())
+        .await
+        .expect("初始化仓库");
     assert!(
         repo.status(false)
             .await

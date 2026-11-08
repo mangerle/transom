@@ -10,6 +10,7 @@
 //!   那是另一条能力；这里放出 `edit` 只会把用户带进界面处理不完的状态；
 //! - 冲突时不自动中止：git 会停在冲突处，界面保留既有的「中止变基」入口，
 //!   由用户决定继续处理还是回退——自动回滚会吞掉用户本可以手工解决的冲突。
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::fields::{lossy, split_limited};
 use crate::process::{RunOptions, run};
@@ -26,11 +27,16 @@ const FIELD: u8 = 0x1f;
 ///
 /// # Errors
 /// 基线不是合法提交号、子进程失败或输出形态不符时返回 [`GitError`]。
-pub(crate) async fn todo(root: &Path, base: &str) -> Result<Vec<GitRebaseStep>, GitError> {
+pub(crate) async fn todo(
+    root: &Path,
+    config: &GitConfig,
+    base: &str,
+) -> Result<Vec<GitRebaseStep>, GitError> {
     check_rev(base)?;
     let range = format!("{base}..HEAD");
     let output = run(
         root,
+        config,
         &[
             "log",
             "--reverse",
@@ -63,6 +69,7 @@ pub(crate) fn todo_text(steps: &[GitRebaseStep]) -> String {
 /// 由界面「中止变基」收尾。
 pub(crate) async fn run_todo(
     root: &Path,
+    config: &GitConfig,
     base: &str,
     steps: &[GitRebaseStep],
 ) -> Result<(), GitError> {
@@ -86,6 +93,7 @@ pub(crate) async fn run_todo(
     })?;
     run(
         root,
+        config,
         &["rebase", "-i", "--end-of-options", base],
         RunOptions::with_todo(file.path().to_path_buf()),
     )

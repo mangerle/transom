@@ -8,6 +8,7 @@
 //! - `apply` 与 `pop` 分开暴露：前者保留栈项，后者弹出。IDEA 的「应用」和
 //!   「多次应用」就是这两条，合成一个按钮会让人担心栈项被吃掉。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::fields::{lossy, split_limited};
 use crate::process::{RunOptions, run, run_allow_fail};
@@ -24,8 +25,14 @@ const FIELD: u8 = 0x1f;
 const FORMAT: &str = "--pretty=format:%x1e%gd%x1f%gs";
 
 /// 列出全部搁置项（栈顶在前）。
-pub(crate) async fn list(root: &Path) -> Result<Vec<StashEntry>, GitError> {
-    let output = run(root, &["stash", "list", FORMAT], RunOptions::default()).await?;
+pub(crate) async fn list(root: &Path, config: &GitConfig) -> Result<Vec<StashEntry>, GitError> {
+    let output = run(
+        root,
+        config,
+        &["stash", "list", FORMAT],
+        RunOptions::default(),
+    )
+    .await?;
     let mut entries = Vec::new();
     for record in output.stdout.split(|b| *b == 0x1e) {
         // `--pretty=format:` 在记录之间插入换行，先剥掉这一个。
@@ -58,6 +65,7 @@ pub(crate) async fn list(root: &Path) -> Result<Vec<StashEntry>, GitError> {
 /// 新建搁置项；`include_untracked` 为真时连未跟踪文件一起收。
 pub(crate) async fn save(
     root: &Path,
+    config: &GitConfig,
     message: &str,
     include_untracked: bool,
 ) -> Result<(), GitError> {
@@ -69,25 +77,43 @@ pub(crate) async fn save(
         args.push("-m");
         args.push(message);
     }
-    run(root, &args, RunOptions::write()).await?;
+    run(root, config, &args, RunOptions::write()).await?;
     Ok(())
 }
 
 /// 应用一个搁置项但保留栈项。
-pub(crate) async fn apply(root: &Path, selector: &str) -> Result<(), GitError> {
-    run(root, &["stash", "apply", selector], RunOptions::write()).await?;
+pub(crate) async fn apply(root: &Path, config: &GitConfig, selector: &str) -> Result<(), GitError> {
+    run(
+        root,
+        config,
+        &["stash", "apply", selector],
+        RunOptions::write(),
+    )
+    .await?;
     Ok(())
 }
 
 /// 应用并弹出栈项。
-pub(crate) async fn pop(root: &Path, selector: &str) -> Result<(), GitError> {
-    run(root, &["stash", "pop", selector], RunOptions::write()).await?;
+pub(crate) async fn pop(root: &Path, config: &GitConfig, selector: &str) -> Result<(), GitError> {
+    run(
+        root,
+        config,
+        &["stash", "pop", selector],
+        RunOptions::write(),
+    )
+    .await?;
     Ok(())
 }
 
 /// 丢弃一个搁置项（不可恢复，界面必须已二次确认）。
-pub(crate) async fn drop(root: &Path, selector: &str) -> Result<(), GitError> {
-    run(root, &["stash", "drop", selector], RunOptions::write()).await?;
+pub(crate) async fn drop(root: &Path, config: &GitConfig, selector: &str) -> Result<(), GitError> {
+    run(
+        root,
+        config,
+        &["stash", "drop", selector],
+        RunOptions::write(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -100,9 +126,14 @@ pub(crate) async fn drop(root: &Path, selector: &str) -> Result<(), GitError> {
 /// - 额外一次 `ls-tree stash@{n}^3` 判定哪些条目住在未跟踪侧：`A` 状态本身分不出
 ///   「先 add 再搁置」与「未跟踪被收进去」，而两者的内容位于不同的树，
 ///   猜错就是一张空差异。没有第三父提交时该命令非零退出，按空集处理。
-pub(crate) async fn files(root: &Path, selector: &str) -> Result<Vec<StashFile>, GitError> {
+pub(crate) async fn files(
+    root: &Path,
+    config: &GitConfig,
+    selector: &str,
+) -> Result<Vec<StashFile>, GitError> {
     let output = run(
         root,
+        config,
         &[
             "stash",
             "show",
@@ -119,7 +150,7 @@ pub(crate) async fn files(root: &Path, selector: &str) -> Result<Vec<StashFile>,
             command: format!("stash show {selector}"),
             reason,
         })?;
-    let untracked = untracked_paths(root, selector).await?;
+    let untracked = untracked_paths(root, config, selector).await?;
     Ok(entries
         .into_iter()
         .map(|entry| {
@@ -135,10 +166,15 @@ pub(crate) async fn files(root: &Path, selector: &str) -> Result<Vec<StashFile>,
 }
 
 /// 未跟踪侧（`<selector>^3`）的文件集合；该搁置没带未跟踪文件时为空。
-async fn untracked_paths(root: &Path, selector: &str) -> Result<HashSet<String>, GitError> {
+async fn untracked_paths(
+    root: &Path,
+    config: &GitConfig,
+    selector: &str,
+) -> Result<HashSet<String>, GitError> {
     let spec = format!("{selector}^3");
     let output = run_allow_fail(
         root,
+        config,
         &["ls-tree", "-r", "--name-only", "-z", &spec],
         RunOptions::default(),
     )

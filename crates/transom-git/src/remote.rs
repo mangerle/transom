@@ -9,6 +9,7 @@
 //! - `worktree add` 的目录由 git 自己创建：应用只负责校验父目录存在，
 //!   避免两边对「已存在目录」的判定规则不一致。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, run, run_allow_fail};
 use std::path::Path;
@@ -25,15 +26,19 @@ fn network() -> RunOptions {
 }
 
 /// 拉取远端引用（不改工作区）。
-pub(crate) async fn fetch(root: &Path) -> Result<(), GitError> {
-    run(root, &["fetch", "--all", "--prune"], network()).await?;
+pub(crate) async fn fetch(root: &Path, config: &GitConfig) -> Result<(), GitError> {
+    run(root, config, &["fetch", "--all", "--prune"], network()).await?;
     Ok(())
 }
 
 use transom_core::{CommitEntry, GitPushOptions, PushTagsMode};
 
 /// 高级推送：支持自定义目标远端、目标分支、强推租约、标签模式与跳过钩子。
-pub(crate) async fn push_advanced(root: &Path, opts: &GitPushOptions) -> Result<(), GitError> {
+pub(crate) async fn push_advanced(
+    root: &Path,
+    config: &GitConfig,
+    opts: &GitPushOptions,
+) -> Result<(), GitError> {
     let mut args: Vec<String> = vec!["push".to_string()];
     if opts.force_with_lease {
         args.push("--force-with-lease".to_string());
@@ -49,7 +54,7 @@ pub(crate) async fn push_advanced(root: &Path, opts: &GitPushOptions) -> Result<
     let remote = match &opts.remote {
         Some(r) if !r.trim().is_empty() => r.trim().to_string(),
         _ => match &opts.branch {
-            Some(b) => upstream_remote(root, b).await,
+            Some(b) => upstream_remote(root, config, b).await,
             None => "origin".to_string(),
         },
     };
@@ -70,14 +75,20 @@ pub(crate) async fn push_advanced(root: &Path, opts: &GitPushOptions) -> Result<
     }
 
     let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    run(root, &str_args, network()).await?;
+    run(root, config, &str_args, network()).await?;
     Ok(())
 }
 
 /// 兼容传统调用的简单推送。
-pub(crate) async fn push(root: &Path, branch: Option<&str>, tags: bool) -> Result<(), GitError> {
+pub(crate) async fn push(
+    root: &Path,
+    config: &GitConfig,
+    branch: Option<&str>,
+    tags: bool,
+) -> Result<(), GitError> {
     push_advanced(
         root,
+        config,
         &GitPushOptions {
             branch: branch.map(str::to_string),
             tags: if tags {
@@ -94,6 +105,7 @@ pub(crate) async fn push(root: &Path, branch: Option<&str>, tags: bool) -> Resul
 /// 查询待推送到目标远端分支的提交列表（Outgoing Commits）。
 pub(crate) async fn outgoing_commits(
     root: &Path,
+    config: &GitConfig,
     branch: &str,
     remote: Option<&str>,
     remote_branch: Option<&str>,
@@ -104,7 +116,7 @@ pub(crate) async fn outgoing_commits(
 
     let target_remote = match remote {
         Some(r) if !r.trim().is_empty() => r.trim().to_string(),
-        _ => upstream_remote(root, branch).await,
+        _ => upstream_remote(root, config, branch).await,
     };
     let target_branch = match remote_branch {
         Some(b) if !b.trim().is_empty() => b.trim().to_string(),
@@ -116,6 +128,7 @@ pub(crate) async fn outgoing_commits(
 
     let has_remote_ref = match run_allow_fail(
         root,
+        config,
         &["rev-parse", "--verify", "--quiet", &remote_ref],
         RunOptions::default(),
     )
@@ -130,6 +143,7 @@ pub(crate) async fn outgoing_commits(
     } else {
         let has_upstream = match run_allow_fail(
             root,
+            config,
             &["rev-parse", "--verify", "--quiet", &upstream_ref],
             RunOptions::default(),
         )
@@ -143,6 +157,7 @@ pub(crate) async fn outgoing_commits(
         } else {
             let base_main = match run_allow_fail(
                 root,
+                config,
                 &["rev-parse", "--verify", "--quiet", "refs/heads/main"],
                 RunOptions::default(),
             )
@@ -169,7 +184,7 @@ pub(crate) async fn outgoing_commits(
         &range,
     ];
 
-    let output = match run_allow_fail(root, &args, RunOptions::default()).await {
+    let output = match run_allow_fail(root, config, &args, RunOptions::default()).await {
         Ok(out) if out.ok() => out,
         _ => {
             let fallback_args = [
@@ -181,7 +196,7 @@ pub(crate) async fn outgoing_commits(
                 "20",
                 branch,
             ];
-            run(root, &fallback_args, RunOptions::default()).await?
+            run(root, config, &fallback_args, RunOptions::default()).await?
         }
     };
 
@@ -198,24 +213,30 @@ pub(crate) async fn outgoing_commits(
 /// - 远端取该分支的上游（`<branch>@{upstream}` 的前半段），没有上游时退回
 ///   `origin`——这与命令行的 `git push origin` 默认一致，也比"让用户选远端"
 ///   少一次弹窗。
-pub(crate) async fn push_up_to(root: &Path, oid: &str, branch: &str) -> Result<(), GitError> {
+pub(crate) async fn push_up_to(
+    root: &Path,
+    config: &GitConfig,
+    oid: &str,
+    branch: &str,
+) -> Result<(), GitError> {
     if oid.is_empty() || !oid.chars().all(|c| c.is_ascii_hexdigit()) || branch.trim().is_empty() {
         return Err(GitError::InvalidPath {
             path: format!("{oid}:{branch}"),
             reason: "推送目标必须是提交号与分支名".into(),
         });
     }
-    let remote = upstream_remote(root, branch).await;
+    let remote = upstream_remote(root, config, branch).await;
     let refspec = format!("{oid}:refs/heads/{branch}");
-    run(root, &["push", &remote, &refspec], network()).await?;
+    run(root, config, &["push", &remote, &refspec], network()).await?;
     Ok(())
 }
 
 /// 分支的上游远端名；未设置上游时退回 `origin`。
-async fn upstream_remote(root: &Path, branch: &str) -> String {
+async fn upstream_remote(root: &Path, config: &GitConfig, branch: &str) -> String {
     let query = format!("{branch}@{{upstream}}");
     let output = match run_allow_fail(
         root,
+        config,
         &["rev-parse", "--abbrev-ref", "--symbolic-full-name", &query],
         RunOptions::default(),
     )
@@ -239,19 +260,19 @@ async fn upstream_remote(root: &Path, branch: &str) -> String {
 }
 
 /// 拉取并整合上游。
-pub(crate) async fn pull(root: &Path, rebase: bool) -> Result<(), GitError> {
+pub(crate) async fn pull(root: &Path, config: &GitConfig, rebase: bool) -> Result<(), GitError> {
     let args: Vec<&str> = if rebase {
         vec!["pull", "--rebase"]
     } else {
         vec!["pull"]
     };
-    run(root, &args, network()).await?;
+    run(root, config, &args, network()).await?;
     Ok(())
 }
 
 /// 远端名列表。
-pub(crate) async fn remotes(root: &Path) -> Result<Vec<String>, GitError> {
-    let output = run(root, &["remote"], RunOptions::default()).await?;
+pub(crate) async fn remotes(root: &Path, config: &GitConfig) -> Result<Vec<String>, GitError> {
+    let output = run(root, config, &["remote"], RunOptions::default()).await?;
     Ok(output
         .lines()
         .into_iter()
@@ -263,6 +284,7 @@ pub(crate) async fn remotes(root: &Path) -> Result<Vec<String>, GitError> {
 /// 新建工作树：`git worktree add -b <branch> <path> [start]`。
 pub(crate) async fn add_worktree(
     root: &Path,
+    config: &GitConfig,
     path: &str,
     branch: &str,
     start: Option<&str>,
@@ -271,6 +293,6 @@ pub(crate) async fn add_worktree(
     if let Some(start) = start {
         args.push(start);
     }
-    run(root, &args, RunOptions::write()).await?;
+    run(root, config, &args, RunOptions::write()).await?;
     Ok(())
 }

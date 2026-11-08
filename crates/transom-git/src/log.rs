@@ -13,6 +13,7 @@
 //! 代价与局限：正文里恰好含 `\x1f` 的提交会被多切一刀，解析时把多出的段并回
 //! 正文，不丢数据；`--grep` 走固定字符串匹配，正则检索暂不提供。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::fields::{lossy, split_limited};
 use crate::process::{RunOptions, run};
@@ -33,7 +34,11 @@ pub(crate) const FORMAT: &str = "%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%D%x1f%s%x
 ///
 /// # Errors
 /// 起始修订不存在、仓库状态异常或输出格式不认识时返回对应 [`GitError`]。
-pub(crate) async fn query(root: &Path, query: &LogQuery) -> Result<LogPage, GitError> {
+pub(crate) async fn query(
+    root: &Path,
+    config: &GitConfig,
+    query: &LogQuery,
+) -> Result<LogPage, GitError> {
     let mut args: Vec<String> = vec![
         "log".into(),
         format!("--pretty=format:{FORMAT}"),
@@ -78,7 +83,7 @@ pub(crate) async fn query(root: &Path, query: &LogQuery) -> Result<LogPage, GitE
     }
 
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = run(root, &refs, RunOptions::default()).await?;
+    let output = run(root, config, &refs, RunOptions::default()).await?;
     let mut page = parse_records(&output.stdout)?;
     if page.entries.len() > query.limit {
         page.entries.truncate(query.limit);
@@ -91,7 +96,11 @@ pub(crate) async fn query(root: &Path, query: &LogQuery) -> Result<LogPage, GitE
 ///
 /// 合并提交默认不产出改动（combined diff 语义），这里统一按「相对第一父提交」
 /// 展示，与 IntelliJ 的默认口径一致；根提交与空树比较。
-pub(crate) async fn commit_files(root: &Path, oid: &str) -> Result<Vec<CommitFile>, GitError> {
+pub(crate) async fn commit_files(
+    root: &Path,
+    config: &GitConfig,
+    oid: &str,
+) -> Result<Vec<CommitFile>, GitError> {
     let mut args: Vec<String> = vec![
         "diff-tree".into(),
         "--no-commit-id".into(),
@@ -99,14 +108,17 @@ pub(crate) async fn commit_files(root: &Path, oid: &str) -> Result<Vec<CommitFil
         "-r".into(),
         "-z".into(),
     ];
-    if repo::resolve(root, &format!("{oid}^1")).await?.is_some() {
+    if repo::resolve(root, config, &format!("{oid}^1"))
+        .await?
+        .is_some()
+    {
         args.push(format!("{oid}^1"));
     } else {
         args.push("--root".into());
     }
     args.push(oid.to_string());
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = run(root, &refs, RunOptions::default()).await?;
+    let output = run(root, config, &refs, RunOptions::default()).await?;
     parse_name_status(&output.stdout).map_err(|reason| GitError::Decode {
         command: "diff-tree".into(),
         reason,
@@ -114,8 +126,11 @@ pub(crate) async fn commit_files(root: &Path, oid: &str) -> Result<Vec<CommitFil
 }
 
 /// 跟踪文件清单：日志的路径过滤下拉需要它，一次 `ls-files` 足够。
-pub(crate) async fn tracked_files(root: &Path) -> Result<Vec<String>, GitError> {
-    let output = crate::process::run(root, &["ls-files"], RunOptions::default()).await?;
+pub(crate) async fn tracked_files(
+    root: &Path,
+    config: &GitConfig,
+) -> Result<Vec<String>, GitError> {
+    let output = crate::process::run(root, config, &["ls-files"], RunOptions::default()).await?;
     Ok(output
         .lines()
         .into_iter()

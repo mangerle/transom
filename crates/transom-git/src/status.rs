@@ -8,6 +8,7 @@
 //!   因此整段输出统一按 NUL 切分即可，无需区分行尾符）；
 //! - 解析函数只吃字节、不碰子进程，便于用真实 git 产出的样本做纯单元测试。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::fields::{lossy, split_limited};
 use crate::process::{RunOptions, run};
@@ -22,12 +23,16 @@ use std::path::Path;
 ///
 /// # Errors
 /// 目录不是仓库、git 不可用或输出格式不认识时返回对应错误。
-pub(crate) async fn current(root: &Path, include_ignored: bool) -> Result<RepoStatus, GitError> {
+pub(crate) async fn current(
+    root: &Path,
+    config: &GitConfig,
+    include_ignored: bool,
+) -> Result<RepoStatus, GitError> {
     let mut args = vec!["status", "--porcelain=v2", "--branch", "-z"];
     if include_ignored {
         args.push("--ignored=matching");
     }
-    let output = run(root, &args, RunOptions::default()).await?;
+    let output = run(root, config, &args, RunOptions::default()).await?;
     parse(&output.stdout)
 }
 

@@ -16,60 +16,13 @@
 //! - 依赖运行环境装有 git；未安装时以 [`GitError::Spawn`] 上报，界面提示安装；
 //! - 子进程启动开销约几毫秒，高频刷新靠调用方节流，本层不做缓存。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::RwLock;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
-
-static GIT_PROGRAM: RwLock<String> = RwLock::new(String::new());
-
-/// 全局 Git 提交作者配置（姓名与邮箱）。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct GitAuthorConfig {
-    pub name: String,
-    pub email: String,
-}
-
-static GIT_AUTHOR: RwLock<GitAuthorConfig> = RwLock::new(GitAuthorConfig {
-    name: String::new(),
-    email: String::new(),
-});
-
-/// 配置全局提交作者信息（当 name 或 email 非空时在底层 git 命令中注入对应环境变量）。
-pub fn set_git_author(name: impl Into<String>, email: impl Into<String>) {
-    if let Ok(mut w) = GIT_AUTHOR.write() {
-        w.name = name.into();
-        w.email = email.into();
-    }
-}
-
-/// 获取当前配置的 Git 提交作者信息。
-pub fn git_author() -> GitAuthorConfig {
-    if let Ok(r) = GIT_AUTHOR.read() {
-        return r.clone();
-    }
-    GitAuthorConfig::default()
-}
-
-/// 配置底层 Git 命令的可执行文件路径（为空或默认时回退到系统 `"git"`）。
-pub fn set_git_program(path: impl Into<String>) {
-    if let Ok(mut w) = GIT_PROGRAM.write() {
-        *w = path.into();
-    }
-}
-
-/// 获取当前生效的 Git 可执行文件路径。
-pub fn git_program() -> String {
-    if let Ok(r) = GIT_PROGRAM.read()
-        && !r.trim().is_empty()
-    {
-        return r.clone();
-    }
-    "git".to_string()
-}
 
 /// 只读查询的默认超时：本地仓库的 status/log 远小于此，超过即视为仓库异常。
 pub(crate) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -150,13 +103,15 @@ impl GitOutput {
 /// 设计原理（Why）：一次性调用的 `run` 与逐行流式的 `clone` 必须共用这一份口径。
 /// 少复制一条 `GIT_TERMINAL_PROMPT=0`，克隆遇到私有仓库就会把 stdin 挂住而不是
 /// 直接失败，而这种差异只在真实网络上偶发、单测覆盖不到；把环境集中到一个函数里，
-/// 两条路径就不可能各说各话。
+/// 两条路径就不可能各说各话。可执行文件与作者信息全部取自显式传入的
+/// [`GitConfig`]，本函数不读取任何进程级静态。
 pub(crate) fn build_command(
     cwd: &Path,
+    config: &GitConfig,
     args: &[&str],
     opts: &RunOptions,
 ) -> Result<Command, GitError> {
-    let mut command = Command::new(git_program());
+    let mut command = Command::new(config.program());
     command
         .args(args)
         .current_dir(cwd)
@@ -175,14 +130,17 @@ pub(crate) fn build_command(
         // 杜绝任何分页与编辑器接管输出。
         .env("GIT_PAGER", "cat")
         .env("GIT_EDITOR", "true");
-    let author = git_author();
-    if !author.name.trim().is_empty() {
-        command.env("GIT_AUTHOR_NAME", author.name.trim());
-        command.env("GIT_COMMITTER_NAME", author.name.trim());
+    // 作者为空时不注入任何环境变量：让 git 自己按仓库配置或全局配置取身份，
+    // 这比注入空字符串（git 会当成显式空作者并拒绝提交）更符合「未配置」语义。
+    let author_name = config.author_name.trim();
+    if !author_name.is_empty() {
+        command.env("GIT_AUTHOR_NAME", author_name);
+        command.env("GIT_COMMITTER_NAME", author_name);
     }
-    if !author.email.trim().is_empty() {
-        command.env("GIT_AUTHOR_EMAIL", author.email.trim());
-        command.env("GIT_COMMITTER_EMAIL", author.email.trim());
+    let author_email = config.author_email.trim();
+    if !author_email.is_empty() {
+        command.env("GIT_AUTHOR_EMAIL", author_email);
+        command.env("GIT_COMMITTER_EMAIL", author_email);
     }
     if let Some(todo) = &opts.sequence_todo {
         // git 通过 shell 调用序列编辑器并把自身的 todo 路径追加为最后一个参数，
@@ -207,10 +165,11 @@ pub(crate) fn build_command(
 /// 执行一次 git 调用，非零退出码返回 [`GitError::Failed`]。
 pub(crate) async fn run(
     cwd: &Path,
+    config: &GitConfig,
     args: &[&str],
     opts: RunOptions,
 ) -> Result<GitOutput, GitError> {
-    let output = run_allow_fail(cwd, args, opts).await?;
+    let output = run_allow_fail(cwd, config, args, opts).await?;
     if output.ok() {
         return Ok(output);
     }
@@ -220,10 +179,11 @@ pub(crate) async fn run(
 /// 执行一次 git 调用，非零退出码也原样返回（用于「存在性探测」类命令）。
 pub(crate) async fn run_allow_fail(
     cwd: &Path,
+    config: &GitConfig,
     args: &[&str],
     opts: RunOptions,
 ) -> Result<GitOutput, GitError> {
-    let mut command = build_command(cwd, args, &opts)?;
+    let mut command = build_command(cwd, config, args, &opts)?;
     let display = display_command(args);
     let mut child = command.spawn().map_err(|source| GitError::Spawn {
         command: display.clone(),
@@ -363,7 +323,10 @@ fn redact_url(arg: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::redact_url;
+    use super::{RunOptions, build_command, redact_url};
+    use crate::config::GitConfig;
+    use std::ffi::OsStr;
+    use std::path::Path;
 
     #[test]
     fn redacts_inline_credentials_only() {
@@ -380,17 +343,74 @@ mod tests {
         assert_eq!(redact_url("file:///srv/@repo"), "file:///srv/@repo");
     }
 
-    #[test]
-    fn author_and_program_config_roundtrip() {
-        super::set_git_program("/usr/bin/git-custom");
-        assert_eq!(super::git_program(), "/usr/bin/git-custom");
-        super::set_git_program("");
-        assert_eq!(super::git_program(), "git");
+    /// 收集命令显式注入的环境变量，供配置断言使用。
+    fn env_of(command: &tokio::process::Command, key: &str) -> Option<String> {
+        command
+            .as_std()
+            .get_envs()
+            .find(|(name, _)| *name == OsStr::new(key))
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().into_owned())
+    }
 
-        super::set_git_author("测试作者", "test@example.com");
-        let a = super::git_author();
-        assert_eq!(a.name, "测试作者");
-        assert_eq!(a.email, "test@example.com");
-        super::set_git_author("", "");
+    #[test]
+    fn default_config_uses_git_and_injects_no_author() {
+        let command = build_command(
+            Path::new("."),
+            &GitConfig::default(),
+            &["status"],
+            &RunOptions::default(),
+        )
+        .expect("默认配置必须能构造命令");
+        assert_eq!(command.as_std().get_program(), OsStr::new("git"));
+        assert_eq!(env_of(&command, "GIT_AUTHOR_NAME"), None);
+        assert_eq!(env_of(&command, "GIT_COMMITTER_NAME"), None);
+        assert_eq!(env_of(&command, "GIT_AUTHOR_EMAIL"), None);
+        assert_eq!(env_of(&command, "GIT_COMMITTER_EMAIL"), None);
+    }
+
+    #[test]
+    fn blank_program_falls_back_and_blank_author_is_skipped() {
+        let config = GitConfig {
+            program: "   ".to_string(),
+            author_name: "  ".to_string(),
+            author_email: String::new(),
+        };
+        let command = build_command(Path::new("."), &config, &["status"], &RunOptions::default())
+            .expect("空白配置必须能构造命令");
+        assert_eq!(command.as_std().get_program(), OsStr::new("git"));
+        assert_eq!(env_of(&command, "GIT_AUTHOR_NAME"), None);
+        assert_eq!(env_of(&command, "GIT_AUTHOR_EMAIL"), None);
+    }
+
+    #[test]
+    fn custom_program_and_author_are_applied() {
+        let config = GitConfig {
+            program: " /usr/bin/git-custom ".to_string(),
+            author_name: " 测试作者 ".to_string(),
+            author_email: " test@example.com ".to_string(),
+        };
+        let command = build_command(Path::new("."), &config, &["status"], &RunOptions::default())
+            .expect("自定义配置必须能构造命令");
+        assert_eq!(
+            command.as_std().get_program(),
+            OsStr::new("/usr/bin/git-custom")
+        );
+        assert_eq!(
+            env_of(&command, "GIT_AUTHOR_NAME").as_deref(),
+            Some("测试作者")
+        );
+        assert_eq!(
+            env_of(&command, "GIT_COMMITTER_NAME").as_deref(),
+            Some("测试作者")
+        );
+        assert_eq!(
+            env_of(&command, "GIT_AUTHOR_EMAIL").as_deref(),
+            Some("test@example.com")
+        );
+        assert_eq!(
+            env_of(&command, "GIT_COMMITTER_EMAIL").as_deref(),
+            Some("test@example.com")
+        );
     }
 }

@@ -11,6 +11,7 @@
 //! - 中文标题会被 git 编成 `=?UTF-8?q?...=` 的 RFC2047 形式（本机 git 2.53 实测），
 //!   这是补丁格式本身的规定，`git am` 收得回去，界面按原样落盘不做二次处理。
 
+use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, run};
 use std::path::Path;
@@ -23,9 +24,14 @@ pub const MAX_PATCH_BYTES: u64 = 16 * 1024 * 1024;
 /// # Errors
 /// 提交号不存在、子进程失败或超时返回 [`GitError`]；补丁超过
 /// [`MAX_PATCH_BYTES`] 返回 [`GitError::TooLarge`]。
-pub(crate) async fn commit_patch(root: &Path, oid: &str) -> Result<Vec<u8>, GitError> {
+pub(crate) async fn commit_patch(
+    root: &Path,
+    config: &GitConfig,
+    oid: &str,
+) -> Result<Vec<u8>, GitError> {
     let output = run(
         root,
+        config,
         &["format-patch", "--stdout", "-1", "--end-of-options", oid],
         RunOptions::default(),
     )
