@@ -167,6 +167,14 @@ AppCommand::Connect
 - 备份/同步文档：两套信封（`transom-crypto::envelope` 的 TSYN 二进制对象、
   `transom-crypto::backup` 的 JSON/YAML 内嵌字段），Argon2id + XChaCha20-Poly1305。
 
+### Git 搁置项（Shelf）
+
+搁置项不再由界面直接操作：`GitCommand::{LoadShelves, Shelve, ApplyShelf, DropShelf}`
+经命令总线交给控制器，补丁导出/应用/工作区丢弃走 `transom-git`，补丁列表的
+读写走 `transom-store` 且统一 `spawn_blocking`；结果经 `GitAppEvent::Shelf*`
+回到界面。`Shelve` 的顺序是“导出补丁 → 落盘条目 → 丢弃工作区”，落盘失败
+时保留工作区改动，避免不可恢复的数据丢失。
+
 ## 目录结构（2026-10 整理后）
 
 ```

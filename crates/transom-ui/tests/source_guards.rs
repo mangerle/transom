@@ -691,3 +691,24 @@ fn known_hosts_modal_is_owned_by_entity() {
         "已知主机的旧外壳入口不得复活"
     );
 }
+
+/// 搁置项必须走控制平面：UI 不得直接构造 git 进程或读写搁置项存储。
+#[test]
+fn shelf_operations_use_command_bus() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/git/shelf.rs");
+    let shelf = std::fs::read_to_string(&path).expect("读取 git/shelf.rs 失败");
+    for forbidden in ["transom_git::Repo", "transom_store::"] {
+        assert!(
+            !shelf.contains(forbidden),
+            "Shelf 操作不得在 UI 直接使用 {forbidden}，请改走 GitCommand"
+        );
+    }
+    for command in [
+        "GitCommand::LoadShelves",
+        "GitCommand::Shelve",
+        "GitCommand::ApplyShelf",
+        "GitCommand::DropShelf",
+    ] {
+        assert!(shelf.contains(command), "Shelf 入口必须投递 {command}");
+    }
+}
