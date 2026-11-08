@@ -1,10 +1,14 @@
 mod block;
+mod clipboard;
 mod copy_mode;
+mod hit_test;
 mod input;
 mod integration;
 mod links;
 mod menu;
 mod paint;
+mod recording;
+mod render;
 mod silent_echo;
 mod tasks;
 #[cfg(test)]
@@ -13,7 +17,7 @@ mod types;
 
 use crate::engine::TerminalEngine;
 use crate::event::{HistoryProvider, TerminalEvent};
-use crate::input::{focus_bytes, paste_bytes};
+use crate::input::focus_bytes;
 use crate::osc::{CommandTracker, TitleGate};
 use crate::record::RecorderHandle;
 use crate::renderer::TerminalRenderer;
@@ -376,232 +380,9 @@ impl TerminalView {
             Err(flume::TrySendError::Disconnected(_)) => false,
         }
     }
-
-    /// 获取录制器句柄。
-    pub fn recorder(&self) -> &RecorderHandle {
-        &self.recorder
-    }
-
-    /// 查询当前窗格是否正在录制。
-    pub fn is_recording(&self) -> bool {
-        self.recorder.is_recording()
-    }
-
-    /// 开始录制当前终端会话到 `.cast` 文件。
-    pub fn start_recording(
-        &mut self,
-        path: std::path::PathBuf,
-        title: Option<String>,
-    ) -> std::io::Result<()> {
-        let term = self.state.engine.lock();
-        let cols = term.term().grid().columns();
-        let rows = term.term().grid().screen_lines();
-        drop(term);
-        self.recorder.start(path, cols as u16, rows as u16, title)
-    }
-
-    /// 停止录制并返回文件路径。
-    pub fn stop_recording(&mut self) -> Option<std::path::PathBuf> {
-        self.recorder.stop()
-    }
-
-    /// 将程序化文本写入终端输入通道。
-    ///
-    /// 与键盘输入复用同一条有界队列，保证初始化命令按调用顺序到达 Shell；
-    /// 返回 `false` 表示终端写入线程已退出（连接已断开）。
-    pub fn send_text(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
-        let sent = self.write_input(text.as_bytes());
-        if sent {
-            self.state.engine.lock().scroll_to_bottom();
-            cx.notify();
-        }
-        sent
-    }
-
-    /// 按粘贴语义把一段文本写入终端输入通道，可选在末尾补回车执行。
-    ///
-    /// 多行脚本使用终端当前的括号粘贴模式：远端 shell 会把整段文本当作一次
-    /// 粘贴，而不是每读到一行就提前执行；对端未开启括号粘贴时退回原始字节。
-    /// 与键盘输入复用同一条有界队列，返回 `false` 表示终端写入线程已退出。
-    pub fn send_paste(&mut self, text: &str, execute: bool, cx: &mut Context<Self>) -> bool {
-        let mut bytes = self.encode_paste(text, cx);
-        if execute {
-            bytes.push(b'\r');
-        }
-        let sent = self.write_input(&bytes);
-        if sent {
-            self.state.engine.lock().scroll_to_bottom();
-            cx.notify();
-        }
-        sent
-    }
-
-    /// 先排空待解析输出，再按最新的终端模式编码粘贴内容。
-    ///
-    /// 设计原理（Why）：引擎的模式位由输出解析得到，而输出要经过读取线程 →
-    /// 有界队列 → UI 线程才落地。UI 线程一旦忙于渲染，Shell 刚发出的
-    /// `ESC[?2004l` 还躺在队列里，此时按旧状态加括号粘贴标记，就把标记送进了一个
-    /// 已经退出括号粘贴的对端：readline 会把这种未绑定的序列静默丢弃，屏幕上并不
-    /// 留残字；要紧的是 vim、tmux 这类直接读原始字节的程序，它会把 `ESC[200~` 当成
-    /// 按键解释。反向过期更糟：以为没开其实开着，多行内容会被逐行立即执行。粘贴是
-    /// 低频且由用户显式触发的事件，值得在这里多花一次解析把判定窗口压到最小。
-    ///
-    /// 代价与局限：只能吃掉已经进了队列的字节；读取线程尚未读到的输出、以及回车
-    /// 与粘贴本身在毫秒级内的真实碰撞仍无法根除——这是任何按 DECSET 2004 加帧的
-    /// 终端都存在的固有竞态。另注：屏幕上的 `^[[200~` 残字与模式位过期无关，它来自
-    /// 误按 Ctrl+V 后 readline 布置的一次性引用插入，被引用的是标记自己的 ESC。
-    fn encode_paste(&mut self, text: &str, cx: &mut Context<Self>) -> Vec<u8> {
-        let drained = self.drain_pending_output(cx);
-        let mode = self.state.engine.lock().mode();
-        if drained > 0 {
-            log::debug!(
-                "粘贴前排空待解析输出 {drained} 批，括号粘贴模式: {}",
-                mode.contains(TermMode::BRACKETED_PASTE)
-            );
-        }
-        paste_bytes(mode, text)
-    }
-
-    /// 把已到达但尚未解析的输出全部并入引擎，返回排空的批次数量。
-    fn drain_pending_output(&mut self, cx: &mut Context<Self>) -> usize {
-        let mut batches = 0;
-        while let Ok(bytes) = self.output_rx.try_recv() {
-            self.apply_output(&bytes, cx);
-            batches += 1;
-        }
-        batches
-    }
-
-    fn mark_exited(&mut self, cx: &mut Context<Self>) {
-        if !self.exited {
-            self.exited = true;
-            cx.emit(TerminalEvent::Exit);
-        }
-    }
-
-    fn copy_selection(&mut self, cx: &mut Context<Self>) -> bool {
-        let text = self.state.engine.lock().selection_text();
-        if let Some(text) = text.filter(|text| !text.is_empty()) {
-            cx.write_to_clipboard(ClipboardItem::new_string(text));
-            cx.emit(TerminalEvent::ClipboardStored);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn paste_from_clipboard(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
-            return false;
-        };
-        let bytes = self.encode_paste(&text, cx);
-        if self.write_input(&bytes) {
-            self.state.engine.lock().scroll_to_bottom();
-            cx.notify();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn hit_test_screen_cell(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
-        let metrics = *self.state.metrics.lock();
-        if metrics.cols == 0
-            || metrics.rows == 0
-            || metrics.cell_width <= px(0.0)
-            || metrics.cell_height <= px(0.0)
-        {
-            return None;
-        }
-        let x = position.x - metrics.origin.x;
-        let y = position.y - metrics.origin.y;
-        if x < px(0.0) || y < px(0.0) {
-            return None;
-        }
-        let col = (f32::from(x) / f32::from(metrics.cell_width)).floor() as usize;
-        let row = (f32::from(y) / f32::from(metrics.cell_height)).floor() as usize;
-        if col >= metrics.cols || row >= metrics.rows {
-            return None;
-        }
-        Some((row, col))
-    }
-
-    fn hit_test_grid_point(&self, position: Point<Pixels>) -> Option<AlacPoint> {
-        let (row, col) = self.hit_test_screen_cell(position)?;
-        // 折叠模式下可见行与网格行不再一一对应：命中必须查行映射，
-        // 否则选择会落到被隐藏的输出区或错位的行上。
-        if let Some(layout) = self.state.block_layout.lock().clone() {
-            return layout
-                .line_at(row)
-                .map(|line| AlacPoint::new(line, Column(col)));
-        }
-        let offset = self.state.engine.lock().display_offset() as i32;
-        Some(AlacPoint::new(Line(row as i32 - offset), Column(col)))
-    }
 }
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
-
-impl Render for TerminalView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.process_events(cx);
-
-        let right_click = self.interaction.right_click_behavior();
-        let menu_entity = cx.entity();
-        let layer = div()
-            .id(ElementId::Name(
-                format!("terminal-layer-{}", cx.entity().entity_id()).into(),
-            ))
-            .size_full()
-            .overflow_hidden()
-            .track_focus(&self.focus_handle)
-            .key_context(CONTEXT)
-            .on_action(cx.listener(Self::on_action_send_tab))
-            .on_action(cx.listener(Self::on_action_send_backtab))
-            .on_action(cx.listener(Self::on_action_terminal_copy))
-            .on_action(cx.listener(Self::on_action_terminal_paste))
-            .on_key_down(cx.listener(Self::on_key_down))
-            .on_key_up(cx.listener(Self::on_key_up))
-            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .on_mouse_down(MouseButton::Right, cx.listener(Self::on_mouse_down))
-            .on_mouse_down(MouseButton::Middle, cx.listener(Self::on_mouse_down))
-            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
-            .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .on_hover(cx.listener(Self::on_terminal_hover))
-            .on_scroll_wheel(cx.listener(Self::on_scroll))
-            .child(self.render_canvas(cx));
-        let layer = Self::wrap_context_menu(layer, menu_entity, right_click);
-
-        let search_bar = self.render_search_bar(cx);
-        let block_actions = self.render_block_actions(cx);
-        // 拖放高亮用主色调半透明蒙色：不改布局、不依赖主题里的具体色值，
-        // 深浅色终端下都能看清"松手就落在这里"。
-        let drop_tint = cx.theme().primary.opacity(0.12);
-        let entity = cx.entity().clone();
-        // 检索栏与终端层平级：放在终端层子树里会让输入框的按键沿焦点路径冒泡到
-        // `on_key_down`，敲搜索词的同时也把字符送进了 Shell。
-        div()
-            .size_full()
-            .relative()
-            .overflow_hidden()
-            .on_action(cx.listener(Self::on_search_enter))
-            .on_action(cx.listener(Self::on_search_escape))
-            // 外部文件拖放：命中区域就是网格本身，视图只投递事件，
-            // 要不要接收、传到哪儿由应用层按会话类型决定。
-            .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(drop_tint))
-            .on_drop(move |paths: &ExternalPaths, _window, cx| {
-                let dropped = paths.paths().to_vec();
-                if dropped.is_empty() {
-                    return;
-                }
-                entity.update(cx, |_, cx| cx.emit(TerminalEvent::FilesDropped(dropped)));
-            })
-            .child(layer)
-            .children(block_actions)
-            .children(self.render_suggestion_bar(cx))
-            .children(search_bar)
-    }
-}
 
 impl Drop for TerminalView {
     fn drop(&mut self) {
