@@ -60,7 +60,21 @@ apps/transom (组合根 + 控制平面)
 
 三条回归闸门固化上述约定：`app_shell_keeps_single_state_field` 禁止外壳重新平铺字段；`widgets_use_design_tokens` 禁止组件层写裸字号与间距；`menu_items_use_widget_constructor` 禁止手写菜单项链。
 
-新增功能时：状态放 `AppState` 或对应 feature 结构体，纯状态方法写 `impl AppState`，纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。
+新增功能时：状态放 `AppState` 或对应 feature 实体，行为与状态同处；纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。新增模态弹窗时，先在 `dialog_host/registry` 的 `MODALS` 表登记一行（层序即表序），再补 `checks` 的打开判定与文本项函数；渲染、取消与提交仍按领域分发。
+
+### 弹窗注册表
+
+`dialog_host/registry` 是弹窗元数据的唯一来源：
+
+```
+ModalEntry { kind, slug, width, is_open, field_values }
+MODALS: &[ModalEntry]   // 顺序即层叠顺序
+```
+
+`ModalWidth` 分三种形态：`Token(rem 档位)`、`Max`（全局上限）、`Viewport(比例)`
+（差异对比专用）。新增弹窗的改动点收敛为“枚举加变体、注册表加一行、checks
+补函数”，不再同时修改 `ORDER`、`spec`、`is_open`、`field_values` 四处大 `match`。
+守卫测试 `registry_covers_every_kind_exactly_once` 保证表与枚举不漏不重。
 
 ### 面板实体化
 
