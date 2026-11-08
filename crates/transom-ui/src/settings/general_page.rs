@@ -2,7 +2,9 @@
 
 use crate::app::app_settings;
 use crate::app::update_app_settings;
-use crate::palette::{Palette, localized_error};
+use crate::palette::Palette;
+#[cfg(target_os = "linux")]
+use crate::palette::localized_error;
 use crate::settings::ProxyProtocol;
 use crate::settings::{SettingsEvent, SettingsView};
 use gpui_kit::assets::IconName;
@@ -289,6 +291,7 @@ impl SettingsView {
     /// 设计原理（Why）：这一项与其他偏好不同——它改的是系统注册而非应用内
     /// 状态，等弹窗"保存"按钮再生效会让开关与真实系统状态脱节，所以点击
     /// 即执行注册/撤销并落盘；失败时回滚开关并把错误抛给用户看。
+    #[cfg(target_os = "linux")]
     pub(crate) fn render_settings_desktop_integration(
         &mut self,
         p: &Palette,

@@ -206,6 +206,7 @@ fn local_permissions(_metadata: &std::fs::Metadata) -> Option<u32> {
 ///
 /// 设计原理（Why）：本地属性展示需要把 uid/gid 映射为可读名称；在不引入
 /// libc 依赖的前提下，直接解析系统账号文件是最轻量且可单测验证的方式。
+#[cfg(any(unix, test))]
 fn parse_id_name(content: &str, id: u32) -> Option<String> {
     for line in content.lines() {
         let mut fields = line.split(':');

@@ -83,6 +83,7 @@ pub(super) enum GroupSearch {
     /// 通用页：出站代理组。
     Proxy,
     /// 通用页：桌面集成组。
+    #[cfg(target_os = "linux")]
     DesktopIntegration,
     /// 通用页：数据备份组。
     Backup,
@@ -132,9 +133,9 @@ impl GroupSearch {
             Mouse | Selection | Clipboard => "settings.tab_mouse_clipboard",
             Shortcuts => "settings.tab_shortcuts",
             Tabs | Window | ActivityBar | StatusBar | Startup => "settings.tab_window_layout",
-            Language | Notify | Proxy | DesktopIntegration | Backup | Sync | Logs => {
-                "settings.tab_general"
-            }
+            Language | Notify | Proxy | Backup | Sync | Logs => "settings.tab_general",
+            #[cfg(target_os = "linux")]
+            DesktopIntegration => "settings.tab_general",
             MonitorSections | MonitorBehavior => "settings.tab_monitor",
             GitExecutable | GitCommitPush | GitDiff => "settings.tab_git",
             ContainerRegistries => "settings.tab_containers",
@@ -200,6 +201,7 @@ mod tests {
         GroupSearch::Language,
         GroupSearch::Notify,
         GroupSearch::Proxy,
+        #[cfg(target_os = "linux")]
         GroupSearch::DesktopIntegration,
         GroupSearch::Backup,
         GroupSearch::Sync,

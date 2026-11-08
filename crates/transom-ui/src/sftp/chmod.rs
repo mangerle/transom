@@ -20,8 +20,7 @@ pub(super) fn exec_granted_mode(current: Option<u32>, is_dir: bool) -> u32 {
 }
 
 impl AppShell {
-    /// 本地右键一键授予执行位（仅 Unix）。
-    #[cfg(unix)]
+    /// 切换 Chmod 弹窗中的单个权限位，并同步八进制输入框。
     pub(crate) fn sftp_toggle_chmod_bit(
         &mut self,
         mask: u32,

@@ -306,6 +306,7 @@ impl GroupSearch {
                     "form.proxy_socks5",
                 ],
             ),
+            #[cfg(target_os = "linux")]
             GroupSearch::DesktopIntegration => (
                 "settings.desktop_integration_group",
                 &[

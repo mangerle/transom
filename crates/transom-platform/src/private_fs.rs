@@ -106,6 +106,7 @@ pub fn open_private_truncate(path: &Path) -> io::Result<File> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::*;
 
     #[cfg(unix)]
