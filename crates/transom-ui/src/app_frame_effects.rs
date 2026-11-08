@@ -230,6 +230,13 @@ impl AppShell {
             ContainerWorkspaceEvent::OpenBuildDialog => {
                 self.open_container_build_dialog(tab_id, window, cx);
             }
+            ContainerWorkspaceEvent::OpenPortForward {
+                container,
+                private,
+                public,
+            } => {
+                self.open_container_port_forward(tab_id, container, *private, *public, window, cx);
+            }
             ContainerWorkspaceEvent::RunRowAction { target, action } => {
                 self.run_row_action(tab_id, target.clone(), *action, window, cx);
             }

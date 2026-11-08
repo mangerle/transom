@@ -1,21 +1,50 @@
 //! 原始 Inspect 配置 JSON 查看器：格式化高亮、关键词搜索与一键复制。
+//!
+//! 设计原理（Why）：渲染函数只持有工作区实体句柄与只读快照，复制提示写回实体的
+//! `notice` 字段、返回结构化视图改写 `overview_raw`，由外壳渲染帧统一消费；
+//! 这样原始视图不必再依赖 `Context<AppShell>`，也不会在渲染期反查外壳。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
 
+/// 原始 inspect 工具栏的搜索输入框与当前关键词快照。
+///
+/// 设计原理（Why）：`InputState` 的当前值必须经 `App` 读取，纯渲染函数拿不到
+/// `App`，因此由外壳在调用前把关键词一并快照进来；输入框实体仍用于渲染工具栏。
+/// 代价是调用点必须先读一次输入框，换来渲染函数与外壳上下文彻底解耦。
+#[derive(Clone, Copy)]
+pub(crate) struct InspectSearch<'a> {
+    pub(crate) input: &'a Entity<InputState>,
+    pub(crate) keyword: &'a str,
+}
+
+/// 其它详情页转入原始 inspect 视图所需的实体与搜索上下文。
+///
+/// 设计原理（Why）：镜像、卷与网络详情共用同一套原始视图，把工作区实体与搜索
+/// 快照收成一个参数，既避免各详情函数继续平铺参数，也保证复制提示与返回动作
+/// 都写回当前标签页的容器工作区实体。
+#[derive(Clone, Copy)]
+pub(crate) struct RawInspectView<'a> {
+    pub(crate) workspace: &'a Entity<ContainerWorkspace>,
+    pub(crate) search: InspectSearch<'a>,
+}
+
 /// 渲染原始 Inspect JSON 视图。
+///
+/// 设计原理（Why）：复制成功只把文案写进工作区 `notice`，返回结构化视图只改
+/// `overview_raw`；两者都由外壳在渲染帧统一处理，不需要在渲染函数里持有窗口。
 pub(crate) fn render_raw_inspect(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     inspect_json: &str,
-    search_input: &Entity<InputState>,
+    search: InspectSearch<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if inspect_json.trim().is_empty() {
         return centered_hint(rust_i18n::t!("container.detail.no_inspect").to_string(), p);
     }
 
-    let search_keyword = search_input.read(cx).value().trim().to_lowercase();
+    let search_keyword = search.keyword.trim().to_lowercase();
     let lines: Vec<&str> = inspect_json.lines().collect();
     let total_lines = lines.len();
 
@@ -29,26 +58,23 @@ pub(crate) fn render_raw_inspect(
             .count()
     };
 
-    let copy_text = inspect_json.to_string();
-    let copy_btn = Button::new(ElementId::Name(
-        format!("btn-copy-raw-inspect-{tab_id}").into(),
-    ))
-    .ghost()
-    .xsmall()
-    .icon(IconName::Copy)
-    .label(rust_i18n::t!("container.detail.copy_inspect").to_string())
-    .on_click(cx.listener({
-        let copy_text = copy_text.clone();
-        move |this, _, window, cx| {
-            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
-            this.show_toast(
-                rust_i18n::t!("container.detail.copied").to_string(),
-                true,
-                window,
-                cx,
-            );
-        }
-    }));
+    let copy_btn = Button::new(ElementId::Name("btn-copy-raw-inspect".into()))
+        .ghost()
+        .xsmall()
+        .icon(IconName::Copy)
+        .label(rust_i18n::t!("container.detail.copy_inspect").to_string())
+        .on_click({
+            let view = view.clone();
+            let copy_text = inspect_json.to_string();
+            move |_, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+                let message = rust_i18n::t!("container.detail.copied").to_string();
+                view.update(cx, |workspace, cx| {
+                    workspace.state.notice = Some(message);
+                    cx.notify();
+                });
+            }
+        });
 
     let stats_label = if search_keyword.is_empty() {
         rust_i18n::t!(
@@ -66,19 +92,20 @@ pub(crate) fn render_raw_inspect(
         .to_string()
     };
 
-    let back_btn = Button::new(ElementId::Name(
-        format!("btn-back-overview-{tab_id}").into(),
-    ))
-    .ghost()
-    .xsmall()
-    .icon(IconName::LayoutDashboard)
-    .label(rust_i18n::t!("container.detail.overview").to_string())
-    .on_click(cx.listener(move |this, _, _, cx| {
-        this.with_container_mut(tab_id, cx, |workspace| {
-            workspace.overview_raw = false;
+    let back_btn = Button::new(ElementId::Name("btn-back-overview".into()))
+        .ghost()
+        .xsmall()
+        .icon(IconName::LayoutDashboard)
+        .label(rust_i18n::t!("container.detail.overview").to_string())
+        .on_click({
+            let view = view.clone();
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.state.overview_raw = false;
+                    cx.notify();
+                });
+            }
         });
-        cx.notify();
-    }));
 
     let toolbar = h_flex()
         .justify_between()
@@ -93,7 +120,7 @@ pub(crate) fn render_raw_inspect(
                 .child(
                     div()
                         .w_64()
-                        .child(Input::new(search_input).cleanable(true).small()),
+                        .child(Input::new(search.input).cleanable(true).small()),
                 )
                 .child(
                     div()

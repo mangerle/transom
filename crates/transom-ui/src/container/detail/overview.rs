@@ -1,26 +1,29 @@
 //! 基础信息总览与键值行。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 
 /// 基础信息页签：结构化字段与原始 inspect 二选一。
 ///
 /// 设计原理（Why）：原始 inspect 里就是上面这些字段的超集，两段同时铺开时
 /// 用户要滚很久才能确认「下面没有别的信息」。切换按钮让同一屏只保留一种视图，
 /// 想看原始 JSON 时不必离开页签。
+///
+/// 渲染只持有工作区实体句柄与只读快照：复制提示写回实体的 `notice`，原始视图
+/// 切换与端口转发分别走实体状态和工作区事件，不再依赖 `Context<AppShell>`。
 pub(crate) fn render_container_overview(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     details: Option<&ContainerDetails>,
     raw: bool,
-    search_input: &Entity<InputState>,
+    inspect: InspectSearch<'_>,
     browser_host: &str,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some(details) = details else {
         return centered_hint(rust_i18n::t!("container.detail.loading").to_string(), p);
     };
     if raw {
-        return render_raw_inspect(tab_id, &details.inspect, search_input, p, cx);
+        return render_raw_inspect(view, &details.inspect, inspect, p);
     }
 
     use super::overview_cards::*;
@@ -31,83 +34,83 @@ pub(crate) fn render_container_overview(
     let mut runtime_fields = v_flex().gap_1p5();
     runtime_fields = runtime_fields
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.id"),
             short(&details.id),
             true,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.image"),
             details.image.clone(),
             true,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.state"),
             details.status.clone(),
             false,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.command"),
             details.command.clone(),
             true,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.entrypoint"),
             details.entrypoint.join(" "),
             true,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.user"),
             details.user.clone().unwrap_or_default(),
             false,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.working_dir"),
             details.working_dir.clone().unwrap_or_default(),
             true,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.restart"),
             details.restart_policy.clone().unwrap_or_default(),
             false,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.created"),
             format_unix(details.created),
             false,
             p,
-            cx,
         ))
         .child(copyable_field(
+            view,
             rust_i18n::t!("container.field.started_at"),
             details.started_at.clone().unwrap_or_default(),
             false,
             p,
-            cx,
         ));
 
     if let Some(code) = details.exit_code {
         runtime_fields = runtime_fields.child(copyable_field(
+            view,
             rust_i18n::t!("container.field.exit_code"),
             code.to_string(),
             true,
             p,
-            cx,
         ));
     }
 
@@ -116,12 +119,15 @@ pub(crate) fn render_container_overview(
         .ghost()
         .icon(IconName::Braces)
         .label(rust_i18n::t!("container.field.inspect").to_string())
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.with_container_mut(tab_id, cx, |workspace| {
-                workspace.overview_raw = true;
-            });
-            cx.notify();
-        }))
+        .on_click({
+            let view = view.clone();
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.state.overview_raw = true;
+                    cx.notify();
+                });
+            }
+        })
         .into_any_element();
 
     cards = cards.child(overview_card(
@@ -134,7 +140,7 @@ pub(crate) fn render_container_overview(
 
     // 2. 网络与端口映射
     let container_name = details.name.trim_start_matches('/');
-    let port_chips = render_port_chips(tab_id, &details.ports, browser_host, container_name, p, cx);
+    let port_chips = render_port_chips(view, &details.ports, browser_host, container_name, p);
     cards = cards.child(overview_card(
         rust_i18n::t!("container.field.ports").to_string(),
         IconName::Network,
@@ -144,7 +150,7 @@ pub(crate) fn render_container_overview(
     ));
 
     // 3. 存储挂载
-    let mounts_el = render_mounts_card(&details.mounts, p);
+    let mounts_el = render_mounts_card(view, &details.mounts, p);
     cards = cards.child(overview_card(
         rust_i18n::t!("container.field.mounts").to_string(),
         IconName::HardDrive,
@@ -155,12 +161,12 @@ pub(crate) fn render_container_overview(
 
     // 4. 健康检查时间线（如果有）
     if let Some(health_diag) = &details.health_details {
-        cards = cards.child(render_health_timeline(health_diag, p));
+        cards = cards.child(render_health_timeline(view, health_diag, p));
     }
 
     // 5. 环境变量
     if !details.env.is_empty() {
-        cards = cards.child(render_env_card(&details.env, p, cx));
+        cards = cards.child(render_env_card(view, &details.env, p));
     }
 
     scroll_body(cards, p).into_any_element()

@@ -1,0 +1,112 @@
+//! 详情页签按钮组：普通页签与带用户下拉的终端页签。
+//!
+//! 设计原理（Why）：页签按钮只决定当前详情页签，属于外壳的交互入口；从
+//! detail.rs 拆出后，该文件只负责详情内容分发，页签选择与终端用户下拉在这里
+//! 单独维护。
+
+use super::*;
+
+impl AppShell {
+    /// 详情页签按钮组：不含外边距与分隔线，由详情头部把它放在同一行的左端。
+    ///
+    /// 只有一个页签的分类（镜像/卷/网络/编排）没有可切换的东西，返回 `None`，
+    /// 头部因此保留标题。
+    pub(super) fn render_detail_tab_buttons(
+        &mut self,
+        tab_id: TabId,
+        section: ContainerSection,
+        current: ContainerDetailTab,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let tabs = section.detail_tabs();
+        if tabs.len() <= 1 {
+            return None;
+        }
+        let app = cx.entity().clone();
+        // 当前终端会话（含正在建立）的执行用户；`None` 表示还没有会话。
+        let current_user = self
+            .state
+            .container_workspace(tab_id)
+            .and_then(|workspace| {
+                let state = &workspace.read(cx).state;
+                state
+                    .terminal
+                    .as_ref()
+                    .map(|terminal| terminal.user.clone())
+                    .or_else(|| {
+                        state
+                            .terminal_request
+                            .as_ref()
+                            .map(|(_, user, _)| user.clone())
+                    })
+            });
+        let user_tooltip = match &current_user {
+            Some(Some(user)) => {
+                rust_i18n::t!("container.terminal.current_user", user = user.as_str()).to_string()
+            }
+            Some(None) => rust_i18n::t!("container.terminal.current_default_user").to_string(),
+            None => rust_i18n::t!("container.terminal.as_user").to_string(),
+        };
+        Some(
+            h_flex()
+                .gap_1()
+                .items_center()
+                .flex_none()
+                .min_w_0()
+                .children(tabs.iter().copied().map(|tab| {
+                    if tab != ContainerDetailTab::Terminal {
+                        return Button::new(ElementId::Name(
+                            format!("container-detail-tab-{}", tab.label_key()).into(),
+                        ))
+                        .xsmall()
+                        .icon(detail_icon(tab))
+                        .label(rust_i18n::t!(tab.label_key()).to_string())
+                        .selected(tab == current)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.set_container_detail_tab(tab_id, tab, window, cx);
+                        }))
+                        .into_any_element();
+                    }
+                    // 终端页签带一个下拉：root 与镜像默认用户的会话是两回事，
+                    // 点主按钮仍走默认用户，避免改变原有肌肉记忆。主按钮与
+                    // 三角共用一个外框，视觉上是一枚分体按钮而不是两枚。
+                    h_flex()
+                        .items_center()
+                        .flex_none()
+                        .rounded(p.radius.md)
+                        .border_1()
+                        .border_color(p.border)
+                        .overflow_hidden()
+                        .child(
+                            Button::new("container-detail-tab-terminal")
+                                .xsmall()
+                                .ghost()
+                                .icon(IconName::Terminal)
+                                .label(rust_i18n::t!("container.detail.terminal").to_string())
+                                .selected(tab == current)
+                                .tooltip(user_tooltip.clone())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.set_container_detail_tab(tab_id, tab, window, cx);
+                                })),
+                        )
+                        .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
+                        .child(
+                            Button::new("container-detail-tab-terminal-menu")
+                                .xsmall()
+                                .ghost()
+                                .icon(IconName::ChevronDown)
+                                .tooltip(user_tooltip.clone())
+                                .dropdown_menu({
+                                    let app = app.clone();
+                                    move |menu, _, _| {
+                                        terminal::populate_terminal_menu(menu, tab_id, app.clone())
+                                    }
+                                }),
+                        )
+                        .into_any_element()
+                }))
+                .into_any_element(),
+        )
+    }
+}

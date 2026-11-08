@@ -17,7 +17,8 @@ pub(crate) struct ImageDetailView<'a> {
     pub(crate) details: Option<&'a ContainerImageDetails>,
     pub(crate) overview_raw: bool,
     pub(crate) detail_tab: ContainerDetailTab,
-    pub(crate) search_input: &'a Entity<InputState>,
+    /// 原始 inspect 视图所需的工作区实体与搜索快照。
+    pub(crate) inspect: RawInspectView<'a>,
 }
 
 /// 渲染镜像详情的主入口调度器。
@@ -32,11 +33,11 @@ pub(crate) fn render_image_detail(
         details,
         overview_raw,
         detail_tab,
-        search_input,
+        inspect,
     } = view;
     match detail_tab {
         ContainerDetailTab::History => render_image_history(summary, details, p, cx),
-        _ => render_image_overview(tab_id, summary, details, overview_raw, search_input, p, cx),
+        _ => render_image_overview(tab_id, summary, details, overview_raw, inspect, p, cx),
     }
 }
 
@@ -46,14 +47,14 @@ fn render_image_overview(
     summary: Option<&transom_core::ContainerImageSummary>,
     details: Option<&ContainerImageDetails>,
     raw: bool,
-    search_input: &Entity<InputState>,
+    inspect: RawInspectView<'_>,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if let Some(details) = details {
         // 原始 Inspect JSON 视图
         if raw {
-            return render_raw_inspect(tab_id, &details.inspect, search_input, p, cx);
+            return render_raw_inspect(inspect.workspace, &details.inspect, inspect.search, p);
         }
 
         let mut rows = v_flex().gap_2();

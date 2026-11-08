@@ -44,6 +44,17 @@ pub(crate) enum ContainerWorkspaceEvent {
     PruneTarget(ContainerPruneTarget),
     /// 从本地 Tar 归档恢复数据卷；`None` 表示由文件名推导卷名。
     RestoreVolume(Option<String>),
+    /// 为容器端口建立 SSH 本地端口转发；需要窗口打开弹窗。
+    ///
+    /// 容器名、私有端口与已发布端口全部随事件携带，外壳处理时不回读工作区实体。
+    OpenPortForward {
+        /// 容器名（已去掉 Docker 的 `/` 前缀）。
+        container: String,
+        /// 容器内私有端口。
+        private: u16,
+        /// 已发布到宿主机的端口；`None` 表示直接用私有端口。
+        public: Option<u16>,
+    },
     /// 对列表行执行动作；具体分发由外壳统一完成，其中部分动作需要窗口。
     RunRowAction {
         target: RowTarget,
@@ -106,6 +117,7 @@ impl AppShell {
             | ContainerWorkspaceEvent::OpenImageHub
             | ContainerWorkspaceEvent::OpenCreateDialog(_)
             | ContainerWorkspaceEvent::OpenBuildDialog
+            | ContainerWorkspaceEvent::OpenPortForward { .. }
             | ContainerWorkspaceEvent::RunRowAction { .. } => {
                 self.state
                     .window_requests

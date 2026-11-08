@@ -38,6 +38,7 @@ mod network;
 mod overview;
 mod overview_cards;
 mod raw_inspect;
+mod tab_strip;
 mod terminal;
 pub(crate) mod timeline;
 mod volume;
@@ -60,7 +61,7 @@ pub(super) use overview::{
     centered_hint, format_unix, kv, linked_containers, render_container_overview, scroll_body,
     short,
 };
-pub(super) use raw_inspect::render_raw_inspect;
+pub(super) use raw_inspect::{InspectSearch, RawInspectView, render_raw_inspect};
 pub(super) use terminal::render_terminal;
 pub(super) use volume::render_volume_detail;
 
@@ -73,10 +74,10 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
+        let Some(view) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let workspace = &workspace.read(cx).state;
+        let workspace = &view.read(cx).state;
         let section = workspace.section;
         let selected = workspace.selected.clone();
         if selected.is_none() {
@@ -199,6 +200,17 @@ impl AppShell {
         let compose_deps = workspace.compose_dependencies.clone();
         let compose_hovered = workspace.compose_hovered_service.clone();
         let compose_deps_is_empty = compose_deps.is_empty();
+        // 输入框的值必须经 App 读取；渲染函数拿不到 App，因此在进入纯渲染前
+        // 把关键词与实体句柄一起快照，原始 inspect 视图只消费快照。
+        let inspect_keyword = inspect_search.read(cx).value().trim().to_string();
+        let inspect = InspectSearch {
+            input: &inspect_search,
+            keyword: &inspect_keyword,
+        };
+        let raw_inspect = RawInspectView {
+            workspace: &view,
+            search: inspect,
+        };
 
         let title = match section {
             ContainerSection::Containers => selected_container.as_ref().map(|i| i.name.clone()),
@@ -250,13 +262,12 @@ impl AppShell {
         let content = match (section, detail_tab) {
             (ContainerSection::Containers, ContainerDetailTab::Overview) => {
                 render_container_overview(
-                    tab_id,
+                    &view,
                     details.as_ref(),
                     overview_raw,
-                    &inspect_search,
+                    inspect,
                     &browser_host,
                     p,
-                    cx,
                 )
             }
             (
@@ -356,7 +367,7 @@ impl AppShell {
                     details: image_details.as_ref(),
                     overview_raw,
                     detail_tab,
-                    search_input: &inspect_search,
+                    inspect: raw_inspect,
                 },
                 p,
                 cx,
@@ -366,7 +377,7 @@ impl AppShell {
                 selected_volume.as_ref(),
                 volume_details.as_ref(),
                 overview_raw,
-                &inspect_search,
+                raw_inspect,
                 p,
                 cx,
             ),
@@ -375,18 +386,17 @@ impl AppShell {
                 selected_network.as_ref(),
                 network_details.as_ref(),
                 overview_raw,
-                &inspect_search,
+                raw_inspect,
                 p,
                 cx,
             ),
             (ContainerSection::Containers, _) => render_container_overview(
-                tab_id,
+                &view,
                 details.as_ref(),
                 overview_raw,
-                &inspect_search,
+                inspect,
                 &browser_host,
                 p,
-                cx,
             ),
         };
 
@@ -396,108 +406,5 @@ impl AppShell {
             .child(header)
             .child(div().flex_1().min_h_0().overflow_hidden().child(content))
             .into_any_element()
-    }
-
-    /// 详情页签按钮组：不含外边距与分隔线，由详情头部把它放在同一行的左端。
-    ///
-    /// 只有一个页签的分类（镜像/卷/网络/编排）没有可切换的东西，返回 `None`，
-    /// 头部因此保留标题。
-    fn render_detail_tab_buttons(
-        &mut self,
-        tab_id: TabId,
-        section: ContainerSection,
-        current: ContainerDetailTab,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let tabs = section.detail_tabs();
-        if tabs.len() <= 1 {
-            return None;
-        }
-        let app = cx.entity().clone();
-        // 当前终端会话（含正在建立）的执行用户；`None` 表示还没有会话。
-        let current_user = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| {
-                let state = &workspace.read(cx).state;
-                state
-                    .terminal
-                    .as_ref()
-                    .map(|terminal| terminal.user.clone())
-                    .or_else(|| {
-                        state
-                            .terminal_request
-                            .as_ref()
-                            .map(|(_, user, _)| user.clone())
-                    })
-            });
-        let user_tooltip = match &current_user {
-            Some(Some(user)) => {
-                rust_i18n::t!("container.terminal.current_user", user = user.as_str()).to_string()
-            }
-            Some(None) => rust_i18n::t!("container.terminal.current_default_user").to_string(),
-            None => rust_i18n::t!("container.terminal.as_user").to_string(),
-        };
-        Some(
-            h_flex()
-                .gap_1()
-                .items_center()
-                .flex_none()
-                .min_w_0()
-                .children(tabs.iter().copied().map(|tab| {
-                    if tab != ContainerDetailTab::Terminal {
-                        return Button::new(ElementId::Name(
-                            format!("container-detail-tab-{}", tab.label_key()).into(),
-                        ))
-                        .xsmall()
-                        .icon(detail_icon(tab))
-                        .label(rust_i18n::t!(tab.label_key()).to_string())
-                        .selected(tab == current)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.set_container_detail_tab(tab_id, tab, window, cx);
-                        }))
-                        .into_any_element();
-                    }
-                    // 终端页签带一个下拉：root 与镜像默认用户的会话是两回事，
-                    // 点主按钮仍走默认用户，避免改变原有肌肉记忆。主按钮与
-                    // 三角共用一个外框，视觉上是一枚分体按钮而不是两枚。
-                    h_flex()
-                        .items_center()
-                        .flex_none()
-                        .rounded(p.radius.md)
-                        .border_1()
-                        .border_color(p.border)
-                        .overflow_hidden()
-                        .child(
-                            Button::new("container-detail-tab-terminal")
-                                .xsmall()
-                                .ghost()
-                                .icon(IconName::Terminal)
-                                .label(rust_i18n::t!("container.detail.terminal").to_string())
-                                .selected(tab == current)
-                                .tooltip(user_tooltip.clone())
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.set_container_detail_tab(tab_id, tab, window, cx);
-                                })),
-                        )
-                        .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
-                        .child(
-                            Button::new("container-detail-tab-terminal-menu")
-                                .xsmall()
-                                .ghost()
-                                .icon(IconName::ChevronDown)
-                                .tooltip(user_tooltip.clone())
-                                .dropdown_menu({
-                                    let app = app.clone();
-                                    move |menu, _, _| {
-                                        terminal::populate_terminal_menu(menu, tab_id, app.clone())
-                                    }
-                                }),
-                        )
-                        .into_any_element()
-                }))
-                .into_any_element(),
-        )
     }
 }
