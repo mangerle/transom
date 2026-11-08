@@ -472,11 +472,16 @@ fn port_bindings(ports: &[transom_core::ContainerPortPublish]) -> serde_json::Va
             "HostIp": "0.0.0.0",
             "HostPort": publish.host.to_string(),
         });
-        map.entry(key)
-            .or_insert_with(|| serde_json::Value::Array(Vec::new()))
-            .as_array_mut()
-            .expect("PortBindings 值必须是数组")
-            .push(entry);
+        match map.entry(key) {
+            serde_json::map::Entry::Vacant(slot) => {
+                slot.insert(serde_json::Value::Array(vec![entry]));
+            }
+            serde_json::map::Entry::Occupied(mut slot) => {
+                if let Some(bindings) = slot.get_mut().as_array_mut() {
+                    bindings.push(entry);
+                }
+            }
+        }
     }
     serde_json::Value::Object(map)
 }
