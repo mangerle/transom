@@ -45,7 +45,7 @@ impl AppShell {
             view.update(cx, |view, cx| {
                 view.state.pending_read = None;
                 view.state.phase = DiffPhase::Ready;
-                view.state.error = Some("读取远端文件的命令投递失败".to_string());
+                view.state.error = Some(rust_i18n::t!("diff.error_read_dispatch").to_string());
                 view.notify_changed(cx);
             });
         }
@@ -75,7 +75,7 @@ impl AppShell {
             .tab(tab_id)
             .and_then(|tab| tab.connection_id)
         else {
-            self.state.status = Some("所属连接已断开，无法对比".to_string());
+            self.state.status = Some(rust_i18n::t!("diff.error_no_connection").to_string());
             cx.notify();
             return;
         };
@@ -98,20 +98,37 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Option<PathBuf> {
         let local_path = rfd::FileDialog::new()
-            .set_title(format!("选择与「{remote_name}」对比的本地文件"))
+            .set_title(rust_i18n::t!("diff.pick_local_title", name = remote_name).to_string())
             .pick_file()?;
         match std::fs::metadata(&local_path) {
             Ok(meta) if meta.len() > MAX_DIFF_BYTES => {
-                self.state.status = Some(format!(
-                    "本地文件超过对比上限 {}",
-                    format_size(MAX_DIFF_BYTES)
-                ));
+                self.state.status = Some(
+                    rust_i18n::t!(
+                        "diff_viewer.error_too_large",
+                        limit = MAX_DIFF_BYTES,
+                        path = local_path.display().to_string()
+                    )
+                    .to_string(),
+                );
             }
             Ok(meta) if !meta.is_file() => {
-                self.state.status = Some("请选择普通文件".to_string());
+                self.state.status = Some(
+                    rust_i18n::t!(
+                        "diff_viewer.error_not_file",
+                        path = local_path.display().to_string()
+                    )
+                    .to_string(),
+                );
             }
             Err(error) => {
-                self.state.status = Some(format!("无法读取本地文件属性: {error}"));
+                self.state.status = Some(
+                    rust_i18n::t!(
+                        "diff_viewer.error_metadata",
+                        path = local_path.display().to_string(),
+                        error = error.to_string()
+                    )
+                    .to_string(),
+                );
             }
             Ok(_) => return Some(local_path),
         }

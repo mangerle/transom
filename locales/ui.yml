@@ -4712,6 +4712,15 @@ diff:
   merge_hint:
     en: Only the selected change is merged; the diff refreshes after writing.
     zh-CN: 合并只影响当前选中的这一处变更；写入后会自动重新对比。
+  error_read_dispatch:
+    en: Failed to dispatch the remote read command
+    zh-CN: 读取远端文件的命令投递失败
+  error_no_connection:
+    en: The owning connection is closed; cannot compare
+    zh-CN: 所属连接已断开，无法对比
+  pick_local_title:
+    en: Choose a local file to compare with %{name}
+    zh-CN: 选择与「%{name}」对比的本地文件
   error_compute_spawn:
     en: Failed to start the diff computation thread
     zh-CN: 差异计算线程启动失败
