@@ -46,6 +46,8 @@ pub(crate) enum ContainerWorkspaceEvent {
     OpenBuildDialog,
     /// 清理指定分类的未使用资源。
     PruneTarget(ContainerPruneTarget),
+    /// 把数据卷备份为本地 Tar 归档；卷名随事件携带。
+    BackupVolume(String),
     /// 从本地 Tar 归档恢复数据卷；`None` 表示由文件名推导卷名。
     RestoreVolume(Option<String>),
     /// Compose YAML 已读取完成；外壳需要用 `Window` 创建编辑器并写回工作区。
@@ -168,6 +170,9 @@ impl AppShell {
             }
             ContainerWorkspaceEvent::PruneTarget(target) => {
                 self.prune_container_target(tab_id, *target, true, cx);
+            }
+            ContainerWorkspaceEvent::BackupVolume(volume) => {
+                self.backup_volume(tab_id, volume.clone(), cx);
             }
             ContainerWorkspaceEvent::RestoreVolume(volume) => {
                 self.restore_volume(tab_id, volume.clone(), cx);

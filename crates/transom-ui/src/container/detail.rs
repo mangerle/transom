@@ -49,8 +49,8 @@ use file_bars::mode_label;
 pub(crate) use file_bars::parent_path;
 use files::ContainerFilesView;
 pub(super) use files::render_files;
-use header::ContainerHeaderView;
 pub(super) use header::detail_icon;
+use header::{ContainerHeaderView, render_detail_header};
 pub(crate) use image::render_image_detail;
 #[cfg(test)]
 pub(crate) use image_history::clean_dockerfile_instruction;
@@ -224,9 +224,9 @@ impl AppShell {
         .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string());
 
         let tabs = self.render_detail_tab_buttons(tab_id, section, detail_tab, p, cx);
-        let header = self.render_detail_header(
-            tab_id,
+        let header = render_detail_header(
             ContainerHeaderView {
+                view: &view,
                 section,
                 title,
                 tabs,
@@ -247,7 +247,6 @@ impl AppShell {
                 },
             },
             p,
-            cx,
         );
 
         let content = match (section, detail_tab) {
