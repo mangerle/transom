@@ -143,17 +143,20 @@ pub(crate) fn render_network_detail(
                     this.with_container_mut(tab_id, cx, |workspace| {
                         workspace.busy = true;
                     });
-                    this.send_tracked(
-                        tab_id,
-                        request_id,
-                        ContainerCommand::DisconnectNetwork {
-                            tab_id,
-                            request_id,
-                            network: net_id.clone(),
-                            container: disconnect_name.clone(),
-                            force: false,
-                        },
-                    );
+                    if let Some(workspace) = this.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.send_tracked(
+                                request_id,
+                                ContainerCommand::DisconnectNetwork {
+                                    tab_id,
+                                    request_id,
+                                    network: net_id.clone(),
+                                    container: disconnect_name.clone(),
+                                    force: false,
+                                },
+                            );
+                        });
+                    }
                     cx.notify();
                 })),
             );

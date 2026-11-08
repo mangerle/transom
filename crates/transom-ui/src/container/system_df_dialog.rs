@@ -51,14 +51,17 @@ impl AppShell {
             })
             .flatten();
         if let Some(previous) = previous {
-            self.cancel_container_request(tab_id, previous);
+            self.cancel_container_request(tab_id, previous, cx);
         }
         log::info!("正在查询全局系统磁盘占用，请求: {request_id}");
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::SystemDf { tab_id, request_id },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::SystemDf { tab_id, request_id },
+                );
+            });
+        }
     }
 
     /// 触发系统级联合深度清理（System Prune）。
@@ -79,16 +82,19 @@ impl AppShell {
         log::info!(
             "正在发起系统级联合清理，全量镜像: {all}，包含数据卷: {volumes}，请求: {request_id}"
         );
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::SystemPrune {
-                tab_id,
-                request_id,
-                all,
-                volumes,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::SystemPrune {
+                        tab_id,
+                        request_id,
+                        all,
+                        volumes,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 

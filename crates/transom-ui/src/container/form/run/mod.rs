@@ -209,7 +209,11 @@ impl AppShell {
                 spec,
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
         self.with_container_mut(tab_id, cx, |workspace| {
             workspace.apply_section(ContainerSection::Containers);
             workspace.notice = Some(rust_i18n::t!("container.run.submitting").to_string());

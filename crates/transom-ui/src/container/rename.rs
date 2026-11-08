@@ -94,16 +94,19 @@ impl AppShell {
         }
         let request_id = ContainerRequestId::new();
         self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::RenameContainer {
-                tab_id,
-                request_id,
-                container: id,
-                name,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::RenameContainer {
+                        tab_id,
+                        request_id,
+                        container: id,
+                        name,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

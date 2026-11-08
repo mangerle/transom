@@ -36,16 +36,19 @@ impl AppShell {
         self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::SaveImage {
-                tab_id,
-                request_id,
-                image: reference,
-                local_path,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::SaveImage {
+                        tab_id,
+                        request_id,
+                        image: reference,
+                        local_path,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 
@@ -62,15 +65,18 @@ impl AppShell {
         self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::LoadImage {
-                tab_id,
-                request_id,
-                local_path,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::LoadImage {
+                        tab_id,
+                        request_id,
+                        local_path,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

@@ -335,23 +335,26 @@ fn render_topology_card(
                 } else {
                     rust_i18n::t!("container.action.start").to_string()
                 })
-                .on_click(cx.listener(move |this, _, _, _cx| {
+                .on_click(cx.listener(move |this, _, _, cx| {
                     let action = if is_running {
                         ContainerLifecycleAction::Stop
                     } else {
                         ContainerLifecycleAction::Start
                     };
                     let req = ContainerRequestId::new();
-                    this.send_tracked(
-                        tab_id,
-                        req,
-                        transom_core::ContainerCommand::Lifecycle {
-                            tab_id,
-                            request_id: req,
-                            container: member_id_toggle.clone(),
-                            action,
-                        },
-                    );
+                    if let Some(workspace) = this.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.send_tracked(
+                                req,
+                                transom_core::ContainerCommand::Lifecycle {
+                                    tab_id,
+                                    request_id: req,
+                                    container: member_id_toggle.clone(),
+                                    action,
+                                },
+                            );
+                        });
+                    }
                 })),
         )
         .child(

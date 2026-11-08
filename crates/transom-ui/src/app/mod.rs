@@ -393,7 +393,7 @@ impl AppShell {
             .collect();
         self.state.container_auto_prune_last = Some(now);
         for tab_id in tabs {
-            self.request_container_auto_prune(tab_id);
+            self.request_container_auto_prune(tab_id, cx);
         }
     }
 

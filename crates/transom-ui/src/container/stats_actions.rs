@@ -98,17 +98,20 @@ impl AppShell {
         log::debug!(
             "请求容器统计，标签: {tab_id}，容器: {container}，间隔: {interval_ms}ms，请求: {request_id}"
         );
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::Stats {
-                tab_id,
-                request_id,
-                container,
-                enabled: true,
-                interval_ms,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::Stats {
+                        tab_id,
+                        request_id,
+                        container,
+                        enabled: true,
+                        interval_ms,
+                    },
+                );
+            });
+        }
     }
 
     /// 切换采样档位：保留当前值与已绘制的历史，只按新间隔重启后续采样。
@@ -139,7 +142,7 @@ impl AppShell {
             })
             .flatten();
         if let Some(request_id) = request_id {
-            self.cancel_container_request(tab_id, request_id);
+            self.cancel_container_request(tab_id, request_id, cx);
         }
         self.ensure_container_stats(tab_id, cx);
         cx.notify();
@@ -174,15 +177,18 @@ impl AppShell {
             workspace.stats_processes_loading = true;
             workspace.stats_processes_error = None;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::ListProcesses {
-                tab_id,
-                request_id,
-                container,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::ListProcesses {
+                        tab_id,
+                        request_id,
+                        container,
+                    },
+                );
+            });
+        }
     }
 
     /// 切换统计走势图形态：与主机监控共用同一套折线/柱状组件。

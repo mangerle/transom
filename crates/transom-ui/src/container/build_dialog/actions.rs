@@ -209,15 +209,18 @@ impl AppShell {
             platform: (!platform_val.is_empty()).then_some(platform_val),
         };
 
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::BuildImage {
-                tab_id,
-                request_id,
-                spec,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::BuildImage {
+                        tab_id,
+                        request_id,
+                        spec,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

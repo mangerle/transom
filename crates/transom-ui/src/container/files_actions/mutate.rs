@@ -91,16 +91,19 @@ impl AppShell {
             workspace.busy = true;
         });
         input.update(cx, |input, cx| input.set_value("", window, cx));
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::CreateDir {
-                tab_id,
-                request_id,
-                container,
-                path,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::CreateDir {
+                        tab_id,
+                        request_id,
+                        container,
+                        path,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

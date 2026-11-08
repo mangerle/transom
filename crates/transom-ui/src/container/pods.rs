@@ -42,11 +42,14 @@ impl AppShell {
             workspace.pods_loading = true;
             workspace.pods_error = None;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::ListPods { tab_id, request_id },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::ListPods { tab_id, request_id },
+                );
+            });
+        }
     }
 
     /// 对 Pod 执行启停/重启/删除，完成后自动刷新列表。
@@ -71,16 +74,19 @@ impl AppShell {
             workspace.pods_loading = true;
             workspace.pods_error = None;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::PodAction {
-                tab_id,
-                request_id,
-                pod,
-                action,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::PodAction {
+                        tab_id,
+                        request_id,
+                        pod,
+                        action,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 
@@ -91,7 +97,7 @@ impl AppShell {
         pods: Vec<transom_core::ContainerPodSummary>,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let applied = self.with_container_mut(tab_id, cx, |workspace| {

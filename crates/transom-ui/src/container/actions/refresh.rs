@@ -38,19 +38,26 @@ impl AppShell {
             ContainerSection::Volumes => ContainerCommand::ListVolumes { tab_id, request_id },
             ContainerSection::Networks => ContainerCommand::ListNetworks { tab_id, request_id },
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
         // 卷分类要同时拉容器列表：「在用 / 空闲」与「仅未使用卷」都靠容器的挂载
         // 明细算，缺了这份数据会把在用卷说成空闲，用户据此删除就是事故。
         if section == ContainerSection::Volumes {
             let usage_request = ContainerRequestId::new();
-            self.send_tracked(
-                tab_id,
-                usage_request,
-                ContainerCommand::ListContainers {
-                    tab_id,
-                    request_id: usage_request,
-                },
-            );
+            if let Some(workspace) = self.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, _| {
+                    workspace.send_tracked(
+                        usage_request,
+                        ContainerCommand::ListContainers {
+                            tab_id,
+                            request_id: usage_request,
+                        },
+                    );
+                });
+            }
         }
     }
 
@@ -76,46 +83,58 @@ impl AppShell {
 
         // 1. 容器与编排项目
         let req_containers = ContainerRequestId::new();
-        self.send_tracked(
-            tab_id,
-            req_containers,
-            ContainerCommand::ListContainers {
-                tab_id,
-                request_id: req_containers,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    req_containers,
+                    ContainerCommand::ListContainers {
+                        tab_id,
+                        request_id: req_containers,
+                    },
+                );
+            });
+        }
 
         // 2. 镜像
         let req_images = ContainerRequestId::new();
-        self.send_tracked(
-            tab_id,
-            req_images,
-            ContainerCommand::ListImages {
-                tab_id,
-                request_id: req_images,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    req_images,
+                    ContainerCommand::ListImages {
+                        tab_id,
+                        request_id: req_images,
+                    },
+                );
+            });
+        }
 
         // 3. 数据卷
         let req_volumes = ContainerRequestId::new();
-        self.send_tracked(
-            tab_id,
-            req_volumes,
-            ContainerCommand::ListVolumes {
-                tab_id,
-                request_id: req_volumes,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    req_volumes,
+                    ContainerCommand::ListVolumes {
+                        tab_id,
+                        request_id: req_volumes,
+                    },
+                );
+            });
+        }
 
         // 4. 网络
         let req_networks = ContainerRequestId::new();
-        self.send_tracked(
-            tab_id,
-            req_networks,
-            ContainerCommand::ListNetworks {
-                tab_id,
-                request_id: req_networks,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    req_networks,
+                    ContainerCommand::ListNetworks {
+                        tab_id,
+                        request_id: req_networks,
+                    },
+                );
+            });
+        }
     }
 }

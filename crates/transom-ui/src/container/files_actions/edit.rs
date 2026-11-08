@@ -96,7 +96,11 @@ impl AppShell {
                 content,
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
         cx.notify();
     }
 }

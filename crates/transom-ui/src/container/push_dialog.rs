@@ -125,18 +125,21 @@ impl AppShell {
         let request_id = ContainerRequestId::new();
 
         // 打标签与推送放在同一条命令里顺序执行，避免 push 抢在 tag 完成之前。
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::PushTaggedImage {
-                tab_id,
-                request_id,
-                source_image: image_id,
-                repo: target_repo,
-                tag: Some(tag),
-                auth,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::PushTaggedImage {
+                        tab_id,
+                        request_id,
+                        source_image: image_id,
+                        repo: target_repo,
+                        tag: Some(tag),
+                        auth,
+                    },
+                );
+            });
+        }
 
         // 关闭推送弹窗并记录通知
         self.with_container_mut(tab_id, cx, |workspace| {

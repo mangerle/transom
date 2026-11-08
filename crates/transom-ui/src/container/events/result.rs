@@ -10,8 +10,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let label = self.state.containers.label_of(request_id);
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let label = self.container_request_label(request_id, cx);
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let mut refresh = false;
@@ -97,8 +97,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let label = self.state.containers.label_of(request_id);
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let label = self.container_request_label(request_id, cx);
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let toast = match &error {
@@ -139,8 +139,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let label = self.state.containers.label_of(request_id);
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let label = self.container_request_label(request_id, cx);
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let err_desc = localized_error(&error);
@@ -230,7 +230,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let message = if deleted_count == 0 {

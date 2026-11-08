@@ -259,16 +259,19 @@ impl AppShell {
                 rust_i18n::t!("container.compose.running", action = action.label()).to_string(),
             );
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::RunCompose {
-                tab_id,
-                request_id,
-                project: Box::new(project),
-                action,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::RunCompose {
+                        tab_id,
+                        request_id,
+                        project: Box::new(project),
+                        action,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

@@ -83,7 +83,11 @@ impl AppShell {
             return;
         };
         for request_id in requests.into_iter().flatten() {
-            self.state.containers.requests.remove(&request_id);
+            if let Some(workspace) = self.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, _| {
+                    workspace.take_request(request_id);
+                });
+            }
             self.state
                 .send_command(ContainerCommand::Cancel { tab_id, request_id });
         }
@@ -94,8 +98,13 @@ impl AppShell {
         &mut self,
         tab_id: TabId,
         request_id: ContainerRequestId,
+        cx: &mut Context<Self>,
     ) {
-        self.state.containers.requests.remove(&request_id);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.take_request(request_id);
+            });
+        }
         self.state
             .send_command(ContainerCommand::Cancel { tab_id, request_id });
     }

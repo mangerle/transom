@@ -44,11 +44,14 @@ impl AppShell {
             workspace.quadlets_loading = true;
             workspace.quadlets_error = None;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::ListQuadlets { tab_id, request_id },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::ListQuadlets { tab_id, request_id },
+                );
+            });
+        }
     }
 
     pub(crate) fn container_quadlet_action(
@@ -72,16 +75,19 @@ impl AppShell {
             workspace.quadlets_loading = true;
             workspace.quadlets_error = None;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::QuadletAction {
-                tab_id,
-                request_id,
-                unit,
-                action,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::QuadletAction {
+                        tab_id,
+                        request_id,
+                        unit,
+                        action,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 
@@ -91,7 +97,7 @@ impl AppShell {
         units: Vec<transom_core::ContainerQuadletUnit>,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let applied = self.with_container_mut(tab_id, cx, |workspace| {

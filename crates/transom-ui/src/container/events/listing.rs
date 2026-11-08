@@ -14,7 +14,7 @@ impl AppShell {
                 request_id,
                 containers,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 let mut inspect_first = None;
@@ -63,22 +63,25 @@ impl AppShell {
                     self.select_container_item(tab_id, id, cx);
                 } else if let Some(id) = re_inspect_id {
                     let request_id = ContainerRequestId::new();
-                    self.send_tracked(
-                        tab_id,
-                        request_id,
-                        ContainerCommand::InspectContainer {
-                            tab_id,
-                            request_id,
-                            container: id,
-                        },
-                    );
+                    if let Some(workspace) = self.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.send_tracked(
+                                request_id,
+                                ContainerCommand::InspectContainer {
+                                    tab_id,
+                                    request_id,
+                                    container: id,
+                                },
+                            );
+                        });
+                    }
                 }
             }
             ContainerAppEvent::ContainerInspected {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 self.with_container_mut(tab_id, cx, |workspace| {
@@ -87,7 +90,7 @@ impl AppShell {
                 });
             }
             ContainerAppEvent::ImagesListed { request_id, images } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 let selected = self
@@ -108,22 +111,25 @@ impl AppShell {
                     .flatten();
                 if let Some(id) = selected {
                     let request_id = ContainerRequestId::new();
-                    self.send_tracked(
-                        tab_id,
-                        request_id,
-                        ContainerCommand::InspectImage {
-                            tab_id,
-                            request_id,
-                            image: id,
-                        },
-                    );
+                    if let Some(workspace) = self.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.send_tracked(
+                                request_id,
+                                ContainerCommand::InspectImage {
+                                    tab_id,
+                                    request_id,
+                                    image: id,
+                                },
+                            );
+                        });
+                    }
                 }
             }
             ContainerAppEvent::ImageInspected {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 self.with_container_mut(tab_id, cx, |workspace| {
@@ -135,7 +141,7 @@ impl AppShell {
                 request_id,
                 volumes,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 let selected = self
@@ -155,22 +161,25 @@ impl AppShell {
                     .flatten();
                 if let Some(name) = selected {
                     let request_id = ContainerRequestId::new();
-                    self.send_tracked(
-                        tab_id,
-                        request_id,
-                        ContainerCommand::InspectVolume {
-                            tab_id,
-                            request_id,
-                            name,
-                        },
-                    );
+                    if let Some(workspace) = self.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.send_tracked(
+                                request_id,
+                                ContainerCommand::InspectVolume {
+                                    tab_id,
+                                    request_id,
+                                    name,
+                                },
+                            );
+                        });
+                    }
                 }
             }
             ContainerAppEvent::VolumeInspected {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 self.with_container_mut(tab_id, cx, |workspace| {
@@ -182,7 +191,7 @@ impl AppShell {
                 request_id,
                 networks,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 let selected = self
@@ -203,22 +212,25 @@ impl AppShell {
                     .flatten();
                 if let Some(id) = selected {
                     let request_id = ContainerRequestId::new();
-                    self.send_tracked(
-                        tab_id,
-                        request_id,
-                        ContainerCommand::InspectNetwork {
-                            tab_id,
-                            request_id,
-                            network: id,
-                        },
-                    );
+                    if let Some(workspace) = self.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.send_tracked(
+                                request_id,
+                                ContainerCommand::InspectNetwork {
+                                    tab_id,
+                                    request_id,
+                                    network: id,
+                                },
+                            );
+                        });
+                    }
                 }
             }
             ContainerAppEvent::NetworkInspected {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 self.with_container_mut(tab_id, cx, |workspace| {
@@ -230,7 +242,7 @@ impl AppShell {
                 request_id,
                 projects,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 self.with_container_mut(tab_id, cx, |workspace| {
@@ -248,7 +260,7 @@ impl AppShell {
                 request_id,
                 processes,
             } => {
-                let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+                let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
                 self.with_container_mut(tab_id, cx, |workspace| {

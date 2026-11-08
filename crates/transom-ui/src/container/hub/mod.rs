@@ -113,17 +113,20 @@ impl AppShell {
             }
         });
 
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::SearchImages {
-                tab_id,
-                request_id,
-                registry,
-                term,
-                limit: Some(25),
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::SearchImages {
+                        tab_id,
+                        request_id,
+                        registry,
+                        term,
+                        limit: Some(25),
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 
@@ -176,16 +179,19 @@ impl AppShell {
                 hub.tags_request = Some(request_id);
             }
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::ListImageTags {
-                tab_id,
-                request_id,
-                registry,
-                repository,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::ListImageTags {
+                        tab_id,
+                        request_id,
+                        registry,
+                        repository,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 

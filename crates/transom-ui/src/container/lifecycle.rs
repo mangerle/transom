@@ -26,16 +26,19 @@ impl AppShell {
                 rust_i18n::t!("container.action.running", action = action.label()).to_string(),
             );
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::Lifecycle {
-                tab_id,
-                request_id,
-                container,
-                action,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::Lifecycle {
+                        tab_id,
+                        request_id,
+                        container,
+                        action,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 
@@ -58,16 +61,19 @@ impl AppShell {
                 .to_string(),
             );
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::UpdateContainer {
-                tab_id,
-                request_id,
-                container,
-                spec,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::UpdateContainer {
+                        tab_id,
+                        request_id,
+                        container,
+                        spec,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 
@@ -95,16 +101,19 @@ impl AppShell {
                 else {
                     return;
                 };
-                self.send_tracked(
-                    tab_id,
-                    request_id,
-                    ContainerCommand::RunCompose {
-                        tab_id,
-                        request_id,
-                        project: Box::new(project),
-                        action: transom_core::ComposeAction::Down,
-                    },
-                );
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.send_tracked(
+                            request_id,
+                            ContainerCommand::RunCompose {
+                                tab_id,
+                                request_id,
+                                project: Box::new(project),
+                                action: transom_core::ComposeAction::Down,
+                            },
+                        );
+                    });
+                }
                 cx.notify();
                 return;
             }
@@ -180,7 +189,11 @@ impl AppShell {
             workspace.busy = true;
             workspace.confirm = None;
         });
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
         cx.notify();
     }
 
@@ -272,7 +285,11 @@ impl AppShell {
         self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
         create_input.update(cx, |input, cx| input.set_value("", window, cx));
         self.state.containers.create_dialog = None;
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
         cx.notify();
     }
 
@@ -370,7 +387,11 @@ impl AppShell {
                 ContainerCommand::PruneNetworks { tab_id, request_id }
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
         cx.notify();
     }
 }

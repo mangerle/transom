@@ -1,4 +1,4 @@
-//! 引擎侧栏与工作区共用的弹窗、发现结果与请求登记状态。
+//! 引擎侧栏与工作区共用的弹窗与发现结果状态。
 
 use super::*;
 
@@ -77,8 +77,6 @@ pub(crate) struct ContainerUiState {
     pub(crate) run_form: Option<ContainerRunForm>,
     /// 拉取镜像 / 新建卷 / 新建网络的弹窗：字段随分类不同。
     pub(crate) create_dialog: Option<ContainerCreateDialog>,
-    /// 请求 ID → 所属工作区标签与动作描述；事件按它路由。
-    pub(crate) requests: HashMap<ContainerRequestId, ContainerRequest>,
     /// 最近一次「发现本机引擎」的结果面板。
     pub(crate) discovery: Option<ContainerDiscovery>,
     /// 正在进行的发现请求，避免连点重复探测。
@@ -98,50 +96,6 @@ pub(crate) struct EngineFolderForm {
     pub(crate) editing: Option<transom_core::FolderId>,
     pub(crate) input: Entity<InputState>,
     pub(crate) error: Option<String>,
-}
-
-impl ContainerUiState {
-    pub(crate) fn track(
-        &mut self,
-        request_id: ContainerRequestId,
-        tab_id: TabId,
-        label: Option<String>,
-    ) {
-        self.requests.insert(
-            request_id,
-            ContainerRequest {
-                tab_id,
-                label: label.filter(|label| !label.is_empty()),
-            },
-        );
-    }
-
-    pub(crate) fn take_tab(&mut self, request_id: ContainerRequestId) -> Option<TabId> {
-        self.requests
-            .remove(&request_id)
-            .map(|request| request.tab_id)
-    }
-
-    pub(crate) fn tab_of(&self, request_id: ContainerRequestId) -> Option<TabId> {
-        self.requests.get(&request_id).map(|request| request.tab_id)
-    }
-
-    /// 取回发送时登记的动作描述（不消费记录）：结果事件用它拼提示文案。
-    pub(crate) fn label_of(&self, request_id: ContainerRequestId) -> Option<String> {
-        self.requests
-            .get(&request_id)
-            .and_then(|request| request.label.clone())
-    }
-}
-
-/// 一条在途请求的路由信息。
-///
-/// 设计原理（Why）：结果事件只带 `request_id`，要给出「启动 web-1 成功」这样的
-/// 可读提示，就得在发送时把动作描述一起登记；只读请求（列表、inspect、日志）
-/// 的 `label` 为空，成功时不弹提示，避免每次刷新都糊一条 toast。
-pub(crate) struct ContainerRequest {
-    pub(crate) tab_id: TabId,
-    pub(crate) label: Option<String>,
 }
 
 /// 端点输入档位。

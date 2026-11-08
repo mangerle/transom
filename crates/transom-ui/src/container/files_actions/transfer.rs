@@ -51,7 +51,11 @@ impl AppShell {
                 local_path,
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
     }
 
     /// 把容器内目录导出为本地 tar 归档。
@@ -90,17 +94,20 @@ impl AppShell {
         self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::DownloadDirectory {
-                tab_id,
-                request_id,
-                container: target,
-                path,
-                local_path,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::DownloadDirectory {
+                        tab_id,
+                        request_id,
+                        container: target,
+                        path,
+                        local_path,
+                    },
+                );
+            });
+        }
     }
 
     /// 上传指定本地路径的文件到容器当前目录；目标已存在时先确认覆盖。
@@ -172,7 +179,11 @@ impl AppShell {
                 local_path,
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
     }
 
     /// 上传本地文件到当前目录。

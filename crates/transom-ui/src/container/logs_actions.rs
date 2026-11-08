@@ -36,33 +36,39 @@ impl AppShell {
             workspace.logs.clear();
             workspace.logs_request = Some(request_id);
         });
-        if let Some((project, containers)) = project {
-            self.send_tracked(
-                tab_id,
-                request_id,
-                ContainerCommand::ProjectLogs {
-                    tab_id,
+        if let Some((project, containers)) = project
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
                     request_id,
-                    project,
-                    containers,
-                    tail,
-                    follow,
-                    timestamps,
-                },
-            );
-        } else if let Some(container) = container {
-            self.send_tracked(
-                tab_id,
-                request_id,
-                ContainerCommand::Logs {
-                    tab_id,
+                    ContainerCommand::ProjectLogs {
+                        tab_id,
+                        request_id,
+                        project,
+                        containers,
+                        tail,
+                        follow,
+                        timestamps,
+                    },
+                );
+            });
+        } else if let Some(container) = container
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
                     request_id,
-                    container,
-                    tail,
-                    follow,
-                    timestamps,
-                },
-            );
+                    ContainerCommand::Logs {
+                        tab_id,
+                        request_id,
+                        container,
+                        tail,
+                        follow,
+                        timestamps,
+                    },
+                );
+            });
         }
     }
 
@@ -72,7 +78,7 @@ impl AppShell {
             .with_container_mut(tab_id, cx, |workspace| workspace.logs_request.take())
             .flatten()
         {
-            self.cancel_container_request(tab_id, request_id);
+            self.cancel_container_request(tab_id, request_id, cx);
         }
         self.ensure_container_logs(tab_id, cx);
     }

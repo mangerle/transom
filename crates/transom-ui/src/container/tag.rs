@@ -76,17 +76,20 @@ impl AppShell {
             workspace.tag_image = None;
         });
 
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::TagImage {
-                tab_id,
-                request_id,
-                image,
-                repo,
-                tag,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::TagImage {
+                        tab_id,
+                        request_id,
+                        image,
+                        repo,
+                        tag,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

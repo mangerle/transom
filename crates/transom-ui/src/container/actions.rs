@@ -9,34 +9,23 @@ mod requests;
 mod volume_archive;
 
 impl AppShell {
-    pub(crate) fn send_tracked(
-        &mut self,
-        tab_id: TabId,
-        request_id: ContainerRequestId,
-        command: ContainerCommand,
-    ) {
-        // 发送时就登记动作描述：结果事件只带 request_id，提示要靠它说清「做了什么」。
-        let label = command_toast_label(&command);
-        self.state.containers.track(request_id, tab_id, label);
-        if !self.state.send_command(command) {
-            self.state.containers.requests.remove(&request_id);
-        }
-    }
-
     /// 对单个已连接工作区发起一次轻量清理；由应用级定时器调用。
-    pub(crate) fn request_container_auto_prune(&mut self, tab_id: TabId) {
+    pub(crate) fn request_container_auto_prune(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let request_id = ContainerRequestId::new();
         log::info!("容器自动清理触发，标签: {tab_id}，请求: {request_id}");
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::SystemPrune {
-                tab_id,
-                request_id,
-                all: false,
-                volumes: false,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::SystemPrune {
+                        tab_id,
+                        request_id,
+                        all: false,
+                        volumes: false,
+                    },
+                );
+            });
+        }
     }
 
     /// 切换顶部功能分类：清空选中项并拉取该分类列表。
@@ -84,15 +73,18 @@ impl AppShell {
             workspace.confirm = None;
             workspace.notice = None;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::InspectContainer {
-                tab_id,
-                request_id,
-                container: id,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::InspectContainer {
+                        tab_id,
+                        request_id,
+                        container: id,
+                    },
+                );
+            });
+        }
     }
 
     pub(crate) fn select_image_item(&mut self, tab_id: TabId, id: String, cx: &mut Context<Self>) {
@@ -102,15 +94,18 @@ impl AppShell {
             workspace.image_details = None;
             workspace.detail_tab = ContainerDetailTab::Overview;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::InspectImage {
-                tab_id,
-                request_id,
-                image: id,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::InspectImage {
+                        tab_id,
+                        request_id,
+                        image: id,
+                    },
+                );
+            });
+        }
     }
 
     pub(crate) fn select_volume_item(
@@ -125,15 +120,18 @@ impl AppShell {
             workspace.volume_details = None;
             workspace.detail_tab = ContainerDetailTab::Overview;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::InspectVolume {
-                tab_id,
-                request_id,
-                name,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::InspectVolume {
+                        tab_id,
+                        request_id,
+                        name,
+                    },
+                );
+            });
+        }
     }
 
     pub(crate) fn select_network_item(
@@ -148,15 +146,18 @@ impl AppShell {
             workspace.network_details = None;
             workspace.detail_tab = ContainerDetailTab::Overview;
         });
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::InspectNetwork {
-                tab_id,
-                request_id,
-                network: id,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::InspectNetwork {
+                        tab_id,
+                        request_id,
+                        network: id,
+                    },
+                );
+            });
+        }
     }
 
     pub(crate) fn select_compose_item(
@@ -398,7 +399,7 @@ impl AppShell {
             && tab != ContainerDetailTab::Logs
             && let Some(request_id) = logs
         {
-            self.cancel_container_request(tab_id, request_id);
+            self.cancel_container_request(tab_id, request_id, cx);
             self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.logs_request = None;
                 workspace.logs_follow = false;
@@ -408,7 +409,7 @@ impl AppShell {
             && tab != ContainerDetailTab::Stats
             && let Some(request_id) = stats
         {
-            self.cancel_container_request(tab_id, request_id);
+            self.cancel_container_request(tab_id, request_id, cx);
             self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.stats_request = None;
             });
@@ -420,7 +421,7 @@ impl AppShell {
                 })
                 .flatten();
             if let Some(request_id) = processes {
-                self.cancel_container_request(tab_id, request_id);
+                self.cancel_container_request(tab_id, request_id, cx);
                 self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.stats_processes_loading = false;
                 });
@@ -431,7 +432,7 @@ impl AppShell {
             && tab != ContainerDetailTab::Terminal
             && let Some(request_id) = terminal
         {
-            self.cancel_container_request(tab_id, request_id);
+            self.cancel_container_request(tab_id, request_id, cx);
             self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.terminal_request = None;
             });

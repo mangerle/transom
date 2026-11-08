@@ -18,7 +18,7 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tab_id = self.state.containers.take_tab(request_id);
+        let tab_id = self.take_container_request(request_id, cx);
         if let Some(tab_id) = tab_id {
             let applied = self.with_container_mut(tab_id, cx, |workspace| {
                 let Some(hub) = workspace.hub_dialog.as_mut() else {
@@ -46,7 +46,7 @@ impl AppShell {
         tags: Vec<String>,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
         let applied = self.with_container_mut(tab_id, cx, |workspace| {
@@ -157,14 +157,17 @@ impl AppShell {
                 self.show_toast(msg, true, window, cx);
                 // 自动刷新镜像列表以呈现新载入的镜像
                 let req_images = ContainerRequestId::new();
-                self.send_tracked(
-                    tab_id,
-                    req_images,
-                    ContainerCommand::ListImages {
-                        tab_id,
-                        request_id: req_images,
-                    },
-                );
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.send_tracked(
+                            req_images,
+                            ContainerCommand::ListImages {
+                                tab_id,
+                                request_id: req_images,
+                            },
+                        );
+                    });
+                }
             }
 
             // 调度排队中的下一个下载任务

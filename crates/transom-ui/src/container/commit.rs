@@ -108,19 +108,22 @@ impl AppShell {
             workspace.commit_container = None;
         });
 
-        self.send_tracked(
-            tab_id,
-            request_id,
-            ContainerCommand::CommitContainer {
-                tab_id,
-                request_id,
-                container,
-                repo,
-                tag,
-                comment,
-                author: None,
-            },
-        );
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(
+                    request_id,
+                    ContainerCommand::CommitContainer {
+                        tab_id,
+                        request_id,
+                        container,
+                        repo,
+                        tag,
+                        comment,
+                        author: None,
+                    },
+                );
+            });
+        }
         cx.notify();
     }
 }

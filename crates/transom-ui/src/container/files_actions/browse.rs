@@ -40,7 +40,7 @@ impl AppShell {
             })
             .flatten();
         if let Some(previous) = previous {
-            self.cancel_container_request(tab_id, previous);
+            self.cancel_container_request(tab_id, previous, cx);
         }
         let command = if is_volume {
             log::info!("打开数据卷目录，卷: {target}，路径: {path}，请求: {request_id}");
@@ -59,7 +59,11 @@ impl AppShell {
                 path,
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
     }
 
     /// 预览容器或数据卷内文本文件。
@@ -106,6 +110,10 @@ impl AppShell {
                 max_bytes: 1024 * 1024,
             }
         };
-        self.send_tracked(tab_id, request_id, command);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.send_tracked(request_id, command);
+            });
+        }
     }
 }
