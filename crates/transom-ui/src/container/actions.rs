@@ -163,6 +163,57 @@ impl ContainerWorkspace {
         self.refresh_section();
         cx.notify();
     }
+
+    /// 从编排/卷/网络详情跳到某个容器：必要时先切分类并拉列表。
+    ///
+    /// 设计原理（Why）：跳转只改本工作区的分类、待选中项与列表，不涉及窗口或
+    /// 其它实体，因此归属工作区实体；详情页拿到实体句柄后直接调用，不必再经
+    /// 外壳转发。
+    pub(crate) fn reveal_container(&mut self, name: String, cx: &mut Context<Self>) {
+        let already_visible = self.state.section == ContainerSection::Containers
+            && self.state.containers.iter().any(|item| item.name == name);
+        let visible_id = self
+            .state
+            .containers
+            .iter()
+            .find(|item| item.name == name)
+            .map(|item| item.id.clone());
+        let need_list =
+            self.state.section != ContainerSection::Containers || self.state.containers.is_empty();
+        if already_visible {
+            if let Some(id) = visible_id {
+                self.select_container_item(id);
+                cx.notify();
+            }
+            return;
+        }
+        self.state.apply_section(ContainerSection::Containers);
+        self.state.pending_select = Some(name);
+        if need_list {
+            self.stop_container_streams();
+            self.refresh_section();
+        }
+        cx.notify();
+    }
+
+    /// 把一个容器从指定网络断开。
+    ///
+    /// 设计原理（Why）：断网只是向控制器投递命令并登记在途请求，动作完全落在
+    /// 本实体上；网络详情页直接调用，不再经外壳的 `with_container_mut` 转手。
+    pub(crate) fn disconnect_network(&mut self, network: String, container: String) {
+        let request_id = ContainerRequestId::new();
+        self.state.busy = true;
+        self.send_tracked(
+            request_id,
+            ContainerCommand::DisconnectNetwork {
+                tab_id: self.tab_id,
+                request_id,
+                network,
+                container,
+                force: false,
+            },
+        );
+    }
 }
 
 impl AppShell {
@@ -442,42 +493,6 @@ impl AppShell {
             | ContainerDetailTab::History
             | ContainerDetailTab::Yaml => {}
         }
-        cx.notify();
-    }
-
-    /// 从编排/卷/网络详情跳到某个容器：必要时先切分类并拉列表。
-    pub(crate) fn reveal_container(&mut self, tab_id: TabId, name: String, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
-            return;
-        };
-        let (already_visible, visible_id, need_list) = {
-            let state = &workspace.read(cx).state;
-            let already_visible = state.section == ContainerSection::Containers
-                && state.containers.iter().any(|item| item.name == name);
-            let visible_id = state
-                .containers
-                .iter()
-                .find(|item| item.name == name)
-                .map(|item| item.id.clone());
-            let need_list =
-                state.section != ContainerSection::Containers || state.containers.is_empty();
-            (already_visible, visible_id, need_list)
-        };
-        if already_visible {
-            if let Some(id) = visible_id {
-                workspace.update(cx, |workspace, _| workspace.select_container_item(id));
-                cx.notify();
-            }
-            return;
-        }
-        workspace.update(cx, |workspace, _| {
-            workspace.state.apply_section(ContainerSection::Containers);
-            workspace.state.pending_select = Some(name);
-            if need_list {
-                workspace.stop_container_streams();
-                workspace.refresh_section();
-            }
-        });
         cx.notify();
     }
 }

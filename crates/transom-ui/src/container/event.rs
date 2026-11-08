@@ -55,6 +55,11 @@ pub(crate) enum ContainerWorkspaceEvent {
         /// 已发布到宿主机的端口；`None` 表示直接用私有端口。
         public: Option<u16>,
     },
+    /// 打开数据卷详情对应的文件浏览器。
+    ///
+    /// 卷详情只显示「浏览文件」入口；切到文件页签与拉取根目录都要走外壳既有的
+    /// 目录加载链路，因此以事件上报，由外壳在渲染期执行。
+    OpenVolumeFiles,
     /// 对列表行执行动作；具体分发由外壳统一完成，其中部分动作需要窗口。
     RunRowAction {
         target: RowTarget,
@@ -118,6 +123,7 @@ impl AppShell {
             | ContainerWorkspaceEvent::OpenCreateDialog(_)
             | ContainerWorkspaceEvent::OpenBuildDialog
             | ContainerWorkspaceEvent::OpenPortForward { .. }
+            | ContainerWorkspaceEvent::OpenVolumeFiles
             | ContainerWorkspaceEvent::RunRowAction { .. } => {
                 self.state
                     .window_requests

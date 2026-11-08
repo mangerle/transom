@@ -175,14 +175,14 @@ pub(crate) fn render_container_overview(
 /// 关联容器行：卷、网络与编排详情里点名字直接跳到那个容器。
 ///
 /// 设计原理（Why）：这三类详情天然带「谁在用我」的关系，原先只把名字拼成一段
-/// 文本，用户看到也只能再回列表用搜索找；跳转由 `reveal_container` 负责切分类与
-/// 延迟选中，因此这里只需要一个按钮。
+/// 文本，用户看到也只能再回列表用搜索找；跳转由工作区实体的 `reveal_container`
+/// 负责切分类与延迟选中，因此这里只需要一个按钮。渲染只持有实体句柄，点击后
+/// 在实体内完成选择与刷新，不再依赖外壳上下文。
 pub(crate) fn linked_containers(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     title: String,
     items: Vec<(String, String)>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let mut block = v_flex()
         .gap_0p5()
@@ -197,6 +197,7 @@ pub(crate) fn linked_containers(
     }
     for (name, hint) in items {
         let reveal_name = name.clone();
+        let link_view = view.clone();
         let mut row = h_flex()
             .gap_2()
             .items_center()
@@ -206,15 +207,15 @@ pub(crate) fn linked_containers(
                     .text_color(p.muted_foreground),
             )
             .child(
-                Button::new(ElementId::Name(
-                    format!("container-link-{name}-{tab_id}").into(),
-                ))
-                .ghost()
-                .xsmall()
-                .label(name)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.reveal_container(tab_id, reveal_name.clone(), cx);
-                })),
+                Button::new(ElementId::Name(format!("container-link-{name}").into()))
+                    .ghost()
+                    .xsmall()
+                    .label(name)
+                    .on_click(move |_, _, cx| {
+                        link_view.update(cx, |workspace, cx| {
+                            workspace.reveal_container(reveal_name.clone(), cx);
+                        });
+                    }),
             );
         if !hint.is_empty() {
             row = row.child(div().text_xs().text_color(p.muted_foreground).child(hint));

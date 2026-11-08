@@ -1,19 +1,19 @@
 //! 数据卷详情。
 
 use super::*;
+use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
 
 pub(crate) fn render_volume_detail(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     summary: Option<&transom_core::ContainerVolumeSummary>,
     details: Option<&ContainerVolumeDetails>,
     overview_raw: bool,
-    inspect: RawInspectView<'_>,
+    inspect: InspectSearch<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if overview_raw {
         let inspect_text = details.map(|d| d.inspect.as_str()).unwrap_or_default();
-        return render_raw_inspect(inspect.workspace, inspect_text, inspect.search, p);
+        return render_raw_inspect(view, inspect_text, inspect, p);
     }
 
     let (name, driver, mountpoint, created, labels, options, used_by) =
@@ -53,19 +53,18 @@ pub(crate) fn render_volume_detail(
         .map(|(key, value)| format!("{key}={value}"))
         .collect::<Vec<_>>()
         .join("\n");
+    let browse_view = view.clone();
     let browse_bar = h_flex().pb_1().child(
         Button::new("browse-volume-files")
             .primary()
             .small()
             .icon(IconName::FolderOpen)
             .label(rust_i18n::t!("container.files.browse").to_string())
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.with_container_mut(tab_id, cx, |w| {
-                    w.detail_tab = ContainerDetailTab::Files;
+            .on_click(move |_, _, cx| {
+                browse_view.update(cx, |_, cx| {
+                    cx.emit(ContainerWorkspaceEvent::OpenVolumeFiles);
                 });
-                this.load_container_dir(tab_id, "/".to_string(), cx);
-                cx.notify();
-            })),
+            }),
     );
     let rows = v_flex()
         .gap_1p5()
@@ -81,26 +80,26 @@ pub(crate) fn render_volume_detail(
         .child(kv(p, rust_i18n::t!("container.field.created"), created))
         .child(kv(p, rust_i18n::t!("container.field.labels"), labels))
         .child(linked_containers(
-            tab_id,
+            view,
             rust_i18n::t!("container.field.used_by").to_string(),
             used_by
                 .into_iter()
                 .map(|name| (name, String::new()))
                 .collect(),
             p,
-            cx,
         ));
+    let raw_view = view.clone();
     let raw_btn = Button::new("volume-overview-raw-inspect")
         .xsmall()
         .ghost()
         .icon(IconName::Braces)
         .label(rust_i18n::t!("container.field.inspect").to_string())
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.with_container_mut(tab_id, cx, |workspace| {
-                workspace.overview_raw = true;
+        .on_click(move |_, _, cx| {
+            raw_view.update(cx, |workspace, cx| {
+                workspace.state.overview_raw = true;
+                cx.notify();
             });
-            cx.notify();
-        }))
+        })
         .into_any_element();
 
     let card = super::overview_cards::overview_card(

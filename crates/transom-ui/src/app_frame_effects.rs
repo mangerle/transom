@@ -216,6 +216,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        use crate::container::ContainerDetailTab;
         use crate::container::ContainerWorkspaceEvent;
         match event {
             ContainerWorkspaceEvent::OpenRunForm(image) => {
@@ -236,6 +237,14 @@ impl AppShell {
                 public,
             } => {
                 self.open_container_port_forward(tab_id, container, *private, *public, window, cx);
+            }
+            ContainerWorkspaceEvent::OpenVolumeFiles => {
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.detail_tab = ContainerDetailTab::Files;
+                    });
+                }
+                self.load_container_dir(tab_id, "/".to_string(), cx);
             }
             ContainerWorkspaceEvent::RunRowAction { target, action } => {
                 self.run_row_action(tab_id, target.clone(), *action, window, cx);

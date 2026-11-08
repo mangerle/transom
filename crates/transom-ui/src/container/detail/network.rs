@@ -1,20 +1,19 @@
 //! 网络详情。
 
 use super::*;
-use transom_core::{ContainerCommand, ContainerRequestId};
+use crate::container::ContainerWorkspace;
 
 pub(crate) fn render_network_detail(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     summary: Option<&transom_core::ContainerNetworkSummary>,
     details: Option<&ContainerNetworkDetails>,
     overview_raw: bool,
-    inspect: RawInspectView<'_>,
+    inspect: InspectSearch<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if overview_raw {
         let inspect_text = details.map(|d| d.inspect.as_str()).unwrap_or_default();
-        return render_raw_inspect(inspect.workspace, inspect_text, inspect.search, p);
+        return render_raw_inspect(view, inspect_text, inspect, p);
     }
 
     let (id, name, driver, scope, subnet, gateway, connected) = if let Some(details) = details {
@@ -107,6 +106,8 @@ pub(crate) fn render_network_detail(
             let reveal_name = name.clone();
             let disconnect_name = name.clone();
             let net_id = disconnect_net_id.clone();
+            let reveal_view = view.clone();
+            let disconnect_view = view.clone();
             let mut row = h_flex()
                 .gap_2()
                 .items_center()
@@ -117,64 +118,50 @@ pub(crate) fn render_network_detail(
                 )
                 .child(
                     Button::new(ElementId::Name(
-                        format!("network-container-link-{name}-{tab_id}").into(),
+                        format!("network-container-link-{name}").into(),
                     ))
                     .ghost()
                     .xsmall()
                     .label(name.clone())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.reveal_container(tab_id, reveal_name.clone(), cx);
-                    })),
+                    .on_click(move |_, _, cx| {
+                        reveal_view.update(cx, |workspace, cx| {
+                            workspace.reveal_container(reveal_name.clone(), cx);
+                        });
+                    }),
                 );
             if !hint.is_empty() {
                 row = row.child(div().text_xs().text_color(p.muted_foreground).child(hint));
             }
             row = row.child(div().flex_1());
             row = row.child(
-                Button::new(ElementId::Name(
-                    format!("network-disconnect-{name}-{tab_id}").into(),
-                ))
-                .ghost()
-                .xsmall()
-                .icon(IconName::Close)
-                .tooltip(rust_i18n::t!("container.action.disconnect_network").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    let request_id = ContainerRequestId::new();
-                    this.with_container_mut(tab_id, cx, |workspace| {
-                        workspace.busy = true;
-                    });
-                    if let Some(workspace) = this.state.container_workspace(tab_id) {
-                        workspace.update(cx, |workspace, _| {
-                            workspace.send_tracked(
-                                request_id,
-                                ContainerCommand::DisconnectNetwork {
-                                    tab_id,
-                                    request_id,
-                                    network: net_id.clone(),
-                                    container: disconnect_name.clone(),
-                                    force: false,
-                                },
-                            );
+                Button::new(ElementId::Name(format!("network-disconnect-{name}").into()))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .tooltip(rust_i18n::t!("container.action.disconnect_network").to_string())
+                    .on_click(move |_, _, cx| {
+                        disconnect_view.update(cx, |workspace, cx| {
+                            workspace.disconnect_network(net_id.clone(), disconnect_name.clone());
+                            cx.notify();
                         });
-                    }
-                    cx.notify();
-                })),
+                    }),
             );
             connected_block = connected_block.child(row);
         }
     }
     rows = rows.child(connected_block);
+    let raw_view = view.clone();
     let raw_btn = Button::new("network-overview-raw-inspect")
         .xsmall()
         .ghost()
         .icon(IconName::Braces)
         .label(rust_i18n::t!("container.field.inspect").to_string())
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.with_container_mut(tab_id, cx, |workspace| {
-                workspace.overview_raw = true;
+        .on_click(move |_, _, cx| {
+            raw_view.update(cx, |workspace, cx| {
+                workspace.state.overview_raw = true;
+                cx.notify();
             });
-            cx.notify();
-        }))
+        })
         .into_any_element();
 
     let card = super::overview_cards::overview_card(
