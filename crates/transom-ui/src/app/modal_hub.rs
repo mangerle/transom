@@ -14,7 +14,7 @@ use super::batch::BatchEditForm;
 use crate::audit_viewer::AuditViewerView;
 use crate::backup::BackupPromptView;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
-use crate::keys::KnownHostsView;
+use crate::keys::{KeyWizardView, KnownHostsView};
 use crate::session_form::SessionForm;
 use crate::settings::SettingsView;
 use crate::sidebar::FolderForm;
@@ -54,6 +54,8 @@ pub(crate) struct ToolModalEntities {
     pub(crate) backup_prompt: Entity<BackupPromptView>,
     /// 审计日志查看器；打开状态与在途扫描归实体。
     pub(crate) audit_viewer: Entity<AuditViewerView>,
+    /// 密钥生成与管理向导；打开状态、公钥清单与在途生成任务归实体。
+    pub(crate) key_wizard: Entity<KeyWizardView>,
 }
 
 /// 工具类浮层：查看器、备份、快捷入口与一次性确认。
@@ -67,8 +69,8 @@ pub(crate) struct ToolModals {
     pub(crate) quick_open_state: Entity<CommandState>,
     pub(crate) snippet_panel: SnippetPanelState,
     pub(crate) confirm_forward_any: Option<crate::forward::PendingForwardConfirm>,
-    /// 密钥生成与管理向导；未打开时为空。
-    pub(crate) key_wizard: Option<crate::keys::KeyWizardState>,
+    /// 密钥生成与管理向导实体；打开状态由实体持有。
+    pub(crate) key_wizard: Entity<KeyWizardView>,
 }
 
 /// Git 仓库管理、克隆与分支操作类弹窗。
@@ -142,7 +144,7 @@ impl ModalHub {
                 quick_open_state,
                 snippet_panel,
                 confirm_forward_any: None,
-                key_wizard: None,
+                key_wizard: tools.key_wizard,
             },
             git: GitModals::new(),
             settings,

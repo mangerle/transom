@@ -128,7 +128,12 @@ impl ModalKind {
                 true
             }
             ModalKind::KeyWizard => {
-                shell.state.modals.tools.key_wizard = None;
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .key_wizard
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::BackupPrompt => {
@@ -263,7 +268,12 @@ impl ModalKind {
                 .connection
                 .known_hosts
                 .update(cx, |view, cx| view.close(cx)),
-            ModalKind::KeyWizard => shell.state.modals.tools.key_wizard = None,
+            ModalKind::KeyWizard => shell
+                .state
+                .modals
+                .tools
+                .key_wizard
+                .update(cx, |view, cx| view.close(cx)),
             ModalKind::AuditViewer => shell
                 .state
                 .modals

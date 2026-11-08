@@ -67,8 +67,8 @@ pub(in crate::app::dialog_host) fn forward_confirm_open(shell: &AppShell, _: &Ap
     shell.state.modals.tools.confirm_forward_any.is_some()
 }
 
-pub(in crate::app::dialog_host) fn key_wizard_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.tools.key_wizard.is_some()
+pub(in crate::app::dialog_host) fn key_wizard_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.tools.key_wizard.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn backup_prompt_open(shell: &AppShell, cx: &App) -> bool {

@@ -5,7 +5,7 @@ use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::audit_viewer::AuditViewerEvent;
 use crate::backup::BackupPromptView;
-use crate::keys::{KnownHostsEvent, KnownHostsView};
+use crate::keys::{KeyWizardView, KnownHostsEvent, KnownHostsView, default_ssh_dir};
 use std::sync::atomic::AtomicBool;
 
 impl AppShell {
@@ -320,6 +320,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     });
     let backup_prompt = cx.new(|_| BackupPromptView::new(services.backup.clone()));
     let audit_viewer = cx.new(|_| crate::audit_viewer::AuditViewerView::new());
+    let key_wizard = cx.new(|_| KeyWizardView::new(default_ssh_dir(), services.command_tx.clone()));
     AppState {
         services,
         catalog: prepared.catalog,
@@ -336,6 +337,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
             ToolModalEntities {
                 backup_prompt,
                 audit_viewer,
+                key_wizard,
             },
             inputs.quick_open_state.clone(),
             SnippetPanelState {

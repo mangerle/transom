@@ -13,31 +13,17 @@ use gpui_kit::*;
 impl AppShell {
     pub(crate) fn render_key_wizard_body(
         &self,
+        state: &crate::keys::KeyWizardState,
         app: &Entity<AppShell>,
         _window: &mut Window,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        if self.state.modals.tools.key_wizard.is_none() {
-            return div().into_any_element();
-        }
-        let generate = self.render_key_generate_section(app, p, cx);
-        let list = self.render_key_list_section(app, p, cx);
-        let deploy = self.render_key_deploy_section(app, p, cx);
-        let message = self
-            .state
-            .modals
-            .tools
-            .key_wizard
-            .as_ref()
-            .and_then(|state| state.message.clone());
-        let error = self
-            .state
-            .modals
-            .tools
-            .key_wizard
-            .as_ref()
-            .and_then(|state| state.error.clone());
+        let generate = self.render_key_generate_section(state, app, p, cx);
+        let list = self.render_key_list_section(state, app, p, cx);
+        let deploy = self.render_key_deploy_section(state, app, p, cx);
+        let message = state.message.clone();
+        let error = state.error.clone();
 
         let content = v_flex()
             .id(ElementId::Name("key-wizard-content".into()))
@@ -80,13 +66,11 @@ impl AppShell {
     }
     fn render_key_generate_section(
         &self,
+        state: &crate::keys::KeyWizardState,
         app: &Entity<AppShell>,
         p: &Palette,
         _cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.tools.key_wizard.as_ref() else {
-            return div().into_any_element();
-        };
         let current_algorithm = state.algorithm;
 
         v_flex()
@@ -133,13 +117,11 @@ impl AppShell {
 
     fn render_key_list_section(
         &self,
+        state: &crate::keys::KeyWizardState,
         app: &Entity<AppShell>,
         p: &Palette,
         _cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.tools.key_wizard.as_ref() else {
-            return div().into_any_element();
-        };
         let keys = state.keys.clone();
         let selected = state.selected;
         let rows: Vec<AnyElement> = keys
@@ -170,13 +152,11 @@ impl AppShell {
 
     fn render_key_deploy_section(
         &self,
+        state: &crate::keys::KeyWizardState,
         app: &Entity<AppShell>,
         p: &Palette,
         _cx: &App,
     ) -> AnyElement {
-        let Some(state) = self.state.modals.tools.key_wizard.as_ref() else {
-            return div().into_any_element();
-        };
         let selected_key = state
             .selected
             .and_then(|index| state.keys.get(index))

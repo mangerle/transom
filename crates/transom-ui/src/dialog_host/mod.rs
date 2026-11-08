@@ -293,7 +293,13 @@ impl ModalKind {
             ModalKind::SnippetForm => shell.render_snippet_form_body(app, window, cx, p),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::KnownHosts => div().into_any_element(),
-            ModalKind::KeyWizard => shell.render_key_wizard_body(app, window, cx, p),
+            ModalKind::KeyWizard => {
+                let view = shell.state.modals.tools.key_wizard.read(cx);
+                match view.state() {
+                    Some(state) => shell.render_key_wizard_body(state, app, window, cx, p),
+                    None => div().into_any_element(),
+                }
+            }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::BackupPrompt => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。

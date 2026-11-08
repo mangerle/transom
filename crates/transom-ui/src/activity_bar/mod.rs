@@ -61,7 +61,7 @@ impl AppShell {
                 self.state.sidebar.visible && self.state.containers.sidebar_open
             }
             ActivityItemId::Git => self.state.sidebar.visible && self.state.git.sidebar_open,
-            ActivityItemId::Keys => self.state.modals.tools.key_wizard.is_some(),
+            ActivityItemId::Keys => self.state.modals.tools.key_wizard.read(cx).is_open(),
             _ => false,
         }
     }
