@@ -17,13 +17,14 @@ impl AppShell {
         tab_id: TabId,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+        let Some(needs_fetch) = self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.system_df_dialog_open = true;
+            workspace.system_df.is_none() && !workspace.system_df_loading
+        }) else {
             return;
         };
-        workspace.system_df_dialog_open = true;
-        let needs_fetch = workspace.system_df.is_none() && !workspace.system_df_loading;
         if needs_fetch {
-            self.refresh_container_system_df(tab_id);
+            self.refresh_container_system_df(tab_id, cx);
         }
         cx.notify();
     }
@@ -34,20 +35,22 @@ impl AppShell {
         tab_id: TabId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.system_df_dialog_open = false;
-        }
+        });
         cx.notify();
     }
 
     /// 重新分析拉取全局磁盘占用。
-    pub(crate) fn refresh_container_system_df(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        workspace.system_df_loading = true;
+    pub(crate) fn refresh_container_system_df(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let request_id = ContainerRequestId::new();
-        if let Some(previous) = workspace.system_df_request.replace(request_id) {
+        let previous = self
+            .with_container_mut(tab_id, cx, |workspace| {
+                workspace.system_df_loading = true;
+                workspace.system_df_request.replace(request_id)
+            })
+            .flatten();
+        if let Some(previous) = previous {
             self.cancel_container_request(tab_id, previous);
         }
         log::info!("正在查询全局系统磁盘占用，请求: {request_id}");
@@ -60,15 +63,18 @@ impl AppShell {
 
     /// 触发系统级联合深度清理（System Prune）。
     pub(crate) fn submit_container_system_prune(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+        let Some((all, volumes)) = self
+            .with_container_mut(tab_id, cx, |workspace| {
+                if workspace.system_prune_running {
+                    return None;
+                }
+                workspace.system_prune_running = true;
+                Some((workspace.system_prune_all, workspace.system_prune_volumes))
+            })
+            .flatten()
+        else {
             return;
         };
-        if workspace.system_prune_running {
-            return;
-        }
-        workspace.system_prune_running = true;
-        let all = workspace.system_prune_all;
-        let volumes = workspace.system_prune_volumes;
         let request_id = ContainerRequestId::new();
         log::info!(
             "正在发起系统级联合清理，全量镜像: {all}，包含数据卷: {volumes}，请求: {request_id}"
@@ -92,12 +98,13 @@ impl AppShell {
         tab_id: TabId,
         app: &Entity<AppShell>,
         _window: &mut Window,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
 
         let loading = workspace.system_df_loading;
         let prune_running = workspace.system_prune_running;
@@ -202,9 +209,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                    this.with_container_mut(tab_id, cx, |ws| {
                                         ws.system_prune_all = !prune_all;
-                                    }
+                                    });
                                     cx.notify();
                                 },
                             )),
@@ -240,9 +247,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                    this.with_container_mut(tab_id, cx, |ws| {
                                         ws.system_prune_volumes = !prune_volumes;
-                                    }
+                                    });
                                     cx.notify();
                                 },
                             )),
@@ -263,8 +270,8 @@ impl AppShell {
                     .disabled(loading || prune_running)
                     .on_click(crate::dialog_host::on_event(
                         app,
-                        move |this, _: &ClickEvent, _, _| {
-                            this.refresh_container_system_df(tab_id);
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.refresh_container_system_df(tab_id, cx);
                         },
                     )),
             )

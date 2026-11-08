@@ -72,7 +72,7 @@ impl AppShell {
             }
         });
 
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.push_dialog = Some(ContainerPushDialog {
                 image_id,
                 source_tag,
@@ -82,7 +82,7 @@ impl AppShell {
                 error: None,
                 _subscriptions: vec![sub1, sub2],
             });
-        }
+        });
         cx.notify();
     }
 
@@ -92,6 +92,7 @@ impl AppShell {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
+            let workspace = &workspace.read(cx).state;
             let Some(push) = workspace.push_dialog.as_ref() else {
                 return;
             };
@@ -107,12 +108,12 @@ impl AppShell {
         };
 
         if repo.is_empty() || tag.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                && let Some(push) = workspace.push_dialog.as_mut()
-            {
-                push.error =
-                    Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
-            }
+            self.with_container_mut(tab_id, cx, |workspace| {
+                if let Some(push) = workspace.push_dialog.as_mut() {
+                    push.error =
+                        Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
+                }
+            });
             cx.notify();
             return;
         }
@@ -138,13 +139,13 @@ impl AppShell {
         );
 
         // 关闭推送弹窗并记录通知
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.push_dialog = None;
             workspace.notice = Some(
                 rust_i18n::t!("container.push.pushing_notice", reference = target_full_ref)
                     .to_string(),
             );
-        }
+        });
         cx.notify();
     }
 
@@ -160,6 +161,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let Some(push) = workspace.push_dialog.as_ref() else {
             return div().into_any_element();
         };
@@ -193,12 +195,16 @@ impl AppShell {
                             .checked(reg.id == selected_reg_id)
                             .on_click(move |_, window, cx| {
                                 app_item.update(cx, |this, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id)
-                                        && let Some(p) = ws.push_dialog.as_mut()
-                                    {
-                                        p.selected_registry_id = reg_item.id.clone();
+                                    let target_repo = this
+                                        .with_container_mut(tab_id, cx, |ws| {
+                                            let p = ws.push_dialog.as_mut()?;
+                                            p.selected_registry_id = reg_item.id.clone();
+                                            Some(p.target_repo.clone())
+                                        })
+                                        .flatten();
+                                    if let Some(target_repo) = target_repo {
                                         // 自动根据所选仓库域名补全前缀
-                                        let current_val = p.target_repo.read(cx).value();
+                                        let current_val = target_repo.read(cx).value();
                                         let pure_name = current_val
                                             .as_ref()
                                             .rsplit('/')
@@ -209,7 +215,7 @@ impl AppShell {
                                         } else {
                                             format!("{}/{}", reg_item.domain(), pure_name)
                                         };
-                                        p.target_repo.update(cx, |input, cx| {
+                                        target_repo.update(cx, |input, cx| {
                                             input.set_value(new_val, window, cx);
                                         });
                                     }
@@ -345,9 +351,9 @@ impl AppShell {
                             .label(rust_i18n::t!("container.push.cancel").to_string())
                             .on_click(move |_, _, cx| {
                                 app_cancel.update(cx, |this, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                    this.with_container_mut(tab_id, cx, |ws| {
                                         ws.push_dialog = None;
-                                    }
+                                    });
                                     cx.notify();
                                 });
                             }),

@@ -5,13 +5,13 @@ use super::*;
 impl AppShell {
     /// 打开 Quadlet 弹窗并扫描宿主单元。
     pub(crate) fn open_container_quadlets_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.quadlets_dialog_open = true;
             workspace.quadlets = Vec::new();
             workspace.quadlets_error = None;
             workspace.quadlets_loading = true;
-        }
-        self.refresh_container_quadlets(tab_id);
+        });
+        self.refresh_container_quadlets(tab_id, cx);
         cx.notify();
     }
 
@@ -20,28 +20,30 @@ impl AppShell {
         tab_id: TabId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.quadlets_dialog_open = false;
             workspace.quadlets_request = None;
             workspace.quadlets_action_request = None;
             workspace.quadlets_loading = false;
-        }
+        });
         cx.notify();
     }
 
-    pub(crate) fn refresh_container_quadlets(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
-            return;
-        };
-        if !workspace.quadlets_dialog_open || workspace.quadlets_request.is_some() {
+    pub(crate) fn refresh_container_quadlets(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let active = self
+            .with_container(tab_id, cx, |workspace| {
+                workspace.quadlets_dialog_open && workspace.quadlets_request.is_none()
+            })
+            .unwrap_or(false);
+        if !active {
             return;
         }
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.quadlets_request = Some(request_id);
             workspace.quadlets_loading = true;
             workspace.quadlets_error = None;
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -56,18 +58,20 @@ impl AppShell {
         action: transom_core::ContainerQuadletAction,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
-            return;
-        };
-        if workspace.quadlets_request.is_some() || workspace.quadlets_action_request.is_some() {
+        let idle = self
+            .with_container(tab_id, cx, |workspace| {
+                workspace.quadlets_request.is_none() && workspace.quadlets_action_request.is_none()
+            })
+            .unwrap_or(false);
+        if !idle {
             return;
         }
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.quadlets_action_request = Some(request_id);
             workspace.quadlets_loading = true;
             workspace.quadlets_error = None;
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -90,15 +94,18 @@ impl AppShell {
         let Some(tab_id) = self.state.containers.take_tab(request_id) else {
             return;
         };
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        let applied = self.with_container_mut(tab_id, cx, |workspace| {
             if workspace.quadlets_request != Some(request_id) || !workspace.quadlets_dialog_open {
-                return;
+                return false;
             }
             workspace.quadlets = units;
             workspace.quadlets_request = None;
             workspace.quadlets_loading = false;
             workspace.quadlets_error = None;
+            true
+        });
+        if applied == Some(true) {
+            cx.notify();
         }
-        cx.notify();
     }
 }

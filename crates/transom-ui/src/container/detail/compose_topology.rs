@@ -249,13 +249,13 @@ fn render_topology_card(
         .border(border_width)
         .opacity(opacity_val)
         .on_hover(cx.listener(move |this, hovered, _, cx| {
-            if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+            this.with_container_mut(tab_id, cx, |ws| {
                 if *hovered {
                     ws.compose_hovered_service = Some(hover_svc.clone());
                 } else if ws.compose_hovered_service.as_deref() == Some(&hover_svc) {
                     ws.compose_hovered_service = None;
                 }
-            }
+            });
             cx.notify();
         }));
 
@@ -361,10 +361,10 @@ fn render_topology_card(
                 .icon(IconName::Info)
                 .tooltip(rust_i18n::t!("container.detail.overview").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.select_container_item(tab_id, member_id_select.clone());
-                    if let Some(w) = this.state.container_workspace_mut(tab_id) {
+                    this.select_container_item(tab_id, member_id_select.clone(), cx);
+                    this.with_container_mut(tab_id, cx, |w| {
                         w.section = ContainerSection::Containers;
-                    }
+                    });
                     cx.notify();
                 })),
         );

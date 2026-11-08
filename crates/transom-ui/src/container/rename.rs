@@ -27,7 +27,9 @@ impl AppShell {
         let in_terminal = self
             .state
             .container_workspace(tab)
-            .is_some_and(|workspace| workspace.detail_tab == ContainerDetailTab::Terminal);
+            .is_some_and(|workspace| {
+                workspace.read(cx).state.detail_tab == ContainerDetailTab::Terminal
+            });
         if in_terminal {
             return;
         }
@@ -45,17 +47,17 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let input = cx.new(|cx| InputState::new(window, cx).default_value(current));
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.rename_container = Some((id, input));
-        }
+        });
         cx.notify();
     }
 
     /// 取消改名。
     pub(crate) fn cancel_container_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.rename_container = None;
-        }
+        });
         cx.notify();
     }
 
@@ -67,18 +69,20 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((id, input)) = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| workspace.rename_container.clone())
+            .with_container(tab_id, cx, |workspace| workspace.rename_container.clone())
+            .flatten()
         else {
             return;
         };
         let name = input.read(cx).value().trim().to_string();
         let same = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| workspace.containers.iter().find(|item| item.id == id))
-            .is_some_and(|item| item.name == name);
+            .with_container(tab_id, cx, |workspace| {
+                workspace
+                    .containers
+                    .iter()
+                    .any(|item| item.id == id && item.name == name)
+            })
+            .unwrap_or(false);
         if name.is_empty() || same {
             self.show_toast(
                 rust_i18n::t!("container.rename.invalid", name = name).to_string(),
@@ -89,9 +93,7 @@ impl AppShell {
             return;
         }
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
-            workspace.busy = true;
-        }
+        self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
         self.send_tracked(
             tab_id,
             request_id,

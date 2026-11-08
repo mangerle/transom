@@ -14,22 +14,21 @@ impl AppShell {
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(REFRESH_DEBOUNCE).await;
             let _ = this.update(cx, |this, cx| {
-                this.refresh_container_section(tab_id);
+                this.refresh_container_section(tab_id, cx);
                 cx.notify();
             });
         });
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.refresh_task = Some(task);
-        }
+        });
     }
 
     /// 刷新当前选中分类的列表。
-    pub(crate) fn refresh_container_section(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+    pub(crate) fn refresh_container_section(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(section) = self.with_container(tab_id, cx, |workspace| workspace.section) else {
             return;
         };
-        let section = workspace.section;
-        workspace.busy = true;
+        self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
         let request_id = ContainerRequestId::new();
         let command = match section {
             ContainerSection::Containers | ContainerSection::Compose => {
@@ -63,11 +62,17 @@ impl AppShell {
     /// - 核心优势：标签数字进入即准确，且用户切换分类时实现秒开零等待；
     /// - 代价与局限：初次连接时并发执行 4 个轻量列表查询，但在普通 Docker/Podman
     ///   引擎上耗时通常在几十毫秒以内，开销极小。
-    pub(crate) fn refresh_container_workspace_all(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+    pub(crate) fn refresh_container_workspace_all(
+        &mut self,
+        tab_id: TabId,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .with_container_mut(tab_id, cx, |workspace| workspace.busy = true)
+            .is_none()
+        {
             return;
-        };
-        workspace.busy = true;
+        }
 
         // 1. 容器与编排项目
         let req_containers = ContainerRequestId::new();

@@ -12,14 +12,15 @@ impl AppShell {
     pub(crate) fn render_container_tag_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         _p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| ws.tag_image.is_some())
+        let Some((tab_id, workspace)) =
+            self.find_container_modal_tab(cx, |ws| ws.tag_image.is_some())
         else {
             return div().into_any_element();
         };
-        let Some((_, input)) = workspace.tag_image.clone() else {
+        let Some((_, input)) = workspace.read(cx).state.tag_image.clone() else {
             return div().into_any_element();
         };
 

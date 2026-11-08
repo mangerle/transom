@@ -70,10 +70,10 @@ impl AppShell {
                 container,
                 changes,
             } => {
-                self.on_container_diffed(request_id, container, changes);
+                self.on_container_diffed(request_id, container, changes, cx);
             }
             ContainerAppEvent::SystemDfLoaded { request_id, usage } => {
-                self.on_container_system_df_loaded(request_id, usage);
+                self.on_container_system_df_loaded(request_id, usage, cx);
             }
             ContainerAppEvent::SystemPruned { request_id, report } => {
                 self.on_container_system_pruned(request_id, report, window, cx);

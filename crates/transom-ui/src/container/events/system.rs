@@ -9,16 +9,18 @@ impl AppShell {
         &mut self,
         request_id: ContainerRequestId,
         usage: transom_core::ContainerSystemDiskUsage,
+        cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.state.containers.take_tab(request_id)
-            && let Some(workspace) = self.state.container_workspace_mut(tab_id)
-        {
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        self.with_container_mut(tab_id, cx, |workspace| {
             if workspace.system_df_request == Some(request_id) {
                 workspace.system_df_request = None;
             }
             workspace.system_df_loading = false;
             workspace.system_df = Some(usage);
-        }
+        });
     }
 
     /// 系统联合深度清理执行完毕。
@@ -33,9 +35,9 @@ impl AppShell {
             return;
         };
 
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.system_prune_running = false;
-        }
+        });
 
         let reclaimed_str = format_size(report.reclaimed);
         let succeeded = report.errors.is_empty();
@@ -57,8 +59,8 @@ impl AppShell {
         self.show_toast(msg, succeeded, window, cx);
 
         // 清理完成后，重新统计磁盘占用并刷新各资源列表
-        self.refresh_container_system_df(tab_id);
-        self.refresh_container_workspace_all(tab_id);
+        self.refresh_container_system_df(tab_id, cx);
+        self.refresh_container_workspace_all(tab_id, cx);
     }
 
     /// 容器文件系统差异对比完成。
@@ -67,16 +69,18 @@ impl AppShell {
         request_id: ContainerRequestId,
         container: String,
         changes: Vec<transom_core::ContainerFileSystemChange>,
+        cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.state.containers.take_tab(request_id)
-            && let Some(workspace) = self.state.container_workspace_mut(tab_id)
-        {
+        let Some(tab_id) = self.state.containers.take_tab(request_id) else {
+            return;
+        };
+        self.with_container_mut(tab_id, cx, |workspace| {
             if workspace.changes_request == Some(request_id) {
                 workspace.changes_request = None;
             }
             workspace.changes_loading = false;
             workspace.changes = Some((container, changes));
-        }
+        });
     }
 
     /// 容器引擎长连接事件流收到事件。
@@ -87,15 +91,15 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let current_section = match self.state.container_workspace(tab_id) {
-            Some(workspace) => workspace.section,
-            None => return,
+        let Some(current_section) = self.with_container(tab_id, cx, |workspace| workspace.section)
+        else {
+            return;
         };
 
         // 0. 事件流重连后的全量对账：断线期间漏掉的事件无法逐条补发。
         if event.resource_type == "engine" && event.action == "resync" {
             log::debug!("容器事件流重连，触发工作区全量刷新");
-            self.refresh_container_workspace_all(tab_id);
+            self.refresh_container_workspace_all(tab_id, cx);
             return;
         }
 

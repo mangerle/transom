@@ -96,7 +96,7 @@ pub(crate) fn render_files(
         parent_row = parent_row
             .hover(|style| style.bg(p.muted.opacity(0.5)))
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.load_container_dir(tab_id, parent.clone());
+                this.load_container_dir(tab_id, parent.clone(), cx);
                 cx.notify();
             }));
     }
@@ -153,19 +153,19 @@ pub(crate) fn render_files(
                 if dropped.is_empty() {
                     return;
                 }
-                app_drop.update(cx, |this, _| {
+                app_drop.update(cx, |this, cx| {
                     for path in dropped {
-                        this.upload_container_path(tab_id, path);
+                        this.upload_container_path(tab_id, path, cx);
                     }
                 });
             })
             .on_drop(move |drag: &SftpDragItem, _window, cx| {
                 let paths: Vec<std::path::PathBuf> =
                     drag.paths.iter().map(std::path::PathBuf::from).collect();
-                app_sftp_drop.update(cx, |this, _| {
+                app_sftp_drop.update(cx, |this, cx| {
                     for path in paths {
                         if path.exists() {
-                            this.upload_container_path(tab_id, path);
+                            this.upload_container_path(tab_id, path, cx);
                         }
                     }
                 });

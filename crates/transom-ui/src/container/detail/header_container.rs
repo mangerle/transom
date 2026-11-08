@@ -255,11 +255,10 @@ pub(super) fn container_header_actions(
                     PopupMenuItem::new(rust_i18n::t!("common.delete").to_string()).on_click(
                         move |_, _, cx| {
                             app_d.update(cx, |this, cx| {
-                                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
-                                {
+                                this.with_container_mut(tab_id, cx, |workspace| {
                                     workspace.confirm =
                                         Some(ContainerConfirm::Container(name_d.clone()));
-                                }
+                                });
                                 cx.notify();
                             });
                         },

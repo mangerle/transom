@@ -33,6 +33,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let Some(hub) = workspace.hub_dialog.as_ref() else {
             return div().into_any_element();
         };
@@ -110,11 +111,11 @@ impl AppShell {
                     let cmd = cmd.to_string();
                     app_copy.update(cx, |this, cx| {
                         cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd));
-                        if let Some(ws) = this.state.container_workspace_mut(tab_id)
-                            && let Some(h) = ws.hub_dialog.as_mut()
-                        {
-                            h.copy_toast = true;
-                        }
+                        this.with_container_mut(tab_id, cx, |ws| {
+                            if let Some(h) = ws.hub_dialog.as_mut() {
+                                h.copy_toast = true;
+                            }
+                        });
                         cx.notify();
                     });
                 },
@@ -125,9 +126,9 @@ impl AppShell {
             let footer = view::render_hub_footer(
                 move |_, cx| {
                     app_close.update(cx, |this, cx| {
-                        if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                        this.with_container_mut(tab_id, cx, |ws| {
                             ws.hub_dialog = None;
-                        }
+                        });
                         cx.notify();
                     });
                 },
@@ -167,11 +168,11 @@ impl AppShell {
                             .checked(reg.id == selected_reg_id)
                             .on_click(move |_, _, cx| {
                                 app_item.update(cx, |this, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id)
-                                        && let Some(h) = ws.hub_dialog.as_mut()
-                                    {
-                                        h.selected_registry_id = reg_id.clone();
-                                    }
+                                    this.with_container_mut(tab_id, cx, |ws| {
+                                        if let Some(h) = ws.hub_dialog.as_mut() {
+                                            h.selected_registry_id = reg_id.clone();
+                                        }
+                                    });
                                     cx.notify();
                                 });
                             }),
@@ -216,10 +217,13 @@ impl AppShell {
                 let tag = tag.to_string();
                 let app_chip = app_chip.clone();
                 app_chip.update(cx, move |this, cx| {
-                    if let Some(ws) = this.state.container_workspace_mut(tab_id)
-                        && let Some(hub) = ws.hub_dialog.as_mut()
-                    {
-                        hub.search_input.update(cx, |input, cx| {
+                    let input = this
+                        .with_container(tab_id, cx, |ws| {
+                            ws.hub_dialog.as_ref().map(|hub| hub.search_input.clone())
+                        })
+                        .flatten();
+                    if let Some(input) = input {
+                        input.update(cx, |input, cx| {
                             input.set_value(tag, window, cx);
                         });
                     }
@@ -410,9 +414,9 @@ impl AppShell {
         let footer = view::render_hub_footer(
             move |_, cx| {
                 app_close.update(cx, |this, cx| {
-                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                    this.with_container_mut(tab_id, cx, |ws| {
                         ws.hub_dialog = None;
-                    }
+                    });
                     cx.notify();
                 });
             },

@@ -23,10 +23,10 @@ impl AppShell {
                 input.default_value(default_value)
             }
         });
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.files.prompt = Some(prompt);
             workspace.files.prompt_input = Some(input);
-        }
+        });
         cx.notify();
     }
 
@@ -96,6 +96,7 @@ impl AppShell {
             .state
             .container_workspace(tab_id)
             .and_then(|workspace| {
+                let workspace = &workspace.read(cx).state;
                 let prompt = workspace.files.prompt.clone()?;
                 let input = workspace.files.prompt_input.clone()?;
                 Some((prompt, input))
@@ -153,10 +154,10 @@ impl AppShell {
             self.show_toast(rust_i18n::t!(key).to_string(), false, window, cx);
             return;
         }
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(container) = workspace.selected_container_name() else {
+        let Some(container) = self
+            .with_container(tab_id, cx, |workspace| workspace.selected_container_name())
+            .flatten()
+        else {
             return;
         };
         let request_id = ContainerRequestId::new();
@@ -198,27 +199,29 @@ impl AppShell {
                 owner: action,
             },
         };
-        workspace.files.prompt = None;
-        workspace.files.prompt_input = None;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.files.prompt = None;
+            workspace.files.prompt_input = None;
+        });
         self.send_tracked(tab_id, request_id, command);
         cx.notify();
     }
 
     /// 取消容器内文件操作提示。
     pub(crate) fn cancel_container_file_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.files.prompt = None;
             workspace.files.prompt_input = None;
-        }
+        });
         cx.notify();
     }
 
     /// 取消新建目录。
     pub(crate) fn cancel_container_file_new_dir(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.files.new_dir_open = false;
             workspace.files.new_dir_input = None;
-        }
+        });
         cx.notify();
     }
 }

@@ -28,6 +28,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         if !matches!(workspace.status, ContainerWorkspaceStatus::Connected) {
             return self.render_container_connection_state(tab_id, window, cx, p);
         }
@@ -40,7 +41,7 @@ impl AppShell {
         let list_split = self
             .state
             .container_workspace(tab_id)
-            .map(|workspace| workspace.list_split.clone())
+            .map(|workspace| workspace.read(cx).state.list_split.clone())
             .unwrap_or_else(|| cx.new(|_| ResizableState::default()));
 
         let list_and_detail = h_resizable("container-split-list")
@@ -79,13 +80,22 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let notice = self
-            .state
-            .container_workspace_mut(tab_id)
-            .and_then(|workspace| workspace.notice.take());
-        if let Some(message) = notice {
-            self.show_info_toast(message, window, cx);
+        // 渲染帧只读判定，真正的状态变更排到本轮效果之后：渲染路径不更新实体，
+        // 避免渲染期写入容器实体造成二次租借或重入。
+        let has_notice = self
+            .with_container(tab_id, cx, |workspace| workspace.notice.is_some())
+            .unwrap_or(false);
+        if !has_notice {
+            return;
         }
+        cx.defer_in(window, move |this, window, cx| {
+            let notice = this
+                .with_container_mut(tab_id, cx, |workspace| workspace.notice.take())
+                .flatten();
+            if let Some(message) = notice {
+                this.show_info_toast(message, window, cx);
+            }
+        });
     }
 
     fn render_container_connection_state(
@@ -98,6 +108,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let status = workspace.status.clone();
         let profile = workspace.profile.clone();
         let (icon, title, detail, retry) = match status {
@@ -143,14 +154,17 @@ impl AppShell {
                     .icon(IconName::RefreshCw)
                     .label(rust_i18n::t!("common.retry").to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.state
-                            .send_command(transom_core::ContainerCommand::Connect {
-                                tab_id,
-                                profile: profile.clone(),
-                            });
-                        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
-                            workspace.status = ContainerWorkspaceStatus::Connecting;
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace
+                                .read(cx)
+                                .send(transom_core::ContainerCommand::Connect {
+                                    tab_id,
+                                    profile: profile.clone(),
+                                });
                         }
+                        this.with_container_mut(tab_id, cx, |workspace| {
+                            workspace.status = ContainerWorkspaceStatus::Connecting;
+                        });
                         cx.notify();
                     })),
             );

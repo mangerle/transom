@@ -8,7 +8,7 @@ impl AppShell {
         &self,
         app: &Entity<AppShell>,
         _window: &mut Window,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(dialog) = self.state.containers.create_dialog.clone() else {
@@ -25,6 +25,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let create_input = workspace.create_input.clone();
         let mut content =
             v_flex()

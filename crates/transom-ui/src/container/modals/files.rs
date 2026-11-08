@@ -12,18 +12,18 @@ impl AppShell {
     pub(crate) fn render_container_file_rename_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         _p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.files.prompt_input.is_some())
+            self.find_container_modal_tab(cx, |ws| ws.files.prompt_input.is_some())
         else {
             return div().into_any_element();
         };
-        let Some(input) = workspace.files.prompt_input.clone() else {
+        let Some(input) = workspace.read(cx).state.files.prompt_input.clone() else {
             return div().into_any_element();
         };
-        let Some(prompt) = workspace.files.prompt.clone() else {
+        let Some(prompt) = workspace.read(cx).state.files.prompt.clone() else {
             return div().into_any_element();
         };
 
@@ -65,15 +65,15 @@ impl AppShell {
     pub(crate) fn render_container_file_new_dir_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         _p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| {
+        let Some((tab_id, workspace)) = self.find_container_modal_tab(cx, |ws| {
             ws.files.new_dir_open && ws.files.new_dir_input.is_some()
         }) else {
             return div().into_any_element();
         };
-        let Some(input) = workspace.files.new_dir_input.clone() else {
+        let Some(input) = workspace.read(cx).state.files.new_dir_input.clone() else {
             return div().into_any_element();
         };
 

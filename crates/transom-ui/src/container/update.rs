@@ -27,17 +27,17 @@ impl AppShell {
                 rust_i18n::t!("container.update_resources.cpu_placeholder").to_string(),
             )
         });
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.update_container = Some((name, mem_input, cpu_input));
-        }
+        });
         cx.notify();
     }
 
     /// 取消容器资源更新。
     pub(crate) fn cancel_container_update(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.update_container = None;
-        }
+        });
         cx.notify();
     }
 
@@ -46,7 +46,7 @@ impl AppShell {
         let Some((name, mem_input, cpu_input)) = self
             .state
             .container_workspace(tab_id)
-            .and_then(|workspace| workspace.update_container.clone())
+            .and_then(|workspace| workspace.read(cx).state.update_container.clone())
         else {
             return;
         };

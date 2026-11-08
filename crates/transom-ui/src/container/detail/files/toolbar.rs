@@ -18,7 +18,7 @@ pub(super) fn render_toolbar(
             .on_click(cx.listener({
                 let parent = parent.clone();
                 move |this, _, _, cx| {
-                    this.load_container_dir(tab_id, parent.clone());
+                    this.load_container_dir(tab_id, parent.clone(), cx);
                     cx.notify();
                 }
             })),
@@ -37,7 +37,7 @@ pub(super) fn render_toolbar(
             .on_click(cx.listener({
                 let path = current_path.to_string();
                 move |this, _, _, cx| {
-                    this.load_container_dir(tab_id, path.clone());
+                    this.load_container_dir(tab_id, path.clone(), cx);
                     cx.notify();
                 }
             })),
@@ -50,7 +50,7 @@ pub(super) fn render_toolbar(
                 .icon(IconName::Upload)
                 .label(rust_i18n::t!("container.files.upload").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.upload_container_file(tab_id);
+                    this.upload_container_file(tab_id, cx);
                     cx.notify();
                 })),
         );
@@ -61,7 +61,7 @@ pub(super) fn render_toolbar(
                 .icon(IconName::Upload)
                 .label(rust_i18n::t!("container.files.upload_directory").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.upload_container_directory(tab_id);
+                    this.upload_container_directory(tab_id, cx);
                     cx.notify();
                 })),
         );

@@ -8,21 +8,25 @@ use transom_core::ContainerStats;
 impl AppShell {
     /// 把当前统计历史导出为 CSV，便于离线分析或贴到工单。
     pub(crate) fn export_container_stats_csv(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
+        let Some((container, history, interval)) = self
+            .with_container(tab_id, cx, |workspace| {
+                workspace.selected_container_name().map(|container| {
+                    let history: Vec<ContainerStats> =
+                        workspace.stats_history.iter().cloned().collect();
+                    (container, history, workspace.stats_interval.interval())
+                })
+            })
+            .flatten()
+        else {
             return;
         };
-        let Some(container) = workspace.selected_container_name() else {
-            return;
-        };
-        let history: Vec<ContainerStats> = workspace.stats_history.iter().cloned().collect();
         if history.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.notice = Some(rust_i18n::t!("container.stats.export_empty").to_string());
-            }
+            });
             cx.notify();
             return;
         }
-        let interval = workspace.stats_interval.interval();
         let Some(local_path) = rfd::FileDialog::new()
             .set_file_name(format!("{container}-stats.csv"))
             .save_file()
@@ -39,7 +43,7 @@ impl AppShell {
             })
             .await;
             let _ = this.update(cx, |this, cx| {
-                if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                this.with_container_mut(tab_id, cx, |workspace| {
                     workspace.notice = Some(match outcome {
                         Some(Ok(path)) => rust_i18n::t!(
                             "container.stats.export_done",
@@ -52,34 +56,45 @@ impl AppShell {
                         }
                         None => rust_i18n::t!("container.stats.export_thread_failed").to_string(),
                     });
-                }
+                });
                 cx.notify();
             });
         })
         .detach();
     }
 
-    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId, _cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        if workspace.stats_request.is_some() {
-            return;
-        }
-        let Some(container) = workspace.selected_container() else {
+    pub(crate) fn ensure_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some((container, running, interval)) = self
+            .with_container(tab_id, cx, |workspace| {
+                if workspace.stats_request.is_some() {
+                    return None;
+                }
+                let container = workspace.selected_container()?;
+                Some((
+                    container.name.clone(),
+                    container.state.is_running(),
+                    workspace.stats_interval.interval(),
+                ))
+            })
+            .flatten()
+        else {
             return;
         };
         // 停掉的容器采不到统计（引擎直接 409）；先把话说清楚，别让页面空等。
-        if !container.state.is_running() {
-            workspace.stats = None;
-            workspace.stats_error = Some(rust_i18n::t!("container.stats.not_running").to_string());
+        if !running {
+            self.with_container_mut(tab_id, cx, |workspace| {
+                workspace.stats = None;
+                workspace.stats_error =
+                    Some(rust_i18n::t!("container.stats.not_running").to_string());
+            });
             return;
         }
-        let container = container.name.clone();
-        let interval_ms = workspace.stats_interval.interval().as_millis() as u64;
+        let interval_ms = interval.as_millis() as u64;
         let request_id = ContainerRequestId::new();
-        workspace.stats_request = Some(request_id);
-        workspace.stats_error = None;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.stats_request = Some(request_id);
+            workspace.stats_error = None;
+        });
         log::debug!(
             "请求容器统计，标签: {tab_id}，容器: {container}，间隔: {interval_ms}ms，请求: {request_id}"
         );
@@ -103,25 +118,26 @@ impl AppShell {
         interval: crate::monitor::SampleIntervalMode,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        if workspace.stats_interval == interval {
-            return;
+        let changed = self.with_container_mut(tab_id, cx, |workspace| {
+            if workspace.stats_interval == interval {
+                return false;
+            }
+            workspace.stats_interval = interval;
+            true
+        });
+        if changed == Some(true) {
+            cx.notify();
         }
-        workspace.stats_interval = interval;
-        cx.notify();
     }
 
     /// 手动重启统计流；后台断线会自动重连，这里用于用户主动重试。
     pub(crate) fn restart_container_stats(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let request_id = self
-            .state
-            .container_workspace_mut(tab_id)
-            .and_then(|workspace| {
+            .with_container_mut(tab_id, cx, |workspace| {
                 workspace.stats_last_append = None;
                 workspace.stats_request.take()
-            });
+            })
+            .flatten();
         if let Some(request_id) = request_id {
             self.cancel_container_request(tab_id, request_id);
         }
@@ -130,28 +146,34 @@ impl AppShell {
     }
 
     /// 拉取容器进程列表（一次性请求，可手动刷新）。
-    pub(crate) fn ensure_container_processes(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        if workspace.stats_processes_request.is_some() {
-            return;
-        }
-        let Some(container) = workspace.selected_container() else {
+    pub(crate) fn ensure_container_processes(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some((container, running)) = self
+            .with_container(tab_id, cx, |workspace| {
+                if workspace.stats_processes_request.is_some() {
+                    return None;
+                }
+                let container = workspace.selected_container()?;
+                Some((container.name.clone(), container.state.is_running()))
+            })
+            .flatten()
+        else {
             return;
         };
         // 停掉的容器查不到进程（引擎直接报 409 Conflict 操作冲突）；直接置空，避免发出无效请求。
-        if !container.state.is_running() {
-            workspace.stats_processes.clear();
-            workspace.stats_processes_loading = false;
-            workspace.stats_processes_error = None;
+        if !running {
+            self.with_container_mut(tab_id, cx, |workspace| {
+                workspace.stats_processes.clear();
+                workspace.stats_processes_loading = false;
+                workspace.stats_processes_error = None;
+            });
             return;
         }
-        let container = container.name.clone();
         let request_id = ContainerRequestId::new();
-        workspace.stats_processes_request = Some(request_id);
-        workspace.stats_processes_loading = true;
-        workspace.stats_processes_error = None;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.stats_processes_request = Some(request_id);
+            workspace.stats_processes_loading = true;
+            workspace.stats_processes_error = None;
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -165,20 +187,20 @@ impl AppShell {
 
     /// 切换统计走势图形态：与主机监控共用同一套折线/柱状组件。
     pub(crate) fn toggle_container_stats_chart(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.stats_chart = match workspace.stats_chart {
                 crate::monitor::SparklineChartType::Line => crate::monitor::SparklineChartType::Bar,
                 crate::monitor::SparklineChartType::Bar => crate::monitor::SparklineChartType::Line,
             };
-        }
+        });
         cx.notify();
     }
 
     /// 切换统计看板端口映射表格折叠状态。
     pub(crate) fn toggle_container_stats_ports(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.stats_ports_collapsed = !workspace.stats_ports_collapsed;
-        }
+        });
         cx.notify();
     }
 
@@ -188,9 +210,9 @@ impl AppShell {
         tab_id: TabId,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.stats_processes_collapsed = !workspace.stats_processes_collapsed;
-        }
+        });
         cx.notify();
     }
 }

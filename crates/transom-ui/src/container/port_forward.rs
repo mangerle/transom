@@ -56,18 +56,16 @@ impl AppShell {
                 .placeholder(rust_i18n::t!("container.forward.target_host_placeholder").to_string())
         });
 
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-
-        workspace.forward_dialog = Some(ContainerForwardDialog {
-            container_name: container_name.to_string(),
-            private_port,
-            published_port,
-            local_port_input,
-            target_host_input,
-            ssh_sessions,
-            selected_ssh_index: 0,
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.forward_dialog = Some(ContainerForwardDialog {
+                container_name: container_name.to_string(),
+                private_port,
+                published_port,
+                local_port_input,
+                target_host_input,
+                ssh_sessions,
+                selected_ssh_index: 0,
+            });
         });
 
         cx.notify();
@@ -75,10 +73,10 @@ impl AppShell {
 
     /// 取消端口转发弹窗。
     pub(crate) fn cancel_container_port_forward(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.forward_dialog = None;
-            cx.notify();
-        }
+        });
+        cx.notify();
     }
 
     /// 切换端口转发目标 SSH 会话。
@@ -88,61 +86,88 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(dialog) = workspace.forward_dialog.as_mut()
-            && index < dialog.ssh_sessions.len()
-        {
+        let selected = self.with_container_mut(tab_id, cx, |workspace| {
+            let Some(dialog) = workspace.forward_dialog.as_mut() else {
+                return false;
+            };
+            if index >= dialog.ssh_sessions.len() {
+                return false;
+            }
             dialog.selected_ssh_index = index;
+            true
+        });
+        if selected == Some(true) {
             cx.notify();
         }
     }
 
     /// 提交端口转发创建。
     pub(crate) fn submit_container_port_forward(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(dialog) = workspace.forward_dialog.as_ref() else {
+        let Some((
+            ssh_sessions,
+            local_port_input,
+            target_host_input,
+            selected_index,
+            container_name,
+            private_port,
+            published_port,
+        )) = self
+            .with_container(tab_id, cx, |workspace| {
+                let dialog = workspace.forward_dialog.as_ref()?;
+                Some((
+                    dialog.ssh_sessions.clone(),
+                    dialog.local_port_input.clone(),
+                    dialog.target_host_input.clone(),
+                    dialog.selected_ssh_index,
+                    dialog.container_name.clone(),
+                    dialog.private_port,
+                    dialog.published_port,
+                ))
+            })
+            .flatten()
+        else {
             return;
         };
 
-        if dialog.ssh_sessions.is_empty() {
-            workspace.notice =
-                Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
+        if ssh_sessions.is_empty() {
+            self.with_container_mut(tab_id, cx, |workspace| {
+                workspace.notice =
+                    Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
+            });
             cx.notify();
             return;
         }
 
-        let local_port_str = dialog.local_port_input.read(cx).value().trim().to_string();
+        let local_port_str = local_port_input.read(cx).value().trim().to_string();
         let local_port: u16 = match local_port_str.parse() {
             Ok(port) if port > 0 => port,
             _ => {
-                workspace.notice =
-                    Some(rust_i18n::t!("container.forward.invalid_port").to_string());
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    workspace.notice =
+                        Some(rust_i18n::t!("container.forward.invalid_port").to_string());
+                });
                 cx.notify();
                 return;
             }
         };
 
-        let target_host_str = dialog.target_host_input.read(cx).value().trim().to_string();
+        let target_host_str = target_host_input.read(cx).value().trim().to_string();
         let target_host = if target_host_str.is_empty() {
             "127.0.0.1".to_string()
         } else {
             target_host_str
         };
 
-        let selected_index = dialog.selected_ssh_index;
-        let Some((_, ssh_tab_id, connection_id)) = dialog.ssh_sessions.get(selected_index).cloned()
-        else {
-            workspace.notice =
-                Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
+        let Some((_, ssh_tab_id, connection_id)) = ssh_sessions.get(selected_index).cloned() else {
+            self.with_container_mut(tab_id, cx, |workspace| {
+                workspace.notice =
+                    Some(rust_i18n::t!("container.forward.no_session_selected").to_string());
+            });
             cx.notify();
             return;
         };
 
-        let container_name = dialog.container_name.clone();
-        let private_port = dialog.private_port;
-        let target_port = forward_target_port(private_port, dialog.published_port);
+        let target_port = forward_target_port(private_port, published_port);
 
         let rule = ForwardRule::new(
             format!("{container_name}:{private_port}"),
@@ -166,7 +191,7 @@ impl AppShell {
             rule,
         });
 
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.forward_dialog = None;
             workspace.notice = Some(
                 rust_i18n::t!(
@@ -177,7 +202,7 @@ impl AppShell {
                 )
                 .to_string(),
             );
-        }
+        });
         cx.notify();
     }
 }

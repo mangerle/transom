@@ -20,22 +20,22 @@ impl AppShell {
                 let Some(tab_id) = self.state.containers.tab_of(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                    && workspace.logs_request == Some(request_id)
-                {
-                    workspace.append_logs(&bytes);
-                }
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    if workspace.logs_request == Some(request_id) {
+                        workspace.append_logs(&bytes);
+                    }
+                });
             }
             ContainerAppEvent::LogsClosed { request_id } => {
                 let Some(tab_id) = self.state.containers.take_tab(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                    && workspace.logs_request == Some(request_id)
-                {
-                    workspace.logs_request = None;
-                    workspace.logs_follow = false;
-                }
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    if workspace.logs_request == Some(request_id) {
+                        workspace.logs_request = None;
+                        workspace.logs_follow = false;
+                    }
+                });
             }
             ContainerAppEvent::StatsUpdated {
                 request_id,
@@ -46,9 +46,10 @@ impl AppShell {
                     return;
                 };
                 log::debug!("收到容器统计更新，请求: {request_id}");
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                    && workspace.stats_request == Some(request_id)
-                {
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    if workspace.stats_request != Some(request_id) {
+                        return;
+                    }
                     let mut stats = stats;
                     if stats.host_load.is_none()
                         && let Some(prev) = &workspace.stats
@@ -91,19 +92,20 @@ impl AppShell {
                         }
                     }
                     workspace.stats_error = None;
-                }
+                });
             }
             ContainerAppEvent::StatsUnavailable { request_id, error } => {
                 let Some(tab_id) = self.state.containers.tab_of(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                    && workspace.stats_request == Some(request_id)
-                {
-                    workspace.stats_error = Some(
-                        rust_i18n::t!("container.stats.reconnecting", error = error).to_string(),
-                    );
-                }
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    if workspace.stats_request == Some(request_id) {
+                        workspace.stats_error = Some(
+                            rust_i18n::t!("container.stats.reconnecting", error = error)
+                                .to_string(),
+                        );
+                    }
+                });
             }
             ContainerAppEvent::DirListed {
                 request_id,
@@ -113,16 +115,16 @@ impl AppShell {
                 let Some(tab_id) = self.state.containers.take_tab(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                    && workspace.files.request == Some(request_id)
-                {
-                    log::info!("容器目录已加载，路径: {path}，条目: {}", entries.len());
-                    workspace.files.request = None;
-                    workspace.files.path = path;
-                    workspace.files.entries = entries;
-                    workspace.files.loading = false;
-                    workspace.files.scroll.set_offset(point(px(0.0), px(0.0)));
-                }
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    if workspace.files.request == Some(request_id) {
+                        log::info!("容器目录已加载，路径: {path}，条目: {}", entries.len());
+                        workspace.files.request = None;
+                        workspace.files.path = path;
+                        workspace.files.entries = entries;
+                        workspace.files.loading = false;
+                        workspace.files.scroll.set_offset(point(px(0.0), px(0.0)));
+                    }
+                });
             }
             ContainerAppEvent::FilePreview {
                 request_id,
@@ -135,13 +137,13 @@ impl AppShell {
                 let Some(tab_id) = self.state.containers.take_tab(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.files.preview = Some((path, content, truncated));
                     workspace.files.preview_binary = binary;
                     if binary {
                         workspace.files.preview_editor = None;
                     }
-                }
+                });
             }
             ContainerAppEvent::TransferProgress {
                 request_id,
@@ -151,7 +153,7 @@ impl AppShell {
                 let Some(tab_id) = self.state.containers.tab_of(request_id) else {
                     return;
                 };
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.notice = Some(match total {
                         Some(total) if total > 0 => format!(
                             "{} / {}",
@@ -160,24 +162,25 @@ impl AppShell {
                         ),
                         _ => crate::format::format_size(transferred),
                     });
-                }
+                });
             }
             ContainerAppEvent::BuildProgress { request_id, line } => {
-                if let Some(tab_id) = self.state.containers.tab_of(request_id)
-                    && let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                {
-                    workspace.notice = line.lines().last().map(str::to_string);
-                    if let Some(b) = workspace
-                        .build_dialog
-                        .as_mut()
-                        .filter(|b| b.request_id == Some(request_id))
-                    {
-                        b.logs.extend(line.lines().map(str::to_string));
-                        if b.logs.len() > crate::container::types::BUILD_LOG_LIMIT {
-                            let excess = b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
-                            b.logs.drain(..excess);
+                if let Some(tab_id) = self.state.containers.tab_of(request_id) {
+                    self.with_container_mut(tab_id, cx, |workspace| {
+                        workspace.notice = line.lines().last().map(str::to_string);
+                        if let Some(b) = workspace
+                            .build_dialog
+                            .as_mut()
+                            .filter(|b| b.request_id == Some(request_id))
+                        {
+                            b.logs.extend(line.lines().map(str::to_string));
+                            if b.logs.len() > crate::container::types::BUILD_LOG_LIMIT {
+                                let excess =
+                                    b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
+                                b.logs.drain(..excess);
+                            }
                         }
-                    }
+                    });
                 }
             }
             _ => {}

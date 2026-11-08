@@ -119,7 +119,12 @@ impl ModalKind {
                 true
             }
             ModalKind::KnownHosts => {
-                shell.state.modals.connection.known_hosts.open = false;
+                shell
+                    .state
+                    .modals
+                    .connection
+                    .known_hosts
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::KeyWizard => {
@@ -235,7 +240,12 @@ impl ModalKind {
             ModalKind::SnippetForm => shell.save_snippet_form(cx),
             ModalKind::BackupPrompt => shell.submit_backup(window, cx),
             // 查看与管理类弹窗只有一个"关闭"主按钮，Enter 与它同义。
-            ModalKind::KnownHosts => shell.state.modals.connection.known_hosts.open = false,
+            ModalKind::KnownHosts => shell
+                .state
+                .modals
+                .connection
+                .known_hosts
+                .update(cx, |view, cx| view.close(cx)),
             ModalKind::KeyWizard => shell.state.modals.tools.key_wizard = None,
             ModalKind::AuditViewer => shell.state.modals.tools.audit_viewer = None,
             ModalKind::Replay => shell.state.modals.tools.replay = None,
@@ -250,8 +260,8 @@ impl ModalKind {
     ///
     /// 一律走 `as_ref()` 安全取值：关闭动作可能在对账把弹窗弹出栈之前就把状态
     /// 清空，这一帧仍可能渲染一次；用 `expect` 会把这条正常路径变成 panic。
-    pub(super) fn focus_target(self, shell: &AppShell) -> ModalFocus {
-        if let Some(target) = self.container_focus_target(shell) {
+    pub(super) fn focus_target(self, shell: &AppShell, cx: &App) -> ModalFocus {
+        if let Some(target) = self.container_focus_target(shell, cx) {
             return target;
         }
         if let Some(target) = self.git_focus_target(shell) {
@@ -303,13 +313,18 @@ impl ModalKind {
                     .as_ref()
                     .map(|form| form.image.clone())
             }),
-            ModalKind::ContainerCreate => input_focus(shell, |state| {
-                state.containers.create_dialog.as_ref().and_then(|dialog| {
-                    state
-                        .container_workspace(dialog.tab_id)
-                        .map(|workspace| workspace.create_input.clone())
-                })
-            }),
+            ModalKind::ContainerCreate => {
+                let input = shell
+                    .state
+                    .containers
+                    .create_dialog
+                    .as_ref()
+                    .and_then(|dialog| {
+                        let workspace = shell.state.container_workspace(dialog.tab_id)?;
+                        Some(workspace.read(cx).state.create_input.clone())
+                    });
+                input.map_or(ModalFocus::None, ModalFocus::Input)
+            }
             ModalKind::SessionForm => input_focus(shell, |state| {
                 state
                     .modals

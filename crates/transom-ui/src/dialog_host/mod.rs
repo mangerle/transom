@@ -180,6 +180,10 @@ impl ModalKind {
             let settings = app.read(cx).state.modals.settings.clone();
             return settings.update(cx, |view, cx| view.render_body(&settings, window, cx, p));
         }
+        if self == ModalKind::KnownHosts {
+            let view = app.read(cx).state.modals.connection.known_hosts.clone();
+            return view.update(cx, |view, cx| view.render_body(cx, p));
+        }
         let shell = app.read(cx);
         self.render_shell_body(shell, app, window, cx, p)
     }
@@ -233,7 +237,7 @@ impl ModalKind {
                 shell.render_container_file_new_dir_dialog_body(app, cx, p)
             }
             ModalKind::ContainerHub => shell
-                .find_container_modal_tab(|ws| ws.hub_dialog.is_some())
+                .find_container_modal_tab(cx, |ws| ws.hub_dialog.is_some())
                 .map_or_else(
                     || div().into_any_element(),
                     |(tab_id, _)| {
@@ -241,7 +245,7 @@ impl ModalKind {
                     },
                 ),
             ModalKind::ContainerPush => shell
-                .find_container_modal_tab(|ws| ws.push_dialog.is_some())
+                .find_container_modal_tab(cx, |ws| ws.push_dialog.is_some())
                 .map_or_else(
                     || div().into_any_element(),
                     |(tab_id, _)| {
@@ -249,7 +253,7 @@ impl ModalKind {
                     },
                 ),
             ModalKind::ContainerSystemDf => shell
-                .find_container_modal_tab(|ws| ws.system_df_dialog_open)
+                .find_container_modal_tab(cx, |ws| ws.system_df_dialog_open)
                 .map_or_else(
                     || div().into_any_element(),
                     |(tab_id, _)| {
@@ -257,7 +261,7 @@ impl ModalKind {
                     },
                 ),
             ModalKind::ContainerBuild => shell
-                .find_container_modal_tab(|ws| ws.build_dialog.is_some())
+                .find_container_modal_tab(cx, |ws| ws.build_dialog.is_some())
                 .map_or_else(
                     || div().into_any_element(),
                     |(tab_id, _)| {
@@ -265,20 +269,21 @@ impl ModalKind {
                     },
                 ),
             ModalKind::ContainerForward => shell
-                .find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+                .find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
                 .map_or_else(
                     || div().into_any_element(),
                     |(tab_id, _)| {
                         shell.render_container_forward_dialog_body(tab_id, app, window, cx, p)
                     },
                 ),
-            ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, p),
-            ModalKind::ContainerQuadlet => shell.render_container_quadlet_dialog_body(app, p),
+            ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, cx, p),
+            ModalKind::ContainerQuadlet => shell.render_container_quadlet_dialog_body(app, cx, p),
             ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
             ModalKind::SnippetForm => shell.render_snippet_form_body(app, window, cx, p),
-            ModalKind::KnownHosts => shell.render_known_hosts_body(app, window, cx, p),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::KnownHosts => div().into_any_element(),
             ModalKind::KeyWizard => shell.render_key_wizard_body(app, window, cx, p),
             ModalKind::BackupPrompt => shell.render_backup_prompt_body(app, window, cx, p),
             ModalKind::AuditViewer => shell.render_audit_viewer_body(app, window, cx, p),

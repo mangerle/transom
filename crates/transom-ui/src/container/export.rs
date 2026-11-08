@@ -16,23 +16,29 @@ impl AppShell {
         name: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+        let Some((run_cmd, compose_yaml)) = self
+            .with_container(tab_id, cx, |workspace| {
+                let details = workspace.details.as_ref()?;
+                Some((
+                    transom_core::generate_docker_run(details),
+                    transom_core::generate_docker_compose(details),
+                ))
+            })
+            .flatten()
+        else {
             return;
         };
-        let Some(ref details) = workspace.details else {
-            return;
-        };
-        let run_cmd = transom_core::generate_docker_run(details);
-        let compose_yaml = transom_core::generate_docker_compose(details);
-        workspace.export_config = Some((name, run_cmd, compose_yaml, false));
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.export_config = Some((name, run_cmd, compose_yaml, false));
+        });
         cx.notify();
     }
 
     /// 关闭导出弹窗。
     pub(crate) fn cancel_container_export(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.export_config = None;
-        }
+        });
         cx.notify();
     }
 
@@ -43,11 +49,11 @@ impl AppShell {
         is_compose: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some((_, _, _, ref mut cur)) = workspace.export_config
-        {
-            *cur = is_compose;
-        }
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if let Some((_, _, _, cur)) = workspace.export_config.as_mut() {
+                *cur = is_compose;
+            }
+        });
         cx.notify();
     }
 }

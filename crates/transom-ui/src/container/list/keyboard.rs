@@ -74,7 +74,7 @@ pub(crate) fn handle_list_key_down(
             let current_selected = app
                 .state
                 .container_workspace(tab_id)
-                .and_then(|w| w.selected.clone());
+                .and_then(|w| w.read(cx).state.selected.clone());
             if let Some(target) = navigate_selection(rows, current_selected.as_deref(), 1) {
                 app.select_row(tab_id, &target, cx);
             }
@@ -84,7 +84,7 @@ pub(crate) fn handle_list_key_down(
             let current_selected = app
                 .state
                 .container_workspace(tab_id)
-                .and_then(|w| w.selected.clone());
+                .and_then(|w| w.read(cx).state.selected.clone());
             if let Some(target) = navigate_selection(rows, current_selected.as_deref(), -1) {
                 app.select_row(tab_id, &target, cx);
             }
@@ -94,7 +94,7 @@ pub(crate) fn handle_list_key_down(
             let current_selected = app
                 .state
                 .container_workspace(tab_id)
-                .and_then(|w| w.selected.clone());
+                .and_then(|w| w.read(cx).state.selected.clone());
             if let Some(row) = find_selected_row(rows, current_selected.as_deref()) {
                 match &row.target {
                     RowTarget::Container { .. } => {
@@ -119,7 +119,7 @@ pub(crate) fn handle_list_key_down(
             let current_selected = app
                 .state
                 .container_workspace(tab_id)
-                .and_then(|w| w.selected.clone());
+                .and_then(|w| w.read(cx).state.selected.clone());
             if let Some(row) = find_selected_row(rows, current_selected.as_deref())
                 && matches!(row.target, RowTarget::Container { .. })
             {
@@ -131,7 +131,7 @@ pub(crate) fn handle_list_key_down(
             let current_selected = app
                 .state
                 .container_workspace(tab_id)
-                .and_then(|w| w.selected.clone());
+                .and_then(|w| w.read(cx).state.selected.clone());
             if let Some(row) = find_selected_row(rows, current_selected.as_deref()) {
                 match &row.target {
                     RowTarget::Container { name, .. } => {
@@ -159,7 +159,7 @@ pub(crate) fn handle_list_key_down(
         // '/'：聚焦搜索框
         "/" => {
             if let Some(workspace) = app.state.container_workspace(tab_id) {
-                let search = workspace.search.clone();
+                let search = workspace.read(cx).state.search.clone();
                 search.update(cx, |state, cx| state.focus(window, cx));
             }
         }

@@ -18,7 +18,7 @@ impl AppShell {
             return;
         }
         let (terminal, subscription) = self.create_container_terminal(io, tab_id, window, cx);
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             let (user, shell) = workspace
                 .terminal_request
                 .take()
@@ -32,6 +32,6 @@ impl AppShell {
             });
             workspace.detail_tab = ContainerDetailTab::Terminal;
             workspace.notice = None;
-        }
+        });
     }
 }

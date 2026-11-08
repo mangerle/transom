@@ -47,7 +47,7 @@ impl AppShell {
             }
         });
 
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.hub_dialog = Some(ContainerHubDialog {
                 search_input,
                 selected_registry_id: default_reg,
@@ -65,7 +65,7 @@ impl AppShell {
                 copy_toast: false,
                 _subscription: subscription,
             });
-        }
+        });
         cx.notify();
     }
 
@@ -75,6 +75,7 @@ impl AppShell {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
+            let workspace = &workspace.read(cx).state;
             let Some(hub) = workspace.hub_dialog.as_ref() else {
                 return;
             };
@@ -95,22 +96,22 @@ impl AppShell {
         let (term, tag_hint) = tags::parse_search_term_and_tag(&raw_input);
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(hub) = workspace.hub_dialog.as_mut()
-        {
-            hub.searching = true;
-            hub.search_error = None;
-            hub.search_request = Some(request_id);
-            // 搜索时重置详情视图与旧标签，避免把上一个仓库的结果带过来。
-            hub.selected_detail = None;
-            hub.tags.clear();
-            hub.tags_error = None;
-            hub.tags_loading = false;
-            hub.tags_request = None;
-            if let Some(tag) = tag_hint {
-                hub.selected_tags.insert(term.clone(), tag);
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if let Some(hub) = workspace.hub_dialog.as_mut() {
+                hub.searching = true;
+                hub.search_error = None;
+                hub.search_request = Some(request_id);
+                // 搜索时重置详情视图与旧标签，避免把上一个仓库的结果带过来。
+                hub.selected_detail = None;
+                hub.tags.clear();
+                hub.tags_error = None;
+                hub.tags_loading = false;
+                hub.tags_request = None;
+                if let Some(tag) = tag_hint {
+                    hub.selected_tags.insert(term.clone(), tag);
+                }
             }
-        }
+        });
 
         self.send_tracked(
             tab_id,
@@ -138,6 +139,7 @@ impl AppShell {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
+            let workspace = &workspace.read(cx).state;
             let Some(hub) = workspace.hub_dialog.as_ref() else {
                 return;
             };
@@ -163,17 +165,17 @@ impl AppShell {
 
         let request_id = ContainerRequestId::new();
         let repository = item.name.clone();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(hub) = workspace.hub_dialog.as_mut()
-        {
-            hub.selected_detail = Some(item);
-            hub.custom_tag_input = Some(custom_input);
-            hub.copy_toast = false;
-            hub.tags.clear();
-            hub.tags_loading = true;
-            hub.tags_error = None;
-            hub.tags_request = Some(request_id);
-        }
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if let Some(hub) = workspace.hub_dialog.as_mut() {
+                hub.selected_detail = Some(item);
+                hub.custom_tag_input = Some(custom_input);
+                hub.copy_toast = false;
+                hub.tags.clear();
+                hub.tags_loading = true;
+                hub.tags_error = None;
+                hub.tags_request = Some(request_id);
+            }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -189,17 +191,17 @@ impl AppShell {
 
     /// 从镜像详情页返回搜索结果列表。
     pub(crate) fn back_to_hub_results(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(hub) = workspace.hub_dialog.as_mut()
-        {
-            hub.selected_detail = None;
-            hub.custom_tag_input = None;
-            hub.copy_toast = false;
-            hub.tags.clear();
-            hub.tags_loading = false;
-            hub.tags_error = None;
-            hub.tags_request = None;
-        }
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if let Some(hub) = workspace.hub_dialog.as_mut() {
+                hub.selected_detail = None;
+                hub.custom_tag_input = None;
+                hub.copy_toast = false;
+                hub.tags.clear();
+                hub.tags_loading = false;
+                hub.tags_error = None;
+                hub.tags_request = None;
+            }
+        });
         cx.notify();
     }
 
@@ -211,11 +213,11 @@ impl AppShell {
         tag: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(hub) = workspace.hub_dialog.as_mut()
-        {
-            hub.selected_tags.insert(image_name, tag);
-        }
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if let Some(hub) = workspace.hub_dialog.as_mut() {
+                hub.selected_tags.insert(image_name, tag);
+            }
+        });
         cx.notify();
     }
 
@@ -238,19 +240,18 @@ impl AppShell {
         }
         let auth = registry.auth();
         let registry_name = registry.name.clone();
-        let (task_id, should_start) = {
-            let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-                return;
-            };
+        let Some((task_id, should_start)) = self.with_container_mut(tab_id, cx, |workspace| {
             workspace
                 .pull_manager
                 .enqueue(tab_id, reference.clone(), registry_name, auth.clone())
+        }) else {
+            return;
         };
 
         // 自动打开下载抽屉以展现分层下载进度
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.pull_drawer_open = true;
-        }
+        });
 
         if should_start {
             self.state.send_command(ContainerCommand::PullImageTask {

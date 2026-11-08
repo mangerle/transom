@@ -12,15 +12,15 @@ impl AppShell {
     pub(crate) fn render_container_network_connect_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         _p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.connect_network.is_some())
+            self.find_container_modal_tab(cx, |ws| ws.connect_network.is_some())
         else {
             return div().into_any_element();
         };
-        let Some((_, input)) = workspace.connect_network.clone() else {
+        let Some((_, input)) = workspace.read(cx).state.connect_network.clone() else {
             return div().into_any_element();
         };
 

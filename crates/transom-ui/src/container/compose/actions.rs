@@ -18,9 +18,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if action.is_dangerous() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.confirm = Some(ContainerConfirm::Compose(name));
-            }
+            });
             cx.notify();
             return;
         }
@@ -28,11 +28,8 @@ impl AppShell {
             .state
             .container_workspace(tab_id)
             .and_then(|workspace| {
-                workspace
-                    .compose
-                    .iter()
-                    .find(|item| item.name == name)
-                    .cloned()
+                let state = &workspace.read(cx).state;
+                state.compose.iter().find(|item| item.name == name).cloned()
             })
         else {
             return;
@@ -156,14 +153,15 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let project = workspace
-            .compose
-            .iter()
-            .find(|item| item.name == name)
-            .cloned();
+        let project = self
+            .with_container(tab_id, cx, |workspace| {
+                workspace
+                    .compose
+                    .iter()
+                    .find(|item| item.name == name)
+                    .cloned()
+            })
+            .flatten();
         let Some(path) = project.as_ref().and_then(compose_project_yaml) else {
             self.show_toast(
                 rust_i18n::t!("container.compose.yaml_missing").to_string(),
@@ -183,14 +181,16 @@ impl AppShell {
             return;
         }
 
-        workspace.section = ContainerSection::Compose;
-        workspace.selected = Some(name.to_string());
-        workspace.detail_tab = ContainerDetailTab::Yaml;
-        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
-            && current_name != name
-        {
-            workspace.compose_yaml_editor = None;
-        }
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.section = ContainerSection::Compose;
+            workspace.selected = Some(name.to_string());
+            workspace.detail_tab = ContainerDetailTab::Yaml;
+            if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
+                && current_name != name
+            {
+                workspace.compose_yaml_editor = None;
+            }
+        });
         self.ensure_compose_yaml_loaded(tab_id, name, window, cx);
         cx.notify();
     }
@@ -225,16 +225,15 @@ impl AppShell {
             config_files: vec![path.to_string_lossy().into_owned()],
         };
 
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        if !workspace.compose.iter().any(|item| item.name == name) {
-            workspace.compose.push(project);
-        }
-        workspace.section = ContainerSection::Compose;
-        workspace.selected = Some(name.clone());
-        workspace.detail_tab = ContainerDetailTab::Yaml;
-        workspace.compose_yaml_editor = None;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if !workspace.compose.iter().any(|item| item.name == name) {
+                workspace.compose.push(project);
+            }
+            workspace.section = ContainerSection::Compose;
+            workspace.selected = Some(name.clone());
+            workspace.detail_tab = ContainerDetailTab::Yaml;
+            workspace.compose_yaml_editor = None;
+        });
 
         self.ensure_compose_yaml_loaded(tab_id, &name, window, cx);
         self.show_toast(
@@ -254,12 +253,12 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.notice = Some(
                 rust_i18n::t!("container.compose.running", action = action.label()).to_string(),
             );
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,

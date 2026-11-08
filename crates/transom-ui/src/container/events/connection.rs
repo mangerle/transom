@@ -11,15 +11,16 @@ impl AppShell {
     ) {
         match event {
             ContainerAppEvent::Connected { tab_id, info } => {
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.status = ContainerWorkspaceStatus::Connected;
                     workspace.info = Some(*info);
                     workspace.notice = None;
-                }
+                });
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Connected;
                 }
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    let workspace = &workspace.read(cx).state;
                     let profile = workspace.profile.clone();
                     let mut exists = false;
                     for saved in &mut self.state.catalog.engines {
@@ -44,13 +45,13 @@ impl AppShell {
                         cx.notify();
                     }
                 }
-                self.refresh_container_workspace_all(tab_id);
+                self.refresh_container_workspace_all(tab_id, cx);
             }
             ContainerAppEvent::ConnectFailed { tab_id, error } => {
                 let message = localized_error(&error);
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.status = ContainerWorkspaceStatus::Failed(message.clone());
-                }
+                });
                 // 连接失败既要让工作区停在失败态（重试按钮在那里），也要在右上角
                 // 立刻说一声：标签可能不在前台，只靠面板状态用户看不到出了事。
                 self.show_toast(message, false, window, cx);
@@ -102,9 +103,9 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::Disconnected { tab_id } => {
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.status = ContainerWorkspaceStatus::Disconnected;
-                }
+                });
             }
             _ => {}
         }

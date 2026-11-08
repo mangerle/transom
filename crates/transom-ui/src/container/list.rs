@@ -83,27 +83,54 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let section = workspace.section;
-        let search = workspace.search.clone();
-        let state_filter = workspace.state_filter;
-        let include_compose = workspace.include_compose;
-        let sort_key = workspace.sort_key;
-        let sort_desc = workspace.sort_desc;
-        let busy = workspace.busy;
-        let selected = workspace.selected.clone();
-        let quick = workspace.quick_filter;
-        let query = workspace.query(cx).to_lowercase();
-        let mut rows = collect_rows(section, workspace, &query, state_filter);
-        rows.sort_by(|left, right| {
-            compare_fields(
-                &left.fields,
-                &right.fields,
-                active_sort(section, sort_key),
+        let (
+            section,
+            search,
+            state_filter,
+            include_compose,
+            sort_key,
+            sort_desc,
+            busy,
+            selected,
+            quick,
+            focus_handle,
+            rows,
+        ) = {
+            let state = &workspace.read(cx).state;
+            let section = state.section;
+            let search = state.search.clone();
+            let state_filter = state.state_filter;
+            let include_compose = state.include_compose;
+            let sort_key = state.sort_key;
+            let sort_desc = state.sort_desc;
+            let busy = state.busy;
+            let selected = state.selected.clone();
+            let quick = state.quick_filter;
+            let query = state.query(cx).to_lowercase();
+            let mut rows = collect_rows(section, state, &query, state_filter);
+            rows.sort_by(|left, right| {
+                compare_fields(
+                    &left.fields,
+                    &right.fields,
+                    active_sort(section, sort_key),
+                    sort_desc,
+                )
+            });
+            let focus_handle = state.list_focus_handle.clone();
+            (
+                section,
+                search,
+                state_filter,
+                include_compose,
+                sort_key,
                 sort_desc,
+                busy,
+                selected,
+                quick,
+                focus_handle,
+                rows,
             )
-        });
-
-        let focus_handle = workspace.list_focus_handle.clone();
+        };
         let toolbar = self.render_list_toolbar(
             &ToolbarParams {
                 tab_id,

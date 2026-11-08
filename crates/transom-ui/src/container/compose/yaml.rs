@@ -17,19 +17,20 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
-            && current_name == project_name
-        {
-            return;
-        }
-        let Some(project) = workspace
-            .compose
-            .iter()
-            .find(|p| p.name == project_name)
-            .cloned()
+        let Some(project) = self
+            .with_container(tab_id, cx, |workspace| {
+                if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
+                    && current_name == project_name
+                {
+                    return None;
+                }
+                workspace
+                    .compose
+                    .iter()
+                    .find(|p| p.name == project_name)
+                    .cloned()
+            })
+            .flatten()
         else {
             return;
         };
@@ -42,33 +43,27 @@ impl AppShell {
         cx.spawn(async move |this, cx| {
             let read_path = target_path.clone();
             let content = spawn_blocking_local(move || std::fs::read_to_string(&read_path)).await;
-            let _ = this.update_in(cx, |this, window, cx| {
-                let Some(workspace) = this.state.container_workspace_mut(tab_id) else {
-                    return;
-                };
-                match content {
-                    Some(Ok(text)) => {
-                        let parsed =
-                            crate::container::detail::compose_graph::parse_compose_dependencies(
-                                &text,
-                            );
-                        let editor =
-                            cx.new(|cx| TextareaState::new(window, cx).default_value(text));
+            let _ = this.update_in(cx, |this, window, cx| match content {
+                Some(Ok(text)) => {
+                    let parsed =
+                        crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+                    let editor = cx.new(|cx| TextareaState::new(window, cx).default_value(text));
+                    this.with_container_mut(tab_id, cx, |workspace| {
                         workspace.compose_yaml_editor =
                             Some((target_project, target_path, editor, false));
                         workspace.compose_dependencies = parsed;
-                        cx.notify();
-                    }
-                    Some(Err(err)) => {
-                        this.show_toast(
-                            rust_i18n::t!("container.compose.read_failed", error = err).to_string(),
-                            false,
-                            window,
-                            cx,
-                        );
-                    }
-                    None => {}
+                    });
+                    cx.notify();
                 }
+                Some(Err(err)) => {
+                    this.show_toast(
+                        rust_i18n::t!("container.compose.read_failed", error = err).to_string(),
+                        false,
+                        window,
+                        cx,
+                    );
+                }
+                None => {}
             });
         })
         .detach();
@@ -76,16 +71,23 @@ impl AppShell {
 
     /// 保存当前在编辑器中修改的 Compose YAML 内容。
     pub(crate) fn save_compose_yaml(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+        let Some((path, editor, saving)) = self
+            .with_container(tab_id, cx, |workspace| {
+                let (_, path, editor, saving) = workspace.compose_yaml_editor.as_ref()?;
+                Some((path.clone(), editor.clone(), *saving))
+            })
+            .flatten()
+        else {
             return;
         };
-        let Some((_, path, editor, saving)) = &mut workspace.compose_yaml_editor else {
-            return;
-        };
-        if *saving {
+        if saving {
             return;
         }
-        *saving = true;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
+                *saving = true;
+            }
+        });
         let text = editor.read(cx).value().to_string();
         let write_text = text.clone();
         let write_path = path.clone();
@@ -94,20 +96,20 @@ impl AppShell {
             let result =
                 spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
             let _ = this.update_in(cx, |this, window, cx| {
-                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
-                    && let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor
-                {
-                    *saving = false;
-                }
+                this.with_container_mut(tab_id, cx, |workspace| {
+                    if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
+                        *saving = false;
+                    }
+                });
                 match result {
                     Some(Ok(())) => {
                         let parsed =
                             crate::container::detail::compose_graph::parse_compose_dependencies(
                                 &text,
                             );
-                        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                        this.with_container_mut(tab_id, cx, |workspace| {
                             workspace.compose_dependencies = parsed;
-                        }
+                        });
                         this.show_toast(
                             rust_i18n::t!("container.compose.yaml_saved").to_string(),
                             true,
@@ -138,26 +140,39 @@ impl AppShell {
         project_name: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+        let Some((dependencies_empty, cached_editor, project)) =
+            self.with_container(tab_id, cx, |workspace| {
+                let cached_editor = workspace
+                    .compose_yaml_editor
+                    .as_ref()
+                    .filter(|(current_name, ..)| current_name == project_name)
+                    .map(|(_, _, editor, _)| editor.clone());
+                let project = workspace
+                    .compose
+                    .iter()
+                    .find(|p| p.name == project_name)
+                    .cloned();
+                (
+                    workspace.compose_dependencies.is_empty(),
+                    cached_editor,
+                    project,
+                )
+            })
+        else {
             return;
         };
-        if !workspace.compose_dependencies.is_empty() {
+        if !dependencies_empty {
             return;
         }
-        if let Some((current_name, _, editor, _)) = &workspace.compose_yaml_editor
-            && current_name == project_name
-        {
+        if let Some(editor) = cached_editor {
             let text = editor.read(cx).value();
-            workspace.compose_dependencies =
-                crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+            let parsed = crate::container::detail::compose_graph::parse_compose_dependencies(&text);
+            self.with_container_mut(tab_id, cx, |workspace| {
+                workspace.compose_dependencies = parsed;
+            });
             return;
         }
-        let Some(project) = workspace
-            .compose
-            .iter()
-            .find(|p| p.name == project_name)
-            .cloned()
-        else {
+        let Some(project) = project else {
             return;
         };
         let Some(yaml_path) = compose_project_yaml(&project) else {
@@ -170,10 +185,10 @@ impl AppShell {
                 if let Some(Ok(text)) = content {
                     let parsed =
                         crate::container::detail::compose_graph::parse_compose_dependencies(&text);
-                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                    this.with_container_mut(tab_id, cx, |workspace| {
                         workspace.compose_dependencies = parsed;
-                        cx.notify();
-                    }
+                    });
+                    cx.notify();
                 }
             });
         })

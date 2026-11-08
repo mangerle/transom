@@ -231,10 +231,7 @@ impl AppShell {
         if let Some(player) = self.state.workspace.tabs[index].player() {
             return div().size_full().child(player).into_any_element();
         }
-        if matches!(
-            &self.state.workspace.tabs[index].content,
-            crate::app::TabContent::Containers(_)
-        ) {
+        if self.state.workspace.tabs[index].containers().is_some() {
             if self.state.containers.fullscreen == Some(tab_id) {
                 return v_flex()
                     .size_full()

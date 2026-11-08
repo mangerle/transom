@@ -60,10 +60,10 @@ pub(crate) fn render_volume_detail(
             .icon(IconName::FolderOpen)
             .label(rust_i18n::t!("container.files.browse").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(w) = this.state.container_workspace_mut(tab_id) {
+                this.with_container_mut(tab_id, cx, |w| {
                     w.detail_tab = ContainerDetailTab::Files;
-                }
-                this.load_container_dir(tab_id, "/".to_string());
+                });
+                this.load_container_dir(tab_id, "/".to_string(), cx);
                 cx.notify();
             })),
     );
@@ -96,9 +96,9 @@ pub(crate) fn render_volume_detail(
         .icon(IconName::Braces)
         .label(rust_i18n::t!("container.field.inspect").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
-            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+            this.with_container_mut(tab_id, cx, |workspace| {
                 workspace.overview_raw = true;
-            }
+            });
             cx.notify();
         }))
         .into_any_element();

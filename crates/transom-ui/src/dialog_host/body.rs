@@ -38,7 +38,7 @@ impl Render for ModalBody {
         let kind = self.kind;
         if self.pending_focus {
             self.pending_focus = false;
-            match kind.focus_target(app.read(cx)) {
+            match kind.focus_target(app.read(cx), cx) {
                 ModalFocus::Input(input) => {
                     input.update(cx, |state, cx| state.focus(window, cx));
                 }

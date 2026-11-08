@@ -89,7 +89,7 @@ impl AppShell {
         let search = self.ensure_engine_search(window, cx);
         let query = search.read(cx).value().trim().to_string();
         let rows = build_engine_rows(&self.state.catalog, &query);
-        let states = self.state.container_profile_states();
+        let states = self.state.container_profile_states(cx);
         let active = self.active_engine_profile_id();
         let selected = self.state.containers.sidebar_selected;
         let discovery = self.state.containers.discovery.clone();

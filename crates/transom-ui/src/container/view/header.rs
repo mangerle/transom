@@ -21,7 +21,7 @@ impl AppShell {
         p: &Palette,
     ) -> AnyElement {
         let section_tabs = self.render_container_section_tabs(tab_id, window, cx, p);
-        let identity = self.render_container_engine_identity(tab_id, p);
+        let identity = self.render_container_engine_identity(tab_id, cx, p);
         let actions = self.render_container_tab_actions(tab_id, cx, p);
 
         h_flex()
@@ -58,11 +58,13 @@ impl AppShell {
     pub(super) fn render_container_engine_identity(
         &self,
         tab_id: TabId,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let profile = &workspace.profile;
         let title = profile.display_name();
         let icon = crate::session_appearance::session_icon(profile.icon)
@@ -115,6 +117,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let busy = workspace.busy;
         let pulling_count = workspace.pull_manager.pulling_count();
         let drawer_open = workspace.pull_drawer_open;
@@ -167,9 +170,9 @@ impl AppShell {
                         })
                 };
                 this.child(btn.on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                    this.with_container_mut(tab_id, cx, |ws| {
                         ws.pull_drawer_open = !ws.pull_drawer_open;
-                    }
+                    });
                     cx.notify();
                 })))
             })
@@ -213,7 +216,7 @@ impl AppShell {
                     .xsmall()
                     .icon(IconName::RefreshCw)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.refresh_container_workspace_all(tab_id);
+                        this.refresh_container_workspace_all(tab_id, cx);
                         cx.notify();
                     })),
             )
@@ -245,6 +248,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let selected = workspace.section;
         let container_count = if workspace.include_compose {
             workspace.containers.len()

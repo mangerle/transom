@@ -253,10 +253,10 @@ impl AppShell {
                 container_id,
             }) => {
                 self.activate_tab(tab_id, window, cx);
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+                self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.apply_section(crate::container::ContainerSection::Containers);
-                }
-                self.select_container_item(tab_id, container_id);
+                });
+                self.select_container_item(tab_id, container_id, cx);
                 cx.notify();
             }
             Some(PaletteTarget::ContainerLifecycle {

@@ -39,9 +39,9 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -71,9 +71,9 @@ impl AppShell {
 
         let volume = target_volume.unwrap_or_else(|| volume_name_from_path(&local_path));
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,

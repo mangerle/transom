@@ -3,33 +3,43 @@
 use super::super::*;
 
 impl AppShell {
-    pub(crate) fn ensure_container_files(&mut self, tab_id: TabId) {
+    pub(crate) fn ensure_container_files(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let path = self
-            .state
-            .container_workspace_mut(tab_id)
-            .map(|workspace| workspace.files.path.clone())
+            .with_container(tab_id, cx, |workspace| workspace.files.path.clone())
             .filter(|path| !path.is_empty())
             .unwrap_or_else(|| "/".to_string());
-        self.load_container_dir(tab_id, path);
+        self.load_container_dir(tab_id, path, cx);
     }
 
-    pub(crate) fn load_container_dir(&mut self, tab_id: TabId, path: String) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+    pub(crate) fn load_container_dir(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((is_volume, target)) = self
+            .with_container(tab_id, cx, |workspace| {
+                let is_volume = workspace.section == ContainerSection::Volumes;
+                let target = if is_volume {
+                    workspace.selected_volume_name()
+                } else {
+                    workspace.selected_container_name()
+                }?;
+                Some((is_volume, target))
+            })
+            .flatten()
+        else {
             return;
         };
-        let is_volume = workspace.section == ContainerSection::Volumes;
-        let target = if is_volume {
-            workspace.selected_volume_name()
-        } else {
-            workspace.selected_container_name()
-        };
-        let Some(target) = target else {
-            return;
-        };
-        workspace.files.loading = true;
-        workspace.files.preview = None;
         let request_id = ContainerRequestId::new();
-        if let Some(previous) = workspace.files.request.replace(request_id) {
+        let previous = self
+            .with_container_mut(tab_id, cx, |workspace| {
+                workspace.files.loading = true;
+                workspace.files.preview = None;
+                workspace.files.request.replace(request_id)
+            })
+            .flatten();
+        if let Some(previous) = previous {
             self.cancel_container_request(tab_id, previous);
         }
         let command = if is_volume {
@@ -53,22 +63,31 @@ impl AppShell {
     }
 
     /// 预览容器或数据卷内文本文件。
-    pub(crate) fn preview_container_file(&mut self, tab_id: TabId, path: String) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+    pub(crate) fn preview_container_file(
+        &mut self,
+        tab_id: TabId,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((is_volume, target)) = self
+            .with_container(tab_id, cx, |workspace| {
+                let is_volume = workspace.section == ContainerSection::Volumes;
+                let target = if is_volume {
+                    workspace.selected_volume_name()
+                } else {
+                    workspace.selected_container_name()
+                }?;
+                Some((is_volume, target))
+            })
+            .flatten()
+        else {
             return;
         };
-        let is_volume = workspace.section == ContainerSection::Volumes;
-        let target = if is_volume {
-            workspace.selected_volume_name()
-        } else {
-            workspace.selected_container_name()
-        };
-        let Some(target) = target else {
-            return;
-        };
-        workspace.files.preview_editor = None;
-        workspace.files.preview_saving = false;
-        workspace.files.preview_binary = false;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.files.preview_editor = None;
+            workspace.files.preview_saving = false;
+            workspace.files.preview_binary = false;
+        });
         let request_id = ContainerRequestId::new();
         let command = if is_volume {
             ContainerCommand::ReadVolumeFile {

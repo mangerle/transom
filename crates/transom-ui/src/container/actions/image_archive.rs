@@ -14,7 +14,8 @@ impl AppShell {
             .state
             .container_workspace(tab_id)
             .and_then(|workspace| {
-                workspace
+                let state = &workspace.read(cx).state;
+                state
                     .images
                     .iter()
                     .find(|item| item.id == id)
@@ -32,9 +33,9 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -58,9 +59,9 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,

@@ -36,7 +36,9 @@ impl AppShell {
 
         // 查找已有镜像的元数据摘要
         let image_meta = self.state.container_workspace(tab_id).and_then(|ws| {
-            ws.images
+            let state = &ws.read(cx).state;
+            state
+                .images
                 .iter()
                 .find(|img| img.tags.contains(&image_raw) || img.id.starts_with(&image_raw))
                 .cloned()

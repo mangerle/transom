@@ -52,11 +52,9 @@ impl AppShell {
                                 .checked(filter == current_state)
                                 .on_click(move |_, _, cx| {
                                     app.update(cx, |this, cx| {
-                                        if let Some(workspace) =
-                                            this.state.container_workspace_mut(tab_id)
-                                        {
+                                        this.with_container_mut(tab_id, cx, |workspace| {
                                             workspace.state_filter = filter;
-                                        }
+                                        });
                                         cx.notify();
                                     });
                                 }),
@@ -71,10 +69,9 @@ impl AppShell {
                         .checked(current_include_compose)
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| {
-                                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
-                                {
+                                this.with_container_mut(tab_id, cx, |workspace| {
                                     workspace.include_compose = !workspace.include_compose;
-                                }
+                                });
                                 cx.notify();
                             });
                         }),
@@ -92,11 +89,9 @@ impl AppShell {
                                 .checked(*quick == current_quick)
                                 .on_click(move |_, _, cx| {
                                     app.update(cx, |this, cx| {
-                                        if let Some(workspace) =
-                                            this.state.container_workspace_mut(tab_id)
-                                        {
+                                        this.with_container_mut(tab_id, cx, |workspace| {
                                             workspace.quick_filter = *quick;
-                                        }
+                                        });
                                         cx.notify();
                                     });
                                 }),
@@ -113,17 +108,16 @@ impl AppShell {
                             .checked(*key == current_sort)
                             .on_click(move |_, _, cx| {
                                 app.update(cx, |this, cx| {
-                                    let Some(workspace) =
-                                        this.state.container_workspace_mut(tab_id)
-                                    else {
-                                        return;
-                                    };
-                                    if active_sort(workspace.section, workspace.sort_key) == *key {
-                                        workspace.sort_desc = !workspace.sort_desc;
-                                    } else {
-                                        workspace.sort_key = *key;
-                                        workspace.sort_desc = false;
-                                    }
+                                    this.with_container_mut(tab_id, cx, |workspace| {
+                                        if active_sort(workspace.section, workspace.sort_key)
+                                            == *key
+                                        {
+                                            workspace.sort_desc = !workspace.sort_desc;
+                                        } else {
+                                            workspace.sort_key = *key;
+                                            workspace.sort_desc = false;
+                                        }
+                                    });
                                     cx.notify();
                                 });
                             }),
@@ -145,10 +139,9 @@ impl AppShell {
                         .checked(ascending != sort_desc)
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| {
-                                if let Some(workspace) = this.state.container_workspace_mut(tab_id)
-                                {
+                                this.with_container_mut(tab_id, cx, |workspace| {
                                     workspace.sort_desc = !ascending;
-                                }
+                                });
                                 cx.notify();
                             });
                         }),
@@ -163,16 +156,14 @@ impl AppShell {
                         PopupMenuItem::new(rust_i18n::t!("container.filter.reset").to_string())
                             .on_click(move |_, _, cx| {
                                 app.update(cx, |this, cx| {
-                                    if let Some(workspace) =
-                                        this.state.container_workspace_mut(tab_id)
-                                    {
+                                    this.with_container_mut(tab_id, cx, |workspace| {
                                         workspace.state_filter = ContainerStateFilter::All;
                                         workspace.include_compose = false;
                                         workspace.quick_filter = ContainerQuickFilter::All;
                                         workspace.sort_key =
                                             ContainerSortKey::default_for(workspace.section);
                                         workspace.sort_desc = false;
-                                    }
+                                    });
                                     cx.notify();
                                 });
                             }),

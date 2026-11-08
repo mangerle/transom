@@ -13,14 +13,15 @@ impl AppShell {
     pub(crate) fn render_container_confirm_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| ws.confirm.is_some())
+        let Some((tab_id, workspace)) =
+            self.find_container_modal_tab(cx, |ws| ws.confirm.is_some())
         else {
             return div().into_any_element();
         };
-        let Some(confirm) = workspace.confirm.clone() else {
+        let Some(confirm) = workspace.read(cx).state.confirm.clone() else {
             return div().into_any_element();
         };
 

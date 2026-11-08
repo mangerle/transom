@@ -14,15 +14,16 @@ impl AppShell {
     pub(crate) fn render_container_export_config_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.export_config.is_some())
+            self.find_container_modal_tab(cx, |ws| ws.export_config.is_some())
         else {
             return div().into_any_element();
         };
-        let Some((name, run_cmd, compose_yaml, is_compose)) = workspace.export_config.clone()
+        let Some((name, run_cmd, compose_yaml, is_compose)) =
+            workspace.read(cx).state.export_config.clone()
         else {
             return div().into_any_element();
         };

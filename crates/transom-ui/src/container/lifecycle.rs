@@ -5,9 +5,9 @@ use super::*;
 impl AppShell {
     /// 取消当前分类里的删除确认。
     pub(crate) fn cancel_container_confirm(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.confirm = None;
-        }
+        });
         cx.notify();
     }
 
@@ -20,12 +20,12 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.notice = Some(
                 rust_i18n::t!("container.action.running", action = action.label()).to_string(),
             );
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -48,7 +48,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.notice = Some(
                 rust_i18n::t!(
@@ -57,7 +57,7 @@ impl AppShell {
                 )
                 .to_string(),
             );
-        }
+        });
         self.send_tracked(
             tab_id,
             request_id,
@@ -85,7 +85,8 @@ impl AppShell {
                     .state
                     .container_workspace(tab_id)
                     .and_then(|workspace| {
-                        workspace
+                        let state = &workspace.read(cx).state;
+                        state
                             .compose
                             .iter()
                             .find(|item| item.name == project)
@@ -131,10 +132,10 @@ impl AppShell {
                 network,
             },
             ContainerConfirm::FilePath { path, recursive } => {
-                let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-                    return;
-                };
-                let Some(container) = workspace.selected_container_name() else {
+                let Some(container) = self
+                    .with_container(tab_id, cx, |workspace| workspace.selected_container_name())
+                    .flatten()
+                else {
                     return;
                 };
                 ContainerCommand::RemovePath {
@@ -150,10 +151,10 @@ impl AppShell {
                 local_path,
                 directory,
             } => {
-                let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-                    return;
-                };
-                let Some(container) = workspace.selected_container_name() else {
+                let Some(container) = self
+                    .with_container(tab_id, cx, |workspace| workspace.selected_container_name())
+                    .flatten()
+                else {
                     return;
                 };
                 if directory {
@@ -175,10 +176,10 @@ impl AppShell {
                 }
             }
         };
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.confirm = None;
-        }
+        });
         self.send_tracked(tab_id, request_id, command);
         cx.notify();
     }
@@ -204,11 +205,18 @@ impl AppShell {
         let dockerfile = read_input(&dialog.and_then(|dialog| dialog.dockerfile.clone()));
         let tag = read_input(&dialog.and_then(|dialog| dialog.tag.clone()));
         let internal = dialog.is_some_and(|dialog| dialog.internal);
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+        let Some((section, value, create_input)) = self
+            .with_container(tab_id, cx, |workspace| {
+                Some((
+                    workspace.section,
+                    workspace.create_input.read(cx).value().trim().to_string(),
+                    workspace.create_input.clone(),
+                ))
+            })
+            .flatten()
+        else {
             return;
         };
-        let section = workspace.section;
-        let value = workspace.create_input.read(cx).value().trim().to_string();
         if value.is_empty() {
             self.show_toast(
                 rust_i18n::t!("container.create_dialog.name_required").to_string(),
@@ -261,10 +269,8 @@ impl AppShell {
             }
             _ => return,
         };
-        workspace.busy = true;
-        workspace
-            .create_input
-            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
+        create_input.update(cx, |input, cx| input.set_value("", window, cx));
         self.state.containers.create_dialog = None;
         self.send_tracked(tab_id, request_id, command);
         cx.notify();
@@ -346,17 +352,16 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if !armed {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.prune_armed = Some(target);
-            }
+            });
             cx.notify();
             return;
         }
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        workspace.prune_armed = None;
-        workspace.busy = true;
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.prune_armed = None;
+            workspace.busy = true;
+        });
         let request_id = ContainerRequestId::new();
         let command = match target {
             ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },

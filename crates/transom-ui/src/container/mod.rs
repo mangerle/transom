@@ -7,6 +7,7 @@ mod compose;
 mod compose_templates;
 mod detail;
 mod engines;
+mod entity;
 mod events;
 mod export;
 mod files_actions;
@@ -36,6 +37,7 @@ mod types;
 mod update;
 mod view;
 
+pub(crate) use entity::ContainerWorkspace;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
     ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,
@@ -76,63 +78,97 @@ pub(crate) fn divider_width_px(width: DividerWidth) -> f32 {
 }
 
 impl AppState {
-    /// 按标签取容器工作区状态；不是容器标签时返回 `None`。
-    pub(crate) fn container_workspace(&self, tab_id: TabId) -> Option<&ContainerWorkspaceState> {
+    /// 按标签取容器工作区实体句柄；不是容器标签时返回 `None`。
+    ///
+    /// 返回的是句柄而不是引用：调用方自行决定 `read` 还是 `update`，避免同一
+    /// 标签页在渲染期与动作期各持一份状态。
+    pub(crate) fn container_workspace(&self, tab_id: TabId) -> Option<Entity<ContainerWorkspace>> {
         match &self.workspace.tab(tab_id)?.content {
-            TabContent::Containers(state) => Some(state),
-            _ => None,
-        }
-    }
-
-    /// 按标签取容器工作区的可变引用；不是容器标签时返回 `None`。
-    pub(crate) fn container_workspace_mut(
-        &mut self,
-        tab_id: TabId,
-    ) -> Option<&mut ContainerWorkspaceState> {
-        match &mut self.workspace.tab_mut(tab_id)?.content {
-            TabContent::Containers(state) => Some(state.as_mut()),
+            TabContent::Containers(workspace) => Some(workspace.clone()),
             _ => None,
         }
     }
 
     /// 汇总每个引擎连接当前的工作区状态，供侧栏行首的状态点使用。
+    ///
+    /// 状态在实体内部，汇总时必须逐个 `read`；渲染期只读，不触发任何写动作。
     pub(crate) fn container_profile_states(
         &self,
+        cx: &App,
     ) -> std::collections::HashMap<transom_core::EngineProfileId, ContainerWorkspaceStatus> {
         let mut states = std::collections::HashMap::default();
         for tab in self.workspace.tabs.iter() {
             let Connection::ContainerEngine(profile) = &tab.session.connection else {
                 continue;
             };
-            let TabContent::Containers(workspace) = &tab.content else {
+            let Some(workspace) = tab.containers() else {
                 continue;
             };
-            states.insert(profile.id, workspace.status.clone());
+            states.insert(profile.id, workspace.read(cx).state.status.clone());
         }
         states
     }
 }
 
 impl AppShell {
-    /// 寻找当前需要响应容器弹窗的工作区（优先当前活动标签，回退至首个包含该弹窗状态的标签）。
+    /// 迁移期辅助：只读访问某个标签页的容器工作区状态。
+    ///
+    /// 这是实体化迁移期的临时桥，最终目标是删除并按领域方法迁入
+    /// [`ContainerWorkspace`]；新代码应优先取实体句柄后自行 `read`。
+    pub(crate) fn with_container<R>(
+        &self,
+        tab_id: TabId,
+        cx: &App,
+        f: impl FnOnce(&ContainerWorkspaceState) -> R,
+    ) -> Option<R> {
+        let workspace = self.state.container_workspace(tab_id)?;
+        Some(f(&workspace.read(cx).state))
+    }
+
+    /// 迁移期辅助：可变访问某个标签页的容器工作区状态。
+    ///
+    /// 闭包内只允许修改状态，禁止调用任何外壳方法（外壳此时已被可变借用）；
+    /// 需要外壳动作时，把数据通过返回值带出闭包，闭包结束后再调用。
+    /// 这是实体化迁移期的临时桥，最终目标是删除并按领域方法迁入
+    /// [`ContainerWorkspace`]。
+    pub(crate) fn with_container_mut<R>(
+        &mut self,
+        tab_id: TabId,
+        cx: &mut Context<AppShell>,
+        f: impl FnOnce(&mut ContainerWorkspaceState) -> R,
+    ) -> Option<R> {
+        let workspace = self.state.container_workspace(tab_id)?;
+        Some(workspace.update(cx, |workspace, _| f(&mut workspace.state)))
+    }
+
+    /// 寻找当前需要响应容器弹窗的工作区（优先当前活动标签，回退至首个包含
+    /// 该弹窗状态的标签）。
+    ///
+    /// 返回实体句柄而不是引用：谓词在 `read` 守卫内执行，返回前即释放，
+    /// 调用方随后自行 `update`，不会在写闭包里再反查同一实体。
     pub(crate) fn find_container_modal_tab<F>(
         &self,
+        cx: &App,
         predicate: F,
-    ) -> Option<(TabId, &ContainerWorkspaceState)>
+    ) -> Option<(TabId, Entity<ContainerWorkspace>)>
     where
         F: Fn(&ContainerWorkspaceState) -> bool,
     {
+        let search = |tab_id: TabId, workspace: Entity<ContainerWorkspace>| {
+            predicate(&workspace.read(cx).state).then_some((tab_id, workspace))
+        };
         if let Some(tab_id) = self.state.workspace.active_tab
-            && let Some(ws) = self.state.container_workspace(tab_id)
-            && predicate(ws)
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+            && let Some(found) = search(tab_id, workspace)
         {
-            return Some((tab_id, ws));
+            return Some(found);
         }
         for tab in self.state.workspace.tabs.iter() {
-            if let TabContent::Containers(ws) = &tab.content
-                && predicate(ws)
-            {
-                return Some((tab.id, ws));
+            let Some(workspace) = tab.containers() else {
+                continue;
+            };
+            if let Some(found) = search(tab.id, workspace) {
+                return Some(found);
             }
         }
         None

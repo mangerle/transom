@@ -14,12 +14,14 @@ impl AppShell {
     pub(crate) fn render_container_pods_dialog_body(
         &self,
         app: &Entity<AppShell>,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) = self.find_container_modal_tab(|ws| ws.pods_dialog_open)
+        let Some((tab_id, workspace)) = self.find_container_modal_tab(cx, |ws| ws.pods_dialog_open)
         else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let loading = workspace.pods_loading;
         let error = workspace.pods_error.clone();
 
@@ -141,7 +143,7 @@ impl AppShell {
             .on_click(crate::dialog_host::on_event(
                 app,
                 move |this, _: &ClickEvent, _, cx| {
-                    this.refresh_container_pods(tab_id);
+                    this.refresh_container_pods(tab_id, cx);
                     cx.notify();
                 },
             ));

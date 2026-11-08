@@ -14,9 +14,9 @@ pub(crate) fn delete_button(
         .icon(IconName::Trash)
         .label(rust_i18n::t!("common.delete").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
-            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+            this.with_container_mut(tab_id, cx, |workspace| {
                 workspace.confirm = Some(confirm.clone());
-            }
+            });
             cx.notify();
         }))
         .into_any_element()

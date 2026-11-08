@@ -12,15 +12,15 @@ impl AppShell {
     pub(crate) fn render_container_commit_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.commit_container.is_some())
+            self.find_container_modal_tab(cx, |ws| ws.commit_container.is_some())
         else {
             return div().into_any_element();
         };
-        let Some(state) = workspace.commit_container.clone() else {
+        let Some(state) = workspace.read(cx).state.commit_container.clone() else {
             return div().into_any_element();
         };
         let repo_input = state.repo;

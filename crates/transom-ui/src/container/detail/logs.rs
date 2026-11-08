@@ -173,7 +173,7 @@ pub(crate) fn render_logs(
         .icon(IconName::ScrollText)
         .label(rust_i18n::t!("container.logs.follow").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
-            this.toggle_container_logs_follow(tab_id, !follow);
+            this.toggle_container_logs_follow(tab_id, !follow, cx);
             cx.notify();
         }));
 
@@ -201,7 +201,7 @@ pub(crate) fn render_logs(
                 menu = menu.item(PopupMenuItem::new(label).checked(choice == tail).on_click(
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
-                            this.set_container_logs_tail(tab_id, choice);
+                            this.set_container_logs_tail(tab_id, choice, cx);
                             cx.notify();
                         });
                     },
@@ -229,7 +229,7 @@ pub(crate) fn render_logs(
                     .checked(timestamps)
                     .on_click(move |_, _, cx| {
                         app1.update(cx, |this, cx| {
-                            this.toggle_container_logs_timestamps(tab_id);
+                            this.toggle_container_logs_timestamps(tab_id, cx);
                             cx.notify();
                         });
                     }),
@@ -239,9 +239,9 @@ pub(crate) fn render_logs(
                     .checked(reversed)
                     .on_click(move |_, _, cx| {
                         app2.update(cx, |this, cx| {
-                            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                            this.with_container_mut(tab_id, cx, |workspace| {
                                 workspace.logs_reversed = !workspace.logs_reversed;
-                            }
+                            });
                             cx.notify();
                         });
                     }),
@@ -271,9 +271,9 @@ pub(crate) fn render_logs(
                 IconName::Trash,
                 move |_, _, cx| {
                     app5.update(cx, |this, cx| {
-                        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                        this.with_container_mut(tab_id, cx, |workspace| {
                             workspace.logs.clear();
-                        }
+                        });
                         cx.notify();
                     });
                 },

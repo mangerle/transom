@@ -12,15 +12,15 @@ impl AppShell {
     pub(crate) fn render_container_rename_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         _p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.rename_container.is_some())
+            self.find_container_modal_tab(cx, |ws| ws.rename_container.is_some())
         else {
             return div().into_any_element();
         };
-        let Some((_, input)) = workspace.rename_container.clone() else {
+        let Some((_, input)) = workspace.read(cx).state.rename_container.clone() else {
             return div().into_any_element();
         };
 

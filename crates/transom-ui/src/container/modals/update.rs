@@ -12,15 +12,16 @@ impl AppShell {
     pub(crate) fn render_container_update_dialog_body(
         &self,
         app: &Entity<AppShell>,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let Some((tab_id, workspace)) =
-            self.find_container_modal_tab(|ws| ws.update_container.is_some())
+            self.find_container_modal_tab(cx, |ws| ws.update_container.is_some())
         else {
             return div().into_any_element();
         };
-        let Some((_, mem_input, cpu_input)) = workspace.update_container.clone() else {
+        let Some((_, mem_input, cpu_input)) = workspace.read(cx).state.update_container.clone()
+        else {
             return div().into_any_element();
         };
 

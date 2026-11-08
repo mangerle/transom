@@ -11,9 +11,9 @@ impl AppShell {
         recursive: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.confirm = Some(ContainerConfirm::FilePath { path, recursive });
-        }
+        });
         cx.notify();
     }
 
@@ -25,16 +25,25 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        workspace.files.new_dir_open = !workspace.files.new_dir_open;
-        if workspace.files.new_dir_open && workspace.files.new_dir_input.is_none() {
+        let (open, has_input) = self
+            .with_container(tab_id, cx, |workspace| {
+                (
+                    !workspace.files.new_dir_open,
+                    workspace.files.new_dir_input.is_some(),
+                )
+            })
+            .unwrap_or((false, true));
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.files.new_dir_open = open;
+        });
+        if open && !has_input {
             let input = cx.new(|cx| {
                 InputState::new(window, cx)
                     .placeholder(rust_i18n::t!("container.files.new_dir_placeholder").to_string())
             });
-            workspace.files.new_dir_input = Some(input);
+            self.with_container_mut(tab_id, cx, |workspace| {
+                workspace.files.new_dir_input = Some(input);
+            });
         }
         cx.notify();
     }
@@ -46,13 +55,19 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(container) = workspace.selected_container_name() else {
-            return;
-        };
-        let Some(input) = workspace.files.new_dir_input.clone() else {
+        let Some((container, input, parent)) = self
+            .with_container(tab_id, cx, |workspace| {
+                let container = workspace.selected_container_name()?;
+                let input = workspace.files.new_dir_input.clone()?;
+                let parent = if workspace.files.path.is_empty() {
+                    "/".to_string()
+                } else {
+                    workspace.files.path.clone()
+                };
+                Some((container, input, parent))
+            })
+            .flatten()
+        else {
             return;
         };
         let name = input.read(cx).value().trim().to_string();
@@ -65,25 +80,17 @@ impl AppShell {
             );
             return;
         }
-        let parent = if workspace.files.path.is_empty() {
-            "/".to_string()
-        } else {
-            workspace.files.path.clone()
-        };
         let path = if parent.ends_with('/') {
             format!("{parent}{name}")
         } else {
             format!("{parent}/{name}")
         };
         let request_id = ContainerRequestId::new();
-        workspace.files.new_dir_open = false;
-        workspace.busy = true;
-        workspace
-            .files
-            .new_dir_input
-            .as_ref()
-            .iter()
-            .for_each(|input| input.update(cx, |input, cx| input.set_value("", window, cx)));
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.files.new_dir_open = false;
+            workspace.busy = true;
+        });
+        input.update(cx, |input, cx| input.set_value("", window, cx));
         self.send_tracked(
             tab_id,
             request_id,

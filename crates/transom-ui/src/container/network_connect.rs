@@ -21,17 +21,17 @@ impl AppShell {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.network_connect.placeholder").to_string())
         });
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.connect_network = Some((network, input));
-        }
+        });
         cx.notify();
     }
 
     /// 取消网络连接容器。
     pub(crate) fn cancel_network_connect(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.connect_network = None;
-        }
+        });
         cx.notify();
     }
 
@@ -45,7 +45,7 @@ impl AppShell {
         let Some((network, input)) = self
             .state
             .container_workspace(tab_id)
-            .and_then(|workspace| workspace.connect_network.clone())
+            .and_then(|workspace| workspace.read(cx).state.connect_network.clone())
         else {
             return;
         };
@@ -64,10 +64,10 @@ impl AppShell {
 
         let container = trimmed.to_string();
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.connect_network = None;
-        }
+        });
 
         self.send_tracked(
             tab_id,

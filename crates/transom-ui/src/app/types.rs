@@ -64,8 +64,8 @@ pub(crate) enum TabContent {
     Player(Entity<crate::cast_player::CastPlayerView>),
     /// 全屏独立主机监控看板（携带关联的主机会话 TabId）。
     Monitor(TabId),
-    /// 容器引擎管理工作区（顶部分类标签 + 列表 / 详情双栏）。
-    Containers(Box<crate::container::ContainerWorkspaceState>),
+    /// 容器引擎管理工作区（顶部分类标签 + 列表 / 详情双栏）；状态与动作归实体。
+    Containers(Entity<crate::container::ContainerWorkspace>),
     /// Git 仓库管理工作区（提交页、日志页与差异分栏）；状态与动作归实体。
     Git(Entity<crate::git::GitWorkspace>),
 }
@@ -124,6 +124,14 @@ impl TerminalTab {
     pub(crate) fn git(&self) -> Option<Entity<crate::git::GitWorkspace>> {
         match &self.content {
             TabContent::Git(workspace) => Some(workspace.clone()),
+            _ => None,
+        }
+    }
+
+    /// 获取容器工作区实体句柄（若当前为容器标签）。
+    pub(crate) fn containers(&self) -> Option<Entity<crate::container::ContainerWorkspace>> {
+        match &self.content {
+            TabContent::Containers(workspace) => Some(workspace.clone()),
             _ => None,
         }
     }

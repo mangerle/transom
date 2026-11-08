@@ -117,9 +117,9 @@ pub(crate) fn render_container_overview(
         .icon(IconName::Braces)
         .label(rust_i18n::t!("container.field.inspect").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
-            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+            this.with_container_mut(tab_id, cx, |workspace| {
                 workspace.overview_raw = true;
-            }
+            });
             cx.notify();
         }))
         .into_any_element();

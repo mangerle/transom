@@ -132,7 +132,6 @@ pub(crate) use task_hub::TaskHub;
 use self::broadcast::BroadcastBarState;
 use self::cloud_sync::GitSyncScheduler;
 use self::editor::EditorPanels;
-use self::keys::KnownHostsModalState;
 use self::sftp::SftpModals;
 use self::sidebar::SidebarState;
 use self::snippets::SnippetPanelState;
@@ -385,14 +384,11 @@ impl AppShell {
             .workspace
             .tabs
             .iter()
-            .filter_map(|tab| match &tab.content {
-                TabContent::Containers(workspace)
-                    if workspace.status
-                        == crate::container::ContainerWorkspaceStatus::Connected =>
-                {
-                    Some(tab.id)
-                }
-                _ => None,
+            .filter_map(|tab| {
+                let workspace = tab.containers()?;
+                (workspace.read(cx).state.status
+                    == crate::container::ContainerWorkspaceStatus::Connected)
+                    .then_some(tab.id)
             })
             .collect();
         self.state.container_auto_prune_last = Some(now);

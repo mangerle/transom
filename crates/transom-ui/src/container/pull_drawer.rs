@@ -28,18 +28,20 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
-
-        if !workspace.pull_drawer_open {
-            return div().into_any_element();
-        }
-
-        let tasks = workspace.pull_manager.tasks.clone();
-        let pulling_count = workspace.pull_manager.pulling_count();
-        let queued_count = tasks
-            .iter()
-            .filter(|t| t.state == PullTaskState::Queued)
-            .count();
-        let has_finished = tasks.iter().any(|t| t.state.is_finished());
+        let (tasks, pulling_count, queued_count, has_finished) = {
+            let workspace = &workspace.read(cx).state;
+            if !workspace.pull_drawer_open {
+                return div().into_any_element();
+            }
+            let tasks = workspace.pull_manager.tasks.clone();
+            let pulling_count = workspace.pull_manager.pulling_count();
+            let queued_count = tasks
+                .iter()
+                .filter(|t| t.state == PullTaskState::Queued)
+                .count();
+            let has_finished = tasks.iter().any(|t| t.state.is_finished());
+            (tasks, pulling_count, queued_count, has_finished)
+        };
 
         // 头部统计与操作
         let header = h_flex()
@@ -91,9 +93,9 @@ impl AppShell {
                                         .to_string(),
                                 )
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                    this.with_container_mut(tab_id, cx, |ws| {
                                         ws.pull_manager.clear_finished();
-                                    }
+                                    });
                                     cx.notify();
                                 })),
                         )
@@ -107,9 +109,9 @@ impl AppShell {
                                 rust_i18n::t!("container.pull_manager.close_drawer").to_string(),
                             )
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                this.with_container_mut(tab_id, cx, |ws| {
                                     ws.pull_drawer_open = false;
-                                }
+                                });
                                 cx.notify();
                             })),
                     ),
@@ -231,13 +233,11 @@ impl AppShell {
                                     )
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
-                                            let next_cmd = if let Some(ws) =
-                                                this.state.container_workspace_mut(tab_id)
-                                            {
-                                                ws.pull_manager.cancel_task(&cancel_task_id)
-                                            } else {
-                                                None
-                                            };
+                                            let next_cmd = this
+                                                .with_container_mut(tab_id, cx, |ws| {
+                                                    ws.pull_manager.cancel_task(&cancel_task_id)
+                                                })
+                                                .flatten();
                                             // 发送取消中断指令
                                             this.state.send_command(
                                                 ContainerCommand::CancelPullTask {
@@ -271,11 +271,9 @@ impl AppShell {
                                     .icon(IconName::Trash)
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
-                                            if let Some(ws) =
-                                                this.state.container_workspace_mut(tab_id)
-                                            {
+                                            this.with_container_mut(tab_id, cx, |ws| {
                                                 ws.pull_manager.remove_task(&remove_task_id);
-                                            }
+                                            });
                                             cx.notify();
                                         },
                                     ))

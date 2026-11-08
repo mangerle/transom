@@ -17,14 +17,15 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return;
         };
+        let workspace = &workspace.read(cx).state;
         let same_target = workspace
             .terminal
             .as_ref()
             .is_some_and(|terminal| terminal.user == user && terminal.shell == shell);
         if same_target {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+            self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.detail_tab = ContainerDetailTab::Terminal;
-            }
+            });
             cx.notify();
             return;
         }
@@ -35,12 +36,12 @@ impl AppShell {
         if let Some(request_id) = pending {
             self.cancel_container_request(tab_id, request_id);
         }
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             // 丢弃旧终端即可结束旧 exec（TerminalIo 的 RAII 清理），再建新会话。
             workspace.terminal = None;
             workspace.terminal_request = None;
             workspace.detail_tab = ContainerDetailTab::Terminal;
-        }
+        });
         self.ensure_container_terminal(tab_id, user, shell, cx);
         cx.notify();
     }
@@ -51,19 +52,23 @@ impl AppShell {
         tab_id: TabId,
         user: Option<String>,
         shell: Option<String>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        if workspace.terminal.is_some() || workspace.terminal_request.is_some() {
-            return;
-        }
-        let Some(container) = workspace.selected_container_name() else {
+        let Some(container) = self
+            .with_container(tab_id, cx, |workspace| {
+                if workspace.terminal.is_some() || workspace.terminal_request.is_some() {
+                    return None;
+                }
+                workspace.selected_container_name()
+            })
+            .flatten()
+        else {
             return;
         };
         let request_id = ContainerRequestId::new();
-        workspace.terminal_request = Some((request_id, user.clone(), shell.clone()));
+        self.with_container_mut(tab_id, cx, |workspace| {
+            workspace.terminal_request = Some((request_id, user.clone(), shell.clone()));
+        });
         let mut options = ContainerConnection::new(container);
         options.user = user;
         if let Some(s) = shell {
@@ -123,11 +128,11 @@ impl AppShell {
             window,
             move |this, _, event: &TerminalEvent, _window, cx| {
                 if matches!(event, TerminalEvent::Exit) {
-                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                    this.with_container_mut(tab_id, cx, |workspace| {
                         workspace.terminal = None;
                         workspace.notice =
                             Some(rust_i18n::t!("container.terminal.closed").to_string());
-                    }
+                    });
                     cx.notify();
                 }
             },

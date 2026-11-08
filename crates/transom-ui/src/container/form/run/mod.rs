@@ -63,6 +63,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return;
         };
+        let workspace = &workspace.read(cx).state;
         if let Some(details) = workspace
             .details
             .as_ref()
@@ -120,6 +121,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return;
         };
+        let workspace = &workspace.read(cx).state;
         if let Some(details) = workspace
             .details
             .as_ref()
@@ -208,10 +210,10 @@ impl AppShell {
             }
         };
         self.send_tracked(tab_id, request_id, command);
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.apply_section(ContainerSection::Containers);
             workspace.notice = Some(rust_i18n::t!("container.run.submitting").to_string());
-        }
+        });
         cx.notify();
     }
 }

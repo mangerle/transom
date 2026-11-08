@@ -24,7 +24,8 @@ impl AppShell {
                 label.map(|label| (toast_succeeded(&label), true))
             }
         };
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        let mut editor_to_read = None;
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = false;
             workspace.confirm = None;
             workspace.rename_container = None;
@@ -55,36 +56,37 @@ impl AppShell {
             }
             if workspace.files.preview_saving {
                 workspace.files.preview_saving = false;
-                if error.is_none()
-                    && let Some(editor) = workspace.files.preview_editor.take()
-                {
-                    let new_content = editor.read(cx).value().to_string();
-                    if let Some((path, _, _)) = workspace.files.preview.as_mut() {
-                        let p = path.clone();
-                        workspace.files.preview = Some((p, new_content, false));
-                    }
+                if error.is_none() {
+                    editor_to_read = workspace.files.preview_editor.take();
                 }
             }
+        });
+        if let Some(editor) = editor_to_read {
+            let new_content = editor.read(cx).value().to_string();
+            self.with_container_mut(tab_id, cx, |workspace| {
+                if let Some((path, _, _)) = workspace.files.preview.as_ref() {
+                    let path = path.clone();
+                    workspace.files.preview = Some((path, new_content, false));
+                }
+            });
         }
         if let Some((message, success)) = toast {
             self.show_toast(message, success, window, cx);
         }
         if self
-            .state
-            .container_workspace(tab_id)
-            .is_some_and(|workspace| workspace.pods_dialog_open)
+            .with_container(tab_id, cx, |workspace| workspace.pods_dialog_open)
+            .unwrap_or(false)
         {
-            self.refresh_container_pods(tab_id);
+            self.refresh_container_pods(tab_id, cx);
         }
         if self
-            .state
-            .container_workspace(tab_id)
-            .is_some_and(|workspace| workspace.quadlets_dialog_open)
+            .with_container(tab_id, cx, |workspace| workspace.quadlets_dialog_open)
+            .unwrap_or(false)
         {
-            self.refresh_container_quadlets(tab_id);
+            self.refresh_container_quadlets(tab_id, cx);
         }
         if refresh {
-            self.refresh_container_section(tab_id);
+            self.refresh_container_section(tab_id, cx);
         }
     }
 
@@ -108,7 +110,7 @@ impl AppShell {
         };
         let mut refresh_files = None;
         let mut refresh_images = false;
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.notice = None;
             if error.is_none() {
                 if workspace.section == ContainerSection::Images {
@@ -117,16 +119,16 @@ impl AppShell {
                     refresh_files = Some(workspace.files.path.clone());
                 }
             }
-        }
+        });
         if let Some((message, success)) = toast {
             self.show_toast(message, success, window, cx);
         }
         if refresh_images {
-            self.refresh_container_section(tab_id);
+            self.refresh_container_section(tab_id, cx);
         } else if let Some(path) = refresh_files
             && !path.is_empty()
         {
-            self.load_container_dir(tab_id, path);
+            self.load_container_dir(tab_id, path, cx);
         }
     }
 
@@ -142,7 +144,7 @@ impl AppShell {
             return;
         };
         let err_desc = localized_error(&error);
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = false;
             workspace.files.loading = false;
             workspace.notice = None;
@@ -211,7 +213,7 @@ impl AppShell {
             {
                 workspace.terminal_request = None;
             }
-        }
+        });
         // 只有明确具备动作意图的用户操作（label 为 Some）失败时才向右上角弹提示；
         // 后台静默采样、列表查询等只读请求失败只记录内部状态，杜绝弹窗轰炸。
         if let Some(label) = label {
@@ -237,6 +239,6 @@ impl AppShell {
             rust_i18n::t!(target.done_key(), count = deleted_count).to_string()
         };
         self.show_toast(message, true, window, cx);
-        self.refresh_container_section(tab_id);
+        self.refresh_container_section(tab_id, cx);
     }
 }

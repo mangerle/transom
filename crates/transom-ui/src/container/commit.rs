@@ -39,22 +39,22 @@ impl AppShell {
                 .placeholder(rust_i18n::t!("container.commit.comment_placeholder").to_string())
         });
 
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.commit_container = Some(ContainerCommitState {
                 container,
                 repo: repo_input,
                 tag: tag_input,
                 comment: comment_input,
             });
-        }
+        });
         cx.notify();
     }
 
     /// 取消容器提交。
     pub(crate) fn cancel_container_commit(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.commit_container = None;
-        }
+        });
         cx.notify();
     }
 
@@ -68,7 +68,7 @@ impl AppShell {
         let Some(state) = self
             .state
             .container_workspace(tab_id)
-            .and_then(|workspace| workspace.commit_container.clone())
+            .and_then(|workspace| workspace.read(cx).state.commit_container.clone())
         else {
             return;
         };
@@ -103,10 +103,10 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.commit_container = None;
-        }
+        });
 
         self.send_tracked(
             tab_id,

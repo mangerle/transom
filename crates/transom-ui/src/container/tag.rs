@@ -22,17 +22,17 @@ impl AppShell {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.tag.placeholder").to_string())
         });
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.tag_image = Some((image, input));
-        }
+        });
         cx.notify();
     }
 
     /// 取消镜像打标签。
     pub(crate) fn cancel_image_tag(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.tag_image = None;
-        }
+        });
         cx.notify();
     }
 
@@ -44,9 +44,8 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let Some((image, input)) = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| workspace.tag_image.clone())
+            .with_container(tab_id, cx, |workspace| workspace.tag_image.clone())
+            .flatten()
         else {
             return;
         };
@@ -72,10 +71,10 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.busy = true;
             workspace.tag_image = None;
-        }
+        });
 
         self.send_tracked(
             tab_id,

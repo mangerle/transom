@@ -63,10 +63,10 @@ pub(crate) fn render_container_changes(
             let cid = refresh_cid.clone();
             move |this, _, _, cx| {
                 let request_id = ContainerRequestId::new();
-                if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                this.with_container_mut(tab_id, cx, |workspace| {
                     workspace.changes_loading = true;
                     workspace.changes_request = Some(request_id);
-                }
+                });
                 this.state.send_command(ContainerCommand::DiffContainer {
                     tab_id,
                     request_id,

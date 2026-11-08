@@ -57,7 +57,7 @@ pub(crate) fn processes_card(
                 .tooltip(refresh_tooltip)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if is_running {
-                        this.ensure_container_processes(tab_id);
+                        this.ensure_container_processes(tab_id, cx);
                         cx.notify();
                     }
                 })),

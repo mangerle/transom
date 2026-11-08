@@ -140,9 +140,9 @@ pub(crate) fn render_network_detail(
                 .tooltip(rust_i18n::t!("container.action.disconnect_network").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     let request_id = ContainerRequestId::new();
-                    if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                    this.with_container_mut(tab_id, cx, |workspace| {
                         workspace.busy = true;
-                    }
+                    });
                     this.send_tracked(
                         tab_id,
                         request_id,
@@ -167,9 +167,9 @@ pub(crate) fn render_network_detail(
         .icon(IconName::Braces)
         .label(rust_i18n::t!("container.field.inspect").to_string())
         .on_click(cx.listener(move |this, _, _, cx| {
-            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+            this.with_container_mut(tab_id, cx, |workspace| {
                 workspace.overview_raw = true;
-            }
+            });
             cx.notify();
         }))
         .into_any_element();

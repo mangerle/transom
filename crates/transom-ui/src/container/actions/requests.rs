@@ -26,7 +26,8 @@ impl AppShell {
                 .state
                 .container_workspace(tab_id)
                 .and_then(|workspace| {
-                    workspace
+                    let state = &workspace.read(cx).state;
+                    state
                         .networks
                         .iter()
                         .find(|network| &network.id == id)
@@ -39,7 +40,8 @@ impl AppShell {
                     RowAction::CopyId => id.clone(),
                     _ => workspace
                         .and_then(|workspace| {
-                            workspace
+                            let state = &workspace.read(cx).state;
+                            state
                                 .images
                                 .iter()
                                 .find(|image| &image.id == id)
@@ -60,27 +62,27 @@ impl AppShell {
     }
 
     /// 停止当前选中项的日志、统计与终端会话。
-    pub(super) fn stop_container_streams(&mut self, tab_id: TabId) {
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
+    pub(super) fn stop_container_streams(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let requests = self.with_container_mut(tab_id, cx, |workspace| {
+            let logs = workspace.logs_request.take();
+            let stats = workspace.stats_request.take();
+            let processes = workspace.stats_processes_request.take();
+            let files = workspace.files.request.take();
+            let changes = workspace.changes_request.take();
+            workspace.files.loading = false;
+            workspace.changes_loading = false;
+            workspace.stats_processes_loading = false;
+            let terminal = workspace
+                .terminal_request
+                .take()
+                .map(|(request_id, ..)| request_id);
+            workspace.terminal = None;
+            [logs, stats, processes, files, changes, terminal]
+        });
+        let Some(requests) = requests else {
             return;
         };
-        let logs = workspace.logs_request.take();
-        let stats = workspace.stats_request.take();
-        let processes = workspace.stats_processes_request.take();
-        let files = workspace.files.request.take();
-        let changes = workspace.changes_request.take();
-        workspace.files.loading = false;
-        workspace.changes_loading = false;
-        workspace.stats_processes_loading = false;
-        let terminal = workspace
-            .terminal_request
-            .take()
-            .map(|(request_id, ..)| request_id);
-        workspace.terminal = None;
-        for request_id in [logs, stats, processes, files, changes, terminal]
-            .into_iter()
-            .flatten()
-        {
+        for request_id in requests.into_iter().flatten() {
             self.state.containers.requests.remove(&request_id);
             self.state
                 .send_command(ContainerCommand::Cancel { tab_id, request_id });

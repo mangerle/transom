@@ -19,16 +19,23 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let tab_id = self.state.containers.take_tab(request_id);
-        if let Some(tab_id) = tab_id
-            && let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(hub) = workspace.hub_dialog.as_mut()
-            && hub.search_request == Some(request_id)
-        {
-            hub.searching = false;
-            hub.search_request = None;
-            hub.results = results;
-            hub.search_error = None;
-            cx.notify();
+        if let Some(tab_id) = tab_id {
+            let applied = self.with_container_mut(tab_id, cx, |workspace| {
+                let Some(hub) = workspace.hub_dialog.as_mut() else {
+                    return false;
+                };
+                if hub.search_request != Some(request_id) {
+                    return false;
+                }
+                hub.searching = false;
+                hub.search_request = None;
+                hub.results = results;
+                hub.search_error = None;
+                true
+            });
+            if applied == Some(true) {
+                cx.notify();
+            }
         }
     }
 
@@ -42,30 +49,32 @@ impl AppShell {
         let Some(tab_id) = self.state.containers.take_tab(request_id) else {
             return;
         };
-        let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-            return;
-        };
-        let Some(hub) = workspace.hub_dialog.as_mut() else {
-            return;
-        };
-        if hub.tags_request != Some(request_id) {
-            return;
-        }
-        hub.tags = tags;
-        hub.tags_loading = false;
-        hub.tags_error = None;
-        hub.tags_request = None;
-        // 若当前选中的 tag 不在实时列表里（仓库已删除该 tag），回落到 latest。
-        if let Some(detail) = hub.selected_detail.as_ref() {
-            let selected = hub
-                .selected_tags
-                .entry(detail.name.clone())
-                .or_insert_with(|| "latest".to_string());
-            if !hub.tags.is_empty() && !hub.tags.iter().any(|tag| tag == selected) {
-                *selected = hub.tags[0].clone();
+        let applied = self.with_container_mut(tab_id, cx, |workspace| {
+            let Some(hub) = workspace.hub_dialog.as_mut() else {
+                return false;
+            };
+            if hub.tags_request != Some(request_id) {
+                return false;
             }
+            hub.tags = tags;
+            hub.tags_loading = false;
+            hub.tags_error = None;
+            hub.tags_request = None;
+            // 若当前选中的 tag 不在实时列表里（仓库已删除该 tag），回落到 latest。
+            if let Some(detail) = hub.selected_detail.as_ref() {
+                let selected = hub
+                    .selected_tags
+                    .entry(detail.name.clone())
+                    .or_insert_with(|| "latest".to_string());
+                if !hub.tags.is_empty() && !hub.tags.iter().any(|tag| tag == selected) {
+                    *selected = hub.tags[0].clone();
+                }
+            }
+            true
+        });
+        if applied == Some(true) {
+            cx.notify();
         }
-        cx.notify();
     }
 
     /// 处理分层下载进度推送。
@@ -78,14 +87,17 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let tab_ids: Vec<TabId> = self.state.workspace.tabs.iter().map(|t| t.id).collect();
-        for tab_id in tab_ids {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                && workspace.pull_manager.get(&task_id).is_some()
-            {
+        let target = tab_ids.into_iter().find(|tab_id| {
+            self.with_container(*tab_id, cx, |workspace| {
+                workspace.pull_manager.get(&task_id).is_some()
+            })
+            .unwrap_or(false)
+        });
+        if let Some(tab_id) = target {
+            self.with_container_mut(tab_id, cx, |workspace| {
                 workspace.pull_manager.on_progress(&task_id, status, layers);
-                cx.notify();
-                break;
-            }
+            });
+            cx.notify();
         }
     }
 
@@ -107,14 +119,20 @@ impl AppShell {
 
         let tab_ids: Vec<TabId> = self.state.workspace.tabs.iter().map(|t| t.id).collect();
         for tab_id in tab_ids {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                && let Some(task) = workspace.pull_manager.get(&task_id)
-            {
+            let found = self
+                .with_container_mut(tab_id, cx, |workspace| {
+                    let task = workspace.pull_manager.get(&task_id)?;
+                    let reference = task.reference.clone();
+                    let next = workspace
+                        .pull_manager
+                        .on_finished(&task_id, error_msg.clone());
+                    Some((reference, next))
+                })
+                .flatten();
+            if let Some((reference, next)) = found {
                 target_tab = Some(tab_id);
-                task_reference = task.reference.clone();
-                next_command = workspace
-                    .pull_manager
-                    .on_finished(&task_id, error_msg.clone());
+                task_reference = reference;
+                next_command = next;
                 break;
             }
         }

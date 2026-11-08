@@ -76,6 +76,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let section = workspace.section;
         let selected = workspace.selected.clone();
         if selected.is_none() {
@@ -419,12 +420,13 @@ impl AppShell {
             .state
             .container_workspace(tab_id)
             .and_then(|workspace| {
-                workspace
+                let state = &workspace.read(cx).state;
+                state
                     .terminal
                     .as_ref()
                     .map(|terminal| terminal.user.clone())
                     .or_else(|| {
-                        workspace
+                        state
                             .terminal_request
                             .as_ref()
                             .map(|(_, user, _)| user.clone())

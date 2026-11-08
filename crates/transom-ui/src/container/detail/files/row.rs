@@ -66,7 +66,7 @@ pub(super) fn render_entry_row(
             .on_click(cx.listener({
                 let entry_path = entry_path.clone();
                 move |this, _, _, cx| {
-                    this.load_container_dir(tab_id, entry_path.clone());
+                    this.load_container_dir(tab_id, entry_path.clone(), cx);
                     cx.notify();
                 }
             }))
@@ -81,7 +81,7 @@ pub(super) fn render_entry_row(
                 .on_click(cx.listener({
                     let entry_path = entry_path.clone();
                     move |this, _, _, cx| {
-                        this.download_container_directory(tab_id, entry_path.clone());
+                        this.download_container_directory(tab_id, entry_path.clone(), cx);
                         cx.notify();
                     }
                 })),
@@ -91,7 +91,7 @@ pub(super) fn render_entry_row(
             .on_click(cx.listener({
                 let entry_path = entry_path.clone();
                 move |this, _, _, cx| {
-                    this.preview_container_file(tab_id, entry_path.clone());
+                    this.preview_container_file(tab_id, entry_path.clone(), cx);
                     cx.notify();
                 }
             }))
@@ -105,7 +105,7 @@ pub(super) fn render_entry_row(
                 .on_click(cx.listener({
                     let entry_path = entry_path.clone();
                     move |this, _, _, cx| {
-                        this.download_container_file(tab_id, entry_path.clone());
+                        this.download_container_file(tab_id, entry_path.clone(), cx);
                         cx.notify();
                     }
                 })),
@@ -165,7 +165,7 @@ pub(super) fn render_entry_row(
                     let app = app.clone();
                     let path = path.clone();
                     app.update(cx, |this, cx| {
-                        this.load_container_dir(tab_id, path.clone());
+                        this.load_container_dir(tab_id, path.clone(), cx);
                         cx.notify();
                     });
                 },
@@ -177,7 +177,7 @@ pub(super) fn render_entry_row(
                 IconName::Download,
                 move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.download_container_directory(tab_id, path.clone());
+                        this.download_container_directory(tab_id, path.clone(), cx);
                         cx.notify();
                     });
                 },
@@ -228,7 +228,7 @@ pub(super) fn render_entry_row(
                     let app = app.clone();
                     let path = path.clone();
                     app.update(cx, |this, cx| {
-                        this.preview_container_file(tab_id, path.clone());
+                        this.preview_container_file(tab_id, path.clone(), cx);
                         cx.notify();
                     });
                 },
@@ -242,7 +242,7 @@ pub(super) fn render_entry_row(
                     let app = app.clone();
                     let path = path.clone();
                     app.update(cx, |this, cx| {
-                        this.download_container_file(tab_id, path.clone());
+                        this.download_container_file(tab_id, path.clone(), cx);
                         cx.notify();
                     });
                 },

@@ -74,9 +74,9 @@ pub(crate) fn render_raw_inspect(
     .icon(IconName::LayoutDashboard)
     .label(rust_i18n::t!("container.detail.overview").to_string())
     .on_click(cx.listener(move |this, _, _, cx| {
-        if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+        this.with_container_mut(tab_id, cx, |workspace| {
             workspace.overview_raw = false;
-        }
+        });
         cx.notify();
     }));
 

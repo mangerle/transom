@@ -7,7 +7,6 @@
 //! - 代价与局限：每个新能力需要一个"能被枚举"的入口；面板不做模糊评分，只做
 //!   大小写无关的子串匹配，排序沿用来源顺序。
 
-use crate::app::TabContent;
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::keymap;
@@ -143,13 +142,17 @@ impl AppState {
     }
 
     /// 遍历各容器工作区已拉取到的容器，转为可搜索与可直接操作的条目。
-    pub(super) fn container_items(&self, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
+    pub(super) fn container_items(
+        &self,
+        needle: &str,
+        cx: &App,
+    ) -> Vec<(CommandItem, PaletteTarget)> {
         let mut items = Vec::new();
         for tab in self.workspace.tabs.iter() {
-            let TabContent::Containers(workspace) = &tab.content else {
+            let Some(workspace) = tab.containers() else {
                 continue;
             };
-            for container in &workspace.containers {
+            for container in &workspace.read(cx).state.containers {
                 let name = &container.name;
                 let image = &container.image;
                 let state_str = container.state.key();
@@ -286,7 +289,7 @@ impl AppShell {
             );
             model.push(
                 rust_i18n::t!("app.palette_containers").to_string(),
-                self.state.container_items(&needle),
+                self.state.container_items(&needle, cx),
             );
             model.push(
                 rust_i18n::t!("app.palette_snippets").to_string(),

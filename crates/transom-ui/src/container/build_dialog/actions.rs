@@ -75,7 +75,7 @@ impl AppShell {
             }
         });
 
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id) {
+        self.with_container_mut(tab_id, cx, |workspace| {
             workspace.build_dialog = Some(ContainerBuildDialog {
                 context_path,
                 dockerfile,
@@ -91,7 +91,7 @@ impl AppShell {
                 success: false,
                 _subscriptions: vec![sub1, sub2, sub3, sub4, sub5, sub6],
             });
-        }
+        });
         cx.notify();
     }
 
@@ -106,10 +106,16 @@ impl AppShell {
             return;
         };
         let path_str = folder.display().to_string();
-        if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-            && let Some(build) = workspace.build_dialog.as_mut()
-        {
-            build.context_path.update(cx, |input, cx| {
+        let input = self
+            .with_container(tab_id, cx, |workspace| {
+                workspace
+                    .build_dialog
+                    .as_ref()
+                    .map(|build| build.context_path.clone())
+            })
+            .flatten();
+        if let Some(input) = input {
+            input.update(cx, |input, cx| {
                 input.set_value(path_str, window, cx);
             });
         }
@@ -122,6 +128,7 @@ impl AppShell {
             let Some(workspace) = self.state.container_workspace(tab_id) else {
                 return;
             };
+            let workspace = &workspace.read(cx).state;
             let Some(build) = workspace.build_dialog.as_ref() else {
                 return;
             };
@@ -139,21 +146,21 @@ impl AppShell {
         };
 
         if context_path_val.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                && let Some(build) = workspace.build_dialog.as_mut()
-            {
-                build.error = Some(rust_i18n::t!("container.build.empty_context").to_string());
-            }
+            self.with_container_mut(tab_id, cx, |workspace| {
+                if let Some(build) = workspace.build_dialog.as_mut() {
+                    build.error = Some(rust_i18n::t!("container.build.empty_context").to_string());
+                }
+            });
             cx.notify();
             return;
         }
 
         if tag_val.is_empty() {
-            if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                && let Some(build) = workspace.build_dialog.as_mut()
-            {
-                build.error = Some(rust_i18n::t!("container.build.empty_tag").to_string());
-            }
+            self.with_container_mut(tab_id, cx, |workspace| {
+                if let Some(build) = workspace.build_dialog.as_mut() {
+                    build.error = Some(rust_i18n::t!("container.build.empty_tag").to_string());
+                }
+            });
             cx.notify();
             return;
         }
@@ -166,30 +173,30 @@ impl AppShell {
         let build_args = match parse_build_args(&build_args_val) {
             Ok(args) => args,
             Err(error) => {
-                if let Some(workspace) = self.state.container_workspace_mut(tab_id)
-                    && let Some(build) = workspace.build_dialog.as_mut()
-                {
-                    build.error = Some(error);
-                }
+                self.with_container_mut(tab_id, cx, |workspace| {
+                    if let Some(build) = workspace.build_dialog.as_mut() {
+                        build.error = Some(error);
+                    }
+                });
                 cx.notify();
                 return;
             }
         };
 
         let request_id = ContainerRequestId::new();
-        let no_cache = {
-            let Some(workspace) = self.state.container_workspace_mut(tab_id) else {
-                return;
-            };
-            let Some(build) = workspace.build_dialog.as_mut() else {
-                return;
-            };
-            build.building = true;
-            build.request_id = Some(request_id);
-            build.error = None;
-            build.logs.clear();
-            build.success = false;
-            build.no_cache
+        let Some(no_cache) = self
+            .with_container_mut(tab_id, cx, |workspace| {
+                let build = workspace.build_dialog.as_mut()?;
+                build.building = true;
+                build.request_id = Some(request_id);
+                build.error = None;
+                build.logs.clear();
+                build.success = false;
+                Some(build.no_cache)
+            })
+            .flatten()
+        else {
+            return;
         };
 
         let spec = ContainerBuildSpec {

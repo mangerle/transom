@@ -24,6 +24,7 @@ impl AppShell {
         let Some(workspace) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
+        let workspace = &workspace.read(cx).state;
         let Some(build) = workspace.build_dialog.as_ref() else {
             return div().into_any_element();
         };
@@ -153,11 +154,11 @@ impl AppShell {
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, move |_, _, cx| {
                         app_toggle_cache.update(cx, |this, cx| {
-                            if let Some(ws) = this.state.container_workspace_mut(tab_id)
-                                && let Some(b) = ws.build_dialog.as_mut()
-                            {
-                                b.no_cache = !b.no_cache;
-                            }
+                            this.with_container_mut(tab_id, cx, |ws| {
+                                if let Some(b) = ws.build_dialog.as_mut() {
+                                    b.no_cache = !b.no_cache;
+                                }
+                            });
                             cx.notify();
                         });
                     })
@@ -293,9 +294,9 @@ impl AppShell {
                             .label(rust_i18n::t!("common.cancel").to_string())
                             .on_click(move |_, _, cx| {
                                 app_cancel.update(cx, |this, cx| {
-                                    if let Some(ws) = this.state.container_workspace_mut(tab_id) {
+                                    this.with_container_mut(tab_id, cx, |ws| {
                                         ws.build_dialog = None;
-                                    }
+                                    });
                                     cx.notify();
                                 });
                             }),

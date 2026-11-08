@@ -20,14 +20,15 @@ impl AppShell {
         tab_id: TabId,
         app: &Entity<AppShell>,
         _window: &mut Window,
-        _cx: &App,
+        cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some((_, workspace)) = self.find_container_modal_tab(|ws| ws.forward_dialog.is_some())
+        let Some((_, workspace)) =
+            self.find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
         else {
             return div().into_any_element();
         };
-        let Some(dialog) = workspace.forward_dialog.as_ref() else {
+        let Some(dialog) = workspace.read(cx).state.forward_dialog.as_ref() else {
             return div().into_any_element();
         };
 

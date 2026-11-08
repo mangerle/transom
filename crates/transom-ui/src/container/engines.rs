@@ -35,11 +35,10 @@ impl AppShell {
         let mut tab = TerminalTab::pending(tab_id, session);
         tab.status = TabStatus::Connecting;
         tab.title = profile.display_name();
-        tab.content = TabContent::Containers(Box::new(ContainerWorkspaceState::new(
-            profile.clone(),
-            window,
-            cx,
-        )));
+        let state = ContainerWorkspaceState::new(profile.clone(), window, cx);
+        let command_tx = self.state.services.command_tx.clone();
+        tab.content =
+            TabContent::Containers(cx.new(|_| ContainerWorkspace::new(state, tab_id, command_tx)));
         self.state.workspace.tabs.push(tab);
         self.state.workspace.active_tab = Some(tab_id);
         self.state.present_active_group();

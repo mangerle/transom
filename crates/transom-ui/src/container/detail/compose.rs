@@ -154,9 +154,9 @@ fn render_compose_yaml_editor(
                         .tooltip(rust_i18n::t!("common.refresh").to_string())
                         .disabled(is_saving)
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            if let Some(workspace) = this.state.container_workspace_mut(tab_id) {
+                            this.with_container_mut(tab_id, cx, |workspace| {
                                 workspace.compose_yaml_editor = None;
-                            }
+                            });
                             this.ensure_compose_yaml_loaded(tab_id, &project_name, window, cx);
                         })),
                 ),
