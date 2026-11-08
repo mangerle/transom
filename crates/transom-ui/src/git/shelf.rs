@@ -10,7 +10,7 @@
 use super::commit_modal::split_path;
 use crate::app::AppShell;
 use crate::git::types::GitDiffRequest;
-use crate::palette::Palette;
+use crate::palette::{Palette, localized_error};
 use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -373,7 +373,9 @@ impl AppShell {
                     state.shelves.insert(0, entry.clone());
                     state.checked.clear();
                     state.commit_tab = crate::git::GitCommitTab::Shelf;
-                    let _ = save_project_shelves(&project_id_str, &state.shelves);
+                    if let Err(error) = save_project_shelves(&project_id_str, &state.shelves) {
+                        this.state.set_error(localized_error(&error));
+                    }
                 }
                 this.git_refresh(&project, cx);
             });
@@ -405,7 +407,9 @@ impl AppShell {
                 let _ = this.update(cx, |this, cx| {
                     if pop && let Some(state) = this.git_state_of_tab_mut(tab_id) {
                         state.shelves.retain(|s| s.id != target_id);
-                        let _ = save_project_shelves(&project_id_str, &state.shelves);
+                        if let Err(error) = save_project_shelves(&project_id_str, &state.shelves) {
+                            this.state.set_error(localized_error(&error));
+                        }
                     }
                     this.git_refresh(&project, cx);
                 });
@@ -421,7 +425,9 @@ impl AppShell {
         };
         let project_id_str = state.project.id.to_string();
         state.shelves.retain(|s| s.id != entry_id);
-        let _ = save_project_shelves(&project_id_str, &state.shelves);
+        if let Err(error) = save_project_shelves(&project_id_str, &state.shelves) {
+            self.state.set_error(localized_error(&error));
+        }
         cx.notify();
     }
 

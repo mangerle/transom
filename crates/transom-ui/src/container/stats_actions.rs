@@ -1,7 +1,7 @@
 //! 容器统计采样：启动/停止采样、时间档位与图表形态切换。
 
 use super::*;
-use crate::sftp::spawn_blocking_local;
+use crate::app::spawn_blocking_local;
 use std::fmt::Write as _;
 use transom_core::ContainerStats;
 

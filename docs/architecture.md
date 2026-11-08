@@ -62,27 +62,32 @@ apps/transom (组合根 + 控制平面)
 
 新增功能时：状态放 `AppState` 或对应 feature 结构体，纯状态方法写 `impl AppState`，纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。
 
-### 面板实体化（进行中）
+### 面板实体化
 
-窗口级面板独立为 `Entity<面板>`，外壳只持有句柄：
+面板独立为 `Entity<面板>`，外壳只持有句柄；状态、动作与渲染都归实体：
 
 ```
 AppShell { monitor: Entity<MonitorView>, editors: Entity<EditorPanels>, ... }
-MonitorView  { state: MonitorState, app: Option<WeakEntity<AppShell>> }
-EditorPanels { manager: EditorManager, app: Option<WeakEntity<AppShell>> }
-impl Render for MonitorView / EditorPanels  →  面板自己渲染
-impl MonitorView / EditorPanels             →  面板自己的动作，跨域动作 with_shell 回交
+MonitorView  { state: MonitorState }          // 不持有外壳句柄
+EditorPanels { manager: EditorManager }       // 不持有外壳句柄
+SettingsView { state: SettingsModalState, services: SettingsServices, ... }
+SftpPanelView { state: SftpPanelState, tab_id: TabId }   // 每窗格一份
+impl Render for 面板                            →  面板自己渲染
+impl 面板                                       →  面板自己的动作
 ```
 
-约定：面板反引用外壳用弱引用（外壳强持有面板，强引用会成环）；跨域动作通过
-`with_shell(cx, |shell, cx| ...)` 显式调用，与 Zed 面板对 `Workspace` 的调用同形；
-跨面板的数据由外壳读好后传入（如 `MonitorTabParams`），面板不为取值克隆整份会话。
+约定：
 
-实体回调回交外壳时，被调用的外壳方法不得再 `read`/`update` 同一实体：状态变更先在
-面板内完成并返回决策值（请求快照、布尔结果、挂起意图），外壳只发命令、开弹窗或
-执行关闭。异步收回的动作（如挂起关闭续行）通过 `cx.defer_in` 延后到实体租借结束。
+- 面板**不得**持有 `WeakEntity<AppShell>` 等父实体句柄，避免双向引用与双重租借；
+- 数据向下：外壳在变更点调用 `view.update(|v, cx| v.set_*(...))` 注入；
+- 意图向上：面板 `cx.emit(PanelEvent)`，事件自带全部数据，外壳订阅一次并消费；
+- 需要 `Window` 的动作排进 `window_requests`，由外壳在渲染期统一执行；
+- 外壳处理实体事件期间不得回读该实体，否则触发
+  “cannot read/update ... while it is already being updated”。
 
-已完成：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）。待迁：SFTP 面板、设置面板。
+已完成：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）、SFTP 面板
+（`SftpPanelView`）、设置面板（`SettingsView`）。容器与 Git 工作区仍以
+`AppShell` 固有方法承载，属于后续迁移项。
 
 ## 数据流
 

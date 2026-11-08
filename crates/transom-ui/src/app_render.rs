@@ -12,8 +12,6 @@ use gpui_kit::component::WindowExt;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::*;
 
-impl AppShell {}
-
 /// 工作区外层布局的渲染输入。
 struct WorkspaceBodyInput<'a> {
     window: &'a mut Window,

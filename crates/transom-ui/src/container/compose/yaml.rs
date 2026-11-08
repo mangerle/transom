@@ -1,7 +1,7 @@
 //! Compose YAML 的定位、加载与保存。
 
 use super::super::*;
-use crate::sftp::spawn_blocking_local;
+use crate::app::spawn_blocking_local;
 use chrono::Local;
 use gpui_kit::component::input::TextareaState;
 use std::path::{Path, PathBuf};

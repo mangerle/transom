@@ -38,7 +38,7 @@ impl DiffViewerView {
         viewer.phase = DiffPhase::Loading;
         viewer.confirm = None;
         cx.spawn(async move |this, cx| {
-            let prepared = crate::sftp::spawn_blocking_local(move || {
+            let prepared = crate::app::spawn_blocking_local(move || {
                 prepare_diff(&local, &remote, &left_label, &right_label, &language)
             })
             .await;

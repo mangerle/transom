@@ -192,12 +192,9 @@ impl AppShell {
         // 看板打开时先把统计快照推入时序历史，再移动 stats。
         if self.state.monitor.read(cx).is_open() && self.state.workspace.active_tab == Some(tab_id)
         {
-            let open = true;
-            if open {
-                self.state
-                    .monitor
-                    .update(cx, |view, _| view.record_stats(tab_id, &stats));
-            }
+            self.state
+                .monitor
+                .update(cx, |view, _| view.record_stats(tab_id, &stats));
         }
 
         let mut applied = false;

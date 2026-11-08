@@ -12,6 +12,7 @@
 
 use super::{SftpPanelView, list_local_dir};
 use crate::app::AppShell;
+use crate::app::spawn_blocking_local;
 use gpui_kit::*;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -193,35 +194,4 @@ fn delete_local_paths(paths: &[PathBuf]) -> LocalDeleteOutcome {
         }
     }
     LocalDeleteOutcome { deleted, failures }
-}
-
-/// 在专用线程执行阻塞的本地文件操作。
-///
-/// 设计原理（Why）：递归删除与超大目录扫描可能运行数十秒，而 GPUI 的后台
-/// 执行器同时承担缩略图解码等短任务，占住其工作线程会拖慢其它后台工作。
-/// 专用线程只跑这一件事，发送结果后立即退出；异步侧收到结果即 join，
-/// 线程生命周期全程可追踪，不产生脱缰线程。
-pub(crate) fn spawn_blocking_local<T, F>(job: F) -> impl std::future::Future<Output = Option<T>>
-where
-    T: Send + 'static,
-    F: FnOnce() -> T + Send + 'static,
-{
-    let (tx, rx) = flume::bounded(1);
-    let spawned = std::thread::Builder::new()
-        .name("transom-sftp-local".into())
-        .spawn(move || {
-            let _ = tx.send(job());
-        });
-    async move {
-        let handle = match spawned {
-            Ok(handle) => handle,
-            Err(error) => {
-                log::error!("创建本地文件操作线程失败，本次操作已取消: {error}");
-                return None;
-            }
-        };
-        let result = rx.recv_async().await.ok();
-        let _ = handle.join();
-        result
-    }
 }

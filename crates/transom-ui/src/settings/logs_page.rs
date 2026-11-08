@@ -12,10 +12,10 @@
 //!   文件的句柄，之后的写入全部进不了磁盘还看不出原因。
 
 use crate::app::app_settings;
+use crate::app::spawn_blocking_local;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
 use crate::settings::SettingsView;
-use crate::sftp::spawn_blocking_local;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;

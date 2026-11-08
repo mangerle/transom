@@ -93,7 +93,6 @@ pub(crate) struct AppState {
     pub(in crate::app) window_requests: super::WindowRequests,
     /// 状态栏右侧指标簇实体：统计/流量事件只重绘它，不重建整窗。
     pub(in crate::app) status_metrics: Entity<crate::status_bar::StatusBarMetricsView>,
-    /// 密钥生成/部署向导状态：独立于设置草稿，随弹窗开关生死。
     /// 当前是否要求控制面采样系统统计；界面完全没有消费方时置假。
     pub(in crate::app) stats_sampling: bool,
     /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。

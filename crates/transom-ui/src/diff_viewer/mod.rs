@@ -26,7 +26,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
-use crate::app::{AppShell, AppState};
+use crate::app::AppShell;
 use crate::editor::EditorDiffSource;
 use crate::format::format_size;
 pub(crate) use entity::{DiffViewerEvent, DiffViewerView};
@@ -143,8 +143,6 @@ impl DiffViewerState {
         }
     }
 }
-
-impl AppState {}
 
 /// 校验"本地文件 → 远端同名文件"的对比前提；入口置灰与真正打开共用同一套口径。
 ///
@@ -478,7 +476,7 @@ impl DiffViewerView {
     fn spawn_local_read(&mut self, cx: &mut Context<Self>) {
         let path = self.state.local_path.clone();
         cx.spawn(async move |this, cx| {
-            let result = crate::sftp::spawn_blocking_local(move || read_local_text(&path)).await;
+            let result = crate::app::spawn_blocking_local(move || read_local_text(&path)).await;
             let _ = this.update(cx, |this, cx| this.apply_local_read(result, cx));
         })
         .detach();

@@ -223,7 +223,7 @@ fn send_zmodem_notification(success: bool, files: usize) {
     } else {
         rust_i18n::t!("zmodem.notify_failed_body").to_string()
     };
-    crate::sftp::send_desktop_notification(&title, &body);
+    crate::notify::send_desktop_notification(&title, &body);
 }
 
 impl AppState {

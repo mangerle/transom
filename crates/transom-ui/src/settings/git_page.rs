@@ -6,10 +6,10 @@
 //! - 包含 openidea / IntelliJ IDEA 标志性的“测试 (Test)”Git 可执行程序与版本检测回显；
 //! - 各输入字段直接绑定 `SettingsModalState`，由 `collect_git_preferences` 统一校验与落盘。
 
+use crate::app::spawn_blocking_local;
 use crate::app::{app_settings, update_app_settings};
 use crate::palette::Palette;
 use crate::settings::SettingsView;
-use crate::sftp::spawn_blocking_local;
 use crate::theme::tokens::{space, typography};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};

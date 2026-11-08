@@ -53,7 +53,6 @@ mod transfer_presentation;
 pub(crate) use self::entity::SftpPanelView;
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
 pub(crate) use self::input_modal::SftpInputModalParams;
-pub(crate) use self::local_async::spawn_blocking_local;
 pub(crate) use self::local_listing::LocalDirectoryLister;
 pub(crate) use self::modals::{
     EditorGotoLineModalState, SftpConfirmModalState, SftpModals, SftpPendingDelete,
@@ -200,69 +199,6 @@ pub(crate) fn fuzzy_match_name(name: &str, query_lower: &str) -> bool {
         }
     }
     true
-}
-
-/// 异步调用操作系统原生通知中心弹出桌面通知，避免阻塞 UI 渲染主线程
-pub(crate) fn send_desktop_notification(summary: &str, body: &str) {
-    let summary = summary.to_string();
-    let body = body.to_string();
-    let spawn = std::thread::Builder::new()
-        .name("transom-desktop-notify".into())
-        .spawn(move || {
-            // GNOME 会在"通知来自当前聚焦窗口的进程"时立刻以 reason=2 关闭通知；
-            // 外部 notify-send 进程没有窗口，行为与终端里手敲 notify-send 一致。
-            // 优先走它，命令缺失或失败再回退跨平台的 notify-rust。
-            #[cfg(target_os = "linux")]
-            if notify_via_send(&summary, &body) {
-                log::debug!("桌面通知已通过 notify-send 发送");
-                return;
-            }
-            if let Err(error) = notify_rust::Notification::new()
-                .appname("Transom")
-                .summary(&summary)
-                .body(&body)
-                .show()
-            {
-                log::warn!("发送桌面通知失败，摘要: {summary}，原因: {error}");
-            }
-        });
-    if let Err(error) = spawn {
-        log::warn!("创建桌面通知线程失败，原因: {error}");
-    }
-}
-
-/// 用系统 `notify-send` 发送通知；命令不存在、超时或返回非零时返回 `false`。
-#[cfg(target_os = "linux")]
-fn notify_via_send(summary: &str, body: &str) -> bool {
-    use std::process::{Command, Stdio};
-    use std::time::{Duration, Instant};
-
-    let Ok(mut child) = Command::new("notify-send")
-        .arg("--app-name=Transom")
-        .arg("--urgency=normal")
-        .arg(summary)
-        .arg(body)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
-        return false;
-    };
-    let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return status.success(),
-            Ok(None) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return false;
-            }
-            Err(_) => return false,
-        }
-    }
 }
 
 #[cfg(test)]

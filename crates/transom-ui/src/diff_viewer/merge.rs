@@ -137,7 +137,7 @@ impl DiffViewerView {
         viewer.phase = DiffPhase::Writing;
         viewer.error = None;
         cx.spawn(async move |this, cx| {
-            let result = crate::sftp::spawn_blocking_local(move || {
+            let result = crate::app::spawn_blocking_local(move || {
                 write_local_text(&path, &expected, &merged)
             })
             .await;

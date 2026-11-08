@@ -1,7 +1,7 @@
 //! 容器日志采样：拉取、跟随、行数与时间戳切换。
 
 use super::*;
-use crate::sftp::spawn_blocking_local;
+use crate::app::spawn_blocking_local;
 
 impl AppShell {
     pub(crate) fn ensure_container_logs(&mut self, tab_id: TabId) {

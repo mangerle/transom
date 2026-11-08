@@ -111,22 +111,19 @@ impl ContainerFormState {
             tls_cert,
             tls_key,
         ) = match &engine.endpoint {
-            ContainerEndpoint::Cli { program, args } => {
-                let _ = program;
-                (
-                    args.join(" "),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    false,
-                    String::new(),
-                    false,
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                )
-            }
+            ContainerEndpoint::Cli { args, .. } => (
+                args.join(" "),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                false,
+                String::new(),
+                false,
+                String::new(),
+                String::new(),
+                String::new(),
+            ),
             ContainerEndpoint::Ssh {
                 port,
                 user,

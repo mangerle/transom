@@ -2,7 +2,7 @@
 
 use super::types::{AuditViewer, MAX_AUDIT_LOG_BYTES, find_session_audit_logs, read_log_content};
 use crate::app::AppShell;
-use crate::sftp::spawn_blocking_local;
+use crate::app::spawn_blocking_local;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_core::{Connection, Session, SessionId, TabId};

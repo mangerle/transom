@@ -10,7 +10,7 @@ pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
-use crate::app::{AppShell, AppState, TabStatus, TerminalTab};
+use crate::app::{AppShell, TabStatus, TerminalTab};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -55,8 +55,6 @@ pub(crate) struct HostKeyConfirmState {
     pub(crate) fingerprint: String,
     pub(crate) responder: tokio::sync::mpsc::Sender<bool>,
 }
-
-impl AppState {}
 
 impl AppShell {
     /// 记录最近打开的会话 ID，并异步落盘保存。

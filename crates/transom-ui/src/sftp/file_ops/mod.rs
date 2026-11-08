@@ -1,7 +1,6 @@
 //! SFTP 文件系统增删改查、模态对话框交互及软链接操作。
 
 mod commit;
-mod remote_inputs;
 mod validate;
 
 use crate::app::AppShell;

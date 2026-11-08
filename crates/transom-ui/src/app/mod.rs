@@ -51,8 +51,8 @@ pub(crate) mod git;
 pub(crate) mod identity;
 #[path = "../keys/mod.rs"]
 pub(crate) mod keys;
-#[path = "../modals.rs"]
-pub(crate) mod modals;
+#[path = "../known_hosts_modal.rs"]
+mod known_hosts_modal;
 #[path = "../monitor/mod.rs"]
 pub(crate) mod monitor;
 #[path = "../notify.rs"]
@@ -110,6 +110,7 @@ mod bootstrap;
 mod modal_hub;
 mod overlays;
 mod persistence;
+mod runtime;
 mod settings_global;
 
 pub(crate) use settings_global::{
@@ -123,6 +124,7 @@ mod window_requests;
 
 pub(crate) use modal_hub::ModalHub;
 pub(crate) use persistence::Persistence;
+pub(crate) use runtime::spawn_blocking_local;
 pub(crate) use secret_prefill::prefill_secret_fields;
 pub(crate) use state::AppState;
 pub(crate) use task_hub::TaskHub;

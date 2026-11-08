@@ -118,7 +118,7 @@ fn build_audit_path(session: &Session, tab_id: TabId, dir: &Path, stamp: String)
 mod tests {
     use super::build_audit_path;
     use std::path::Path;
-    use transom_core::{Connection, LocalConnection, Session, SessionId, TabId, ids::FolderId};
+    use transom_core::{Connection, LocalConnection, Session, TabId, ids::FolderId};
 
     fn ssh_session(name: &str, host: &str) -> Session {
         let mut session = Session::new(
@@ -126,8 +126,6 @@ mod tests {
             Connection::Ssh(transom_core::SshConnection::new(host, "deploy")),
         );
         session.folder_id = Some(FolderId::new());
-        // 让测试里比较名字而不是身份，但 id 字段仍要是合法值。
-        let _ = SessionId::new();
         session
     }
 

@@ -2,7 +2,7 @@
 
 use super::super::*;
 use super::yaml::{compose_project_yaml, compose_yaml_is_allowed, unique_compose_destination};
-use crate::sftp::spawn_blocking_local;
+use crate::app::spawn_blocking_local;
 use chrono::Local;
 use std::path::{Path, PathBuf};
 use transom_core::ComposeProject;

@@ -2,10 +2,9 @@
 
 use super::validate::name_validation_error;
 use crate::app::AppShell;
+use crate::app::spawn_blocking_local;
 use crate::sftp::state::SftpInputModalState;
-use crate::sftp::{
-    SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote, spawn_blocking_local,
-};
+use crate::sftp::{SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote};
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{SftpOperation, TabId};

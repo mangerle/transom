@@ -4,10 +4,11 @@
 //! 连接/认证与遥测事件在另一处；拆分让每个文件保持在工程规范的体量内。
 
 use crate::app::AppShell;
+use crate::notify::send_desktop_notification;
 use crate::palette::localized_error;
 use crate::sftp::TransferFailure;
 use crate::sftp::TransferStatus;
-use crate::sftp::{format_size, parent_remote, send_desktop_notification};
+use crate::sftp::{format_size, parent_remote};
 use gpui_kit::*;
 use transom_core::{SftpAppEvent, TransferDirection};
 

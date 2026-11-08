@@ -2,9 +2,9 @@
 
 use super::types::{ReplayModalState, scan_recordings};
 use crate::app::app_settings;
+use crate::app::spawn_blocking_local;
 use crate::app::{AppShell, TerminalTab};
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
-use crate::sftp::spawn_blocking_local;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

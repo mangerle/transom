@@ -193,7 +193,7 @@ impl AppShell {
 
         cx.spawn(async move |this, cx| {
             let Some(result) =
-                crate::sftp::spawn_blocking_local(move || std::fs::read_to_string(path)).await
+                crate::app::spawn_blocking_local(move || std::fs::read_to_string(path)).await
             else {
                 log::error!("读取 SSH 配置的阻塞线程创建失败");
                 return;

@@ -10,9 +10,9 @@ use std::collections::HashSet;
 use super::font_select::{
     CJK_DEFAULT_KEY, FontSelect, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select,
 };
+use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::settings::SettingsView;
-use crate::sftp::spawn_blocking_local;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
