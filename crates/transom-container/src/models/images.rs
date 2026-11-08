@@ -148,9 +148,6 @@ pub struct ImagePullEvent {
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
-    #[allow(dead_code)]
-    pub progress: Option<String>,
-    #[serde(default)]
     pub error: Option<String>,
     #[serde(rename = "errorDetail", default)]
     pub error_detail: Option<PullErrorDetail>,

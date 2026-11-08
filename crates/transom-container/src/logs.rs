@@ -114,8 +114,8 @@ pub struct LinePrefixer {
 }
 
 impl LinePrefixer {
-    /// 构造带容器/服务名前缀的行格式化器（默认无色）。
-    #[allow(dead_code)]
+    /// 构造带容器/服务名前缀的行格式化器（默认无色）；仅供测试使用。
+    #[cfg(test)]
     pub fn new(name: &str) -> Self {
         Self {
             prefix: format!("[{name}] ").into_bytes(),
