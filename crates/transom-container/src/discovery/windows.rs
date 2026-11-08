@@ -2,14 +2,13 @@
 
 //! windows 相关的引擎候选发现。
 
-use super::{CliSpec, EngineCandidate};
+use super::EngineCandidate;
+use super::cli::{find_in_path, wslc_spec};
 use crate::transport::EngineTransport;
-use std::path::Path;
 use transom_core::{ContainerEndpoint, ContainerEngineKind};
 
 #[cfg(windows)]
 pub(super) fn windows_candidates(kind: ContainerEngineKind) -> Vec<EngineCandidate> {
-    use std::path::Path;
     let mut candidates = Vec::with_capacity(4);
     if kind == ContainerEngineKind::Docker {
         for pipe in [
@@ -38,6 +37,5 @@ pub(super) fn windows_candidates(kind: ContainerEngineKind) -> Vec<EngineCandida
             cli: Some(wslc_spec()),
         });
     }
-    let _ = Path::new(".");
     candidates
 }

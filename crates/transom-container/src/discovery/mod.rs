@@ -298,6 +298,7 @@ mod tests {
         assert_eq!(cli.prefix, &["-d", "Ubuntu-24.04", "-e", "docker"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn symlinked_socket_paths_share_one_key() {
         let dir = tempfile::tempdir().expect("临时目录必须可建");
@@ -309,6 +310,11 @@ mod tests {
             endpoint_key(&ContainerEndpoint::Unix { path: real.clone() }),
             endpoint_key(&ContainerEndpoint::Unix { path: link })
         );
+    }
+
+    #[test]
+    fn missing_socket_paths_keep_original_key() {
+        let dir = tempfile::tempdir().expect("临时目录必须可建");
         // 解析不了的路径退回原描述：宁可多列一项，也不能把可用引擎藏起来。
         let missing = dir.path().join("missing.sock");
         assert_eq!(

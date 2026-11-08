@@ -4,6 +4,7 @@ use super::handler::ClientHandler;
 use crate::auth::AuthPrompter;
 use crate::error::NetError;
 use russh::client::Handle;
+#[cfg(unix)]
 use russh::keys::agent::client::AgentClient;
 use russh::keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg, load_secret_key};
 use std::sync::Arc;
@@ -237,6 +238,7 @@ fn auth_error(error: russh::Error) -> AppError {
     AppError::with_detail(ErrorCode::AuthFailed, error.to_string())
 }
 
+#[cfg(unix)]
 fn agent_error(error: impl std::fmt::Display) -> NetError {
     NetError::Auth {
         reason: format!("SSH 代理（ssh-agent）认证失败: {error}"),
