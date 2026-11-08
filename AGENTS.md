@@ -155,12 +155,13 @@
 - **状态与外壳分离**：应用级状态集中在 `app::state::AppState`，`AppShell` 只保留 `state` 字段；访问必须显式写 `self.state.xxx`，**严禁为外壳实现 `Deref`/`DerefMut`**——那会让状态方法隐式长在外壳上，调用点看不出归属，且任意模块都能拿到 `&mut AppState` 改状态而不触发重绘（守卫：`app_shell_does_not_deref_state`）。新增状态优先放 `AppState` 或 feature 结构体，禁止继续往 `AppShell` 平铺字段。
 - **表现层组件契约**：跨页面复用的 UI 必须放 `transom-ui/src/widgets/`，只接收数据与回调，禁止依赖 `AppShell`、禁止直接访问 store。组件内部优先复用 `gpui-kit` 的 `Button`、`Dialog`、`Empty`、`Progress`、`Settings`、`Kbd` 等，不重写焦点、键盘与弹层行为。
 - **设计令牌强制**：组件层禁止裸写 `text_xs()`、`text_sm()`、`px(...)`、`gap_N()`；字号、间距、控件尺寸与弹窗宽度必须取 `theme::tokens` 的 `typography`、`space`、`control`、`dialog` 档位。`widgets_use_design_tokens` 源码守卫必须保持通过。
-- **弹窗元数据单一来源**：`ModalKind` 的宽度与 slug 必须由 `ModalSpec` 一次提供；`ORDER` 必须覆盖全部种类且不重复，`order_covers_every_kind_exactly_once` 测试必须保持通过。新增弹窗同时评估是否应拆到独立视图文件。
+- **弹窗元数据单一来源**：弹窗的种类、层序、宽度、slug、打开判定与文本项必须登记在 `dialog_host/registry::MODALS` 一张表里；表序即层序，`registry_covers_every_kind_exactly_once` 测试必须保持通过。禁止再新增按种类的 `ORDER`/`spec`/`is_open`/`field_values` 大 `match`；新增弹窗同时评估是否应拆到独立视图文件。
 - **UI 线程禁止同步磁盘与重解析**：渲染函数、点击回调与事件处理中禁止直接 `std::fs` 读写大文件、解析 `.cast`、扫描审计目录或同步保存设置/会话目录。统一使用 `app::persistence::SnapshotWriter` 做覆盖式异步落盘，或用 `spawn_blocking_local` 执行阻塞 IO；只有退出路径等必须落定的单次写入允许同步保存。
 - **外部文件必须有上限**：解析 `.cast`、审计日志、预览与差异等外部文件必须先检查体积与事件数上限；`MAX_CAST_BYTES` / `MAX_CAST_EVENTS` 等常量不得绕过。
 - **错误不得静默降级**：禁止 `let _ = save(...)` 这类吞错写法；设置保存走 `persist_settings_reported`，目录保存走 `persist_catalog`，后台写盘错误由渲染帧统一转成应用内通知。确实可恢复的降级必须记录日志并说明原因。
 - **平台边界**：桌面注册、启动器与图标安装只经 `transom-desktop`；macOS/Windows 的占位实现必须返回明确错误，不允许静默成功。存储层不再承担桌面集成。
-- **纯状态方法归属**：不依赖 `Window`、`Entity`、`Context`、`cx` 的状态查询与变更一律写在 `impl AppState`；`AppShell` 只保留需要 GPUI 上下文的渲染、事件路由与生命周期入口。新增方法前先判断是否真的需要 `Context<Self>`。
+- **架构守卫归属**：源码结构守卫统一放在 `crates/transom-ui/tests/source_guards.rs`，不要塞进主题或业务模块的单元测试；能由字段私有性、类型系统表达的边界优先用类型约束，文本扫描只作为迁移期防线。
+- **纯状态方法归属**：不依赖 `Window`、`Entity`、`Context`、`cx` 的状态查询与变更一律写在 `impl AppState`（或对应 feature 实体的方法）；`AppShell` 只保留需要 GPUI 上下文的渲染、事件路由与生命周期入口。新增方法前先判断是否真的需要 `Context<Self>`。
 - **外壳结构守卫**：`AppShell` 只允许持有 `state: AppState` 一个字段，`app_shell_keeps_single_state_field` 测试是回归闸门；新增状态放 `AppState` 或对应 feature 结构体，禁止重新平铺字段。
 - **菜单与按钮构造器**：右键菜单项统一用 `widgets::menu_item` / `widgets::MenuItem`（后者支持 `.disabled(...)`），弹窗取消与确认按钮分别用 `widgets::dialog_cancel_button` / `dialog_confirm_button`。`menu_items_use_widget_constructor` 守卫禁止 `PopupMenuItem::new(...)` 紧接 `.icon(...)` 的手写链；真实 `Action` 绑定与 `.checked(...)` 下拉选中项属例外，保留组件库原写法。
 - **文件拆分准则**：单文件超过 500 行按“状态 / 视图 / 动作 / 测试”拆分，不按行数机械切割；子模块共用导入收敛到 `common.rs` 之类的私有模块，禁止复制一长串 import。拆分后外部路径通过父模块重导出保持稳定。声明式键位表（如 `keymap/mod.rs`）属于规范例外，不为行数强行拆分。
