@@ -38,14 +38,14 @@ use windows::core::{BOOL, Error, PCWSTR, PWSTR};
 const PRIVATE_PRINCIPALS: usize = 3;
 
 /// 已构造的私有安全描述符与 ACL；ACL 由 `SetEntriesInAclW` 分配，需要显式释放。
-struct PrivateSecurity {
+pub(crate) struct PrivateSecurity {
     descriptor: Box<SECURITY_DESCRIPTOR>,
     acl: *mut ACL,
     attributes: SECURITY_ATTRIBUTES,
 }
 
 impl PrivateSecurity {
-    fn new(inherit_for_directory: bool) -> io::Result<Self> {
+    pub(crate) fn new(inherit_for_directory: bool) -> io::Result<Self> {
         let user_sid = current_user_sid()?;
         let system_sid = well_known_sid(WinLocalSystemSid)?;
         let administrators_sid = well_known_sid(WinBuiltinAdministratorsSid)?;
@@ -111,7 +111,7 @@ impl PrivateSecurity {
         })
     }
 
-    fn attributes_ptr(&self) -> *const SECURITY_ATTRIBUTES {
+    pub(crate) fn attributes_ptr(&self) -> *const SECURITY_ATTRIBUTES {
         let _ = &self.descriptor;
         &self.attributes
     }

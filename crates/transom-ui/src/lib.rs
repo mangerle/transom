@@ -63,6 +63,8 @@ pub struct UiServices {
     pub git_projects: Arc<dyn transom_core::GitProjectStore>,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
+    /// 平台 URL 回调与深链任务共用的应用事件发送端。
+    pub event_tx: flume::Sender<AppEvent>,
 }
 
 pub fn run(services: UiServices) -> bool {
@@ -112,7 +114,23 @@ pub fn run(services: UiServices) -> bool {
     );
 
     let restart_flag = restart_requested.clone();
-    application().with_assets(AppAssets).run(move |cx| {
+    let external_url_tx = services.event_tx.clone();
+    let application = application().with_assets(AppAssets);
+    application.on_open_urls(move |urls| {
+        for url in urls {
+            if !transom_core::is_ssh_url(&url) {
+                log::warn!("平台传入不支持的深链地址，已拒绝: {url}");
+                continue;
+            }
+            if let Err(error) = external_url_tx.try_send(AppEvent::DeepLink {
+                request: transom_core::DeepLinkRequest::Ssh { url },
+            }) {
+                log::warn!("平台深链地址未能投递到界面事件通道，原因: {error}");
+            }
+        }
+    });
+    application.run(move |cx| {
+        cx.set_app_identity(transom_platform::paths::APP_ID, APP_NAME);
         rust_i18n::extend!(gpui_component);
         init(cx);
         gpui_component::set_locale(&language);

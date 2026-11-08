@@ -41,6 +41,12 @@ fern.workspace = true
 chrono.workspace = true
 portable-pty.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Threading",
+] }
+
 # DEB 打包元数据（cargo-deb）。设计原理（Why）：
 # - 依赖表按本机 `ldd` 与 `dpkg -S` 实测手写而不是 `$auto`/dpkg-shlibdeps：
 #   后两者把出包结果绑到构建机的包库状态上，同一份代码在不同 Ubuntu 版本
@@ -98,6 +104,12 @@ identifier = "com.github.mangerle.transom"
 category = "Utility"
 description = "Native SSH, serial console and terminal workspace with SFTP"
 long-description = "Transom 是一款基于 GPUI 的原生终端工作台，支持 SSH、串口、分屏终端、SFTP 文件传输、命令历史、端口转发与审计录像。"
+# Linux AppImage、Windows NSIS 与 macOS .app 都登记 `ssh://` 候选处理程序。
+# macOS 写入 CFBundleURLTypes；NSIS 在每用户安装作用域登记 URL Protocol。
+# 是否成为系统默认仍由用户的操作系统设置决定。
+deep-link-protocols = [
+    { schemes = ["ssh"], name = "SSH URL", role = "Viewer" },
+]
 icons = [
     "../../packaging/icons/32x32.png",
     "../../packaging/icons/64x64.png",

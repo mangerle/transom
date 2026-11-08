@@ -1,5 +1,4 @@
 mod controller;
-#[cfg(unix)]
 mod deep_link;
 mod logging;
 
@@ -33,7 +32,6 @@ fn main() -> anyhow::Result<()> {
     // 深链与单实例判定早于一切重量级初始化（钥匙串走 D-Bus 可能挂起秒级）：
     // 已有实例在跑时本进程只负责转交请求，不该建立存储、控制器与窗口。
     // `None` 即"请求已交接"，进程直接退出。
-    #[cfg(unix)]
     let Some(primary) = deep_link::acquire_primary(&startup)? else {
         log::info!("唤起请求已转交给正在运行的实例，本次启动结束");
         return Ok(());
@@ -77,7 +75,6 @@ fn main() -> anyhow::Result<()> {
     let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
 
     // 监听句柄保留在此直到进程结束：随控制器停机，不做脱缰派生。
-    #[cfg(unix)]
     let _deep_link = primary.serve(controller.runtime(), controller.event_sender());
 
     deliver_startup_requests(&controller, startup);
@@ -93,6 +90,7 @@ fn main() -> anyhow::Result<()> {
         git_projects,
         command_tx: controller.command_sender(),
         event_rx: controller.event_receiver(),
+        event_tx: controller.event_sender(),
     };
 
     let restart_requested = transom_ui::run(services);
@@ -109,30 +107,25 @@ fn main() -> anyhow::Result<()> {
 
 /// 启动参数解析出的唤起请求（`ssh://` 地址 + 可选目录）。
 ///
-/// 非 Unix 平台返回空请求：macOS/Windows 由平台层派发 URL 事件，这里若也
-/// 接管会把同一条地址连两次。
+/// macOS 的 URL 由 LaunchServices 通过 `on_open_urls` 投递，不能再从 argv
+/// 接管同一条地址；Linux/Windows 则从启动参数解析深链与目录/命令请求。
 fn startup_request() -> StartupRequest {
-    #[cfg(unix)]
+    #[cfg(not(target_os = "macos"))]
     {
         deep_link::request_from_args(std::env::args())
     }
-    #[cfg(not(unix))]
+    #[cfg(target_os = "macos")]
     {
-        StartupRequest::default()
+        deep_link::LaunchRequest::default()
     }
 }
 
-/// 跨平台统一的启动请求形态：Unix 复用深链模块的解析结果，其余平台恒为空。
-#[cfg(unix)]
+/// 跨平台统一的启动请求形态。
 type StartupRequest = deep_link::LaunchRequest;
-#[cfg(not(unix))]
-#[derive(Default)]
-struct StartupRequest;
 
 impl StartupRequest {
     /// 把冷启动请求按到达顺序展开成事件，与运行期唤起共用同一条投递路径：
     /// 界面事件泵启动后顺序消费，不必为"带参数启动"另开入口。
-    #[cfg(unix)]
     fn into_events(self) -> Vec<AppEvent> {
         let mut events: Vec<AppEvent> = self
             .urls
@@ -155,11 +148,6 @@ impl StartupRequest {
             });
         }
         events
-    }
-
-    #[cfg(not(unix))]
-    fn into_events(self) -> Vec<AppEvent> {
-        Vec::new()
     }
 }
 

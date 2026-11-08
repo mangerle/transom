@@ -19,7 +19,7 @@ use std::io;
 use std::path::Path;
 
 #[cfg(windows)]
-mod windows;
+pub(crate) mod windows;
 
 /// 创建目录（含父目录），并在 Unix 上设为 0700、Windows 上应用私有 DACL。
 ///

@@ -9,3 +9,6 @@ pub mod os_release;
 pub mod paths;
 pub mod private_fs;
 pub mod system;
+
+#[cfg(windows)]
+pub mod named_pipe;

@@ -1,10 +1,11 @@
 //! 深链与单实例测试用例。
 
-use super::service::{MAX_REQUEST_BYTES, accept_stream, acquire_primary_at, probe_alive};
+use super::protocol::{MAX_REQUEST_BYTES, accept_stream};
 use super::types::{LaunchRequest, request_from_args, request_lines};
+#[cfg(unix)]
+use super::unix::{acquire_primary_at, probe_alive};
 use std::path::PathBuf;
-use tokio::io::AsyncWriteExt;
-use tokio::net::UnixStream;
+use tokio::io::{AsyncWriteExt, DuplexStream, duplex};
 use transom_core::{AppEvent, DeepLinkRequest};
 
 fn temp_dir(tag: &str) -> PathBuf {
@@ -20,6 +21,10 @@ fn temp_dir(tag: &str) -> PathBuf {
 
 fn channel() -> (flume::Sender<AppEvent>, flume::Receiver<AppEvent>) {
     flume::bounded::<AppEvent>(4)
+}
+
+fn stream_pair() -> (DuplexStream, DuplexStream) {
+    duplex(MAX_REQUEST_BYTES as usize * 2)
 }
 
 #[test]
@@ -111,7 +116,7 @@ fn request_from_args_consumes_value_after_dir_flag() {
 
 #[tokio::test]
 async fn accept_delivers_ssh_url() {
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let write = async {
         client
@@ -135,7 +140,7 @@ async fn accept_delivers_ssh_url() {
 
 #[tokio::test]
 async fn accept_treats_blank_line_as_activate() {
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let write = async {
         client.write_all(b"\n").await.unwrap();
@@ -155,7 +160,7 @@ async fn accept_treats_blank_line_as_activate() {
 #[tokio::test]
 async fn accept_delivers_dir_request() {
     let dir = temp_dir("accept");
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let payload = format!("dir:{}\n", dir.display());
     let write = async {
@@ -177,7 +182,7 @@ async fn accept_delivers_dir_request() {
 #[tokio::test]
 async fn accept_drives_all_requests_on_one_connection() {
     let dir = temp_dir("multi");
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let payload = format!("ssh://a@host.example\ndir:{}\n", dir.display());
     let write = async {
@@ -210,7 +215,7 @@ async fn accept_rejects_foreign_and_stale_lines() {
         "dir:relative/path\n".to_string(),
     ];
     for payload in cases {
-        let (mut client, mut server) = UnixStream::pair().unwrap();
+        let (mut client, mut server) = stream_pair();
         let (tx, rx) = channel();
         let write = async {
             client.write_all(payload.as_bytes()).await.unwrap();
@@ -224,7 +229,7 @@ async fn accept_rejects_foreign_and_stale_lines() {
 
 #[tokio::test]
 async fn accept_ignores_immediate_eof() {
-    let (_client, mut server) = UnixStream::pair().unwrap();
+    let (_client, mut server) = stream_pair();
     drop(_client);
     let (tx, rx) = channel();
     accept_stream(&mut server, &tx).await.unwrap();
@@ -265,7 +270,7 @@ fn request_from_args_collects_exec_command_verbatim() {
 #[tokio::test]
 async fn accept_delivers_exec_request_with_dir() {
     let dir = temp_dir("exec");
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let payload = format!(
         "exec:{}\n",
@@ -295,7 +300,7 @@ async fn accept_delivers_exec_request_with_dir() {
 
 #[tokio::test]
 async fn accept_rejects_exec_without_command() {
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let write = async {
         client
@@ -327,7 +332,7 @@ async fn forwarded_exec_request_encodes_command_and_dir_in_one_line() {
     assert_eq!(lines.len(), 1, "命令请求只应产生一行");
     assert!(lines[0].starts_with("exec:"));
 
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let payload = format!("{}\n", lines[0]);
     let write = async {
@@ -355,7 +360,7 @@ async fn forwarded_exec_request_encodes_command_and_dir_in_one_line() {
 
 #[tokio::test]
 async fn accept_caps_oversized_request() {
-    let (mut client, mut server) = UnixStream::pair().unwrap();
+    let (mut client, mut server) = stream_pair();
     let (tx, rx) = channel();
     let payload = format!(
         "ssh://{}@host.example\n",
@@ -377,6 +382,7 @@ async fn accept_caps_oversized_request() {
     }
 }
 
+#[cfg(unix)]
 fn temp_socket_path(tag: &str) -> PathBuf {
     static SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -390,6 +396,7 @@ fn temp_socket_path(tag: &str) -> PathBuf {
     path
 }
 
+#[cfg(unix)]
 #[test]
 fn second_instance_forwards_requests_to_running_primary() {
     let path = temp_socket_path("forward");
@@ -433,6 +440,7 @@ fn second_instance_forwards_requests_to_running_primary() {
     let _ = std::fs::remove_dir(&dir);
 }
 
+#[cfg(unix)]
 #[test]
 fn stale_socket_is_reclaimed_on_bind_conflict() {
     let path = temp_socket_path("stale");

@@ -8590,6 +8590,7 @@ dependencies = [
  "transom-ui",
  "transom-updater",
  "transom-zmodem",
+ "windows 0.62.2",
 ]
 
 [[package]]
