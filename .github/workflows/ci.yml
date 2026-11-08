@@ -75,36 +75,39 @@ jobs:
       - name: 验证最低支持 Rust 版本
         run: cargo +1.96.0 check --locked --workspace --all-targets
 
-  windows-check:
-    name: Windows 编译检查
-    runs-on: windows-latest
-    timeout-minutes: 60
+  # 平台作业不只编译：Windows/macOS 条件编译的单测与无头 GPUI 集成测试必须在
+  # 对应宿主上真实执行，否则平台分支和 Job Object/LaunchServices 路径会长期失守。
+  platform-test:
+    name: ${{ matrix.label }} 运行测试与静态检查
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows
+            os: windows-latest
+          - label: macOS
+            os: macos-latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 配置 Rust 稳定版工具链
+      - name: 配置 Rust 稳定版与静态检查组件
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: 启用 Rust 依赖缓存
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
 
-      - name: 编译检查全部目标
-        run: cargo check --locked --workspace --all-targets
+      - name: 运行平台 Clippy 零警告门禁
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
-  macos-check:
-    name: macOS 编译检查
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 配置 Rust 稳定版工具链
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: 启用 Rust 依赖缓存
-        uses: Swatinem/rust-cache@v2
+      - name: 运行全工作区测试
+        run: cargo test --locked --workspace
 
       - name: 编译检查全部目标
         run: cargo check --locked --workspace --all-targets
