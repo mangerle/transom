@@ -57,7 +57,13 @@ impl AppShell {
             )
             .child(resizable_panel().min_w_0().child(detail));
 
-        let pull_drawer = self.render_container_pull_drawer(tab_id, cx, p);
+        let pull_drawer = match self.state.container_workspace(tab_id) {
+            Some(view) => {
+                let state = view.read(cx);
+                crate::container::render_pull_drawer(&view, &state.state, p)
+            }
+            None => div().into_any_element(),
+        };
 
         v_flex()
             .relative()

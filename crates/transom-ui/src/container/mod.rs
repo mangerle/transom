@@ -38,6 +38,7 @@ mod update;
 mod view;
 
 pub(crate) use entity::ContainerWorkspace;
+pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
     ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,
