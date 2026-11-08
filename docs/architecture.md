@@ -129,8 +129,9 @@ impl 面板                                       →  面板自己的动作
 时间线的复制/跳转只依赖实体句柄与状态快照，端口转发经工作区事件排队执行。
 日志页的跟随/行数/时间戳/倒序、复制与导出也已随渲染一起下沉到工作区实体，
 导出结果经实体 notice 提示。统计页的六张卡片、采样档位、图表形态、进程与端口
-折叠及 CSV 导出也已随动作一起下沉，导出结果同样走实体 notice。其余组件沿用
-同一模式继续下沉，最终删除迁移桥。
+折叠及 CSV 导出也已随动作一起下沉，导出结果同样走实体 notice。镜像、卷、网络、镜像历史与容器详情头部的渲染/动作也已下沉，跨页动作经
+`ContainerWorkspaceEvent` 排队到渲染期执行。其余组件沿用同一模式继续下沉，
+最终删除迁移桥。
 
 Git 侧已迁 `GitWorkspace::load_log` 与实体命令通道；其余 Git 动作仍在外壳。
 
@@ -272,6 +273,10 @@ apps/transom/src/controller/
                各处理一类事件
   lifecycle.rs 连接接入/清理/停机的公共流程
   pty.rs / samplers/ / sftp_exec/（dispatch + 按域拆分的 ops）/ sftp_finish.rs / sync_exec.rs / host_exec.rs
+
+apps/transom/src/
+  local_pty.rs 普通本地标签与提权代理共用的 Shell 解析、参数拼接和 PTY 启动
+  pty_broker.rs Windows UAC 提权 PTY 代理：私有命名管道、控制帧、进程树回收
 ```
 
 ## 关键决策记录
@@ -291,6 +296,7 @@ apps/transom/src/controller/
 | 单实例 + 深链 socket（0600/0700） | 二次启动转交请求，不堆进程 | 多实例并行调试需伪装环境变量 |
 | 统计采样按机器共享（本地标签） | 标签一多避免 N 倍 /proc 与 df | 新标签等下一轮（3-5 秒）才见数据 |
 | 远端统计 5 秒、df 每 3 轮 | 降低远端负载与子进程开销 | 磁盘指标最多陈 15 秒 |
+| Windows 管理员终端经隐藏 PTY 代理桥接 | UAC 不能给现有 PTY 子进程原地加管理员令牌；代理在提升进程中创建 ConPTY，再把字节与控制接回当前标签 | 多一个短生命周期代理进程和一组私有命名管道 |
 
 ## 改动指引
 
