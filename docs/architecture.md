@@ -124,7 +124,9 @@ impl 面板                                       →  面板自己的动作
 `AppShell`，通过 `with_container` 迁移期桥只读状态；拉取抽屉与工作区头部（分类页签、引擎标识、工具条按钮）已按“实体状态 +
 实体句柄 + Palette”的参数对象模式迁出为容器模块内的自由渲染函数；头部需要
 外壳弹窗/全屏时经 `ContainerWorkspaceEvent` 事件上交，订阅按标签持有并在
-`prune_tab_overlays` 统一回收。其余组件沿用同一模式继续下沉，最终删除迁移桥。
+`prune_tab_overlays` 统一回收。中栏列表与工具条（筛选/排序/更多菜单、行内动作）也已迁出；需要 `Window`
+的动作经 `ContainerWorkspaceEvent` → `WindowRequests` 排到渲染期执行。其余
+组件沿用同一模式继续下沉，最终删除迁移桥。
 
 Git 侧已迁 `GitWorkspace::load_log` 与实体命令通道；其余 Git 动作仍在外壳。
 
