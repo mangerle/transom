@@ -184,6 +184,10 @@ impl ModalKind {
             let view = app.read(cx).state.modals.connection.known_hosts.clone();
             return view.update(cx, |view, cx| view.render_body(cx, p));
         }
+        if self == ModalKind::BackupPrompt {
+            let view = app.read(cx).state.modals.tools.backup_prompt.clone();
+            return view.update(cx, |view, cx| view.render_body(cx, p));
+        }
         let shell = app.read(cx);
         self.render_shell_body(shell, app, window, cx, p)
     }
@@ -285,7 +289,8 @@ impl ModalKind {
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::KnownHosts => div().into_any_element(),
             ModalKind::KeyWizard => shell.render_key_wizard_body(app, window, cx, p),
-            ModalKind::BackupPrompt => shell.render_backup_prompt_body(app, window, cx, p),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::BackupPrompt => div().into_any_element(),
             ModalKind::AuditViewer => shell.render_audit_viewer_body(app, window, cx, p),
             ModalKind::Replay => shell.render_replay_body(app, window, cx, p),
             ModalKind::Settings => {

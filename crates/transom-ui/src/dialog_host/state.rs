@@ -132,7 +132,12 @@ impl ModalKind {
                 true
             }
             ModalKind::BackupPrompt => {
-                shell.state.modals.tools.backup_prompt = None;
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .backup_prompt
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::AuditViewer => {
@@ -238,7 +243,14 @@ impl ModalKind {
             ModalKind::FolderForm => shell.save_folder_form(cx),
             ModalKind::BatchEdit => shell.save_batch_edit(cx),
             ModalKind::SnippetForm => shell.save_snippet_form(cx),
-            ModalKind::BackupPrompt => shell.submit_backup(window, cx),
+            ModalKind::BackupPrompt => {
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .backup_prompt
+                    .update(cx, |view, cx| view.submit(window, cx));
+            }
             // 查看与管理类弹窗只有一个"关闭"主按钮，Enter 与它同义。
             ModalKind::KnownHosts => shell
                 .state

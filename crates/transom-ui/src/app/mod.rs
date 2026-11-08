@@ -106,6 +106,7 @@ mod workspace_render;
 #[path = "../zmodem.rs"]
 pub(crate) mod zmodem;
 
+mod backup_prompt;
 mod bootstrap;
 mod modal_hub;
 mod overlays;

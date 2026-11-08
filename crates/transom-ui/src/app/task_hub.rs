@@ -22,7 +22,6 @@ pub(crate) struct BackgroundTasks {
     /// 密钥生成任务。
     pub(crate) keygen: Option<Task<()>>,
     pub(crate) git_sync: Option<Task<()>>,
-    pub(crate) backup: Option<Task<()>>,
     pub(crate) sync_pull: Option<Task<()>>,
     /// 首帧稳定后的升级确认任务：延迟执行，避免把"窗口刚创建"误判为健康运行。
     pub(crate) update_confirm: Option<Task<()>>,
@@ -35,7 +34,6 @@ impl BackgroundTasks {
             monitor: None,
             keygen: None,
             git_sync: None,
-            backup: None,
             sync_pull: None,
             update_confirm: None,
         }
@@ -50,6 +48,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     pub(crate) settings: Option<Subscription>,
     pub(crate) known_hosts: Option<Subscription>,
+    /// 备份弹窗结果：目录合并与状态栏提示由外壳处理。
+    pub(crate) backup: Option<Subscription>,
     pub(crate) diff_viewer: Option<Subscription>,
     /// 订阅本身即生命周期守卫，无需读取。
     pub(crate) _status_metrics: Option<Subscription>,
@@ -65,6 +65,7 @@ impl PanelSubscriptions {
             forward: HashMap::new(),
             settings: None,
             known_hosts: None,
+            backup: None,
             diff_viewer: None,
             _status_metrics: None,
             _git_focus: None,

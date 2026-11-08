@@ -3,6 +3,7 @@
 use super::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
+use crate::backup::BackupPromptView;
 use crate::keys::{KnownHostsEvent, KnownHostsView};
 use std::sync::atomic::AtomicBool;
 
@@ -156,6 +157,13 @@ impl AppShell {
             |shell, _, event: &KnownHostsEvent, cx| shell.on_known_hosts_event(event, cx),
         );
         self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
+        let backup_subscription = cx.subscribe(
+            &self.state.modals.tools.backup_prompt,
+            |shell, _view, event: &crate::backup::BackupPromptEvent, cx| {
+                shell.on_backup_event(event, cx);
+            },
+        );
+        self.state.tasks.subscriptions.backup = Some(backup_subscription);
         let settings_subscription = cx.subscribe(
             &self.state.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
@@ -301,6 +309,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
             inputs.known_hosts_search.clone(),
         )
     });
+    let backup_prompt = cx.new(|_| BackupPromptView::new(services.backup.clone()));
     AppState {
         services,
         catalog: prepared.catalog,
@@ -314,6 +323,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         modals: ModalHub::new(
             known_hosts_view,
             settings_view,
+            backup_prompt,
             inputs.quick_open_state.clone(),
             SnippetPanelState {
                 open: false,

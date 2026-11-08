@@ -6,12 +6,12 @@
 //! 同一生命周期的弹窗，新增弹窗必须先判断它属于哪一组。
 //!
 //! # 代价与局限
-//! 分组只解决可读性与归属提示，不改变“外壳统一持有”的事实；设置弹窗已经
-//! 独立为实体，后续应把会话表单、连接确认也按同一路径迁成实体，最终让本
-//! 容器退化为“实体句柄集合”。
+//! 分组只解决可读性与归属提示，不改变“外壳统一持有”的事实；设置、已知主机
+//! 与备份弹窗已经独立为实体，后续应把会话表单、连接确认也按同一路径迁成实体，
+//! 最终让本容器退化为“实体句柄集合”。
 
 use super::batch::BatchEditForm;
-use crate::backup::BackupPromptState;
+use crate::backup::BackupPromptView;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
 use crate::keys::KnownHostsView;
 use crate::session_form::SessionForm;
@@ -52,7 +52,8 @@ pub(crate) struct ConnectionModals {
 pub(crate) struct ToolModals {
     pub(crate) replay: Option<crate::record::ReplayModalState>,
     pub(crate) audit_viewer: Option<crate::audit_viewer::AuditViewer>,
-    pub(crate) backup_prompt: Option<BackupPromptState>,
+    /// 备份导入/导出弹窗实体；打开状态与在途任务都归实体。
+    pub(crate) backup_prompt: Entity<BackupPromptView>,
     pub(crate) show_quick_open: bool,
     pub(crate) quick_open_state: Entity<CommandState>,
     pub(crate) snippet_panel: SnippetPanelState,
@@ -111,6 +112,7 @@ impl ModalHub {
     pub(crate) fn new(
         known_hosts: Entity<KnownHostsView>,
         settings: Entity<SettingsView>,
+        backup_prompt: Entity<BackupPromptView>,
         quick_open_state: Entity<CommandState>,
         snippet_panel: SnippetPanelState,
     ) -> Self {
@@ -126,7 +128,7 @@ impl ModalHub {
             tools: ToolModals {
                 replay: None,
                 audit_viewer: None,
-                backup_prompt: None,
+                backup_prompt,
                 show_quick_open: false,
                 quick_open_state,
                 snippet_panel,
