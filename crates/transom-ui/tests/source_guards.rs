@@ -131,8 +131,8 @@ fn allowlisted_literal(path: &str, literal: &str) -> bool {
 
 /// 剔除测试模块、注释与静默调用后，返回剩余的中文字面量（行号从 1 起）。
 fn chinese_literals(src: &str) -> Vec<(usize, String)> {
-    let cut = src.find("#[cfg(test)]").unwrap_or(src.len());
-    let code = strip_silent_regions(&src[..cut]);
+    let production = blank_test_modules(src);
+    let code = strip_silent_regions(&production);
     let mut out = Vec::new();
     for (index, line) in code.lines().enumerate() {
         for literal in string_literals(line) {
@@ -140,6 +140,42 @@ fn chinese_literals(src: &str) -> Vec<(usize, String)> {
                 out.push((index + 1, literal));
             }
         }
+    }
+    out
+}
+
+/// 把 `#[cfg(test)] mod tests;` 与内联测试模块替换为空格，保留行号。
+///
+/// 不能简单地从第一个 `#[cfg(test)]` 截断：不少模块把 `mod tests;` 声明在
+/// 文件顶部，截断会把其后全部生产代码漏掉，硬编码文案因此逃过扫描。
+fn blank_test_modules(src: &str) -> String {
+    let bytes = src.as_bytes();
+    let mut out = String::with_capacity(src.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if src[i..].starts_with("#[cfg(test)]") && !inside_ident(bytes, i) {
+            let mut j = i + "#[cfg(test)]".len();
+            while j < bytes.len() && (bytes[j] as char).is_whitespace() {
+                j += 1;
+            }
+            if src[j..].starts_with("mod ") {
+                let mut k = j;
+                while k < bytes.len() && bytes[k] != b'{' && bytes[k] != b';' {
+                    k += 1;
+                }
+                let end = if k < bytes.len() && bytes[k] == b'{' {
+                    skip_balanced(bytes, k)
+                } else {
+                    (k + 1).min(bytes.len())
+                };
+                blank_range(&src[i..end], &mut out);
+                i = end;
+                continue;
+            }
+        }
+        let len = src[i..].chars().next().map_or(1, char::len_utf8);
+        out.push_str(&src[i..i + len]);
+        i += len;
     }
     out
 }

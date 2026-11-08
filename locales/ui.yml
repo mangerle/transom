@@ -4721,6 +4721,30 @@ diff:
   pick_local_title:
     en: Choose a local file to compare with %{name}
     zh-CN: 选择与「%{name}」对比的本地文件
+  error_remote_not_utf8:
+    en: The remote file is not UTF-8 text; write-back is blocked
+    zh-CN: 远端文件不是 UTF-8 文本，禁止写回
+  error_remote_meta_missing:
+    en: The remote version fingerprint is missing; read it again before merging
+    zh-CN: 远端版本指纹缺失，请重新读取后再合并
+  error_no_local_file:
+    en: Select a local file first
+    zh-CN: 请先选中一个本地文件
+  error_local_is_dir:
+    en: A directory cannot be compared as file content
+    zh-CN: 目录不能参与文件内容对比
+  error_local_no_name:
+    en: Cannot determine the local file name
+    zh-CN: 无法获取本地文件名
+  error_remote_missing:
+    en: 'The remote directory has no file named %{name}; upload it or pick another file'
+    zh-CN: 远端当前目录没有同名文件「%{name}」，请先上传或选择对应文件
+  error_remote_too_large:
+    en: 'The remote file exceeds the comparison limit (%{limit} bytes); use the editor or download it first'
+    zh-CN: 远端文件超过对比上限（%{limit} 字节），请改用编辑器或先下载
+  error_local_read_spawn:
+    en: Failed to start the local read thread
+    zh-CN: 本地文件读取线程启动失败
   error_compute_spawn:
     en: Failed to start the diff computation thread
     zh-CN: 差异计算线程启动失败

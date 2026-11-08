@@ -29,7 +29,6 @@ mod tests;
 
 use crate::app::AppShell;
 use crate::editor::EditorDiffSource;
-use crate::format::format_size;
 pub(crate) use entity::{DiffViewerEvent, DiffViewerView};
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::*;
@@ -136,11 +135,13 @@ impl DiffViewerState {
     }
 
     /// 远端是否允许写回；非 UTF-8 内容的编码边界不在这里猜。
-    fn remote_write_blocker(&self) -> Result<(), &'static str> {
+    fn remote_write_blocker(&self) -> Result<(), String> {
         match self.remote_meta {
-            Some(meta) if meta.transcoded => Err("远端文件不是 UTF-8 文本，禁止写回"),
+            Some(meta) if meta.transcoded => {
+                Err(rust_i18n::t!("diff.error_remote_not_utf8").to_string())
+            }
             Some(_) => Ok(()),
-            None => Err("远端版本指纹缺失，请重新读取后再合并"),
+            None => Err(rust_i18n::t!("diff.error_remote_meta_missing").to_string()),
         }
     }
 }
@@ -161,7 +162,7 @@ pub(crate) fn local_diff_check(
         .clone()
         .or_else(|| panel.local.selection.iter().next().cloned())
     else {
-        return LocalDiffCheck::Rejected("请先选中一个本地文件".to_string());
+        return LocalDiffCheck::Rejected(rust_i18n::t!("diff.error_no_local_file").to_string());
     };
     if panel
         .local
@@ -169,13 +170,13 @@ pub(crate) fn local_diff_check(
         .iter()
         .any(|entry| entry.path == local_path && entry.is_dir)
     {
-        return LocalDiffCheck::Rejected("目录不能参与文件内容对比".to_string());
+        return LocalDiffCheck::Rejected(rust_i18n::t!("diff.error_local_is_dir").to_string());
     }
     let Some(file_name) = local_path
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
     else {
-        return LocalDiffCheck::Rejected("无法获取本地文件名".to_string());
+        return LocalDiffCheck::Rejected(rust_i18n::t!("diff.error_local_no_name").to_string());
     };
     let remote_path = join_remote(&panel.remote.path, &file_name);
     let Some(entry) = panel
@@ -184,15 +185,14 @@ pub(crate) fn local_diff_check(
         .iter()
         .find(|entry| entry.path == remote_path && !entry.is_dir)
     else {
-        return LocalDiffCheck::Rejected(format!(
-            "远端当前目录没有同名文件「{file_name}」，请先上传或选择对应文件"
-        ));
+        return LocalDiffCheck::Rejected(
+            rust_i18n::t!("diff.error_remote_missing", name = file_name).to_string(),
+        );
     };
     if entry.size > MAX_DIFF_BYTES {
-        return LocalDiffCheck::Rejected(format!(
-            "远端文件超过对比上限 {}，请改用编辑器或先下载",
-            format_size(MAX_DIFF_BYTES)
-        ));
+        return LocalDiffCheck::Rejected(
+            rust_i18n::t!("diff.error_remote_too_large", limit = MAX_DIFF_BYTES).to_string(),
+        );
     }
     LocalDiffCheck::Ready(LocalDiffTarget {
         connection_id,
@@ -223,7 +223,7 @@ impl DiffViewerView {
                 self.state.phase = DiffPhase::Ready;
             }
             None => {
-                self.state.error = Some("本地文件读取线程启动失败".to_string());
+                self.state.error = Some(rust_i18n::t!("diff.error_local_read_spawn").to_string());
                 self.state.phase = DiffPhase::Ready;
             }
         }
