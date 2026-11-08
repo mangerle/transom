@@ -83,14 +83,6 @@ impl AppShell {
                 self.state.set_error(message.clone());
                 cx.notify();
             }
-            SettingsEvent::RestartForUpdate => {
-                // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
-                // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
-                self.state
-                    .restart_requested
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                cx.quit();
-            }
         }
     }
 
