@@ -106,7 +106,9 @@ impl 面板                                       →  面板自己的动作
 （`SftpPanelView`）、设置面板（`SettingsView`）、已知主机弹窗（`KnownHostsView`）、
 备份弹窗（`BackupPromptView`：口令校验、文件选择与后台任务归实体，目录合并与
 状态栏仍由外壳消费事件完成）、审计查看器（`AuditViewerView`：扫描、选中、删除、
-复制与渲染归实体，状态栏与“打开设置”由外壳消费事件）。
+复制与渲染归实体，状态栏与“打开设置”由外壳消费事件）、密钥向导
+（`KeyWizardView`：生成任务、公钥清单、复制/导出/部署与渲染归实体，状态栏与
+部署回执由外壳消费事件）。
 
 容器与 Git 的**每标签页状态**已收进 `Entity<ContainerWorkspace>` /
 `Entity<GitWorkspace>`：标签内容只存句柄，外壳读写都经 `read`/`update`。
