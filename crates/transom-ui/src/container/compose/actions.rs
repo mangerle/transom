@@ -210,7 +210,11 @@ impl AppShell {
                 workspace.compose_yaml_editor = None;
             }
         });
-        self.ensure_compose_yaml_loaded(tab_id, name, window, cx);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, cx| {
+                workspace.ensure_compose_yaml_loaded(cx);
+            });
+        }
         cx.notify();
     }
 
@@ -254,7 +258,11 @@ impl AppShell {
             workspace.compose_yaml_editor = None;
         });
 
-        self.ensure_compose_yaml_loaded(tab_id, &name, window, cx);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, cx| {
+                workspace.ensure_compose_yaml_loaded(cx);
+            });
+        }
         self.show_toast(
             rust_i18n::t!("container.compose.created_hint", name = name).to_string(),
             true,

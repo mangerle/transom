@@ -16,6 +16,7 @@ use super::types::{
 };
 use crate::app::AppShell;
 use gpui_kit::{Context, EventEmitter};
+use std::path::PathBuf;
 use transom_core::TabId;
 
 /// 容器工作区向外壳发出的动作意图。
@@ -47,6 +48,21 @@ pub(crate) enum ContainerWorkspaceEvent {
     PruneTarget(ContainerPruneTarget),
     /// 从本地 Tar 归档恢复数据卷；`None` 表示由文件名推导卷名。
     RestoreVolume(Option<String>),
+    /// Compose YAML 已读取完成；外壳需要用 `Window` 创建编辑器并写回工作区。
+    ///
+    /// 设计原理（Why）：`TextareaState` 的创建必须拿到 `Window`，而读盘发生在
+    /// 工作区实体的异步任务里；事件只携带已读出的文本与定位信息，外壳在渲染期
+    /// 创建编辑器，避免在实体派发阶段同步开窗或重复读盘。
+    ComposeYamlLoaded {
+        /// 项目名。
+        project: String,
+        /// 读取到的 YAML 配置文件路径。
+        path: PathBuf,
+        /// 文件全文。
+        text: String,
+    },
+    /// Compose YAML 读取失败；外壳在渲染期弹出失败通知。
+    ComposeYamlReadFailed(String),
     /// 为容器端口建立 SSH 本地端口转发；需要窗口打开弹窗。
     ///
     /// 容器名、私有端口与已发布端口全部随事件携带，外壳处理时不回读工作区实体。
@@ -165,6 +181,8 @@ impl AppShell {
             | ContainerWorkspaceEvent::OpenImageHub
             | ContainerWorkspaceEvent::OpenCreateDialog(_)
             | ContainerWorkspaceEvent::OpenBuildDialog
+            | ContainerWorkspaceEvent::ComposeYamlLoaded { .. }
+            | ContainerWorkspaceEvent::ComposeYamlReadFailed(_)
             | ContainerWorkspaceEvent::OpenPortForward { .. }
             | ContainerWorkspaceEvent::OpenVolumeFiles
             | ContainerWorkspaceEvent::OpenContainerUpdate(_)

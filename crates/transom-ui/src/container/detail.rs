@@ -70,7 +70,7 @@ impl AppShell {
     pub(crate) fn render_container_detail(
         &mut self,
         tab_id: TabId,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
@@ -206,7 +206,6 @@ impl AppShell {
         let selected_compose = workspace.selected_compose().cloned();
         let compose_deps = workspace.compose_dependencies.clone();
         let compose_hovered = workspace.compose_hovered_service.clone();
-        let compose_deps_is_empty = compose_deps.is_empty();
         // 输入框的值必须经 App 读取；渲染函数拿不到 App，因此在进入纯渲染前
         // 把关键词与实体句柄一起快照，原始 inspect 视图只消费快照。
         let inspect_keyword = inspect_search.read(cx).value().trim().to_string();
@@ -223,16 +222,6 @@ impl AppShell {
             ContainerSection::Compose => selected_compose.as_ref().map(|i| i.name.clone()),
         }
         .unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string());
-
-        if section == ContainerSection::Compose
-            && let Some(project) = &selected_compose
-        {
-            if detail_tab == ContainerDetailTab::Yaml {
-                self.ensure_compose_yaml_loaded(tab_id, &project.name, window, cx);
-            } else if compose_deps_is_empty {
-                self.ensure_compose_dependencies_loaded(tab_id, &project.name, cx);
-            }
-        }
 
         let tabs = self.render_detail_tab_buttons(tab_id, section, detail_tab, p, cx);
         let header = self.render_detail_header(

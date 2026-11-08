@@ -138,8 +138,12 @@ pub(crate) struct ContainerWorkspaceState {
     /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
     pub(crate) compose_yaml_editor:
         Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
+    /// 正在读取 YAML 的项目名：读盘完成前拦重复请求，避免每帧重复读文件。
+    pub(crate) compose_yaml_loading: Option<String>,
     /// Compose 项目的微服务依赖图：(服务名 -> 上游依赖的服务名列表)。
     pub(crate) compose_dependencies: HashMap<String, Vec<String>>,
+    /// 正在解析依赖图的项目名：同一项目只允许一条在途读盘请求。
+    pub(crate) compose_dependencies_loading: Option<String>,
     /// 拓扑看板中当前鼠标悬停的服务名；用于上下游依赖卡片与连线的高亮聚焦。
     pub(crate) compose_hovered_service: Option<String>,
     /// 待展示的操作提示；渲染帧消费后转为右上角通知并清空。
@@ -299,7 +303,9 @@ impl ContainerWorkspaceState {
             quadlets_action_request: None,
             quadlets_dialog_open: false,
             compose_yaml_editor: None,
+            compose_yaml_loading: None,
             compose_dependencies: HashMap::new(),
+            compose_dependencies_loading: None,
             compose_hovered_service: None,
             notice: None,
             busy: false,

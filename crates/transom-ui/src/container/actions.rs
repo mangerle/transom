@@ -100,9 +100,11 @@ impl ContainerWorkspace {
         );
     }
 
-    pub(crate) fn select_compose_item(&mut self, name: String) {
+    pub(crate) fn select_compose_item(&mut self, name: String, cx: &mut Context<Self>) {
         self.state.selected = Some(name);
         self.state.detail_tab = ContainerDetailTab::Overview;
+        // 编排详情默认是拓扑看板，选中即开始准备依赖图。
+        self.ensure_compose_dependencies_loaded(cx);
     }
 
     /// 让某一行成为选中项；已经选中时不重复拉详情，否则会把正在看的日志与
@@ -121,7 +123,7 @@ impl ContainerWorkspace {
             RowTarget::Image(id) => self.select_image_item(id.clone()),
             RowTarget::Volume(name) => self.select_volume_item(name.clone()),
             RowTarget::Network(id) => self.select_network_item(id.clone()),
-            RowTarget::Compose(name) => self.select_compose_item(name.clone()),
+            RowTarget::Compose(name) => self.select_compose_item(name.clone(), cx),
         }
         // 换条目回到结构化视图：上一个容器的原始 JSON 留在这一条上没有意义。
         self.state.overview_raw = false;
@@ -264,6 +266,15 @@ impl ContainerWorkspace {
         {
             self.cancel_container_request(request_id);
             self.state.terminal_request = None;
+        }
+
+        // 编排项目的源码与依赖图按需加载：YAML 页需要编辑器，其余页需要拓扑依赖。
+        if self.state.section == ContainerSection::Compose {
+            if tab == ContainerDetailTab::Yaml {
+                self.ensure_compose_yaml_loaded(cx);
+            } else if self.state.compose_dependencies.is_empty() {
+                self.ensure_compose_dependencies_loaded(cx);
+            }
         }
 
         match tab {

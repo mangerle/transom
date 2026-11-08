@@ -86,8 +86,8 @@ use super::compose_yaml::{render_line_numbers, render_path_breadcrumbs, validate
 
 /// 渲染在线 YAML 编辑器。
 ///
-/// 保存直接调用实体方法；部署属于纯实体动作；重新加载只清空编辑器状态，由
-/// 外壳在下一帧的 `ensure_compose_yaml_loaded` 重新读取文件。
+/// 保存直接调用实体方法；部署属于纯实体动作；重新加载清空编辑器后由实体
+/// 重新读取文件，编辑器实体仍由外壳在拿到 `Window` 的渲染期创建。
 fn render_compose_yaml_editor(
     view: &Entity<ContainerWorkspace>,
     project: &ComposeProject,
@@ -165,6 +165,7 @@ fn render_compose_yaml_editor(
                         .on_click(move |_, _, cx| {
                             reload_view.update(cx, |workspace, cx| {
                                 workspace.state.compose_yaml_editor = None;
+                                workspace.ensure_compose_yaml_loaded(cx);
                                 cx.notify();
                             });
                         }),

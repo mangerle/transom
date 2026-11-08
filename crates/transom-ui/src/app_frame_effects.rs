@@ -4,6 +4,7 @@
 //! 面板事件本身仍由各自的事件处理模块负责。
 
 use super::*;
+use gpui_kit::component::input::TextareaState;
 
 impl AppShell {
     pub(super) fn refresh_sftp_mount_candidates(&mut self, cx: &mut Context<Self>) {
@@ -246,6 +247,32 @@ impl AppShell {
                         workspace.load_container_dir("/".to_string(), cx);
                     });
                 }
+            }
+            ContainerWorkspaceEvent::ComposeYamlLoaded {
+                project,
+                path,
+                text,
+            } => {
+                let Some(workspace) = self.state.container_workspace(tab_id) else {
+                    return;
+                };
+                let editor =
+                    cx.new(|cx| TextareaState::new(window, cx).default_value(text.clone()));
+                workspace.update(cx, |workspace, cx| {
+                    // 读取期间用户可能已切到别的项目：只把结果写给仍被选中的项目。
+                    if workspace
+                        .state
+                        .selected_compose()
+                        .is_some_and(|item| &item.name == project)
+                    {
+                        workspace.state.compose_yaml_editor =
+                            Some((project.clone(), path.clone(), editor, false));
+                        cx.notify();
+                    }
+                });
+            }
+            ContainerWorkspaceEvent::ComposeYamlReadFailed(message) => {
+                self.show_toast(message.clone(), false, window, cx);
             }
             ContainerWorkspaceEvent::OpenContainerUpdate(name) => {
                 self.open_container_update(tab_id, name.clone(), window, cx);

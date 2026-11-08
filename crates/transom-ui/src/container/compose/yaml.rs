@@ -3,7 +3,6 @@
 use super::super::*;
 use crate::app::spawn_blocking_local;
 use chrono::Local;
-use gpui_kit::component::input::TextareaState;
 use std::path::{Path, PathBuf};
 use transom_core::ComposeProject;
 use transom_platform::paths;
@@ -63,124 +62,114 @@ impl ContainerWorkspace {
     }
 }
 
-impl AppShell {
-    /// 确保当前 Compose 项目的 YAML 内容已载入编辑器。
-    pub(crate) fn ensure_compose_yaml_loaded(
-        &mut self,
-        tab_id: TabId,
-        project_name: &str,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(project) = self
-            .with_container(tab_id, cx, |workspace| {
-                if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
-                    && current_name == project_name
-                {
-                    return None;
-                }
-                workspace
-                    .compose
-                    .iter()
-                    .find(|p| p.name == project_name)
-                    .cloned()
-            })
-            .flatten()
-        else {
+impl ContainerWorkspace {
+    /// 确保当前选中的 Compose 项目 YAML 内容已载入编辑器。
+    ///
+    /// 设计原理（Why）：读盘与解析都属于工作区实体，异步任务完成后把文本通过
+    /// 事件带回外壳；`TextareaState` 的创建需要 `Window`，由外壳在渲染期完成，
+    /// 实体不在派发阶段同步开窗，也不把 `Window` 传进纯渲染链路。
+    ///
+    /// 代价与局限：编辑器就绪晚于文件读取一帧；`compose_yaml_loading` 只是同一
+    /// 项目的在途闸门，不缓存读取失败结果，失败后再次进入页签会重试。
+    pub(crate) fn ensure_compose_yaml_loaded(&mut self, cx: &mut Context<Self>) {
+        let Some(project) = self.state.selected_compose().cloned() else {
             return;
         };
+        if self
+            .state
+            .compose_yaml_editor
+            .as_ref()
+            .is_some_and(|(name, ..)| name == &project.name)
+        {
+            return;
+        }
+        if self.state.compose_yaml_loading.as_deref() == Some(project.name.as_str()) {
+            return;
+        }
         let Some(yaml_path) = compose_project_yaml(&project) else {
             return;
         };
 
-        let target_project = project_name.to_string();
+        self.state.compose_yaml_loading = Some(project.name.clone());
+        let project_name = project.name.clone();
         let target_path = yaml_path.clone();
         cx.spawn(async move |this, cx| {
             let read_path = target_path.clone();
             let content = spawn_blocking_local(move || std::fs::read_to_string(&read_path)).await;
-            let _ = this.update_in(cx, |this, window, cx| match content {
-                Some(Ok(text)) => {
-                    let parsed =
-                        crate::container::detail::compose_graph::parse_compose_dependencies(&text);
-                    let editor = cx.new(|cx| TextareaState::new(window, cx).default_value(text));
-                    this.with_container_mut(tab_id, cx, |workspace| {
-                        workspace.compose_yaml_editor =
-                            Some((target_project, target_path, editor, false));
-                        workspace.compose_dependencies = parsed;
-                    });
-                    cx.notify();
+            let _ = this.update(cx, |workspace, cx| {
+                workspace.state.compose_yaml_loading = None;
+                match content {
+                    Some(Ok(text)) => {
+                        workspace.state.compose_dependencies =
+                            crate::container::detail::compose_graph::parse_compose_dependencies(
+                                &text,
+                            );
+                        cx.emit(ContainerWorkspaceEvent::ComposeYamlLoaded {
+                            project: project_name,
+                            path: target_path,
+                            text,
+                        });
+                    }
+                    Some(Err(error)) => {
+                        cx.emit(ContainerWorkspaceEvent::ComposeYamlReadFailed(
+                            rust_i18n::t!("container.compose.read_failed", error = error)
+                                .to_string(),
+                        ));
+                    }
+                    None => {}
                 }
-                Some(Err(err)) => {
-                    this.show_toast(
-                        rust_i18n::t!("container.compose.read_failed", error = err).to_string(),
-                        false,
-                        window,
-                        cx,
-                    );
-                }
-                None => {}
+                cx.notify();
             });
         })
         .detach();
     }
 
     /// 确保当前 Compose 项目的微服务依赖图已解析载入。
-    pub(crate) fn ensure_compose_dependencies_loaded(
-        &mut self,
-        tab_id: TabId,
-        project_name: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let Some((dependencies_empty, cached_editor, project)) =
-            self.with_container(tab_id, cx, |workspace| {
-                let cached_editor = workspace
-                    .compose_yaml_editor
-                    .as_ref()
-                    .filter(|(current_name, ..)| current_name == project_name)
-                    .map(|(_, _, editor, _)| editor.clone());
-                let project = workspace
-                    .compose
-                    .iter()
-                    .find(|p| p.name == project_name)
-                    .cloned();
-                (
-                    workspace.compose_dependencies.is_empty(),
-                    cached_editor,
-                    project,
-                )
-            })
-        else {
+    ///
+    /// 设计原理（Why）：已有 YAML 编辑器时直接读取编辑器文本解析，避免重复读盘；
+    /// 没有编辑器时才异步读取配置文件。依赖图属于工作区状态，后续拓扑页直接消费。
+    ///
+    /// 代价与局限：解析在异步任务里完成，失败与空依赖图在界面上不可区分；这与
+    /// 原有行为一致，依赖数据本身没有独立的错误出口。
+    pub(crate) fn ensure_compose_dependencies_loaded(&mut self, cx: &mut Context<Self>) {
+        if !self.state.compose_dependencies.is_empty() {
+            return;
+        }
+        let Some(project_name) = self.state.selected_compose().map(|p| p.name.clone()) else {
             return;
         };
-        if !dependencies_empty {
+        if self.state.compose_dependencies_loading.as_deref() == Some(project_name.as_str()) {
             return;
         }
+        let cached_editor = self
+            .state
+            .compose_yaml_editor
+            .as_ref()
+            .filter(|(name, ..)| name == &project_name)
+            .map(|(_, _, editor, _)| editor.clone());
         if let Some(editor) = cached_editor {
             let text = editor.read(cx).value();
-            let parsed = crate::container::detail::compose_graph::parse_compose_dependencies(&text);
-            self.with_container_mut(tab_id, cx, |workspace| {
-                workspace.compose_dependencies = parsed;
-            });
+            self.state.compose_dependencies =
+                crate::container::detail::compose_graph::parse_compose_dependencies(&text);
             return;
         }
-        let Some(project) = project else {
+
+        let Some(project) = self.state.selected_compose().cloned() else {
             return;
         };
         let Some(yaml_path) = compose_project_yaml(&project) else {
             return;
         };
-
+        self.state.compose_dependencies_loading = Some(project_name);
         cx.spawn(async move |this, cx| {
             let content = spawn_blocking_local(move || std::fs::read_to_string(&yaml_path)).await;
-            let _ = this.update_in(cx, |this, _, cx| {
+            let _ = this.update(cx, |workspace, cx| {
+                workspace.state.compose_dependencies_loading = None;
                 if let Some(Ok(text)) = content {
-                    let parsed =
+                    workspace.state.compose_dependencies =
                         crate::container::detail::compose_graph::parse_compose_dependencies(&text);
-                    this.with_container_mut(tab_id, cx, |workspace| {
-                        workspace.compose_dependencies = parsed;
-                    });
-                    cx.notify();
                 }
+                cx.notify();
             });
         })
         .detach();
