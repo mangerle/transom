@@ -879,3 +879,44 @@ fn inline_test_module_is_ignored_but_following_code_is_scanned() {
         "内联测试模块之后的生产代码必须继续参与扫描"
     );
 }
+
+/// 审计查看器必须由实体持有：状态、扫描与渲染不得退回 ModalHub 字段。
+#[test]
+fn audit_viewer_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("audit_viewer: Entity<AuditViewerView>"),
+        "ModalHub 的 audit_viewer 必须持有 Entity<AuditViewerView>"
+    );
+    let entity =
+        std::fs::read_to_string(root.join("src/audit_viewer/entity.rs")).expect("读取审计实体失败");
+    assert!(
+        entity.contains("pub(crate) struct AuditViewerView"),
+        "AuditViewerView 必须存在于 audit_viewer/entity.rs"
+    );
+    assert!(
+        !root.join("src/audit_viewer/ops.rs").exists()
+            && !root.join("src/audit_viewer/view.rs").exists(),
+        "审计查看器旧的 ops.rs/view.rs 应已删除"
+    );
+}
+
+/// 回放选择弹窗必须由实体持有；录制启停与播放器打开仍可留在外壳。
+#[test]
+fn replay_modal_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("replay: Entity<ReplayModalView>"),
+        "ModalHub 的 replay 必须持有 Entity<ReplayModalView>"
+    );
+    let entity =
+        std::fs::read_to_string(root.join("src/record/entity.rs")).expect("读取回放实体失败");
+    assert!(
+        entity.contains("pub(crate) struct ReplayModalView"),
+        "ReplayModalView 必须存在于 record/entity.rs"
+    );
+}
