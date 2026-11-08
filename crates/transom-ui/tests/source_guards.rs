@@ -612,3 +612,33 @@ fn panel_event_handlers_do_not_read_back() {
         offenders.join("\n")
     );
 }
+
+/// Git 工作区必须由实体持有：标签内容存 `Entity<GitWorkspace>`，旧的可变
+/// 引用访问器不得复活。实体化后动作与状态同处，状态生命周期随标签页。
+#[test]
+fn git_workspace_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let types = std::fs::read_to_string(root.join("src/app/types.rs")).expect("读取 tags 类型失败");
+    assert!(
+        types.contains("Git(Entity<crate::git::GitWorkspace>)"),
+        "TabContent::Git 必须持有 Entity<GitWorkspace>"
+    );
+    let state = std::fs::read_to_string(root.join("src/app/state.rs")).expect("读取 AppState 失败");
+    for forbidden in [
+        "fn git_state_of_tab(",
+        "fn git_state_of_tab_mut(",
+        "fn git_state_of(",
+        "fn git_state_of_mut(",
+    ] {
+        assert!(
+            !state.contains(forbidden) && !types.contains(forbidden),
+            "旧的 Git 引用访问器不得复活：{forbidden}"
+        );
+    }
+    let entity =
+        std::fs::read_to_string(root.join("src/git/entity.rs")).expect("读取 Git 实体失败");
+    assert!(
+        entity.contains("pub(crate) struct GitWorkspace"),
+        "GitWorkspace 实体必须存在于 git/entity.rs"
+    );
+}
