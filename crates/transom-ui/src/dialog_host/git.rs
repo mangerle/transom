@@ -7,72 +7,6 @@ use crate::palette::Palette;
 use gpui_kit::*;
 
 impl ModalKind {
-    /// Git 弹窗是否处于打开状态。若属于 Git 弹窗种类，返回 `Some(bool)`；否则返回 `None`。
-    pub(super) fn git_is_open(self, shell: &AppShell) -> Option<bool> {
-        let is_open = match self {
-            ModalKind::GitProject => shell.state.modals.git.project.is_some(),
-            ModalKind::GitClone => shell.state.modals.git.clone.is_some(),
-            ModalKind::GitWorktree => shell.state.modals.git.worktree.is_some(),
-            ModalKind::GitName => shell.state.modals.git.name.is_some(),
-            ModalKind::GitRebase => shell.state.modals.git.rebase.is_some(),
-            ModalKind::GitPush => shell.state.modals.git.push.is_some(),
-            ModalKind::GitConflict => shell.state.modals.git.conflict.is_some(),
-            _ => return None,
-        };
-        Some(is_open)
-    }
-
-    /// Git 弹窗的跟踪文本项（用于表单脏检查拦截）。
-    pub(super) fn git_field_values(self, shell: &AppShell, cx: &App) -> Option<Vec<String>> {
-        let values = match self {
-            ModalKind::GitProject => shell
-                .state
-                .modals
-                .git
-                .project
-                .as_ref()
-                .map(|modal| vec![modal.picker.path.read(cx).value().to_string()])
-                .unwrap_or_default(),
-            ModalKind::GitClone => shell
-                .state
-                .modals
-                .git
-                .clone
-                .as_ref()
-                .map(|modal| {
-                    vec![
-                        modal.url.read(cx).value().to_string(),
-                        modal.picker.path.read(cx).value().to_string(),
-                    ]
-                })
-                .unwrap_or_default(),
-            ModalKind::GitWorktree => shell
-                .state
-                .modals
-                .git
-                .worktree
-                .as_ref()
-                .map(|modal| {
-                    vec![
-                        modal.branch.read(cx).value().to_string(),
-                        modal.path.read(cx).value().to_string(),
-                    ]
-                })
-                .unwrap_or_default(),
-            ModalKind::GitName => shell
-                .state
-                .modals
-                .git
-                .name
-                .as_ref()
-                .map(|modal| vec![modal.input.read(cx).value().to_string()])
-                .unwrap_or_default(),
-            ModalKind::GitRebase | ModalKind::GitPush | ModalKind::GitConflict => Vec::new(),
-            _ => return None,
-        };
-        Some(values)
-    }
-
     /// Git 弹窗取消操作。
     pub(super) fn git_cancel(
         self,
@@ -213,31 +147,5 @@ impl ModalKind {
             _ => return None,
         };
         Some(element)
-    }
-
-    /// Git 弹窗尺寸规格与唯一标识。
-    pub(super) fn git_spec(self, window: &Window) -> Option<super::ModalSpec> {
-        let rem = window.rem_size();
-        let (px_width, slug) = match self {
-            ModalKind::GitProject => (Some(crate::theme::tokens::dialog::GIT_FORM), "git-project"),
-            ModalKind::GitClone => (Some(crate::theme::tokens::dialog::GIT_CLONE), "git-clone"),
-            ModalKind::GitWorktree => {
-                (Some(crate::theme::tokens::dialog::GIT_FORM), "git-worktree")
-            }
-            ModalKind::GitName => (Some(crate::theme::tokens::dialog::INPUT), "git-name"),
-            ModalKind::GitRebase => (Some(crate::theme::tokens::dialog::GIT_FORM), "git-rebase"),
-            ModalKind::GitPush => (Some(crate::theme::tokens::dialog::GIT_PUSH), "git-push"),
-            ModalKind::GitConflict => (
-                Some(crate::theme::tokens::dialog::GIT_CONFLICT),
-                "git-conflict",
-            ),
-            _ => return None,
-        };
-
-        let width = px_width.map_or(
-            rem * crate::theme::tokens::size::DIALOG_MAX_WIDTH,
-            |width| rem * width,
-        );
-        Some(super::ModalSpec { width, slug })
     }
 }

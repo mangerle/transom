@@ -1,51 +1,15 @@
 //! 弹窗状态判定、取消与提交。
 //!
 //! 这些方法需要读取或修改 AppShell 的私有状态，因此作为 dialog_host 的子模块
-//! 存在；枚举与元数据仍留在父模块，新增弹窗时先改 `ModalKind`。
+//! 存在；弹窗种类与元数据由 `registry` 统一登记，新增弹窗时先改变体再登记。
 
 use super::body::ModalFocus;
 use super::*;
 
 impl ModalKind {
-    /// 该弹窗此刻是否应当存在。只读状态、不产生副作用：对账每帧都会问一次。
+    /// 该弹窗此刻是否应当存在；判定函数由注册表按种类提供。
     pub(super) fn is_open(self, shell: &AppShell, cx: &App) -> bool {
-        if let Some(open) = self.container_is_open(shell) {
-            return open;
-        }
-        if let Some(open) = self.git_is_open(shell) {
-            return open;
-        }
-        match self {
-            ModalKind::AuthPrompt => shell.state.modals.connection.auth_prompt.is_some(),
-            ModalKind::HostKeyConfirm => shell.state.modals.connection.host_key_confirm.is_some(),
-            ModalKind::ClipboardPrompt => shell.state.modals.connection.clipboard_request.is_some(),
-            ModalKind::ForwardConfirm => shell.state.modals.tools.confirm_forward_any.is_some(),
-            ModalKind::SftpConfirm => shell.state.sftp_modals.confirm.is_some(),
-            ModalKind::SftpInput => shell.state.sftp_modals.input.is_some(),
-            ModalKind::SftpChmod => shell.state.sftp_modals.chmod.is_some(),
-            ModalKind::SftpProperties => shell.state.sftp_modals.properties.is_some(),
-            ModalKind::SftpFilter => shell.state.sftp_modals.filter.is_some(),
-            ModalKind::SftpSearch => shell.state.sftp_modals.search.is_some(),
-            ModalKind::SftpSync => shell.state.sftp_modals.sync.is_some(),
-            ModalKind::EditorGotoLine => shell.state.sftp_modals.goto_line.is_some(),
-            ModalKind::ContainerForm => shell.state.containers.form.is_some(),
-            ModalKind::ContainerFolderForm => shell.state.containers.engine_folder_form.is_some(),
-            ModalKind::ContainerRunForm => shell.state.containers.run_form.is_some(),
-            ModalKind::ContainerCreate => shell.state.containers.create_dialog.is_some(),
-            ModalKind::SessionForm => shell.state.modals.session.form.is_some(),
-            ModalKind::FolderForm => shell.state.modals.session.folder_form.is_some(),
-            ModalKind::BatchEdit => shell.state.modals.session.batch_edit.is_some(),
-            ModalKind::SnippetForm => shell.state.modals.tools.snippet_panel.form.is_some(),
-            ModalKind::KnownHosts => shell.state.modals.connection.known_hosts.open,
-            ModalKind::KeyWizard => shell.state.modals.tools.key_wizard.is_some(),
-            ModalKind::BackupPrompt => shell.state.modals.tools.backup_prompt.is_some(),
-            ModalKind::AuditViewer => shell.state.modals.tools.audit_viewer.is_some(),
-            ModalKind::Replay => shell.state.modals.tools.replay.is_some(),
-            ModalKind::Settings => shell.state.modals.settings.read(cx).is_open(),
-            ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture.is_some(),
-            ModalKind::DiffViewer => shell.state.diff_viewer.is_some(),
-            _ => false,
-        }
+        (super::registry::entry(self).is_open)(shell, cx)
     }
 
     /// 是否存在未提交内容：与影子栈记录的打开时基线逐项比对。
@@ -61,88 +25,7 @@ impl ModalKind {
 
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
-        if let Some(values) = self.container_field_values(shell, cx) {
-            return values;
-        }
-        if let Some(values) = self.git_field_values(shell, cx) {
-            return values;
-        }
-        match self {
-            ModalKind::ContainerForm => shell
-                .state
-                .containers
-                .form
-                .as_ref()
-                .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            ModalKind::ContainerFolderForm => shell
-                .state
-                .containers
-                .engine_folder_form
-                .as_ref()
-                .map(|form| vec![form.input.read(cx).value().to_string()])
-                .unwrap_or_default(),
-            ModalKind::ContainerRunForm => shell
-                .state
-                .containers
-                .run_form
-                .as_ref()
-                .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            ModalKind::ContainerCreate => shell
-                .state
-                .containers
-                .create_dialog
-                .as_ref()
-                .map(|dialog| {
-                    let mut values = Vec::new();
-                    if let Some(workspace) = shell.state.container_workspace(dialog.tab_id) {
-                        values.push(workspace.create_input.read(cx).value().to_string());
-                    }
-                    for input in [&dialog.driver, &dialog.subnet, &dialog.gateway]
-                        .into_iter()
-                        .flatten()
-                    {
-                        values.push(input.read(cx).value().to_string());
-                    }
-                    values
-                })
-                .unwrap_or_default(),
-            ModalKind::SessionForm => shell
-                .state
-                .modals
-                .session
-                .form
-                .as_ref()
-                .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            ModalKind::FolderForm => shell
-                .state
-                .modals
-                .session
-                .folder_form
-                .as_ref()
-                .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            ModalKind::BatchEdit => shell
-                .state
-                .modals
-                .session
-                .batch_edit
-                .as_ref()
-                .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            ModalKind::SnippetForm => shell
-                .state
-                .modals
-                .tools
-                .snippet_panel
-                .form
-                .as_ref()
-                .map(|form| form.text_values(cx))
-                .unwrap_or_default(),
-            _ => Vec::new(),
-        }
+        (super::registry::entry(self).field_values)(shell, cx)
     }
 
     /// 取消：把用户意图回给等待方并清空自身状态，返回是否允许容器关闭该层。

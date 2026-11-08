@@ -2,7 +2,7 @@
 
 use super::ModalKind;
 
-/// 全部弹窗种类；新增变体时必须同步本表，顺序测试会校验 `ORDER` 不漏不重。
+/// 全部弹窗种类；新增变体时必须同步本表，注册表测试会校验不漏不重。
 const ALL: &[ModalKind] = &[
     ModalKind::AuthPrompt,
     ModalKind::HostKeyConfirm,
@@ -58,14 +58,17 @@ const ALL: &[ModalKind] = &[
 ];
 
 #[test]
-fn order_covers_every_kind_exactly_once() {
+fn registry_covers_every_kind_exactly_once() {
     assert_eq!(
         ALL.len(),
-        ModalKind::ORDER.len(),
-        "ORDER 漏掉或多出弹窗种类"
+        super::registry::MODALS.len(),
+        "注册表漏掉或多出弹窗种类"
     );
     for kind in ALL {
-        let count = ModalKind::ORDER.iter().filter(|item| *item == kind).count();
-        assert_eq!(count, 1, "弹窗种类 {:?} 在 ORDER 中必须恰好出现一次", kind);
+        let count = super::registry::MODALS
+            .iter()
+            .filter(|entry| entry.kind == *kind)
+            .count();
+        assert_eq!(count, 1, "弹窗种类 {:?} 在注册表中必须恰好出现一次", kind);
     }
 }

@@ -76,9 +76,7 @@ impl OpenModals {
 impl AppShell {
     /// 当前应当打开的弹窗栈，按层序由下到上。
     fn desired_modal_stack(&self, cx: &App) -> Vec<ModalKind> {
-        ModalKind::ORDER
-            .iter()
-            .copied()
+        super::registry::ordered_kinds()
             .filter(|kind| kind.is_open(self, cx))
             .collect()
     }
