@@ -1,9 +1,10 @@
 //! 深链与单实例测试用例。
 
 use super::protocol::{MAX_REQUEST_BYTES, accept_stream};
-use super::types::{LaunchRequest, request_from_args, request_lines};
+use super::types::request_lines;
 #[cfg(unix)]
 use super::unix::{acquire_primary_at, probe_alive};
+use super::{LaunchRequest, request_from_args};
 use std::path::PathBuf;
 use tokio::io::{AsyncWriteExt, DuplexStream, duplex};
 use transom_core::{AppEvent, DeepLinkRequest};

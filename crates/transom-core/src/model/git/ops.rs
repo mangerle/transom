@@ -227,7 +227,7 @@ pub struct StashFile {
 /// 一个工作树（`git worktree`）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeEntry {
-    /// 工作树目录。
+    /// 工作树目录；现存路径会规范化为宿主机的绝对路径表示。
     pub path: PathBuf,
     /// HEAD 指向的提交号。
     pub head: String,

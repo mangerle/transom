@@ -1,6 +1,9 @@
 //! 启动意图解析与协议行序列化。
 
-use std::path::{Path, PathBuf};
+#[cfg(any(not(target_os = "macos"), test))]
+use std::path::Path;
+use std::path::PathBuf;
+#[cfg(any(not(target_os = "macos"), test))]
 use transom_core::is_ssh_url;
 
 /// 转发协议里目录请求的行前缀：路径可以合法地以 `/` 开头，必须先于

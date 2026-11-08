@@ -171,8 +171,9 @@ pub async fn probe(path: &Path, config: &GitConfig) -> Result<RepoInfo, GitError
             path: canonical.display().to_string(),
         });
     }
-    let toplevel = rev_parse(&canonical, config, "--show-toplevel").await?;
-    let git_dir = rev_parse(&canonical, config, "--absolute-git-dir").await?;
+    let toplevel = canonical_or_original(&rev_parse(&canonical, config, "--show-toplevel").await?);
+    let git_dir =
+        canonical_or_original(&rev_parse(&canonical, config, "--absolute-git-dir").await?);
     // 链接工作树的判据是「本工作树的 git 目录不等于公共 git 目录」：
     // `git worktree add` 出来的目录有独立的 HEAD/index，但 refs 与对象库共用主仓库。
     let common_dir = rev_parse(&canonical, config, "--git-common-dir").await?;
@@ -181,7 +182,8 @@ pub async fn probe(path: &Path, config: &GitConfig) -> Result<RepoInfo, GitError
     } else {
         canonical.join(common_dir)
     };
-    let linked_worktree = normalize(&git_dir) != normalize(&common_dir);
+    let common_dir = canonical_or_original(&common_dir);
+    let linked_worktree = git_dir != common_dir;
     Ok(RepoInfo {
         toplevel,
         git_dir,
@@ -189,8 +191,14 @@ pub async fn probe(path: &Path, config: &GitConfig) -> Result<RepoInfo, GitError
     })
 }
 
-/// 去掉路径尾部的 `.git` 差异成分，使不同写法可比。
-fn normalize(path: &Path) -> PathBuf {
+/// 返回规范化的绝对路径；目标暂时不存在时保留 Git 给出的原始写法。
+///
+/// 设计原理（Why）：Windows 的 [`std::fs::canonicalize`] 会返回 `\\?\C:\...`
+/// 扩展长度路径，而 Git 通常返回 `C:/...`。若调用链混用两种表示，普通的
+/// [`Path::starts_with`] 与相等比较都会产生假阴性；因此所有来自 Git 的现存
+/// 路径都必须在进入内部状态前统一规范化。对不可解析路径保留原文，则用于
+/// 「已登记但目录已不存在」的可清理工作树，避免列表因规范化失败而整体失败。
+pub(crate) fn canonical_or_original(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 

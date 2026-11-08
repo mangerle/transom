@@ -170,7 +170,7 @@ fn pipe_name() -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::{acquire_primary_at, pipe_name};
-    use crate::deep_link::types::{LaunchRequest, request_from_args};
+    use crate::deep_link::{LaunchRequest, request_from_args};
     use transom_core::{AppEvent, DeepLinkRequest};
 
     #[test]

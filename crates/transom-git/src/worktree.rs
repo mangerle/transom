@@ -9,10 +9,13 @@
 use crate::config::GitConfig;
 use crate::error::GitError;
 use crate::process::{RunOptions, run};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use transom_core::WorktreeEntry;
 
 /// 列出全部工作树（主工作树在首）。
+///
+/// 现存目录会规范化为宿主机路径表示，使工作树路径能与仓库根直接比较；
+/// 已登记但目录不存在的工作树保留 Git 输出原文，以便界面显示并清理。
 pub(crate) async fn list(root: &Path, config: &GitConfig) -> Result<Vec<WorktreeEntry>, GitError> {
     let output = crate::process::run(
         root,
@@ -29,7 +32,7 @@ pub(crate) async fn list(root: &Path, config: &GitConfig) -> Result<Vec<Worktree
                 entries.push(entry);
             }
             current = Some(WorktreeEntry {
-                path: PathBuf::from(path),
+                path: crate::repo::canonical_or_original(Path::new(path)),
                 head: String::new(),
                 branch: None,
                 detached: false,

@@ -475,10 +475,13 @@ async fn worktree_lock_round_trip_decodes_reason_and_blocks_removal() {
     repo.lock_worktree(&linked_path, Some("临时保留"))
         .await
         .expect("锁定成功");
+    let canonical_linked_path = Path::new(&linked_path)
+        .canonicalize()
+        .expect("工作树路径可规范化");
     let entries = repo.worktrees().await.expect("工作树列表成功");
     let locked = entries
         .iter()
-        .find(|entry| entry.path.display().to_string() == linked_path)
+        .find(|entry| entry.path == canonical_linked_path)
         .expect("锁定的工作树应在列");
     assert!(locked.locked, "锁定态应被识别");
     assert_eq!(
@@ -507,7 +510,7 @@ async fn worktree_lock_round_trip_decodes_reason_and_blocks_removal() {
     assert!(
         after
             .iter()
-            .all(|entry| entry.path.display().to_string() != linked_path),
+            .all(|entry| entry.path != canonical_linked_path),
         "删除后不应再出现在列表里"
     );
 }
