@@ -283,9 +283,15 @@ impl AppShell {
                 },
                 p,
             ),
-            (ContainerSection::Containers, ContainerDetailTab::Terminal) => {
-                render_terminal(tab_id, terminal, terminal_user, terminal_shell, p, cx)
-            }
+            (ContainerSection::Containers, ContainerDetailTab::Terminal) => render_terminal(
+                &view,
+                terminal::ContainerTerminalView {
+                    terminal,
+                    user: terminal_user.as_ref(),
+                    shell: terminal_shell.as_ref(),
+                },
+                p,
+            ),
             (ContainerSection::Containers, ContainerDetailTab::Stats) => {
                 super::stats::render_container_stats(
                     &view,

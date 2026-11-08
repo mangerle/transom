@@ -23,24 +23,21 @@ impl AppShell {
         if tabs.len() <= 1 {
             return None;
         }
-        let app = cx.entity().clone();
+        let workspace = self.state.container_workspace(tab_id);
         // 当前终端会话（含正在建立）的执行用户；`None` 表示还没有会话。
-        let current_user = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| {
-                let state = &workspace.read(cx).state;
-                state
-                    .terminal
-                    .as_ref()
-                    .map(|terminal| terminal.user.clone())
-                    .or_else(|| {
-                        state
-                            .terminal_request
-                            .as_ref()
-                            .map(|(_, user, _)| user.clone())
-                    })
-            });
+        let current_user = workspace.as_ref().and_then(|workspace| {
+            let state = &workspace.read(cx).state;
+            state
+                .terminal
+                .as_ref()
+                .map(|terminal| terminal.user.clone())
+                .or_else(|| {
+                    state
+                        .terminal_request
+                        .as_ref()
+                        .map(|(_, user, _)| user.clone())
+                })
+        });
         let user_tooltip = match &current_user {
             Some(Some(user)) => {
                 rust_i18n::t!("container.terminal.current_user", user = user.as_str()).to_string()
@@ -98,9 +95,13 @@ impl AppShell {
                                 .icon(IconName::ChevronDown)
                                 .tooltip(user_tooltip.clone())
                                 .dropdown_menu({
-                                    let app = app.clone();
-                                    move |menu, _, _| {
-                                        terminal::populate_terminal_menu(menu, tab_id, app.clone())
+                                    let workspace = workspace.clone();
+                                    move |menu, _, _| match workspace.as_ref() {
+                                        Some(workspace) => terminal::populate_terminal_menu(
+                                            menu,
+                                            workspace.clone(),
+                                        ),
+                                        None => menu,
                                     }
                                 }),
                         )

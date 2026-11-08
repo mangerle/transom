@@ -491,7 +491,13 @@ impl AppShell {
                     workspace.update(cx, |workspace, cx| workspace.ensure_container_files(cx));
                 }
             }
-            ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
+            ContainerDetailTab::Terminal => {
+                if let Some(workspace) = workspace.as_ref() {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.ensure_container_terminal(None, None)
+                    });
+                }
+            }
             ContainerDetailTab::Changes => {
                 if let Some(workspace) = workspace.as_ref() {
                     workspace.update(cx, |workspace, _| workspace.ensure_container_changes());
