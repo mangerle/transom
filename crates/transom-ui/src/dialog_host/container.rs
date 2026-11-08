@@ -70,18 +70,22 @@ impl ModalKind {
                 Some(true)
             }
             ModalKind::ContainerFileRename => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.files.prompt_input.is_some())
                 {
-                    shell.cancel_container_file_rename(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.cancel_container_file_rename(cx);
+                    });
                 }
                 Some(true)
             }
             ModalKind::ContainerFileNewDir => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.files.new_dir_input.is_some())
                 {
-                    shell.cancel_container_file_new_dir(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.cancel_container_file_new_dir(cx);
+                    });
                 }
                 Some(true)
             }
@@ -207,18 +211,22 @@ impl ModalKind {
                 Some(())
             }
             ModalKind::ContainerFileRename => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.files.prompt_input.is_some())
                 {
-                    shell.submit_container_file_prompt(tab_id, window, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.submit_container_file_prompt(cx);
+                    });
                 }
                 Some(())
             }
             ModalKind::ContainerFileNewDir => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.files.new_dir_input.is_some())
                 {
-                    shell.submit_container_mkdir(tab_id, window, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.submit_container_mkdir(cx);
+                    });
                 }
                 Some(())
             }

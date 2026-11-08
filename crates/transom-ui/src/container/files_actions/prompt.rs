@@ -4,11 +4,10 @@ use super::super::*;
 
 use super::super::detail;
 
-impl AppShell {
+impl ContainerWorkspace {
     /// 打开文件操作提示：重命名、复制、改权限与改属主共用同一套输入弹窗。
     fn open_container_file_prompt(
         &mut self,
-        tab_id: TabId,
         prompt: ContainerFilePrompt,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -23,85 +22,57 @@ impl AppShell {
                 input.default_value(default_value)
             }
         });
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.files.prompt = Some(prompt);
-            workspace.files.prompt_input = Some(input);
-        });
+        self.state.files.prompt = Some(prompt);
+        self.state.files.prompt_input = Some(input);
         cx.notify();
     }
 
     /// 打开文件重命名条。
     pub(crate) fn begin_container_file_rename(
         &mut self,
-        tab_id: TabId,
         path: String,
-        _name: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_container_file_prompt(
-            tab_id,
-            ContainerFilePrompt::Rename { from: path },
-            window,
-            cx,
-        );
+        self.open_container_file_prompt(ContainerFilePrompt::Rename { from: path }, window, cx);
     }
 
     /// 打开「复制到」输入条。
     pub(crate) fn begin_container_file_copy(
         &mut self,
-        tab_id: TabId,
         path: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_container_file_prompt(
-            tab_id,
-            ContainerFilePrompt::Copy { from: path },
-            window,
-            cx,
-        );
+        self.open_container_file_prompt(ContainerFilePrompt::Copy { from: path }, window, cx);
     }
 
     /// 打开「修改权限」输入条。
     pub(crate) fn begin_container_file_chmod(
         &mut self,
-        tab_id: TabId,
         path: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_container_file_prompt(tab_id, ContainerFilePrompt::Chmod { path }, window, cx);
+        self.open_container_file_prompt(ContainerFilePrompt::Chmod { path }, window, cx);
     }
 
     /// 打开「修改属主」输入条。
     pub(crate) fn begin_container_file_chown(
         &mut self,
-        tab_id: TabId,
         path: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_container_file_prompt(tab_id, ContainerFilePrompt::Chown { path }, window, cx);
+        self.open_container_file_prompt(ContainerFilePrompt::Chown { path }, window, cx);
     }
 
     /// 提交文件操作提示：按提示类型生成命令并清空输入状态。
-    pub(crate) fn submit_container_file_prompt(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some((prompt, input)) = self
-            .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| {
-                let workspace = &workspace.read(cx).state;
-                let prompt = workspace.files.prompt.clone()?;
-                let input = workspace.files.prompt_input.clone()?;
-                Some((prompt, input))
-            })
-        else {
+    pub(crate) fn submit_container_file_prompt(&mut self, cx: &mut Context<Self>) {
+        let Some(prompt) = self.state.files.prompt.clone() else {
+            return;
+        };
+        let Some(input) = self.state.files.prompt_input.clone() else {
             return;
         };
         let value = input.read(cx).value().trim().to_string();
@@ -151,13 +122,11 @@ impl AppShell {
             }
         };
         if let Some(key) = invalid_key.or(same_key) {
-            self.show_toast(rust_i18n::t!(key).to_string(), false, window, cx);
+            self.state.notice = Some(rust_i18n::t!(key).to_string());
+            cx.notify();
             return;
         }
-        let Some(container) = self
-            .with_container(tab_id, cx, |workspace| workspace.selected_container_name())
-            .flatten()
-        else {
+        let Some(container) = self.state.selected_container_name() else {
             return;
         };
         let request_id = ContainerRequestId::new();
@@ -170,7 +139,7 @@ impl AppShell {
                     format!("{parent}/{action}")
                 };
                 ContainerCommand::Rename {
-                    tab_id,
+                    tab_id: self.tab_id,
                     request_id,
                     container,
                     from,
@@ -178,54 +147,44 @@ impl AppShell {
                 }
             }
             ContainerFilePrompt::Copy { from } => ContainerCommand::CopyPath {
-                tab_id,
+                tab_id: self.tab_id,
                 request_id,
                 container,
                 from,
                 to: action,
             },
             ContainerFilePrompt::Chmod { path } => ContainerCommand::ChmodPath {
-                tab_id,
+                tab_id: self.tab_id,
                 request_id,
                 container,
                 path,
                 mode: action,
             },
             ContainerFilePrompt::Chown { path } => ContainerCommand::ChownPath {
-                tab_id,
+                tab_id: self.tab_id,
                 request_id,
                 container,
                 path,
                 owner: action,
             },
         };
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.files.prompt = None;
-            workspace.files.prompt_input = None;
-        });
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(request_id, command);
-            });
-        }
+        self.state.files.prompt = None;
+        self.state.files.prompt_input = None;
+        self.send_tracked(request_id, command);
         cx.notify();
     }
 
     /// 取消容器内文件操作提示。
-    pub(crate) fn cancel_container_file_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.files.prompt = None;
-            workspace.files.prompt_input = None;
-        });
+    pub(crate) fn cancel_container_file_rename(&mut self, cx: &mut Context<Self>) {
+        self.state.files.prompt = None;
+        self.state.files.prompt_input = None;
         cx.notify();
     }
 
     /// 取消新建目录。
-    pub(crate) fn cancel_container_file_new_dir(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.files.new_dir_open = false;
-            workspace.files.new_dir_input = None;
-        });
+    pub(crate) fn cancel_container_file_new_dir(&mut self, cx: &mut Context<Self>) {
+        self.state.files.new_dir_open = false;
+        self.state.files.new_dir_input = None;
         cx.notify();
     }
 }

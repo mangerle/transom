@@ -129,8 +129,9 @@ impl AppShell {
             }
         } else if let Some(path) = refresh_files
             && !path.is_empty()
+            && let Some(workspace) = self.state.container_workspace(tab_id)
         {
-            self.load_container_dir(tab_id, path, cx);
+            workspace.update(cx, |workspace, cx| workspace.load_container_dir(path, cx));
         }
     }
 

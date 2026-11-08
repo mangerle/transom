@@ -312,7 +312,7 @@ impl AppShell {
             ) => {
                 let is_volume = section == ContainerSection::Volumes;
                 render_files(
-                    tab_id,
+                    &view,
                     ContainerFilesView {
                         path: &files.0,
                         entries: &files.1,
@@ -325,7 +325,6 @@ impl AppShell {
                         readonly: is_volume,
                     },
                     p,
-                    cx,
                 )
             }
             (ContainerSection::Containers, ContainerDetailTab::Changes) => {

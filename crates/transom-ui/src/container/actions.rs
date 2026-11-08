@@ -486,7 +486,11 @@ impl AppShell {
                     });
                 }
             }
-            ContainerDetailTab::Files => self.ensure_container_files(tab_id, cx),
+            ContainerDetailTab::Files => {
+                if let Some(workspace) = workspace.as_ref() {
+                    workspace.update(cx, |workspace, cx| workspace.ensure_container_files(cx));
+                }
+            }
             ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
             ContainerDetailTab::Changes => self.ensure_container_changes(tab_id, cx),
             ContainerDetailTab::Overview

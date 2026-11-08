@@ -1,12 +1,12 @@
 //! 容器与数据卷内文本文件的预览与就地编辑器。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::input::{Textarea, TextareaState};
 
 /// 文件预览渲染参数：预览内容与编辑状态属于同一组视图数据。
 pub(super) struct FilePreviewView<'a> {
-    pub(super) tab_id: TabId,
     pub(super) preview: &'a (String, String, bool),
     pub(super) preview_editor: Option<&'a Entity<TextareaState>>,
     pub(super) preview_saving: bool,
@@ -16,18 +16,17 @@ pub(super) struct FilePreviewView<'a> {
 
 /// 渲染文件预览卡片或就地编辑框。
 pub(super) fn render_file_preview(
-    view: FilePreviewView<'_>,
+    view: &Entity<ContainerWorkspace>,
+    params: FilePreviewView<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let FilePreviewView {
-        tab_id,
         preview,
         preview_editor,
         preview_saving,
         binary,
         readonly,
-    } = view;
+    } = params;
     let (path, content, truncated) = preview;
     let mut header = h_flex().gap_2().items_center().justify_between().child(
         h_flex()
@@ -55,6 +54,7 @@ pub(super) fn render_file_preview(
 
     let mut actions = h_flex().gap_1p5().items_center();
     if let Some(_editor) = preview_editor {
+        let save_view = view.clone();
         actions = actions
             .child(
                 Button::new("container-file-save")
@@ -63,9 +63,11 @@ pub(super) fn render_file_preview(
                     .icon(IconName::Save)
                     .label(rust_i18n::t!("common.save").to_string())
                     .disabled(preview_saving)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.save_edit_container_file(tab_id, cx);
-                    })),
+                    .on_click(move |_, _, cx| {
+                        save_view.update(cx, |workspace, cx| {
+                            workspace.save_edit_container_file(cx);
+                        });
+                    }),
             )
             .child(
                 Button::new("container-file-cancel-edit")
@@ -74,31 +76,42 @@ pub(super) fn render_file_preview(
                     .icon(IconName::Close)
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .disabled(preview_saving)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_edit_container_file(tab_id, cx);
-                    })),
+                    .on_click({
+                        let cancel_view = view.clone();
+                        move |_, _, cx| {
+                            cancel_view.update(cx, |workspace, cx| {
+                                workspace.cancel_edit_container_file(cx);
+                            });
+                        }
+                    }),
             );
     } else {
         if !readonly && !*truncated && !binary {
+            let edit_view = view.clone();
             actions = actions.child(
                 Button::new("container-file-edit")
                     .ghost()
                     .xsmall()
                     .icon(IconName::Pen)
                     .label(rust_i18n::t!("container.files.edit").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.begin_edit_container_file(tab_id, window, cx);
-                    })),
+                    .on_click(move |_, window, cx| {
+                        edit_view.update(cx, |workspace, cx| {
+                            workspace.begin_edit_container_file(window, cx);
+                        });
+                    }),
             );
         }
+        let close_view = view.clone();
         actions = actions.child(
             Button::new("container-file-close-preview")
                 .ghost()
                 .xsmall()
                 .icon(IconName::Close)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.close_preview_container_file(tab_id, cx);
-                })),
+                .on_click(move |_, _, cx| {
+                    close_view.update(cx, |workspace, cx| {
+                        workspace.close_preview_container_file(cx);
+                    });
+                }),
         );
     }
     header = header.child(actions);

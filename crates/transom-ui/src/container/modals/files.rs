@@ -9,13 +9,16 @@ use gpui_kit::*;
 
 impl AppShell {
     /// 渲染容器文件重命名模态弹窗主体。
+    ///
+    /// 弹窗本体仍由外壳按统一模态栈组装；输入框与提交/取消动作属于工作区实体，
+    /// 回调直接 `update` 找到的实体，不再回交外壳方法。
     pub(crate) fn render_container_file_rename_dialog_body(
         &self,
-        app: &Entity<AppShell>,
+        _app: &Entity<AppShell>,
         cx: &App,
         _p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) =
+        let Some((_, workspace)) =
             self.find_container_modal_tab(cx, |ws| ws.files.prompt_input.is_some())
         else {
             return div().into_any_element();
@@ -32,8 +35,8 @@ impl AppShell {
         let cancel = crate::widgets::dialog_cancel_button(
             "cancel-container-file-rename",
             rust_i18n::t!("common.cancel").to_string(),
-            crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                this.cancel_container_file_rename(tab_id, cx);
+            crate::dialog_host::on_event(&workspace, move |workspace, _: &ClickEvent, _, cx| {
+                workspace.cancel_container_file_rename(cx);
             }),
         );
 
@@ -42,8 +45,8 @@ impl AppShell {
             rust_i18n::t!("common.confirm").to_string(),
             Some(IconName::Check),
             crate::widgets::DialogConfirmKind::Primary,
-            crate::dialog_host::on_event(app, move |this, _: &ClickEvent, window, cx| {
-                this.submit_container_file_prompt(tab_id, window, cx);
+            crate::dialog_host::on_event(&workspace, move |workspace, _: &ClickEvent, _, cx| {
+                workspace.submit_container_file_prompt(cx);
             }),
         );
 
@@ -64,11 +67,11 @@ impl AppShell {
     /// 渲染容器新建目录模态弹窗主体。
     pub(crate) fn render_container_file_new_dir_dialog_body(
         &self,
-        app: &Entity<AppShell>,
+        _app: &Entity<AppShell>,
         cx: &App,
         _p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) = self.find_container_modal_tab(cx, |ws| {
+        let Some((_, workspace)) = self.find_container_modal_tab(cx, |ws| {
             ws.files.new_dir_open && ws.files.new_dir_input.is_some()
         }) else {
             return div().into_any_element();
@@ -82,8 +85,8 @@ impl AppShell {
         let cancel = crate::widgets::dialog_cancel_button(
             "cancel-container-file-mkdir",
             rust_i18n::t!("common.cancel").to_string(),
-            crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                this.cancel_container_file_new_dir(tab_id, cx);
+            crate::dialog_host::on_event(&workspace, move |workspace, _: &ClickEvent, _, cx| {
+                workspace.cancel_container_file_new_dir(cx);
             }),
         );
 
@@ -92,8 +95,8 @@ impl AppShell {
             rust_i18n::t!("container.create").to_string(),
             Some(IconName::Plus),
             crate::widgets::DialogConfirmKind::Primary,
-            crate::dialog_host::on_event(app, move |this, _: &ClickEvent, window, cx| {
-                this.submit_container_mkdir(tab_id, window, cx);
+            crate::dialog_host::on_event(&workspace, move |workspace, _: &ClickEvent, _, cx| {
+                workspace.submit_container_mkdir(cx);
             }),
         );
 

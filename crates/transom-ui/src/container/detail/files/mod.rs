@@ -1,11 +1,14 @@
 //! 文件页签：目录行、上传与预览入口。
 //!
 //! 面包屑工具条与目录行分别放在 toolbar.rs / row.rs，本模块负责组装。
+//! 渲染只持有工作区实体句柄与状态快照：目录切换、预览、编辑与上传下载都直接
+//! `update` 实体，不再需要 `Context<AppShell>`。
 
 mod row;
 mod toolbar;
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use crate::sftp::SftpDragItem;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::gpui::ExternalPaths;
@@ -24,10 +27,9 @@ pub(crate) struct ContainerFilesView<'a> {
 }
 
 pub(crate) fn render_files(
-    tab_id: TabId,
-    view: ContainerFilesView<'_>,
+    view: &Entity<ContainerWorkspace>,
+    params: ContainerFilesView<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let ContainerFilesView {
         path,
@@ -39,10 +41,10 @@ pub(crate) fn render_files(
         loading,
         scroll,
         readonly,
-    } = view;
+    } = params;
     let current_path = if path.is_empty() { "/" } else { path };
     let parent = parent_path(current_path);
-    let crumbs = toolbar::render_toolbar(tab_id, current_path, readonly, p, cx);
+    let crumbs = toolbar::render_toolbar(view, current_path, readonly, p);
 
     // 目录优先、再按名称：归档接口按 tar 顺序返回，用户习惯是先看目录。
     let mut ordered: Vec<&ContainerFileEntry> = entries.iter().collect();
@@ -54,7 +56,6 @@ pub(crate) fn render_files(
             .then_with(|| left.name.cmp(&right.name))
     });
 
-    let app = cx.entity().clone();
     let mut list = v_flex().gap_0p5();
     if loading && entries.is_empty() {
         list = list.child(
@@ -92,17 +93,19 @@ pub(crate) fn render_files(
                 .child(".."),
         );
     if !at_root {
+        let parent_view = view.clone();
         let parent = parent.clone();
         parent_row = parent_row
             .hover(|style| style.bg(p.muted.opacity(0.5)))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.load_container_dir(tab_id, parent.clone(), cx);
-                cx.notify();
-            }));
+            .on_click(move |_, _, cx| {
+                parent_view.update(cx, |workspace, cx| {
+                    workspace.load_container_dir(parent.clone(), cx);
+                });
+            });
     }
     list = list.child(parent_row);
     for entry in ordered {
-        list = list.child(row::render_entry_row(tab_id, entry, readonly, &app, p, cx));
+        list = list.child(row::render_entry_row(view, entry, readonly, p));
     }
     if entries.is_empty() && !loading {
         list = list.child(
@@ -127,8 +130,8 @@ pub(crate) fn render_files(
 
     let drop_bg = p.sidebar_accent.opacity(0.3);
     let drop_border = p.primary;
-    let app_drop = app.clone();
-    let app_sftp_drop = app.clone();
+    let drop_view = view.clone();
+    let sftp_drop_view = view.clone();
 
     let mut scroll_container = div()
         // 滚动容器用稳定 id，切目录只复位偏移不重建整块列表；换 id 会让
@@ -153,19 +156,19 @@ pub(crate) fn render_files(
                 if dropped.is_empty() {
                     return;
                 }
-                app_drop.update(cx, |this, cx| {
+                drop_view.update(cx, |workspace, cx| {
                     for path in dropped {
-                        this.upload_container_path(tab_id, path, cx);
+                        workspace.upload_container_path(path, cx);
                     }
                 });
             })
             .on_drop(move |drag: &SftpDragItem, _window, cx| {
                 let paths: Vec<std::path::PathBuf> =
                     drag.paths.iter().map(std::path::PathBuf::from).collect();
-                app_sftp_drop.update(cx, |this, cx| {
+                sftp_drop_view.update(cx, |workspace, cx| {
                     for path in paths {
                         if path.exists() {
-                            this.upload_container_path(tab_id, path, cx);
+                            workspace.upload_container_path(path, cx);
                         }
                     }
                 });
@@ -179,8 +182,8 @@ pub(crate) fn render_files(
         .child(scroll_container.child(list));
     if let Some(preview) = preview {
         body = body.child(super::file_preview::render_file_preview(
+            view,
             super::file_preview::FilePreviewView {
-                tab_id,
                 preview,
                 preview_editor,
                 preview_saving,
@@ -188,7 +191,6 @@ pub(crate) fn render_files(
                 readonly,
             },
             p,
-            cx,
         ));
     }
     body.into_any_element()

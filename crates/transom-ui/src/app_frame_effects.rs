@@ -241,11 +241,11 @@ impl AppShell {
             }
             ContainerWorkspaceEvent::OpenVolumeFiles => {
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    workspace.update(cx, |workspace, _| {
+                    workspace.update(cx, |workspace, cx| {
                         workspace.state.detail_tab = ContainerDetailTab::Files;
+                        workspace.load_container_dir("/".to_string(), cx);
                     });
                 }
-                self.load_container_dir(tab_id, "/".to_string(), cx);
             }
             ContainerWorkspaceEvent::OpenContainerUpdate(name) => {
                 self.open_container_update(tab_id, name.clone(), window, cx);
