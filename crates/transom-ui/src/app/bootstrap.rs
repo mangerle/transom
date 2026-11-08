@@ -310,6 +310,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         )
     });
     let backup_prompt = cx.new(|_| BackupPromptView::new(services.backup.clone()));
+    let audit_viewer = cx.new(|_| crate::audit_viewer::AuditViewerView::new());
     AppState {
         services,
         catalog: prepared.catalog,
@@ -323,7 +324,10 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         modals: ModalHub::new(
             known_hosts_view,
             settings_view,
-            backup_prompt,
+            ToolModalEntities {
+                backup_prompt,
+                audit_viewer,
+            },
             inputs.quick_open_state.clone(),
             SnippetPanelState {
                 open: false,

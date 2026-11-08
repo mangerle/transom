@@ -123,7 +123,7 @@ mod task_hub;
 mod types;
 mod window_requests;
 
-pub(crate) use modal_hub::ModalHub;
+pub(crate) use modal_hub::{ModalHub, ToolModalEntities};
 pub(crate) use persistence::Persistence;
 pub(crate) use runtime::spawn_blocking_local;
 pub(crate) use secret_prefill::prefill_secret_fields;

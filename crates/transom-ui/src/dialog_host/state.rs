@@ -141,7 +141,12 @@ impl ModalKind {
                 true
             }
             ModalKind::AuditViewer => {
-                shell.state.modals.tools.audit_viewer = None;
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .audit_viewer
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::Replay => {
@@ -259,7 +264,12 @@ impl ModalKind {
                 .known_hosts
                 .update(cx, |view, cx| view.close(cx)),
             ModalKind::KeyWizard => shell.state.modals.tools.key_wizard = None,
-            ModalKind::AuditViewer => shell.state.modals.tools.audit_viewer = None,
+            ModalKind::AuditViewer => shell
+                .state
+                .modals
+                .tools
+                .audit_viewer
+                .update(cx, |view, cx| view.close(cx)),
             ModalKind::Replay => shell.state.modals.tools.replay = None,
             ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,

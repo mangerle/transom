@@ -11,6 +11,7 @@
 //! 最终让本容器退化为“实体句柄集合”。
 
 use super::batch::BatchEditForm;
+use crate::audit_viewer::AuditViewerView;
 use crate::backup::BackupPromptView;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
 use crate::keys::KnownHostsView;
@@ -48,10 +49,18 @@ pub(crate) struct ConnectionModals {
     pub(crate) known_hosts: Entity<KnownHostsView>,
 }
 
+/// 工具类浮层中需要由外壳预创建的实体句柄。
+pub(crate) struct ToolModalEntities {
+    pub(crate) backup_prompt: Entity<BackupPromptView>,
+    /// 审计日志查看器；打开状态与在途扫描归实体。
+    pub(crate) audit_viewer: Entity<AuditViewerView>,
+}
+
 /// 工具类浮层：查看器、备份、快捷入口与一次性确认。
 pub(crate) struct ToolModals {
     pub(crate) replay: Option<crate::record::ReplayModalState>,
-    pub(crate) audit_viewer: Option<crate::audit_viewer::AuditViewer>,
+    /// 审计日志查看器实体；打开状态与在途扫描都归实体。
+    pub(crate) audit_viewer: Entity<AuditViewerView>,
     /// 备份导入/导出弹窗实体；打开状态与在途任务都归实体。
     pub(crate) backup_prompt: Entity<BackupPromptView>,
     pub(crate) show_quick_open: bool,
@@ -112,7 +121,7 @@ impl ModalHub {
     pub(crate) fn new(
         known_hosts: Entity<KnownHostsView>,
         settings: Entity<SettingsView>,
-        backup_prompt: Entity<BackupPromptView>,
+        tools: ToolModalEntities,
         quick_open_state: Entity<CommandState>,
         snippet_panel: SnippetPanelState,
     ) -> Self {
@@ -127,8 +136,8 @@ impl ModalHub {
             },
             tools: ToolModals {
                 replay: None,
-                audit_viewer: None,
-                backup_prompt,
+                audit_viewer: tools.audit_viewer,
+                backup_prompt: tools.backup_prompt,
                 show_quick_open: false,
                 quick_open_state,
                 snippet_panel,

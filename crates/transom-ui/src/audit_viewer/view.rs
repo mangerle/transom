@@ -1,6 +1,6 @@
 //! 审计日志查看器模态弹窗渲染。
 
-use super::types::format_file_size;
+use super::types::{AuditViewer, format_file_size};
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -15,15 +15,12 @@ impl AppShell {
     /// 渲染审计日志查看器模态弹窗。
     pub(crate) fn render_audit_viewer_body(
         &self,
+        viewer: &AuditViewer,
         app: &Entity<AppShell>,
         _window: &mut Window,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(viewer) = self.state.modals.tools.audit_viewer.as_ref() else {
-            return div().into_any_element();
-        };
-
         let title = viewer.target_title.clone();
         let selected_file = viewer.entries.get(viewer.selected_index);
         let current_search = viewer.search_input.read(cx).value().trim().to_string();
@@ -63,8 +60,8 @@ impl AppShell {
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.state.modals.tools.audit_viewer = None;
-                            cx.notify();
+                            let view = this.state.modals.tools.audit_viewer.clone();
+                            view.update(cx, |view, cx| view.close(cx));
                         },
                     )),
             );
@@ -153,7 +150,8 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
-                                    this.state.modals.tools.audit_viewer = None;
+                                    let view = this.state.modals.tools.audit_viewer.clone();
+                                    view.update(cx, |view, cx| view.close(cx));
                                     this.open_settings_modal(None, window, cx);
                                 },
                             )),
@@ -354,15 +352,9 @@ fn audit_file_action_buttons(
             .on_click(crate::dialog_host::on_event(
                 app,
                 move |this, _: &ClickEvent, _, cx| {
-                    let idx = this
-                        .state
-                        .modals
-                        .tools
-                        .audit_viewer
-                        .as_ref()
-                        .map(|v| v.selected_index)
-                        .unwrap_or(0);
-                    this.delete_audit_log(idx, cx);
+                    let view = this.state.modals.tools.audit_viewer.clone();
+                    let idx = view.read(cx).selected_index();
+                    view.update(cx, |view, cx| view.delete(idx, cx));
                 },
             )),
     );

@@ -292,7 +292,13 @@ impl ModalKind {
             ModalKind::KeyWizard => shell.render_key_wizard_body(app, window, cx, p),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::BackupPrompt => div().into_any_element(),
-            ModalKind::AuditViewer => shell.render_audit_viewer_body(app, window, cx, p),
+            ModalKind::AuditViewer => {
+                let viewer = shell.state.modals.tools.audit_viewer.read(cx);
+                viewer.viewer().map_or_else(
+                    || div().into_any_element(),
+                    |viewer| shell.render_audit_viewer_body(viewer, app, window, cx, p),
+                )
+            }
             ModalKind::Replay => shell.render_replay_body(app, window, cx, p),
             ModalKind::Settings => {
                 // 由 [`Self::render_body`] 的专用分支处理，这里不会走到。
