@@ -3,6 +3,24 @@
 use super::*;
 use std::collections::HashSet;
 
+/// 列表最终展示的行：收集、套用筛选与排序一次完成。
+///
+/// 设计原理（Why）：渲染与键盘导航都从同一份工作区状态出发，排序规则只能有
+/// 一处实现；统一收口后，键盘事件发生时的行集合与画面上的行集合保持一致。
+pub(crate) fn list_rows(workspace: &ContainerWorkspaceState, query: &str) -> Vec<ListRow> {
+    let query = query.to_lowercase();
+    let mut rows = collect_rows(workspace.section, workspace, &query, workspace.state_filter);
+    rows.sort_by(|left, right| {
+        compare_fields(
+            &left.fields,
+            &right.fields,
+            active_sort(workspace.section, workspace.sort_key),
+            workspace.sort_desc,
+        )
+    });
+    rows
+}
+
 /// 按分类收集行数据，并套用状态筛选与关键词搜索。
 pub(crate) fn collect_rows(
     section: ContainerSection,

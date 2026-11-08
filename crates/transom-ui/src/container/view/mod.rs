@@ -5,6 +5,7 @@
 mod header;
 
 use crate::app::AppShell;
+use crate::container::list::render_container_list;
 use crate::container::types::ContainerWorkspaceStatus;
 use crate::divider::h_resizable;
 use crate::palette::Palette;
@@ -41,7 +42,27 @@ impl AppShell {
             let workspace = view.read(cx);
             render_container_header(&view, &workspace.state, fullscreen, p)
         };
-        let list = self.render_container_list(tab_id, cx, p);
+        let list = {
+            let workspace = view.read(cx);
+            let query = workspace.state.query(cx);
+            render_container_list(&view, &workspace.state, &query, p)
+        };
+        // 焦点与按键仍归外壳：列表渲染函数只画内容，键盘事件到来时再按当前
+        // 状态重算行集合，避免把窗口级焦点管理塞进纯渲染函数。
+        let list_focus = view.read(cx).state.list_focus_handle.clone();
+        let list = v_flex()
+            .id("container-list-panel")
+            .track_focus(&list_focus)
+            .key_context("ContainerList")
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                this.handle_container_list_key(tab_id, event, window, cx);
+            }))
+            .h_full()
+            .w_full()
+            .min_w_0()
+            .overflow_hidden()
+            .child(list)
+            .into_any_element();
         let detail = self.render_container_detail(tab_id, window, cx, p);
         // 列表与详情宽度可拖拽：长容器名与镜像引用在固定宽度下必然截断，详情区在
         // 小窗下又铺不开，与主窗口其他分区一样交给用户拖。默认值只是首次打开的起点。

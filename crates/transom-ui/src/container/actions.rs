@@ -128,6 +128,21 @@ impl ContainerWorkspace {
         cx.notify();
     }
 
+    /// 把列表行的动作意向交给外壳统一分发。
+    ///
+    /// 设计原理（Why）：行内快捷按钮与右键菜单只持有工作区实体句柄，选中、生命周期
+    /// 与删除确认等实体动作，以及需要窗口的表单/弹窗，统一由外壳既有分发逻辑完成；
+    /// 渲染函数因此不需要 `Context<AppShell>`。事件派发阶段拿不到 `Window`，需要
+    /// 窗口的动作由外壳排进 `window_requests`，在渲染期执行。
+    pub(crate) fn run_row_action(
+        &mut self,
+        target: RowTarget,
+        action: RowAction,
+        cx: &mut Context<Self>,
+    ) {
+        cx.emit(ContainerWorkspaceEvent::RunRowAction { target, action });
+    }
+
     /// 切换顶部功能分类：清空选中项并拉取该分类列表。
     ///
     /// 设计原理（Why）：分类属于工作区自身状态，切换只需清空输入框并重新拉取，

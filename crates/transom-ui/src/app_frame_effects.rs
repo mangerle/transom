@@ -204,6 +204,39 @@ impl AppShell {
         }
     }
 
+    /// 执行一条需要窗口的容器工作区动作。
+    ///
+    /// 设计原理（Why）：事件在标签实体派发阶段产生，那里拿不到 `Window`；外壳
+    /// 先把事件连同订阅捕获的标签 id 入队，渲染期再调用既有打开方法。这里只
+    /// 处理需要窗口的分支，不需要窗口的动作已在事件处理函数里直接完成。
+    fn handle_container_request(
+        &mut self,
+        tab_id: transom_core::TabId,
+        event: &crate::container::ContainerWorkspaceEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::container::ContainerWorkspaceEvent;
+        match event {
+            ContainerWorkspaceEvent::OpenRunForm(image) => {
+                self.open_container_run_form(tab_id, image.clone(), window, cx);
+            }
+            ContainerWorkspaceEvent::OpenImageHub => {
+                self.open_container_hub_dialog(tab_id, window, cx);
+            }
+            ContainerWorkspaceEvent::OpenCreateDialog(section) => {
+                self.open_container_create_dialog(tab_id, *section, window, cx);
+            }
+            ContainerWorkspaceEvent::OpenBuildDialog => {
+                self.open_container_build_dialog(tab_id, window, cx);
+            }
+            ContainerWorkspaceEvent::RunRowAction { target, action } => {
+                self.run_row_action(tab_id, target.clone(), *action, window, cx);
+            }
+            _ => {}
+        }
+    }
+
     pub(super) fn flush_window_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::app::WindowRequest;
         if self.state.window_requests.is_empty() {
@@ -216,6 +249,9 @@ impl AppShell {
                 WindowRequest::Monitor(event) => self.handle_monitor_request(event, window, cx),
                 WindowRequest::Editor(event) => self.handle_editor_request(event, window, cx),
                 WindowRequest::Settings(event) => self.handle_settings_request(event, window, cx),
+                WindowRequest::Container { tab_id, event } => {
+                    self.handle_container_request(tab_id, &event, window, cx);
+                }
             }
         }
     }

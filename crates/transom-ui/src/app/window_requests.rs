@@ -8,10 +8,12 @@
 //! 代价与局限：合并后按入队顺序执行，跨领域动作的先后由产生顺序决定；
 //! 需要严格先后的动作应在产生点排好，而不是依赖队列分组的固定次序。
 
+use crate::container::ContainerWorkspaceEvent;
 use crate::editor::EditorPanelEvent;
 use crate::monitor::MonitorPanelEvent;
 use crate::settings::SettingsRequest;
 use crate::sftp::SftpPanelEvent;
+use transom_core::TabId;
 
 /// 一条需要窗口才能执行的请求。
 pub(crate) enum WindowRequest {
@@ -19,6 +21,11 @@ pub(crate) enum WindowRequest {
     Monitor(MonitorPanelEvent),
     Editor(EditorPanelEvent),
     Settings(SettingsRequest),
+    /// 容器工作区动作：标签 id 在事件订阅时确定，执行时不回读实体。
+    Container {
+        tab_id: TabId,
+        event: ContainerWorkspaceEvent,
+    },
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -42,6 +49,11 @@ impl WindowRequests {
 
     pub(crate) fn push_settings(&mut self, request: SettingsRequest) {
         self.items.push(WindowRequest::Settings(request));
+    }
+
+    /// 容器工作区的窗口动作：事件在派发阶段不持有实体句柄，直接连标签 id 入队。
+    pub(crate) fn push_container(&mut self, tab_id: TabId, event: ContainerWorkspaceEvent) {
+        self.items.push(WindowRequest::Container { tab_id, event });
     }
 
     pub(crate) fn is_empty(&self) -> bool {

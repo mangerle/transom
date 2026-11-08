@@ -1,15 +1,19 @@
 //! 列表行渲染与底部状态条。
+//!
+//! 行渲染只持有工作区实体句柄：点击直接 `select_row`，快捷按钮与右键菜单把
+//! 行动作交给 [`ContainerWorkspace::run_row_action`] 上报外壳统一分发，不再经
+//! `AppShell` 的渲染方法。
 
 use super::*;
 use crate::widgets::status_dot_bare;
 
 /// 渲染列表；空结果给出可行动的提示而不是白屏。
 pub(crate) fn render_rows(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     rows: &[ListRow],
     selected: &Option<String>,
+    focus_handle: &FocusHandle,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if rows.is_empty() {
         return v_flex()
@@ -26,11 +30,10 @@ pub(crate) fn render_rows(
             ))
             .into_any_element();
     }
-    let app = cx.entity().clone();
     let mut list = v_flex().gap_0p5().w_full();
     for row in rows {
         let is_selected = selected.as_deref() == Some(row_key(&row.target));
-        list = list.child(list_row(&app, tab_id, row, is_selected, p, cx));
+        list = list.child(list_row(view, row, is_selected, focus_handle, p));
     }
     div()
         .id("container-list-scroll")
@@ -43,12 +46,11 @@ pub(crate) fn render_rows(
 
 /// 单行渲染：状态点、标题副标题、快捷按钮与右键菜单。
 pub(crate) fn list_row(
-    app: &Entity<AppShell>,
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     row: &ListRow,
     selected: bool,
+    focus_handle: &FocusHandle,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let group = format!("container-list-row-{}", row.key);
     let title = row.title.clone();
@@ -127,6 +129,7 @@ pub(crate) fn list_row(
         let mut actions_flex = h_flex().gap_0p5().items_center().flex_none();
         for action in actions {
             let target = row.target.clone();
+            let view = view.clone();
             actions_flex = actions_flex.child(
                 Button::new(ElementId::Name(
                     format!("{}-action-{:?}", row.key, action).into(),
@@ -134,10 +137,12 @@ pub(crate) fn list_row(
                 .ghost()
                 .xsmall()
                 .icon(action.icon())
-                .on_click(cx.listener(move |this, _, window, cx| {
+                .on_click(move |_, _, cx| {
                     cx.stop_propagation();
-                    this.run_row_action(tab_id, target.clone(), action, window, cx);
-                })),
+                    view.update(cx, |workspace, cx| {
+                        workspace.run_row_action(target.clone(), action, cx);
+                    });
+                }),
             );
         }
 
@@ -154,17 +159,14 @@ pub(crate) fn list_row(
 
     let menu_target = row.target.clone();
     let menu_actions = row_actions(row);
-    let menu_app = app.clone();
+    let menu_view = view.clone();
     let click_target = row.target.clone();
-    let element = element.on_click(cx.listener(move |this, _, window, cx| {
-        if let Some(workspace) = this.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, cx| workspace.select_row(&click_target, cx));
-        }
-        if let Some(workspace) = this.state.container_workspace(tab_id) {
-            let focus_handle = workspace.read(cx).state.list_focus_handle.clone();
-            window.focus(&focus_handle, cx);
-        }
-    }));
+    let click_view = view.clone();
+    let click_focus = focus_handle.clone();
+    let element = element.on_click(move |_, window, cx| {
+        click_view.update(cx, |workspace, cx| workspace.select_row(&click_target, cx));
+        window.focus(&click_focus, cx);
+    });
 
     element
         .context_menu(move |menu, _window, _cx| {
@@ -174,13 +176,13 @@ pub(crate) fn list_row(
                     menu = menu.item(PopupMenuItem::separator());
                 }
                 let target = menu_target.clone();
-                let entity = menu_app.clone();
+                let view = menu_view.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!(action.label_key()).to_string(),
                     action.icon(),
-                    move |_, window, cx| {
-                        entity.update(cx, |this, cx| {
-                            this.run_row_action(tab_id, target.clone(), action, window, cx);
+                    move |_, _, cx| {
+                        view.update(cx, |workspace, cx| {
+                            workspace.run_row_action(target.clone(), action, cx);
                         });
                     },
                 ));
