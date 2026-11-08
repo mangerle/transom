@@ -34,12 +34,9 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, window, cx| {
-                        if let Some(form) = this.state.modals.session.form.as_mut() {
-                            let port_name = port_name.clone();
-                            form.serial_port.update(cx, |state, cx| {
-                                state.set_value(&port_name, window, cx);
-                            });
-                        }
+                        this.state.modals.session.form.update(cx, |view, cx| {
+                            view.select_serial_port(&port_name, window, cx);
+                        });
                         cx.notify();
                     },
                 )),
@@ -64,10 +61,7 @@ pub(crate) fn render_serial_fields(
             .on_click(crate::dialog_host::on_event(
                 app,
                 move |this, _: &ClickEvent, _, cx| {
-                    if let Some(form) = this.state.modals.session.form.as_mut() {
-                        form.serial_data_bits = bits;
-                    }
-                    cx.notify();
+                    this.update_session_form(cx, |form| form.serial_data_bits = bits);
                 },
             ))
         }));
@@ -86,10 +80,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.modals.session.form.as_mut() {
-                            form.serial_parity = parity;
-                        }
-                        cx.notify();
+                        this.update_session_form(cx, |form| form.serial_parity = parity);
                     },
                 ))
         }),
@@ -108,10 +99,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.modals.session.form.as_mut() {
-                            form.serial_stop_bits = stop_bits;
-                        }
-                        cx.notify();
+                        this.update_session_form(cx, |form| form.serial_stop_bits = stop_bits);
                     },
                 ))
         }),
@@ -131,10 +119,7 @@ pub(crate) fn render_serial_fields(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.modals.session.form.as_mut() {
-                            form.serial_flow_control = flow;
-                        }
-                        cx.notify();
+                        this.update_session_form(cx, |form| form.serial_flow_control = flow);
                     },
                 ))
         }),

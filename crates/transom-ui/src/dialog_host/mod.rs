@@ -301,7 +301,13 @@ impl ModalKind {
                 ),
             ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, cx, p),
             ModalKind::ContainerQuadlet => shell.render_container_quadlet_dialog_body(app, cx, p),
-            ModalKind::SessionForm => shell.render_session_form_body(app, window, cx, p),
+            ModalKind::SessionForm => {
+                let form = shell.state.modals.session.form.read(cx);
+                form.state().map_or_else(
+                    || div().into_any_element(),
+                    |form| shell.render_session_form_body(form, app, window, cx, p),
+                )
+            }
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),
             ModalKind::BatchEdit => shell.render_batch_edit_body(app, window, cx, p),
             ModalKind::SnippetForm => shell.render_snippet_form_body(app, window, cx, p),

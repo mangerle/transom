@@ -29,10 +29,9 @@ pub(super) fn render_auth_credential_fields(
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, checked: &bool, _, cx| {
-                                    if let Some(form) = this.state.modals.session.form.as_mut() {
+                                    this.update_session_form(cx, |form| {
                                         form.save_password = *checked;
-                                    }
-                                    cx.notify();
+                                    });
                                 },
                             )),
                     ),
@@ -67,7 +66,10 @@ pub(super) fn render_auth_credential_fields(
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, _: &ClickEvent, window, cx| {
-                                        this.pick_private_key_path(window, cx);
+                                        this.state.modals.session.form.update(cx, |view, cx| {
+                                            view.pick_private_key_path(window, cx);
+                                        });
+                                        cx.notify();
                                     },
                                 )),
                         ),
@@ -90,7 +92,10 @@ pub(super) fn render_auth_credential_fields(
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, _: &ClickEvent, window, cx| {
-                                        this.pick_certificate_path(window, cx);
+                                        this.state.modals.session.form.update(cx, |view, cx| {
+                                            view.pick_certificate_path(window, cx);
+                                        });
+                                        cx.notify();
                                     },
                                 )),
                         ),
@@ -118,11 +123,9 @@ pub(super) fn render_auth_credential_fields(
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, checked: &bool, _, cx| {
-                                        if let Some(form) = this.state.modals.session.form.as_mut()
-                                        {
+                                        this.update_session_form(cx, |form| {
                                             form.save_passphrase = *checked;
-                                        }
-                                        cx.notify();
+                                        });
                                     },
                                 )),
                         ),

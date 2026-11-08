@@ -3,8 +3,7 @@
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
-use crate::session_form::SessionForm;
-use gpui_kit::component::input::InputEvent;
+use crate::session_form::{SessionForm, SessionFormView};
 use gpui_kit::*;
 use transom_core::{
     AppError, Connection, ErrorCode, SecretKey, SecretKind, SecretStore, Session, SessionId,
@@ -101,7 +100,6 @@ impl AppState {
 }
 
 impl AppShell {
-    /// 目录里的凭据模板快照，供会话表单渲染可选项。
     /// 在会话表单中选择指定分组，并自动应用该分组及其祖先的默认继承属性。
     pub(crate) fn select_form_folder(
         &mut self,
@@ -119,58 +117,57 @@ impl AppShell {
             })
             .map(|folder| self.state.catalog.inherited_folder_defaults(folder.id))
             .unwrap_or_default();
-        if let Some(form) = self.state.modals.session.form.as_mut() {
-            form.apply_folder_selection(folder_path, &defaults, window, cx);
-        }
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| {
+            view.apply_folder_selection(folder_path, &defaults, window, cx);
+        });
+        cx.notify();
     }
 
     /// 在会话表单中清除分组（选择根层级）。
     pub(crate) fn clear_form_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(form) = self.state.modals.session.form.as_mut() {
-            form.folder_path
-                .update(cx, |state, cx| state.set_value("", window, cx));
-            cx.notify();
-        }
-    }
-
-    pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let form = SessionForm::new(
-            window,
-            cx,
-            crate::session_form::SessionFormInit {
-                base: None,
-                folder_path: None,
-                identities: self.state.identity_options(),
-                jump_options: self.state.jump_options(None),
-                folder_options: self.state.folder_paths(),
-                global_proxy: app_settings(cx).proxy.clone(),
-                block_view: transom_core::BlockViewOverride::FollowGlobal,
-            },
-        );
-        self.install_session_form(form, cx);
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| view.clear_folder(window, cx));
         cx.notify();
     }
 
-    /// 装载会话表单，并处理文件夹输入与候选弹层的关系。
+    /// 关闭会话表单。
+    pub(crate) fn close_session_form(&mut self, cx: &mut Context<Self>) {
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| view.close(cx));
+        cx.notify();
+    }
+
+    /// 迁移期表单更新入口：在实体 update 内改表单字段，并同时刷新外壳。
     ///
-    /// 文件夹字段是"输入或选择"：候选不随输入过滤。展开后一旦开始键入
-    /// 路径，就把候选收起，避免一个不动的列表挡住表单；选中与清空仍由
-    /// 字段自身收起。
-    pub(crate) fn install_session_form(&mut self, form: SessionForm, cx: &mut Context<Self>) {
-        cx.subscribe(&form.folder_path, |this, _, event, cx| {
-            if !matches!(event, InputEvent::Change) {
-                return;
-            }
-            let Some(form) = this.state.modals.session.form.as_mut() else {
-                return;
-            };
-            if form.folder_open {
-                form.folder_open = false;
-                cx.notify();
-            }
-        })
-        .detach();
-        self.state.modals.session.form = Some(form);
+    /// 渲染下沉到实体后本方法应删除，调用点改用实体自己的动作方法。
+    pub(crate) fn update_session_form<R>(
+        &mut self,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut SessionForm) -> R,
+    ) -> Option<R> {
+        let result = self.state.modals.session.form.update(cx, |view, cx| {
+            let result = view.form_mut().map(update);
+            cx.notify();
+            result
+        });
+        cx.notify();
+        result
+    }
+
+    pub(crate) fn open_new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let init = crate::session_form::SessionFormInit {
+            base: None,
+            folder_path: None,
+            identities: self.state.identity_options(),
+            jump_options: self.state.jump_options(None),
+            folder_options: self.state.folder_paths(),
+            global_proxy: app_settings(cx).proxy.clone(),
+            block_view: transom_core::BlockViewOverride::FollowGlobal,
+        };
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| view.open(init, window, cx));
+        cx.notify();
     }
 
     pub(crate) fn open_edit_session(
@@ -194,21 +191,18 @@ impl AppShell {
             .and_then(|id| self.state.catalog.folder_path(id));
         let is_serial = matches!(session.connection, Connection::Serial(_));
         let block_override = session.block_view;
-        let mut form = SessionForm::new(
-            window,
-            cx,
-            crate::session_form::SessionFormInit {
-                base: Some(session),
-                folder_path,
-                identities: self.state.identity_options(),
-                jump_options: self.state.jump_options(Some(session_id)),
-                folder_options: self.state.folder_paths(),
-                global_proxy: app_settings(cx).proxy.clone(),
-                block_view: block_override,
-            },
-        );
-        self.prefill_secrets(&mut form, window, cx);
-        self.install_session_form(form, cx);
+        let init = crate::session_form::SessionFormInit {
+            base: Some(session),
+            folder_path,
+            identities: self.state.identity_options(),
+            jump_options: self.state.jump_options(Some(session_id)),
+            folder_options: self.state.folder_paths(),
+            global_proxy: app_settings(cx).proxy.clone(),
+            block_view: block_override,
+        };
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| view.open(init, window, cx));
+        self.prefill_secrets(&view, window, cx);
         if is_serial {
             self.refresh_serial_ports(window, cx);
         }
@@ -217,21 +211,27 @@ impl AppShell {
     /// 把编辑中会话已保存在钥匙串里的凭据填回表单输入框。
     fn prefill_secrets(
         &mut self,
-        form: &mut SessionForm,
+        view: &Entity<SessionFormView>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(base) = form.base.as_ref() else {
-            return;
+        let (session_id, fields) = {
+            let view = view.read(cx);
+            let Some(form) = view.state() else {
+                return;
+            };
+            let Some(base) = form.base.as_ref() else {
+                return;
+            };
+            let mut fields = Vec::new();
+            if form.save_password {
+                fields.push((SecretKind::Password, form.password.clone()));
+            }
+            if form.save_passphrase {
+                fields.push((SecretKind::KeyPassphrase, form.passphrase.clone()));
+            }
+            (base.id, fields)
         };
-        let session_id = base.id;
-        let mut fields = Vec::new();
-        if form.save_password {
-            fields.push((SecretKind::Password, form.password.clone()));
-        }
-        if form.save_passphrase {
-            fields.push((SecretKind::KeyPassphrase, form.passphrase.clone()));
-        }
         if fields.is_empty() {
             return;
         }
@@ -246,21 +246,16 @@ impl AppShell {
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
     pub(crate) fn save_session_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.session.form.as_mut() else {
+        let view = self.state.modals.session.form.clone();
+        let editing = view
+            .read(cx)
+            .state()
+            .is_some_and(|form| form.base.is_some());
+        let Some((built, save_password, save_passphrase)) =
+            view.update(cx, |view, cx| view.take_built(cx))
+        else {
             return;
         };
-        let editing = form.base.is_some();
-        let save_password = form.save_password;
-        let save_passphrase = form.save_passphrase;
-        let built = match form.build_session(cx) {
-            Ok(built) => built,
-            Err(error) => {
-                form.error = Some(error);
-                cx.notify();
-                return;
-            }
-        };
-        self.state.modals.session.form = None;
 
         let mut built = built;
         built.session.folder_id = built
@@ -332,13 +327,15 @@ impl AppShell {
     }
 
     pub(crate) fn delete_session_form(&mut self, cx: &mut Context<Self>) {
-        let Some(form) = self.state.modals.session.form.take() else {
-            return;
-        };
-        let Some(base) = form.base else {
-            return;
-        };
-        self.delete_session_by_id(base.id, cx);
+        let view = self.state.modals.session.form.clone();
+        let session_id = view
+            .read(cx)
+            .state()
+            .and_then(|form| form.base.as_ref().map(|base| base.id));
+        view.update(cx, |view, cx| view.close(cx));
+        if let Some(session_id) = session_id {
+            self.delete_session_by_id(session_id, cx);
+        }
     }
 }
 

@@ -7,7 +7,7 @@
 //!
 //! # 代价与局限
 //! 分组只解决可读性与归属提示，不改变“外壳统一持有”的事实；设置、已知主机、
-//! 备份、审计查看器、密钥向导与会话回放弹窗已经独立为实体，后续应把会话表单、
+//! 备份、审计查看器、密钥向导、会话回放与会话表单已经独立为实体，后续应把
 //! 连接确认也按同一路径迁成实体，最终让本容器退化为“实体句柄集合”。
 
 use super::batch::BatchEditForm;
@@ -16,7 +16,7 @@ use crate::backup::BackupPromptView;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
 use crate::keys::{KeyWizardView, KnownHostsView};
 use crate::record::ReplayModalView;
-use crate::session_form::SessionForm;
+use crate::session_form::SessionFormView;
 use crate::settings::SettingsView;
 use crate::sidebar::FolderForm;
 use crate::snippets::SnippetPanelState;
@@ -25,15 +25,16 @@ use gpui_kit::component::command::CommandState;
 
 /// 会话与文件夹表单类弹窗。
 pub(crate) struct SessionModals {
-    pub(crate) form: Option<SessionForm>,
+    /// 会话新建/编辑表单；打开状态、输入控件与表单动作都归实体。
+    pub(crate) form: Entity<SessionFormView>,
     pub(crate) folder_form: Option<FolderForm>,
     pub(crate) batch_edit: Option<BatchEditForm>,
 }
 
 impl SessionModals {
-    fn new() -> Self {
+    fn new(form: Entity<SessionFormView>) -> Self {
         Self {
-            form: None,
+            form,
             folder_form: None,
             batch_edit: None,
         }
@@ -125,6 +126,7 @@ impl ModalHub {
 
     /// 构造新的模态聚合容器。
     pub(crate) fn new(
+        session_form: Entity<SessionFormView>,
         known_hosts: Entity<KnownHostsView>,
         settings: Entity<SettingsView>,
         tools: ToolModalEntities,
@@ -132,7 +134,7 @@ impl ModalHub {
         snippet_panel: SnippetPanelState,
     ) -> Self {
         Self {
-            session: SessionModals::new(),
+            session: SessionModals::new(session_form),
             connection: ConnectionModals {
                 auth_prompt: None,
                 host_key_confirm: None,

@@ -49,10 +49,7 @@ pub(crate) fn render_proxy_section(
             ),
         ],
         |this, choice, _window, cx| {
-            if let Some(form) = this.state.modals.session.form.as_mut() {
-                form.proxy_choice = choice;
-            }
-            cx.notify();
+            this.update_session_form(cx, |form| form.proxy_choice = choice);
         },
         app,
     ));

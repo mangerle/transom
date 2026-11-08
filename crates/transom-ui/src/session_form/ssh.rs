@@ -37,10 +37,7 @@ pub(crate) fn render_ssh_fields(
     .on_click(crate::dialog_host::on_event(
         app,
         |this, _: &ClickEvent, _, cx| {
-            if let Some(form) = this.state.modals.session.form.as_mut() {
-                form.auth = AuthChoice::Password;
-            }
-            cx.notify();
+            this.update_session_form(cx, |form| form.auth = AuthChoice::Password);
         },
     ));
 
@@ -57,10 +54,7 @@ pub(crate) fn render_ssh_fields(
     .on_click(crate::dialog_host::on_event(
         app,
         |this, _: &ClickEvent, _, cx| {
-            if let Some(form) = this.state.modals.session.form.as_mut() {
-                form.auth = AuthChoice::PrivateKey;
-            }
-            cx.notify();
+            this.update_session_form(cx, |form| form.auth = AuthChoice::PrivateKey);
         },
     ));
 
@@ -77,10 +71,7 @@ pub(crate) fn render_ssh_fields(
     .on_click(crate::dialog_host::on_event(
         app,
         |this, _: &ClickEvent, _, cx| {
-            if let Some(form) = this.state.modals.session.form.as_mut() {
-                form.auth = AuthChoice::Agent;
-            }
-            cx.notify();
+            this.update_session_form(cx, |form| form.auth = AuthChoice::Agent);
         },
     ));
 
@@ -126,11 +117,9 @@ pub(crate) fn render_ssh_fields(
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     |this, _: &ClickEvent, _, cx| {
-                                        if let Some(form) = this.state.modals.session.form.as_mut()
-                                        {
+                                        this.update_session_form(cx, |form| {
                                             form.identity_choice = None;
-                                        }
-                                        cx.notify();
+                                        });
                                     },
                                 )),
                         )
@@ -144,11 +133,9 @@ pub(crate) fn render_ssh_fields(
                                 .on_click(crate::dialog_host::on_event(
                                     app,
                                     move |this, _: &ClickEvent, _, cx| {
-                                        if let Some(form) = this.state.modals.session.form.as_mut()
-                                        {
+                                        this.update_session_form(cx, |form| {
                                             form.identity_choice = Some(identity_id);
-                                        }
-                                        cx.notify();
+                                        });
                                     },
                                 ))
                         })),
@@ -200,10 +187,9 @@ pub(crate) fn render_ssh_fields(
                         .on_click(crate::dialog_host::on_event(
                             app,
                             |this, checked: &bool, _, cx| {
-                                if let Some(form) = this.state.modals.session.form.as_mut() {
+                                this.update_session_form(cx, |form| {
                                     form.auto_reconnect = *checked;
-                                }
-                                cx.notify();
+                                });
                             },
                         )),
                 ),
@@ -225,10 +211,9 @@ pub(crate) fn render_ssh_fields(
                         .on_click(crate::dialog_host::on_event(
                             app,
                             |this, checked: &bool, _, cx| {
-                                if let Some(form) = this.state.modals.session.form.as_mut() {
+                                this.update_session_form(cx, |form| {
                                     form.agent_forward = *checked;
-                                }
-                                cx.notify();
+                                });
                             },
                         )),
                 ),

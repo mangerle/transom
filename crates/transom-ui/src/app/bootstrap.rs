@@ -327,6 +327,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         restart_requested,
     } = input;
     let git_registry = services.git_projects.load().unwrap_or_default();
+    let session_form = cx.new(|_| crate::session_form::SessionFormView::new());
     let known_hosts_view = cx.new(|_| {
         KnownHostsView::new(
             services.known_hosts.clone(),
@@ -349,6 +350,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         vertical_tabs_search: inputs.vertical_tabs_search.clone(),
         vertical_tabs_open,
         modals: ModalHub::new(
+            session_form,
             known_hosts_view,
             settings_view,
             ToolModalEntities {

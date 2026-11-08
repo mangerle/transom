@@ -3,7 +3,6 @@
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::palette::Palette;
-use crate::session_form::SessionForm;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
@@ -128,24 +127,23 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let path = self.state.catalog.folder_path(folder_id);
-        let mut form = SessionForm::new(
-            window,
-            cx,
-            crate::session_form::SessionFormInit {
-                base: None,
-                folder_path: path.clone(),
-                identities: self.state.identity_options(),
-                jump_options: self.state.jump_options(None),
-                folder_options: self.state.folder_paths(),
-                global_proxy: app_settings(cx).proxy.clone(),
-                block_view: transom_core::BlockViewOverride::FollowGlobal,
-            },
-        );
         let defaults = self.state.catalog.inherited_folder_defaults(folder_id);
-        if let Some(folder_path) = path {
-            form.apply_folder_selection(&folder_path, &defaults, window, cx);
-        }
-        self.install_session_form(form, cx);
+        let init = crate::session_form::SessionFormInit {
+            base: None,
+            folder_path: path.clone(),
+            identities: self.state.identity_options(),
+            jump_options: self.state.jump_options(None),
+            folder_options: self.state.folder_paths(),
+            global_proxy: app_settings(cx).proxy.clone(),
+            block_view: transom_core::BlockViewOverride::FollowGlobal,
+        };
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| {
+            view.open(init, window, cx);
+            if let Some(folder_path) = path {
+                view.apply_folder_selection(&folder_path, &defaults, window, cx);
+            }
+        });
         cx.notify();
     }
 

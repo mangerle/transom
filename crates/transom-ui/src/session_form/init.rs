@@ -163,7 +163,7 @@ impl SessionForm {
         path: &str,
         defaults: &transom_core::FolderInheritedDefaults,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized + 'static>,
     ) {
         self.folder_path
             .update(cx, |state, cx| state.set_value(path, window, cx));

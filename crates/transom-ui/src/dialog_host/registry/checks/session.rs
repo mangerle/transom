@@ -2,19 +2,12 @@
 use crate::app::AppShell;
 use gpui_kit::App;
 
-pub(in crate::app::dialog_host) fn session_form_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.session.form.is_some()
+pub(in crate::app::dialog_host) fn session_form_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.session.form.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn session_form_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell
-        .state
-        .modals
-        .session
-        .form
-        .as_ref()
-        .map(|form| form.text_values(cx))
-        .unwrap_or_default()
+    shell.state.modals.session.form.read(cx).text_values(cx)
 }
 
 pub(in crate::app::dialog_host) fn folder_form_open(shell: &AppShell, _: &App) -> bool {

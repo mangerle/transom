@@ -63,12 +63,7 @@ impl AppShell {
             .on_open_change(move |open, _window, cx| {
                 let open = *open;
                 toggle_app.update(cx, |this, cx| {
-                    if let Some(form) = this.state.modals.session.form.as_mut()
-                        && form.folder_open != open
-                    {
-                        form.folder_open = open;
-                        cx.notify();
-                    }
+                    this.update_session_form(cx, |form| form.folder_open = open);
                 });
             })
             .trigger_style(StyleRefinement::default().w_full())
@@ -178,9 +173,6 @@ impl AppShell {
 
     /// 关闭文件夹候选下拉；选中候选或清空后调用，避免弹层继续驻留。
     fn close_form_folder_menu(&mut self, cx: &mut Context<Self>) {
-        if let Some(form) = self.state.modals.session.form.as_mut() {
-            form.folder_open = false;
-        }
-        cx.notify();
+        self.update_session_form(cx, |form| form.folder_open = false);
     }
 }

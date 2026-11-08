@@ -5,6 +5,7 @@
 mod appearance;
 mod builder;
 mod defaults;
+mod entity;
 mod init;
 mod proxy;
 mod serial;
@@ -13,6 +14,7 @@ mod telnet;
 mod types;
 mod view;
 
+pub(crate) use entity::SessionFormView;
 pub(crate) use init::text_input;
 pub(crate) use types::{
     AuthChoice, ConnectionChoice, IdentityOption, JumpOption, SessionForm, SessionFormInit,

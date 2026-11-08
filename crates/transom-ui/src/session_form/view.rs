@@ -55,10 +55,7 @@ impl AppShell {
                         .on_click(crate::dialog_host::on_event(
                             app,
                             |this, _: &ClickEvent, _, cx| {
-                                if let Some(form) = this.state.modals.session.form.as_mut() {
-                                    form.confirm_delete = true;
-                                }
-                                cx.notify();
+                                this.update_session_form(cx, |form| form.confirm_delete = true);
                             },
                         )),
                 );
@@ -69,8 +66,7 @@ impl AppShell {
                 "cancel-session",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.session.form = None;
-                    cx.notify();
+                    this.close_session_form(cx);
                 }),
             ))
             .child(crate::widgets::dialog_confirm_button(
@@ -95,14 +91,12 @@ impl AppShell {
 
     pub(crate) fn render_session_form_body(
         &self,
+        form: &crate::session_form::SessionForm,
         app: &Entity<AppShell>,
         _window: &mut Window,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.modals.session.form.as_ref() else {
-            return div().into_any_element();
-        };
         let title = if form.base.is_some() {
             rust_i18n::t!("form.edit_title").to_string()
         } else {

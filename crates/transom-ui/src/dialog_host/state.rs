@@ -103,7 +103,12 @@ impl ModalKind {
                 true
             }
             ModalKind::SessionForm => {
-                shell.state.modals.session.form = None;
+                shell
+                    .state
+                    .modals
+                    .session
+                    .form
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::FolderForm => {
@@ -368,14 +373,16 @@ impl ModalKind {
                     });
                 input.map_or(ModalFocus::None, ModalFocus::Input)
             }
-            ModalKind::SessionForm => input_focus(shell, |state| {
-                state
-                    .modals
-                    .session
-                    .form
-                    .as_ref()
-                    .map(|form| form.name.clone())
-            }),
+            ModalKind::SessionForm => shell
+                .state
+                .modals
+                .session
+                .form
+                .read(cx)
+                .state()
+                .map_or(ModalFocus::None, |form| {
+                    ModalFocus::Input(form.name.clone())
+                }),
             ModalKind::FolderForm => input_focus(shell, |state| {
                 state
                     .modals
