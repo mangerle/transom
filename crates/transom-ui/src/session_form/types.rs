@@ -183,6 +183,7 @@ pub(crate) struct JumpOption {
     pub jump_session_id: Option<SessionId>,
 }
 
+#[derive(Clone)]
 pub(crate) struct BuiltSession {
     pub session: Session,
     pub folder_path: Option<String>,

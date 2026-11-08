@@ -42,7 +42,14 @@ impl AppShell {
                         .label(rust_i18n::t!("common.confirm_delete").to_string())
                         .on_click(crate::dialog_host::on_event(
                             app,
-                            |this, _: &ClickEvent, _, cx| this.delete_session_form(cx),
+                            |this, _: &ClickEvent, _, cx| {
+                                this.state
+                                    .modals
+                                    .session
+                                    .form
+                                    .update(cx, |view, cx| view.delete(cx));
+                                cx.notify();
+                            },
                         )),
                 );
             } else {
@@ -75,7 +82,12 @@ impl AppShell {
                 Some(IconName::Check),
                 crate::widgets::DialogConfirmKind::Primary,
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.save_session_form(cx);
+                    this.state
+                        .modals
+                        .session
+                        .form
+                        .update(cx, |view, cx| view.save(cx));
+                    cx.notify();
                 }),
             ));
 

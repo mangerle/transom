@@ -259,7 +259,14 @@ impl ModalKind {
                     shell.submit_container_create(tab_id, window, cx);
                 }
             }
-            ModalKind::SessionForm => shell.save_session_form(cx),
+            ModalKind::SessionForm => {
+                shell
+                    .state
+                    .modals
+                    .session
+                    .form
+                    .update(cx, |view, cx| view.save(cx));
+            }
             ModalKind::FolderForm => shell.save_folder_form(cx),
             ModalKind::BatchEdit => shell.save_batch_edit(cx),
             ModalKind::SnippetForm => shell.save_snippet_form(cx),

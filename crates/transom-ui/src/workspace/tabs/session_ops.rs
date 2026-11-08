@@ -244,20 +244,42 @@ impl AppShell {
         );
     }
 
-    /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
-    pub(crate) fn save_session_form(&mut self, cx: &mut Context<Self>) {
-        let view = self.state.modals.session.form.clone();
-        let editing = view
-            .read(cx)
-            .state()
-            .is_some_and(|form| form.base.is_some());
-        let Some((built, save_password, save_passphrase)) =
-            view.update(cx, |view, cx| view.take_built(cx))
-        else {
-            return;
-        };
+    /// 消费会话表单实体上交的保存与删除意图。
+    ///
+    /// 事件自带构建结果与会话 ID，这里禁止回读实体，避免实体 emit 期间
+    /// 形成双重租借。
+    pub(crate) fn on_session_form_event(
+        &mut self,
+        event: &crate::session_form::SessionFormEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            crate::session_form::SessionFormEvent::Save {
+                built,
+                save_password,
+                save_passphrase,
+            } => self.apply_session_form_save(built, *save_password, *save_passphrase, cx),
+            crate::session_form::SessionFormEvent::Delete { session_id } => {
+                self.delete_session_by_id(*session_id, cx);
+            }
+        }
+    }
 
-        let mut built = built;
+    /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
+    fn apply_session_form_save(
+        &mut self,
+        built: &crate::session_form::BuiltSession,
+        save_password: bool,
+        save_passphrase: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let editing = self
+            .state
+            .catalog
+            .sessions
+            .iter()
+            .any(|session| session.id == built.session.id);
+        let mut built = built.clone();
         built.session.folder_id = built
             .folder_path
             .as_deref()
@@ -324,18 +346,6 @@ impl AppShell {
         }
         self.state.persist_catalog();
         cx.notify();
-    }
-
-    pub(crate) fn delete_session_form(&mut self, cx: &mut Context<Self>) {
-        let view = self.state.modals.session.form.clone();
-        let session_id = view
-            .read(cx)
-            .state()
-            .and_then(|form| form.base.as_ref().map(|base| base.id));
-        view.update(cx, |view, cx| view.close(cx));
-        if let Some(session_id) = session_id {
-            self.delete_session_by_id(session_id, cx);
-        }
     }
 }
 

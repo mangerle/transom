@@ -196,6 +196,13 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.settings = Some(settings_subscription);
+        let session_form_subscription = cx.subscribe(
+            &self.state.modals.session.form,
+            |shell, _view, event: &crate::session_form::SessionFormEvent, cx| {
+                shell.on_session_form_event(event, cx);
+            },
+        );
+        self.state.tasks.subscriptions.session_form = Some(session_form_subscription);
         let metrics_subscription = cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {

@@ -18,7 +18,25 @@ use super::types::{BuiltSession, SessionForm, SessionFormInit};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
-use transom_core::{AppError, FolderInheritedDefaults, SerialPortDescriptor};
+use transom_core::{AppError, FolderInheritedDefaults, SerialPortDescriptor, SessionId};
+
+/// 会话表单交给外壳处理的意图。
+///
+/// 事件自带全部数据：外壳处理时禁止回读实体，否则会在实体回调期间触发
+/// GPUI 的双重租借崩溃。
+pub(crate) enum SessionFormEvent {
+    /// 校验通过后的构建结果；实体已先关闭再发出本事件。
+    Save {
+        /// 构建结果体积远大于删除事件，装箱避免枚举整体变大。
+        built: Box<BuiltSession>,
+        save_password: bool,
+        save_passphrase: bool,
+    },
+    /// 删除当前编辑的会话；实体已先关闭再发出本事件。
+    Delete { session_id: SessionId },
+}
+
+impl EventEmitter<SessionFormEvent> for SessionFormView {}
 
 /// 会话新建/编辑表单实体。
 pub(crate) struct SessionFormView {
@@ -72,11 +90,36 @@ impl SessionFormView {
             .unwrap_or_default()
     }
 
-    /// 校验并取出构建结果；成功即关闭表单，失败把错误写回弹窗并保持打开。
-    pub(crate) fn take_built(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Option<(BuiltSession, bool, bool)> {
+    /// 校验并提交表单：成功先关闭再上交 [`SessionFormEvent::Save`]；
+    /// 失败把错误写回弹窗并保持打开，等待用户就地改正。
+    pub(crate) fn save(&mut self, cx: &mut Context<Self>) {
+        let Some((built, save_password, save_passphrase)) = self.build(cx) else {
+            return;
+        };
+        self.state = None;
+        cx.emit(SessionFormEvent::Save {
+            built: Box::new(built),
+            save_password,
+            save_passphrase,
+        });
+        cx.notify();
+    }
+
+    /// 关闭表单并上交删除意图；新建态没有可删除的会话，只关闭。
+    pub(crate) fn delete(&mut self, cx: &mut Context<Self>) {
+        let Some(form) = self.state.take() else {
+            return;
+        };
+        if let Some(base) = form.base {
+            cx.emit(SessionFormEvent::Delete {
+                session_id: base.id,
+            });
+        }
+        cx.notify();
+    }
+
+    /// 校验并取出构建结果；失败时把错误写回弹窗。
+    fn build(&mut self, cx: &mut Context<Self>) -> Option<(BuiltSession, bool, bool)> {
         let (built, save_password, save_passphrase) = {
             let form = self.state.as_mut()?;
             let save_password = form.save_password;
@@ -90,8 +133,6 @@ impl SessionFormView {
                 }
             }
         };
-        self.state = None;
-        cx.notify();
         Some((built, save_password, save_passphrase))
     }
 

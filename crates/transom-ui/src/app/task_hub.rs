@@ -44,6 +44,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) monitor: Option<Subscription>,
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     pub(crate) settings: Option<Subscription>,
+    /// 会话表单：保存落目录与删除会话由外壳处理。
+    pub(crate) session_form: Option<Subscription>,
     pub(crate) known_hosts: Option<Subscription>,
     /// 密钥向导：状态栏提示与命令发送失败由外壳处理。
     pub(crate) key_wizard: Option<Subscription>,
@@ -67,6 +69,7 @@ impl PanelSubscriptions {
             monitor: None,
             forward: HashMap::new(),
             settings: None,
+            session_form: None,
             known_hosts: None,
             key_wizard: None,
             backup: None,

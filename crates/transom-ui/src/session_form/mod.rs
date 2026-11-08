@@ -14,8 +14,9 @@ mod telnet;
 mod types;
 mod view;
 
-pub(crate) use entity::SessionFormView;
+pub(crate) use entity::{SessionFormEvent, SessionFormView};
 pub(crate) use init::text_input;
 pub(crate) use types::{
-    AuthChoice, ConnectionChoice, IdentityOption, JumpOption, SessionForm, SessionFormInit,
+    AuthChoice, BuiltSession, ConnectionChoice, IdentityOption, JumpOption, SessionForm,
+    SessionFormInit,
 };
