@@ -14,6 +14,8 @@ pub enum ShellKind {
     Bash,
     Zsh,
     Fish,
+    /// PowerShell 5.1 / PowerShell 7+。
+    PowerShell,
     /// 未识别的方言：不注入，避免把 bash 语法喂给别的解释器。
     Other,
 }
@@ -25,6 +27,7 @@ impl ShellKind {
             ShellKind::Bash => "bash",
             ShellKind::Zsh => "zsh",
             ShellKind::Fish => "fish",
+            ShellKind::PowerShell => "powershell",
             ShellKind::Other => "other",
         }
     }
@@ -42,13 +45,15 @@ impl ShellKind {
 pub fn detect_shell(shell_path: &str) -> ShellKind {
     let lower = shell_path.to_ascii_lowercase();
     // 只看路径末段：`/usr/local/bin/fish` 里含 "fish"，而 `/bin/sh` 含 "sh" 太宽。
-    let name = lower.rsplit('/').next().unwrap_or(lower.as_str());
+    let name = lower.rsplit(['/', '\\']).next().unwrap_or(lower.as_str());
     if name.contains("zsh") {
         ShellKind::Zsh
     } else if name.contains("fish") {
         ShellKind::Fish
     } else if name.contains("bash") {
         ShellKind::Bash
+    } else if name.contains("powershell") || name.contains("pwsh") {
+        ShellKind::PowerShell
     } else {
         ShellKind::Other
     }
@@ -127,6 +132,27 @@ pub const FISH_INTEGRATION_SCRIPT: &str = concat!(
     "; end"
 );
 
+/// PowerShell 集成脚本（单行，供本地启动参数预装）。
+///
+/// 设计原理（Why）：PowerShell 没有 bash 的 DEBUG trap 或 zsh 的 preexec，但
+/// 可以包装全局 `prompt` 函数，在每条命令结束后发送 OSC 133 D/A 与 OSC 7；
+/// PSReadLine 可用时再用 Enter 键处理器在提交命令前发送 OSC 133 C。
+///
+/// 安全与兼容：原 prompt 函数先保存再调用，不覆盖用户提示符；使用
+/// `[char]27` 兼容 Windows PowerShell 5.1；只通过 `-Command` 参数注入，
+/// 不写磁盘、不修改用户 profile。
+pub const POWERSHELL_INTEGRATION_SCRIPT: &str = concat!(
+    r#"if (-not $env:TRANSOM_SI) { $env:TRANSOM_SI='1'; "#,
+    r#"$global:__transom_esc=[char]27; $global:__transom_bel=[char]7; "#,
+    r#"$global:__transom_prompt=$function:prompt; "#,
+    r#"function global:prompt { $__transom_ok=$?; $__transom_code=if ($__transom_ok) {0} elseif ($LASTEXITCODE) {$LASTEXITCODE} else {1}; "#,
+    r#"[Console]::Write("$global:__transom_esc]133;D;$__transom_code$global:__transom_bel$global:__transom_esc]133;A$global:__transom_bel"); "#,
+    r#"[Console]::Write("$global:__transom_esc]7;$([Uri]::new((Get-Location).Path).AbsoluteUri)$global:__transom_bel"); "#,
+    r#"if ($global:__transom_prompt) { & $global:__transom_prompt } else { "PS $((Get-Location).Path)> " } }; "#,
+    r#"if (Get-Module -ListAvailable PSReadLine) { Import-Module PSReadLine -ErrorAction SilentlyContinue; Set-PSReadLineKeyHandler -Key Enter -ScriptBlock { [Console]::Write("$global:__transom_esc]133;C$global:__transom_bel"); [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine() } -ErrorAction SilentlyContinue }; "#,
+    r#"[Console]::Write("$global:__transom_esc]777;transom;ready=powershell$global:__transom_bel") }"#
+);
+
 /// 注入命令末尾追加的清行命令：执行后擦掉这条命令自己的回显。
 ///
 /// 设计原理（Why）：
@@ -197,6 +223,7 @@ pub fn integration_script(kind: ShellKind) -> Option<&'static str> {
         ShellKind::Bash => Some(BASH_INTEGRATION_SCRIPT),
         ShellKind::Zsh => Some(ZSH_INTEGRATION_SCRIPT),
         ShellKind::Fish => Some(FISH_INTEGRATION_SCRIPT),
+        ShellKind::PowerShell => Some(POWERSHELL_INTEGRATION_SCRIPT),
         ShellKind::Other => None,
     }
 }
@@ -204,8 +231,8 @@ pub fn integration_script(kind: ShellKind) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, ShellKind, ZSH_INTEGRATION_SCRIPT,
-        detect_shell, injection_payload, probe_command,
+        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, POWERSHELL_INTEGRATION_SCRIPT, ShellKind,
+        ZSH_INTEGRATION_SCRIPT, detect_shell, injection_payload, probe_command,
     };
 
     /// 每份脚本都必须：自带解释器判定、幂等保护、发 A/C/D 标记、上报 cwd、回报 ready。
@@ -215,15 +242,20 @@ mod tests {
             (BASH_INTEGRATION_SCRIPT, "ready=bash"),
             (ZSH_INTEGRATION_SCRIPT, "ready=zsh"),
             (FISH_INTEGRATION_SCRIPT, "ready=fish"),
+            (POWERSHELL_INTEGRATION_SCRIPT, "ready=powershell"),
         ] {
             assert!(script.contains("133;A"), "缺少提示符标记: {script}");
             assert!(script.contains("133;C"), "缺少执行标记: {script}");
             assert!(script.contains("133;D"), "缺少结束标记: {script}");
             assert!(
-                script.contains("7;file://"),
+                script.contains("7;")
+                    && (script.contains("$PWD") || script.contains("AbsoluteUri")),
                 "缺少 OSC 7 cwd 上报: {script}"
             );
-            assert!(script.contains("$PWD"), "cwd 必须取当前目录: {script}");
+            assert!(
+                script.contains("$PWD") || script.contains("Get-Location"),
+                "cwd 必须取当前目录: {script}"
+            );
             assert!(script.contains("777;transom;"), "缺少 ready 回报: {script}");
             assert!(script.contains(ready));
             assert!(
@@ -288,5 +320,13 @@ mod tests {
         assert_eq!(detect_shell("/usr/local/bin/fish"), ShellKind::Fish);
         assert_eq!(detect_shell("/bin/sh"), ShellKind::Other);
         assert_eq!(detect_shell("/usr/bin/zsh"), ShellKind::Zsh);
+        assert_eq!(
+            detect_shell(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"),
+            ShellKind::PowerShell
+        );
+        assert_eq!(
+            detect_shell(r"C:\Program Files\PowerShell\7\pwsh.exe"),
+            ShellKind::PowerShell
+        );
     }
 }

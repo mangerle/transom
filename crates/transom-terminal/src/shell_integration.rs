@@ -271,6 +271,13 @@ impl ShellIntegration {
                         return IntegrationAction::None;
                     }
                 };
+                if kind == ShellKind::PowerShell {
+                    log::warn!(
+                        "远程 PowerShell 不适用于当前终端侧注入协议，需使用本地启动预装: {shell}"
+                    );
+                    self.stop(IntegrationHalt::UnsupportedShell);
+                    return IntegrationAction::None;
+                }
                 self.phase = IntegrationPhase::Injecting { kind, at: now };
                 IntegrationAction::Inject(kind)
             }
@@ -305,7 +312,9 @@ impl ShellIntegration {
                 log::info!("远端已在输出 OSC 133 标记，跳过注入，改用既有集成")
             }
             IntegrationHalt::UnsupportedShell => {
-                log::warn!("登录 shell 方言不在支持列表（bash/zsh/fish），跳过注入{shell}")
+                log::warn!(
+                    "登录 shell 不在当前自动注入支持范围（bash/zsh/fish/powershell 本地预装），跳过注入{shell}"
+                )
             }
             IntegrationHalt::NoShellReport => {
                 log::warn!("Shell 探针回报的 SHELL 为空，跳过注入")
@@ -325,7 +334,8 @@ impl ShellIntegration {
 mod tests {
     use super::*;
     use transom_core::protocol::shell_integration::{
-        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, ZSH_INTEGRATION_SCRIPT,
+        BASH_INTEGRATION_SCRIPT, FISH_INTEGRATION_SCRIPT, POWERSHELL_INTEGRATION_SCRIPT,
+        ZSH_INTEGRATION_SCRIPT,
     };
 
     fn ctx_at(now: Instant) -> IntegrationContext {
@@ -351,8 +361,33 @@ mod tests {
         assert_eq!(detect_shell("/usr/local/bin/fish"), ShellKind::Fish);
         assert_eq!(detect_shell("/bin/sh"), ShellKind::Other);
         assert_eq!(detect_shell("/usr/bin/BASH"), ShellKind::Bash);
+        assert_eq!(
+            detect_shell(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"),
+            ShellKind::PowerShell
+        );
         // 只看末段：目录名里带 bash 不能误判成 bash。
         assert_eq!(detect_shell("/opt/bash-tools/run"), ShellKind::Other);
+    }
+
+    #[test]
+    fn powershell_is_preinstalled_not_remotely_injected() {
+        let now = Instant::now();
+        let mut integration = ShellIntegration::new(true);
+        probing(&mut integration);
+        assert_eq!(
+            integration.on_signal(
+                &IntegrationSignal::ShellReport {
+                    shell: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe".into(),
+                },
+                now,
+            ),
+            IntegrationAction::None
+        );
+        assert_eq!(integration.halt(), Some(IntegrationHalt::UnsupportedShell));
+        assert_eq!(
+            get_integration_script(ShellKind::PowerShell),
+            Some(POWERSHELL_INTEGRATION_SCRIPT)
+        );
     }
 
     #[test]

@@ -5,9 +5,8 @@
 //!   启动参数由我们决定，直接在 rcfile 里把钩子装好，就绕开了终端输入这条路；
 //! - 核心优势：预装完全不经过终端输入，屏幕上不会出现注入痕迹，也没有一闪而过；
 //! - 代价与局限：只有启动参数能表达的方言支持预装（bash 的 `--rcfile`、zsh 的
-//!   `ZDOTDIR`），fish 等方言没有等价手段，只能回退到终端侧注入，启动瞬间仍会
-//!   有一行一闪；预装只改当前会话的启动文件读取位置，用户原有配置由临时 rcfile
-//!   显式 source 回来，行为与不预装时等价。
+//!   `ZDOTDIR`、PowerShell 的 `-Command`），fish 等方言没有等价手段。预装只改
+//!   当前会话的启动文件读取位置，用户原有配置仍由 Shell 正常加载。
 
 use std::fs;
 use std::path::PathBuf;
@@ -44,6 +43,7 @@ pub(super) fn prepare(shell_path: &str) -> LocalShellPreload {
     let attempt = match detect_shell(shell_path) {
         ShellKind::Bash => prepare_bash(),
         ShellKind::Zsh => prepare_zsh(),
+        ShellKind::PowerShell => prepare_powershell(),
         // fish 没有等价的启动参数注入手段；它的注入只能写 stdin，会闪一行。
         _ => return LocalShellPreload::none(),
     };
@@ -106,6 +106,22 @@ fn prepare_zsh() -> Result<LocalShellPreload, String> {
     })
 }
 
+/// PowerShell：通过 `-NoExit -Command` 执行单行集成脚本，不写临时文件。
+fn prepare_powershell() -> Result<LocalShellPreload, String> {
+    let script = integration_script(ShellKind::PowerShell).ok_or("缺少 PowerShell 集成脚本")?;
+    Ok(LocalShellPreload {
+        kind: Some(ShellKind::PowerShell),
+        args: vec![
+            "-NoLogo".to_string(),
+            "-NoExit".to_string(),
+            "-Command".to_string(),
+            script.to_string(),
+        ],
+        env: Vec::new(),
+        cleanup: None,
+    })
+}
+
 /// 生成"source 用户同名启动文件"的一行；文件不存在时静默跳过。
 fn source_user_file(name: &str) -> String {
     format!("if [ -f \"$HOME/{name}\" ]; then . \"$HOME/{name}\"; fi\n")
@@ -129,7 +145,7 @@ fn write_file(path: &std::path::Path, content: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ShellKind, prepare_bash, prepare_zsh, source_user_file};
+    use super::{ShellKind, prepare_bash, prepare_powershell, prepare_zsh, source_user_file};
 
     /// 用户启动文件不存在时要静默跳过，不能让 Shell 因一条 source 报错而中断。
     #[test]
@@ -184,5 +200,22 @@ mod tests {
             .expect("必须先加载用户原有配置");
         let hook = content.find("ready=zsh").expect("必须装上集成脚本");
         assert!(user_config < hook, "用户配置必须排在钩子之前");
+    }
+
+    #[test]
+    fn powershell_preload_uses_no_exit_command_without_temp_files() {
+        let preload = prepare_powershell().expect("PowerShell 预装应当成功");
+        assert_eq!(preload.kind, Some(ShellKind::PowerShell));
+        assert_eq!(preload.args.first().map(String::as_str), Some("-NoLogo"));
+        assert!(preload.args.iter().any(|arg| arg == "-NoExit"));
+        assert!(preload.args.iter().any(|arg| arg == "-Command"));
+        assert!(
+            preload
+                .args
+                .iter()
+                .any(|arg| arg.contains("ready=powershell")),
+            "必须把 PowerShell 集成脚本作为单个 argv 传入"
+        );
+        assert!(preload.cleanup.is_none());
     }
 }
