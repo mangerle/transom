@@ -5,7 +5,7 @@
 //!   焦点捕获、层序、右上角关闭件与取消/确认语义一概拿不到。若把
 //!   `open_dialog`/`close_dialog` 散落到二十多个开关点去配对调用，弹窗状态与
 //!   容器栈必然漂移。这里改成"期望栈仍从既有状态推导，每帧与实际栈对账"，
-//!   各站点继续只写 `self.state.modals.xxx = Some(..)` / `None`。
+//!   各站点只写自己的弹窗状态（或实体打开标记），不再成对调用容器开关。
 //! - 核心优势：
 //!   1. 站点不需要成对的开关调用，新增入口不会漏掉容器操作；
 //!   2. 按键语义集中在本文件：取消、提交、脏拦截一处声明，不会出现某个弹窗
@@ -165,8 +165,8 @@ pub(crate) use stack::OpenModals;
 
 impl ModalKind {
     /// 弹窗体：内容与页脚仍由各领域自己渲染。
-    /// 设置、已知主机、备份、审计查看器与密钥向导弹窗的状态归实体，先克隆
-    /// 句柄再进入 `update`，其它弹窗直接读外壳。
+    /// 设置、已知主机、备份、审计查看器、密钥向导与会话回放弹窗的状态归实体，
+    /// 先克隆句柄再进入 `update`，其它弹窗直接读外壳。
     ///
     /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到实体的可变
     /// `update`”这类借用冲突：实体分支先克隆句柄、立即结束外壳借用。
@@ -202,6 +202,10 @@ impl ModalKind {
                 )
             };
             return view.update(cx, |view, cx| view.render_body(&targets, cx, p));
+        }
+        if self == ModalKind::Replay {
+            let view = app.read(cx).state.modals.tools.replay.clone();
+            return view.update(cx, |view, cx| view.render_body(cx, p));
         }
         let shell = app.read(cx);
         self.render_shell_body(shell, app, window, cx, p)
@@ -309,13 +313,8 @@ impl ModalKind {
             ModalKind::BackupPrompt => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::AuditViewer => div().into_any_element(),
-            ModalKind::Replay => {
-                let view = shell.state.modals.tools.replay.read(cx);
-                match view.state() {
-                    Some(state) => shell.render_replay_body(state, app, window, cx, p),
-                    None => div().into_any_element(),
-                }
-            }
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::Replay => div().into_any_element(),
             ModalKind::Settings => {
                 // 由 [`Self::render_body`] 的专用分支处理，这里不会走到。
                 div().into_any_element()

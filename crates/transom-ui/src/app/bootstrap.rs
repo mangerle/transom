@@ -6,6 +6,7 @@ use crate::app::update_app_settings;
 use crate::audit_viewer::AuditViewerEvent;
 use crate::backup::BackupPromptView;
 use crate::keys::{KeyWizardView, KnownHostsEvent, KnownHostsView, default_ssh_dir};
+use crate::record::ReplayEvent;
 use std::sync::atomic::AtomicBool;
 
 impl AppShell {
@@ -180,6 +181,14 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.audit_viewer = Some(audit_subscription);
+        let replay_subscription = cx.subscribe_in(
+            &self.state.modals.tools.replay,
+            window,
+            |shell, _view, event: &ReplayEvent, window, cx| {
+                shell.on_replay_event(event, window, cx);
+            },
+        );
+        self.state.tasks.subscriptions.replay = Some(replay_subscription);
         let settings_subscription = cx.subscribe(
             &self.state.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {

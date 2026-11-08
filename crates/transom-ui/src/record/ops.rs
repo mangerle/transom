@@ -1,15 +1,14 @@
-//! 终端录制启停、回放触发与独立播放器打开逻辑。
+//! 终端录制启停、回放选择入口与独立播放器打开逻辑；回放执行由 `shell.rs` 消费实体意图。
 
 use crate::app::app_settings;
 use crate::app::spawn_blocking_local;
 use crate::app::{AppShell, TerminalTab};
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use gpui_kit::*;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::path::PathBuf;
 use transom_core::{Connection, Session, TabId};
 use transom_platform::paths;
-use transom_terminal::{extract_replay_inputs, parse_cast_file};
+use transom_terminal::parse_cast_file;
 
 impl AppShell {
     /// 触发当前活动会话的录制开关（录制中则停止，未录制则启动）。
@@ -185,130 +184,6 @@ impl AppShell {
         self.state.workspace.create_group(tab_id, session_id);
         self.state.workspace.tabs.push(tab);
         self.activate_tab(tab_id, window, cx);
-        cx.notify();
-    }
-
-    /// 打开外部 `.cast` 文件并在独立播放器中打开。
-    pub(crate) fn pick_and_play_external_cast(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(path) = rfd::FileDialog::new()
-            .set_title(rust_i18n::t!("recorder.pick_replay_file").to_string())
-            .add_filter("asciinema cast (*.cast)", &["cast"])
-            .pick_file()
-        else {
-            return;
-        };
-
-        self.open_cast_player(path, None, window, cx);
-    }
-
-    /// 打开外部 `.cast` 文件并立即向当前终端重放。
-    pub(crate) fn pick_and_replay_external_cast(
-        &mut self,
-        tab_id: TabId,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(path) = rfd::FileDialog::new()
-            .set_title(rust_i18n::t!("recorder.pick_replay_file").to_string())
-            .add_filter("asciinema cast (*.cast)", &["cast"])
-            .pick_file()
-        else {
-            return;
-        };
-
-        self.execute_replay_file(tab_id, &path, cx);
-    }
-
-    /// 执行指定文件的重放。
-    pub(crate) fn execute_replay_file(
-        &mut self,
-        tab_id: TabId,
-        path: &Path,
-        cx: &mut Context<Self>,
-    ) {
-        let path = path.to_path_buf();
-        cx.spawn(async move |this, cx| {
-            let parse_path = path.clone();
-            let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await
-            else {
-                log::error!("解析回放脚本的线程创建失败");
-                let _ = this.update(cx, |this, cx| {
-                    this.state
-                        .set_error(rust_i18n::t!("recorder.parse_failed").to_string());
-                    cx.notify();
-                });
-                return;
-            };
-            let _ = this.update(cx, |this, cx| match parsed {
-                Ok((header, events)) => this.execute_replay_events(tab_id, header, events, cx),
-                Err(error) => {
-                    log::error!("解析回放脚本失败: {error}");
-                    this.state
-                        .set_error(rust_i18n::t!("recorder.parse_failed").to_string());
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
-    }
-
-    /// 解析完成后的输入流调度；必须在 UI 线程执行。
-    fn execute_replay_events(
-        &mut self,
-        tab_id: TabId,
-        header: transom_terminal::CastHeader,
-        events: Vec<transom_terminal::CastEvent>,
-        cx: &mut Context<Self>,
-    ) {
-        let steps = extract_replay_inputs(&events, 1.5);
-        if steps.is_empty() {
-            self.state.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
-            cx.notify();
-            return;
-        }
-
-        let Some(tab) = self.state.workspace.tab(tab_id) else {
-            return;
-        };
-        let Some(terminal) = tab.terminal() else {
-            return;
-        };
-
-        let step_count = steps.len();
-        self.state.status = Some(
-            rust_i18n::t!(
-                "recorder.replaying_start",
-                title = header
-                    .title
-                    .unwrap_or_else(|| rust_i18n::t!("recorder.script_fallback").to_string()),
-                count = step_count
-            )
-            .to_string(),
-        );
-
-        // 异步调度输入流回放
-        cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
-            for step in steps {
-                if step.delay_secs > 0.05 {
-                    cx.background_executor()
-                        .timer(Duration::from_secs_f64(step.delay_secs))
-                        .await;
-                }
-                terminal.update(cx, |term, cx| {
-                    term.send_text(&step.text, cx);
-                });
-            }
-            let _ = this.update(cx, |app, cx| {
-                app.state.status = Some(rust_i18n::t!("recorder.replay_completed").to_string());
-                cx.notify();
-            });
-        })
-        .detach();
-
         cx.notify();
     }
 }

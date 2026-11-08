@@ -290,7 +290,7 @@ impl ModalKind {
                 .modals
                 .tools
                 .replay
-                .update(cx, |view, cx| view.close(cx)),
+                .update(cx, |view, cx| view.confirm(cx)),
             ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
             ModalKind::DiffViewer => shell.close_diff_viewer(cx),
