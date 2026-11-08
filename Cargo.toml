@@ -86,6 +86,8 @@ sysinfo = { version = "0.31", default-features = false, features = [
     "user",
     "multithread",
 ] }
+# Windows 安全描述符与文件 API：私有目录/文件创建时直接应用 DACL。
+windows = { version = "0.62", default-features = false }
 chrono = "0.4"
 globset = "0.4"
 # 文件行差异：Myers 算法实现，core 产出 hunk 契约，UI 复用同一结果渲染。

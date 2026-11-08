@@ -6,14 +6,22 @@
 //! 把“私有目录 0700、私有文件 0600”收敛到这里，调用方只表达“这是私有资源”，
 //! 不再各自复述一遍 Unix 权限细节。
 //!
-//! 代价与局限：非 Unix 平台没有等价的 mode 语义，只能依赖用户目录自身的 ACL；
-//! 因此这里的收紧是 Unix 专属，非 Unix 保持原有行为。
+//! 平台口径：
+//! - Unix：目录 0700、文件 0600；
+//! - Windows：为新建目录和文件应用受保护 DACL，仅允许当前用户、SYSTEM 与
+//!   内置管理员访问；
+//! - 其它平台：没有可移植的权限模型，保持原行为。
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
+#[cfg(not(windows))]
+use std::fs::OpenOptions;
 use std::io;
 use std::path::Path;
 
-/// 创建目录（含父目录），并在 Unix 上把新建目录的权限设为 0700。
+#[cfg(windows)]
+mod windows;
+
+/// 创建目录（含父目录），并在 Unix 上设为 0700、Windows 上应用私有 DACL。
 ///
 /// 已存在的目录不会被改权限：调用方可能传入 `/tmp` 或 `~/.config` 这类共享
 /// 父目录，静默收紧会影响其它程序。文件本身仍由 [`restrict_file_permissions`]
@@ -32,8 +40,13 @@ pub fn ensure_private_dir(dir: &Path) -> io::Result<()> {
             .create(dir)?;
     }
     #[cfg(not(unix))]
+    #[cfg(not(windows))]
     {
         std::fs::create_dir_all(dir)?;
+    }
+    #[cfg(windows)]
+    {
+        windows::ensure_private_dir(dir)?;
     }
     let metadata = std::fs::metadata(dir)?;
     if !metadata.is_dir() {
@@ -45,12 +58,12 @@ pub fn ensure_private_dir(dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// 把已打开文件的权限收紧到仅属主可读写（Unix 0600）。
+/// 把已打开文件的权限收紧到私有主体（Unix 0600 / Windows 私有 DACL）。
 ///
 /// 用句柄而不是路径设置权限，避免“检查路径后文件被替换”的竞态。
 ///
 /// # Errors
-/// Unix 上权限设置失败时返回底层 IO 错误；其它平台为空操作。
+/// Unix 或 Windows 上权限设置失败时返回底层 IO 错误；其它平台为空操作。
 pub fn restrict_file_permissions(file: &File) -> io::Result<()> {
     #[cfg(unix)]
     {
@@ -58,31 +71,43 @@ pub fn restrict_file_permissions(file: &File) -> io::Result<()> {
         file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
     }
     #[cfg(not(unix))]
+    #[cfg(not(windows))]
     {
         let _ = file;
+    }
+    #[cfg(windows)]
+    {
+        windows::restrict_file_permissions(file)?;
     }
     Ok(())
 }
 
 /// 以追加方式打开私有文件；不存在时创建，并保证权限为 0600。
 ///
-/// Unix 上在 open 时直接带 0600 模式，新建文件从第一刻起就不是宽权限；
-/// 随后仍对句柄收紧一次，兜底旧版本留下的宽权限文件。非 Unix 平台没有
-/// mode 语义，只保留句柄收紧（空操作）。
+/// Unix 上在 open 时直接带 0600 模式；Windows 上创建文件时携带私有安全
+/// 描述符，二者都从第一刻起限制访问。随后仍对句柄收紧一次，兜底旧版本
+/// 留下的宽权限文件。
 ///
 /// # Errors
 /// 打开或权限设置失败时返回底层 IO 错误。
 pub fn open_private_append(path: &Path) -> io::Result<File> {
-    let mut options = OpenOptions::new();
-    options.create(true).append(true);
-    #[cfg(unix)]
+    #[cfg(windows)]
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+        windows::open_private_append(path)
     }
-    let file = options.open(path)?;
-    restrict_file_permissions(&file)?;
-    Ok(file)
+    #[cfg(not(windows))]
+    {
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(path)?;
+        restrict_file_permissions(&file)?;
+        Ok(file)
+    }
 }
 
 /// 以截断方式创建/打开私有文件，并保证权限为 0600。
@@ -92,16 +117,23 @@ pub fn open_private_append(path: &Path) -> io::Result<File> {
 /// # Errors
 /// 打开或权限设置失败时返回底层 IO 错误。
 pub fn open_private_truncate(path: &Path) -> io::Result<File> {
-    let mut options = OpenOptions::new();
-    options.create(true).write(true).truncate(true);
-    #[cfg(unix)]
+    #[cfg(windows)]
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+        windows::open_private_truncate(path)
     }
-    let file = options.open(path)?;
-    restrict_file_permissions(&file)?;
-    Ok(file)
+    #[cfg(not(windows))]
+    {
+        let mut options = OpenOptions::new();
+        options.create(true).write(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(path)?;
+        restrict_file_permissions(&file)?;
+        Ok(file)
+    }
 }
 
 #[cfg(test)]
@@ -143,5 +175,26 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn private_dir_and_files_have_protected_windows_dacl() {
+        use super::*;
+        use std::io::Write;
+
+        let root = tempfile::tempdir().expect("临时目录应可创建");
+        let dir = root.path().join("private/logs");
+        ensure_private_dir(&dir).expect("私有目录应可创建");
+        super::windows::assert_private_acl(&dir, true);
+
+        let append = dir.join("append.log");
+        let mut file = open_private_append(&append).expect("追加文件应可打开");
+        file.write_all(b"line\n").expect("写入应成功");
+        super::windows::assert_private_acl(&append, false);
+
+        let truncate = dir.join("truncate.log");
+        let _file = open_private_truncate(&truncate).expect("截断文件应可打开");
+        super::windows::assert_private_acl(&truncate, false);
     }
 }
