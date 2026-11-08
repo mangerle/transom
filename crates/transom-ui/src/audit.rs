@@ -35,8 +35,7 @@ pub(crate) fn reveal_in_file_manager(path: PathBuf) {
 
 /// 用系统默认程序打开外部链接（"关于"页的项目主页）。
 ///
-/// 与打开目录共用同一条 xdg-open/`open`/`explorer` 通路：三者都接受 URL，
-/// 因此不必为链接再写一套进程派生与收割逻辑。调用方只传代码里的常量地址，
+/// 与打开目录共用平台层默认程序通路。调用方只传代码里的常量地址，
 /// 不接受用户或远端输入，不存在被诱导执行任意参数的风险。
 pub(crate) fn open_web_page(url: &str) {
     open_with_default_app(std::ffi::OsStr::new(url));
@@ -50,33 +49,16 @@ pub(crate) fn open_local_path(path: &std::path::Path) {
     open_with_default_app(path.as_os_str());
 }
 
-/// 交给系统默认程序处理一个目标，并在同一线程里收割子进程。
+/// 交给系统默认程序处理一个目标。
 ///
-/// 子进程在同一线程里 `wait` 收割，避免遗留僵尸进程；失败只记日志，
-/// 因为打不开文件管理器属于可降级的体验问题，不该冒泡成界面错误。
+/// `open` crate 负责平台启动器与子进程生命周期；失败只记日志，因为打不开
+/// 文件管理器属于可降级的体验问题，不应冒泡成界面错误。
 fn open_with_default_app(target: &std::ffi::OsStr) {
-    #[cfg(target_os = "macos")]
-    let program = "open";
-    #[cfg(target_os = "windows")]
-    let program = "explorer";
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    let program = "xdg-open";
-
-    let target = target.to_os_string();
-    let spawned = std::thread::Builder::new()
-        .name("transom-open-file-manager".into())
-        .spawn(
-            move || match std::process::Command::new(program).arg(&target).spawn() {
-                Ok(mut child) => {
-                    let _ = child.wait();
-                }
-                Err(error) => {
-                    log::warn!("调用系统默认程序失败，原因: {error}");
-                }
-            },
+    if let Err(error) = transom_platform::opener::open_with_default_app(target) {
+        log::warn!(
+            "调用系统默认程序失败，目标: {}，原因: {error}",
+            target.to_string_lossy()
         );
-    if spawned.is_err() {
-        log::warn!("启动系统默认程序线程失败，已忽略本次打开请求");
     }
 }
 

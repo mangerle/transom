@@ -29,7 +29,6 @@ flume.workspace = true
 rust-i18n.workspace = true
 zeroize.workspace = true
 rfd.workspace = true
-open.workspace = true
 directories.workspace = true
 notify-rust.workspace = true
 chrono.workspace = true

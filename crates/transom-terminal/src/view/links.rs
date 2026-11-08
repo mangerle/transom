@@ -22,10 +22,9 @@ impl TerminalView {
         match classify(&uri) {
             HyperlinkTarget::Url(uri) => {
                 log::info!("打开终端超链接: {uri}");
-                #[cfg(unix)]
-                open_external_uri(&uri);
-                #[cfg(not(unix))]
-                log::warn!("当前平台暂不支持打开终端超链接");
+                if let Err(error) = transom_platform::opener::open_with_default_app(&uri) {
+                    log::warn!("打开终端超链接失败，地址: {uri}，原因: {error}");
+                }
             }
             HyperlinkTarget::CodeLocation { path, line, column } => {
                 log::info!("打开终端代码位置: {path}:{line}:{column:?}");
@@ -82,24 +81,5 @@ impl TerminalView {
             self.hover_link = false;
             self.apply_pointer_style(window, false);
         }
-    }
-}
-
-/// 交给系统默认程序打开 URI，并在专用线程里回收子进程。
-#[cfg(unix)]
-fn open_external_uri(uri: &str) {
-    let uri = uri.to_string();
-    let spawned = std::thread::Builder::new()
-        .name("transom-open-uri".into())
-        .spawn(
-            move || match std::process::Command::new("xdg-open").arg(&uri).spawn() {
-                Ok(mut child) => {
-                    let _ = child.wait();
-                }
-                Err(error) => log::warn!("打开超链接失败，原因: {error}"),
-            },
-        );
-    if spawned.is_err() {
-        log::warn!("启动超链接打开线程失败，已忽略本次请求");
     }
 }

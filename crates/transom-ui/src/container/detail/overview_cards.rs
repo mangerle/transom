@@ -188,7 +188,13 @@ pub(super) fn render_port_chips(
                             .label(label)
                             .tooltip(url)
                             .on_click(move |_, _, _| {
-                                let _ = open::that_detached(&open_url);
+                                if let Err(error) =
+                                    transom_platform::opener::open_with_default_app(&open_url)
+                                {
+                                    log::warn!(
+                                        "打开容器概览链接失败，地址: {open_url}，原因: {error}"
+                                    );
+                                }
                             }),
                     )
                     .child(forward_btn)

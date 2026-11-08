@@ -5440,6 +5440,7 @@ version = "5.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d8c8b8e725ad26404d6896eb2f064294a0a7b4f1d9120210d85544684c4ca95"
 dependencies = [
+ "dunce",
  "is-wsl",
  "libc",
 ]
@@ -8714,6 +8715,7 @@ name = "transom-platform"
 version = "1.6.1"
 dependencies = [
  "directories",
+ "open",
  "sysinfo",
  "tempfile",
  "windows 0.62.2",
@@ -8794,7 +8796,6 @@ dependencies = [
  "image",
  "log",
  "notify-rust",
- "open",
  "parking_lot",
  "rand 0.10.3",
  "regex",

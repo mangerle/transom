@@ -72,7 +72,7 @@ zeroize = "1"
 async-trait = "0.1"
 rust-i18n = "4.2"
 rfd = "0.15"
-open = "5.4"
+open = { version = "5.4", features = ["shellexecute-on-windows"] }
 notify-rust = "4"
 # 同步子进程的跨平台进程组/Job Object 管理：Unix 使用进程组，Windows
 # 使用 CREATE_SUSPENDED + Job Object，超时时能连同孙进程一起回收。
