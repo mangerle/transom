@@ -8,8 +8,8 @@ use transom_core::{
     SshConnection, SshHop, TabId, TelnetConnection, TerminalAppEvent, TerminalIo, TerminalSize,
 };
 use transom_net::{
-    AuthPrompter, SshConnectParams, build_mosh_server_command, check_local_mosh_client,
-    connect_ssh, connect_telnet, open_serial, parse_mosh_server_output,
+    AuthPrompter, SshConnectParams, build_mosh_server_command, connect_ssh, connect_telnet,
+    local_mosh_client, open_serial, parse_mosh_server_output,
 };
 use transom_zmodem::ZmodemConfig;
 
@@ -394,15 +394,16 @@ async fn connect_mosh_task(
     log::info!("远端 mosh-server 启动成功，UDP 监听端口: {}", info.udp_port);
 
     // 2. 本地客户端检查
-    if !check_local_mosh_client() {
-        return Err(AppError::with_detail(
-            ErrorCode::Configuration,
+    let client = local_mosh_client().await.map_err(|error| {
+        let detail = error.detail.unwrap_or_else(|| "未知原因".to_string());
+        AppError::with_detail(
+            error.code,
             format!(
-                "远端 mosh-server 已成功启动（UDP 端口: {}），但本地未检测到 mosh-client。请先通过系统包管理器安装 mosh（例如 apt/brew/dnf install mosh）",
-                info.udp_port
+                "远端 mosh-server 已成功启动（UDP 端口: {}），但本地 Mosh 客户端不可用: {}",
+                info.udp_port, detail
             ),
-        ));
-    }
+        )
+    })?;
 
     // 3. 本地启动 mosh-client 桥接伪终端
     let pty_system = native_pty_system();
@@ -417,12 +418,16 @@ async fn connect_mosh_task(
             AppError::with_detail(ErrorCode::Io, format!("创建 Mosh 本地伪终端失败: {e}"))
         })?;
 
-    let mut command = CommandBuilder::new("mosh-client");
+    let mut command = CommandBuilder::new(&client.program);
+    command.args(&client.prefix);
     command.env("MOSH_KEY", &info.session_key);
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
     command.arg(&mosh.host);
     command.arg(info.udp_port.to_string());
+    for (key, value) in &client.env {
+        command.env(key, value);
+    }
 
     let mut child = pair.slave.spawn_command(command).map_err(|e| {
         AppError::with_detail(ErrorCode::Io, format!("启动本地 mosh-client 失败: {e}"))
