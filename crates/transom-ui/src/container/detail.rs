@@ -274,8 +274,8 @@ impl AppShell {
                 ContainerSection::Containers | ContainerSection::Compose,
                 ContainerDetailTab::Logs,
             ) => render_logs(
+                &view,
                 ContainerLogsView {
-                    tab_id,
                     logs: &logs,
                     follow: logs_follow,
                     tail: logs_tail,
@@ -285,7 +285,6 @@ impl AppShell {
                     filter: &logs_filter,
                 },
                 p,
-                cx,
             ),
             (ContainerSection::Containers, ContainerDetailTab::Terminal) => {
                 render_terminal(tab_id, terminal, terminal_user, terminal_shell, p, cx)

@@ -422,7 +422,11 @@ impl AppShell {
         }
 
         match tab {
-            ContainerDetailTab::Logs => self.ensure_container_logs(tab_id, cx),
+            ContainerDetailTab::Logs => {
+                if let Some(workspace) = workspace.as_ref() {
+                    workspace.update(cx, |workspace, _| workspace.ensure_container_logs());
+                }
+            }
             ContainerDetailTab::Stats => {
                 self.ensure_container_stats(tab_id, cx);
                 self.ensure_container_processes(tab_id, cx);

@@ -1,13 +1,13 @@
 //! 日志页签：跟随、行数与时间戳切换。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use crate::widgets::status_dot_bare;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
 
 /// 日志页签渲染参数。
 pub(crate) struct ContainerLogsView<'a> {
-    pub(super) tab_id: TabId,
     pub(super) logs: &'a str,
     pub(super) follow: bool,
     pub(super) tail: usize,
@@ -146,12 +146,11 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
 }
 
 pub(crate) fn render_logs(
-    view: ContainerLogsView<'_>,
+    view: &Entity<ContainerWorkspace>,
+    params: ContainerLogsView<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let ContainerLogsView {
-        tab_id,
         logs,
         follow,
         tail,
@@ -159,7 +158,7 @@ pub(crate) fn render_logs(
         reversed,
         search,
         filter,
-    } = view;
+    } = params;
 
     let all_lines_count = logs.lines().count();
     let lines = filtered_log_lines(logs, filter, reversed, LOG_RENDER_LIMIT);
@@ -172,10 +171,15 @@ pub(crate) fn render_logs(
         .when(!follow, |b| b.ghost())
         .icon(IconName::ScrollText)
         .label(rust_i18n::t!("container.logs.follow").to_string())
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.toggle_container_logs_follow(tab_id, !follow, cx);
-            cx.notify();
-        }));
+        .on_click({
+            let view = view.clone();
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.toggle_container_logs_follow(!follow);
+                    cx.notify();
+                });
+            }
+        });
 
     // 2. 尾部行数下拉菜单
     let tail_text = if tail == 0 {
@@ -183,7 +187,7 @@ pub(crate) fn render_logs(
     } else {
         rust_i18n::t!("container.logs.tail_format", count = tail).to_string()
     };
-    let app_tail = cx.entity().clone();
+    let tail_view = view.clone();
     let tail_dropdown = Button::new("container-logs-tail-dropdown")
         .ghost()
         .xsmall()
@@ -192,44 +196,44 @@ pub(crate) fn render_logs(
         .dropdown_menu(move |menu, _, _| {
             let mut menu = menu;
             for choice in LOG_TAIL_CHOICES {
-                let app = app_tail.clone();
                 let label = if choice == 0 {
                     rust_i18n::t!("container.logs.tail_all").to_string()
                 } else {
                     rust_i18n::t!("container.logs.tail_format", count = choice).to_string()
                 };
-                menu = menu.item(PopupMenuItem::new(label).checked(choice == tail).on_click(
+                menu = menu.item(PopupMenuItem::new(label).checked(choice == tail).on_click({
+                    let view = tail_view.clone();
                     move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            this.set_container_logs_tail(tab_id, choice, cx);
+                        view.update(cx, |workspace, cx| {
+                            workspace.set_container_logs_tail(choice);
                             cx.notify();
                         });
-                    },
-                ));
+                    }
+                }));
             }
             menu
         });
 
     // 3. 更多操作下拉菜单（时间戳、倒序、复制、导出、清空）
-    let app_more = cx.entity().clone();
+    let more_view = view.clone();
     let more_btn = Button::new("container-logs-more-menu")
         .ghost()
         .xsmall()
         .icon(IconName::Ellipsis)
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _, _| {
-            let app1 = app_more.clone();
-            let app2 = app_more.clone();
-            let app3 = app_more.clone();
-            let app4 = app_more.clone();
-            let app5 = app_more.clone();
+            let timestamps_view = more_view.clone();
+            let reverse_view = more_view.clone();
+            let copy_view = more_view.clone();
+            let export_view = more_view.clone();
+            let clear_view = more_view.clone();
 
             menu.item(
                 PopupMenuItem::new(rust_i18n::t!("container.logs.timestamps").to_string())
                     .checked(timestamps)
                     .on_click(move |_, _, cx| {
-                        app1.update(cx, |this, cx| {
-                            this.toggle_container_logs_timestamps(tab_id, cx);
+                        timestamps_view.update(cx, |workspace, cx| {
+                            workspace.toggle_container_logs_timestamps();
                             cx.notify();
                         });
                     }),
@@ -238,10 +242,8 @@ pub(crate) fn render_logs(
                 PopupMenuItem::new(rust_i18n::t!("container.logs.reverse").to_string())
                     .checked(reversed)
                     .on_click(move |_, _, cx| {
-                        app2.update(cx, |this, cx| {
-                            this.with_container_mut(tab_id, cx, |workspace| {
-                                workspace.logs_reversed = !workspace.logs_reversed;
-                            });
+                        reverse_view.update(cx, |workspace, cx| {
+                            workspace.state.logs_reversed = !workspace.state.logs_reversed;
                             cx.notify();
                         });
                     }),
@@ -251,8 +253,8 @@ pub(crate) fn render_logs(
                 rust_i18n::t!("container.logs.copy").to_string(),
                 IconName::Copy,
                 move |_, _, cx| {
-                    app3.update(cx, |this, cx| {
-                        this.copy_container_logs(tab_id, cx);
+                    copy_view.update(cx, |workspace, cx| {
+                        workspace.copy_container_logs(cx);
                     });
                 },
             ))
@@ -260,8 +262,8 @@ pub(crate) fn render_logs(
                 rust_i18n::t!("container.logs.export").to_string(),
                 IconName::Download,
                 move |_, _window, cx| {
-                    app4.update(cx, |this, cx| {
-                        this.export_container_logs(tab_id, cx);
+                    export_view.update(cx, |workspace, cx| {
+                        workspace.export_container_logs(cx);
                     });
                 },
             ))
@@ -270,10 +272,8 @@ pub(crate) fn render_logs(
                 rust_i18n::t!("container.logs.clear").to_string(),
                 IconName::Trash,
                 move |_, _, cx| {
-                    app5.update(cx, |this, cx| {
-                        this.with_container_mut(tab_id, cx, |workspace| {
-                            workspace.logs.clear();
-                        });
+                    clear_view.update(cx, |workspace, cx| {
+                        workspace.state.logs.clear();
                         cx.notify();
                     });
                 },
