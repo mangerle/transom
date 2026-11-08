@@ -309,7 +309,13 @@ impl ModalKind {
             ModalKind::BackupPrompt => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::AuditViewer => div().into_any_element(),
-            ModalKind::Replay => shell.render_replay_body(app, window, cx, p),
+            ModalKind::Replay => {
+                let view = shell.state.modals.tools.replay.read(cx);
+                match view.state() {
+                    Some(state) => shell.render_replay_body(state, app, window, cx, p),
+                    None => div().into_any_element(),
+                }
+            }
             ModalKind::Settings => {
                 // 由 [`Self::render_body`] 的专用分支处理，这里不会走到。
                 div().into_any_element()

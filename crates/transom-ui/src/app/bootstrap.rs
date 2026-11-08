@@ -328,6 +328,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     let backup_prompt = cx.new(|_| BackupPromptView::new(services.backup.clone()));
     let audit_viewer = cx.new(|_| crate::audit_viewer::AuditViewerView::new());
     let key_wizard = cx.new(|_| KeyWizardView::new(default_ssh_dir(), services.command_tx.clone()));
+    let replay = cx.new(|_| crate::record::ReplayModalView::new());
     AppState {
         services,
         catalog: prepared.catalog,
@@ -345,6 +346,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
                 backup_prompt,
                 audit_viewer,
                 key_wizard,
+                replay,
             },
             inputs.quick_open_state.clone(),
             SnippetPanelState {

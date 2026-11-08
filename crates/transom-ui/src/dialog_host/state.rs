@@ -155,7 +155,12 @@ impl ModalKind {
                 true
             }
             ModalKind::Replay => {
-                shell.state.modals.tools.replay = None;
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .replay
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::Settings => {
@@ -280,7 +285,12 @@ impl ModalKind {
                 .tools
                 .audit_viewer
                 .update(cx, |view, cx| view.close(cx)),
-            ModalKind::Replay => shell.state.modals.tools.replay = None,
+            ModalKind::Replay => shell
+                .state
+                .modals
+                .tools
+                .replay
+                .update(cx, |view, cx| view.close(cx)),
             ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
             ModalKind::DiffViewer => shell.close_diff_viewer(cx),

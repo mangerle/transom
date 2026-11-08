@@ -79,8 +79,8 @@ pub(in crate::app::dialog_host) fn audit_viewer_open(shell: &AppShell, cx: &App)
     shell.state.modals.tools.audit_viewer.read(cx).is_open()
 }
 
-pub(in crate::app::dialog_host) fn replay_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.tools.replay.is_some()
+pub(in crate::app::dialog_host) fn replay_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.tools.replay.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn snippet_form_open(shell: &AppShell, _: &App) -> bool {

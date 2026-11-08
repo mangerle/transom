@@ -1,5 +1,6 @@
 //! 终端录制底栏指示器与回放选择模态弹窗渲染。
 
+use super::ReplayModalState;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::status_bar::BADGE_HEIGHT;
@@ -117,24 +118,21 @@ impl AppShell {
     /// 渲染回放脚本选择弹窗。
     pub(crate) fn render_replay_body(
         &self,
+        state: &ReplayModalState,
         app: &Entity<AppShell>,
         _window: &mut Window,
         _cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(modal) = self.state.modals.tools.replay.as_ref() else {
-            return div().into_any_element();
-        };
-
-        let target_tab_id = modal.target_tab_id;
-        let selected_idx = modal.selected_index;
-        let selected_entry = modal.entries.get(selected_idx).cloned();
+        let target_tab_id = state.target_tab_id;
+        let selected_idx = state.selected_index;
+        let selected_entry = state.entries.get(selected_idx).cloned();
 
         let mut list = v_flex()
             .id("replay-script-list")
             .gap_1()
             .overflow_y_scroll();
-        if modal.entries.is_empty() {
+        if state.entries.is_empty() {
             list = list.child(
                 v_flex()
                     .p_4()
@@ -150,7 +148,7 @@ impl AppShell {
                     ),
             );
         } else {
-            for (idx, entry) in modal.entries.iter().enumerate() {
+            for (idx, entry) in state.entries.iter().enumerate() {
                 list = list.child(replay_row(idx, entry, idx == selected_idx, app, p));
             }
         }
@@ -210,7 +208,11 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, window, cx| {
-                                    this.state.modals.tools.replay = None;
+                                    this.state
+                                        .modals
+                                        .tools
+                                        .replay
+                                        .update(cx, |view, cx| view.close(cx));
                                     this.pick_and_play_external_cast(window, cx);
                                 },
                             )),
@@ -224,7 +226,11 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, window, cx| {
-                                    this.state.modals.tools.replay = None;
+                                    this.state
+                                        .modals
+                                        .tools
+                                        .replay
+                                        .update(cx, |view, cx| view.close(cx));
                                     this.pick_and_replay_external_cast(target_tab_id, window, cx);
                                 },
                             )),
@@ -249,7 +255,11 @@ impl AppShell {
                 "cancel-replay-modal",
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.tools.replay = None;
+                    this.state
+                        .modals
+                        .tools
+                        .replay
+                        .update(cx, |view, cx| view.close(cx));
                     cx.notify();
                 }),
             ))
@@ -268,7 +278,11 @@ impl AppShell {
                                 move |this, _: &ClickEvent, _, cx| {
                                     if let Some(entry) = selected_entry.as_ref() {
                                         let path = entry.path.clone();
-                                        this.state.modals.tools.replay = None;
+                                        this.state
+                                            .modals
+                                            .tools
+                                            .replay
+                                            .update(cx, |view, cx| view.close(cx));
                                         this.execute_replay_file(target_tab_id, &path, cx);
                                     }
                                 },
@@ -286,7 +300,11 @@ impl AppShell {
                                     if let Some(entry) = play_entry.as_ref() {
                                         let path = entry.path.clone();
                                         let title = entry.title.clone();
-                                        this.state.modals.tools.replay = None;
+                                        this.state
+                                            .modals
+                                            .tools
+                                            .replay
+                                            .update(cx, |view, cx| view.close(cx));
                                         this.open_cast_player(path, Some(title), window, cx);
                                     }
                                 },
@@ -337,16 +355,24 @@ fn replay_row(
             app,
             move |this, event: &ClickEvent, window, cx| {
                 if event.click_count() >= 2 {
-                    this.state.modals.tools.replay = None;
+                    this.state
+                        .modals
+                        .tools
+                        .replay
+                        .update(cx, |view, cx| view.close(cx));
                     this.open_cast_player(
                         entry_path.clone(),
                         Some(entry_title.clone()),
                         window,
                         cx,
                     );
-                } else if let Some(m) = this.state.modals.tools.replay.as_mut() {
-                    m.selected_index = idx;
-                    cx.notify();
+                } else {
+                    this.state.modals.tools.replay.update(cx, |view, cx| {
+                        if let Some(state) = view.state_mut() {
+                            state.selected_index = idx;
+                        }
+                        cx.notify();
+                    });
                 }
             },
         ))
@@ -374,7 +400,11 @@ fn replay_row(
                     .on_click(crate::dialog_host::on_event(
                         app,
                         move |this, _: &ClickEvent, window, cx| {
-                            this.state.modals.tools.replay = None;
+                            this.state
+                                .modals
+                                .tools
+                                .replay
+                                .update(cx, |view, cx| view.close(cx));
                             this.open_cast_player(
                                 item_play_path.clone(),
                                 Some(item_play_title.clone()),

@@ -1,6 +1,5 @@
 //! 终端录制启停、回放触发与独立播放器打开逻辑。
 
-use super::types::{ReplayModalState, scan_recordings};
 use crate::app::app_settings;
 use crate::app::spawn_blocking_local;
 use crate::app::{AppShell, TerminalTab};
@@ -83,26 +82,8 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let dir = paths::recordings_dir();
-        self.state.modals.tools.replay = Some(ReplayModalState {
-            target_tab_id: tab_id,
-            entries: Vec::new(),
-            selected_index: 0,
-        });
-        cx.spawn(async move |this, cx| {
-            let Some(entries) = spawn_blocking_local(move || scan_recordings(&dir)).await else {
-                log::error!("扫描录制目录的线程创建失败，回放列表为空");
-                return;
-            };
-            let _ = this.update(cx, |this, cx| {
-                if let Some(modal) = this.state.modals.tools.replay.as_mut() {
-                    modal.entries = entries;
-                    modal.selected_index = 0;
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+        let view = self.state.modals.tools.replay.clone();
+        view.update(cx, |view, cx| view.open(tab_id, cx));
         cx.notify();
     }
 

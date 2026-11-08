@@ -15,6 +15,7 @@ use crate::audit_viewer::AuditViewerView;
 use crate::backup::BackupPromptView;
 use crate::connection::{AuthPromptState, HostKeyConfirmState, PendingCredential};
 use crate::keys::{KeyWizardView, KnownHostsView};
+use crate::record::ReplayModalView;
 use crate::session_form::SessionForm;
 use crate::settings::SettingsView;
 use crate::sidebar::FolderForm;
@@ -56,11 +57,14 @@ pub(crate) struct ToolModalEntities {
     pub(crate) audit_viewer: Entity<AuditViewerView>,
     /// 密钥生成与管理向导；打开状态、公钥清单与在途生成任务归实体。
     pub(crate) key_wizard: Entity<KeyWizardView>,
+    /// 会话录制回放选择弹窗；打开状态、脚本清单与在途扫描归实体。
+    pub(crate) replay: Entity<ReplayModalView>,
 }
 
 /// 工具类浮层：查看器、备份、快捷入口与一次性确认。
 pub(crate) struct ToolModals {
-    pub(crate) replay: Option<crate::record::ReplayModalState>,
+    /// 会话录制回放选择弹窗实体；打开状态与在途扫描都归实体。
+    pub(crate) replay: Entity<ReplayModalView>,
     /// 审计日志查看器实体；打开状态与在途扫描都归实体。
     pub(crate) audit_viewer: Entity<AuditViewerView>,
     /// 备份导入/导出弹窗实体；打开状态与在途任务都归实体。
@@ -137,7 +141,7 @@ impl ModalHub {
                 known_hosts,
             },
             tools: ToolModals {
-                replay: None,
+                replay: tools.replay,
                 audit_viewer: tools.audit_viewer,
                 backup_prompt: tools.backup_prompt,
                 show_quick_open: false,
