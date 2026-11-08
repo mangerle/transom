@@ -1,2 +1,7 @@
 /target/
 .idea/
+
+# 操作系统代码签名私钥不得进入仓库；证书只通过 GitHub Secrets 注入。
+*.pfx
+*.p12
+*.p8

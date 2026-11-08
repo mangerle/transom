@@ -5,8 +5,8 @@ name: Release
 # - Windows: NSIS 安装包（shipup 安装器更新通道）+ 绿色便携 zip
 # - macOS: .dmg（手动分发）+ 自更新 zip（shipup archive 通道，内含主程序）
 #
-# 自更新清单 latest.json 由 shipup-cli 生成并做 Ed25519 签名；
-# 客户端内置公钥只接受对应私钥签出的清单与安装包。
+# 自更新清单 latest.json 由 shipup-cli 生成并做 Ed25519 签名；Windows 与
+# macOS 产物还必须完成操作系统代码签名，缺少任一签名凭据时整条流水线拒绝发布。
 
 on:
   push:
@@ -95,9 +95,46 @@ jobs:
           name: release-changelog
           path: RELEASE_CHANGELOG.md
 
+  signing-preflight:
+    name: 校验发布签名凭据
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检查全部必需 GitHub Secrets
+        env:
+          SHIPUP_PRIVATE_KEY: ${{ secrets.SHIPUP_PRIVATE_KEY }}
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in \
+            SHIPUP_PRIVATE_KEY \
+            WINDOWS_CERTIFICATE_BASE64 \
+            WINDOWS_CERTIFICATE_PASSWORD \
+            APPLE_CERTIFICATE_BASE64 \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_ID \
+            APPLE_APP_SPECIFIC_PASSWORD \
+            APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf '::error::缺少发布签名 Secret: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
   build-linux:
     name: 构建 Linux 产物 (${{ matrix.arch }})
-    needs: prepare
+    needs: [prepare, signing-preflight]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -186,9 +223,12 @@ jobs:
 
   build-windows:
     name: 构建 Windows 产物 (${{ matrix.arch }})
-    needs: prepare
+    needs: [prepare, signing-preflight]
     runs-on: windows-latest
     timeout-minutes: 90
+    env:
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -219,10 +259,38 @@ jobs:
       - name: 编译 Release 二进制
         run: cargo build --locked --release -p transom --target ${{ matrix.target }}
 
+      - name: 准备 Authenticode 临时证书
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "缺少 Windows Authenticode 证书 Secret"
+          }
+          $certPath = Join-Path $env:RUNNER_TEMP "transom-authenticode.pfx"
+          $certBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          $securePassword = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Get-PfxCertificate -FilePath $certPath -Password $securePassword
+          if (-not $certificate.HasPrivateKey) {
+            throw "Authenticode PFX 不包含私钥"
+          }
+          "WINDOWS_CERTIFICATE_PATH=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 签署 Windows 主程序
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $binary = Join-Path $PWD "target/$env:TARGET/release/transom.exe"
+          $signer = Join-Path $PWD "packaging/windows/sign-authenticode.ps1"
+          & $signer -FilePath $binary
+
       - name: 构建 NSIS 安装包
         run: cargo packager --release -p transom --target ${{ matrix.target }} --formats nsis
 
-      - name: 规整安装包与绿色便携包
+      - name: 签署安装包并生成发布产物
         shell: pwsh
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -237,9 +305,12 @@ jobs:
           $setup = Get-ChildItem -Path $releaseDir -Filter "*-setup.exe" -File -Recurse |
             Select-Object -First 1
           if (-not $setup) { throw "未找到 NSIS 安装包" }
+
+          $signer = Join-Path $PWD "packaging/windows/sign-authenticode.ps1"
+          & $signer -FilePath $setup.FullName
           Copy-Item $setup.FullName (Join-Path $dist "transom_$($env:VERSION)_windows_$($env:ARCH)_setup.exe")
 
-          $portable = Join-Path $releaseDir "transom-portable"
+          $portable = Join-Path $env:RUNNER_TEMP "transom-portable"
           New-Item -ItemType Directory -Force -Path $portable | Out-Null
           Copy-Item (Join-Path $releaseDir "transom.exe") $portable
           Copy-Item "LICENSE" $portable
@@ -249,6 +320,15 @@ jobs:
 
           Get-ChildItem $dist | Format-Table Name, Length
 
+      - name: 清理临时 Authenticode 证书
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PATH) -and
+              (Test-Path -LiteralPath $env:WINDOWS_CERTIFICATE_PATH)) {
+            Remove-Item -LiteralPath $env:WINDOWS_CERTIFICATE_PATH -Force
+          }
+
       - name: 上传 Windows 构建产物
         uses: actions/upload-artifact@v4
         with:
@@ -257,9 +337,15 @@ jobs:
 
   build-macos:
     name: 构建 macOS 产物 (${{ matrix.arch }})
-    needs: prepare
+    needs: [prepare, signing-preflight]
     runs-on: macos-latest
     timeout-minutes: 90
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     strategy:
       fail-fast: false
       matrix:
@@ -290,10 +376,10 @@ jobs:
       - name: 编译 Release 二进制
         run: cargo build --locked --release -p transom --target ${{ matrix.target }}
 
-      - name: 构建 DMG 镜像
-        run: cargo packager --release -p transom --target ${{ matrix.target }} --formats dmg
+      - name: 构建 macOS 应用包
+        run: cargo packager --release -p transom --target ${{ matrix.target }} --formats app
 
-      - name: 规整 DMG 与自更新 zip
+      - name: 签署、公证并生成 DMG 与自更新 zip
         shell: bash
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -301,16 +387,10 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          DIST="$PWD/dist"
-          mkdir -p "$DIST"
-          BIN="target/${TARGET}/release/transom"
-          DMG="$(find "target/${TARGET}/release" -name '*.dmg' -type f | head -n 1)"
-          if [ ! -f "$BIN" ]; then echo "::error::未找到 macOS 主程序"; exit 1; fi
-          if [ -z "$DMG" ]; then echo "::error::未找到 DMG 产物"; exit 1; fi
-          # 自更新 zip 只放主程序：shipup archive 模式解压后替换
-          # .app/Contents/MacOS/transom，Info.plist 与资源保持安装态。
-          (cd "$(dirname "$BIN")" && zip -j -q "$DIST/transom_${VERSION}_macos_${ARCH}.zip" transom)
-          cp "$DMG" "$DIST/transom_${VERSION}_macos_${ARCH}.dmg"
+          APP="target/${TARGET}/release/Transom.app"
+          DMG="$PWD/dist/transom_${VERSION}_macos_${ARCH}.dmg"
+          ZIP="$PWD/dist/transom_${VERSION}_macos_${ARCH}.zip"
+          bash packaging/macos/sign-and-notarize.sh "$APP" "$DMG" "$ZIP"
           ls -lh dist
 
       - name: 上传 macOS 构建产物
@@ -321,7 +401,7 @@ jobs:
 
   publish-release:
     name: 汇总签名并发布 GitHub Release
-    needs: [prepare, changelog, build-linux, build-windows, build-macos]
+    needs: [prepare, signing-preflight, changelog, build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: 检出标签对应代码
