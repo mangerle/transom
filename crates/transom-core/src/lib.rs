@@ -25,9 +25,9 @@ pub use backup::{
 };
 pub use commands::{
     AppCommand, AppEvent, ConnectParams, ContainerAppEvent, ContainerCommand, DeepLinkRequest,
-    ForwardAppEvent, ForwardCommand, GitAppEvent, GitCommand, HostAppEvent, HostCommand,
-    SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats, TerminalAppEvent,
-    TerminalCommand, ZmodemAppEvent, ZmodemCommand,
+    ForwardAppEvent, ForwardCommand, GitAppEvent, GitCommand, GitShelfOperation, HostAppEvent,
+    HostCommand, SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats,
+    TerminalAppEvent, TerminalCommand, ZmodemAppEvent, ZmodemCommand,
 };
 pub use error::{AppError, ErrorCode, ErrorContext};
 pub use ids::{

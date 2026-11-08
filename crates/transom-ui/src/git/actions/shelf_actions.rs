@@ -12,6 +12,9 @@ use super::{GitDiffRequest, GitRefAction};
 
 impl AppShell {
     /// 在提交页左栏切换「提交 / 搁置 / 贮藏」；首次进入分别拉取对应列表。
+    ///
+    /// 搁置列表与贮藏列表都走命令总线：磁盘读取在控制器里完成，界面只登记
+    /// 请求号并等待对应事件落地。
     pub(crate) fn git_set_commit_tab(
         &mut self,
         tab_id: TabId,
@@ -21,7 +24,7 @@ impl AppShell {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let list_stashes = workspace.update(cx, |workspace, _| {
+        let command = workspace.update(cx, |workspace, _| {
             let state = &mut workspace.state;
             if state.commit_tab == tab {
                 return None;
@@ -29,26 +32,26 @@ impl AppShell {
             state.commit_tab = tab;
             match tab {
                 GitCommitTab::Shelf => {
-                    let project_id = state.project.id.to_string();
-                    if let Ok(shelves) = transom_store::load_project_shelves(&project_id) {
-                        state.shelves = shelves;
-                    }
-                    None
-                }
-                GitCommitTab::Stash => {
-                    let project = state.project.clone();
                     let request_id = GitRequestId::new();
                     state.pending.push(request_id);
-                    Some((project, request_id))
+                    Some(GitCommand::LoadShelves {
+                        project: state.project.clone(),
+                        request_id,
+                    })
+                }
+                GitCommitTab::Stash => {
+                    let request_id = GitRequestId::new();
+                    state.pending.push(request_id);
+                    Some(GitCommand::ListStashes {
+                        project: state.project.clone(),
+                        request_id,
+                    })
                 }
                 GitCommitTab::Commit => None,
             }
         });
-        if let Some((project, request_id)) = list_stashes {
-            self.send_command(GitCommand::ListStashes {
-                project,
-                request_id,
-            });
+        if let Some(command) = command {
+            self.send_command(command);
         }
         cx.notify();
     }

@@ -15,7 +15,7 @@ pub use domain_events::{
     ContainerAppEvent, DeepLinkRequest, ForwardAppEvent, HostAppEvent, SftpAppEvent, SyncAppEvent,
     TerminalAppEvent, ZmodemAppEvent,
 };
-pub use git::{GitAppEvent, GitCommand};
+pub use git::{GitAppEvent, GitCommand, GitShelfOperation};
 
 /// 应用顶层命令：按业务领域划分为子枚举。
 pub enum AppCommand {

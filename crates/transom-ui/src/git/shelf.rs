@@ -10,7 +10,7 @@
 use super::commit_modal::split_path;
 use crate::app::AppShell;
 use crate::git::types::GitDiffRequest;
-use crate::palette::{Palette, localized_error};
+use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -21,8 +21,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{GitSide, HeadState, ShelfEntry, TabId};
-use transom_store::{load_project_shelves, save_project_shelves};
+use transom_core::{GitCommand, GitRequestId, GitSide, HeadState, ShelfEntry, TabId};
 
 impl AppShell {
     /// 搁置内联面板：提交页左栏的「搁置」页签内容。
@@ -318,93 +317,75 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 重新从本地存储中加载搁置项列表。
+    /// 重新读取搁置项列表。
+    ///
+    /// 读盘经命令总线交给控制器；界面只登记请求号，事件落地时整体替换列表。
     pub(crate) fn git_reload_shelves(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let project_id = workspace.read(cx).state.project.id.to_string();
-        let loaded = load_project_shelves(&project_id);
-        if let Ok(shelves) = loaded {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.shelves = shelves;
-            });
-        }
+        let request_id = GitRequestId::new();
+        let project = workspace.update(cx, |workspace, _| {
+            workspace.state.pending.push(request_id);
+            workspace.state.project.clone()
+        });
+        self.send_command(GitCommand::LoadShelves {
+            project,
+            request_id,
+        });
         cx.notify();
     }
 
     /// 把工作区勾选的改动创建为独立离线搁置项（Shelf）。
+    ///
+    /// 补丁导出、工作区抽离与落盘都在控制器里完成：界面只提交「搁置意图」，
+    /// 失败经 [`transom_core::GitAppEvent::ShelfFailed`] 回到状态栏。
     pub(crate) fn git_shelve_checked(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let (project, checked_files, branch) = {
+        let (project, files, branch) = {
             let state = &workspace.read(cx).state;
-            let checked_files: Vec<String> = if state.checked.is_empty() {
+            let files: Vec<String> = if state.checked.is_empty() {
                 state
                     .status
                     .as_ref()
-                    .map(|s| s.entries.iter().map(|e| e.path.clone()).collect())
+                    .map(|status| {
+                        status
+                            .entries
+                            .iter()
+                            .map(|entry| entry.path.clone())
+                            .collect()
+                    })
                     .unwrap_or_default()
             } else {
                 state.checked.iter().cloned().collect()
             };
-            let branch = match state.status.as_ref().map(|s| &s.head) {
-                Some(HeadState::OnBranch(b)) => b.clone(),
+            let branch = match state.status.as_ref().map(|status| &status.head) {
+                Some(HeadState::OnBranch(branch)) => branch.clone(),
                 Some(HeadState::Initial { branch }) => branch.clone(),
                 _ => "HEAD".to_string(),
             };
-            (state.project.clone(), checked_files, branch)
+            (state.project.clone(), files, branch)
         };
-        if checked_files.is_empty() {
+        if files.is_empty() {
             return;
         }
-        let project_id_str = project.id.to_string();
-        let files_count = checked_files.len();
-        let name = format!("{} ({files_count})", rust_i18n::t!("git.shelf.title"));
-
-        cx.spawn(async move |this, cx| {
-            let repo = transom_git::Repo::at(project.path.clone());
-            let Ok(patch) = repo.export_patch(&checked_files).await else {
-                return;
-            };
-            if patch.trim().is_empty() {
-                return;
-            }
-            // 撤销工作区已搁置的已跟踪修改
-            let _ = repo.discard(&checked_files).await;
-
-            let now = chrono::Local::now();
-            let created_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
-            let entry = ShelfEntry {
-                id: format!("shelf_{}", now.timestamp_millis()),
-                name,
-                branch,
-                created_at,
-                files: checked_files,
-                patch,
-            };
-
-            let _ = this.update(cx, |this, cx| {
-                let save_error = this.state.git_workspace(tab_id).and_then(|workspace| {
-                    workspace.update(cx, |workspace, _| {
-                        let state = &mut workspace.state;
-                        state.shelves.insert(0, entry.clone());
-                        state.checked.clear();
-                        state.commit_tab = crate::git::GitCommitTab::Shelf;
-                        save_project_shelves(&project_id_str, &state.shelves).err()
-                    })
-                });
-                if let Some(error) = save_error {
-                    this.state.set_error(localized_error(&error));
-                }
-                this.git_refresh(&project, cx);
-            });
-        })
-        .detach();
+        let name = format!("{} ({})", rust_i18n::t!("git.shelf.title"), files.len());
+        self.send_command(GitCommand::Shelve {
+            project,
+            request_id: GitRequestId::new(),
+            name,
+            branch,
+            files,
+        });
+        cx.notify();
     }
 
     /// 应用或弹回搁置项。
+    ///
+    /// 补丁文本随命令携带：控制器不必再按 id 回读存储，界面手里的条目
+    /// 就是用户点击时看到的那一份。
     pub(crate) fn git_apply_shelf(
         &mut self,
         tab_id: TabId,
@@ -415,39 +396,21 @@ impl AppShell {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let (project, entry) = {
+        let (project, patch) = {
             let state = &workspace.read(cx).state;
-            let Some(entry) = state.shelves.iter().find(|s| s.id == entry_id).cloned() else {
+            let Some(entry) = state.shelves.iter().find(|shelf| shelf.id == entry_id) else {
                 return;
             };
-            (state.project.clone(), entry)
+            (state.project.clone(), entry.patch.clone())
         };
-        let project_id_str = project.id.to_string();
-        let target_id = entry_id.to_string();
-
-        cx.spawn(async move |this, cx| {
-            let repo = transom_git::Repo::at(project.path.clone());
-            if let Ok(()) = repo.apply_patch(&entry.patch).await {
-                let _ = this.update(cx, |this, cx| {
-                    let save_error = if pop {
-                        this.state.git_workspace(tab_id).and_then(|workspace| {
-                            workspace.update(cx, |workspace, _| {
-                                let state = &mut workspace.state;
-                                state.shelves.retain(|s| s.id != target_id);
-                                save_project_shelves(&project_id_str, &state.shelves).err()
-                            })
-                        })
-                    } else {
-                        None
-                    };
-                    if let Some(error) = save_error {
-                        this.state.set_error(localized_error(&error));
-                    }
-                    this.git_refresh(&project, cx);
-                });
-            }
-        })
-        .detach();
+        self.send_command(GitCommand::ApplyShelf {
+            project,
+            request_id: GitRequestId::new(),
+            shelf_id: entry_id.to_string(),
+            patch,
+            pop,
+        });
+        cx.notify();
     }
 
     /// 删除指定搁置项。
@@ -455,15 +418,12 @@ impl AppShell {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let save_error = workspace.update(cx, |workspace, _| {
-            let state = &mut workspace.state;
-            let project_id_str = state.project.id.to_string();
-            state.shelves.retain(|s| s.id != entry_id);
-            save_project_shelves(&project_id_str, &state.shelves).err()
+        let project = workspace.read(cx).state.project.clone();
+        self.send_command(GitCommand::DropShelf {
+            project,
+            request_id: GitRequestId::new(),
+            shelf_id: entry_id.to_string(),
         });
-        if let Some(error) = save_error {
-            self.state.set_error(localized_error(&error));
-        }
         cx.notify();
     }
 

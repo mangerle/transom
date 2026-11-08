@@ -9,11 +9,15 @@
 //! - 写请求统一回报 [`transom_core::GitAppEvent::ActionDone`]：动作类别由 [`transom_core::GitAction`]
 //!   携带，界面据此决定刷新（暂存）还是仅提示（推送失败），不必为每个动作
 //!   定义一个事件变体；
+//! - 离线搁置项（Shelf）例外：一条操作同时涉及 git 补丁与本地 JSON 两步，
+//!   `ActionDone` 无法表达「补丁已应用但条目删除失败」的分步结果，因此使用
+//!   独立的 [`transom_core::GitShelfOperation`] 与对应事件；
 //! - 全部任务进 `git_set` JoinSet：停机时统一限时等待，不留脱缰子进程。
 
 mod clone_op;
 mod reads;
 mod runner;
+mod shelf;
 mod writes;
 
 use super::state::{ControllerCtx, ControllerState};
@@ -33,6 +37,10 @@ pub(super) fn handle_git_command(
     } = command
     {
         clone_op::spawn_clone(state, ctx, request_id, url, dest, depth);
+        return;
+    }
+
+    if shelf::handle_shelf_command(state, ctx, &command) {
         return;
     }
 
