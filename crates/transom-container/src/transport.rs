@@ -6,6 +6,7 @@
 //! 只需实现一次，新增平台通道不影响协议代码。
 
 use crate::error::ContainerError;
+use command_group::{AsyncCommandGroup, AsyncGroupChild};
 use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -171,9 +172,8 @@ impl EngineTransport {
                     .args(args)
                     .stdin(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped())
-                    .kill_on_drop(true);
-                let mut child = command.spawn().map_err(|error| {
+                    .stderr(std::process::Stdio::piped());
+                let mut child = command.group().kill_on_drop(true).spawn().map_err(|error| {
                     let friendly_msg = if error.kind() == std::io::ErrorKind::NotFound {
                         if program == "ssh" {
                             "未检测到系统的 ssh 命令，请安装 OpenSSH 客户端并确保已配置在 PATH 环境变量中".to_string()
@@ -190,17 +190,26 @@ impl EngineTransport {
                         source: std::io::Error::new(error.kind(), friendly_msg),
                     }
                 })?;
-                let stdin = child.stdin.take().ok_or_else(|| ContainerError::Connect {
-                    endpoint: self.describe(),
-                    source: std::io::Error::other("子进程标准输入不可用"),
-                })?;
-                let stdout = child.stdout.take().ok_or_else(|| ContainerError::Connect {
-                    endpoint: self.describe(),
-                    source: std::io::Error::other("子进程标准输出不可用"),
-                })?;
+                let stdin = child
+                    .inner()
+                    .stdin
+                    .take()
+                    .ok_or_else(|| ContainerError::Connect {
+                        endpoint: self.describe(),
+                        source: std::io::Error::other("子进程标准输入不可用"),
+                    })?;
+                let stdout =
+                    child
+                        .inner()
+                        .stdout
+                        .take()
+                        .ok_or_else(|| ContainerError::Connect {
+                            endpoint: self.describe(),
+                            source: std::io::Error::other("子进程标准输出不可用"),
+                        })?;
                 // stderr 只用于诊断：后台读取并写入 debug 日志，避免 pipe 写满
                 // 反过来阻塞通道进程。
-                if let Some(stderr) = child.stderr.take() {
+                if let Some(stderr) = child.inner().stderr.take() {
                     let endpoint = self.describe();
                     tokio::spawn(async move {
                         use tokio::io::AsyncBufReadExt;
@@ -411,9 +420,16 @@ fn extract_host(address: &str) -> String {
 /// `_child` 必须与流一起存活：提前 drop 会关闭管道；设置了 `kill_on_drop`
 /// 后，通道被回收时子进程也会被终止，不留孤儿进程。
 struct ChildStream {
-    _child: tokio::process::Child,
+    _child: AsyncGroupChild,
     stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
+}
+
+impl Drop for ChildStream {
+    fn drop(&mut self) {
+        // 流被回收时主动终止整个进程组；Tokio 随后会完成子进程状态回收。
+        let _ = self._child.start_kill();
+    }
 }
 
 impl AsyncRead for ChildStream {

@@ -9,7 +9,7 @@
 
 use crate::error::ContainerError;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 use transom_core::{ContainerQuadletAction, ContainerQuadletUnit};
 
@@ -132,36 +132,12 @@ fn run_systemctl_args(
     args: &[String],
     timeout: Duration,
 ) -> Result<std::process::Output, ContainerError> {
-    let mut child = Command::new("systemctl")
-        .arg("--user")
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| ContainerError::Cli {
-            command: format!("systemctl --user {}", args.join(" ")),
-            message: error.to_string(),
-        })?;
-    let start = std::time::Instant::now();
-    loop {
-        if let Ok(Some(_)) = child.try_wait() {
-            return child
-                .wait_with_output()
-                .map_err(|error| ContainerError::Cli {
-                    command: format!("systemctl --user {}", args.join(" ")),
-                    message: error.to_string(),
-                });
-        }
-        if start.elapsed() > timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(ContainerError::Cli {
-                command: format!("systemctl --user {}", args.join(" ")),
-                message: format!("systemctl 超过 {} 秒未返回", timeout.as_secs()),
-            });
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
+    let mut command = Command::new("systemctl");
+    command.arg("--user").args(args);
+    crate::cli::run_grouped_output(&mut command, timeout).map_err(|error| ContainerError::Cli {
+        command: format!("systemctl --user {}", args.join(" ")),
+        message: error.to_string(),
+    })
 }
 
 /// 单元名只允许常见安全字符，且必须是以 `.service` 结尾的单段名称。

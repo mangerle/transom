@@ -52,27 +52,11 @@ pub(super) fn podman_machine_candidates() -> Vec<EngineCandidate> {
 
 /// 执行 `podman machine inspect --format json`，带 5 秒上限。
 fn run_podman_machine_inspect() -> Option<Vec<u8>> {
-    let mut child = std::process::Command::new("podman")
-        .args(["machine", "inspect", "--format", "json"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
+    let mut command = std::process::Command::new("podman");
+    command.args(["machine", "inspect", "--format", "json"]);
+    let output = crate::cli::run_grouped_output(&mut command, std::time::Duration::from_secs(5))
+        .map_err(|error| log::debug!("podman machine inspect 失败，跳过 machine 发现: {error}"))
         .ok()?;
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(5);
-    loop {
-        if let Ok(Some(_)) = child.try_wait() {
-            break;
-        }
-        if start.elapsed() > timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            log::debug!("podman machine inspect 超时，跳过 machine 发现");
-            return None;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    let output = child.wait_with_output().ok()?;
     output.status.success().then_some(output.stdout)
 }
 

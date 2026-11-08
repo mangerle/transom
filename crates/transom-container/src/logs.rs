@@ -311,17 +311,16 @@ async fn cli_logs(
     }
     args.push(container.to_string());
     let mut command = cli.command(&args);
-    crate::cli::configure_child(&mut command);
     command
-        .kill_on_drop(true)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    let mut child = command.spawn().map_err(|error| ContainerError::Cli {
-        command: cli.spec.describe(&args),
-        message: error.to_string(),
-    })?;
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
+    let mut child =
+        crate::cli::spawn_grouped(&mut command).map_err(|error| ContainerError::Cli {
+            command: cli.spec.describe(&args),
+            message: error.to_string(),
+        })?;
+    let stdout = child.inner().stdout.take();
+    let stderr = child.inner().stderr.take();
     let (sender, receiver) = flume::bounded::<BridgeItem>(16);
     let mut pumps = Vec::with_capacity(2);
     if let Some(stdout) = stdout {

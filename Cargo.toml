@@ -76,7 +76,7 @@ open = { version = "5.4", features = ["shellexecute-on-windows"] }
 notify-rust = "4"
 # 同步子进程的跨平台进程组/Job Object 管理：Unix 使用进程组，Windows
 # 使用 CREATE_SUSPENDED + Job Object，超时时能连同孙进程一起回收。
-command-group = "5.0"
+command-group = { version = "5.0", features = ["with-tokio"] }
 # 宿主资源与进程信息：跨 Linux/macOS/Windows 统一采集 CPU、内存、
 # 磁盘、网络与进程，避免在业务层解析 /proc 或调用平台 shell。
 sysinfo = { version = "0.31", default-features = false, features = [

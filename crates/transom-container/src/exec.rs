@@ -12,6 +12,7 @@
 use crate::cli::CliBackend;
 use crate::engine::Engine;
 use crate::error::ContainerError;
+use command_group::{CommandGroup, GroupChild};
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -206,7 +207,7 @@ async fn http_exec(
 
 /// CLI 兜底的子进程会话。
 struct CliSession {
-    child: Arc<Mutex<std::process::Child>>,
+    child: Arc<Mutex<GroupChild>>,
     wait_thread: Option<std::thread::JoinHandle<()>>,
     control_thread: Option<std::thread::JoinHandle<()>>,
     pump_threads: Vec<std::thread::JoinHandle<()>>,
@@ -261,22 +262,34 @@ fn cli_exec(
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    let mut child = command.spawn().map_err(|error| ContainerError::Cli {
+    let mut child = command.group_spawn().map_err(|error| ContainerError::Cli {
         command: cli.spec.describe(&args),
         message: error.to_string(),
     })?;
-    let stdin = child.stdin.take().ok_or_else(|| ContainerError::Cli {
-        command: cli.spec.describe(&args),
-        message: "子进程标准输入不可用".to_string(),
-    })?;
-    let stdout = child.stdout.take().ok_or_else(|| ContainerError::Cli {
-        command: cli.spec.describe(&args),
-        message: "子进程标准输出不可用".to_string(),
-    })?;
-    let stderr = child.stderr.take().ok_or_else(|| ContainerError::Cli {
-        command: cli.spec.describe(&args),
-        message: "子进程标准错误不可用".to_string(),
-    })?;
+    let stdin = child
+        .inner()
+        .stdin
+        .take()
+        .ok_or_else(|| ContainerError::Cli {
+            command: cli.spec.describe(&args),
+            message: "子进程标准输入不可用".to_string(),
+        })?;
+    let stdout = child
+        .inner()
+        .stdout
+        .take()
+        .ok_or_else(|| ContainerError::Cli {
+            command: cli.spec.describe(&args),
+            message: "子进程标准输出不可用".to_string(),
+        })?;
+    let stderr = child
+        .inner()
+        .stderr
+        .take()
+        .ok_or_else(|| ContainerError::Cli {
+            command: cli.spec.describe(&args),
+            message: "子进程标准错误不可用".to_string(),
+        })?;
 
     let child = Arc::new(Mutex::new(child));
     let (output_tx, output_reader) = output_channel(BRIDGE_CAPACITY);

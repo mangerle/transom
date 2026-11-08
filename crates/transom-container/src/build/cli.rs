@@ -53,19 +53,16 @@ pub async fn build_image_cli(
     args.push(spec.context_path.clone());
 
     let mut cmd = cli.command(&args);
-    crate::cli::configure_child(&mut cmd);
-    cmd.kill_on_drop(true)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let command_line = format!("docker {}", args.join(" "));
-    let mut child = cmd.spawn().map_err(|error| ContainerError::Cli {
+    let mut child = crate::cli::spawn_grouped(&mut cmd).map_err(|error| ContainerError::Cli {
         command: command_line.clone(),
         message: format!("启动构建子进程失败: {error}"),
     })?;
 
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
+    let stdout = child.inner().stdout.take();
+    let stderr = child.inner().stderr.take();
 
     let mut out_reader = stdout.map(|s| BufReader::new(s).lines());
     let mut err_reader = stderr.map(|s| BufReader::new(s).lines());

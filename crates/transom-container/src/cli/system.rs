@@ -1,9 +1,8 @@
 //! 引擎级 CLI 操作：磁盘占用、全局清理与事件流。
 
 use super::CliBackend;
-use super::configure_child;
-use super::terminate_child;
 use super::{CLI_PRUNE_TIMEOUT, CLI_SYSTEM_DF_TIMEOUT, parse_human_size};
+use super::{spawn_grouped, terminate_child};
 use crate::error::ContainerError;
 use crate::models::DockerEventMessage;
 use tokio::io::AsyncBufReadExt;
@@ -149,17 +148,15 @@ impl CliBackend {
             "{{json .}}".to_string(),
         ];
         let mut cmd = self.command(&args);
-        configure_child(&mut cmd);
-        cmd.kill_on_drop(true)
-            .stdout(std::process::Stdio::piped())
+        cmd.stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null());
 
-        let mut child = cmd.spawn().map_err(|e| ContainerError::Cli {
+        let mut child = spawn_grouped(&mut cmd).map_err(|e| ContainerError::Cli {
             command: self.describe(&args),
             message: e.to_string(),
         })?;
 
-        let Some(stdout) = child.stdout.take() else {
+        let Some(stdout) = child.inner().stdout.take() else {
             return Ok(());
         };
 

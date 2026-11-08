@@ -20,6 +20,9 @@ use std::process::Command;
 use std::time::Duration;
 use transom_core::ContainerEngineKind;
 
+/// Docker Context 查询与切换命令的统一超时。
+const DOCKER_CONTEXT_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Docker Context 元数据信息。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DockerContextInfo {
@@ -78,9 +81,9 @@ pub fn list_docker_contexts() -> Result<Vec<DockerContextInfo>, ContainerError> 
 /// 上下文切换失败时返回 [`ContainerError::Cli`]。
 pub fn use_docker_context(name: &str) -> Result<(), ContainerError> {
     log::info!("正在切换 Docker 上下文为: {name}");
-    let output = Command::new("docker")
-        .args(["context", "use", name])
-        .output();
+    let mut command = Command::new("docker");
+    command.args(["context", "use", name]);
+    let output = crate::cli::run_grouped_output(&mut command, DOCKER_CONTEXT_TIMEOUT);
 
     match output {
         Ok(out) if out.status.success() => {
@@ -134,33 +137,13 @@ pub fn discover_context_candidates() -> Vec<EngineCandidate> {
 
 /// 通过 Docker CLI 列出上下文。
 fn list_contexts_from_cli() -> Result<Vec<DockerContextInfo>, String> {
-    let mut child = Command::new("docker")
-        .args(["context", "ls", "--format", "{{json .}}"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("启动 docker context 命令失败: {e}"))?;
-
-    // 设置超时等待，避免僵尸进程或永久挂起
-    let start = std::time::Instant::now();
-    let timeout = Duration::from_secs(3);
-    loop {
-        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-            if !status.success() {
-                return Err(format!("docker context ls 返回非零状态: {status}"));
-            }
-            break;
-        }
-        if start.elapsed() > timeout {
-            let _ = child.kill();
-            return Err("读取 docker context ls 超时".to_string());
-        }
-        std::thread::sleep(Duration::from_millis(50));
+    let mut command = Command::new("docker");
+    command.args(["context", "ls", "--format", "{{json .}}"]);
+    let output = crate::cli::run_grouped_output(&mut command, DOCKER_CONTEXT_TIMEOUT)
+        .map_err(|error| format!("docker context ls 执行失败: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("docker context ls 返回非零状态: {}", output.status));
     }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("读取输出失败: {e}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     let mut list = Vec::new();

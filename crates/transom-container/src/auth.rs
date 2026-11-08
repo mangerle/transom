@@ -5,6 +5,7 @@
 //! 优先读取明确传入的凭据，未传入时自动从宿主机 `~/.docker/config.json` 解析已登录的
 //! 凭证（包含 Docker Hub 与私有 Registry），实现免密无缝推送。
 
+use crate::cli::{spawn_grouped, wait_for_group_output};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
@@ -91,29 +92,32 @@ pub fn extract_registry_host(image: &str) -> String {
 /// 依赖宿主机环境安装并配置有相应的 `docker-credential-*` 可执行程序；未安装时安全降级。
 async fn query_credential_helper(helper: &str, server_url: &str) -> Option<(String, String)> {
     let program = format!("docker-credential-{helper}");
-    let mut child = tokio::process::Command::new(&program)
+    let mut command = tokio::process::Command::new(&program);
+    command
         .arg("get")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
+        .stderr(std::process::Stdio::null());
+    let mut child = spawn_grouped(&mut command)
         .map_err(|error| {
             log::debug!("未能启动 Docker 凭证助手 {program}，原因: {error}");
             error
         })
         .ok()?;
 
-    if let Some(mut stdin) = child.stdin.take() {
+    if let Some(mut stdin) = child.inner().stdin.take() {
         let _ = stdin.write_all(server_url.as_bytes()).await;
         let _ = stdin.write_all(b"\n").await;
         let _ = stdin.shutdown().await;
     }
 
-    let output = tokio::time::timeout(CREDENTIAL_HELPER_TIMEOUT, child.wait_with_output())
-        .await
-        .ok()?
-        .ok()?;
+    let output = match wait_for_group_output(&mut child, CREDENTIAL_HELPER_TIMEOUT).await {
+        Ok(output) => output,
+        Err(error) => {
+            log::debug!("等待 Docker 凭证助手 {program} 失败，原因: {error}");
+            return None;
+        }
+    };
     if !output.status.success() {
         log::debug!(
             "Docker 凭证助手 {program} 退出码非 0: {:?}",

@@ -42,34 +42,13 @@ mod containers;
 mod images;
 mod networks;
 mod pods;
+mod process;
 mod system;
 mod volumes;
 
-/// 把 CLI 子进程放入独立进程组，便于连同其派生的子进程一起终止。
-///
-/// 设计原理（Why）：`docker build` 等命令可能再派生 buildx 等子进程；只杀
-/// 直接子进程会让孙进程继续持有 stdout/stderr 管道，导致输出读取任务无法 EOF。
-/// Unix 上通过 `process_group(0)` 建立新进程组，终止时对整组发信号。
-#[cfg(unix)]
-pub(crate) fn configure_child(command: &mut Command) {
-    command.process_group(0);
-}
-
-#[cfg(not(unix))]
-pub(crate) fn configure_child(_command: &mut Command) {}
-
-/// 终止 CLI 子进程并回收，Unix 上同时终止其进程组。
-pub(crate) async fn terminate_child(child: &mut tokio::process::Child) {
-    #[cfg(unix)]
-    if let Some(pid) = child.id() {
-        // 安全性：只向整数 pid 对应的进程组发送 SIGKILL，不涉及内存访问。
-        unsafe {
-            libc::kill(-(pid as i32), libc::SIGKILL);
-        }
-    }
-    let _ = child.kill().await;
-    let _ = child.wait().await;
-}
+pub(crate) use process::{
+    run_grouped_output, spawn_grouped, terminate_child, wait_for_group_output,
+};
 
 #[derive(Debug, Clone)]
 pub struct CliBackend {
@@ -239,17 +218,15 @@ impl CliBackend {
     ) -> Result<CliOutput, ContainerError> {
         let description = self.describe(args);
         let mut command = self.command(args);
-        configure_child(&mut command);
         command
-            .kill_on_drop(true)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
-        let mut child = command.spawn().map_err(|error| ContainerError::Cli {
+        let mut child = spawn_grouped(&mut command).map_err(|error| ContainerError::Cli {
             command: description.clone(),
             message: error.to_string(),
         })?;
-        let stdout_task = tokio::spawn(read_capped(child.stdout.take()));
-        let stderr_task = tokio::spawn(read_capped(child.stderr.take()));
+        let stdout_task = tokio::spawn(read_capped(child.inner().stdout.take()));
+        let stderr_task = tokio::spawn(read_capped(child.inner().stderr.take()));
         let deadline = tokio::time::Instant::now() + timeout;
 
         let outcome = loop {

@@ -309,7 +309,6 @@ async fn spawn_compose(
         working_dir,
     );
     let mut cmd = tokio::process::Command::new(program);
-    crate::cli::configure_child(&mut cmd);
     cmd.args(&args);
 
     if let Some(dir) = working_dir {
@@ -318,17 +317,16 @@ async fn spawn_compose(
         cmd.current_dir(std::env::temp_dir());
     }
 
-    cmd.kill_on_drop(true)
-        .stdout(std::process::Stdio::piped())
+    cmd.stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|error| ContainerError::Cli {
+    let mut child = crate::cli::spawn_grouped(&mut cmd).map_err(|error| ContainerError::Cli {
         command: display_command(program, action, endpoint_args),
         message: error.to_string(),
     })?;
 
-    let stdout_pipe = child.stdout.take();
-    let stderr_pipe = child.stderr.take();
+    let stdout_pipe = child.inner().stdout.take();
+    let stderr_pipe = child.inner().stderr.take();
     let stdout_task = tokio::spawn(read_capped(stdout_pipe));
     let stderr_task = tokio::spawn(read_capped(stderr_pipe));
 
