@@ -103,12 +103,11 @@ pub(crate) fn handle_list_key_down(
                 match &row.target {
                     RowTarget::Container { .. } => {
                         // 若已选中容器，打开概览页
-                        app.set_container_detail_tab(
-                            tab_id,
-                            ContainerDetailTab::Overview,
-                            window,
-                            cx,
-                        );
+                        if let Some(workspace) = app.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.set_detail_tab(ContainerDetailTab::Overview, cx);
+                            });
+                        }
                     }
                     _ => {
                         if let Some(workspace) = app.state.container_workspace(tab_id) {
@@ -131,8 +130,11 @@ pub(crate) fn handle_list_key_down(
                 .and_then(|w| w.read(cx).state.selected.clone());
             if let Some(row) = find_selected_row(rows, current_selected.as_deref())
                 && matches!(row.target, RowTarget::Container { .. })
+                && let Some(workspace) = app.state.container_workspace(tab_id)
             {
-                app.set_container_detail_tab(tab_id, ContainerDetailTab::Logs, window, cx);
+                workspace.update(cx, |workspace, cx| {
+                    workspace.set_detail_tab(ContainerDetailTab::Logs, cx);
+                });
             }
         }
         // 's'：启停当前选中的容器或 Compose 项目

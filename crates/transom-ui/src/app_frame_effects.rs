@@ -272,7 +272,9 @@ impl AppShell {
                 self.recreate_container(tab_id, id, name, window, cx);
             }
             ContainerWorkspaceEvent::SetDetailTab(tab) => {
-                self.set_container_detail_tab(tab_id, *tab, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| workspace.set_detail_tab(*tab, cx));
+                }
             }
             ContainerWorkspaceEvent::RunRowAction { target, action } => {
                 self.run_row_action(tab_id, target.clone(), *action, window, cx);

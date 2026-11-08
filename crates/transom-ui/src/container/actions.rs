@@ -214,6 +214,73 @@ impl ContainerWorkspace {
             },
         );
     }
+
+    /// 切换详情页签，并按新页签启停对应的数据流。
+    ///
+    /// 设计原理（Why）：页签选择只改本工作区状态、撤销旧页签的在途请求并拉起
+    /// 新页签的数据；这些都是实体自己的事，不需要 `Window` 或外壳上下文。页签
+    /// 按钮因此可以直接 `update` 实体，职责仍落在工作区实体上。
+    ///
+    /// 代价与局限：切换时会取消离开页签的在途请求；统计/日志等流式数据重新
+    /// 进入页签时由 `ensure_*` 重新建立，因此切换本身不是零成本操作。
+    pub(crate) fn set_detail_tab(&mut self, tab: ContainerDetailTab, cx: &mut Context<Self>) {
+        let previous = self.state.detail_tab;
+        let logs_request = self.state.logs_request;
+        let stats_request = self.state.stats_request;
+        let stats_processes_request = self.state.stats_processes_request;
+        let terminal_request = self
+            .state
+            .terminal_request
+            .as_ref()
+            .map(|(request_id, ..)| *request_id);
+        self.state.detail_tab = tab;
+
+        if previous == ContainerDetailTab::Logs
+            && tab != ContainerDetailTab::Logs
+            && let Some(request_id) = logs_request
+        {
+            self.cancel_container_request(request_id);
+            self.state.logs_request = None;
+            self.state.logs_follow = false;
+        }
+        if previous == ContainerDetailTab::Stats
+            && tab != ContainerDetailTab::Stats
+            && let Some(request_id) = stats_request
+        {
+            self.cancel_container_request(request_id);
+            self.state.stats_request = None;
+        }
+        if previous == ContainerDetailTab::Stats
+            && tab != ContainerDetailTab::Stats
+            && let Some(request_id) = stats_processes_request
+        {
+            self.cancel_container_request(request_id);
+            self.state.stats_processes_loading = false;
+        }
+        // 还没建立完的终端：用户已经切走就撤销，避免后台建好后又把页签抢回去。
+        if previous == ContainerDetailTab::Terminal
+            && tab != ContainerDetailTab::Terminal
+            && let Some(request_id) = terminal_request
+        {
+            self.cancel_container_request(request_id);
+            self.state.terminal_request = None;
+        }
+
+        match tab {
+            ContainerDetailTab::Logs => self.ensure_container_logs(),
+            ContainerDetailTab::Stats => {
+                self.ensure_container_stats();
+                self.ensure_container_processes();
+            }
+            ContainerDetailTab::Files => self.ensure_container_files(cx),
+            ContainerDetailTab::Terminal => self.ensure_container_terminal(None, None),
+            ContainerDetailTab::Changes => self.ensure_container_changes(),
+            ContainerDetailTab::Overview
+            | ContainerDetailTab::History
+            | ContainerDetailTab::Yaml => {}
+        }
+        cx.notify();
+    }
 }
 
 impl AppShell {
@@ -242,19 +309,39 @@ impl AppShell {
         };
         match action {
             RowAction::Overview => {
-                self.set_container_detail_tab(tab_id, ContainerDetailTab::Overview, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.set_detail_tab(ContainerDetailTab::Overview, cx);
+                    });
+                }
             }
             RowAction::Logs => {
-                self.set_container_detail_tab(tab_id, ContainerDetailTab::Logs, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.set_detail_tab(ContainerDetailTab::Logs, cx);
+                    });
+                }
             }
             RowAction::Terminal => {
-                self.set_container_detail_tab(tab_id, ContainerDetailTab::Terminal, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.set_detail_tab(ContainerDetailTab::Terminal, cx);
+                    });
+                }
             }
             RowAction::Stats => {
-                self.set_container_detail_tab(tab_id, ContainerDetailTab::Stats, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.set_detail_tab(ContainerDetailTab::Stats, cx);
+                    });
+                }
             }
             RowAction::Files => {
-                self.set_container_detail_tab(tab_id, ContainerDetailTab::Files, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.set_detail_tab(ContainerDetailTab::Files, cx);
+                    });
+                }
             }
             RowAction::Start
             | RowAction::Stop
@@ -397,116 +484,5 @@ impl AppShell {
             }
             RowAction::CopyId | RowAction::CopyName => {}
         }
-    }
-
-    pub(crate) fn set_container_detail_tab(
-        &mut self,
-        tab_id: TabId,
-        tab: ContainerDetailTab,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some((previous, logs, stats, terminal)) =
-            self.with_container(tab_id, cx, |workspace| {
-                (
-                    workspace.detail_tab,
-                    workspace.logs_request,
-                    workspace.stats_request,
-                    workspace
-                        .terminal_request
-                        .as_ref()
-                        .map(|(request_id, ..)| *request_id),
-                )
-            })
-        else {
-            return;
-        };
-        self.with_container_mut(tab_id, cx, |workspace| workspace.detail_tab = tab);
-
-        let workspace = self.state.container_workspace(tab_id);
-        if previous == ContainerDetailTab::Logs
-            && tab != ContainerDetailTab::Logs
-            && let Some(request_id) = logs
-            && let Some(workspace) = workspace.as_ref()
-        {
-            workspace.update(cx, |workspace, _| {
-                workspace.cancel_container_request(request_id);
-                workspace.state.logs_request = None;
-                workspace.state.logs_follow = false;
-            });
-        }
-        if previous == ContainerDetailTab::Stats
-            && tab != ContainerDetailTab::Stats
-            && let Some(request_id) = stats
-            && let Some(workspace) = workspace.as_ref()
-        {
-            workspace.update(cx, |workspace, _| {
-                workspace.cancel_container_request(request_id);
-                workspace.state.stats_request = None;
-            });
-        }
-        if previous == ContainerDetailTab::Stats && tab != ContainerDetailTab::Stats {
-            let processes = self
-                .with_container_mut(tab_id, cx, |workspace| {
-                    workspace.stats_processes_request.take()
-                })
-                .flatten();
-            if let Some(request_id) = processes
-                && let Some(workspace) = workspace.as_ref()
-            {
-                workspace.update(cx, |workspace, _| {
-                    workspace.cancel_container_request(request_id);
-                    workspace.state.stats_processes_loading = false;
-                });
-            }
-        }
-        // 还没建立完的终端：用户已经切走就撤销，避免后台建好后又把页签抢回去。
-        if previous == ContainerDetailTab::Terminal
-            && tab != ContainerDetailTab::Terminal
-            && let Some(request_id) = terminal
-            && let Some(workspace) = workspace.as_ref()
-        {
-            workspace.update(cx, |workspace, _| {
-                workspace.cancel_container_request(request_id);
-                workspace.state.terminal_request = None;
-            });
-        }
-
-        match tab {
-            ContainerDetailTab::Logs => {
-                if let Some(workspace) = workspace.as_ref() {
-                    workspace.update(cx, |workspace, _| workspace.ensure_container_logs());
-                }
-            }
-            ContainerDetailTab::Stats => {
-                if let Some(workspace) = workspace.as_ref() {
-                    workspace.update(cx, |workspace, _| {
-                        workspace.ensure_container_stats();
-                        workspace.ensure_container_processes();
-                    });
-                }
-            }
-            ContainerDetailTab::Files => {
-                if let Some(workspace) = workspace.as_ref() {
-                    workspace.update(cx, |workspace, cx| workspace.ensure_container_files(cx));
-                }
-            }
-            ContainerDetailTab::Terminal => {
-                if let Some(workspace) = workspace.as_ref() {
-                    workspace.update(cx, |workspace, _| {
-                        workspace.ensure_container_terminal(None, None)
-                    });
-                }
-            }
-            ContainerDetailTab::Changes => {
-                if let Some(workspace) = workspace.as_ref() {
-                    workspace.update(cx, |workspace, _| workspace.ensure_container_changes());
-                }
-            }
-            ContainerDetailTab::Overview
-            | ContainerDetailTab::History
-            | ContainerDetailTab::Yaml => {}
-        }
-        cx.notify();
     }
 }
