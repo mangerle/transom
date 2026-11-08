@@ -291,8 +291,8 @@ impl AppShell {
             }
             (ContainerSection::Containers, ContainerDetailTab::Stats) => {
                 super::stats::render_container_stats(
+                    &view,
                     super::stats::ContainerStatsView {
-                        tab_id,
                         stats: stats.as_ref(),
                         history: &stats_history,
                         chart: stats_chart,
@@ -309,7 +309,6 @@ impl AppShell {
                         processes_collapsed: stats_processes_collapsed,
                     },
                     p,
-                    cx,
                 )
             }
             (

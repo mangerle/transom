@@ -5,7 +5,6 @@ use crate::widgets::table_header;
 use gpui_kit::component::Disableable;
 
 pub(crate) struct ContainerProcessesView<'a> {
-    pub(crate) tab_id: TabId,
     pub(crate) processes: &'a [ContainerProcess],
     pub(crate) loading: bool,
     pub(crate) error: Option<&'a str>,
@@ -14,18 +13,17 @@ pub(crate) struct ContainerProcessesView<'a> {
 }
 
 pub(crate) fn processes_card(
-    view: ContainerProcessesView<'_>,
+    view: &Entity<ContainerWorkspace>,
+    params: ContainerProcessesView<'_>,
     chrome: &StatsChrome,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let ContainerProcessesView {
-        tab_id,
         processes,
         loading,
         error,
         is_running,
         collapsed,
-    } = view;
+    } = params;
     let p = chrome.p;
     let refresh_tooltip = if is_running {
         rust_i18n::t!("container.stats.process_refresh").to_string()
@@ -55,12 +53,17 @@ pub(crate) fn processes_card(
                 .icon(IconName::RefreshCw)
                 .disabled(!is_running)
                 .tooltip(refresh_tooltip)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if is_running {
-                        this.ensure_container_processes(tab_id, cx);
-                        cx.notify();
+                .on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        if is_running {
+                            view.update(cx, |workspace, cx| {
+                                workspace.ensure_container_processes();
+                                cx.notify();
+                            });
+                        }
                     }
-                })),
+                }),
         );
 
     let header_btn = h_flex()
@@ -76,9 +79,15 @@ pub(crate) fn processes_card(
                 .gap_1p5()
                 .items_center()
                 .cursor_pointer()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.toggle_container_stats_processes(tab_id, cx);
-                }))
+                .on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |workspace, cx| {
+                            workspace.toggle_container_stats_processes();
+                            cx.notify();
+                        });
+                    }
+                })
                 .child(
                     Icon::new(if collapsed {
                         IconName::ChevronRight

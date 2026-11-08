@@ -8,7 +8,7 @@
 //! 不同步；容器内没有「宿主 load/swap/systemd 服务」这类宿主级语义，因此没有对应
 //! 卡片。
 
-use crate::app::AppShell;
+use crate::container::ContainerWorkspace;
 use crate::monitor::{SampleIntervalMode, SparklineChartType, usage_color};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -16,7 +16,7 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
-use transom_core::{ContainerDetails, ContainerProcess, ContainerStats, TabId};
+use transom_core::{ContainerDetails, ContainerProcess, ContainerStats};
 
 mod cards;
 mod ports;
@@ -36,7 +36,6 @@ pub(crate) use toolbar::*;
 const PROCESS_LIMIT: usize = 60;
 
 pub(crate) struct ContainerStatsView<'a> {
-    pub(crate) tab_id: TabId,
     pub(crate) stats: Option<&'a ContainerStats>,
     pub(crate) history: &'a [ContainerStats],
     pub(crate) chart: SparklineChartType,
@@ -55,12 +54,11 @@ pub(crate) struct ContainerStatsView<'a> {
 }
 
 pub(crate) fn render_container_stats(
-    view: ContainerStatsView<'_>,
+    view: &Entity<ContainerWorkspace>,
+    params: ContainerStatsView<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let ContainerStatsView {
-        tab_id,
         stats,
         history,
         chart,
@@ -75,10 +73,17 @@ pub(crate) fn render_container_stats(
         has_selection,
         ports_collapsed,
         processes_collapsed,
-    } = view;
+    } = params;
 
     let waiting = stats.is_none() && error.is_none();
-    let toolbar = stats_toolbar(tab_id, interval, chart, waiting, error, p, cx);
+    let trend = trend_window(interval);
+    let chrome = StatsChrome {
+        chart,
+        trend: &trend,
+        p,
+        waiting,
+    };
+    let toolbar = stats_toolbar(view, interval, error, &chrome);
     if !has_selection {
         return v_flex()
             .size_full()
@@ -144,14 +149,6 @@ pub(crate) fn render_container_stats(
             .into_any_element()
     });
 
-    let trend = trend_window(interval);
-    let chrome = StatsChrome {
-        chart,
-        trend: &trend,
-        p,
-        waiting,
-    };
-
     let cpu_card = cpu_card(stats, &cpu_history, &chrome);
     let memory_card = memory_card(stats, &memory_history, &chrome);
     let network_card = network_card(
@@ -172,10 +169,10 @@ pub(crate) fn render_container_stats(
         },
         &chrome,
     );
-    let ports_card = ports_card(tab_id, details, browser_host, ports_collapsed, &chrome, cx);
+    let ports_card = ports_card(view, details, browser_host, ports_collapsed, &chrome);
     let processes_card = processes_card(
+        view,
         processes::ContainerProcessesView {
-            tab_id,
             processes,
             loading: processes_loading,
             error: processes_error,
@@ -183,7 +180,6 @@ pub(crate) fn render_container_stats(
             collapsed: processes_collapsed,
         },
         &chrome,
-        cx,
     );
 
     // 两层架构：

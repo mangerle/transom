@@ -4,12 +4,11 @@ use super::*;
 use crate::widgets::{status_badge, table_header};
 
 pub(crate) fn ports_card(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     details: Option<&ContainerDetails>,
     browser_host: &str,
     collapsed: bool,
     chrome: &StatsChrome,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let p = chrome.p;
     let Some(details) = details else {
@@ -43,9 +42,15 @@ pub(crate) fn ports_card(
         .px_3()
         .py_2p5()
         .cursor_pointer()
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.toggle_container_stats_ports(tab_id, cx);
-        }))
+        .on_click({
+            let view = view.clone();
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.toggle_container_stats_ports();
+                    cx.notify();
+                });
+            }
+        })
         .child(
             h_flex()
                 .gap_1p5()

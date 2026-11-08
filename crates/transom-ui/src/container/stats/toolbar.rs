@@ -3,15 +3,15 @@
 use super::*;
 
 /// 工具条：采样档位、走势图形态与右侧的采样状态。
+///
+/// 按钮回调经工作区实体句柄落到实体方法，渲染函数不再需要外壳上下文。
 pub(crate) fn stats_toolbar(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     interval: SampleIntervalMode,
-    chart: SparklineChartType,
-    waiting: bool,
     error: Option<&str>,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
+    chrome: &StatsChrome,
 ) -> AnyElement {
+    let p = chrome.p;
     let mut interval_chips = h_flex().gap_0p5().items_center();
     for mode in [
         SampleIntervalMode::Fast,
@@ -25,9 +25,15 @@ pub(crate) fn stats_toolbar(
             .xsmall()
             .label(mode.label())
             .selected(interval == mode)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.set_container_stats_interval(tab_id, mode, cx);
-            })),
+            .on_click({
+                let view = view.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.set_container_stats_interval(mode);
+                        cx.notify();
+                    });
+                }
+            }),
         );
     }
     // 采样状态放在工具条右端：不再单独占一行，也不会把卡片往下推。
@@ -53,15 +59,20 @@ pub(crate) fn stats_toolbar(
                         .xsmall()
                         .icon(IconName::RefreshCw)
                         .label(rust_i18n::t!("common.retry").to_string())
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.restart_container_stats(tab_id, cx);
-                            this.ensure_container_processes(tab_id, cx);
-                            cx.notify();
-                        })),
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _, cx| {
+                                view.update(cx, |workspace, cx| {
+                                    workspace.restart_container_stats();
+                                    workspace.ensure_container_processes();
+                                    cx.notify();
+                                });
+                            }
+                        }),
                 )
                 .into_any_element(),
         )
-    } else if waiting {
+    } else if chrome.waiting {
         Some(
             h_flex()
                 .gap_1p5()
@@ -92,20 +103,26 @@ pub(crate) fn stats_toolbar(
             Button::new("container-stats-chart")
                 .ghost()
                 .xsmall()
-                .icon(match chart {
+                .icon(match chrome.chart {
                     SparklineChartType::Line => IconName::ChartLine,
                     SparklineChartType::Bar => IconName::ChartBar,
                 })
                 .tooltip(
-                    rust_i18n::t!(match chart {
+                    rust_i18n::t!(match chrome.chart {
                         SparklineChartType::Line => "monitor.view.chart_line_tooltip",
                         SparklineChartType::Bar => "monitor.view.chart_bar_tooltip",
                     })
                     .to_string(),
                 )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.toggle_container_stats_chart(tab_id, cx);
-                })),
+                .on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |workspace, cx| {
+                            workspace.toggle_container_stats_chart();
+                            cx.notify();
+                        });
+                    }
+                }),
         )
         .child(
             Button::new("container-stats-export")
@@ -113,9 +130,14 @@ pub(crate) fn stats_toolbar(
                 .xsmall()
                 .icon(IconName::Download)
                 .tooltip(rust_i18n::t!("container.stats.export_csv").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.export_container_stats_csv(tab_id, cx);
-                })),
+                .on_click({
+                    let view = view.clone();
+                    move |_, _, cx| {
+                        view.update(cx, |workspace, cx| {
+                            workspace.export_container_stats_csv(cx);
+                        });
+                    }
+                }),
         )
         .child(div().flex_1())
         .children(status)

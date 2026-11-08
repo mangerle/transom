@@ -428,8 +428,12 @@ impl AppShell {
                 }
             }
             ContainerDetailTab::Stats => {
-                self.ensure_container_stats(tab_id, cx);
-                self.ensure_container_processes(tab_id, cx);
+                if let Some(workspace) = workspace.as_ref() {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.ensure_container_stats();
+                        workspace.ensure_container_processes();
+                    });
+                }
             }
             ContainerDetailTab::Files => self.ensure_container_files(tab_id, cx),
             ContainerDetailTab::Terminal => self.ensure_container_terminal(tab_id, None, None, cx),
