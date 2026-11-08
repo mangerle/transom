@@ -15,7 +15,11 @@ impl AppShell {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        workspace.update(cx, |workspace, _| workspace.load_log(skip));
+        let sent = workspace.update(cx, |workspace, _| workspace.load_log(skip));
+        if !sent {
+            self.state
+                .set_error(rust_i18n::t!("error.command_queue_full").to_string());
+        }
         cx.notify();
     }
 

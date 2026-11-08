@@ -62,7 +62,10 @@ impl GitWorkspace {
     /// 设计原理（Why）：请求登记、加载态与查询快照是一组必须原子的状态改动，
     /// 放在实体上后调用方只需给出页码，不必再重复一遍“先置 loading 再发命令”
     /// 的顺序；命令走实体自己的 `command_tx`，不依赖外壳。
-    pub(crate) fn load_log(&mut self, skip: usize) {
+    ///
+    /// 返回 `false` 表示命令队列已满或控制平面已退出，调用方负责把失败
+    /// 转成应用级提示；实体自身只留日志，避免同一故障出现两条通知。
+    pub(crate) fn load_log(&mut self, skip: usize) -> bool {
         self.state.log.loading = true;
         self.state.log.error = None;
         let request_id = GitRequestId::new();
@@ -75,6 +78,6 @@ impl GitWorkspace {
             project: self.state.project.clone(),
             request_id,
             query,
-        });
+        })
     }
 }
