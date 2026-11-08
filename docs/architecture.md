@@ -107,9 +107,13 @@ impl 面板                                       →  面板自己的动作
 
 容器与 Git 的**每标签页状态**已收进 `Entity<ContainerWorkspace>` /
 `Entity<GitWorkspace>`：标签内容只存句柄，外壳读写都经 `read`/`update`。
-两者的渲染编排与多数领域动作仍在 `AppShell`，通过显式标注的
-`with_container` / `with_container_mut` 迁移期桥访问状态；下一步是把这些
-动作按领域下沉进实体，再删除桥接方法。
+
+容器侧的在途请求登记、命令跟踪投递、列表刷新（防抖/单分类/全量预热）、
+选择项、生命周期与清理动作已迁入 `impl ContainerWorkspace`；请求按标签归属，
+事件用 `request_id` 在实体上反查标签，迟到结果自然丢弃。渲染编排仍在
+`AppShell`，通过 `with_container` 迁移期桥只读状态，下一步是迁渲染并删除桥。
+
+Git 侧已迁 `GitWorkspace::load_log` 与实体命令通道；其余 Git 动作仍在外壳。
 
 ## 数据流
 
