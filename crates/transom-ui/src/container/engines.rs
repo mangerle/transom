@@ -37,8 +37,21 @@ impl AppShell {
         tab.title = profile.display_name();
         let state = ContainerWorkspaceState::new(profile.clone(), window, cx);
         let command_tx = self.state.services.command_tx.clone();
-        tab.content =
-            TabContent::Containers(cx.new(|_| ContainerWorkspace::new(state, tab_id, command_tx)));
+        let workspace = cx.new(|_| ContainerWorkspace::new(state, tab_id, command_tx));
+        // 订阅一次并在标签存续期间持有：头部把需要外壳配合的动作发成事件，
+        // 处理时按这里捕获的标签 id 定位，避免回读正在派发事件的实体。
+        let subscription = cx.subscribe(
+            &workspace,
+            move |shell, _workspace, event: &ContainerWorkspaceEvent, cx| {
+                shell.on_container_workspace_event(tab_id, event, cx);
+            },
+        );
+        self.state
+            .tasks
+            .subscriptions
+            .container_workspaces
+            .insert(tab_id, subscription);
+        tab.content = TabContent::Containers(workspace);
         self.state.workspace.tabs.push(tab);
         self.state.workspace.active_tab = Some(tab_id);
         self.state.present_active_group();

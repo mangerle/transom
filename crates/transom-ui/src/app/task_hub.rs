@@ -13,7 +13,7 @@
 
 use gpui_kit::{Subscription, Task};
 use std::collections::HashMap;
-use transom_core::SessionId;
+use transom_core::{SessionId, TabId};
 
 /// 可替换的后台任务。
 pub(crate) struct BackgroundTasks {
@@ -43,6 +43,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) editor: Option<Subscription>,
     pub(crate) monitor: Option<Subscription>,
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
+    /// 容器工作区发往外壳的意图事件：一个标签一份订阅，按标签回收。
+    pub(crate) container_workspaces: HashMap<TabId, Subscription>,
     pub(crate) settings: Option<Subscription>,
     /// 会话表单：保存落目录与删除会话由外壳处理。
     pub(crate) session_form: Option<Subscription>,
@@ -70,6 +72,7 @@ impl PanelSubscriptions {
             editor: None,
             monitor: None,
             forward: HashMap::new(),
+            container_workspaces: HashMap::new(),
             settings: None,
             session_form: None,
             known_hosts: None,
@@ -82,6 +85,16 @@ impl PanelSubscriptions {
             _status_metrics: None,
             _git_focus: None,
         }
+    }
+
+    /// 丢弃已关闭标签的容器工作区事件订阅。
+    ///
+    /// 设计原理（Why）：订阅的生命周期必须跟随标签，而不是跟随进程。关闭窗格、
+    /// 关闭整组、删除会话与连接失败四条路径最终都会走外壳的存活标签裁剪，因此
+    /// 集中在这里按 `TabId` 回收即可，避免某个关闭入口漏掉后订阅一直留在映射里。
+    pub(crate) fn prune_container_workspaces(&mut self, alive: &[TabId]) {
+        self.container_workspaces
+            .retain(|tab_id, _| alive.contains(tab_id));
     }
 }
 

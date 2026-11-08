@@ -8,6 +8,7 @@ mod compose_templates;
 mod detail;
 mod engines;
 mod entity;
+mod event;
 mod events;
 mod export;
 mod files_actions;
@@ -38,6 +39,7 @@ mod update;
 mod view;
 
 pub(crate) use entity::ContainerWorkspace;
+pub(crate) use event::ContainerWorkspaceEvent;
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{

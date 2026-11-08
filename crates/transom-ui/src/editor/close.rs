@@ -92,16 +92,21 @@ impl AppShell {
 }
 
 impl AppShell {
-    /// 按存活标签集合裁剪编辑面板与对比面板。
+    /// 按存活标签集合裁剪编辑面板、对比面板与容器工作区订阅。
     ///
-    /// 两者都挂在 `TabId`（窗格）上，关闭标签、关闭窗格、关闭整组都会让面板失去
-    /// 宿主；集中在一处裁剪比在每条关闭路径里分别点名更可靠，订阅句柄随面板一起
-    /// 析构退订，不会留下向已死实体投递的事件。
+    /// 编辑面板与对比面板都挂在 `TabId`（窗格）上，关闭标签、关闭窗格、关闭整组
+    /// 都会让面板失去宿主；容器工作区的事件订阅同样按标签持有，实体销毁后继续
+    /// 留在映射里就是泄漏。集中在一处裁剪比在每条关闭路径里分别点名更可靠，
+    /// 订阅句柄随面板一起析构退订，不会留下向已死实体投递的事件。
     pub(crate) fn prune_tab_overlays(&mut self, cx: &mut Context<Self>) {
         let alive: Vec<TabId> = self.state.workspace.tabs.iter().map(|tab| tab.id).collect();
         self.state
             .editors
             .update(cx, |panels, _| panels.prune_dead_tabs(&alive));
+        self.state
+            .tasks
+            .subscriptions
+            .prune_container_workspaces(&alive);
         self.prune_tab_diff_overlay(cx);
     }
 

@@ -14,6 +14,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use header::render_container_header;
 use transom_core::TabId;
 
 impl AppShell {
@@ -25,15 +26,21 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
+        let Some(view) = self.state.container_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let workspace = &workspace.read(cx).state;
-        if !matches!(workspace.status, ContainerWorkspaceStatus::Connected) {
+        if !matches!(
+            view.read(cx).state.status,
+            ContainerWorkspaceStatus::Connected
+        ) {
             return self.render_container_connection_state(tab_id, window, cx, p);
         }
         self.flush_container_notice(tab_id, window, cx);
-        let header = self.render_container_header(tab_id, window, cx, p);
+        let fullscreen = self.state.containers.fullscreen == Some(tab_id);
+        let header = {
+            let workspace = view.read(cx);
+            render_container_header(&view, &workspace.state, fullscreen, p)
+        };
         let list = self.render_container_list(tab_id, cx, p);
         let detail = self.render_container_detail(tab_id, window, cx, p);
         // 列表与详情宽度可拖拽：长容器名与镜像引用在固定宽度下必然截断，详情区在

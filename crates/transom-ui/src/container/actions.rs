@@ -127,10 +127,12 @@ impl ContainerWorkspace {
         self.state.overview_raw = false;
         cx.notify();
     }
-}
 
-impl AppShell {
     /// 切换顶部功能分类：清空选中项并拉取该分类列表。
+    ///
+    /// 设计原理（Why）：分类属于工作区自身状态，切换只需清空输入框并重新拉取，
+    /// 不依赖外壳的其它字段；`tab_id` 由调用方传入并在调试期校验，防止多标签
+    /// 场景下把分类切换误发到别的实体。
     pub(crate) fn select_container_section(
         &mut self,
         tab_id: TabId,
@@ -138,19 +140,17 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
-            return;
-        };
-        workspace.update(cx, |workspace, _| workspace.stop_container_streams());
-        let create_input = workspace.update(cx, |workspace, _| {
-            workspace.state.apply_section(section);
-            workspace.state.create_input.clone()
-        });
+        debug_assert_eq!(tab_id, self.tab_id, "分类切换必须落在实体所属标签上");
+        self.stop_container_streams();
+        let create_input = self.state.create_input.clone();
+        self.state.apply_section(section);
         create_input.update(cx, |input, cx| input.set_value("", window, cx));
-        workspace.update(cx, |workspace, _| workspace.refresh_section());
+        self.refresh_section();
         cx.notify();
     }
+}
 
+impl AppShell {
     /// 列表行动作分发：行内快捷按钮与右键菜单共用这一套语义，避免出现两处行为。
     ///
     /// 复制类动作不改选中项：用户常常要复制一个不是当前选中项的 ID，改选中会
