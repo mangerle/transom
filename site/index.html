@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transom - 原生 SSH、串口与终端工作台</title>
+<meta name="description" content="Transom 是基于 Rust 与 GPUI 构建的原生终端工作台，把 SSH、串口、分屏终端、SFTP、端口转发与审计留档收进同一个窗口。">
+<meta name="theme-color" content="#061310">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://mangerle.github.io/transom/">
+<link rel="icon" href="transom.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="Transom - 原生 SSH、串口与终端工作台">
+<meta property="og:description" content="一个窗口，同时管理远端 Shell、串口控制台与远程文件。">
+<meta property="og:url" content="https://mangerle.github.io/transom/">
+<meta property="og:image" content="https://mangerle.github.io/transom/assets/transom-social.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Transom - 原生 SSH、串口与终端工作台">
+<meta name="twitter:description" content="Rust + GPUI 原生渲染，SSH、Serial、SFTP 与端口转发集中在一个工作台。">
+<meta name="twitter:image" content="https://mangerle.github.io/transom/assets/transom-social.png">
+<script>document.documentElement.classList.add('js');</script>
+<style>
+@font-face{font-family:"Transom Sans";src:local("Inter"),local("Manrope"),local("Noto Sans SC"),local("PingFang SC");font-style:normal;font-weight:100 900;font-display:swap}
+:root{
+  --bg:#061310;--surface-1:#0a1b17;--surface-2:#0e241f;--surface-3:#133029;--surface-4:#1b4037;
+  --text:#f2fbf8;--muted:#9cb7ae;--soft:#c7d9d3;--line:rgba(159,205,191,.16);
+  --accent:#2dd4bf;--accent-strong:#5eead4;--accent-ink:#03231e;--gold:#fbbf24;--cyan:#67e8f9;
+  --danger:#fb7185;--radius-sm:9px;--radius-md:14px;--radius-lg:20px;--radius-xl:28px;
+  --curve:cubic-bezier(.22,1,.36,1);--shadow:0 32px 90px -36px rgba(0,0,0,.92),inset 0 1px 0 rgba(255,255,255,.06)
+}
+*{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  margin:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+  color:var(--text);background:var(--bg);
+  font:400 16px/1.5 "Transom Sans","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility
+}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(72% 60% at 54% -12%,rgba(20,184,166,.25),transparent 68%),
+    radial-gradient(38% 32% at 96% 12%,rgba(14,116,144,.2),transparent 72%),
+    radial-gradient(35% 28% at 10% 78%,rgba(251,191,36,.055),transparent 76%)
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.19;
+  background-image:linear-gradient(rgba(148,180,170,.13) 1px,transparent 1px),linear-gradient(90deg,rgba(148,180,170,.13) 1px,transparent 1px);
+  background-size:56px 56px;-webkit-mask-image:radial-gradient(82% 66% at 50% 8%,#000,transparent 88%);mask-image:radial-gradient(82% 66% at 50% 8%,#000,transparent 88%)
+}
+a{color:inherit;text-decoration:none}
+button{font:inherit}
+img{display:block;max-width:100%;height:auto;object-fit:contain}
+button,a{-webkit-tap-highlight-color:transparent}
+::selection{background:var(--accent);color:var(--accent-ink)}
+.skip-link{position:fixed;left:16px;top:-80px;z-index:100;padding:8px 12px;border-radius:var(--radius-sm);background:var(--accent);color:var(--accent-ink)}
+.skip-link:focus{top:12px}
+.container{width:min(1180px,calc(100% - 40px));margin-inline:auto}
+.icon{width:24px;height:24px;fill:currentColor;flex:none}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.heading-1{font-size:56px;line-height:1.05;font-weight:650;letter-spacing:-.05em}
+.heading-2{font-size:42px;line-height:1.1;font-weight:650;letter-spacing:-.045em}
+.heading-3{font-size:34px;line-height:1.14;font-weight:650;letter-spacing:-.04em}
+.heading-4{font-size:20px;line-height:1.35;font-weight:650;letter-spacing:-.02em}
+.body-lg{font-size:17px;line-height:1.75;color:var(--muted)}
+.body-md{font-size:15px;line-height:1.7;color:var(--muted)}
+.body-sm{font-size:13px;line-height:1.65;color:var(--muted)}
+.caption{font-size:12px;line-height:1.45;font-weight:500;color:var(--muted)}
+.kicker{display:inline-flex;align-items:center;gap:8px;color:var(--accent-strong);font-size:12px;line-height:16px;font-weight:650;letter-spacing:.04em}
+.kicker::before{content:"";width:7px;height:7px;border-radius:999px;background:currentColor;box-shadow:0 0 16px currentColor}
+.gradient-text{display:block;background:linear-gradient(100deg,#fff 4%,#a7f3d0 44%,#5eead4 68%,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:0 18px;border:1px solid transparent;border-radius:12px;font-size:14px;line-height:20px;font-weight:650;transition:transform .2s var(--curve),background-color .2s,border-color .2s,color .2s}
+.button:hover{transform:translateY(-1px)}
+.button-primary{background:var(--accent);color:var(--accent-ink);box-shadow:0 12px 30px -14px rgba(45,212,191,.7)}
+.button-primary:hover{background:var(--accent-strong)}
+.button-secondary{border-color:var(--line);background:rgba(255,255,255,.045);color:var(--text)}
+.button-secondary:hover{border-color:rgba(255,255,255,.26);background:rgba(255,255,255,.075)}
+:focus-visible{outline:2px solid var(--accent-strong);outline-offset:3px}
+
+.site-header{position:relative;z-index:50;padding:14px 0 8px;background:linear-gradient(to bottom,var(--bg) 0,var(--bg) 70%,rgba(6,19,16,.84) 70%,rgba(6,19,16,0) 100%)}
+.nav-bar{height:64px;display:flex;align-items:center;justify-content:space-between;gap:22px;padding:0 10px 0 18px;border:1px solid var(--line);border-radius:18px;background:rgba(6,19,16,.9);box-shadow:var(--shadow);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+.brand{display:flex;align-items:center;gap:9px;font-size:16px;line-height:24px;font-weight:680;letter-spacing:-.02em}
+.brand img{width:34px;height:34px;border-radius:9px}
+.nav-links{display:flex;align-items:center;gap:23px}
+.nav-link{position:relative;padding:7px 0;border:0;background:none;color:var(--muted);font-size:13px;line-height:18px;font-weight:550;cursor:pointer;transition:color .2s}
+.nav-link:hover,.nav-link:focus-visible,.nav-link[aria-current="page"]{color:var(--text)}
+.nav-link[aria-current="page"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--accent-strong)}
+.nav-actions{display:flex;align-items:center;gap:8px}
+.nav-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;color:var(--muted);transition:color .2s,background-color .2s}
+.nav-icon:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.menu-toggle{display:none;position:relative;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:10px;background:transparent;color:var(--text);cursor:pointer}
+.menu-toggle span{position:absolute;width:19px;height:2px;background:currentColor;transition:transform .35s var(--curve),opacity .2s}
+.menu-toggle span:first-child{transform:translateY(-6px)}
+.menu-toggle span:last-child{transform:translateY(6px)}
+body.menu-open .menu-toggle span:first-child{transform:rotate(45deg)}
+body.menu-open .menu-toggle span:nth-child(2){opacity:0}
+body.menu-open .menu-toggle span:last-child{transform:rotate(-45deg)}
+.mobile-menu{position:fixed;inset:0;z-index:45;display:none;padding:104px 24px 32px;background:rgba(6,19,16,.98);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);opacity:0;visibility:hidden;transition:opacity .35s,visibility .35s}
+.mobile-menu button{display:block;width:100%;padding:13px 0;border:0;background:none;color:var(--muted);text-align:left;font-size:27px;line-height:1.35;font-weight:560;opacity:0;transform:translateY(18px);transition:opacity .4s var(--curve),transform .4s var(--curve),color .2s;transition-delay:calc(var(--i) * 42ms)}
+body.menu-open .mobile-menu{opacity:1;visibility:visible}
+body.menu-open .mobile-menu button{opacity:1;transform:none}
+
+.deck{position:relative;min-height:0;overflow:hidden;isolation:isolate;outline:none}
+.slide{position:absolute;inset:0;display:block;padding:8px 0 20px;overflow-y:auto;overscroll-behavior:contain;opacity:0;visibility:hidden;transform:translateY(32px);pointer-events:none;transition:opacity .45s var(--curve),transform .6s var(--curve),visibility .45s;scrollbar-width:thin;scrollbar-color:var(--surface-4) transparent}
+.slide.is-before{transform:translateY(-32px)}
+.slide.is-active{opacity:1;visibility:visible;transform:none;pointer-events:auto}
+.slide-inner{width:min(1180px,calc(100% - 40px));min-height:100%;margin-inline:auto;display:flex;flex-direction:column;justify-content:center}
+.hero-layout{display:grid;grid-template-columns:minmax(0,.88fr) minmax(500px,1.12fr);grid-template-areas:"copy visual" "stats stats";align-items:center;gap:26px 54px}
+.hero-copy{grid-area:copy;max-width:570px}
+.hero-copy h1{max-width:590px;margin:18px 0 0;text-wrap:balance}
+.hero-copy .body-lg{max-width:560px;margin:18px 0 0}
+.hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.proof-line{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:18px;color:var(--muted);font-size:13px;line-height:20px}
+.proof-item{display:flex;align-items:center;gap:7px}
+.proof-item .icon{width:16px;height:16px;color:var(--accent-strong)}
+.stat-strip{grid-area:stats;display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:18px;background:rgba(10,27,23,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden}
+.stat{padding:13px 19px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat strong{display:block;font-size:21px;line-height:25px;letter-spacing:-.03em;color:var(--text)}
+.stat span{display:block;margin-top:3px;font-size:11px;line-height:16px;color:var(--muted)}
+
+.app-window{overflow:hidden;border:1px solid rgba(94,234,212,.22);border-radius:var(--radius-lg);background:linear-gradient(150deg,#0d241f,#091713);box-shadow:0 38px 90px -38px rgba(0,0,0,.96),inset 0 1px 0 rgba(255,255,255,.06)}
+.hero-visual{grid-area:visual;padding:7px;border:1px solid rgba(94,234,212,.18);border-radius:24px;background:rgba(14,36,31,.76);box-shadow:var(--shadow)}
+.app-titlebar{height:36px;display:flex;align-items:center;gap:14px;padding:0 12px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018)}
+.traffic{display:flex;gap:6px}
+.traffic i{width:8px;height:8px;border-radius:50%;background:#fb7185}.traffic i:nth-child(2){background:#fbbf24}.traffic i:nth-child(3){background:#34d399}
+.app-title{font-size:10px;color:var(--muted);letter-spacing:.05em}
+.app-body{display:grid;grid-template-columns:34px 150px minmax(0,1fr);min-height:352px}
+.app-rail{display:flex;flex-direction:column;align-items:center;gap:9px;padding:11px 0;border-right:1px solid var(--line);background:rgba(0,0,0,.12)}
+.rail-button{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;color:#6f9187;background:transparent;font-size:9px;font-weight:700}
+.rail-button.active{color:var(--accent-ink);background:var(--accent)}
+.app-sidebar{border-right:1px solid var(--line);background:rgba(4,15,12,.36);padding:10px 8px;overflow:hidden}
+.sidebar-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;color:#d9ebe5;font-size:10px;font-weight:650}
+.sidebar-add{width:17px;height:17px;display:grid;place-items:center;border:1px solid var(--line);border-radius:5px;color:var(--muted);font-size:11px}
+.session-group{margin-top:9px;font-size:8px;font-weight:650;letter-spacing:.08em;color:#6e9086;text-transform:uppercase}
+.session-row{display:flex;align-items:center;gap:7px;margin-top:4px;padding:5px 6px;border-radius:5px;color:#b7cec7;font-size:9px}
+.session-row.active{background:rgba(45,212,191,.13);color:#eafff9;box-shadow:inset 2px 0 0 var(--accent)}
+.session-dot{width:5px;height:5px;border-radius:50%;background:#34d399;box-shadow:0 0 8px rgba(52,211,153,.5)}
+.session-dot.idle{background:#64748b;box-shadow:none}.session-dot.warn{background:var(--gold)}
+.app-main{min-width:0;display:flex;flex-direction:column;background:#07130f}
+.app-tabs{height:31px;display:flex;align-items:flex-end;gap:1px;padding:0 8px;border-bottom:1px solid var(--line);background:#091a15}
+.app-tab{display:flex;align-items:center;gap:6px;height:26px;padding:0 10px;border:1px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;color:#78988e;font-size:8px}
+.app-tab.active{border-color:var(--line);background:#0c211b;color:#d5e7e1}
+.tab-dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.pane-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;flex:1;gap:1px;background:var(--line);min-height:0}
+.terminal-pane{position:relative;min-width:0;padding:8px 9px;background:#091a16;overflow:hidden}
+.terminal-pane.wide{grid-column:span 2}
+.pane-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;color:#76988e;font-size:7px}
+.pane-head span:first-child{color:#aac5bd}
+.terminal-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:7px/1.75 "SFMono-Regular",Consolas,"Liberation Mono",monospace;color:#9fc0b6}
+.terminal-line .prompt{color:var(--accent-strong)}.terminal-line .path{color:var(--cyan)}.terminal-line .warn{color:var(--gold)}.terminal-line .err{color:var(--danger)}.terminal-line .dim{color:#55756b}
+.terminal-cursor{display:inline-block;width:4px;height:8px;margin-left:2px;vertical-align:-1px;background:var(--accent);animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:.2}}
+.app-status{height:22px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;border-top:1px solid var(--line);background:#081813;color:#6f9187;font-size:7px}
+.status-chips{display:flex;gap:10px}.status-chips b{font-weight:500;color:#a8c2ba}
+
+.section-layout{display:flex;flex-direction:column;gap:24px}
+.section-heading{max-width:800px}
+.section-heading h2{margin:10px 0 0;text-wrap:balance}
+.section-heading p{margin:10px 0 0;max-width:700px}
+.benefit-grid,.workflow-grid,.platform-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.benefit-card,.workflow-card,.platform-card{position:relative;padding:20px;border:1px solid var(--line);border-radius:var(--radius-lg);background:linear-gradient(145deg,rgba(19,48,41,.68),rgba(10,27,23,.86));box-shadow:inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden}
+.benefit-card::after,.workflow-card::after,.platform-card::after{content:"";position:absolute;width:120px;height:120px;right:-50px;top:-60px;border-radius:50%;background:radial-gradient(circle,rgba(45,212,191,.14),transparent 68%);pointer-events:none}
+.benefit-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.icon-box{display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(94,234,212,.2);border-radius:11px;background:rgba(45,212,191,.1);color:var(--accent-strong)}
+.icon-box .icon{width:20px;height:20px}
+.icon-box.gold{border-color:rgba(251,191,36,.2);background:rgba(251,191,36,.09);color:var(--gold)}
+.icon-box.cyan{border-color:rgba(103,232,249,.18);background:rgba(103,232,249,.08);color:var(--cyan)}
+.index-pill{display:inline-flex;align-items:center;justify-content:center;min-width:31px;height:22px;padding:0 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font:600 10px/1 "SFMono-Regular",Consolas,monospace}
+.benefit-card h3,.workflow-card h3,.platform-card h3{margin:0;font-size:18px;line-height:1.32;font-weight:650;letter-spacing:-.02em}
+.benefit-card p,.workflow-card p,.platform-card p{margin:8px 0 0;font-size:13px;line-height:1.65;color:var(--muted)}
+.card-caption{display:inline-flex;align-items:center;gap:6px;margin-top:14px;color:#afd9ce;font-size:11px;line-height:17px}
+.card-caption::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.workflow-card .step-number{display:block;margin-bottom:18px;color:#5e8177;font:650 11px/1 "SFMono-Regular",Consolas,monospace;letter-spacing:.08em}
+
+.feature-layout{display:grid;grid-template-columns:minmax(0,.82fr) minmax(480px,1.18fr);align-items:center;gap:54px}
+.feature-layout.reverse{grid-template-columns:minmax(480px,1.18fr) minmax(0,.82fr)}
+.feature-copy h2{margin:10px 0 0;text-wrap:balance}
+.feature-copy .body-lg{margin:12px 0 0}
+.feature-list{display:grid;gap:10px;margin:20px 0 0;padding:0;list-style:none}
+.feature-list li{display:flex;gap:9px;align-items:flex-start;color:var(--soft);font-size:13px;line-height:1.6}
+.feature-list .icon{width:16px;height:16px;margin-top:2px;color:var(--accent-strong)}
+.media-card{min-width:0;padding:8px;border:1px solid rgba(94,234,212,.17);border-radius:22px;background:linear-gradient(145deg,rgba(19,48,41,.7),rgba(9,23,19,.85));box-shadow:var(--shadow)}
+.media-card-inner{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:#081713}
+.media-toolbar{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018);color:#77998f;font-size:9px}
+.media-dots{display:flex;gap:5px}.media-dots i{width:6px;height:6px;border-radius:50%;background:#3b5c52}
+.split-demo{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1px;min-height:330px;background:var(--line)}
+.split-demo .terminal-pane{background:#091a16;padding:12px 13px}
+.split-demo .pane-head{font-size:8px;margin-bottom:10px}
+.split-demo .terminal-line{font-size:8px;line-height:1.85}
+.split-demo .split-top{grid-column:span 2}
+
+.security-board{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;min-height:330px}
+.security-stack{display:grid;grid-template-rows:repeat(3,1fr);gap:10px}
+.security-item{display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid var(--line);border-radius:14px;background:rgba(15,39,33,.68)}
+.security-item .icon-box{width:32px;height:32px;flex:none}.security-item .icon-box .icon{width:17px;height:17px}
+.security-item h3{margin:0;font-size:14px;font-weight:650}.security-item p{margin:4px 0 0;font-size:11px;line-height:1.55;color:var(--muted)}
+.cipher-panel{position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid var(--line);border-radius:16px;background:radial-gradient(circle at 72% 15%,rgba(45,212,191,.14),transparent 38%),rgba(7,19,15,.82);overflow:hidden}
+.cipher-panel::before{content:"";position:absolute;inset:18px;border:1px solid rgba(94,234,212,.09);border-radius:50%;pointer-events:none}
+.cipher-title{position:relative;font-size:10px;font-weight:650;letter-spacing:.12em;color:#88aa9f}
+.cipher-list{position:relative;display:grid;gap:11px}
+.cipher-row{display:flex;justify-content:space-between;gap:12px;padding-bottom:9px;border-bottom:1px solid var(--line);font-size:10px}
+.cipher-row:last-child{border-bottom:0}.cipher-row span{color:#728f87}.cipher-row code{color:#d6eee7;font:9px "SFMono-Regular",Consolas,monospace}
+
+.sftp-demo{min-height:350px}
+.sftp-head{display:flex;align-items:center;justify-content:space-between;padding:11px 12px;border-bottom:1px solid var(--line);color:#a2beb6;font-size:9px}
+.sftp-connection{display:flex;align-items:center;gap:6px}.sftp-connection i{width:5px;height:5px;border-radius:50%;background:#34d399}
+.sftp-body{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);min-height:245px}
+.file-pane{min-width:0;background:#081713;padding:10px}
+.file-path{margin-bottom:8px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;color:#a8c2ba;font:8px "SFMono-Regular",Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(255,255,255,.025)}
+.file-row{display:grid;grid-template-columns:14px minmax(0,1fr) 46px;gap:6px;align-items:center;height:25px;padding:0 6px;border-radius:5px;color:#9bb8af;font-size:8px}
+.file-row:nth-child(odd){background:rgba(255,255,255,.018)}
+.file-row.selected{background:rgba(45,212,191,.11);color:#e2f5ef}
+.file-icon{width:9px;height:9px;border-radius:2px;background:#3f6258}.file-icon.dir{background:var(--gold)}
+.file-size{text-align:right;color:#617f76;font:7px "SFMono-Regular",Consolas,monospace}
+.queue-bar{display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--line);background:#0a1b17;font-size:8px;color:#89a89f}
+.queue-progress{height:4px;flex:1;border-radius:999px;background:#17372e;overflow:hidden}.queue-progress i{display:block;width:68%;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--cyan))}
+.queue-rate{color:var(--accent-strong);font:7px "SFMono-Regular",Consolas,monospace}
+
+.terminal-showcase .media-card-inner{background:#07140f}
+.showcase-tabs{height:34px;display:flex;align-items:center;gap:16px;padding:0 12px;border-bottom:1px solid var(--line);color:#688a80;font-size:8px}
+.showcase-tabs strong{color:#bdd8d0;font-weight:550}
+.showcase-body{position:relative;min-height:315px;padding:16px 17px;background:radial-gradient(circle at 92% 0,rgba(45,212,191,.05),transparent 38%)}
+.showcase-line{font:9px/1.9 "SFMono-Regular",Consolas,"Liberation Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#a4c2b8}
+.showcase-line .prompt{color:var(--accent-strong)}.showcase-line .warn{color:var(--gold)}.showcase-line .error{color:var(--danger)}.showcase-line .info{color:var(--cyan)}.showcase-line .dim{color:#55756b}
+.showcase-line mark{color:#031713;background:var(--accent);border-radius:2px;padding:1px 2px}
+.showcase-line .uuid{color:#c4b5fd}
+.minimap{position:absolute;top:14px;right:8px;bottom:14px;width:7px;border-radius:999px;background:#122c25;overflow:hidden}
+.minimap i{position:absolute;left:1px;right:1px;height:6px;border-radius:2px;background:var(--gold);opacity:.8}
+.search-popover{position:absolute;right:24px;top:60px;width:220px;padding:11px;border:1px solid rgba(94,234,212,.2);border-radius:10px;background:#0d251f;box-shadow:0 18px 40px -20px #000;color:#84a49a;font-size:8px}
+.search-popover strong{display:block;margin-bottom:7px;color:#d8eee7;font-size:9px}
+.search-field{display:flex;align-items:center;justify-content:space-between;padding:6px 7px;border:1px solid var(--line);border-radius:5px;background:#081713;color:#b9d2ca;font:8px "SFMono-Regular",Consolas,monospace}
+.search-options{display:flex;gap:6px;margin-top:7px}.search-options span{padding:3px 5px;border-radius:4px;background:#17372e;color:#88a89e}.search-options span.active{background:rgba(45,212,191,.2);color:var(--accent-strong)}
+.showcase-footer{display:flex;gap:18px;padding:8px 12px;border-top:1px solid var(--line);color:#66887e;font-size:8px}
+.showcase-footer b{color:#aecbc2;font-weight:500}
+
+.platform-note{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:rgba(10,27,23,.65);color:var(--muted);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;min-height:23px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.035);color:#b5ccc5;font-size:10px;line-height:15px;white-space:nowrap}
+.platform-card .chips{margin-top:14px}
+.platform-icon{display:grid;place-items:center;width:38px;height:38px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.035);color:var(--accent-strong)}
+.platform-icon .icon{width:21px;height:21px}
+.platform-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+
+.download-layout{display:grid;grid-template-columns:minmax(0,1.02fr) minmax(420px,.98fr);gap:42px;align-items:center}
+.cta-panel{padding:28px;border:1px solid rgba(94,234,212,.21);border-radius:var(--radius-xl);background:radial-gradient(circle at 94% 4%,rgba(45,212,191,.18),transparent 36%),linear-gradient(145deg,rgba(19,48,41,.82),rgba(8,23,18,.9));box-shadow:var(--shadow)}
+.cta-panel h2{margin:12px 0 0;text-wrap:balance}
+.cta-panel p{max-width:560px;margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.7}
+.cta-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.cta-meta{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:17px;color:#86a69d;font-size:11px}
+.cta-meta span{display:flex;align-items:center;gap:6px}.cta-meta .icon{width:14px;height:14px;color:var(--accent-strong)}
+.faq-list{display:grid;gap:8px}
+.faq-list details{border:1px solid var(--line);border-radius:13px;background:rgba(10,27,23,.7);overflow:hidden}
+.faq-list summary{position:relative;padding:14px 42px 14px 16px;color:#d9ebe5;font-size:13px;line-height:1.45;font-weight:570;cursor:pointer;list-style:none}
+.faq-list summary::-webkit-details-marker{display:none}
+.faq-list summary::after{content:"";position:absolute;right:17px;top:19px;width:7px;height:7px;border-right:1px solid var(--muted);border-bottom:1px solid var(--muted);transform:rotate(45deg);transition:transform .2s}
+.faq-list details[open] summary::after{transform:rotate(225deg);top:22px}
+.faq-list p{margin:0;padding:0 16px 15px;color:var(--muted);font-size:12px;line-height:1.65}
+
+.site-footer{position:relative;z-index:20;padding:6px 0;background:linear-gradient(to top,var(--bg),rgba(6,19,16,.96))}
+.progress-rail{position:absolute;left:0;right:0;top:0;height:1px;background:rgba(255,255,255,.055)}
+.progress-bar{display:block;width:100%;height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));transform:scaleX(.125);transform-origin:left;transition:transform .45s var(--curve)}
+.footer-inner{height:38px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.footer-brand{font-size:10px;letter-spacing:.03em;color:#719087}
+.footer-hint{font-size:10px;color:#66837b}
+.deck-controls{display:flex;align-items:center;gap:9px}
+.icon-button{display:grid;place-items:center;width:31px;height:31px;padding:0;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.035);color:#a5c1b8;cursor:pointer;transition:background-color .2s,color .2s,border-color .2s}
+.icon-button:hover:not(:disabled){border-color:rgba(94,234,212,.3);background:rgba(45,212,191,.1);color:var(--text)}
+.icon-button:disabled{opacity:.28;cursor:not-allowed}
+.icon-button .icon{width:16px;height:16px}.icon-button.prev .icon{transform:rotate(180deg)}
+.slide-counter{min-width:70px;text-align:center;font:10px "SFMono-Regular",Consolas,monospace;color:#6c8d83}
+.slide-counter strong{color:#d9ede7;font-weight:600}
+
+@media(max-width:1040px){
+  .heading-1{font-size:48px}.heading-2{font-size:36px}.heading-3{font-size:30px}
+  .hero-layout{grid-template-columns:minmax(0,.9fr) minmax(420px,1.1fr);gap:24px 34px}
+  .feature-layout,.feature-layout.reverse{gap:34px;grid-template-columns:minmax(0,.84fr) minmax(420px,1.16fr)}
+  .feature-layout.reverse{grid-template-columns:minmax(420px,1.16fr) minmax(0,.84fr)}
+  .nav-links{gap:17px}
+}
+@media(max-width:860px){
+  html,body{height:auto;min-height:100%;overflow:auto}
+  body{display:block}
+  .site-header{position:sticky;top:0}
+  .nav-bar{margin-inline:16px}.container{width:min(100% - 32px,720px)}
+  .nav-links,.nav-actions .github-link{display:none}.menu-toggle{display:grid}.mobile-menu{display:block}
+  .slide{position:relative;inset:auto;min-height:calc(100svh - 86px);opacity:1;visibility:visible;transform:none;pointer-events:auto;padding:24px 0 40px}
+  .js .slide:not(.is-active){display:none}.slide-inner{min-height:0;justify-content:flex-start}
+  .hero-layout{grid-template-columns:1fr;grid-template-areas:"copy" "visual" "stats";gap:24px}
+  .hero-copy{max-width:none}.hero-copy h1{max-width:680px}
+  .stat-strip{grid-template-columns:1fr 1fr 1fr}
+  .benefit-grid,.workflow-grid,.platform-grid{grid-template-columns:1fr}
+  .feature-layout,.feature-layout.reverse{grid-template-columns:1fr;gap:24px}.feature-layout.reverse .feature-copy{order:1}.feature-layout.reverse .media-card{order:2}
+  .security-board{grid-template-columns:1fr}.security-stack{grid-template-rows:auto}
+  .download-layout{grid-template-columns:1fr;gap:24px}
+  .site-footer{position:relative}.footer-hint{display:none}
+}
+@media(max-width:560px){
+  .site-header{padding-top:10px}.nav-bar{height:56px;padding-left:12px}.brand img{width:30px;height:30px}
+  .heading-1{font-size:38px;letter-spacing:-.045em}.heading-2{font-size:30px}.heading-3{font-size:27px}.body-lg{font-size:15px}.body-md{font-size:14px}
+  .hero-copy h1{margin-top:15px}.hero-copy .body-lg{margin-top:15px}.hero-actions .button{width:100%}
+  .proof-line{gap:7px 14px;font-size:11px}.stat-strip{grid-template-columns:1fr}.stat{border-right:0;border-bottom:1px solid var(--line)}.stat:last-child{border-bottom:0}
+  .app-body{grid-template-columns:30px 114px minmax(0,1fr);min-height:300px}.app-sidebar{padding-inline:6px}
+  .pane-grid{grid-template-columns:1fr;grid-template-rows:1fr 1fr}.terminal-pane.wide{grid-column:auto}.pane-grid .terminal-pane:nth-child(3){display:none}
+  .benefit-card,.workflow-card,.platform-card{padding:17px}.benefit-top{margin-bottom:13px}
+  .media-card{padding:6px;border-radius:18px}.split-demo{min-height:280px}.security-board{min-height:0}
+  .sftp-body{grid-template-columns:1fr}.file-pane.remote{border-top:1px solid var(--line)}
+  .search-popover{width:180px;right:15px}
+  .platform-note{align-items:flex-start;flex-direction:column}.cta-panel{padding:22px}.cta-actions .button{width:100%}
+  .footer-brand{font-size:9px}.slide-counter{min-width:58px}.icon-button{width:29px;height:29px}.footer-inner{height:36px}.mobile-menu button{font-size:23px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+}
+</style>
+<noscript><style>html,body{height:auto;overflow:auto}body{display:block}.slide{position:relative;inset:auto;min-height:100vh;opacity:1;visibility:visible;transform:none;pointer-events:auto}.site-footer{position:sticky}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#overview">跳到页面正文</a>
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm2.3 2.3 1.4-1.4L12.4 11l-4.7 4.1-1.4-1.4L9.5 11 6.3 8.3Zm5.7 5.7h5v2h-5v-2Z"/></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><path d="M3 3h18v18H3V3Zm2 2v6h6V5H5Zm8 0v6h6V5h-6Zm-8 8v6h6v-6H5Zm8 0v6h6v-6h-6Z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 8 3v6c0 5.1-3.4 9.4-8 11-4.6-1.6-8-5.9-8-11V5l8-3Zm0 2.2L6 6.4V11c0 3.8 2.4 7.1 6 8.7 3.6-1.6 6-4.9 6-8.7V6.4l-6-2.2Zm-1 4h2v5h-2V8.2Zm0 6.5h2v2h-2v-2Z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 5h6l2 2h10v12H3V5Zm2 2v10h14V9h-8.8l-2-2H5Z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path d="M15.5 3a5.5 5.5 0 0 1 1.7 10.7L15 16l-1.5-1.5L12 16l-2-2-2 2-2-2 6.3-6.3A5.5 5.5 0 0 1 15.5 3Zm0 2a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M11 3h2v10l3-3 1.4 1.4L12 17l-5.4-5.6L8 10l3 3V3ZM4 19h16v2H4v-2Z"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.5.1.7-.2.7-.5v-2.1c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.5 1.1 1.5 1.1.9 1.5 2.4 1.1 3 .8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.7.7 1 1.6 1 2.7 0 3.8-2.4 4.6-4.6 4.9.4.3.7.9.7 1.9V22c0 .3.2.6.7.5A11.2 11.2 0 0 0 12 .8Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path d="M10.5 3a7.5 7.5 0 1 1-4.8 13.3L2 20l1.4 1.4 3.7-3.7A7.5 7.5 0 0 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 1-9.8 12h2.1A8 8 0 1 0 6.3 7.7L9 10H2V3l3 3A9.9 9.9 0 0 1 12 2Zm-1 5h2v4.6l3 1.8-1 1.7-4-2.4V7Z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M9.5 7H7a5 5 0 0 0 0 10h2.5v-2H7a3 3 0 1 1 0-6h2.5V7Zm5 0H17a5 5 0 0 1 0 10h-2.5v-2H17a3 3 0 1 0 0-6h-2.5V7ZM8 11h8v2H8v-2Z"/></symbol>
+  <symbol id="i-linux" viewBox="0 0 24 24"><path d="M12 2c3 0 4.5 2.5 4.5 5.5 0 1.7.5 3 1.5 4.4 1.4 1.9 2 3.9 1.4 5.2-.3.8-1.1 1.1-2 1-.4 1.1-1.2 1.7-2.2 1.7-.9 0-1.5-.4-2-.9-.4.2-.8.3-1.2.3s-.8-.1-1.2-.3c-.5.5-1.1.9-2 .9-1 0-1.8-.6-2.2-1.7-.9.1-1.7-.2-2-1-.6-1.3 0-3.3 1.4-5.2 1-1.4 1.5-2.7 1.5-4.4C7.5 4.5 9 2 12 2Zm0 2c-1.5 0-2.5 1.5-2.5 3.5S8.6 10.9 7.3 12.7c-.9 1.2-1.4 2.5-1.3 3.2.1.2.5.3 1 .2l.8-.2.5 1c.2.5.5.8.9.8.5 0 .9-.3 1.2-.8l.7-1.1.8.6c.4.3.7.4 1.1.4.4 0 .7-.1 1.1-.4l.8-.6.7 1.1c.3.5.7.8 1.2.8.4 0 .7-.3.9-.8l.5-1 .8.2c.5.1.9 0 1-.2.1-.7-.4-2-1.3-3.2-1.3-1.8-2.2-3.7-2.2-5.7C14.5 5.5 13.5 4 12 4Zm-1.6 4.1a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm3.2 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z"/></symbol>
+  <symbol id="i-windows" viewBox="0 0 24 24"><path d="M3 4.4 10.5 3v8H3V4.4ZM11.5 2.8 21 1v10h-9.5V2.8ZM3 12h7.5v8L3 18.6V12Zm8.5 0H21v10l-9.5-1.8V12Z"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path d="M16.4 12.8c0-2.1 1.7-3.1 1.8-3.2-1-1.4-2.5-1.6-3-1.6-1.3-.1-2.5.7-3.2.7-.7 0-1.7-.7-2.8-.7-1.4 0-2.8.8-3.5 2.1-1.5 2.6-.4 6.5 1 8.6.7 1 1.5 2.1 2.6 2 1-.1 1.4-.7 2.7-.7s1.6.7 2.8.7c1.1 0 1.9-1 2.5-2 .8-1.2 1.2-2.4 1.2-2.5-.1 0-2.1-.8-2.1-3.4ZM14.4 6.8c.6-.7 1-1.7.9-2.8-.9 0-2 .6-2.6 1.3-.6.6-1.1 1.7-.9 2.7 1 .1 2-.5 2.6-1.2Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m9.2 16.6-4.3-4.3L3.5 13.7l5.7 5.7L21 7.6l-1.4-1.4-10.4 10.4Z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="m13.2 5.2 6.8 6.8-6.8 6.8-1.4-1.4 4.4-4.4H4v-2h12.2l-4.4-4.4 1.4-1.4Z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8.7 5.3 1.4 1.4L4.8 12l5.3 5.3-1.4 1.4L1.9 12l6.8-6.7Zm6.6 0L22.1 12l-6.8 6.7-1.4-1.4 5.3-5.3-5.3-5.3 1.4-1.4Z"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M6.5 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 9.7 4.7 4.7 0 0 1 17.5 19h-11Zm0-2h11a2.7 2.7 0 0 0 .1-5.4l-1.2-.1-.4-1.2a4 4 0 0 0-7.6.3l-.4 1.4-1.5.1a2.5 2.5 0 0 0 0 4.9Z"/></symbol>
+</svg>
+
+<header class="site-header">
+  <div class="container nav-bar">
+    <a class="brand" href="#overview" data-go="0" aria-label="Transom 首页"><img src="transom.svg" width="34" height="34" alt="">Transom</a>
+    <nav class="nav-links" aria-label="主导航">
+      <button class="nav-link" type="button" data-go="0" data-range="0" aria-current="page">概览</button>
+      <button class="nav-link" type="button" data-go="1" data-range="1">优势</button>
+      <button class="nav-link" type="button" data-go="2" data-range="2">工作区</button>
+      <button class="nav-link" type="button" data-go="3" data-range="3">连接</button>
+      <button class="nav-link" type="button" data-go="4" data-range="4">文件</button>
+      <button class="nav-link" type="button" data-go="5" data-range="5">终端</button>
+      <button class="nav-link" type="button" data-go="6" data-range="6">平台</button>
+      <button class="nav-link" type="button" data-go="7" data-range="7">下载</button>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-icon github-link" href="https://github.com/mangerle/transom" aria-label="打开 GitHub 仓库"><svg class="icon"><use href="#i-github"/></svg></a>
+      <button class="menu-toggle" type="button" aria-label="打开导航" aria-expanded="false" aria-controls="mobileMenu"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<nav class="mobile-menu" id="mobileMenu" aria-label="移动导航" aria-hidden="true">
+  <button type="button" data-go="0" style="--i:0">概览</button>
+  <button type="button" data-go="1" style="--i:1">核心优势</button>
+  <button type="button" data-go="2" style="--i:2">终端工作区</button>
+  <button type="button" data-go="3" style="--i:3">连接与安全</button>
+  <button type="button" data-go="4" style="--i:4">SFTP 文件</button>
+  <button type="button" data-go="5" style="--i:5">终端效率</button>
+  <button type="button" data-go="6" style="--i:6">平台与发布</button>
+  <button type="button" data-go="7" style="--i:7">下载与常见问题</button>
+</nav>
+
+<main class="deck" id="main" tabindex="-1">
+  <section class="slide hero-slide is-active" id="overview" aria-label="Transom 概览">
+    <div class="slide-inner hero-layout">
+      <div class="hero-copy">
+        <span class="kicker">Rust + GPUI 原生终端工作台</span>
+        <h1 class="heading-1">把所有远端会话，<span class="gradient-text">收进一个终端工作台</span></h1>
+        <p class="body-lg">SSH、串口、分屏终端、SFTP 与端口转发共享同一个生命周期。没有 Electron，也没有网页外壳，只有真正走 GPU 的原生界面。</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="https://github.com/mangerle/transom/releases/latest"><svg class="icon" style="width:18px;height:18px"><use href="#i-download"/></svg>下载最新版本</a>
+          <a class="button button-secondary" href="https://github.com/mangerle/transom"><svg class="icon" style="width:18px;height:18px"><use href="#i-code"/></svg>查看源码</a>
+        </div>
+        <div class="proof-line">
+          <span class="proof-item"><svg class="icon"><use href="#i-check"/></svg>GPU 原生渲染</span>
+          <span class="proof-item"><svg class="icon"><use href="#i-check"/></svg>凭据保存在系统钥匙串</span>
+          <span class="proof-item"><svg class="icon"><use href="#i-check"/></svg>Apache 2.0 开源</span>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="app-window" aria-hidden="true">
+          <div class="app-titlebar"><div class="traffic"><i></i><i></i><i></i></div><span class="app-title">Transom / 生产环境</span></div>
+          <div class="app-body">
+            <aside class="app-rail"><span class="rail-button active">会话</span><span class="rail-button">SFTP</span><span class="rail-button">审计</span><span class="rail-button">设置</span></aside>
+            <aside class="app-sidebar">
+              <div class="sidebar-title"><span>会话</span><span class="sidebar-add">+</span></div>
+              <div class="session-group">生产环境</div>
+              <div class="session-row active"><span class="session-dot"></span>edge-gateway</div>
+              <div class="session-row"><span class="session-dot"></span>deploy-api-01</div>
+              <div class="session-row"><span class="session-dot warn"></span>core-switch</div>
+              <div class="session-group">实验室</div>
+              <div class="session-row"><span class="session-dot idle"></span>serial-rk3588</div>
+              <div class="session-row"><span class="session-dot idle"></span>local-zsh</div>
+            </aside>
+            <div class="app-main">
+              <div class="app-tabs"><span class="app-tab active"><i class="tab-dot"></i>edge-gateway</span><span class="app-tab"><i class="tab-dot"></i>串口控制台</span></div>
+              <div class="pane-grid">
+                <div class="terminal-pane">
+                  <div class="pane-head"><span>deploy@edge-gateway</span><span>SSH2</span></div>
+                  <div class="terminal-line"><span class="prompt">deploy@edge:~$</span> systemctl status caddy</div>
+                  <div class="terminal-line"><span class="dim">● caddy.service - Caddy web server</span></div>
+                  <div class="terminal-line"><span class="dim">   Active: active (running)</span></div>
+                  <div class="terminal-line"><span class="prompt">deploy@edge:~$</span> tail -f /var/log/caddy.log</div>
+                  <div class="terminal-line"><span class="info">INFO</span> certificate renewed</div>
+                  <div class="terminal-line"><span class="warn">WARN</span> upstream latency 428ms</div>
+                  <div class="terminal-line"><span class="prompt">deploy@edge:~$</span> <span class="terminal-cursor"></span></div>
+                </div>
+                <div class="terminal-pane">
+                  <div class="pane-head"><span>serial / ttyUSB0</span><span>115200</span></div>
+                  <div class="terminal-line"><span class="dim">[ 12.480] mmc0: SDHCI ready</span></div>
+                  <div class="terminal-line"><span class="dim">[ 12.611] eth0: link up</span></div>
+                  <div class="terminal-line"><span class="prompt">root@rk3588:~#</span> dmesg | tail</div>
+                  <div class="terminal-line"><span class="info">usb 1-1: new high-speed device</span></div>
+                  <div class="terminal-line"><span class="prompt">root@rk3588:~#</span> <span class="terminal-cursor"></span></div>
+                </div>
+                <div class="terminal-pane wide">
+                  <div class="pane-head"><span>build@10.0.0.18</span><span>SFTP 已连接</span></div>
+                  <div class="terminal-line"><span class="prompt">build@lab:$</span> git status --short</div>
+                  <div class="terminal-line"><span class="warn">M</span> crates/transom-net/src/session.rs</div>
+                  <div class="terminal-line"><span class="prompt">build@lab:$</span> cargo check -p transom-net</div>
+                  <div class="terminal-line"><span class="dim">Finished dev profile in 1.82s</span></div>
+                </div>
+              </div>
+              <div class="app-status"><span>SSH 延迟 <b>18 ms</b></span><span class="status-chips"><span>UTF-8</span><span>ZMODEM</span><span>审计开启</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stat-strip" aria-label="产品数据">
+        <div class="stat"><strong>约 1.7 ms</strong><span>debug 构建 50×120 全可见区重绘</span></div>
+        <div class="stat"><strong>SSH2 + Serial</strong><span>远端 Shell 与设备控制台并列管理</span></div>
+        <div class="stat"><strong>600+</strong><span>单元与集成测试覆盖核心链路</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="benefits" aria-label="核心优势" aria-hidden="true">
+    <div class="slide-inner section-layout">
+      <div class="section-heading">
+        <span class="kicker">核心优势</span>
+        <h2 class="heading-2">终端、文件与连接，不再分散在多个工具里</h2>
+        <p class="body-md">Transom 把日常运维中反复切换的现场收进同一窗口。会话状态与标签页同生命周期，文件面板跟随 Shell 的当前目录，所有网络链路都由 Rust 原生处理。</p>
+      </div>
+      <div class="benefit-grid">
+        <article class="benefit-card"><div class="benefit-top"><span class="icon-box"><svg class="icon"><use href="#i-terminal"/></svg></span><span class="index-pill">01</span></div><h3>原生渲染，不嵌网页</h3><p>终端网格由 GPUI 与真实字体引擎绘制，不打包 Chromium。高频重绘、中文双宽对齐与主题切换都留在原生进程内。</p><span class="card-caption">GPU 加速的桌面体验</span></article>
+        <article class="benefit-card"><div class="benefit-top"><span class="icon-box gold"><svg class="icon"><use href="#i-split"/></svg></span><span class="index-pill">02</span></div><h3>工作区按现场组织</h3><p>标签内自由切分，每一刀都能独立指定方向；单窗格可以最大化或拆成新标签。远端主机、本地终端与串口可以并排观察。</p><span class="card-caption">可嵌套的分屏布局</span></article>
+        <article class="benefit-card"><div class="benefit-top"><span class="icon-box cyan"><svg class="icon"><use href="#i-shield"/></svg></span><span class="index-pill">03</span></div><h3>本地优先的安全边界</h3><p>口令与私钥 passphrase 进入操作系统钥匙串；会话文件原子写入并限制权限。审计留档默认关闭，开启后按连接逐份落盘。</p><span class="card-caption">凭证不进入明文配置</span></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="workspace" aria-label="终端工作区" aria-hidden="true">
+    <div class="slide-inner feature-layout">
+      <div class="feature-copy">
+        <span class="kicker">终端工作区</span>
+        <h2 class="heading-3">一个标签页，容纳整场排障</h2>
+        <p class="body-lg">分隔方向属于每一刀，窗格可以继续嵌套。把日志、复现命令与设备串口放在同一视图里，不必在多个终端窗口之间来回定位。</p>
+        <ul class="feature-list">
+          <li><svg class="icon"><use href="#i-check"/></svg><span>标签、窗格与 SFTP 面板各自持有独立会话状态。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>快速打开面板支持输入 <code>deploy@10.0.0.8:2222</code> 免保存直连。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>启动时恢复并重连上次会话，多级文件夹与批量属性修改同步可用。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>凭据模板让多个会话共享一个账号，改密只需更新一处。</span></li>
+        </ul>
+      </div>
+      <div class="media-card">
+        <div class="media-card-inner">
+          <div class="media-toolbar"><span>edge-gateway / 现场排障</span><span class="media-dots"><i></i><i></i><i></i></span></div>
+          <div class="split-demo" aria-hidden="true">
+            <div class="terminal-pane split-top"><div class="pane-head"><span>日志流</span><span>Ctrl+F 检索</span></div><div class="terminal-line"><span class="prompt">deploy@edge:~$</span> journalctl -fu api --since "10 min ago"</div><div class="terminal-line"><span class="info">INFO</span> request_id=8f2c upstream=10.0.0.42 status=200 <span class="dim">latency=48ms</span></div><div class="terminal-line"><span class="warn">WARN</span> request_id=4a19 upstream=10.0.0.43 status=200 <span class="dim">latency=621ms</span></div><div class="terminal-line"><span class="err">ERROR</span> request_id=91d0 connect timeout <span class="dim">upstream=10.0.0.44</span></div></div>
+            <div class="terminal-pane"><div class="pane-head"><span>上游探活</span><span>SSH2</span></div><div class="terminal-line"><span class="prompt">deploy@edge:~$</span> for h in 42 43 44; do</div><div class="terminal-line"><span class="prompt">&gt;</span> ping -c1 10.0.0.$h</div><div class="terminal-line"><span class="prompt">&gt;</span> done</div><div class="terminal-line"><span class="dim">42: 0.21 ms</span></div><div class="terminal-line"><span class="dim">43: 0.38 ms</span></div><div class="terminal-line"><span class="err">44: unreachable</span></div></div>
+            <div class="terminal-pane"><div class="pane-head"><span>串口 / ttyUSB0</span><span>115200</span></div><div class="terminal-line"><span class="dim">[ 84.122] watchdog: ping</span></div><div class="terminal-line"><span class="dim">[ 84.681] eth0: carrier down</span></div><div class="terminal-line"><span class="warn">[ 85.014] link retry 1/3</span></div><div class="terminal-line"><span class="info">[ 85.720] eth0: carrier up</span></div><div class="terminal-line"><span class="prompt">root@board:~#</span> <span class="terminal-cursor"></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="connections" aria-label="连接与安全" aria-hidden="true">
+    <div class="slide-inner feature-layout reverse">
+      <div class="media-card">
+        <div class="media-card-inner" aria-hidden="true">
+          <div class="media-toolbar"><span>连接策略</span><span class="media-dots"><i></i><i></i><i></i></span></div>
+          <div class="security-board" style="padding:12px">
+            <div class="security-stack">
+              <div class="security-item"><span class="icon-box"><svg class="icon"><use href="#i-key"/></svg></span><div><h3>系统钥匙串</h3><p>口令与私钥口令由操作系统保管，不写入 sessions.json。</p></div></div>
+              <div class="security-item"><span class="icon-box gold"><svg class="icon"><use href="#i-shield"/></svg></span><div><h3>首次信任主机密钥</h3><p>known_hosts 保存主机指纹，默认每 30 秒心跳确认链路。</p></div></div>
+              <div class="security-item"><span class="icon-box cyan"><svg class="icon"><use href="#i-history"/></svg></span><div><h3>可选审计留档</h3><p>原始输出按连接分文件保存，默认关闭并由用户显式开启。</p></div></div>
+            </div>
+            <div class="cipher-panel">
+              <div class="cipher-title">现代加密套件</div>
+              <div class="cipher-list">
+                <div class="cipher-row"><span>密钥交换</span><code>Curve25519 / ECDH</code></div>
+                <div class="cipher-row"><span>对称加密</span><code>AES-GCM / ChaCha20</code></div>
+                <div class="cipher-row"><span>摘要认证</span><code>SHA2-512 MAC</code></div>
+                <div class="cipher-row"><span>主机密钥</span><code>RSA / ECDSA / Ed25519</code></div>
+                <div class="cipher-row"><span>传输压缩</span><code>zlib</code></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="feature-copy">
+        <span class="kicker">连接与安全</span>
+        <h2 class="heading-3">连接是原生的，凭证也留在本机</h2>
+        <p class="body-lg">SSH2 由 russh 处理，串口与本地 PTY 走独立适配层。Transom 不把凭证塞进配置文件，也不在日志里留下明文密码。</p>
+        <ul class="feature-list">
+          <li><svg class="icon"><use href="#i-check"/></svg><span>密码、键盘交互、公钥、OpenSSH CA 用户证书与 ssh-agent 认证。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>端口转发覆盖本地、远程与动态 SOCKS5，可随时启停并查看通道状态。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>批量 TCP 拨测与 Wake-on-LAN，适合成组主机巡检。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>会话库支持明文 JSON/YAML 与 Argon2id + XChaCha20-Poly1305 加密备份。</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="sftp" aria-label="SFTP 文件传输" aria-hidden="true">
+    <div class="slide-inner feature-layout">
+      <div class="feature-copy">
+        <span class="kicker">SFTP 文件</span>
+        <h2 class="heading-3">终端与文件，共享同一个当前目录</h2>
+        <p class="body-lg">本地与远程双栏浏览、断点续传、差异同步和远程编辑都在工作台里完成。文件面板跟随 Shell 的目录变化，拖进终端即可上传到会话当前位置。</p>
+        <ul class="feature-list">
+          <li><svg class="icon"><use href="#i-check"/></svg><span>传输队列支持置顶插队、失败重试、速率、百分比与完成后批量清理。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>按大小与修改时间做目录差异比较，勾选后执行增量同步。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>可选 SHA-256 分块校验，上传目录支持通配符排除规则。</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>远程编辑器提供保存前 diff 预览、自动备份与 chmod 九宫格输入。</span></li>
+        </ul>
+      </div>
+      <div class="media-card">
+        <div class="media-card-inner sftp-demo">
+          <div class="sftp-head"><span>SFTP / deploy@edge-gateway</span><span class="sftp-connection"><i></i>已连接</span></div>
+          <div class="sftp-body" aria-hidden="true">
+            <div class="file-pane">
+              <div class="file-path">~/Projects/transom</div>
+              <div class="file-row"><span class="file-icon dir"></span><span>crates</span><span class="file-size">目录</span></div>
+              <div class="file-row"><span class="file-icon dir"></span><span>docs</span><span class="file-size">目录</span></div>
+              <div class="file-row selected"><span class="file-icon"></span><span>README.md</span><span class="file-size">15.8 KB</span></div>
+              <div class="file-row"><span class="file-icon"></span><span>Cargo.lock</span><span class="file-size">254 KB</span></div>
+              <div class="file-row"><span class="file-icon"></span><span>runbook.md</span><span class="file-size">8.1 KB</span></div>
+            </div>
+            <div class="file-pane remote">
+              <div class="file-path">/srv/transom/releases/current</div>
+              <div class="file-row"><span class="file-icon dir"></span><span>bin</span><span class="file-size">目录</span></div>
+              <div class="file-row"><span class="file-icon dir"></span><span>config</span><span class="file-size">目录</span></div>
+              <div class="file-row selected"><span class="file-icon"></span><span>transom</span><span class="file-size">42.6 MB</span></div>
+              <div class="file-row"><span class="file-icon"></span><span>README.md</span><span class="file-size">15.8 KB</span></div>
+              <div class="file-row"><span class="file-icon"></span><span>service.env</span><span class="file-size">1.2 KB</span></div>
+            </div>
+          </div>
+          <div class="queue-bar"><span>上传 README.md</span><span class="queue-progress"><i></i></span><span class="queue-rate">11.4 MB/s</span><span>68%</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="terminal" aria-label="终端效率" aria-hidden="true">
+    <div class="slide-inner feature-layout reverse">
+      <div class="media-card terminal-showcase">
+        <div class="media-card-inner" aria-hidden="true">
+          <div class="showcase-tabs"><strong>api-gateway</strong><span>caddy</span><span>serial-rk3588</span><span>build</span></div>
+          <div class="showcase-body">
+            <div class="showcase-line"><span class="prompt">deploy@edge:~$</span> journalctl -u api --since "5 min ago"</div>
+            <div class="showcase-line"><span class="info">INFO</span> server listening on 0.0.0.0:8080</div>
+            <div class="showcase-line"><span class="warn">WARN</span> request <span class="uuid">91d07b0a-4c9e-4b1f</span> slow upstream</div>
+            <div class="showcase-line"><span class="error">ERROR</span> dial tcp <mark>10.0.0.44:443</mark>: i/o timeout</div>
+            <div class="showcase-line"><span class="dim">  retry 1/3 after 500ms</span></div>
+            <div class="showcase-line"><span class="prompt">deploy@edge:~$</span> ssh core-switch</div>
+            <div class="showcase-line"><span class="dim">Last login: Sun Nov 8 16:22:41 2026</span></div>
+            <div class="showcase-line"><span class="info">INFO</span> port forwarding active <span class="dim">8443 -&gt; internal:443</span></div>
+            <div class="showcase-line"><span class="prompt">admin@core-switch:~$</span> show interfaces status</div>
+            <div class="showcase-line"><span class="dim">Eth1/1 connected trunk 10G</span></div>
+            <div class="showcase-line"><span class="prompt">admin@core-switch:~$</span> <span class="terminal-cursor"></span></div>
+            <div class="search-popover"><strong>缓冲区检索</strong><div class="search-field"><span>10\.0\.0\.44</span><span>12 处</span></div><div class="search-options"><span class="active">Aa</span><span>.*</span><span>全词</span></div></div>
+            <div class="minimap"><i style="top:24%"></i><i style="top:31%"></i><i style="top:58%"></i><i style="top:64%"></i><i style="top:71%"></i></div>
+          </div>
+          <div class="showcase-footer"><span><b>ERROR</b> / WARN / INFO 高亮</span><span>IPv4</span><span>UUID</span><span>自定义关键词 32 个</span></div>
+        </div>
+      </div>
+      <div class="feature-copy">
+        <span class="kicker">终端效率</span>
+        <h2 class="heading-3">查找、补全与历史，都围绕光标工作</h2>
+        <p class="body-lg">缓冲区全文检索带正则开关，右侧刻度显示所有命中位置。命令历史从 shell 集成标记采集，边输入边给出建议。</p>
+        <ul class="feature-list">
+          <li><svg class="icon"><use href="#i-search"/></svg><span>常驻高亮 ERROR、WARN、INFO、DEBUG、IPv4 与 UUID，颜色跟随主题。</span></li>
+          <li><svg class="icon"><use href="#i-history"/></svg><span>输入时展示历史建议，Tab 补全第一条，回车仍执行当前输入。</span></li>
+          <li><svg class="icon"><use href="#i-terminal"/></svg><span>Alt + 拖拽矩形列选，可自定义双击选词分隔符。</span></li>
+          <li><svg class="icon"><use href="#i-link"/></svg><span>命令耗时超过阈值时通过 OSC 133 / OSC 777 发出桌面通知。</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" id="platforms" aria-label="平台与发布" aria-hidden="true">
+    <div class="slide-inner section-layout">
+      <div class="section-heading">
+        <span class="kicker">平台与发布</span>
+        <h2 class="heading-2">Linux 为主，三端持续构建</h2>
+        <p class="body-md">Linux 是主要开发与验证平台。macOS 与 Windows 已具备跨平台代码路径、CI 编译检查与发布打包，但仍在真实桌面交互验证阶段，建议按实验性使用。</p>
+      </div>
+      <div class="platform-grid">
+        <article class="platform-card"><div class="platform-head"><h3>Linux</h3><span class="platform-icon"><svg class="icon"><use href="#i-linux"/></svg></span></div><p>主要开发与验证平台，支持 Wayland 与 X11、桌面集成、ssh:// 单实例唤起和系统钥匙串。</p><div class="chips"><span class="chip">DEB</span><span class="chip">AppImage</span><span class="chip">x86_64</span><span class="chip">arm64</span></div></article>
+        <article class="platform-card"><div class="platform-head"><h3>Windows</h3><span class="platform-icon"><svg class="icon"><use href="#i-windows"/></svg></span></div><p>提供每用户 NSIS 安装包与便携 ZIP，已完成编译检查及发布打包，真实桌面交互仍在验证。</p><div class="chips"><span class="chip">NSIS</span><span class="chip">ZIP</span><span class="chip">x86_64</span><span class="chip">arm64</span></div></article>
+        <article class="platform-card"><div class="platform-head"><h3>macOS</h3><span class="platform-icon"><svg class="icon"><use href="#i-apple"/></svg></span></div><p>提供 DMG 与自更新 ZIP，修饰键、钥匙串后端与文件管理集成已接入，真实桌面交互仍在验证。</p><div class="chips"><span class="chip">DMG</span><span class="chip">APP</span><span class="chip">Apple Silicon</span><span class="chip">Intel</span></div></article>
+      </div>
+      <div class="platform-note"><span>发布产物由 GitHub Actions 构建，更新清单与安装包使用 Ed25519 签名。</span><div class="chips"><span class="chip">Apache 2.0</span><span class="chip">自更新</span><span class="chip">崩溃回滚</span></div></div>
+    </div>
+  </section>
+
+  <section class="slide" id="download" aria-label="下载与常见问题" aria-hidden="true">
+    <div class="slide-inner download-layout">
+      <div class="cta-panel">
+        <span class="kicker">开始使用</span>
+        <h2 class="heading-2">把下一台远端主机，<span class="gradient-text">接进 Transom</span></h2>
+        <p>从最新 Release 选择对应平台安装包。无需注册账号，连接配置、凭据与审计数据都留在你的设备上。</p>
+        <div class="cta-actions"><a class="button button-primary" href="https://github.com/mangerle/transom/releases/latest"><svg class="icon" style="width:19px;height:19px"><use href="#i-download"/></svg>下载 Transom</a><a class="button button-secondary" href="https://github.com/mangerle/transom"><svg class="icon" style="width:19px;height:19px"><use href="#i-github"/></svg>查看源码</a></div>
+        <div class="cta-meta"><span><svg class="icon"><use href="#i-shield"/></svg>凭证交给系统钥匙串</span><span><svg class="icon"><use href="#i-check"/></svg>Apache 2.0 开源</span></div>
+      </div>
+      <div class="faq-list">
+        <details open><summary>Transom 会打包浏览器内核吗？</summary><p>不会。界面使用 GPUI 原生渲染，终端仿真来自 alacritty_terminal，不存在 Electron 或内置 Chromium 运行时。</p></details>
+        <details><summary>会话密码保存在哪里？</summary><p>密码和私钥 passphrase 存入操作系统钥匙串，服务名为 transom。会话文件只保存连接配置与钥匙串槽位引用。</p></details>
+        <details><summary>Windows 与 macOS 可以日常使用吗？</summary><p>项目已为三端提供构建与发布产物，但 Linux 是主要验证平台。Windows 与 macOS 仍缺少充分的真实桌面人工交互验证，请按实验性功能评估。</p></details>
+        <details><summary>如何配置自动更新？</summary><p>应用内「偏好设置 → 关于 → 软件更新」会检查签名清单、下载并验证安装包。连续两次启动失败会回滚到上一版本。</p></details>
+        <details><summary>SFTP 会自动跟随终端目录吗？</summary><p>会。SFTP 自动跟随 Shell 的当前工作目录，每个标签页持有各自的远程会话状态；也可以手动导航到其他路径。</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="progress-rail" aria-hidden="true"><i class="progress-bar" id="progressBar"></i></div>
+  <div class="container footer-inner">
+    <span class="footer-brand">Transom · Apache 2.0 · 本地优先</span>
+    <span class="footer-hint">滚轮、方向键或触摸切换介绍</span>
+    <div class="deck-controls">
+      <button class="icon-button prev" id="prevSlide" type="button" aria-label="上一个介绍"><svg class="icon"><use href="#i-arrow"/></svg></button>
+      <span class="slide-counter"><strong id="currentSlide">01</strong> / <span id="totalSlides">08</span></span>
+      <button class="icon-button next" id="nextSlide" type="button" aria-label="下一个介绍"><svg class="icon"><use href="#i-arrow"/></svg></button>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var deck = document.getElementById('main');
+  var progressBar = document.getElementById('progressBar');
+  var currentLabel = document.getElementById('currentSlide');
+  var totalLabel = document.getElementById('totalSlides');
+  var prevButton = document.getElementById('prevSlide');
+  var nextButton = document.getElementById('nextSlide');
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll('.nav-link'));
+  var goButtons = Array.prototype.slice.call(document.querySelectorAll('[data-go]'));
+  var menuButton = document.querySelector('.menu-toggle');
+  var mobileMenu = document.getElementById('mobileMenu');
+  var current = 0;
+  var wheelTotal = 0;
+  var wheelLocked = false;
+  var wheelIdleTimer = 0;
+  var touchStartY = 0;
+  var touchStartX = 0;
+
+  function resetMobileScroll(){
+    if(!window.matchMedia('(max-width: 860px)').matches) return;
+    window.scrollTo(0,0);
+    window.requestAnimationFrame(function(){ window.scrollTo(0,0); });
+  }
+
+  totalLabel.textContent = String(slides.length).padStart(2,'0');
+
+  function activeRangeMatches(range){
+    if(!range) return false;
+    var parts = range.split('-');
+    if(parts.length === 2) return current >= Number(parts[0]) && current <= Number(parts[1]);
+    return Number(range) === current;
+  }
+
+  function updateNavigation(){
+    navLinks.forEach(function(link){
+      if(activeRangeMatches(link.getAttribute('data-range'))) link.setAttribute('aria-current','page');
+      else link.removeAttribute('aria-current');
+    });
+    currentLabel.textContent = String(current + 1).padStart(2,'0');
+    progressBar.style.transform = 'scaleX(' + ((current + 1) / slides.length) + ')';
+    prevButton.disabled = current === 0;
+    nextButton.disabled = current === slides.length - 1;
+  }
+
+  function goTo(index, focusDeck){
+    var target = Math.max(0,Math.min(slides.length - 1,index));
+    if(target === current){
+      if(focusDeck) deck.focus({preventScroll:true});
+      return false;
+    }
+    slides[current].classList.remove('is-active');
+    slides[current].classList.add('is-before');
+    slides[current].setAttribute('aria-hidden','true');
+    slides[current].inert = true;
+    current = target;
+    slides[current].classList.remove('is-before');
+    slides[current].classList.add('is-active');
+    slides[current].setAttribute('aria-hidden','false');
+    slides[current].inert = false;
+    slides[current].scrollTop = 0;
+    resetMobileScroll();
+    updateNavigation();
+    if(window.history && window.history.replaceState){
+      window.history.replaceState(null,'','#' + slides[current].id);
+    }
+    if(focusDeck) deck.focus({preventScroll:true});
+    return true;
+  }
+
+  function closeMenu(){
+    document.body.classList.remove('menu-open');
+    menuButton.setAttribute('aria-expanded','false');
+    menuButton.setAttribute('aria-label','打开导航');
+    mobileMenu.setAttribute('aria-hidden','true');
+  }
+
+  menuButton.addEventListener('click',function(){
+    var open = !document.body.classList.contains('menu-open');
+    document.body.classList.toggle('menu-open',open);
+    menuButton.setAttribute('aria-expanded',String(open));
+    menuButton.setAttribute('aria-label',open ? '关闭导航' : '打开导航');
+    mobileMenu.setAttribute('aria-hidden',String(!open));
+  });
+
+  goButtons.forEach(function(button){
+    button.addEventListener('click',function(event){
+      event.preventDefault();
+      goTo(Number(button.getAttribute('data-go')),true);
+      closeMenu();
+    });
+  });
+
+  prevButton.addEventListener('click',function(){ goTo(current - 1,true); });
+  nextButton.addEventListener('click',function(){ goTo(current + 1,true); });
+
+  function slideCanScroll(direction){
+    if(window.matchMedia('(max-width: 860px)').matches){
+      var root = document.scrollingElement || document.documentElement;
+      var maxScroll = Math.max(0, root.scrollHeight - window.innerHeight);
+      if(direction > 0) return window.scrollY < maxScroll - 2;
+      return window.scrollY > 2;
+    }
+    var slide = slides[current];
+    if(slide.scrollHeight <= slide.clientHeight + 2) return false;
+    if(direction > 0) return slide.scrollTop + slide.clientHeight < slide.scrollHeight - 2;
+    return slide.scrollTop > 2;
+  }
+
+  deck.addEventListener('wheel',function(event){
+    if(wheelLocked){ event.preventDefault(); return; }
+    if(slideCanScroll(event.deltaY)) return;
+    event.preventDefault();
+    wheelTotal += event.deltaY;
+    window.clearTimeout(wheelIdleTimer);
+    wheelIdleTimer = window.setTimeout(function(){ wheelTotal = 0; },160);
+    if(Math.abs(wheelTotal) < 42) return;
+    var direction = wheelTotal > 0 ? 1 : -1;
+    goTo(current + direction,false);
+    wheelTotal = 0;
+    wheelLocked = true;
+    window.setTimeout(function(){ wheelLocked = false; },220);
+  },{passive:false});
+
+  document.addEventListener('keydown',function(event){
+    if(event.key === 'Escape' && document.body.classList.contains('menu-open')){ closeMenu(); return; }
+    if(document.body.classList.contains('menu-open')) return;
+    if(event.target.closest && event.target.closest('a,button,summary,details,input,textarea,select')) return;
+    if(['ArrowDown','PageDown',' '].indexOf(event.key) !== -1){ event.preventDefault(); goTo(current + 1,false); }
+    else if(['ArrowUp','PageUp'].indexOf(event.key) !== -1){ event.preventDefault(); goTo(current - 1,false); }
+    else if(event.key === 'Home'){ event.preventDefault(); goTo(0,false); }
+    else if(event.key === 'End'){ event.preventDefault(); goTo(slides.length - 1,false); }
+  });
+
+  deck.addEventListener('touchstart',function(event){
+    if(event.touches.length !== 1) return;
+    touchStartY = event.touches[0].clientY;
+    touchStartX = event.touches[0].clientX;
+  },{passive:true});
+
+  deck.addEventListener('touchend',function(event){
+    if(event.changedTouches.length !== 1) return;
+    var deltaY = touchStartY - event.changedTouches[0].clientY;
+    var deltaX = touchStartX - event.changedTouches[0].clientX;
+    if(Math.abs(deltaY) < 56 || Math.abs(deltaY) <= Math.abs(deltaX)) return;
+    if(slideCanScroll(deltaY)) return;
+    goTo(current + (deltaY > 0 ? 1 : -1),false);
+  },{passive:true});
+
+  var hashIndex = slides.findIndex(function(slide){ return '#' + slide.id === window.location.hash; });
+  if(hashIndex > 0){
+    slides[0].classList.remove('is-active');
+    slides[0].setAttribute('aria-hidden','true');
+    slides[0].inert = true;
+    current = hashIndex;
+    slides[current].classList.add('is-active');
+    slides[current].setAttribute('aria-hidden','false');
+    slides[current].inert = false;
+  }
+  resetMobileScroll();
+  updateNavigation();
+})();
+</script>
+
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"SoftwareApplication",
+  "name":"Transom",
+  "applicationCategory":"DeveloperApplication",
+  "operatingSystem":"Linux, Windows, macOS",
+  "description":"基于 Rust 与 GPUI 的原生 SSH、串口与终端工作台，内置 SFTP、端口转发和审计留档。",
+  "url":"https://mangerle.github.io/transom/",
+  "downloadUrl":"https://github.com/mangerle/transom/releases/latest",
+  "codeRepository":"https://github.com/mangerle/transom",
+  "license":"https://github.com/mangerle/transom/blob/main/LICENSE",
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"CNY"}
+}
+</script>
+</body>
+</html>
