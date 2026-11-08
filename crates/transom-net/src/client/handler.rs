@@ -281,13 +281,6 @@ impl client::Handler for ClientHandler {
             return Ok(());
         };
 
-        let auth_sock = std::env::var("SSH_AUTH_SOCK").ok();
-        let Some(auth_sock) = auth_sock.filter(|s| !s.trim().is_empty()) else {
-            log::warn!("远端请求 SSH Agent 转发，但本地未检测到有效的 $SSH_AUTH_SOCK 环境变量");
-            reply.reject(ChannelOpenFailure::ConnectFailed).await;
-            return Ok(());
-        };
-
         reply.accept().await;
         let mut channel_stream = channel.into_stream();
 
@@ -295,14 +288,14 @@ impl client::Handler for ClientHandler {
         // （端口 0 为保留哨兵），会话关闭时 abort_all 一并收割，不留孤儿任务。
         let forward_task = tokio::spawn(async move {
             let _permit = permit;
-            match connect_local_agent(&auth_sock).await {
+            match crate::agent::connect_agent_stream().await {
                 Ok(mut local_stream) => {
-                    log::debug!("SSH Agent 转发通道已建立并桥接至本地套接字: {auth_sock}");
+                    log::debug!("SSH Agent 转发通道已建立并桥接至本地 Agent");
                     let _ =
                         tokio::io::copy_bidirectional(&mut local_stream, &mut channel_stream).await;
                 }
                 Err(err) => {
-                    log::warn!("连接本地 SSH Agent 套接字失败: {auth_sock}，原因: {err}");
+                    log::warn!("连接本地 SSH Agent 失败，转发通道已关闭，原因: {err}");
                     let _ = channel_stream.shutdown().await;
                 }
             }
@@ -311,23 +304,4 @@ impl client::Handler for ClientHandler {
 
         Ok(())
     }
-}
-
-#[cfg(unix)]
-type AgentStream = tokio::net::UnixStream;
-
-#[cfg(unix)]
-async fn connect_local_agent(path: &str) -> std::io::Result<AgentStream> {
-    tokio::net::UnixStream::connect(path).await
-}
-
-#[cfg(not(unix))]
-type AgentStream = tokio::net::TcpStream;
-
-#[cfg(not(unix))]
-async fn connect_local_agent(_path: &str) -> std::io::Result<AgentStream> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "非 Unix 平台暂不支持 SSH Agent Unix 套接字转发",
-    ))
 }

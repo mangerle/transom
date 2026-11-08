@@ -4,7 +4,6 @@ use super::handler::ClientHandler;
 use crate::auth::AuthPrompter;
 use crate::error::NetError;
 use russh::client::Handle;
-#[cfg(unix)]
 use russh::keys::agent::client::AgentClient;
 use russh::keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg, load_secret_key};
 use std::sync::Arc;
@@ -238,7 +237,6 @@ fn auth_error(error: russh::Error) -> AppError {
     AppError::with_detail(ErrorCode::AuthFailed, error.to_string())
 }
 
-#[cfg(unix)]
 fn agent_error(error: impl std::fmt::Display) -> NetError {
     NetError::Auth {
         reason: format!("SSH 代理（ssh-agent）认证失败: {error}"),
@@ -249,30 +247,20 @@ async fn authenticate_agent(
     session: &mut Handle<ClientHandler>,
     user: &str,
 ) -> Result<bool, AppError> {
-    #[cfg(unix)]
-    {
-        let mut agent = AgentClient::connect_env().await.map_err(agent_error)?;
-        let identities = agent.request_identities().await.map_err(agent_error)?;
-        for identity in identities {
-            let public_key = identity.public_key().into_owned();
-            let result = session
-                .authenticate_publickey_with(user.to_owned(), public_key, None, &mut agent)
-                .await
-                .map_err(agent_error)?;
-            if result.success() {
-                return Ok(true);
-            }
+    let stream = crate::agent::connect_agent_stream().await?;
+    let mut agent = AgentClient::connect(stream);
+    let identities = agent.request_identities().await.map_err(agent_error)?;
+    for identity in identities {
+        let public_key = identity.public_key().into_owned();
+        let result = session
+            .authenticate_publickey_with(user.to_owned(), public_key, None, &mut agent)
+            .await
+            .map_err(agent_error)?;
+        if result.success() {
+            return Ok(true);
         }
-        Ok(false)
     }
-    #[cfg(not(unix))]
-    {
-        let _ = (session, user);
-        Err(NetError::Auth {
-            reason: "当前平台暂不支持 ssh-agent 认证".to_string(),
-        }
-        .into())
-    }
+    Ok(false)
 }
 
 async fn authenticate_keyboard_interactive(

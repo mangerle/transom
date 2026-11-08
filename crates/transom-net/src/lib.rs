@@ -1,5 +1,6 @@
 //! SSH transport, authentication, SFTP, and port forwarding.
 
+mod agent;
 mod auth;
 mod bridge;
 mod client;
