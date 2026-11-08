@@ -60,7 +60,9 @@ impl AppShell {
 
         // 清理完成后，重新统计磁盘占用并刷新各资源列表
         self.refresh_container_system_df(tab_id, cx);
-        self.refresh_container_workspace_all(tab_id, cx);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| workspace.refresh_all());
+        }
     }
 
     /// 容器文件系统差异对比完成。
@@ -99,7 +101,9 @@ impl AppShell {
         // 0. 事件流重连后的全量对账：断线期间漏掉的事件无法逐条补发。
         if event.resource_type == "engine" && event.action == "resync" {
             log::debug!("容器事件流重连，触发工作区全量刷新");
-            self.refresh_container_workspace_all(tab_id, cx);
+            if let Some(workspace) = self.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, _| workspace.refresh_all());
+            }
             return;
         }
 
@@ -127,22 +131,29 @@ impl AppShell {
                 if matches!(
                     current_section,
                     ContainerSection::Containers | ContainerSection::Compose
-                ) {
-                    self.schedule_container_refresh(tab_id, cx);
+                ) && let Some(workspace) = self.state.container_workspace(tab_id)
+                {
+                    workspace.update(cx, |workspace, cx| workspace.schedule_refresh(cx));
                 }
             }
             "image" => {
-                if current_section == ContainerSection::Images {
-                    self.schedule_container_refresh(tab_id, cx);
+                if current_section == ContainerSection::Images
+                    && let Some(workspace) = self.state.container_workspace(tab_id)
+                {
+                    workspace.update(cx, |workspace, cx| workspace.schedule_refresh(cx));
                 }
             }
             "volume" => {
-                if current_section == ContainerSection::Volumes {
-                    self.schedule_container_refresh(tab_id, cx);
+                if current_section == ContainerSection::Volumes
+                    && let Some(workspace) = self.state.container_workspace(tab_id)
+                {
+                    workspace.update(cx, |workspace, cx| workspace.schedule_refresh(cx));
                 }
             }
             "network" if current_section == ContainerSection::Networks => {
-                self.schedule_container_refresh(tab_id, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| workspace.schedule_refresh(cx));
+                }
             }
             _ => {}
         }

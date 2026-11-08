@@ -45,7 +45,9 @@ impl AppShell {
                         cx.notify();
                     }
                 }
-                self.refresh_container_workspace_all(tab_id, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| workspace.refresh_all());
+                }
             }
             ContainerAppEvent::ConnectFailed { tab_id, error } => {
                 let message = localized_error(&error);

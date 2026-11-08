@@ -393,7 +393,10 @@ impl AppShell {
             .collect();
         self.state.container_auto_prune_last = Some(now);
         for tab_id in tabs {
-            self.request_container_auto_prune(tab_id, cx);
+            let workspace = self.state.container_workspace(tab_id);
+            if let Some(workspace) = workspace {
+                workspace.update(cx, |workspace, _| workspace.request_auto_prune());
+            }
         }
     }
 

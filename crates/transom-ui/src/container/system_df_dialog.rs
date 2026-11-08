@@ -50,8 +50,12 @@ impl AppShell {
                 workspace.system_df_request.replace(request_id)
             })
             .flatten();
-        if let Some(previous) = previous {
-            self.cancel_container_request(tab_id, previous, cx);
+        if let Some(previous) = previous
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.cancel_container_request(previous)
+            });
         }
         log::info!("正在查询全局系统磁盘占用，请求: {request_id}");
         if let Some(workspace) = self.state.container_workspace(tab_id) {

@@ -33,8 +33,12 @@ impl AppShell {
             .terminal_request
             .as_ref()
             .map(|(request_id, _, _)| *request_id);
-        if let Some(request_id) = pending {
-            self.cancel_container_request(tab_id, request_id, cx);
+        if let Some(request_id) = pending
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.cancel_container_request(request_id)
+            });
         }
         self.with_container_mut(tab_id, cx, |workspace| {
             // 丢弃旧终端即可结束旧 exec（TerminalIo 的 RAII 清理），再建新会话。

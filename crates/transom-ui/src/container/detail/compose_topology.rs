@@ -364,7 +364,11 @@ fn render_topology_card(
                 .icon(IconName::Info)
                 .tooltip(rust_i18n::t!("container.detail.overview").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.select_container_item(tab_id, member_id_select.clone(), cx);
+                    if let Some(workspace) = this.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| {
+                            workspace.select_container_item(member_id_select.clone())
+                        });
+                    }
                     this.with_container_mut(tab_id, cx, |w| {
                         w.section = ContainerSection::Containers;
                     });

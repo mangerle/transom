@@ -216,7 +216,9 @@ impl AppShell {
                     .xsmall()
                     .icon(IconName::RefreshCw)
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.refresh_container_workspace_all(tab_id, cx);
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, _| workspace.refresh_all());
+                        }
                         cx.notify();
                     })),
             )

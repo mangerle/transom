@@ -60,52 +60,40 @@ impl AppShell {
             cx,
         );
     }
+}
 
+impl ContainerWorkspace {
     /// 停止当前选中项的日志、统计与终端会话。
-    pub(super) fn stop_container_streams(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let requests = self.with_container_mut(tab_id, cx, |workspace| {
-            let logs = workspace.logs_request.take();
-            let stats = workspace.stats_request.take();
-            let processes = workspace.stats_processes_request.take();
-            let files = workspace.files.request.take();
-            let changes = workspace.changes_request.take();
-            workspace.files.loading = false;
-            workspace.changes_loading = false;
-            workspace.stats_processes_loading = false;
-            let terminal = workspace
+    pub(crate) fn stop_container_streams(&mut self) {
+        let requests = [
+            self.state.logs_request.take(),
+            self.state.stats_request.take(),
+            self.state.stats_processes_request.take(),
+            self.state.files.request.take(),
+            self.state.changes_request.take(),
+            self.state
                 .terminal_request
                 .take()
-                .map(|(request_id, ..)| request_id);
-            workspace.terminal = None;
-            [logs, stats, processes, files, changes, terminal]
-        });
-        let Some(requests) = requests else {
-            return;
-        };
+                .map(|(request_id, ..)| request_id),
+        ];
+        self.state.files.loading = false;
+        self.state.changes_loading = false;
+        self.state.stats_processes_loading = false;
+        self.state.terminal = None;
         for request_id in requests.into_iter().flatten() {
-            if let Some(workspace) = self.state.container_workspace(tab_id) {
-                workspace.update(cx, |workspace, _| {
-                    workspace.take_request(request_id);
-                });
-            }
-            self.state
-                .send_command(ContainerCommand::Cancel { tab_id, request_id });
+            self.cancel_container_request(request_id);
         }
     }
 
     /// 立即取消一个流式请求（切换页签时使用）。
-    pub(crate) fn cancel_container_request(
-        &mut self,
-        tab_id: TabId,
-        request_id: ContainerRequestId,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.take_request(request_id);
-            });
-        }
-        self.state
-            .send_command(ContainerCommand::Cancel { tab_id, request_id });
+    ///
+    /// 先撤销登记再投递取消：控制器可能立刻回执，登记留着会让迟到结果
+    /// 再次落到本标签页。
+    pub(crate) fn cancel_container_request(&mut self, request_id: ContainerRequestId) {
+        self.take_request(request_id);
+        self.send(ContainerCommand::Cancel {
+            tab_id: self.tab_id,
+            request_id,
+        });
     }
 }

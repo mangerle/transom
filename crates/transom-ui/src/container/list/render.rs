@@ -157,7 +157,9 @@ pub(crate) fn list_row(
     let menu_app = app.clone();
     let click_target = row.target.clone();
     let element = element.on_click(cx.listener(move |this, _, window, cx| {
-        this.select_row(tab_id, &click_target, cx);
+        if let Some(workspace) = this.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, cx| workspace.select_row(&click_target, cx));
+        }
         if let Some(workspace) = this.state.container_workspace(tab_id) {
             let focus_handle = workspace.read(cx).state.list_focus_handle.clone();
             window.focus(&focus_handle, cx);

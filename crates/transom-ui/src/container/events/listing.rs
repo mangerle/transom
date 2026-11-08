@@ -60,7 +60,9 @@ impl AppShell {
                     None
                 };
                 if let Some(id) = inspect_first {
-                    self.select_container_item(tab_id, id, cx);
+                    if let Some(workspace) = self.state.container_workspace(tab_id) {
+                        workspace.update(cx, |workspace, _| workspace.select_container_item(id));
+                    }
                 } else if let Some(id) = re_inspect_id {
                     let request_id = ContainerRequestId::new();
                     if let Some(workspace) = self.state.container_workspace(tab_id) {

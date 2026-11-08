@@ -77,8 +77,11 @@ impl AppShell {
         if let Some(request_id) = self
             .with_container_mut(tab_id, cx, |workspace| workspace.logs_request.take())
             .flatten()
+            && let Some(workspace) = self.state.container_workspace(tab_id)
         {
-            self.cancel_container_request(tab_id, request_id, cx);
+            workspace.update(cx, |workspace, _| {
+                workspace.cancel_container_request(request_id)
+            });
         }
         self.ensure_container_logs(tab_id, cx);
     }

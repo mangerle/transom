@@ -75,8 +75,10 @@ pub(crate) fn handle_list_key_down(
                 .state
                 .container_workspace(tab_id)
                 .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(target) = navigate_selection(rows, current_selected.as_deref(), 1) {
-                app.select_row(tab_id, &target, cx);
+            if let Some(target) = navigate_selection(rows, current_selected.as_deref(), 1)
+                && let Some(workspace) = app.state.container_workspace(tab_id)
+            {
+                workspace.update(cx, |workspace, cx| workspace.select_row(&target, cx));
             }
         }
         // 上移一行
@@ -85,8 +87,10 @@ pub(crate) fn handle_list_key_down(
                 .state
                 .container_workspace(tab_id)
                 .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(target) = navigate_selection(rows, current_selected.as_deref(), -1) {
-                app.select_row(tab_id, &target, cx);
+            if let Some(target) = navigate_selection(rows, current_selected.as_deref(), -1)
+                && let Some(workspace) = app.state.container_workspace(tab_id)
+            {
+                workspace.update(cx, |workspace, cx| workspace.select_row(&target, cx));
             }
         }
         // 回车：打开/激活当前条目
@@ -107,11 +111,16 @@ pub(crate) fn handle_list_key_down(
                         );
                     }
                     _ => {
-                        app.select_row(tab_id, &row.target, cx);
+                        if let Some(workspace) = app.state.container_workspace(tab_id) {
+                            workspace
+                                .update(cx, |workspace, cx| workspace.select_row(&row.target, cx));
+                        }
                     }
                 }
-            } else if let Some(first) = rows.first() {
-                app.select_row(tab_id, &first.target, cx);
+            } else if let Some(first) = rows.first()
+                && let Some(workspace) = app.state.container_workspace(tab_id)
+            {
+                workspace.update(cx, |workspace, cx| workspace.select_row(&first.target, cx));
             }
         }
         // 'l'：快速切换至日志页签
@@ -141,7 +150,11 @@ pub(crate) fn handle_list_key_down(
                         } else {
                             ContainerLifecycleAction::Start
                         };
-                        app.container_lifecycle(tab_id, name.clone(), action, cx);
+                        if let Some(workspace) = app.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(name.clone(), action, cx);
+                            });
+                        }
                     }
                     RowTarget::Compose(name) => {
                         let is_running = row.running == Some(true);

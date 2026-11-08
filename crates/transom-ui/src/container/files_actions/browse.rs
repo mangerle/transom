@@ -39,8 +39,12 @@ impl AppShell {
                 workspace.files.request.replace(request_id)
             })
             .flatten();
-        if let Some(previous) = previous {
-            self.cancel_container_request(tab_id, previous, cx);
+        if let Some(previous) = previous
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.cancel_container_request(previous)
+            });
         }
         let command = if is_volume {
             log::info!("打开数据卷目录，卷: {target}，路径: {path}，请求: {request_id}");

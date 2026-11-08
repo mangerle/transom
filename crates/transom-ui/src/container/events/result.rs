@@ -85,8 +85,8 @@ impl AppShell {
         {
             self.refresh_container_quadlets(tab_id, cx);
         }
-        if refresh {
-            self.refresh_container_section(tab_id, cx);
+        if refresh && let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| workspace.refresh_section());
         }
     }
 
@@ -124,7 +124,9 @@ impl AppShell {
             self.show_toast(message, success, window, cx);
         }
         if refresh_images {
-            self.refresh_container_section(tab_id, cx);
+            if let Some(workspace) = self.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, _| workspace.refresh_section());
+            }
         } else if let Some(path) = refresh_files
             && !path.is_empty()
         {
@@ -239,6 +241,8 @@ impl AppShell {
             rust_i18n::t!(target.done_key(), count = deleted_count).to_string()
         };
         self.show_toast(message, true, window, cx);
-        self.refresh_container_section(tab_id, cx);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| workspace.refresh_section());
+        }
     }
 }

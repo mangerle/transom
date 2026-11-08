@@ -41,8 +41,12 @@ impl AppShell {
                 workspace.changes_request.replace(request_id)
             })
             .flatten();
-        if let Some(previous) = previous {
-            self.cancel_container_request(tab_id, previous, cx);
+        if let Some(previous) = previous
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.cancel_container_request(previous)
+            });
         }
         log::info!("正在拉取容器文件系统变更，容器: {container_id}，请求: {request_id}");
         let command = ContainerCommand::DiffContainer {

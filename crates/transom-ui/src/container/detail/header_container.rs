@@ -36,12 +36,15 @@ pub(super) fn container_header_actions(
                 .on_click(cx.listener({
                     let name = name.clone();
                     move |this, _, _, cx| {
-                        this.container_lifecycle(
-                            tab_id,
-                            name.clone(),
-                            transom_core::ContainerLifecycleAction::Unpause,
-                            cx,
-                        );
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(
+                                    name.clone(),
+                                    transom_core::ContainerLifecycleAction::Unpause,
+                                    cx,
+                                );
+                            });
+                        }
                     }
                 }))
                 .into_any_element(),
@@ -55,12 +58,15 @@ pub(super) fn container_header_actions(
                 .on_click(cx.listener({
                     let name = name.clone();
                     move |this, _, _, cx| {
-                        this.container_lifecycle(
-                            tab_id,
-                            name.clone(),
-                            transom_core::ContainerLifecycleAction::Stop,
-                            cx,
-                        );
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(
+                                    name.clone(),
+                                    transom_core::ContainerLifecycleAction::Stop,
+                                    cx,
+                                );
+                            });
+                        }
                     }
                 }))
                 .into_any_element(),
@@ -75,12 +81,15 @@ pub(super) fn container_header_actions(
                 .on_click(cx.listener({
                     let name = name.clone();
                     move |this, _, _, cx| {
-                        this.container_lifecycle(
-                            tab_id,
-                            name.clone(),
-                            transom_core::ContainerLifecycleAction::Stop,
-                            cx,
-                        );
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(
+                                    name.clone(),
+                                    transom_core::ContainerLifecycleAction::Stop,
+                                    cx,
+                                );
+                            });
+                        }
                     }
                 }))
                 .into_any_element(),
@@ -113,12 +122,15 @@ pub(super) fn container_header_actions(
                 .on_click(cx.listener({
                     let name = name.clone();
                     move |this, _, _, cx| {
-                        this.container_lifecycle(
-                            tab_id,
-                            name.clone(),
-                            transom_core::ContainerLifecycleAction::Start,
-                            cx,
-                        );
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(
+                                    name.clone(),
+                                    transom_core::ContainerLifecycleAction::Start,
+                                    cx,
+                                );
+                            });
+                        }
                     }
                 }))
                 .into_any_element(),
@@ -144,12 +156,16 @@ pub(super) fn container_header_actions(
                         PopupMenuItem::new(rust_i18n::t!("container.action.pause").to_string())
                             .on_click(move |_, _, cx| {
                                 app_p.update(cx, |this, cx| {
-                                    this.container_lifecycle(
-                                        tab_id,
-                                        name_p.clone(),
-                                        transom_core::ContainerLifecycleAction::Pause,
-                                        cx,
-                                    );
+                                    if let Some(workspace) = this.state.container_workspace(tab_id)
+                                    {
+                                        workspace.update(cx, |workspace, cx| {
+                                            workspace.container_lifecycle(
+                                                name_p.clone(),
+                                                transom_core::ContainerLifecycleAction::Pause,
+                                                cx,
+                                            );
+                                        });
+                                    }
                                 });
                             }),
                     );
@@ -162,12 +178,16 @@ pub(super) fn container_header_actions(
                         PopupMenuItem::new(rust_i18n::t!("container.action.restart").to_string())
                             .on_click(move |_, _, cx| {
                                 app_r.update(cx, |this, cx| {
-                                    this.container_lifecycle(
-                                        tab_id,
-                                        name_r.clone(),
-                                        transom_core::ContainerLifecycleAction::Restart,
-                                        cx,
-                                    );
+                                    if let Some(workspace) = this.state.container_workspace(tab_id)
+                                    {
+                                        workspace.update(cx, |workspace, cx| {
+                                            workspace.container_lifecycle(
+                                                name_r.clone(),
+                                                transom_core::ContainerLifecycleAction::Restart,
+                                                cx,
+                                            );
+                                        });
+                                    }
                                 });
                             }),
                     );
@@ -177,14 +197,18 @@ pub(super) fn container_header_actions(
                         PopupMenuItem::new(rust_i18n::t!("container.action.kill").to_string())
                             .on_click(move |_, _, cx| {
                                 app_k.update(cx, |this, cx| {
-                                    this.container_lifecycle(
-                                        tab_id,
-                                        name_k.clone(),
-                                        transom_core::ContainerLifecycleAction::Kill {
-                                            signal: None,
-                                        },
-                                        cx,
-                                    );
+                                    if let Some(workspace) = this.state.container_workspace(tab_id)
+                                    {
+                                        workspace.update(cx, |workspace, cx| {
+                                            workspace.container_lifecycle(
+                                                name_k.clone(),
+                                                transom_core::ContainerLifecycleAction::Kill {
+                                                    signal: None,
+                                                },
+                                                cx,
+                                            );
+                                        });
+                                    }
                                 });
                             }),
                     );

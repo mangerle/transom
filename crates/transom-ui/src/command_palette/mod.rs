@@ -256,7 +256,11 @@ impl AppShell {
                 self.with_container_mut(tab_id, cx, |workspace| {
                     workspace.apply_section(crate::container::ContainerSection::Containers);
                 });
-                self.select_container_item(tab_id, container_id, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.select_container_item(container_id)
+                    });
+                }
                 cx.notify();
             }
             Some(PaletteTarget::ContainerLifecycle {
@@ -264,7 +268,11 @@ impl AppShell {
                 container_name,
                 action,
             }) => {
-                self.container_lifecycle(tab_id, container_name, action, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.container_lifecycle(container_name, action, cx);
+                    });
+                }
                 cx.notify();
             }
             // 动作已由组件派发；None 表示索引失效，静默忽略。

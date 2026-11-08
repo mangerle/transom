@@ -50,12 +50,15 @@ pub(super) fn compose_header_actions(
                 .label(rust_i18n::t!("container.action.stop_all").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     for name in &stop_names {
-                        this.container_lifecycle(
-                            tab_id,
-                            name.clone(),
-                            transom_core::ContainerLifecycleAction::Stop,
-                            cx,
-                        );
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(
+                                    name.clone(),
+                                    transom_core::ContainerLifecycleAction::Stop,
+                                    cx,
+                                );
+                            });
+                        }
                     }
                 }))
                 .into_any_element(),
@@ -69,12 +72,15 @@ pub(super) fn compose_header_actions(
                 .label(rust_i18n::t!("container.action.start_all").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     for name in &start_names {
-                        this.container_lifecycle(
-                            tab_id,
-                            name.clone(),
-                            transom_core::ContainerLifecycleAction::Start,
-                            cx,
-                        );
+                        if let Some(workspace) = this.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.container_lifecycle(
+                                    name.clone(),
+                                    transom_core::ContainerLifecycleAction::Start,
+                                    cx,
+                                );
+                            });
+                        }
                     }
                 }))
                 .into_any_element(),

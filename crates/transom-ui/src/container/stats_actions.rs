@@ -141,8 +141,12 @@ impl AppShell {
                 workspace.stats_request.take()
             })
             .flatten();
-        if let Some(request_id) = request_id {
-            self.cancel_container_request(tab_id, request_id, cx);
+        if let Some(request_id) = request_id
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, _| {
+                workspace.cancel_container_request(request_id)
+            });
         }
         self.ensure_container_stats(tab_id, cx);
         cx.notify();

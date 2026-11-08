@@ -11,37 +11,6 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 生命周期动作（启动/停止/重启/删除）。
-    pub(crate) fn container_lifecycle(
-        &mut self,
-        tab_id: TabId,
-        container: String,
-        action: ContainerLifecycleAction,
-        cx: &mut Context<Self>,
-    ) {
-        let request_id = ContainerRequestId::new();
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.busy = true;
-            workspace.notice = Some(
-                rust_i18n::t!("container.action.running", action = action.label()).to_string(),
-            );
-        });
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::Lifecycle {
-                        tab_id,
-                        request_id,
-                        container,
-                        action,
-                    },
-                );
-            });
-        }
-        cx.notify();
-    }
-
     /// 更新容器资源配置（内存、CPU、重启策略）。
     pub(crate) fn update_container_resources(
         &mut self,
@@ -392,6 +361,31 @@ impl AppShell {
                 workspace.send_tracked(request_id, command);
             });
         }
+        cx.notify();
+    }
+}
+
+impl ContainerWorkspace {
+    /// 生命周期动作（启动/停止/重启/删除）。
+    pub(crate) fn container_lifecycle(
+        &mut self,
+        container: String,
+        action: ContainerLifecycleAction,
+        cx: &mut Context<Self>,
+    ) {
+        let request_id = ContainerRequestId::new();
+        self.state.busy = true;
+        self.state.notice =
+            Some(rust_i18n::t!("container.action.running", action = action.label()).to_string());
+        self.send_tracked(
+            request_id,
+            ContainerCommand::Lifecycle {
+                tab_id: self.tab_id,
+                request_id,
+                container,
+                action,
+            },
+        );
         cx.notify();
     }
 }
