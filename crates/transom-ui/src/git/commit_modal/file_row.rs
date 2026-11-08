@@ -189,7 +189,7 @@ impl AppShell {
             let dbl_path = path.clone();
             row = row.on_click(cx.listener(move |this, event: &ClickEvent, _window, cx| {
                 if event.click_count() >= 2
-                    && let Some(tab_id) = this.git_tab_for_project(click_project.id)
+                    && let Some(tab_id) = this.git_tab_for_project(click_project.id, cx)
                 {
                     this.git_open_diff_modal(tab_id, &dbl_path, cx);
                     return;

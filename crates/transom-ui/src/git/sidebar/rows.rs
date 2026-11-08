@@ -141,16 +141,18 @@ impl AppShell {
         let badge = self.state.git.badges.get(&id).cloned().unwrap_or_default();
         let name = project.display_name();
         let active_branch = self
-            .git_tab_for_project(id)
-            .and_then(|tab_id| self.git_state_of_tab(tab_id))
-            .and_then(|s| s.status.as_ref())
-            .and_then(|status| match &status.head {
-                transom_core::HeadState::OnBranch(name) => Some(name.clone()),
-                transom_core::HeadState::Initial { branch } => Some(branch.clone()),
-                transom_core::HeadState::Detached => status
-                    .oid
-                    .as_deref()
-                    .map(|oid| oid.chars().take(7).collect()),
+            .state
+            .git_workspace_of_project(id, cx)
+            .and_then(|workspace| {
+                let state = &workspace.read(cx).state;
+                state.status.as_ref().and_then(|status| match &status.head {
+                    transom_core::HeadState::OnBranch(name) => Some(name.clone()),
+                    transom_core::HeadState::Initial { branch } => Some(branch.clone()),
+                    transom_core::HeadState::Detached => status
+                        .oid
+                        .as_deref()
+                        .map(|oid| oid.chars().take(7).collect()),
+                })
             });
 
         let branch = badge.branch.clone().or(active_branch).unwrap_or_else(|| {

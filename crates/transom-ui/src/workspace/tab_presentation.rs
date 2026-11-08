@@ -22,6 +22,7 @@ pub(crate) fn tab_icon(
     tab: &TerminalTab,
     active: bool,
     p: &Palette,
+    cx: &App,
 ) -> (AppIcon, Hsla) {
     if tab.is_player() {
         return (IconName::Disc.into(), p.muted_foreground);
@@ -29,9 +30,10 @@ pub(crate) fn tab_icon(
     if tab.is_monitor() {
         return (IconName::Gauge.into(), p.primary);
     }
-    if let Some(git) = tab.git() {
-        let icon = git_project_icon(&git.project);
-        let color = git_project_color(&git.project).unwrap_or(if active {
+    if let Some(workspace) = tab.git() {
+        let state = &workspace.read(cx).state;
+        let icon = git_project_icon(&state.project);
+        let color = git_project_color(&state.project).unwrap_or(if active {
             p.sidebar_accent_foreground
         } else {
             p.muted_foreground
@@ -66,9 +68,9 @@ pub(crate) fn tab_icon(
 }
 
 /// 用户为会话配置的环境色；未配置时不画强调条。
-pub(crate) fn tab_accent(shell: &AppShell, tab: &TerminalTab) -> Option<Hsla> {
-    if let Some(git) = tab.git() {
-        return git_project_color(&git.project);
+pub(crate) fn tab_accent(shell: &AppShell, tab: &TerminalTab, cx: &App) -> Option<Hsla> {
+    if let Some(workspace) = tab.git() {
+        return git_project_color(&workspace.read(cx).state.project);
     }
     shell.state.session_appearance(tab).color
 }

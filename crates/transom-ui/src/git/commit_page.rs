@@ -44,17 +44,20 @@ impl AppShell {
     ) -> AnyElement {
         // 提交成功后消息框的清理要 Window；事件落地时没有，先在这里补一次。
         if self
-            .git_state_of_tab(tab_id)
-            .is_some_and(|s| s.commit_clear_pending)
+            .state
+            .git_workspace(tab_id)
+            .is_some_and(|workspace| workspace.read(cx).state.commit_clear_pending)
         {
-            if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-                state.commit_clear_pending = false;
+            if let Some(workspace) = self.state.git_workspace(tab_id) {
+                workspace.update(cx, |workspace, _| {
+                    workspace.state.commit_clear_pending = false;
+                });
             }
             cx.defer_in(window, move |this, window, cx| {
-                if let Some(state) = this.git_state_of_tab_mut(tab_id) {
-                    state
-                        .commit_message
-                        .update(cx, |input, cx| input.set_value("", window, cx));
+                if let Some(workspace) = this.state.git_workspace(tab_id) {
+                    let commit_message =
+                        workspace.update(cx, |workspace, _| workspace.state.commit_message.clone());
+                    commit_message.update(cx, |input, cx| input.set_value("", window, cx));
                 }
             });
         }
@@ -74,9 +77,10 @@ impl AppShell {
             amend_files_loading,
             amend_head,
         ) = {
-            let Some(state) = self.git_state_of_tab(tab_id) else {
+            let Some(workspace) = self.state.git_workspace(tab_id) else {
                 return div().into_any_element();
             };
+            let state = &workspace.read(cx).state;
             if state.not_repo {
                 let error = state
                     .log
@@ -188,7 +192,15 @@ impl AppShell {
                 let grouping =
                     self.git_grouping_menu(cx.entity(), project.clone(), display.by_directory);
                 let files = self.render_git_group_list(&project, &display, p, cx);
-                let amend_target = self.git_amend_target_button(cx.entity(), tab_id, &project, p);
+                let amend_target = self.git_amend_target_button(
+                    super::commit_modal::GitAmendTargetParams {
+                        app: cx.entity(),
+                        tab_id,
+                        project: &project,
+                        palette: p,
+                    },
+                    cx,
+                );
 
                 let branch_chip = self.render_git_branch_chip(project.id, p);
                 let refresh_project = project.clone();
@@ -445,14 +457,17 @@ impl AppShell {
             .child(content);
 
         // 右栏每次重新借一次状态：左栏构建期间要 `&mut self`。
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return left.into_any_element();
         };
-        let right = v_flex()
-            .flex_1()
-            .min_w_0()
-            .min_h_0()
-            .child(diff_view::render(state, cx.entity(), tab_id, p));
+        let right = {
+            let state = &workspace.read(cx).state;
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .min_h_0()
+                .child(diff_view::render(state, cx.entity(), tab_id, p))
+        };
 
         let left_panel = resizable_panel()
             .size(px(COMMIT_PANEL_WIDTH))

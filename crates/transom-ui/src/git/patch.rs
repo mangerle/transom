@@ -56,8 +56,10 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let (short_oid, subject) = self
-            .git_state_of(project.id)
-            .and_then(|state| {
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| {
+                let state = &workspace.read(cx).state;
                 state
                     .log
                     .entries
@@ -74,8 +76,10 @@ impl AppShell {
         else {
             return;
         };
-        if let Some(state) = self.git_state_mut(project.id) {
-            state.patch_target = Some(path.clone());
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.patch_target = Some(path.clone());
+            });
         }
         self.send_command(GitCommand::CreatePatch {
             project: project.clone(),
@@ -86,18 +90,30 @@ impl AppShell {
     }
 
     /// 补丁写成功后把状态栏换成落盘路径；没有待定路径时返回 `None` 让通用文案兜底。
-    pub(crate) fn git_patch_done_status(&mut self, project_id: GitProjectId) -> Option<String> {
-        let path = self.git_state_mut(project_id)?.patch_target.take()?;
+    pub(crate) fn git_patch_done_status(
+        &mut self,
+        project_id: GitProjectId,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let workspace = self.state.git_workspace_of_project(project_id, cx)?;
+        let path = workspace.update(cx, |workspace, _| workspace.state.patch_target.take())?;
         Some(rust_i18n::t!("git.patch.saved", path = path.display().to_string()).to_string())
     }
 
     /// 动作失败时也要清掉待定路径，否则下一次同类动作的成功会报出旧路径。
-    pub(crate) fn git_patch_failed(&mut self, project_id: GitProjectId, action: GitAction) {
+    pub(crate) fn git_patch_failed(
+        &mut self,
+        project_id: GitProjectId,
+        action: GitAction,
+        cx: &mut Context<Self>,
+    ) {
         if action != GitAction::CreatePatch {
             return;
         }
-        if let Some(state) = self.git_state_mut(project_id) {
-            state.patch_target = None;
+        if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.patch_target = None;
+            });
         }
     }
 }

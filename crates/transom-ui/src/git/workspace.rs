@@ -5,11 +5,12 @@
 //!   右详情与差异三栏。用户从 IDE 过来时不需要重新学一遍信息在哪；
 //! - 顶部固定两个入口——「提交」开模态框，「操作」在概览与日志工作区之间切换；
 //!   刷新 / 抓取 / 拉取 / 推送作为工具栏动作，与 IDEA 的工具条一致；
-//! - 渲染期只读标签页状态，任何变更都交给 `Entity<AppShell>` 回调：这样既避开
-//!   借用冲突，也让"点击后改什么"集中在一处。
+//! - 渲染期只 `read` 标签页的 `Entity<GitWorkspace>` 状态，任何变更都经实体
+//!   `update` 或 `Entity<AppShell>` 回调：这样既避开借用冲突，也让"点击后改什么"
+//!   集中在一处。
 
 use super::log_view;
-use super::types::{GitView, GitWorkspaceState};
+use super::types::GitView;
 use crate::app::AppShell;
 use crate::divider::v_resizable;
 use crate::palette::Palette;
@@ -31,13 +32,11 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return div().into_any_element();
         };
         let (view, project, bottom_log_open, bottom_log_split) = {
-            let Some(state) = self.state.workspace.tabs[index].git() else {
-                return div().into_any_element();
-            };
+            let state = &workspace.read(cx).state;
             (
                 state.view,
                 state.project.clone(),
@@ -82,7 +81,7 @@ impl AppShell {
             root = root.child(self.render_git_toolbar(tab_id, &project, p, cx));
         }
         root = root.child(body);
-        let diff_modal = self.render_git_diff_modal(tab_id, cx.entity().clone(), p);
+        let diff_modal = self.render_git_diff_modal(tab_id, cx.entity().clone(), p, cx);
         root.child(diff_modal).into_any_element()
     }
 
@@ -238,12 +237,10 @@ impl AppShell {
         p: &Palette,
         cx: &App,
     ) -> AnyElement {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let Some(state) = self.state.workspace.tabs[index].git() else {
-            return div().into_any_element();
-        };
+        let state = &workspace.read(cx).state;
 
         if state.not_repo {
             let error = state
@@ -362,17 +359,4 @@ pub(crate) fn render_git_not_repo_state(
                 }),
         )
         .into_any_element()
-}
-
-/// 只读状态的按标签取用（渲染期专用，避免与 `git_mut` 借用打架）。
-impl AppShell {
-    pub(crate) fn git_state_of_tab(&self, tab_id: TabId) -> Option<&GitWorkspaceState> {
-        let index = self.state.workspace.tab_index(tab_id)?;
-        self.state.workspace.tabs[index].git()
-    }
-
-    pub(crate) fn git_state_of_tab_mut(&mut self, tab_id: TabId) -> Option<&mut GitWorkspaceState> {
-        let index = self.state.workspace.tab_index(tab_id)?;
-        self.state.workspace.tabs[index].git_mut()
-    }
 }

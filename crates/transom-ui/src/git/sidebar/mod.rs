@@ -62,7 +62,7 @@ impl AppShell {
         let rows = build_git_rows(&self.state.git);
         // 分组列表在渲染期就取好带走：右键菜单闭包运行时再回查 `self.state.git` 的借用不成立。
         let folders = git_folder_options(&self.state.git);
-        let active_project = self.active_git_project_id();
+        let active_project = self.active_git_project_id(cx);
         let mut list = v_flex()
             .flex_1()
             .id("git-sidebar-list")

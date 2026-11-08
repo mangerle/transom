@@ -22,17 +22,18 @@ use super::types::PendingNotices;
 use crate::UiServices;
 use crate::cloud_sync::GitSyncScheduler;
 use crate::editor::EditorPanels;
+use crate::git::GitWorkspace;
 use crate::keymap::ShortcutRecordingState;
 use crate::palette::localized_error;
 use crate::sftp::SftpModals;
 use crate::sidebar::SidebarState;
 use crate::workspace::WorkspaceState;
-use gpui_kit::Entity;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::{App, Entity};
 use std::collections::HashMap;
 use std::sync::Arc;
-use transom_core::{AppCommand, AppSettings, SessionCatalog, SessionId};
+use transom_core::{AppCommand, AppSettings, GitProjectId, SessionCatalog, SessionId, TabId};
 
 /// 应用运行期状态。
 pub(crate) struct AppState {
@@ -117,6 +118,31 @@ impl AppState {
             .active_tab
             .and_then(|tab_id| self.workspace.tab(tab_id))
             .is_some_and(|tab| tab.terminal().is_some())
+    }
+
+    /// 按标签 id 取 Git 工作区实体句柄。
+    ///
+    /// 返回的是句柄而不是引用：调用方自行决定 `read` 还是 `update`，避免同一
+    /// 标签页在渲染期与动作期各持一份状态。`tab_id` 不存在或不是 Git 标签时
+    /// 返回 `None`。
+    pub(crate) fn git_workspace(&self, tab_id: TabId) -> Option<Entity<GitWorkspace>> {
+        let index = self.workspace.tab_index(tab_id)?;
+        self.workspace.tabs[index].git()
+    }
+
+    /// 按项目 id 取 Git 工作区实体句柄。
+    ///
+    /// 项目 id 存在实体内部，读取需要只读的 `App` 上下文；查找口径与旧实现
+    /// 一致——按标签出现顺序取第一个打开该项目的 Git 标签。
+    pub(crate) fn git_workspace_of_project(
+        &self,
+        project_id: GitProjectId,
+        cx: &App,
+    ) -> Option<Entity<GitWorkspace>> {
+        self.workspace.tabs.iter().find_map(|tab| {
+            let workspace = tab.git()?;
+            (workspace.read(cx).state.project.id == project_id).then_some(workspace)
+        })
     }
 
     /// 向控制器提交命令：非阻塞 `try_send`，队列满时快速失败。

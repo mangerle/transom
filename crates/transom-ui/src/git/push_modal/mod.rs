@@ -101,21 +101,24 @@ impl AppShell {
         target_branch: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let (branch_name, upstream_name) = if let Some(state) = self.git_state_of(project.id) {
-            let head_branch = state
-                .status
-                .as_ref()
-                .and_then(|s| match &s.head {
-                    HeadState::OnBranch(name) => Some(name.clone()),
-                    _ => None,
-                })
-                .unwrap_or_else(|| "HEAD".to_string());
-            let branch = target_branch.unwrap_or(head_branch);
-            let upstream = state.status.as_ref().and_then(|s| s.upstream.clone());
-            (branch, upstream)
-        } else {
-            ("HEAD".to_string(), None)
-        };
+        let (branch_name, upstream_name) = self
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .map(|workspace| {
+                let state = &workspace.read(cx).state;
+                let head_branch = state
+                    .status
+                    .as_ref()
+                    .and_then(|s| match &s.head {
+                        HeadState::OnBranch(name) => Some(name.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| "HEAD".to_string());
+                let branch = target_branch.unwrap_or(head_branch);
+                let upstream = state.status.as_ref().and_then(|s| s.upstream.clone());
+                (branch, upstream)
+            })
+            .unwrap_or_else(|| ("HEAD".to_string(), None));
 
         let (remote, remote_branch) = if let Some(ref up) = upstream_name {
             if let Some((r, b)) = up.split_once('/') {
@@ -136,8 +139,10 @@ impl AppShell {
 
         // 派发 LoadOutgoingCommits 查询真实的待推送提交历史
         let request_id = GitRequestId::new();
-        if let Some(state) = self.git_state_mut(project.id) {
-            state.pending.push(request_id);
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.pending.push(request_id);
+            });
         }
         self.send_command(GitCommand::LoadOutgoingCommits {
             project: project.clone(),
@@ -181,8 +186,10 @@ impl AppShell {
 
         if let Some(oid) = first_oid {
             let request_id = GitRequestId::new();
-            if let Some(state) = self.git_state_mut(project_id) {
-                state.pending.push(request_id);
+            if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                workspace.update(cx, |workspace, _| {
+                    workspace.state.pending.push(request_id);
+                });
             }
             self.send_command(GitCommand::LoadCommitFiles {
                 project,
@@ -213,8 +220,10 @@ impl AppShell {
 
         let project = modal.project.clone();
         let request_id = GitRequestId::new();
-        if let Some(state) = self.git_state_mut(project.id) {
-            state.pending.push(request_id);
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.pending.push(request_id);
+            });
         }
         self.send_command(GitCommand::LoadCommitFiles {
             project,

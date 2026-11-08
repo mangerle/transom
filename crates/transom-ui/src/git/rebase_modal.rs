@@ -57,8 +57,10 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let subject = self
-            .git_state_of(project.id)
-            .and_then(|state| {
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| {
+                let state = &workspace.read(cx).state;
                 state
                     .log
                     .entries
@@ -68,8 +70,10 @@ impl AppShell {
             })
             .unwrap_or_default();
         let request_id = GitRequestId::new();
-        if let Some(state) = self.git_state_mut(project.id) {
-            state.pending.push(request_id);
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.pending.push(request_id);
+            });
         }
         self.state.modals.git.rebase = Some(GitRebaseModal::new(
             project.clone(),

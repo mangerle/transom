@@ -103,7 +103,7 @@ impl AppShell {
             .state
             .workspace
             .active_tab
-            .filter(|tab_id| self.git_state_of_tab(*tab_id).is_some())
+            .filter(|tab_id| self.state.git_workspace(*tab_id).is_some())
             .or_else(|| {
                 self.state
                     .workspace
@@ -114,9 +114,9 @@ impl AppShell {
 
         let make_git_log_btn = |id: TabId, app_entity: Entity<AppShell>| {
             let is_open = self
-                .git_state_of_tab(id)
-                .map(|s| s.bottom_log_open)
-                .unwrap_or(false);
+                .state
+                .git_workspace(id)
+                .is_some_and(|workspace| workspace.read(cx).state.bottom_log_open);
             let tooltip_text = if is_open {
                 rust_i18n::t!("git.view.collapse_log")
             } else {

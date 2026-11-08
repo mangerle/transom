@@ -35,15 +35,16 @@ impl AppShell {
                     "初始化 Git 仓库失败，项目: {project_id}，路径: {}，原因: {message}",
                     path.display()
                 );
-                if let Some(tab_id) = self.git_tab_for_project(project_id)
-                    && let Some(state) = self.git_state_of_tab_mut(tab_id)
-                {
-                    state.init_running = false;
-                    state.not_repo = true;
-                    state.status_loading = false;
-                    state.status_error = Some(message.clone());
-                    state.log.loading = false;
-                    state.log.error = Some(message.clone());
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.init_running = false;
+                        state.not_repo = true;
+                        state.status_loading = false;
+                        state.status_error = Some(message.clone());
+                        state.log.loading = false;
+                        state.log.error = Some(message.clone());
+                    });
                 }
                 let badge = self.state.git.badges.entry(project_id).or_default();
                 badge.loading = false;
@@ -55,21 +56,22 @@ impl AppShell {
                     "目录已初始化为 Git 仓库，项目: {project_id}，路径: {}",
                     path.display()
                 );
-                if let Some(tab_id) = self.git_tab_for_project(project_id)
-                    && let Some(state) = self.git_state_of_tab_mut(tab_id)
-                {
-                    state.init_running = false;
-                    state.not_repo = false;
-                    state.status_error = None;
-                    state.log.loading = false;
-                    state.log.error = None;
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.init_running = false;
+                        state.not_repo = false;
+                        state.status_error = None;
+                        state.log.loading = false;
+                        state.log.error = None;
+                    });
                 }
                 let badge = self.state.git.badges.entry(project_id).or_default();
                 badge.loading = false;
                 badge.error = None;
                 if let Some(project) = project {
                     self.git_refresh(&project, cx);
-                    if let Some(tab_id) = self.git_tab_for_project(project_id) {
+                    if let Some(tab_id) = self.git_tab_for_project(project_id, cx) {
                         self.git_load_log(tab_id, 0, cx);
                     }
                 }

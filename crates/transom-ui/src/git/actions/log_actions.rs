@@ -1,52 +1,42 @@
 //! 日志视图的动作：过滤、分页、选行、跳转、列开关、分组勾选与差异打开。
 //!
 //! 设计原理（Why）：这些都是「只改视图状态 + 发读命令」的轻动作，放一处便于核对
-//! 借用边界（先取数据结束借用，再 `send_command`）与请求登记口径。
+//! 借用边界（先取数据结束借用，再投递命令）与请求登记口径。日志分页的核心状态机
+//! 已迁到 `GitWorkspace::load_log`，外壳只负责定位实体与在实体更新后请求重绘。
 
 use crate::app::AppShell;
 use crate::git::types::GitDiffRequest;
 use gpui_kit::*;
 use transom_core::{GitAction, GitCommand, GitProject, GitRequestId, GitSide, TabId};
 
-/// 日志单页条数：一屏约 40 行，5 页滚动内不必再发请求。
-const LOG_PAGE_SIZE: usize = 200;
-
 impl AppShell {
     /// 分页加载提交历史；`skip` 为 0 时整页替换，否则追加（下拉加载）。
     pub(crate) fn git_load_log(&mut self, tab_id: TabId, skip: usize, cx: &mut Context<Self>) {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let Some(state) = self.state.workspace.tabs[index].git_mut() else {
-            return;
-        };
-        let project = state.project.clone();
-        state.log.loading = true;
-        state.log.error = None;
-        let request_id = GitRequestId::new();
-        state.pending.push(request_id);
-        state.log.request = Some((request_id, skip > 0));
-        let mut query = state.query.clone();
-        query.skip = skip;
-        query.limit = LOG_PAGE_SIZE;
-        self.send_command(GitCommand::LoadLog {
-            project,
-            request_id,
-            query,
-        });
+        workspace.update(cx, |workspace, _| workspace.load_log(skip));
         cx.notify();
     }
 
     /// 读取输入框里的过滤条件并重查日志。
     pub(crate) fn git_apply_filter_inputs(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let search = state.search_input.read(cx).value().trim().to_string();
-        let author = state.author_input.read(cx).value().trim().to_string();
-        state.query.search = (!search.is_empty()).then_some(search);
-        state.query.author = (!author.is_empty()).then_some(author);
-        state.log.scope = state.query.scope.clone();
+        let (search, author) = {
+            let state = &workspace.read(cx).state;
+            (
+                state.search_input.read(cx).value().trim().to_string(),
+                state.author_input.read(cx).value().trim().to_string(),
+            )
+        };
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            state.query.search = (!search.is_empty()).then_some(search);
+            state.query.author = (!author.is_empty()).then_some(author);
+            state.log.scope = state.query.scope.clone();
+        });
         cx.notify();
         self.git_load_log(tab_id, 0, cx);
     }
@@ -58,14 +48,17 @@ impl AppShell {
         regex: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        if regex {
-            state.query.regex = !state.query.regex;
-        } else {
-            state.query.case_sensitive = !state.query.case_sensitive;
-        }
+        workspace.update(cx, |workspace, _| {
+            let query = &mut workspace.state.query;
+            if regex {
+                query.regex = !query.regex;
+            } else {
+                query.case_sensitive = !query.case_sensitive;
+            }
+        });
         cx.notify();
         self.git_apply_filter_inputs(tab_id, cx);
     }
@@ -77,11 +70,14 @@ impl AppShell {
         scope: transom_core::LogScope,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        state.query.scope = scope;
-        state.log.scope = state.query.scope.clone();
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            state.query.scope = scope;
+            state.log.scope = state.query.scope.clone();
+        });
         cx.notify();
         self.git_load_log(tab_id, 0, cx);
     }
@@ -93,10 +89,12 @@ impl AppShell {
         since: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        state.query.since = since;
+        workspace.update(cx, |workspace, _| {
+            workspace.state.query.since = since;
+        });
         cx.notify();
         self.git_load_log(tab_id, 0, cx);
     }
@@ -108,10 +106,12 @@ impl AppShell {
         path: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        state.query.paths = path.into_iter().collect();
+        workspace.update(cx, |workspace, _| {
+            workspace.state.query.paths = path.into_iter().collect();
+        });
         cx.notify();
         self.git_load_log(tab_id, 0, cx);
     }
@@ -123,10 +123,12 @@ impl AppShell {
         update: impl FnOnce(&mut crate::git::types::GitDiffOptions),
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        update(&mut state.diff_options);
+        workspace.update(cx, |workspace, _| {
+            update(&mut workspace.state.diff_options);
+        });
         cx.notify();
     }
 
@@ -136,63 +138,72 @@ impl AppShell {
         project: &GitProject,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_mut(project.id) else {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
             return;
         };
-        state.group_by_directory = !state.group_by_directory;
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            state.group_by_directory = !state.group_by_directory;
+        });
         cx.notify();
     }
 
     /// 全部展开：清空分组与目录的折叠集合。
     pub(crate) fn git_expand_all_groups(&mut self, project: &GitProject, cx: &mut Context<Self>) {
-        if let Some(state) = self.git_state_of_mut(project.id) {
-            state.collapsed_groups.clear();
-            state.collapsed_dirs.clear();
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                let state = &mut workspace.state;
+                state.collapsed_groups.clear();
+                state.collapsed_dirs.clear();
+            });
         }
         cx.notify();
     }
 
     /// 全部收起：收起所有分组；按目录模式下把当前每个目录也收起。
     pub(crate) fn git_collapse_all_groups(&mut self, project: &GitProject, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_mut(project.id) else {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
             return;
         };
-        use crate::git::commit_modal::ChangeGroup;
-        for group in [
-            ChangeGroup::Staged,
-            ChangeGroup::Unstaged,
-            ChangeGroup::Untracked,
-            ChangeGroup::Ignored,
-        ] {
-            state.collapsed_groups.insert(group.key().to_string());
-        }
-        state.collapsed_dirs.clear();
-        if state.group_by_directory
-            && let Some(status) = state.status.as_ref()
-        {
-            for entry in &status.entries {
-                let group = match entry.record {
-                    transom_core::StatusRecord::Tracked { index, worktree } => {
-                        if index != transom_core::ChangeCode::Unmodified {
-                            Some(ChangeGroup::Staged)
-                        } else if worktree != transom_core::ChangeCode::Unmodified {
-                            Some(ChangeGroup::Unstaged)
-                        } else {
-                            None
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            use crate::git::commit_modal::ChangeGroup;
+            for group in [
+                ChangeGroup::Staged,
+                ChangeGroup::Unstaged,
+                ChangeGroup::Untracked,
+                ChangeGroup::Ignored,
+            ] {
+                state.collapsed_groups.insert(group.key().to_string());
+            }
+            state.collapsed_dirs.clear();
+            if state.group_by_directory
+                && let Some(status) = state.status.as_ref()
+            {
+                for entry in &status.entries {
+                    let group = match entry.record {
+                        transom_core::StatusRecord::Tracked { index, worktree } => {
+                            if index != transom_core::ChangeCode::Unmodified {
+                                Some(ChangeGroup::Staged)
+                            } else if worktree != transom_core::ChangeCode::Unmodified {
+                                Some(ChangeGroup::Unstaged)
+                            } else {
+                                None
+                            }
                         }
+                        transom_core::StatusRecord::Conflict => Some(ChangeGroup::Staged),
+                        transom_core::StatusRecord::Untracked => Some(ChangeGroup::Untracked),
+                        transom_core::StatusRecord::Ignored => Some(ChangeGroup::Ignored),
+                    };
+                    if let Some(group) = group {
+                        let dir = entry.path.rfind('/').map_or("", |at| &entry.path[..at]);
+                        state
+                            .collapsed_dirs
+                            .insert(format!("{}|{dir}", group.key()));
                     }
-                    transom_core::StatusRecord::Conflict => Some(ChangeGroup::Staged),
-                    transom_core::StatusRecord::Untracked => Some(ChangeGroup::Untracked),
-                    transom_core::StatusRecord::Ignored => Some(ChangeGroup::Ignored),
-                };
-                if let Some(group) = group {
-                    let dir = entry.path.rfind('/').map_or("", |at| &entry.path[..at]);
-                    state
-                        .collapsed_dirs
-                        .insert(format!("{}|{dir}", group.key()));
                 }
             }
-        }
+        });
         cx.notify();
     }
 
@@ -203,12 +214,15 @@ impl AppShell {
         key: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_mut(project.id) else {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
             return;
         };
-        if !state.collapsed_dirs.insert(key.to_string()) {
-            state.collapsed_dirs.remove(key);
-        }
+        workspace.update(cx, |workspace, _| {
+            let collapsed_dirs = &mut workspace.state.collapsed_dirs;
+            if !collapsed_dirs.insert(key.to_string()) {
+                collapsed_dirs.remove(key);
+            }
+        });
         cx.notify();
     }
 
@@ -219,12 +233,15 @@ impl AppShell {
         key: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_mut(project.id) else {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
             return;
         };
-        if !state.collapsed_groups.insert(key.to_string()) {
-            state.collapsed_groups.remove(key);
-        }
+        workspace.update(cx, |workspace, _| {
+            let collapsed_groups = &mut workspace.state.collapsed_groups;
+            if !collapsed_groups.insert(key.to_string()) {
+                collapsed_groups.remove(key);
+            }
+        });
         cx.notify();
     }
 
@@ -236,16 +253,19 @@ impl AppShell {
         checked: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_mut(project.id) else {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
             return;
         };
-        for path in paths {
-            if checked {
-                state.checked.insert(path.clone());
-            } else {
-                state.checked.remove(path);
+        workspace.update(cx, |workspace, _| {
+            let checked_set = &mut workspace.state.checked;
+            for path in paths {
+                if checked {
+                    checked_set.insert(path.clone());
+                } else {
+                    checked_set.remove(path);
+                }
             }
-        }
+        });
         cx.notify();
     }
 
@@ -288,10 +308,13 @@ impl AppShell {
 
     /// 展开 / 收起左侧引用栏。
     pub(crate) fn git_toggle_refs_panel(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        state.refs_panel = !state.refs_panel;
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            state.refs_panel = !state.refs_panel;
+        });
         cx.notify();
     }
 
@@ -305,15 +328,14 @@ impl AppShell {
         let Some(tab_id) = self.active_git_tab() else {
             return;
         };
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let current = state
-            .refs_expanded
-            .get(key)
-            .copied()
-            .unwrap_or(default_expanded);
-        state.refs_expanded.insert(key.to_string(), !current);
+        workspace.update(cx, |workspace, _| {
+            let expanded = &mut workspace.state.refs_expanded;
+            let current = expanded.get(key).copied().unwrap_or(default_expanded);
+            expanded.insert(key.to_string(), !current);
+        });
         cx.notify();
     }
 
@@ -326,19 +348,22 @@ impl AppShell {
         let Some(tab_id) = self.active_git_tab() else {
             return;
         };
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        for key in ["HEAD", "git.refs.local", "git.refs.remote", "git.refs.tags"] {
-            state.refs_expanded.insert(key.to_string(), expanded);
-        }
+        workspace.update(cx, |workspace, _| {
+            let refs_expanded = &mut workspace.state.refs_expanded;
+            for key in ["HEAD", "git.refs.local", "git.refs.remote", "git.refs.tags"] {
+                refs_expanded.insert(key.to_string(), expanded);
+            }
+        });
         cx.notify();
     }
 
     /// 当前活动标签若为 Git 标签则返回它，否则退回最后一个 Git 标签。
     pub(crate) fn active_git_tab(&self) -> Option<TabId> {
         if let Some(tab_id) = self.state.workspace.active_tab
-            && self.git_state_of_tab(tab_id).is_some()
+            && self.state.git_workspace(tab_id).is_some()
         {
             return Some(tab_id);
         }
@@ -358,10 +383,12 @@ impl AppShell {
         column: crate::git::types::LogColumn,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        column.flip(&mut state.log.columns);
+        workspace.update(cx, |workspace, _| {
+            column.flip(&mut workspace.state.log.columns);
+        });
         cx.notify();
     }
 
@@ -376,20 +403,22 @@ impl AppShell {
         jump: crate::git::types::LogJump,
         cx: &mut Context<Self>,
     ) {
-        let landed = self
-            .git_state_of_tab(tab_id)
-            .and_then(|state| jump.resolve(&state.log.entries));
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let landed = {
+            let state = &workspace.read(cx).state;
+            jump.resolve(&state.log.entries)
+        };
         if let Some(index) = landed {
             self.git_select_commit_by_index(tab_id, index, cx);
             return;
         }
-        let paging = self
-            .git_state_of_tab_mut(tab_id)
-            .map(move |state| {
-                state.log.jump = Some(jump);
-                state.log.has_more && !state.log.loading
-            })
-            .unwrap_or_default();
+        let paging = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            state.log.jump = Some(jump);
+            state.log.has_more && !state.log.loading
+        });
         if paging {
             self.git_load_more_log(tab_id, cx);
             return;
@@ -405,26 +434,29 @@ impl AppShell {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        let Some(oid) = self
-            .git_state_of_tab(tab_id)
-            .and_then(|state| state.log.entries.get(index))
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let Some(oid) = workspace
+            .read(cx)
+            .state
+            .log
+            .entries
+            .get(index)
             .map(|entry| entry.oid.clone())
         else {
             return;
         };
-        let (project, request_id) = {
-            let Some(state) = self.git_state_of_tab_mut(tab_id) else {
-                return;
-            };
+        let (project, request_id) = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             state.selected_commit = Some(index);
             state.commit_files = Vec::new();
             state.commit_files_loading = true;
             state.diff = None;
-            (state.project.clone(), GitRequestId::new())
-        };
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+            let request_id = GitRequestId::new();
             state.pending.push(request_id);
-        }
+            (state.project.clone(), request_id)
+        });
         self.send_command(GitCommand::LoadCommitFiles {
             project,
             request_id,
@@ -435,12 +467,10 @@ impl AppShell {
 
     /// 加载更多历史（追加页）。
     pub(crate) fn git_load_more_log(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(len) = self
-            .git_state_of_tab(tab_id)
-            .map(|state| state.log.entries.len())
-        else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
+        let len = workspace.read(cx).state.log.entries.len();
         self.git_load_log(tab_id, len, cx);
     }
 
@@ -451,9 +481,13 @@ impl AppShell {
         path: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(oid) = self
-            .git_state_of_tab(tab_id)
-            .and_then(|state| state.selected_entry())
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let Some(oid) = workspace
+            .read(cx)
+            .state
+            .selected_entry()
             .map(|entry| entry.oid.clone())
         else {
             return;

@@ -23,15 +23,18 @@ impl AppShell {
             return;
         }
         let fixup_target = if amend {
-            self.git_state_of(project.id).and_then(|state| {
-                let target = state.amend_target.as_ref()?;
-                let head_oid = state.log.entries.first().map(|e| &e.oid);
-                if head_oid != Some(target) {
-                    Some(target.clone())
-                } else {
-                    None
-                }
-            })
+            self.state
+                .git_workspace_of_project(project.id, cx)
+                .and_then(|workspace| {
+                    let state = &workspace.read(cx).state;
+                    let target = state.amend_target.as_ref()?;
+                    let head_oid = state.log.entries.first().map(|e| &e.oid);
+                    if head_oid != Some(target) {
+                        Some(target.clone())
+                    } else {
+                        None
+                    }
+                })
         } else {
             None
         };
@@ -44,8 +47,10 @@ impl AppShell {
 
         if push_after {
             // 提交成功后自动唤起推送弹窗（与在分支上右键推送展示一致）。
-            if let Some(state) = self.git_state_mut(project.id) {
-                state.push_after_commit = true;
+            if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+                workspace.update(cx, |workspace, _| {
+                    workspace.state.push_after_commit = true;
+                });
             }
         }
         cx.notify();
@@ -136,8 +141,16 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let is_tag = self
-            .git_state_of(project.id)
-            .is_some_and(|state| state.tags.iter().any(|tag| tag.name == name));
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .is_some_and(|workspace| {
+                workspace
+                    .read(cx)
+                    .state
+                    .tags
+                    .iter()
+                    .any(|tag| tag.name == name)
+            });
         let action = if is_tag {
             GitRefAction::DeleteTag(name.to_string())
         } else {
@@ -176,7 +189,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(project) = self.git_project_of_tab(None) else {
+        let Some(project) = self.git_project_of_tab(None, cx) else {
             return;
         };
         self.git_create_project_branch_from(&project, start, window, cx);
@@ -255,7 +268,7 @@ impl AppShell {
         action: GitHistoryAction,
         cx: &mut Context<Self>,
     ) {
-        let Some(project) = self.git_project_of_tab(None) else {
+        let Some(project) = self.git_project_of_tab(None, cx) else {
             self.set_error(rust_i18n::t!("git.diff.none").to_string());
             return;
         };
@@ -325,8 +338,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let branch = self
-            .git_state_of(project.id)
-            .and_then(|state| state.status.clone())
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| workspace.read(cx).state.status.clone())
             .and_then(|status| match status.head {
                 transom_core::HeadState::OnBranch(name) => Some(name),
                 _ => None,

@@ -17,12 +17,14 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let request_id = {
-            let Some(state) = self.git_state_mut(project.id) else {
+            let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
                 return;
             };
-            let request_id = GitRequestId::new();
-            state.pending.push(request_id);
-            request_id
+            workspace.update(cx, |workspace, _| {
+                let request_id = GitRequestId::new();
+                workspace.state.pending.push(request_id);
+                request_id
+            })
         };
         self.send_command(GitCommand::ResolveCommitUrl {
             project: project.clone(),

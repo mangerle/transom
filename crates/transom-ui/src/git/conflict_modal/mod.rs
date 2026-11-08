@@ -56,14 +56,16 @@ impl AppShell {
     /// 打开冲突解决模态框。
     pub(crate) fn open_git_conflict_modal(&mut self, project: &GitProject, cx: &mut Context<Self>) {
         let conflict_files: Vec<String> = self
-            .git_state_of(project.id)
-            .and_then(|state| state.status.as_ref())
-            .map(|status| {
-                status
-                    .conflicts()
-                    .into_iter()
-                    .map(|e| e.path.clone())
-                    .collect()
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| {
+                workspace.read(cx).state.status.as_ref().map(|status| {
+                    status
+                        .conflicts()
+                        .into_iter()
+                        .map(|e| e.path.clone())
+                        .collect()
+                })
             })
             .unwrap_or_default();
 

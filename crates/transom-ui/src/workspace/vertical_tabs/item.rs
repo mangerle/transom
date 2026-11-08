@@ -57,7 +57,8 @@ pub(super) fn render_vertical_tab_row(
     let subtitle = crate::workspace::tab_presentation::tab_subtitle(tab);
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
-    let (icon, icon_color) = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p);
+    let (icon, icon_color) =
+        crate::workspace::tab_presentation::tab_icon(shell, tab, active, p, cx);
     let tiled = shell.state.tiling_of_group(group_id);
     let tiled_badge = tiled.is_some();
     let this_set_id = tiled.map(|tiled| tiled.id);

@@ -83,8 +83,8 @@ pub(super) fn render_tab_entry(
     let this_set_id = tiled_set.as_ref().map(|tiled| tiled.id);
 
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
-    let tab_icon = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p).0;
-    let session_color = crate::workspace::tab_presentation::tab_accent(shell, tab);
+    let tab_icon = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p, cx).0;
+    let session_color = crate::workspace::tab_presentation::tab_accent(shell, tab, cx);
     let mut tab_element = h_flex()
         .id(ElementId::Name(format!("tab-{group_id}").into()))
         .relative()

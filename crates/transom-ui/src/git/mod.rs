@@ -4,7 +4,7 @@
 //! - 界面完全照 IntelliJ IDEA 的 Git 工具窗口布局组织：侧栏是仓库列表，点开
 //!   一个仓库就在右侧开一个标签页；标签页顶部两个入口——「提交」开模态框，
 //!   「操作」进日志工作区。用户的心智模型已经在 IDE 里建立，这里不另创一套；
-//! - 每个标签页持有一份 [`GitWorkspaceState`]（挂在 `TabContent::Git` 上），
+//! - 每个标签页持有一份 [`GitWorkspace`] 实体（挂在 `TabContent::Git` 上），
 //!   控制器不保存任何界面状态：关闭标签即随视图一起释放，不存在跨标签串数据；
 //! - 所有 git 数据都经命令总线异步取回，UI 线程不跑子进程；界面按
 //!   `request_id` 丢弃迟到的结果，避免快速切换仓库时旧数据覆盖新视图。
@@ -16,6 +16,7 @@ mod commit_modal;
 mod commit_page;
 mod diff_modal;
 mod diff_view;
+mod entity;
 mod form;
 pub(crate) mod graph_paint;
 pub(crate) mod log_view;
@@ -40,6 +41,7 @@ mod web_link;
 
 pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
 pub(crate) use conflict_modal::GitConflictModal;
+pub(crate) use entity::GitWorkspace;
 pub(crate) use form::{GitProjectDraft, GitProjectModal};
 pub(crate) use name_modal::{GitNameModal, GitNamePurpose};
 pub(crate) use push_modal::GitPushModal;

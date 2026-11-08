@@ -38,9 +38,12 @@ impl AppShell {
         let submitting = props.submitting;
 
         let history: Vec<String> = self
-            .git_state_of_tab(tab_id)
-            .map(|s| {
-                s.log
+            .state
+            .git_workspace(tab_id)
+            .map(|workspace| {
+                let state = &workspace.read(cx).state;
+                state
+                    .log
                     .entries
                     .iter()
                     .map(|e| e.subject.clone())

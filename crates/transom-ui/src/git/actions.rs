@@ -13,6 +13,7 @@
 //!   `shelf_actions` / `event_dispatch`），本文件只留项目与标签这一公共层，
 //!   并对外再导出各模块的类型：调用方的引用路径不因拆分而改变。
 
+use super::GitWorkspace;
 use super::commit_modal::{ChangeGroup, worktree_diff_request};
 use super::form::GitProjectDraft;
 use super::types::{GitBadge, GitWorkspaceState};
@@ -97,7 +98,7 @@ impl AppShell {
         path: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.git_tab_for_project(project.id) else {
+        let Some(tab_id) = self.git_tab_for_project(project.id, cx) else {
             return;
         };
         self.git_open_diff(tab_id, worktree_diff_request(group, path), cx);
@@ -110,46 +111,44 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut pending = None;
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let pending = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             let next = !state.commit_amend;
             state.commit_amend = next;
             if !next {
                 state.amend_files_loading = false;
-            } else {
-                let target_oid = state.amend_target.clone();
-                let entry = target_oid
-                    .as_ref()
-                    .and_then(|oid| state.log.entries.iter().find(|e| &e.oid == oid))
-                    .or_else(|| state.log.entries.first())
-                    .cloned();
-                if let Some(entry) = entry {
-                    let mut message = entry.subject.clone();
-                    let body = entry.body.trim();
-                    if !body.is_empty() {
-                        message.push_str("\n\n");
-                        message.push_str(body);
-                    }
-                    let request_id = GitRequestId::new();
-                    state.amend_request = Some(request_id);
-                    state.amend_files_loading = true;
-                    state.amend_files.clear();
-                    state.pending.push(request_id);
-                    pending = Some((
-                        state.project.clone(),
-                        request_id,
-                        message,
-                        entry.oid.clone(),
-                    ));
-                }
+                return None;
             }
-        }
-        if let Some((project, request_id, message, oid)) = pending {
-            if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-                state
-                    .commit_message
-                    .update(cx, |input, cx| input.set_value(message, window, cx));
+            let target_oid = state.amend_target.clone();
+            let entry = target_oid
+                .as_ref()
+                .and_then(|oid| state.log.entries.iter().find(|e| &e.oid == oid))
+                .or_else(|| state.log.entries.first())
+                .cloned()?;
+            let mut message = entry.subject.clone();
+            let body = entry.body.trim();
+            if !body.is_empty() {
+                message.push_str("\n\n");
+                message.push_str(body);
             }
+            let request_id = GitRequestId::new();
+            state.amend_request = Some(request_id);
+            state.amend_files_loading = true;
+            state.amend_files.clear();
+            state.pending.push(request_id);
+            Some((
+                state.project.clone(),
+                request_id,
+                message,
+                entry.oid.clone(),
+                state.commit_message.clone(),
+            ))
+        });
+        if let Some((project, request_id, message, oid, commit_message)) = pending {
+            commit_message.update(cx, |input, cx| input.set_value(message, window, cx));
             self.send_command(GitCommand::LoadCommitFiles {
                 project,
                 request_id,
@@ -167,44 +166,43 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut pending = None;
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let pending = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             state.amend_target = Some(oid.clone());
-            if state.commit_amend {
-                let entry = state
-                    .log
-                    .entries
-                    .iter()
-                    .find(|e| e.oid == oid)
-                    .or_else(|| state.log.entries.first())
-                    .cloned();
-                if let Some(entry) = entry {
-                    let mut message = entry.subject.clone();
-                    let body = entry.body.trim();
-                    if !body.is_empty() {
-                        message.push_str("\n\n");
-                        message.push_str(body);
-                    }
-                    let request_id = GitRequestId::new();
-                    state.amend_request = Some(request_id);
-                    state.amend_files_loading = true;
-                    state.amend_files.clear();
-                    state.pending.push(request_id);
-                    pending = Some((
-                        state.project.clone(),
-                        request_id,
-                        message,
-                        entry.oid.clone(),
-                    ));
-                }
+            if !state.commit_amend {
+                return None;
             }
-        }
-        if let Some((project, request_id, message, oid)) = pending {
-            if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-                state
-                    .commit_message
-                    .update(cx, |input, cx| input.set_value(message, window, cx));
+            let entry = state
+                .log
+                .entries
+                .iter()
+                .find(|e| e.oid == oid)
+                .or_else(|| state.log.entries.first())
+                .cloned()?;
+            let mut message = entry.subject.clone();
+            let body = entry.body.trim();
+            if !body.is_empty() {
+                message.push_str("\n\n");
+                message.push_str(body);
             }
+            let request_id = GitRequestId::new();
+            state.amend_request = Some(request_id);
+            state.amend_files_loading = true;
+            state.amend_files.clear();
+            state.pending.push(request_id);
+            Some((
+                state.project.clone(),
+                request_id,
+                message,
+                entry.oid.clone(),
+                state.commit_message.clone(),
+            ))
+        });
+        if let Some((project, request_id, message, oid, commit_message)) = pending {
+            commit_message.update(cx, |input, cx| input.set_value(message, window, cx));
             self.send_command(GitCommand::LoadCommitFiles {
                 project,
                 request_id,
@@ -216,10 +214,13 @@ impl AppShell {
 
     /// 打开当前改动列表里第一个文件的差异（工具条「查看差异」）。
     pub(crate) fn git_open_first_worktree_diff(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let Some((group, path)) = state.status.as_ref().and_then(first_worktree_diff) else {
+        let Some((group, path)) = ({
+            let state = &workspace.read(cx).state;
+            state.status.as_ref().and_then(first_worktree_diff)
+        }) else {
             return;
         };
         self.git_open_diff(tab_id, worktree_diff_request(group, path), cx);
@@ -227,10 +228,11 @@ impl AppShell {
 
     /// 回滚勾选中的改动：已跟踪走 Discard，未跟踪走 DeleteUntracked。
     pub(crate) fn git_rollback_checked(&mut self, project: &GitProject, cx: &mut Context<Self>) {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
+            return;
+        };
         let (tracked, untracked, empty) = {
-            let Some(state) = self.git_state_of_mut(project.id) else {
-                return;
-            };
+            let state = &workspace.read(cx).state;
             if state.checked.is_empty() {
                 (Vec::new(), Vec::new(), true)
             } else {
@@ -281,20 +283,26 @@ impl AppShell {
         push_after: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let message = state.commit_message.read(cx).value().to_string();
-        let project = state.project.clone();
-        let amend = state.commit_amend;
+        let (message, project, amend) = {
+            let state = &workspace.read(cx).state;
+            (
+                state.commit_message.read(cx).value().to_string(),
+                state.project.clone(),
+                state.commit_amend,
+            )
+        };
         if message.trim().is_empty() && !amend {
             self.set_error(rust_i18n::t!("git.commit.empty_message").to_string());
             return;
         }
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             state.commit_submitting = true;
             state.checked.clear();
-        }
+        });
         self.git_commit(&project, message, amend, push_after, cx);
         cx.notify();
     }
@@ -304,18 +312,22 @@ impl AppShell {
     /// 成功后由 `Inited` 事件统一刷新状态与日志；失败时项目仍留在列表里，
     /// 用户可以修好目录权限后再次点击，不在失败路径上删登记。
     pub(crate) fn git_init_project(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        if state.init_running {
+        let (init_running, project) = {
+            let state = &workspace.read(cx).state;
+            (state.init_running, state.project.clone())
+        };
+        if init_running {
             return;
         }
-        let project = state.project.clone();
         let request_id = GitRequestId::new();
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+        workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             state.init_running = true;
             state.status_error = None;
-        }
+        });
         self.state.git.pending_project_init = Some((request_id, project.id));
         self.send_command(GitCommand::Init {
             request_id,
@@ -331,7 +343,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(tab_id) = self.git_tab_for_project(project.id) {
+        if let Some(tab_id) = self.git_tab_for_project(project.id, cx) {
             self.activate_tab(tab_id, window, cx);
             return;
         }
@@ -339,7 +351,9 @@ impl AppShell {
         let session = git_placeholder_session(&project);
         let session_id = session.id;
         let title = project.display_name();
-        let workspace = GitWorkspaceState::new(project.clone(), window, cx);
+        let state = GitWorkspaceState::new(project.clone(), window, cx);
+        let command_tx = self.state.services.command_tx.clone();
+        let workspace = cx.new(|_| GitWorkspace::new(state, tab_id, command_tx));
         self.state
             .workspace
             .tabs
@@ -353,13 +367,10 @@ impl AppShell {
 
     /// 关闭标签页时取消该项目所有在途请求。
     pub(crate) fn cancel_git_tab(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let Some(state) = self.state.workspace.tabs[index].git() else {
-            return;
-        };
-        let requests = state.pending.clone();
+        let requests = workspace.read(cx).state.pending.clone();
         for request_id in requests {
             self.send_command(GitCommand::Cancel { request_id });
         }
@@ -367,16 +378,10 @@ impl AppShell {
     }
 
     /// 按项目 id 找已打开的标签页。
-    pub(crate) fn git_tab_for_project(&self, project_id: GitProjectId) -> Option<TabId> {
+    pub(crate) fn git_tab_for_project(&self, project_id: GitProjectId, cx: &App) -> Option<TabId> {
         self.state
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| {
-                tab.git()
-                    .is_some_and(|state| state.project.id == project_id)
-            })
-            .map(|tab| tab.id)
+            .git_workspace_of_project(project_id, cx)
+            .map(|workspace| workspace.read(cx).tab_id)
     }
 
     /// 按草稿添加项目到列表（探测或初始化通过后调用）。
@@ -405,27 +410,11 @@ impl AppShell {
     pub(crate) fn remove_git_project(&mut self, id: GitProjectId, cx: &mut Context<Self>) {
         self.state.git.projects.retain(|project| project.id != id);
         self.state.git.badges.remove(&id);
-        if let Some(tab_id) = self.git_tab_for_project(id) {
+        if let Some(tab_id) = self.git_tab_for_project(id, cx) {
             self.cancel_git_tab(tab_id, cx);
         }
         self.persist_git_projects(cx);
         cx.notify();
-    }
-
-    /// 按项目 id 取标签页状态。
-    pub(crate) fn git_state_mut(
-        &mut self,
-        project_id: GitProjectId,
-    ) -> Option<&mut GitWorkspaceState> {
-        self.state
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| {
-                tab.git()
-                    .is_some_and(|state| state.project.id == project_id)
-            })
-            .and_then(|tab| tab.git_mut())
     }
 
     /// 打开偏好设置弹窗并直接定位到 Git 版本控制设置页。

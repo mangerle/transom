@@ -17,14 +17,17 @@ use transom_core::{HeadState, TabId};
 impl AppShell {
     /// 切换底部 Git 提交记录面板展开/收起。
     pub(crate) fn toggle_git_bottom_log(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let (is_open, project) = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             state.bottom_log_open = !state.bottom_log_open;
-            let is_open = state.bottom_log_open;
-            let project = state.project.clone();
-            if is_open {
-                self.git_refresh(&project, cx);
-                self.git_load_log(tab_id, 0, cx);
-            }
+            (state.bottom_log_open, state.project.clone())
+        });
+        if is_open {
+            self.git_refresh(&project, cx);
+            self.git_load_log(tab_id, 0, cx);
         }
         cx.notify();
     }
@@ -37,22 +40,22 @@ impl AppShell {
         p: &Palette,
         cx: &App,
     ) -> AnyElement {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let Some(state) = self.state.workspace.tabs[index].git() else {
-            return div().into_any_element();
-        };
-        let branch = match state.status.as_ref().map(|s| &s.head) {
-            Some(HeadState::OnBranch(name)) | Some(HeadState::Initial { branch: name }) => {
-                Some(name.clone())
+        let branch = {
+            let state = &workspace.read(cx).state;
+            match state.status.as_ref().map(|s| &s.head) {
+                Some(HeadState::OnBranch(name)) | Some(HeadState::Initial { branch: name }) => {
+                    Some(name.clone())
+                }
+                _ => self
+                    .state
+                    .git
+                    .badges
+                    .get(&state.project.id)
+                    .and_then(|b| b.branch.clone()),
             }
-            _ => self
-                .state
-                .git
-                .badges
-                .get(&state.project.id)
-                .and_then(|b| b.branch.clone()),
         };
         let tab_title = match branch {
             Some(name) if !name.is_empty() => {

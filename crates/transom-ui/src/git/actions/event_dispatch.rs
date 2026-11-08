@@ -3,6 +3,9 @@
 //! 设计原理（Why）：事件处理是「唯一写界面的入口」，单独成模块便于逐条核对
 //! 迟到请求的丢弃口径（按 `request_id` 比对）与写动作后的自动刷新，
 //! 不让这些规则散落在各个点击回调里。
+//!
+//! 状态写入一律走 `Entity<GitWorkspace>::update`：闭包内只改该标签页的状态并把
+//! 外壳后续需要的数据带出来，闭包结束后再调用外壳方法，避免同一实体被二次租借。
 
 use crate::app::AppShell;
 use crate::palette::localized_error;
@@ -23,10 +26,13 @@ impl AppShell {
                 tags,
                 paths,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.branches = branches;
-                    state.tags = tags;
-                    state.tracked_paths = paths;
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.branches = branches;
+                        state.tags = tags;
+                        state.tracked_paths = paths;
+                    });
                 }
                 cx.notify();
             }
@@ -35,48 +41,51 @@ impl AppShell {
                 request_id,
                 page,
             } => {
-                let Some(tab_id) = self.git_tab_for_project(project_id) else {
+                let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) else {
                     return;
                 };
-                let Some(index) = self.state.workspace.tab_index(tab_id) else {
+                let Some((landed, keep_waiting, jump, tab_id)) =
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        let (held, appended) = state.log.request?;
+                        if held != request_id {
+                            // 迟到的旧请求：界面已经发起了新一轮加载，直接丢弃。
+                            log::debug!("丢弃迟到的 Git 日志结果，请求: {request_id}");
+                            return None;
+                        }
+                        state.log.request = None;
+                        state.log.loading = false;
+                        state.log.error = None;
+                        if appended {
+                            state.log.entries.extend(page.entries.iter().cloned());
+                        } else {
+                            state.log.entries = page.entries.clone();
+                        }
+                        state.log.rows =
+                            transom_git::assign_lanes(&mut state.log.graph, &state.log.entries);
+                        state.log.has_more = page.has_more;
+                        let jump = state.log.jump.clone();
+                        let landed = jump
+                            .as_ref()
+                            .and_then(|target| target.resolve(&state.log.entries));
+                        let within_budget =
+                            state.log.jump_pages < crate::git::types::MAX_JUMP_PAGES;
+                        let keep_waiting = landed.is_none()
+                            && jump.is_some()
+                            && state.log.has_more
+                            && within_budget;
+                        if landed.is_some() {
+                            state.log.jump = None;
+                            state.log.jump_pages = 0;
+                        } else if keep_waiting {
+                            state.log.jump_pages += 1;
+                        }
+                        Some((landed, keep_waiting, jump, workspace.tab_id))
+                    })
+                else {
                     return;
                 };
-                let Some(state) = self.state.workspace.tabs[index].git_mut() else {
-                    return;
-                };
-                state.drop_request(request_id);
-                let Some((held, appended)) = state.log.request else {
-                    return;
-                };
-                if held != request_id {
-                    // 迟到的旧请求：界面已经发起了新一轮加载，直接丢弃。
-                    log::debug!("丢弃迟到的 Git 日志结果，请求: {request_id}");
-                    return;
-                }
-                state.log.request = None;
-                state.log.loading = false;
-                state.log.error = None;
-                if appended {
-                    state.log.entries.extend(page.entries.iter().cloned());
-                } else {
-                    state.log.entries = page.entries.clone();
-                }
-                state.log.rows =
-                    transom_git::assign_lanes(&mut state.log.graph, &state.log.entries);
-                state.log.has_more = page.has_more;
-                let jump = state.log.jump.clone();
-                let landed = jump
-                    .as_ref()
-                    .and_then(|target| target.resolve(&state.log.entries));
-                let within_budget = state.log.jump_pages < crate::git::types::MAX_JUMP_PAGES;
-                let keep_waiting =
-                    landed.is_none() && jump.is_some() && state.log.has_more && within_budget;
-                if landed.is_some() {
-                    state.log.jump = None;
-                    state.log.jump_pages = 0;
-                } else if keep_waiting {
-                    state.log.jump_pages += 1;
-                }
                 cx.notify();
                 if let Some(index) = landed {
                     self.git_select_commit_by_index(tab_id, index, cx);
@@ -95,8 +104,10 @@ impl AppShell {
                 base,
                 steps,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.drop_request(request_id);
+                    });
                 }
                 self.git_apply_rebase_todo(&base, steps);
                 cx.notify();
@@ -107,8 +118,10 @@ impl AppShell {
                 oid,
                 url,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.drop_request(request_id);
+                    });
                 }
                 self.git_open_commit_url(url, &oid, cx);
             }
@@ -118,16 +131,19 @@ impl AppShell {
                 oid,
                 files,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
-                    if state.amend_request == Some(request_id) {
-                        state.amend_files = files.clone();
-                        state.amend_files_loading = false;
-                        state.amend_request = None;
-                    } else {
-                        state.commit_files = files.clone();
-                        state.commit_files_loading = false;
-                    }
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        if state.amend_request == Some(request_id) {
+                            state.amend_files = files.clone();
+                            state.amend_files_loading = false;
+                            state.amend_request = None;
+                        } else {
+                            state.commit_files = files.clone();
+                            state.commit_files_loading = false;
+                        }
+                    });
                 }
                 self.git_apply_push_commit_files(&oid, files);
                 cx.notify();
@@ -139,8 +155,10 @@ impl AppShell {
                 remote_branch,
                 commits,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.drop_request(request_id);
+                    });
                 }
                 self.git_apply_outgoing_commits(project_id, &branch, &remote_branch, commits, cx);
                 cx.notify();
@@ -150,9 +168,12 @@ impl AppShell {
                 request_id,
                 diff,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
-                    state.apply_diff_loaded(request_id, *diff);
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        state.apply_diff_loaded(request_id, *diff);
+                    });
                 }
 
                 cx.notify();
@@ -169,22 +190,25 @@ impl AppShell {
                 } else {
                     log::error!("Git 读取失败，项目: {project_id}，原因: {message}");
                 }
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
-                    state.log.loading = false;
-                    state.log.error = Some(message.clone());
-                    if let Some(diff) = state.diff.as_mut() {
-                        diff.loading = false;
-                        diff.error = Some(message.clone());
-                    }
-                    state.commit_files_loading = false;
-                    if not_repo {
-                        // 不是仓库是「可以补初始化」的正常状态，不只是错误：
-                        // 工作区据此显示初始化入口，而不是只剩一句红字。
-                        state.not_repo = true;
-                        state.status_loading = false;
-                        state.status_error = Some(message.clone());
-                    }
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        state.log.loading = false;
+                        state.log.error = Some(message.clone());
+                        if let Some(diff) = state.diff.as_mut() {
+                            diff.loading = false;
+                            diff.error = Some(message.clone());
+                        }
+                        state.commit_files_loading = false;
+                        if not_repo {
+                            // 不是仓库是「可以补初始化」的正常状态，不只是错误：
+                            // 工作区据此显示初始化入口，而不是只剩一句红字。
+                            state.not_repo = true;
+                            state.status_loading = false;
+                            state.status_error = Some(message.clone());
+                        }
+                    });
                 }
                 let badge = self.state.git.badges.entry(project_id).or_default();
                 badge.loading = false;
@@ -205,13 +229,13 @@ impl AppShell {
                         log::error!(
                             "Git 动作失败，动作: {action:?}，项目: {project_id}，原因: {text}"
                         );
-                        self.git_patch_failed(project_id, action);
+                        self.git_patch_failed(project_id, action, cx);
                         self.git_rebase_failed(project_id, action, text.clone());
                         self.set_error(text.clone());
                     }
                     None => {
                         // 补丁动作要报出落盘路径，其余动作沿用动作名文案。
-                        let saved = self.git_patch_done_status(project_id);
+                        let saved = self.git_patch_done_status(project_id, cx);
                         self.state.status = Some(
                             saved.unwrap_or_else(|| rust_i18n::t!(action.i18n_key()).to_string()),
                         );
@@ -220,8 +244,12 @@ impl AppShell {
                 if matches!(action, GitAction::AddWorktree) && message.is_none() {
                     // 新建成功才把目录登记成项目：失败时留下一个打不开的条目只会碍事。
                     let pending = self
-                        .git_state_mut(project_id)
-                        .and_then(|state| state.pending_worktree.take());
+                        .state
+                        .git_workspace_of_project(project_id, cx)
+                        .and_then(|workspace| {
+                            workspace
+                                .update(cx, |workspace, _| workspace.state.pending_worktree.take())
+                        });
                     if let Some((path, _checkout)) = pending {
                         self.add_git_project(
                             super::super::GitProjectDraft::new(std::path::PathBuf::from(&path)),
@@ -272,7 +300,7 @@ impl AppShell {
                     if matches!(action, GitAction::RebaseRun) {
                         self.state.modals.git.rebase = None;
                     }
-                    if let Some(tab_id) = self.git_tab_for_project(project_id) {
+                    if let Some(tab_id) = self.git_tab_for_project(project_id, cx) {
                         self.git_load_log(tab_id, 0, cx);
                     }
                 }
@@ -312,28 +340,24 @@ impl AppShell {
                     }
                 }
                 if matches!(action, GitAction::Commit)
-                    && let Some(tab_id) = self.git_tab_for_project(project_id)
+                    && let Some(tab_id) = self.git_tab_for_project(project_id, cx)
                 {
                     let mut should_push = false;
-                    if let Some(state) = self
-                        .state
-                        .workspace
-                        .tabs
-                        .iter_mut()
-                        .find(|tab| tab.id == tab_id)
-                        .and_then(|tab| tab.git_mut())
-                    {
-                        state.commit_submitting = false;
-                        if message.is_none() {
-                            state.checked = HashSet::new();
-                            state.commit_amend = false;
-                            state.commit_clear_pending =
-                                crate::app::app_settings(cx).git.clear_message_on_commit;
-                            // 让下一次状态刷新重新选中第一个改动并拉差异。
-                            state.diff = None;
-                            state.last_diff = None;
-                            should_push = std::mem::take(&mut state.push_after_commit);
-                        }
+                    if let Some(workspace) = self.state.git_workspace(tab_id) {
+                        workspace.update(cx, |workspace, cx| {
+                            let state = &mut workspace.state;
+                            state.commit_submitting = false;
+                            if message.is_none() {
+                                state.checked = HashSet::new();
+                                state.commit_amend = false;
+                                state.commit_clear_pending =
+                                    crate::app::app_settings(cx).git.clear_message_on_commit;
+                                // 让下一次状态刷新重新选中第一个改动并拉差异。
+                                state.diff = None;
+                                state.last_diff = None;
+                                should_push = std::mem::take(&mut state.push_after_commit);
+                            }
+                        });
                     }
                     if message.is_none() {
                         self.git_load_log(tab_id, 0, cx);
@@ -365,9 +389,12 @@ impl AppShell {
                 request_id,
                 entries,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
-                    state.worktrees = entries;
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        state.worktrees = entries;
+                    });
                 }
                 cx.notify();
             }
@@ -376,9 +403,12 @@ impl AppShell {
                 request_id,
                 entries,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
-                    state.stashes = entries;
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        state.stashes = entries;
+                    });
                 }
                 cx.notify();
             }
@@ -388,14 +418,17 @@ impl AppShell {
                 selector,
                 files,
             } => {
-                if let Some(state) = self.git_state_mut(project_id) {
-                    state.drop_request(request_id);
-                    state.stash_files_loading = false;
-                    // 迟到的清单不能写进已经换过展开项的视图：编号会随删除前移，
-                    // 对不上选择器就如实丢弃，而不是让界面挂着一份别人的文件。
-                    if state.expanded_stash.as_deref() == Some(selector.as_str()) {
-                        state.stash_files = files;
-                    }
+                if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.drop_request(request_id);
+                        state.stash_files_loading = false;
+                        // 迟到的清单不能写进已经换过展开项的视图：编号会随删除前移，
+                        // 对不上选择器就如实丢弃，而不是让界面挂着一份别人的文件。
+                        if state.expanded_stash.as_deref() == Some(selector.as_str()) {
+                            state.stash_files = files;
+                        }
+                    });
                 }
                 cx.notify();
             }
@@ -469,18 +502,29 @@ impl AppShell {
         badge.behind = status.behind;
         badge.loading = false;
         badge.error = None;
-        if let Some(state) = self.git_state_mut(project_id) {
-            state.status_error = None;
-            state.status_loading = false;
-            state.not_repo = false;
-            state.status = Some(status);
+        if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
+            workspace.update(cx, |workspace, _| {
+                let state = &mut workspace.state;
+                state.status_error = None;
+                state.status_loading = false;
+                state.not_repo = false;
+                state.status = Some(status);
+            });
         }
         // 提交页首屏直接给第一个改动的差异：用户不用先点一下才知道右侧能看什么。
-        if let Some(tab_id) = self.git_tab_for_project(project_id) {
+        if let Some(tab_id) = self.git_tab_for_project(project_id, cx) {
             let first = self
-                .git_state_of_tab(tab_id)
-                .filter(|state| state.diff.is_none())
-                .and_then(|state| state.status.as_ref().and_then(super::first_worktree_diff));
+                .state
+                .git_workspace(tab_id)
+                .map(|workspace| {
+                    let state = &workspace.read(cx).state;
+                    state
+                        .diff
+                        .is_none()
+                        .then(|| state.status.as_ref().and_then(super::first_worktree_diff))
+                        .flatten()
+                })
+                .unwrap_or_default();
             if let Some((group, path)) = first
                 && let Some(project) = self
                     .state

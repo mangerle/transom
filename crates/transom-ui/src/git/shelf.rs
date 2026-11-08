@@ -32,12 +32,17 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let project = state.project.clone();
-        let entries = state.shelves.clone();
-        let expanded = state.expanded_shelf.clone();
+        let (project, entries, expanded) = {
+            let state = &workspace.read(cx).state;
+            (
+                state.project.clone(),
+                state.shelves.clone(),
+                state.expanded_shelf.clone(),
+            )
+        };
 
         let refresh_project = project.clone();
         let toolbar = h_flex()
@@ -238,10 +243,14 @@ impl AppShell {
     ) -> AnyElement {
         let (name, dir_prefix) = split_path(file_path);
         let path_str = file_path.to_string();
-        let selected = self
-            .git_state_of_tab(tab_id)
-            .and_then(|state| state.diff.as_ref())
-            .is_some_and(|diff| diff.path == path_str);
+        let selected = self.state.git_workspace(tab_id).is_some_and(|workspace| {
+            workspace
+                .read(cx)
+                .state
+                .diff
+                .as_ref()
+                .is_some_and(|diff| diff.path == path_str)
+        });
         let tooltip_path = path_str.clone();
         let file_for_diff = path_str.clone();
         let entry_for_diff = entry.clone();
@@ -296,52 +305,60 @@ impl AppShell {
         entry_id: &str,
         cx: &mut Context<Self>,
     ) {
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-            state.expanded_shelf = if state.expanded_shelf.as_deref() == Some(entry_id) {
-                None
-            } else {
-                Some(entry_id.to_string())
-            };
+        if let Some(workspace) = self.state.git_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                let state = &mut workspace.state;
+                state.expanded_shelf = if state.expanded_shelf.as_deref() == Some(entry_id) {
+                    None
+                } else {
+                    Some(entry_id.to_string())
+                };
+            });
         }
         cx.notify();
     }
 
     /// 重新从本地存储中加载搁置项列表。
     pub(crate) fn git_reload_shelves(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let project_id = state.project.id.to_string();
-        if let Ok(shelves) = load_project_shelves(&project_id) {
-            state.shelves = shelves;
+        let project_id = workspace.read(cx).state.project.id.to_string();
+        let loaded = load_project_shelves(&project_id);
+        if let Ok(shelves) = loaded {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.shelves = shelves;
+            });
         }
         cx.notify();
     }
 
     /// 把工作区勾选的改动创建为独立离线搁置项（Shelf）。
     pub(crate) fn git_shelve_checked(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let project = state.project.clone();
-        let checked_files: Vec<String> = if state.checked.is_empty() {
-            state
-                .status
-                .as_ref()
-                .map(|s| s.entries.iter().map(|e| e.path.clone()).collect())
-                .unwrap_or_default()
-        } else {
-            state.checked.iter().cloned().collect()
+        let (project, checked_files, branch) = {
+            let state = &workspace.read(cx).state;
+            let checked_files: Vec<String> = if state.checked.is_empty() {
+                state
+                    .status
+                    .as_ref()
+                    .map(|s| s.entries.iter().map(|e| e.path.clone()).collect())
+                    .unwrap_or_default()
+            } else {
+                state.checked.iter().cloned().collect()
+            };
+            let branch = match state.status.as_ref().map(|s| &s.head) {
+                Some(HeadState::OnBranch(b)) => b.clone(),
+                Some(HeadState::Initial { branch }) => branch.clone(),
+                _ => "HEAD".to_string(),
+            };
+            (state.project.clone(), checked_files, branch)
         };
         if checked_files.is_empty() {
             return;
         }
-
-        let branch = match state.status.as_ref().map(|s| &s.head) {
-            Some(HeadState::OnBranch(b)) => b.clone(),
-            Some(HeadState::Initial { branch }) => branch.clone(),
-            _ => "HEAD".to_string(),
-        };
         let project_id_str = project.id.to_string();
         let files_count = checked_files.len();
         let name = format!("{} ({files_count})", rust_i18n::t!("git.shelf.title"));
@@ -369,13 +386,17 @@ impl AppShell {
             };
 
             let _ = this.update(cx, |this, cx| {
-                if let Some(state) = this.git_state_of_tab_mut(tab_id) {
-                    state.shelves.insert(0, entry.clone());
-                    state.checked.clear();
-                    state.commit_tab = crate::git::GitCommitTab::Shelf;
-                    if let Err(error) = save_project_shelves(&project_id_str, &state.shelves) {
-                        this.state.set_error(localized_error(&error));
-                    }
+                let save_error = this.state.git_workspace(tab_id).and_then(|workspace| {
+                    workspace.update(cx, |workspace, _| {
+                        let state = &mut workspace.state;
+                        state.shelves.insert(0, entry.clone());
+                        state.checked.clear();
+                        state.commit_tab = crate::git::GitCommitTab::Shelf;
+                        save_project_shelves(&project_id_str, &state.shelves).err()
+                    })
+                });
+                if let Some(error) = save_error {
+                    this.state.set_error(localized_error(&error));
                 }
                 this.git_refresh(&project, cx);
             });
@@ -391,12 +412,15 @@ impl AppShell {
         pop: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let project = state.project.clone();
-        let Some(entry) = state.shelves.iter().find(|s| s.id == entry_id).cloned() else {
-            return;
+        let (project, entry) = {
+            let state = &workspace.read(cx).state;
+            let Some(entry) = state.shelves.iter().find(|s| s.id == entry_id).cloned() else {
+                return;
+            };
+            (state.project.clone(), entry)
         };
         let project_id_str = project.id.to_string();
         let target_id = entry_id.to_string();
@@ -405,11 +429,19 @@ impl AppShell {
             let repo = transom_git::Repo::at(project.path.clone());
             if let Ok(()) = repo.apply_patch(&entry.patch).await {
                 let _ = this.update(cx, |this, cx| {
-                    if pop && let Some(state) = this.git_state_of_tab_mut(tab_id) {
-                        state.shelves.retain(|s| s.id != target_id);
-                        if let Err(error) = save_project_shelves(&project_id_str, &state.shelves) {
-                            this.state.set_error(localized_error(&error));
-                        }
+                    let save_error = if pop {
+                        this.state.git_workspace(tab_id).and_then(|workspace| {
+                            workspace.update(cx, |workspace, _| {
+                                let state = &mut workspace.state;
+                                state.shelves.retain(|s| s.id != target_id);
+                                save_project_shelves(&project_id_str, &state.shelves).err()
+                            })
+                        })
+                    } else {
+                        None
+                    };
+                    if let Some(error) = save_error {
+                        this.state.set_error(localized_error(&error));
                     }
                     this.git_refresh(&project, cx);
                 });
@@ -420,12 +452,16 @@ impl AppShell {
 
     /// 删除指定搁置项。
     pub(crate) fn git_drop_shelf(&mut self, tab_id: TabId, entry_id: &str, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let project_id_str = state.project.id.to_string();
-        state.shelves.retain(|s| s.id != entry_id);
-        if let Err(error) = save_project_shelves(&project_id_str, &state.shelves) {
+        let save_error = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            let project_id_str = state.project.id.to_string();
+            state.shelves.retain(|s| s.id != entry_id);
+            save_project_shelves(&project_id_str, &state.shelves).err()
+        });
+        if let Some(error) = save_error {
             self.state.set_error(localized_error(&error));
         }
         cx.notify();

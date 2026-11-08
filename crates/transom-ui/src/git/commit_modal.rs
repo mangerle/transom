@@ -32,44 +32,58 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{CommitEntry, GitAction, GitProject, TabId};
 
+/// 「修正」目标下拉按钮的渲染参数包。
+pub(crate) struct GitAmendTargetParams<'a> {
+    pub(crate) app: Entity<AppShell>,
+    pub(crate) tab_id: TabId,
+    pub(crate) project: &'a GitProject,
+    pub(crate) palette: &'a Palette,
+}
+
 impl AppShell {
     /// 「修正」旁边的目标提交展示与选择：
     /// 只显示哈希，悬停显示完整说明，小倒三角点击下拉选择未推送到远端的本地提交。
     pub(crate) fn git_amend_target_button(
         &mut self,
-        app: Entity<AppShell>,
-        tab_id: TabId,
-        project: &GitProject,
-        p: &Palette,
+        params: GitAmendTargetParams<'_>,
+        cx: &App,
     ) -> AnyElement {
-        let (candidates, selected) = if let Some(state) = self.git_state_of(project.id) {
-            let ahead = state.status.as_ref().map(|s| s.ahead as usize).unwrap_or(0);
-            let has_upstream = state
-                .status
-                .as_ref()
-                .and_then(|s| s.upstream.as_ref())
-                .is_some();
-            let entries = &state.log.entries;
-            let list: Vec<CommitEntry> = if has_upstream {
-                if ahead > 0 {
-                    entries.iter().take(ahead).cloned().collect()
+        let GitAmendTargetParams {
+            app,
+            tab_id,
+            project,
+            palette: p,
+        } = params;
+        let (candidates, selected) =
+            if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+                let state = &workspace.read(cx).state;
+                let ahead = state.status.as_ref().map(|s| s.ahead as usize).unwrap_or(0);
+                let has_upstream = state
+                    .status
+                    .as_ref()
+                    .and_then(|s| s.upstream.as_ref())
+                    .is_some();
+                let entries = &state.log.entries;
+                let list: Vec<CommitEntry> = if has_upstream {
+                    if ahead > 0 {
+                        entries.iter().take(ahead).cloned().collect()
+                    } else {
+                        entries.iter().take(1).cloned().collect()
+                    }
                 } else {
-                    entries.iter().take(1).cloned().collect()
-                }
-            } else {
-                entries.iter().take(20).cloned().collect()
-            };
+                    entries.iter().take(20).cloned().collect()
+                };
 
-            let current = state
-                .amend_target
-                .as_ref()
-                .and_then(|oid| list.iter().find(|e| &e.oid == oid))
-                .or_else(|| list.first())
-                .cloned();
-            (list, current)
-        } else {
-            (Vec::new(), None)
-        };
+                let current = state
+                    .amend_target
+                    .as_ref()
+                    .and_then(|oid| list.iter().find(|e| &e.oid == oid))
+                    .or_else(|| list.first())
+                    .cloned();
+                (list, current)
+            } else {
+                (Vec::new(), None)
+            };
 
         let Some(selected) = selected else {
             return h_flex()

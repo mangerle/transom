@@ -4,7 +4,6 @@
 //! 一个视图文件里都会造成反向依赖，单独成模块保持「视图 → 辅助」的单向引用。
 
 use crate::app::AppShell;
-use crate::git::GitWorkspaceState;
 use gpui_kit::*;
 use std::cmp::Ordering;
 use transom_core::{DropSide, GitFolder, GitFolderId, GitProject, GitProjectId, TabId};
@@ -138,52 +137,29 @@ pub(crate) fn find_folder_by_name(
 
 impl AppShell {
     /// 当前活动标签页对应的 Git 项目 id：侧栏据此给行上激活底色与左竖条。
-    pub(crate) fn active_git_project_id(&self) -> Option<GitProjectId> {
+    pub(crate) fn active_git_project_id(&self, cx: &App) -> Option<GitProjectId> {
         let tab_id = self.state.workspace.active_tab?;
         self.state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.git())
-            .map(|state| state.project.id)
-    }
-
-    /// 按项目 id 取标签页里的只读状态。
-    pub(crate) fn git_state_of(&mut self, id: GitProjectId) -> Option<&GitWorkspaceState> {
-        self.state
-            .workspace
-            .tabs
-            .iter()
-            .find(|tab| tab.git().is_some_and(|state| state.project.id == id))
-            .and_then(|tab| tab.git())
-    }
-
-    /// 按项目 id 取标签页里的可变状态。
-    pub(crate) fn git_state_of_mut(&mut self, id: GitProjectId) -> Option<&mut GitWorkspaceState> {
-        self.state
-            .workspace
-            .tabs
-            .iter_mut()
-            .find(|tab| tab.git().is_some_and(|state| state.project.id == id))
-            .and_then(|tab| tab.git_mut())
+            .git_workspace(tab_id)
+            .map(|workspace| workspace.read(cx).state.project.id)
     }
 
     /// 取"当前上下文项目"：`Some(tab_id)` 时按标签定位，否则取第一个 Git 标签。
     ///
     /// 右键菜单只带得动项目 id 之外的信息，这里退回"最近一个 Git 标签"，
     /// 与 IDEA 在工具窗口里对当前仓库执行动作的语义一致。
-    pub(crate) fn git_project_of_tab(&mut self, tab_id: Option<TabId>) -> Option<GitProject> {
-        if let Some(tab_id) = tab_id {
-            let index = self.state.workspace.tab_index(tab_id)?;
-            return self.state.workspace.tabs[index]
-                .git()
-                .map(|state| state.project.clone());
-        }
-        self.state
-            .workspace
-            .tabs
-            .iter()
-            .rev()
-            .find_map(|tab| tab.git().map(|state| state.project.clone()))
+    pub(crate) fn git_project_of_tab(&self, tab_id: Option<TabId>, cx: &App) -> Option<GitProject> {
+        let workspace = match tab_id {
+            Some(tab_id) => self.state.git_workspace(tab_id)?,
+            None => self
+                .state
+                .workspace
+                .tabs
+                .iter()
+                .rev()
+                .find_map(|tab| tab.git())?,
+        };
+        Some(workspace.read(cx).state.project.clone())
     }
 
     /// 切换一个文件的勾选态（提交面板的待提交集）。
@@ -193,12 +169,15 @@ impl AppShell {
         path: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_mut(project.id) else {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
             return;
         };
-        if !state.checked.remove(path) {
-            state.checked.insert(path.to_string());
-        }
+        workspace.update(cx, |workspace, _| {
+            let checked = &mut workspace.state.checked;
+            if !checked.remove(path) {
+                checked.insert(path.to_string());
+            }
+        });
         cx.notify();
     }
 

@@ -30,14 +30,19 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let project = state.project.clone();
-        let entries = state.stashes.clone();
-        let expanded = state.expanded_stash.clone();
-        let files = state.stash_files.clone();
-        let loading = state.stash_files_loading;
+        let (project, entries, expanded, files, loading) = {
+            let state = &workspace.read(cx).state;
+            (
+                state.project.clone(),
+                state.stashes.clone(),
+                state.expanded_stash.clone(),
+                state.stash_files.clone(),
+                state.stash_files_loading,
+            )
+        };
 
         let refresh_project = project.clone();
         let toolbar = h_flex()
@@ -269,10 +274,14 @@ impl AppShell {
         let selector = view.selector.to_string();
         let tab_id = view.tab_id;
         let open_file = file.clone();
-        let selected = self
-            .git_state_of_tab(tab_id)
-            .and_then(|state| state.diff.as_ref())
-            .is_some_and(|diff| diff.path == file.path);
+        let selected = self.state.git_workspace(tab_id).is_some_and(|workspace| {
+            workspace
+                .read(cx)
+                .state
+                .diff
+                .as_ref()
+                .is_some_and(|diff| diff.path == file.path)
+        });
         let tooltip_path = file.path.clone();
         h_flex()
             .id(ElementId::Name(
@@ -332,23 +341,26 @@ impl AppShell {
 
     /// 把改动保存到 Git Stash 栈。
     pub(crate) fn git_stash_checked(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(state) = self.git_state_of_tab(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let message = if state.checked.is_empty() {
-            rust_i18n::t!("git.stash.auto_message").to_string()
-        } else {
-            format!(
-                "{} ({})",
-                rust_i18n::t!("git.stash.title"),
-                state.checked.len()
-            )
+        let (message, project) = {
+            let state = &workspace.read(cx).state;
+            let message = if state.checked.is_empty() {
+                rust_i18n::t!("git.stash.auto_message").to_string()
+            } else {
+                format!(
+                    "{} ({})",
+                    rust_i18n::t!("git.stash.title"),
+                    state.checked.len()
+                )
+            };
+            (message, state.project.clone())
         };
-        let project = state.project.clone();
         self.git_stash_save(&project, message, false, cx);
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-            state.checked.clear();
-        }
+        workspace.update(cx, |workspace, _| {
+            workspace.state.checked.clear();
+        });
         cx.notify();
     }
 
@@ -357,12 +369,14 @@ impl AppShell {
         let Some(tab_id) = self.active_git_tab() else {
             return;
         };
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        let project = state.project.clone();
+        let project = workspace.read(cx).state.project.clone();
         let request_id = transom_core::GitRequestId::new();
-        state.pending.push(request_id);
+        workspace.update(cx, |workspace, _| {
+            workspace.state.pending.push(request_id);
+        });
         self.send_command(transom_core::GitCommand::ListStashes {
             project,
             request_id,

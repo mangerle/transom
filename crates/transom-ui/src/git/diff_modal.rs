@@ -23,16 +23,20 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.git_diff_commit_file(tab_id, path, cx);
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-            state.diff_modal_open = true;
+        if let Some(workspace) = self.state.git_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.diff_modal_open = true;
+            });
         }
         cx.notify();
     }
 
     /// 关闭独立 Diff 对比弹窗。
     pub(crate) fn git_close_diff_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(state) = self.git_state_of_tab_mut(tab_id) {
-            state.diff_modal_open = false;
+        if let Some(workspace) = self.state.git_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.diff_modal_open = false;
+            });
         }
         cx.notify();
     }
@@ -43,13 +47,12 @@ impl AppShell {
         tab_id: TabId,
         app: Entity<Self>,
         p: &Palette,
+        cx: &App,
     ) -> AnyElement {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return div().into_any_element();
         };
-        let Some(state) = self.state.workspace.tabs[index].git() else {
-            return div().into_any_element();
-        };
+        let state = &workspace.read(cx).state;
         if !state.diff_modal_open {
             return div().into_any_element();
         }

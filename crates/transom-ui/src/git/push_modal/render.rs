@@ -41,7 +41,7 @@ pub(super) fn render_push_dialog(
     let commits_count = modal.commits.len();
     let files_count = modal.commit_files.len();
     let is_protected = shell.is_git_branch_protected(remote_branch, _cx);
-    let tab_id = shell.git_tab_for_project(modal.project.id);
+    let tab_id = shell.git_tab_for_project(modal.project.id, _cx);
 
     // 1. 顶部目标路径胶囊与统计
     let target_bar = h_flex()

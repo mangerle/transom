@@ -18,30 +18,37 @@ impl AppShell {
         tab: GitCommitTab,
         cx: &mut Context<Self>,
     ) {
-        let Some(state) = self.git_state_of_tab_mut(tab_id) else {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        if state.commit_tab == tab {
-            return;
-        }
-        state.commit_tab = tab;
-        match tab {
-            GitCommitTab::Shelf => {
-                let project_id = state.project.id.to_string();
-                if let Ok(shelves) = transom_store::load_project_shelves(&project_id) {
-                    state.shelves = shelves;
+        let list_stashes = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
+            if state.commit_tab == tab {
+                return None;
+            }
+            state.commit_tab = tab;
+            match tab {
+                GitCommitTab::Shelf => {
+                    let project_id = state.project.id.to_string();
+                    if let Ok(shelves) = transom_store::load_project_shelves(&project_id) {
+                        state.shelves = shelves;
+                    }
+                    None
                 }
+                GitCommitTab::Stash => {
+                    let project = state.project.clone();
+                    let request_id = GitRequestId::new();
+                    state.pending.push(request_id);
+                    Some((project, request_id))
+                }
+                GitCommitTab::Commit => None,
             }
-            GitCommitTab::Stash => {
-                let project = state.project.clone();
-                let request_id = GitRequestId::new();
-                state.pending.push(request_id);
-                self.send_command(GitCommand::ListStashes {
-                    project,
-                    request_id,
-                });
-            }
-            GitCommitTab::Commit => {}
+        });
+        if let Some((project, request_id)) = list_stashes {
+            self.send_command(GitCommand::ListStashes {
+                project,
+                request_id,
+            });
         }
         cx.notify();
     }
@@ -49,8 +56,10 @@ impl AppShell {
     /// 拉取工作树列表。
     pub(crate) fn git_reload_worktrees(&mut self, project: &GitProject, cx: &mut Context<Self>) {
         let request_id = GitRequestId::new();
-        if let Some(state) = self.git_state_mut(project.id) {
-            state.pending.push(request_id);
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.pending.push(request_id);
+            });
         }
         self.send_command(GitCommand::ListWorktrees {
             project: project.clone(),
@@ -84,8 +93,10 @@ impl AppShell {
             }
         };
         let text = target.display().to_string();
-        if let Some(state) = self.git_state_mut(project.id) {
-            state.pending_worktree = Some((text.clone(), checkout));
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.pending_worktree = Some((text.clone(), checkout));
+            });
         }
         self.git_ref_action(
             project,
@@ -148,7 +159,7 @@ impl AppShell {
             .find(|item| item.path == target)
             .cloned()
         {
-            let tab_id = self.git_tab_for_project(project.id);
+            let tab_id = self.git_tab_for_project(project.id, cx);
             if let Some(tab_id) = tab_id {
                 let _ = tab_id;
             }
@@ -215,7 +226,11 @@ impl AppShell {
         selector: &str,
         cx: &mut Context<Self>,
     ) {
-        let request = self.git_state_mut(project.id).and_then(|state| {
+        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
+            return;
+        };
+        let request = workspace.update(cx, |workspace, _| {
+            let state = &mut workspace.state;
             let opening = state.expanded_stash.as_deref() != Some(selector);
             state.expanded_stash = opening.then(|| selector.to_string());
             state.stash_files.clear();

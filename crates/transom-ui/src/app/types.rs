@@ -66,8 +66,8 @@ pub(crate) enum TabContent {
     Monitor(TabId),
     /// 容器引擎管理工作区（顶部分类标签 + 列表 / 详情双栏）。
     Containers(Box<crate::container::ContainerWorkspaceState>),
-    /// Git 仓库管理工作区（提交页、日志页与差异分栏）。
-    Git(Box<crate::git::GitWorkspaceState>),
+    /// Git 仓库管理工作区（提交页、日志页与差异分栏）；状态与动作归实体。
+    Git(Entity<crate::git::GitWorkspace>),
 }
 
 /// 实时通信会话窗格关联的所有运行期状态。
@@ -120,18 +120,10 @@ impl TerminalTab {
         matches!(self.content, TabContent::Git(_))
     }
 
-    /// 快捷访问 Git 工作区状态。
-    pub(crate) fn git(&self) -> Option<&crate::git::GitWorkspaceState> {
+    /// 获取 Git 工作区实体句柄（若当前为 Git 标签）。
+    pub(crate) fn git(&self) -> Option<Entity<crate::git::GitWorkspace>> {
         match &self.content {
-            TabContent::Git(state) => Some(state.as_ref()),
-            _ => None,
-        }
-    }
-
-    /// 快捷访问 Git 工作区可变状态。
-    pub(crate) fn git_mut(&mut self) -> Option<&mut crate::git::GitWorkspaceState> {
-        match &mut self.content {
-            TabContent::Git(state) => Some(state.as_mut()),
+            TabContent::Git(workspace) => Some(workspace.clone()),
             _ => None,
         }
     }
@@ -283,7 +275,7 @@ impl TerminalTab {
         id: TabId,
         session: Session,
         title: String,
-        state: crate::git::GitWorkspaceState,
+        workspace: Entity<crate::git::GitWorkspace>,
     ) -> Self {
         Self {
             id,
@@ -293,7 +285,7 @@ impl TerminalTab {
             title,
             cwd: None,
             status: TabStatus::Connected,
-            content: TabContent::Git(Box::new(state)),
+            content: TabContent::Git(workspace),
         }
     }
 }

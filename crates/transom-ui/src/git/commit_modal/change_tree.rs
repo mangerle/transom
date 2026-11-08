@@ -29,14 +29,16 @@ impl AppShell {
     ) -> AnyElement {
         let checked = &display.checked;
         let Some(status) = self
-            .git_state_of(project.id)
-            .and_then(|state| state.status.clone())
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| workspace.read(cx).state.status.clone())
         else {
             return hint(rust_i18n::t!("git.overview.loading").to_string(), p);
         };
         let active_diff = self
-            .git_state_of(project.id)
-            .and_then(|state| state.last_diff.clone());
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| workspace.read(cx).state.last_diff.clone());
         let staged: Vec<StatusEntry> = status
             .entries
             .iter()
@@ -182,8 +184,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let active_diff = self
-            .git_state_of(project.id)
-            .and_then(|state| state.last_diff.clone());
+            .state
+            .git_workspace_of_project(project.id, cx)
+            .and_then(|workspace| workspace.read(cx).state.last_diff.clone());
         let mut buckets: Vec<(String, Vec<&StatusEntry>)> = Vec::new();
         for entry in entries {
             let dir = match entry.path.rfind('/') {
