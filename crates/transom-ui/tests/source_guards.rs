@@ -987,6 +987,8 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/list/filters.rs",
         "src/container/detail/overview.rs",
         "src/container/detail/overview_cards/mod.rs",
+        "src/container/detail/logs.rs",
+        "src/container/logs_actions.rs",
     ];
     let mut offenders = Vec::new();
     for file in files {
