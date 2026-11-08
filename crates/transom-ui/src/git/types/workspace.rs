@@ -21,7 +21,7 @@ pub(crate) enum GitView {
     #[default]
     Overview,
     /// 日志工作区：入口按钮本轮先移除（用户尚未决定放哪），代码保留待接回。
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "日志页暂无入口，保留视图与匹配分支待接回")]
     Log,
 }
 

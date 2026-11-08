@@ -5295,15 +5295,6 @@ container:
     confirm:
       en: Click again to confirm
       zh-CN: 再点一次确认清理
-    hint:
-      en: Removes every volume not referenced by a container; cannot be undone
-      zh-CN: 删除所有未被容器引用的数据卷，不可恢复
-    images_hint:
-      en: Removes untagged images not referenced by any other image; cannot be undone
-      zh-CN: 删除没有标签且不被其他镜像引用的镜像，不可恢复
-    networks_hint:
-      en: Removes all networks not used by at least one container; cannot be undone
-      zh-CN: 删除所有未被任何容器使用的网络，不可恢复
     done:
       en: 'Pruned %{count} unused volumes'
       zh-CN: '已清理 %{count} 个未使用数据卷'

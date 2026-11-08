@@ -42,15 +42,6 @@ impl ContainerPruneTarget {
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn hint_key(self) -> &'static str {
-        match self {
-            Self::Volumes => "container.prune.hint",
-            Self::Images => "container.prune.images_hint",
-            Self::Networks => "container.prune.networks_hint",
-        }
-    }
-
     /// 清理结果的「有删除」与「无删除」文案，避免镜像结果显示成数据卷。
     pub(crate) fn done_key(self) -> &'static str {
         match self {
