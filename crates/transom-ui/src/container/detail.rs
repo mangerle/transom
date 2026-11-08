@@ -56,14 +56,14 @@ pub(crate) use image::render_image_detail;
 pub(crate) use image_history::clean_dockerfile_instruction;
 use logs::ContainerLogsView;
 pub(super) use logs::render_logs;
-pub(super) use network::render_network_detail;
+pub(super) use network::{ContainerNetworkView, render_network_detail};
 pub(super) use overview::{
     centered_hint, format_unix, kv, linked_containers, render_container_overview, scroll_body,
     short,
 };
 pub(super) use raw_inspect::{InspectSearch, render_raw_inspect};
 pub(super) use terminal::render_terminal;
-pub(super) use volume::render_volume_detail;
+pub(super) use volume::{ContainerVolumeView, render_volume_detail};
 
 impl AppShell {
     /// 右侧详情区。
@@ -366,18 +366,22 @@ impl AppShell {
             ),
             (ContainerSection::Volumes, _) => render_volume_detail(
                 &view,
-                selected_volume.as_ref(),
-                volume_details.as_ref(),
-                overview_raw,
-                inspect,
+                ContainerVolumeView {
+                    summary: selected_volume.as_ref(),
+                    details: volume_details.as_ref(),
+                    overview_raw,
+                    inspect,
+                },
                 p,
             ),
             (ContainerSection::Networks, _) => render_network_detail(
                 &view,
-                selected_network.as_ref(),
-                network_details.as_ref(),
-                overview_raw,
-                inspect,
+                ContainerNetworkView {
+                    summary: selected_network.as_ref(),
+                    details: network_details.as_ref(),
+                    overview_raw,
+                    inspect,
+                },
                 p,
             ),
             (ContainerSection::Containers, _) => render_container_overview(

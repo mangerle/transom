@@ -3,14 +3,25 @@
 use super::*;
 use crate::container::ContainerWorkspace;
 
+/// 网络详情渲染参数。
+pub(crate) struct ContainerNetworkView<'a> {
+    pub(crate) summary: Option<&'a transom_core::ContainerNetworkSummary>,
+    pub(crate) details: Option<&'a ContainerNetworkDetails>,
+    pub(crate) overview_raw: bool,
+    pub(crate) inspect: InspectSearch<'a>,
+}
+
 pub(crate) fn render_network_detail(
     view: &Entity<ContainerWorkspace>,
-    summary: Option<&transom_core::ContainerNetworkSummary>,
-    details: Option<&ContainerNetworkDetails>,
-    overview_raw: bool,
-    inspect: InspectSearch<'_>,
+    params: ContainerNetworkView<'_>,
     p: &Palette,
 ) -> AnyElement {
+    let ContainerNetworkView {
+        summary,
+        details,
+        overview_raw,
+        inspect,
+    } = params;
     if overview_raw {
         let inspect_text = details.map(|d| d.inspect.as_str()).unwrap_or_default();
         return render_raw_inspect(view, inspect_text, inspect, p);

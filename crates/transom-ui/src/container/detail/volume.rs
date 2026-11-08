@@ -3,14 +3,25 @@
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
 
+/// 数据卷详情渲染参数。
+pub(crate) struct ContainerVolumeView<'a> {
+    pub(crate) summary: Option<&'a transom_core::ContainerVolumeSummary>,
+    pub(crate) details: Option<&'a ContainerVolumeDetails>,
+    pub(crate) overview_raw: bool,
+    pub(crate) inspect: InspectSearch<'a>,
+}
+
 pub(crate) fn render_volume_detail(
     view: &Entity<ContainerWorkspace>,
-    summary: Option<&transom_core::ContainerVolumeSummary>,
-    details: Option<&ContainerVolumeDetails>,
-    overview_raw: bool,
-    inspect: InspectSearch<'_>,
+    params: ContainerVolumeView<'_>,
     p: &Palette,
 ) -> AnyElement {
+    let ContainerVolumeView {
+        summary,
+        details,
+        overview_raw,
+        inspect,
+    } = params;
     if overview_raw {
         let inspect_text = details.map(|d| d.inspect.as_str()).unwrap_or_default();
         return render_raw_inspect(view, inspect_text, inspect, p);
