@@ -163,7 +163,11 @@ pub(crate) fn handle_list_key_down(
                         } else {
                             ComposeAction::Up
                         };
-                        app.run_compose(tab_id, name.clone(), action, cx);
+                        if let Some(workspace) = app.state.container_workspace(tab_id) {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.run_compose(name.clone(), action, cx);
+                            });
+                        }
                     }
                     _ => {}
                 }

@@ -8,6 +8,61 @@ use std::path::{Path, PathBuf};
 use transom_core::ComposeProject;
 use transom_platform::paths;
 
+impl ContainerWorkspace {
+    /// 保存当前在编辑器中修改的 Compose YAML 内容。
+    ///
+    /// 设计原理（Why）：编辑器实体与配置文件路径都在工作区状态里，保存不需要
+    /// 窗口；完成提示写入实体 `notice`，由外壳渲染帧的 `flush_container_notice`
+    /// 统一转成通知，避免为一条回执再把动作转回外壳。
+    pub(crate) fn save_compose_yaml(&mut self, cx: &mut Context<Self>) {
+        let Some((_, path, editor, saving)) = self.state.compose_yaml_editor.as_ref() else {
+            return;
+        };
+        if *saving {
+            return;
+        }
+        // 先取出所需的拥有型数据，避免后续异步闭包与状态借用冲突。
+        let path = path.clone();
+        let editor = editor.clone();
+        if let Some((_, _, _, saving)) = &mut self.state.compose_yaml_editor {
+            *saving = true;
+        }
+        let text = editor.read(cx).value().to_string();
+        let write_text = text.clone();
+        let write_path = path.clone();
+
+        cx.spawn(async move |this, cx| {
+            let result =
+                spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
+            let _ = this.update(cx, |workspace, cx| {
+                if let Some((_, _, _, saving)) = &mut workspace.state.compose_yaml_editor {
+                    *saving = false;
+                }
+                match result {
+                    Some(Ok(())) => {
+                        workspace.state.compose_dependencies =
+                            crate::container::detail::compose_graph::parse_compose_dependencies(
+                                &text,
+                            );
+                        workspace.state.notice =
+                            Some(rust_i18n::t!("container.compose.yaml_saved").to_string());
+                    }
+                    Some(Err(error)) => {
+                        workspace.state.notice = Some(
+                            rust_i18n::t!("container.compose.save_failed", error = error)
+                                .to_string(),
+                        );
+                    }
+                    None => {}
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+}
+
 impl AppShell {
     /// 确保当前 Compose 项目的 YAML 内容已载入编辑器。
     pub(crate) fn ensure_compose_yaml_loaded(
@@ -67,70 +122,6 @@ impl AppShell {
             });
         })
         .detach();
-    }
-
-    /// 保存当前在编辑器中修改的 Compose YAML 内容。
-    pub(crate) fn save_compose_yaml(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some((path, editor, saving)) = self
-            .with_container(tab_id, cx, |workspace| {
-                let (_, path, editor, saving) = workspace.compose_yaml_editor.as_ref()?;
-                Some((path.clone(), editor.clone(), *saving))
-            })
-            .flatten()
-        else {
-            return;
-        };
-        if saving {
-            return;
-        }
-        self.with_container_mut(tab_id, cx, |workspace| {
-            if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
-                *saving = true;
-            }
-        });
-        let text = editor.read(cx).value().to_string();
-        let write_text = text.clone();
-        let write_path = path.clone();
-
-        cx.spawn(async move |this, cx| {
-            let result =
-                spawn_blocking_local(move || std::fs::write(&write_path, write_text)).await;
-            let _ = this.update_in(cx, |this, window, cx| {
-                this.with_container_mut(tab_id, cx, |workspace| {
-                    if let Some((_, _, _, saving)) = &mut workspace.compose_yaml_editor {
-                        *saving = false;
-                    }
-                });
-                match result {
-                    Some(Ok(())) => {
-                        let parsed =
-                            crate::container::detail::compose_graph::parse_compose_dependencies(
-                                &text,
-                            );
-                        this.with_container_mut(tab_id, cx, |workspace| {
-                            workspace.compose_dependencies = parsed;
-                        });
-                        this.show_toast(
-                            rust_i18n::t!("container.compose.yaml_saved").to_string(),
-                            true,
-                            window,
-                            cx,
-                        );
-                    }
-                    Some(Err(err)) => {
-                        this.show_toast(
-                            rust_i18n::t!("container.compose.save_failed", error = err).to_string(),
-                            false,
-                            window,
-                            cx,
-                        );
-                    }
-                    None => {}
-                }
-            });
-        })
-        .detach();
-        cx.notify();
     }
 
     /// 确保当前 Compose 项目的微服务依赖图已解析载入。

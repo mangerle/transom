@@ -6,8 +6,12 @@
 //! - 在线编写（Yaml）：依托内置 `Textarea` 提供 `docker-compose.yml` 的就地浏览与编辑，
 //!   支持就地保存与一键 `docker compose up` 重新部署；
 //! - 多路聚合日志（Logs）：由 `render_logs` 统一承接，自动带有各容器色块前缀。
+//!
+//! 渲染只持有工作区实体句柄与只读快照：保存、部署与重新加载都直接改实体状态或
+//! 调用实体方法，不再依赖 `Context<AppShell>`；编辑器文本由外壳在调用前快照。
 
 use super::*;
+use crate::container::ContainerWorkspace;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::input::{Textarea, TextareaState};
 use std::path::PathBuf;
@@ -37,20 +41,20 @@ pub(crate) fn service_name_of(container: &ContainerSummary, project_name: &str) 
 
 /// Compose 详情与拓扑渲染参数。
 pub(crate) struct ComposeDetailParams<'a> {
-    pub(crate) tab_id: TabId,
     pub(crate) project: Option<&'a ComposeProject>,
     pub(crate) containers: &'a [ContainerSummary],
     pub(crate) detail_tab: ContainerDetailTab,
     pub(crate) compose_yaml_editor: Option<&'a (String, PathBuf, Entity<TextareaState>, bool)>,
+    /// 编辑器当前文本快照：行号与语法校验在纯渲染阶段使用。
+    pub(crate) compose_yaml_text: &'a str,
     pub(crate) dependencies: &'a std::collections::HashMap<String, Vec<String>>,
     pub(crate) hovered_service: Option<&'a str>,
 }
 
 pub(crate) fn render_compose_detail(
-    params: ComposeDetailParams,
+    view: &Entity<ContainerWorkspace>,
+    params: ComposeDetailParams<'_>,
     p: &Palette,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some(project) = params.project else {
         return centered_hint(
@@ -61,21 +65,19 @@ pub(crate) fn render_compose_detail(
 
     match params.detail_tab {
         ContainerDetailTab::Yaml => render_compose_yaml_editor(
-            params.tab_id,
+            view,
             project,
             params.compose_yaml_editor,
+            params.compose_yaml_text,
             p,
-            window,
-            cx,
         ),
         _ => render_compose_overview_and_topology(
-            params.tab_id,
+            view,
             project,
             params.containers,
             params.dependencies,
             params.hovered_service,
             p,
-            cx,
         ),
     }
 }
@@ -83,13 +85,15 @@ pub(crate) fn render_compose_detail(
 use super::compose_yaml::{render_line_numbers, render_path_breadcrumbs, validate_compose_yaml};
 
 /// 渲染在线 YAML 编辑器。
+///
+/// 保存直接调用实体方法；部署属于纯实体动作；重新加载只清空编辑器状态，由
+/// 外壳在下一帧的 `ensure_compose_yaml_loaded` 重新读取文件。
 fn render_compose_yaml_editor(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     project: &ComposeProject,
     compose_yaml_editor: Option<&(String, PathBuf, Entity<TextareaState>, bool)>,
+    current_text: &str,
     p: &Palette,
-    _window: &mut Window,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let Some((_, path, editor, saving)) = compose_yaml_editor else {
         return centered_hint(
@@ -99,13 +103,15 @@ fn render_compose_yaml_editor(
     };
 
     let is_saving = *saving;
-    let project_name = project.name.clone();
     let project_name_up = project.name.clone();
 
-    // 实时读取内容并计算行数与语法校验
-    let current_text = editor.read(cx).value();
+    // 行数与语法校验基于外壳传入的文本快照，渲染函数不再读取编辑器实体。
     let line_count = current_text.lines().count().max(1);
-    let validation_err = validate_compose_yaml(&current_text);
+    let validation_err = validate_compose_yaml(current_text);
+
+    let save_view = view.clone();
+    let deploy_view = view.clone();
+    let reload_view = view.clone();
 
     let header = h_flex()
         .px_3()
@@ -126,9 +132,11 @@ fn render_compose_yaml_editor(
                         .icon(IconName::Save)
                         .label(rust_i18n::t!("common.save").to_string())
                         .disabled(is_saving)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.save_compose_yaml(tab_id, cx);
-                        })),
+                        .on_click(move |_, _, cx| {
+                            save_view.update(cx, |workspace, cx| {
+                                workspace.save_compose_yaml(cx);
+                            });
+                        }),
                 )
                 .child(
                     Button::new("compose-yaml-deploy")
@@ -137,14 +145,15 @@ fn render_compose_yaml_editor(
                         .icon(IconName::Play)
                         .label(rust_i18n::t!("container.compose.up_deploy").to_string())
                         .disabled(is_saving)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.run_compose(
-                                tab_id,
-                                project_name_up.clone(),
-                                ComposeAction::Up,
-                                cx,
-                            );
-                        })),
+                        .on_click(move |_, _, cx| {
+                            deploy_view.update(cx, |workspace, cx| {
+                                workspace.run_compose(
+                                    project_name_up.clone(),
+                                    ComposeAction::Up,
+                                    cx,
+                                );
+                            });
+                        }),
                 )
                 .child(
                     Button::new("compose-yaml-reload")
@@ -153,12 +162,12 @@ fn render_compose_yaml_editor(
                         .icon(IconName::RotateCw)
                         .tooltip(rust_i18n::t!("common.refresh").to_string())
                         .disabled(is_saving)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.with_container_mut(tab_id, cx, |workspace| {
-                                workspace.compose_yaml_editor = None;
+                        .on_click(move |_, _, cx| {
+                            reload_view.update(cx, |workspace, cx| {
+                                workspace.state.compose_yaml_editor = None;
+                                cx.notify();
                             });
-                            this.ensure_compose_yaml_loaded(tab_id, &project_name, window, cx);
-                        })),
+                        }),
                 ),
         );
 
@@ -231,13 +240,12 @@ fn render_compose_yaml_editor(
 
 /// 渲染概览与服务拓扑看板。
 fn render_compose_overview_and_topology(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     project: &ComposeProject,
     containers: &[ContainerSummary],
     dependencies: &std::collections::HashMap<String, Vec<String>>,
     hovered_service: Option<&str>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let members: Vec<&ContainerSummary> = containers
         .iter()
@@ -317,13 +325,12 @@ fn render_compose_overview_and_topology(
     );
 
     let topology_board = super::compose_topology::render_compose_topology_board(
-        tab_id,
+        view,
         project,
         &members,
         dependencies,
         hovered_service,
         p,
-        cx,
     );
     topology_section = topology_section.child(topology_board);
 

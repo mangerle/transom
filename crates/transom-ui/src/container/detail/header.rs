@@ -80,12 +80,13 @@ impl AppShell {
                 }
             }
             ContainerSection::Compose => {
-                if let Some(project) = compose {
+                if let Some(project) = compose
+                    && let Some(workspace) = workspace.as_ref()
+                {
                     actions = actions.children(super::header_actions::compose_header_actions(
-                        tab_id,
+                        workspace,
                         project,
                         all_containers,
-                        cx,
                     ));
                 }
             }

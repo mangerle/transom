@@ -122,6 +122,11 @@ impl AppShell {
                 .into_any_element();
         }
         let compose_yaml_editor = workspace.compose_yaml_editor.clone();
+        // 编辑器当前文本必须经 App 读取：渲染函数只做行号与语法校验的纯展示。
+        let compose_yaml_text = compose_yaml_editor
+            .as_ref()
+            .map(|(_, _, editor, _)| editor.read(cx).value())
+            .unwrap_or_default();
         let detail_tab = workspace.detail_tab;
         let overview_raw = workspace.overview_raw;
         let browser_host = workspace.browser_host();
@@ -350,18 +355,17 @@ impl AppShell {
                 )
             }
             (ContainerSection::Compose, _) => render_compose_detail(
+                &view,
                 compose::ComposeDetailParams {
-                    tab_id,
                     project: selected_compose.as_ref(),
                     containers: &containers,
                     detail_tab,
                     compose_yaml_editor: compose_yaml_editor.as_ref(),
+                    compose_yaml_text: &compose_yaml_text,
                     dependencies: &compose_deps,
                     hovered_service: compose_hovered.as_deref(),
                 },
                 p,
-                window,
-                cx,
             ),
             (ContainerSection::Images, _) => render_image_detail(
                 &view,

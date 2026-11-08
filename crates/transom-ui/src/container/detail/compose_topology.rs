@@ -8,6 +8,7 @@
 
 use super::compose_graph::*;
 use super::*;
+use crate::container::ContainerWorkspace;
 use gpui_kit::prelude::FluentBuilder;
 use std::collections::HashMap;
 use transom_core::{ContainerLifecycleAction, ContainerRequestId};
@@ -31,13 +32,12 @@ fn tier_label(tier_idx: usize, total_tiers: usize) -> String {
 
 /// 渲染微服务拓扑分层网格看板。
 pub(crate) fn render_compose_topology_board(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     project: &ComposeProject,
     members: &[&ContainerSummary],
     deps: &HashMap<String, Vec<String>>,
     hovered_service: Option<&str>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     if members.is_empty() {
         return div()
@@ -113,7 +113,7 @@ pub(crate) fn render_compose_topology_board(
         for svc_name in tier_services {
             if let Some(member) = member_by_service.get(svc_name) {
                 let card = render_topology_card(
-                    tab_id,
+                    view,
                     member,
                     TopologyContext {
                         service_name: svc_name,
@@ -122,7 +122,6 @@ pub(crate) fn render_compose_topology_board(
                         hovered_service,
                     },
                     p,
-                    cx,
                 );
                 cards_container = cards_container.child(card);
             }
@@ -178,11 +177,10 @@ struct TopologyContext<'a> {
 
 /// 渲染单个微服务拓扑卡片。
 fn render_topology_card(
-    tab_id: TabId,
+    view: &Entity<ContainerWorkspace>,
     member: &ContainerSummary,
     context: TopologyContext<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let TopologyContext {
         service_name,
@@ -235,6 +233,7 @@ fn render_topology_card(
     };
 
     let hover_svc = current_svc_name.clone();
+    let hover_view = view.clone();
 
     let mut card = v_flex()
         .id(ElementId::Name(
@@ -248,16 +247,16 @@ fn render_topology_card(
         .border_color(border_color)
         .border(border_width)
         .opacity(opacity_val)
-        .on_hover(cx.listener(move |this, hovered, _, cx| {
-            this.with_container_mut(tab_id, cx, |ws| {
+        .on_hover(move |hovered: &bool, _, cx| {
+            hover_view.update(cx, |workspace, cx| {
                 if *hovered {
-                    ws.compose_hovered_service = Some(hover_svc.clone());
-                } else if ws.compose_hovered_service.as_deref() == Some(&hover_svc) {
-                    ws.compose_hovered_service = None;
+                    workspace.state.compose_hovered_service = Some(hover_svc.clone());
+                } else if workspace.state.compose_hovered_service.as_deref() == Some(&hover_svc) {
+                    workspace.state.compose_hovered_service = None;
                 }
+                cx.notify();
             });
-            cx.notify();
-        }));
+        });
 
     let mut main_row = h_flex().items_center().justify_between().w_full();
 
@@ -318,6 +317,8 @@ fn render_topology_card(
                 ),
         );
 
+    let toggle_view = view.clone();
+    let inspect_view = view.clone();
     let actions = h_flex()
         .gap_1()
         .items_center()
@@ -335,27 +336,25 @@ fn render_topology_card(
                 } else {
                     rust_i18n::t!("container.action.start").to_string()
                 })
-                .on_click(cx.listener(move |this, _, _, cx| {
+                .on_click(move |_, _, cx| {
                     let action = if is_running {
                         ContainerLifecycleAction::Stop
                     } else {
                         ContainerLifecycleAction::Start
                     };
-                    let req = ContainerRequestId::new();
-                    if let Some(workspace) = this.state.container_workspace(tab_id) {
-                        workspace.update(cx, |workspace, _| {
-                            workspace.send_tracked(
-                                req,
-                                transom_core::ContainerCommand::Lifecycle {
-                                    tab_id,
-                                    request_id: req,
-                                    container: member_id_toggle.clone(),
-                                    action,
-                                },
-                            );
-                        });
-                    }
-                })),
+                    toggle_view.update(cx, |workspace, _| {
+                        let request_id = ContainerRequestId::new();
+                        workspace.send_tracked(
+                            request_id,
+                            transom_core::ContainerCommand::Lifecycle {
+                                tab_id: workspace.tab_id,
+                                request_id,
+                                container: member_id_toggle.clone(),
+                                action,
+                            },
+                        );
+                    });
+                }),
         )
         .child(
             Button::new(ElementId::Name(format!("inspect-{container_id}").into()))
@@ -363,17 +362,13 @@ fn render_topology_card(
                 .xsmall()
                 .icon(IconName::Info)
                 .tooltip(rust_i18n::t!("container.detail.overview").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(workspace) = this.state.container_workspace(tab_id) {
-                        workspace.update(cx, |workspace, _| {
-                            workspace.select_container_item(member_id_select.clone())
-                        });
-                    }
-                    this.with_container_mut(tab_id, cx, |w| {
-                        w.section = ContainerSection::Containers;
+                .on_click(move |_, _, cx| {
+                    inspect_view.update(cx, |workspace, cx| {
+                        workspace.select_container_item(member_id_select.clone());
+                        workspace.state.section = ContainerSection::Containers;
+                        cx.notify();
                     });
-                    cx.notify();
-                })),
+                }),
         );
 
     main_row = main_row.child(left_info).child(actions);

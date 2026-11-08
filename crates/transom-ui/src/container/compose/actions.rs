@@ -5,38 +5,57 @@ use super::yaml::{compose_project_yaml, compose_yaml_is_allowed, unique_compose_
 use crate::app::spawn_blocking_local;
 use chrono::Local;
 use std::path::{Path, PathBuf};
-use transom_core::ComposeProject;
+use transom_core::{ComposeAction, ComposeProject};
 use transom_platform::paths;
 
-impl AppShell {
+impl ContainerWorkspace {
     /// 编排项目命令：`up` 直接下发，`down` 会删容器与网络，先过确认条。
+    ///
+    /// 设计原理（Why）：确认项与命令投递都属于工作区实体状态，不涉及窗口或
+    /// 其它领域；头部动作与键盘快捷键拿到实体句柄后直接调用，不再经外壳转手。
     pub(crate) fn run_compose(
         &mut self,
-        tab_id: TabId,
         name: String,
-        action: transom_core::ComposeAction,
+        action: ComposeAction,
         cx: &mut Context<Self>,
     ) {
         if action.is_dangerous() {
-            self.with_container_mut(tab_id, cx, |workspace| {
-                workspace.confirm = Some(ContainerConfirm::Compose(name));
-            });
+            self.state.confirm = Some(ContainerConfirm::Compose(name));
             cx.notify();
             return;
         }
         let Some(project) = self
             .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| {
-                let state = &workspace.read(cx).state;
-                state.compose.iter().find(|item| item.name == name).cloned()
-            })
+            .compose
+            .iter()
+            .find(|item| item.name == name)
+            .cloned()
         else {
             return;
         };
-        self.start_compose_project(tab_id, project, action, cx);
+        self.start_compose_project(project, action);
+        cx.notify();
     }
 
+    /// 投递编排命令并登记在途请求；调用方负责触发重绘。
+    fn start_compose_project(&mut self, project: ComposeProject, action: ComposeAction) {
+        let request_id = ContainerRequestId::new();
+        self.state.busy = true;
+        self.state.notice =
+            Some(rust_i18n::t!("container.compose.running", action = action.label()).to_string());
+        self.send_tracked(
+            request_id,
+            ContainerCommand::RunCompose {
+                tab_id: self.tab_id,
+                request_id,
+                project: Box::new(project),
+                action,
+            },
+        );
+    }
+}
+
+impl AppShell {
     /// 根据自定义或预设模板内容新建 Compose 项目并在详情中打开。
     pub(crate) fn create_local_compose_with_content(
         &mut self,
@@ -242,36 +261,6 @@ impl AppShell {
             window,
             cx,
         );
-        cx.notify();
-    }
-
-    fn start_compose_project(
-        &mut self,
-        tab_id: TabId,
-        project: ComposeProject,
-        action: transom_core::ComposeAction,
-        cx: &mut Context<Self>,
-    ) {
-        let request_id = ContainerRequestId::new();
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.busy = true;
-            workspace.notice = Some(
-                rust_i18n::t!("container.compose.running", action = action.label()).to_string(),
-            );
-        });
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::RunCompose {
-                        tab_id,
-                        request_id,
-                        project: Box::new(project),
-                        action,
-                    },
-                );
-            });
-        }
         cx.notify();
     }
 }
