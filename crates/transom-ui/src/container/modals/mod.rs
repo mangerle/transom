@@ -14,3 +14,6 @@ mod quadlet;
 mod rename;
 mod tag;
 mod update;
+
+pub(crate) use confirm::render_container_confirm_dialog_body;
+pub(crate) use rename::render_container_rename_dialog_body;

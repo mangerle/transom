@@ -282,6 +282,33 @@ impl ModalKind {
         }
         if matches!(
             self,
+            ModalKind::ContainerConfirm | ModalKind::ContainerRename
+        ) {
+            let shell = app.read(cx);
+            return match self {
+                ModalKind::ContainerConfirm => {
+                    let Some((_, view)) =
+                        shell.find_container_modal_tab(cx, |workspace| workspace.confirm.is_some())
+                    else {
+                        return div().into_any_element();
+                    };
+                    let state = view.read(cx);
+                    crate::container::render_container_confirm_dialog_body(&view, &state.state, p)
+                }
+                ModalKind::ContainerRename => {
+                    let Some((_, view)) = shell.find_container_modal_tab(cx, |workspace| {
+                        workspace.rename_container.is_some()
+                    }) else {
+                        return div().into_any_element();
+                    };
+                    let state = view.read(cx);
+                    crate::container::render_container_rename_dialog_body(&view, &state.state, p)
+                }
+                _ => unreachable!(),
+            };
+        }
+        if matches!(
+            self,
             ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt
         ) {
             let view = app.read(cx).state.modals.connection.prompts.clone();
@@ -324,8 +351,8 @@ impl ModalKind {
             ModalKind::ContainerRunForm => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerCreate => div().into_any_element(),
-            ModalKind::ContainerConfirm => shell.render_container_confirm_dialog_body(app, cx, p),
-            ModalKind::ContainerRename => shell.render_container_rename_dialog_body(app, cx, p),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerConfirm | ModalKind::ContainerRename => div().into_any_element(),
             ModalKind::ContainerTagImage => shell.render_container_tag_dialog_body(app, cx, p),
             ModalKind::ContainerCommit => shell.render_container_commit_dialog_body(app, cx, p),
             ModalKind::ContainerUpdate => shell.render_container_update_dialog_body(app, cx, p),

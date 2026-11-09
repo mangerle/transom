@@ -46,6 +46,9 @@ pub(crate) use form::{
     ContainerFormEvent, ContainerFormFolders, ContainerFormView, ContainerRunFormEvent,
     ContainerRunFormView,
 };
+pub(crate) use modals::{
+    render_container_confirm_dialog_body, render_container_rename_dialog_body,
+};
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{
