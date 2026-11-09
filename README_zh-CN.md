@@ -81,8 +81,8 @@
 | 平台 | 支持等级 | 已验证能力 |
 | :--- | :--- | :--- |
 | Linux（Wayland / X11） | 主要交互开发平台 | 完整原生 CI、deb 与 AppImage 发布构建、XDG 默认终端集成、`ssh://` 单实例转交。 |
-| macOS（Intel / Apple silicon） | 支持 | 原生 CI 测试与 Clippy、Developer ID 签名并公证的 DMG、已签名更新二进制、LaunchServices `ssh://` 注册、系统原生打开能力。 |
-| Windows（x64 / arm64） | 支持 | 原生 CI 测试与 Clippy、Authenticode 签名的主程序与 NSIS 安装包、命名管道/WSL/WSLC 容器发现、`ssh://` 候选注册、系统原生打开能力。 |
+| macOS（Intel / Apple silicon） | 支持 | 原生 CI 测试与 Clippy、DMG 与自更新 zip、Ed25519 签名的更新清单、LaunchServices `ssh://` 注册、系统原生打开能力。 |
+| Windows（x64 / arm64） | 支持 | 原生 CI 测试与 Clippy、NSIS 安装包与便携 zip、Ed25519 签名的更新清单、命名管道/WSL/WSLC 容器发现、`ssh://` 候选注册、系统原生打开能力。 |
 
 三个平台的 CI 都会真实运行，但属于无头测试；具体硬件、显卡或桌面环境仍应在代表性机器上做发布前冒烟验证。
 
@@ -139,10 +139,10 @@ Release 构建剥离符号表并启用 thin LTO。日志经 `log` 门面落到 `
 | 平台 | 更新通道 | 手动分发产物 |
 | :--- | :--- | :--- |
 | Linux | `.deb` 安装器 | `.AppImage` |
-| Windows | Authenticode 签名的 NSIS 每用户安装包 | 内含已签名主程序的绿色便携 `.zip` |
-| macOS | 内含已签名可执行文件的 `.zip`（由 shipup 解压后替换 `.app` 内可执行文件） | Developer ID 签名、Apple 公证并 stapling 的 `.dmg` |
+| Windows | NSIS 每用户安装包 | 绿色便携 `.zip` |
+| macOS | 内含可执行文件的 `.zip`（由 shipup 解压后替换 `.app` 内可执行文件） | `.dmg` |
 
-发布任务先用 Ed25519 对每个更新包与合并后的 `latest.json` 签名，再应用平台原生签名：Windows 使用带 RFC 3161 时间戳的 Authenticode，macOS 使用 Developer ID、Hardened Runtime、Apple 公证与 stapling。全部签名凭据均为必需的 GitHub Secrets；任一缺失时发布前门禁会直接拒绝构建。应用内「偏好设置 → 关于 → 软件更新」负责检查清单、下载验签、安装与优雅重启；连续两次启动失败会触发上一版本回滚。
+发布任务把每个更新通道产物的 SHA-256 摘要写入 `latest.json` 并用 Ed25519 签名；Windows 与 macOS 产物不做 Authenticode、Developer ID 签名与 Apple 公证，SmartScreen 与 Gatekeeper 会按未签名应用提示。`SHIPUP_PRIVATE_KEY` 是唯一必需的发布 Secret，缺失时任务在发布前失败。应用内「偏好设置 → 关于 → 软件更新」负责检查清单、下载验签、安装与优雅重启；连续两次启动失败会触发上一版本回滚。
 
 密钥管理、产物矩阵、本地验证命令与三端更新路径见 [`docs/release.md`](./docs/release.md)。
 

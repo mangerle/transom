@@ -81,8 +81,8 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 | Platform | Support level | Verified behavior |
 | :--- | :--- | :--- |
 | Linux (Wayland / X11) | Primary interactive target | Full native CI, deb and AppImage release builds, XDG default-terminal integration, `ssh://` single-instance handoff. |
-| macOS (Intel / Apple silicon) | Supported | Native CI tests and Clippy, Developer ID signed and notarized DMG, signed update binary, LaunchServices `ssh://` registration, OS-native opener. |
-| Windows (x64 / arm64) | Supported | Native CI tests and Clippy, Authenticode-signed executable and NSIS installer, named-pipe/WSL/WSLC container discovery, `ssh://` candidate registration, OS-native opener. |
+| macOS (Intel / Apple silicon) | Supported | Native CI tests and Clippy, DMG and self-update zip, Ed25519-signed update manifest, LaunchServices `ssh://` registration, OS-native opener. |
+| Windows (x64 / arm64) | Supported | Native CI tests and Clippy, NSIS installer and portable zip, Ed25519-signed update manifest, named-pipe/WSL/WSLC container discovery, `ssh://` candidate registration, OS-native opener. |
 
 CI runs on all three operating systems, but it is headless. Hardware- and driver-specific desktop behavior still needs a release smoke test on representative machines.
 
@@ -139,10 +139,10 @@ Pushing a `v*` tag runs `.github/workflows/release.yml` and publishes a GitHub R
 | Platform | Update channel | Manual artifacts |
 | :--- | :--- | :--- |
 | Linux | `.deb` installer | `.AppImage` |
-| Windows | Authenticode-signed NSIS per-user installer | portable `.zip` with a signed executable |
-| macOS | `.zip` containing the signed executable (`shipup` archive replacement inside the `.app`) | Developer ID signed, notarized and stapled `.dmg` |
+| Windows | NSIS per-user installer | portable `.zip` |
+| macOS | `.zip` containing the executable (`shipup` archive replacement inside the `.app`) | `.dmg` |
 
-The release job signs every update package and the merged `latest.json` with Ed25519, then applies the platform's native signature: Authenticode with RFC 3161 timestamps for Windows, and Developer ID + Hardened Runtime + Apple notarization/stapling for macOS. All signing credentials are required GitHub Secrets; the release preflight refuses to build when any are missing. In the app, **Preferences → About → Software Updates** checks the manifest, downloads and verifies the package, installs it, and offers a graceful restart; a crash-loop guard rolls back to the previous binary after two failed starts.
+The release job records every update package's SHA-256 digest in `latest.json` and signs the manifest with Ed25519; Windows and macOS artifacts are not Authenticode or Developer ID signed, so SmartScreen and Gatekeeper apply their standard unsigned-app prompts. `SHIPUP_PRIVATE_KEY` is the only required release secret; the job refuses to publish a manifest it cannot sign. In the app, **Preferences → About → Software Updates** checks the manifest, downloads and verifies the package, installs it, and offers a graceful restart; a crash-loop guard rolls back to the previous binary after two failed starts.
 
 See [`docs/release.md`](./docs/release.md) (Chinese) for key management, local verification, the artifact matrix, and the per-platform update path.
 

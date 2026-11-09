@@ -110,9 +110,9 @@ workspace 版本一致）与 `packaging/linux/com.github.mangerle.transom.metain
 的 `<releases>`；详细打包口径见 `packaging/linux/deb/README.md`。
 
 推送 `v*` 标签后由 `.github/workflows/release.yml` 完成三端双架构打包、
-Windows Authenticode、macOS Developer ID 签名与公证、shipup Ed25519 清单签名
-与 GitHub Release 发布。Windows 与 macOS 签名证书、Apple 公证凭据及
-`SHIPUP_PRIVATE_KEY` 全部只放在仓库 Secret；缺少任一项时发布前门禁直接失败。
+shipup Ed25519 清单签名与 GitHub Release 发布。Windows 与 macOS 产物不做
+操作系统级代码签名，SmartScreen 与 Gatekeeper 会按未签名应用提示；发布只
+依赖 `SHIPUP_PRIVATE_KEY` 一个 Secret，缺失时生成清单前直接失败。
 完整发版步骤、密钥轮换与本地验签命令见 [`docs/release.md`](./release.md)。
 
 ## 数据救援
