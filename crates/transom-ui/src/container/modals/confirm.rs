@@ -12,11 +12,11 @@ impl AppShell {
     /// 渲染容器模块通用删除确认弹窗主体。
     pub(crate) fn render_container_confirm_dialog_body(
         &self,
-        app: &Entity<AppShell>,
+        _app: &Entity<AppShell>,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some((tab_id, workspace)) =
+        let Some((_tab_id, workspace)) =
             self.find_container_modal_tab(cx, |ws| ws.confirm.is_some())
         else {
             return div().into_any_element();
@@ -75,9 +75,12 @@ impl AppShell {
         let cancel = crate::widgets::dialog_cancel_button(
             "cancel-container-confirm",
             rust_i18n::t!("common.cancel").to_string(),
-            crate::dialog_host::on_event(app, move |this, _: &ClickEvent, _, cx| {
-                this.cancel_container_confirm(tab_id, cx);
-            }),
+            {
+                let view = workspace.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| workspace.cancel_container_confirm(cx));
+                }
+            },
         );
 
         let confirm_btn = crate::widgets::dialog_confirm_button(
@@ -85,12 +88,9 @@ impl AppShell {
             rust_i18n::t!("common.confirm_delete").to_string(),
             Some(IconName::Trash),
             crate::widgets::DialogConfirmKind::Danger,
-            crate::dialog_host::on_event(app, {
-                let confirm = confirm.clone();
-                move |this, _: &ClickEvent, _, cx| {
-                    this.apply_container_confirm(tab_id, confirm.clone(), cx);
-                }
-            }),
+            move |_, _, cx| {
+                workspace.update(cx, |workspace, cx| workspace.apply_container_confirm(cx));
+            },
         );
 
         let footer = crate::widgets::dialog_actions([

@@ -118,6 +118,16 @@ pub(crate) enum ContainerWorkspaceEvent {
     },
     /// 切换到指定详情页签；终端等页签需要外壳初始化会话。
     SetDetailTab(ContainerDetailTab),
+    /// 工作区校验失败等一次性提示：实体拿不到 `Window`，由外壳在渲染期弹出。
+    ///
+    /// 设计原理（Why）：提示属于窗口级 UI，实体只表达「提示什么」；事件自带
+    /// 完整文案与成功标志，外壳处理时不回读实体。
+    ShowToast {
+        /// 已本地化的提示文案。
+        message: String,
+        /// 是否为成功提示。
+        success: bool,
+    },
     /// 对列表行执行动作；具体分发由外壳统一完成，其中部分动作需要窗口。
     RunRowAction {
         target: RowTarget,
@@ -199,6 +209,7 @@ impl AppShell {
             | ContainerWorkspaceEvent::CloneContainer { .. }
             | ContainerWorkspaceEvent::RecreateContainer { .. }
             | ContainerWorkspaceEvent::SetDetailTab(_)
+            | ContainerWorkspaceEvent::ShowToast { .. }
             | ContainerWorkspaceEvent::RunRowAction { .. } => {
                 self.state
                     .window_requests

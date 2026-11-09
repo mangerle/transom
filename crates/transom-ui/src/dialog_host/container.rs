@@ -14,18 +14,22 @@ impl ModalKind {
     ) -> Option<bool> {
         match self {
             ModalKind::ContainerConfirm => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.confirm.is_some())
                 {
-                    shell.cancel_container_confirm(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.cancel_container_confirm(cx);
+                    });
                 }
                 Some(true)
             }
             ModalKind::ContainerRename => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.rename_container.is_some())
                 {
-                    shell.cancel_container_rename(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.cancel_container_rename(cx);
+                    });
                 }
                 Some(true)
             }
@@ -154,19 +158,22 @@ impl ModalKind {
     ) -> Option<()> {
         match self {
             ModalKind::ContainerConfirm => {
-                if let Some((tab_id, ws)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.confirm.is_some())
-                    && let Some(confirm) = ws.read(cx).state.confirm.clone()
                 {
-                    shell.apply_container_confirm(tab_id, confirm, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.apply_container_confirm(cx);
+                    });
                 }
                 Some(())
             }
             ModalKind::ContainerRename => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.rename_container.is_some())
                 {
-                    shell.submit_container_rename(tab_id, window, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.submit_container_rename(cx);
+                    });
                 }
                 Some(())
             }

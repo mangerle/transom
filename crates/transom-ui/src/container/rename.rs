@@ -52,61 +52,49 @@ impl AppShell {
         });
         cx.notify();
     }
+}
 
-    /// 取消改名。
-    pub(crate) fn cancel_container_rename(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.rename_container = None;
-        });
+impl ContainerWorkspace {
+    /// 取消改名：丢弃本次打开期的输入控件。
+    pub(crate) fn cancel_container_rename(&mut self, cx: &mut Context<Self>) {
+        self.state.rename_container = None;
         cx.notify();
     }
 
     /// 提交改名：名称留空或与原名相同都不下发，避免无意义的请求与 409。
-    pub(crate) fn submit_container_rename(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some((id, input)) = self
-            .with_container(tab_id, cx, |workspace| workspace.rename_container.clone())
-            .flatten()
-        else {
+    ///
+    /// 校验失败时弹窗保持打开、输入保留，提示经
+    /// [`ContainerWorkspaceEvent::ShowToast`] 交给外壳；成功投递命令后立即清空
+    /// 改名状态，弹窗随之关闭，结果事件只负责收尾忙碌状态与刷新。
+    pub(crate) fn submit_container_rename(&mut self, cx: &mut Context<Self>) {
+        let Some((id, input)) = self.state.rename_container.clone() else {
             return;
         };
         let name = input.read(cx).value().trim().to_string();
         let same = self
-            .with_container(tab_id, cx, |workspace| {
-                workspace
-                    .containers
-                    .iter()
-                    .any(|item| item.id == id && item.name == name)
-            })
-            .unwrap_or(false);
+            .state
+            .containers
+            .iter()
+            .any(|item| item.id == id && item.name == name);
         if name.is_empty() || same {
-            self.show_toast(
-                rust_i18n::t!("container.rename.invalid", name = name).to_string(),
-                false,
-                window,
-                cx,
-            );
+            cx.emit(ContainerWorkspaceEvent::ShowToast {
+                message: rust_i18n::t!("container.rename.invalid", name = name).to_string(),
+                success: false,
+            });
             return;
         }
         let request_id = ContainerRequestId::new();
-        self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::RenameContainer {
-                        tab_id,
-                        request_id,
-                        container: id,
-                        name,
-                    },
-                );
-            });
-        }
+        self.state.busy = true;
+        self.state.rename_container = None;
+        self.send_tracked(
+            request_id,
+            ContainerCommand::RenameContainer {
+                tab_id: self.tab_id,
+                request_id,
+                container: id,
+                name,
+            },
+        );
         cx.notify();
     }
 }

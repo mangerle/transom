@@ -3,14 +3,6 @@
 use super::*;
 
 impl AppShell {
-    /// 取消当前分类里的删除确认。
-    pub(crate) fn cancel_container_confirm(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.confirm = None;
-        });
-        cx.notify();
-    }
-
     /// 更新容器资源配置（内存、CPU、重启策略）。
     pub(crate) fn update_container_resources(
         &mut self,
@@ -41,126 +33,6 @@ impl AppShell {
                         spec,
                     },
                 );
-            });
-        }
-        cx.notify();
-    }
-
-    /// 删除镜像/卷/网络。
-    pub(crate) fn apply_container_confirm(
-        &mut self,
-        tab_id: TabId,
-        confirm: ContainerConfirm,
-        cx: &mut Context<Self>,
-    ) {
-        let request_id = ContainerRequestId::new();
-        let command = match confirm {
-            ContainerConfirm::Compose(project) => {
-                let Some(project) = self
-                    .state
-                    .container_workspace(tab_id)
-                    .and_then(|workspace| {
-                        let state = &workspace.read(cx).state;
-                        state
-                            .compose
-                            .iter()
-                            .find(|item| item.name == project)
-                            .cloned()
-                    })
-                else {
-                    return;
-                };
-                if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    workspace.update(cx, |workspace, _| {
-                        workspace.send_tracked(
-                            request_id,
-                            ContainerCommand::RunCompose {
-                                tab_id,
-                                request_id,
-                                project: Box::new(project),
-                                action: transom_core::ComposeAction::Down,
-                            },
-                        );
-                    });
-                }
-                cx.notify();
-                return;
-            }
-            ContainerConfirm::Container(container) => ContainerCommand::Lifecycle {
-                tab_id,
-                request_id,
-                container,
-                action: ContainerLifecycleAction::Remove { force: false },
-            },
-            ContainerConfirm::Image(image) => ContainerCommand::RemoveImage {
-                tab_id,
-                request_id,
-                image,
-                force: false,
-            },
-            ContainerConfirm::Volume(name) => ContainerCommand::RemoveVolume {
-                tab_id,
-                request_id,
-                name,
-                force: false,
-            },
-            ContainerConfirm::Network(network) => ContainerCommand::RemoveNetwork {
-                tab_id,
-                request_id,
-                network,
-            },
-            ContainerConfirm::FilePath { path, recursive } => {
-                let Some(container) = self
-                    .with_container(tab_id, cx, |workspace| workspace.selected_container_name())
-                    .flatten()
-                else {
-                    return;
-                };
-                ContainerCommand::RemovePath {
-                    tab_id,
-                    request_id,
-                    container,
-                    path,
-                    recursive,
-                }
-            }
-            ContainerConfirm::UploadOverwrite {
-                path,
-                local_path,
-                directory,
-            } => {
-                let Some(container) = self
-                    .with_container(tab_id, cx, |workspace| workspace.selected_container_name())
-                    .flatten()
-                else {
-                    return;
-                };
-                if directory {
-                    ContainerCommand::UploadDirectory {
-                        tab_id,
-                        request_id,
-                        container,
-                        path,
-                        local_path,
-                    }
-                } else {
-                    ContainerCommand::Upload {
-                        tab_id,
-                        request_id,
-                        container,
-                        path,
-                        local_path,
-                    }
-                }
-            }
-        };
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.busy = true;
-            workspace.confirm = None;
-        });
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(request_id, command);
             });
         }
         cx.notify();
@@ -328,5 +200,122 @@ impl ContainerWorkspace {
             },
         );
         cx.notify();
+    }
+
+    /// 取消当前分类里的删除确认。
+    pub(crate) fn cancel_container_confirm(&mut self, cx: &mut Context<Self>) {
+        self.state.confirm = None;
+        cx.notify();
+    }
+
+    /// 执行确认过的危险操作：把确认项翻译成命令并登记在途请求。
+    ///
+    /// 设计原理（Why）：确认内容就是本工作区的 `confirm` 快照，命令投递端也归
+    /// 实体，确认后的分派不再经外壳转手。Compose 项目先按名称从当前列表取快照，
+    /// 找不到说明列表已刷新，本次确认失效；与原外壳行为一致，此时不改弹窗状态。
+    pub(crate) fn apply_container_confirm(&mut self, cx: &mut Context<Self>) {
+        let Some(confirm) = self.state.confirm.clone() else {
+            return;
+        };
+        let request_id = ContainerRequestId::new();
+        let confirm = match confirm {
+            ContainerConfirm::Compose(project) => {
+                let Some(project) = self
+                    .state
+                    .compose
+                    .iter()
+                    .find(|item| item.name == project)
+                    .cloned()
+                else {
+                    return;
+                };
+                self.send_tracked(
+                    request_id,
+                    ContainerCommand::RunCompose {
+                        tab_id: self.tab_id,
+                        request_id,
+                        project: Box::new(project),
+                        action: transom_core::ComposeAction::Down,
+                    },
+                );
+                cx.notify();
+                return;
+            }
+            confirm => confirm,
+        };
+        let Some(command) = self.confirm_container_command(confirm, request_id) else {
+            return;
+        };
+        self.state.busy = true;
+        self.state.confirm = None;
+        self.send_tracked(request_id, command);
+        cx.notify();
+    }
+
+    /// 把确认项映射成控制器命令；文件类操作缺少选中容器时返回 `None`。
+    fn confirm_container_command(
+        &self,
+        confirm: ContainerConfirm,
+        request_id: ContainerRequestId,
+    ) -> Option<ContainerCommand> {
+        let command = match confirm {
+            ContainerConfirm::Container(container) => ContainerCommand::Lifecycle {
+                tab_id: self.tab_id,
+                request_id,
+                container,
+                action: ContainerLifecycleAction::Remove { force: false },
+            },
+            ContainerConfirm::Image(image) => ContainerCommand::RemoveImage {
+                tab_id: self.tab_id,
+                request_id,
+                image,
+                force: false,
+            },
+            ContainerConfirm::Volume(name) => ContainerCommand::RemoveVolume {
+                tab_id: self.tab_id,
+                request_id,
+                name,
+                force: false,
+            },
+            ContainerConfirm::Network(network) => ContainerCommand::RemoveNetwork {
+                tab_id: self.tab_id,
+                request_id,
+                network,
+            },
+            ContainerConfirm::FilePath { path, recursive } => ContainerCommand::RemovePath {
+                tab_id: self.tab_id,
+                request_id,
+                container: self.state.selected_container_name()?,
+                path,
+                recursive,
+            },
+            ContainerConfirm::UploadOverwrite {
+                path,
+                local_path,
+                directory,
+            } => {
+                let container = self.state.selected_container_name()?;
+                if directory {
+                    ContainerCommand::UploadDirectory {
+                        tab_id: self.tab_id,
+                        request_id,
+                        container,
+                        path,
+                        local_path,
+                    }
+                } else {
+                    ContainerCommand::Upload {
+                        tab_id: self.tab_id,
+                        request_id,
+                        container,
+                        path,
+                        local_path,
+                    }
+                }
+            }
+            // Compose 分支在 `apply_container_confirm` 内提前处理。
+            ContainerConfirm::Compose(_) => return None,
+        };
+        Some(command)
     }
 }

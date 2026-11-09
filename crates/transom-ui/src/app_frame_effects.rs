@@ -308,6 +308,9 @@ impl AppShell {
             ContainerWorkspaceEvent::RunRowAction { target, action } => {
                 self.run_row_action(tab_id, target.clone(), *action, window, cx);
             }
+            ContainerWorkspaceEvent::ShowToast { message, success } => {
+                self.show_toast(message.clone(), *success, window, cx);
+            }
             _ => {}
         }
     }
