@@ -14,13 +14,11 @@ impl AppShell {
         let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
-        self.with_container_mut(tab_id, cx, |workspace| {
-            if workspace.system_df_request == Some(request_id) {
-                workspace.system_df_request = None;
-            }
-            workspace.system_df_loading = false;
-            workspace.system_df = Some(usage);
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.apply_system_df_loaded(request_id, usage)
+            });
+        }
     }
 
     /// 系统联合深度清理执行完毕。
@@ -35,9 +33,9 @@ impl AppShell {
             return;
         };
 
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.system_prune_running = false;
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| workspace.apply_system_pruned());
+        }
 
         let reclaimed_str = format_size(report.reclaimed);
         let succeeded = report.errors.is_empty();
@@ -78,13 +76,11 @@ impl AppShell {
         let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
-        self.with_container_mut(tab_id, cx, |workspace| {
-            if workspace.changes_request == Some(request_id) {
-                workspace.changes_request = None;
-            }
-            workspace.changes_loading = false;
-            workspace.changes = Some((container, changes));
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.apply_diffed(request_id, container, changes)
+            });
+        }
     }
 
     /// 容器引擎长连接事件流收到事件。
@@ -95,7 +91,10 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(current_section) = self.with_container(tab_id, cx, |workspace| workspace.section)
+        let Some(current_section) = self
+            .state
+            .container_workspace(tab_id)
+            .map(|workspace| workspace.read(cx).state.section)
         else {
             return;
         };

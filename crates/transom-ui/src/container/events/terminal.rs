@@ -22,20 +22,23 @@ impl AppShell {
             return;
         }
         let (terminal, subscription) = self.create_container_terminal(io, tab_id, window, cx);
-        self.with_container_mut(tab_id, cx, |workspace| {
-            let (user, shell) = workspace
-                .terminal_request
-                .take()
-                .map(|(_, user, shell)| (user, shell))
-                .unwrap_or((None, None));
-            workspace.terminal = Some(ContainerTerminalState {
-                view: terminal,
-                user,
-                shell,
-                _subscription: subscription,
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                let (user, shell) = workspace
+                    .state
+                    .terminal_request
+                    .take()
+                    .map(|(_, user, shell)| (user, shell))
+                    .unwrap_or((None, None));
+                workspace.state.terminal = Some(ContainerTerminalState {
+                    view: terminal,
+                    user,
+                    shell,
+                    _subscription: subscription,
+                });
+                workspace.state.detail_tab = ContainerDetailTab::Terminal;
+                workspace.state.notice = None;
             });
-            workspace.detail_tab = ContainerDetailTab::Terminal;
-            workspace.notice = None;
-        });
+        }
     }
 }

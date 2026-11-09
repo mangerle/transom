@@ -173,14 +173,17 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let project = self
-            .with_container(tab_id, cx, |workspace| {
+            .state
+            .container_workspace(tab_id)
+            .and_then(|workspace| {
                 workspace
+                    .read(cx)
+                    .state
                     .compose
                     .iter()
                     .find(|item| item.name == name)
                     .cloned()
-            })
-            .flatten();
+            });
         let Some(path) = project.as_ref().and_then(compose_project_yaml) else {
             self.show_toast(
                 rust_i18n::t!("container.compose.yaml_missing").to_string(),
@@ -200,16 +203,18 @@ impl AppShell {
             return;
         }
 
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.section = ContainerSection::Compose;
-            workspace.selected = Some(name.to_string());
-            workspace.detail_tab = ContainerDetailTab::Yaml;
-            if let Some((current_name, _, _, _)) = &workspace.compose_yaml_editor
-                && current_name != name
-            {
-                workspace.compose_yaml_editor = None;
-            }
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.section = ContainerSection::Compose;
+                workspace.state.selected = Some(name.to_string());
+                workspace.state.detail_tab = ContainerDetailTab::Yaml;
+                if let Some((current_name, _, _, _)) = &workspace.state.compose_yaml_editor
+                    && current_name != name
+                {
+                    workspace.state.compose_yaml_editor = None;
+                }
+            });
+        }
         if let Some(workspace) = self.state.container_workspace(tab_id) {
             workspace.update(cx, |workspace, cx| {
                 workspace.ensure_compose_yaml_loaded(cx);
@@ -248,15 +253,17 @@ impl AppShell {
             config_files: vec![path.to_string_lossy().into_owned()],
         };
 
-        self.with_container_mut(tab_id, cx, |workspace| {
-            if !workspace.compose.iter().any(|item| item.name == name) {
-                workspace.compose.push(project);
-            }
-            workspace.section = ContainerSection::Compose;
-            workspace.selected = Some(name.clone());
-            workspace.detail_tab = ContainerDetailTab::Yaml;
-            workspace.compose_yaml_editor = None;
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                if !workspace.state.compose.iter().any(|item| item.name == name) {
+                    workspace.state.compose.push(project);
+                }
+                workspace.state.section = ContainerSection::Compose;
+                workspace.state.selected = Some(name.clone());
+                workspace.state.detail_tab = ContainerDetailTab::Yaml;
+                workspace.state.compose_yaml_editor = None;
+            });
+        }
 
         if let Some(workspace) = self.state.container_workspace(tab_id) {
             workspace.update(cx, |workspace, cx| {

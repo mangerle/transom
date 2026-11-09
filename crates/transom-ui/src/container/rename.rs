@@ -47,10 +47,12 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let input = cx.new(|cx| InputState::new(window, cx).default_value(current));
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.rename_container = Some((id, input));
-        });
-        cx.notify();
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, cx| {
+                workspace.state.rename_container = Some((id, input));
+                cx.notify();
+            });
+        }
     }
 }
 

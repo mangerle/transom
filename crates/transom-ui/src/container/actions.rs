@@ -201,7 +201,7 @@ impl ContainerWorkspace {
     /// 把一个容器从指定网络断开。
     ///
     /// 设计原理（Why）：断网只是向控制器投递命令并登记在途请求，动作完全落在
-    /// 本实体上；网络详情页直接调用，不再经外壳的 `with_container_mut` 转手。
+    /// 本实体上；网络详情页直接调用，不经过外壳转发。
     pub(crate) fn disconnect_network(&mut self, network: String, container: String) {
         let request_id = ContainerRequestId::new();
         self.state.busy = true;
@@ -385,11 +385,13 @@ impl AppShell {
                     RowTarget::Network(id) => Some(ContainerConfirm::Network(id)),
                     RowTarget::Compose(_) => None,
                 };
-                if let Some(confirm) = confirm {
-                    self.with_container_mut(tab_id, cx, |workspace| {
-                        workspace.confirm = Some(confirm);
+                if let Some(confirm) = confirm
+                    && let Some(workspace) = self.state.container_workspace(tab_id)
+                {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.state.confirm = Some(confirm);
+                        cx.notify();
                     });
-                    cx.notify();
                 }
             }
             RowAction::Run => {

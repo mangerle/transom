@@ -116,16 +116,20 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         if !armed {
-            self.with_container_mut(tab_id, cx, |workspace| {
-                workspace.prune_armed = Some(target);
-            });
-            cx.notify();
+            if let Some(workspace) = self.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| {
+                    workspace.state.prune_armed = Some(target);
+                    cx.notify();
+                });
+            }
             return;
         }
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.prune_armed = None;
-            workspace.busy = true;
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.prune_armed = None;
+                workspace.state.busy = true;
+            });
+        }
         let request_id = ContainerRequestId::new();
         let command = match target {
             ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },

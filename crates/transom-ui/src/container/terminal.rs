@@ -115,13 +115,15 @@ impl AppShell {
             &terminal,
             window,
             move |this, _, event: &TerminalEvent, _window, cx| {
-                if matches!(event, TerminalEvent::Exit) {
-                    this.with_container_mut(tab_id, cx, |workspace| {
-                        workspace.terminal = None;
-                        workspace.notice =
+                if matches!(event, TerminalEvent::Exit)
+                    && let Some(workspace) = this.state.container_workspace(tab_id)
+                {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.state.terminal = None;
+                        workspace.state.notice =
                             Some(rust_i18n::t!("container.terminal.closed").to_string());
+                        cx.notify();
                     });
-                    cx.notify();
                 }
             },
         );

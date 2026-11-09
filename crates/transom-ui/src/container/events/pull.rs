@@ -62,16 +62,27 @@ impl AppShell {
     ) {
         let tab_ids: Vec<TabId> = self.state.workspace.tabs.iter().map(|t| t.id).collect();
         let target = tab_ids.into_iter().find(|tab_id| {
-            self.with_container(*tab_id, cx, |workspace| {
-                workspace.pull_manager.get(&task_id).is_some()
-            })
-            .unwrap_or(false)
+            self.state
+                .container_workspace(*tab_id)
+                .is_some_and(|workspace| {
+                    workspace
+                        .read(cx)
+                        .state
+                        .pull_manager
+                        .get(&task_id)
+                        .is_some()
+                })
         });
-        if let Some(tab_id) = target {
-            self.with_container_mut(tab_id, cx, |workspace| {
-                workspace.pull_manager.on_progress(&task_id, status, layers);
+        if let Some(tab_id) = target
+            && let Some(workspace) = self.state.container_workspace(tab_id)
+        {
+            workspace.update(cx, |workspace, cx| {
+                workspace
+                    .state
+                    .pull_manager
+                    .on_progress(&task_id, status, layers);
+                cx.notify();
             });
-            cx.notify();
         }
     }
 
@@ -93,16 +104,18 @@ impl AppShell {
 
         let tab_ids: Vec<TabId> = self.state.workspace.tabs.iter().map(|t| t.id).collect();
         for tab_id in tab_ids {
-            let found = self
-                .with_container_mut(tab_id, cx, |workspace| {
-                    let task = workspace.pull_manager.get(&task_id)?;
-                    let reference = task.reference.clone();
-                    let next = workspace
-                        .pull_manager
-                        .on_finished(&task_id, error_msg.clone());
-                    Some((reference, next))
-                })
-                .flatten();
+            let Some(workspace) = self.state.container_workspace(tab_id) else {
+                continue;
+            };
+            let found = workspace.update(cx, |workspace, _| {
+                let task = workspace.state.pull_manager.get(&task_id)?;
+                let reference = task.reference.clone();
+                let next = workspace
+                    .state
+                    .pull_manager
+                    .on_finished(&task_id, error_msg.clone());
+                Some((reference, next))
+            });
             if let Some((reference, next)) = found {
                 target_tab = Some(tab_id);
                 task_reference = reference;

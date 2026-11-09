@@ -33,9 +33,12 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.notice =
+                    Some(rust_i18n::t!("container.transfer.start").to_string());
+            });
+        }
         if let Some(workspace) = self.state.container_workspace(tab_id) {
             workspace.update(cx, |workspace, _| {
                 workspace.send_tracked(
@@ -62,9 +65,12 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.state.notice =
+                    Some(rust_i18n::t!("container.transfer.start").to_string());
+            });
+        }
         if let Some(workspace) = self.state.container_workspace(tab_id) {
             workspace.update(cx, |workspace, _| {
                 workspace.send_tracked(

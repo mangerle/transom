@@ -11,11 +11,13 @@ impl AppShell {
     ) {
         match event {
             ContainerAppEvent::Connected { tab_id, info } => {
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.status = ContainerWorkspaceStatus::Connected;
-                    workspace.info = Some(*info);
-                    workspace.notice = None;
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.status = ContainerWorkspaceStatus::Connected;
+                        workspace.state.info = Some(*info);
+                        workspace.state.notice = None;
+                    });
+                }
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.status = TabStatus::Connected;
                 }
@@ -51,9 +53,11 @@ impl AppShell {
             }
             ContainerAppEvent::ConnectFailed { tab_id, error } => {
                 let message = localized_error(&error);
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.status = ContainerWorkspaceStatus::Failed(message.clone());
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.status = ContainerWorkspaceStatus::Failed(message.clone());
+                    });
+                }
                 // 连接失败既要让工作区停在失败态（重试按钮在那里），也要在右上角
                 // 立刻说一声：标签可能不在前台，只靠面板状态用户看不到出了事。
                 self.show_toast(message, false, window, cx);
@@ -86,9 +90,11 @@ impl AppShell {
                 });
             }
             ContainerAppEvent::Disconnected { tab_id } => {
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.status = ContainerWorkspaceStatus::Disconnected;
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.state.status = ContainerWorkspaceStatus::Disconnected;
+                    });
+                }
             }
             _ => {}
         }

@@ -253,9 +253,13 @@ impl AppShell {
                 container_id,
             }) => {
                 self.activate_tab(tab_id, window, cx);
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.apply_section(crate::container::ContainerSection::Containers);
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace
+                            .state
+                            .apply_section(crate::container::ContainerSection::Containers);
+                    });
+                }
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
                     workspace.update(cx, |workspace, _| {
                         workspace.select_container_item(container_id)

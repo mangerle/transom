@@ -154,36 +154,6 @@ impl AppState {
 }
 
 impl AppShell {
-    /// 迁移期辅助：只读访问某个标签页的容器工作区状态。
-    ///
-    /// 这是实体化迁移期的临时桥，最终目标是删除并按领域方法迁入
-    /// [`ContainerWorkspace`]；新代码应优先取实体句柄后自行 `read`。
-    pub(crate) fn with_container<R>(
-        &self,
-        tab_id: TabId,
-        cx: &App,
-        f: impl FnOnce(&ContainerWorkspaceState) -> R,
-    ) -> Option<R> {
-        let workspace = self.state.container_workspace(tab_id)?;
-        Some(f(&workspace.read(cx).state))
-    }
-
-    /// 迁移期辅助：可变访问某个标签页的容器工作区状态。
-    ///
-    /// 闭包内只允许修改状态，禁止调用任何外壳方法（外壳此时已被可变借用）；
-    /// 需要外壳动作时，把数据通过返回值带出闭包，闭包结束后再调用。
-    /// 这是实体化迁移期的临时桥，最终目标是删除并按领域方法迁入
-    /// [`ContainerWorkspace`]。
-    pub(crate) fn with_container_mut<R>(
-        &mut self,
-        tab_id: TabId,
-        cx: &mut Context<AppShell>,
-        f: impl FnOnce(&mut ContainerWorkspaceState) -> R,
-    ) -> Option<R> {
-        let workspace = self.state.container_workspace(tab_id)?;
-        Some(workspace.update(cx, |workspace, _| f(&mut workspace.state)))
-    }
-
     /// 按请求 id 取走它所属的容器标签页。
     ///
     /// 请求登记在各标签页的容器实体内部，事件只带 `request_id`，因此必须逐个

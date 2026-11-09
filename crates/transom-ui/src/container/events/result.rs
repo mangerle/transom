@@ -1,4 +1,7 @@
 //! 容器动作/传输结果与非传输失败：统一收尾工作区状态并给出右上角提示。
+//!
+//! 设计原理（Why）：收尾分支集中到 [`ContainerWorkspace`] 的具名方法，
+//! 外壳只负责取提示文案、定位标签页与在需要时刷新列表。
 
 use super::*;
 
@@ -24,68 +27,32 @@ impl AppShell {
                 label.map(|label| (toast_succeeded(&label), true))
             }
         };
-        let mut editor_to_read = None;
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.busy = false;
-            workspace.confirm = None;
-            workspace.rename_container = None;
-            workspace.notice = None;
-            if workspace.pods_action_request == Some(request_id) {
-                workspace.pods_action_request = None;
-                workspace.pods_loading = false;
-                if let Some(err) = &error {
-                    workspace.pods_error = Some(localized_error(err));
-                }
-            }
-            if workspace.quadlets_action_request == Some(request_id) {
-                workspace.quadlets_action_request = None;
-                workspace.quadlets_loading = false;
-                if let Some(err) = &error {
-                    workspace.quadlets_error = Some(localized_error(err));
-                }
-            }
-            if let Some(build) = workspace.build_dialog.as_mut()
-                && build.request_id == Some(request_id)
-            {
-                build.building = false;
-                if let Some(err) = &error {
-                    build.error = Some(localized_error(err));
-                } else {
-                    build.success = true;
-                }
-            }
-            if workspace.files.preview_saving {
-                workspace.files.preview_saving = false;
-                if error.is_none() {
-                    editor_to_read = workspace.files.preview_editor.take();
-                }
-            }
+        let Some(workspace) = self.state.container_workspace(tab_id) else {
+            return;
+        };
+        let editor = workspace.update(cx, |workspace, _| {
+            workspace.apply_action_finished(request_id, error.as_ref())
         });
-        if let Some(editor) = editor_to_read {
+        if let Some(editor) = editor {
             let new_content = editor.read(cx).value().to_string();
-            self.with_container_mut(tab_id, cx, |workspace| {
-                if let Some((path, _, _)) = workspace.files.preview.as_ref() {
-                    let path = path.clone();
-                    workspace.files.preview = Some((path, new_content, false));
-                }
+            workspace.update(cx, |workspace, _| {
+                workspace.apply_preview_saved(new_content)
             });
         }
         if let Some((message, success)) = toast {
             self.show_toast(message, success, window, cx);
         }
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            let (pods_open, quadlets_open) = {
-                let state = &workspace.read(cx).state;
-                (state.pods_dialog_open, state.quadlets_dialog_open)
-            };
-            if pods_open {
-                workspace.update(cx, |workspace, cx| workspace.refresh_pods(cx));
-            }
-            if quadlets_open {
-                workspace.update(cx, |workspace, cx| workspace.refresh_quadlets(cx));
-            }
+        let (pods_open, quadlets_open) = {
+            let state = &workspace.read(cx).state;
+            (state.pods_dialog_open, state.quadlets_dialog_open)
+        };
+        if pods_open {
+            workspace.update(cx, |workspace, cx| workspace.refresh_pods(cx));
         }
-        if refresh && let Some(workspace) = self.state.container_workspace(tab_id) {
+        if quadlets_open {
+            workspace.update(cx, |workspace, cx| workspace.refresh_quadlets(cx));
+        }
+        if refresh {
             workspace.update(cx, |workspace, _| workspace.refresh_section());
         }
     }
@@ -108,28 +75,19 @@ impl AppShell {
             )),
             None => label.map(|label| (toast_succeeded(&label), true)),
         };
-        let mut refresh_files = None;
-        let mut refresh_images = false;
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.notice = None;
-            if error.is_none() {
-                if workspace.section == ContainerSection::Images {
-                    refresh_images = true;
-                } else {
-                    refresh_files = Some(workspace.files.path.clone());
-                }
-            }
+        let Some(workspace) = self.state.container_workspace(tab_id) else {
+            return;
+        };
+        let (refresh_images, refresh_files) = workspace.update(cx, |workspace, _| {
+            workspace.apply_transfer_finished(error.as_ref())
         });
         if let Some((message, success)) = toast {
             self.show_toast(message, success, window, cx);
         }
         if refresh_images {
-            if let Some(workspace) = self.state.container_workspace(tab_id) {
-                workspace.update(cx, |workspace, _| workspace.refresh_section());
-            }
+            workspace.update(cx, |workspace, _| workspace.refresh_section());
         } else if let Some(path) = refresh_files
             && !path.is_empty()
-            && let Some(workspace) = self.state.container_workspace(tab_id)
         {
             workspace.update(cx, |workspace, cx| workspace.load_container_dir(path, cx));
         }
@@ -147,76 +105,11 @@ impl AppShell {
             return;
         };
         let err_desc = localized_error(&error);
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.busy = false;
-            workspace.files.loading = false;
-            workspace.notice = None;
-            if workspace.logs_request == Some(request_id) {
-                workspace.logs_request = None;
-                workspace.logs_follow = false;
-            }
-            if workspace.stats_request == Some(request_id) {
-                workspace.stats_request = None;
-                workspace.stats_error = Some(err_desc.clone());
-            }
-            if workspace.stats_processes_request == Some(request_id) {
-                workspace.stats_processes_request = None;
-                workspace.stats_processes_loading = false;
-                let friendly_err = if err_desc.to_lowercase().contains("is not running") {
-                    rust_i18n::t!("container.stats.container_stopped").to_string()
-                } else {
-                    err_desc.clone()
-                };
-                workspace.stats_processes_error = Some(friendly_err);
-            }
-            if workspace.files.request == Some(request_id) {
-                workspace.files.request = None;
-                workspace.files.loading = false;
-            }
-            if workspace.pods_request == Some(request_id) {
-                workspace.pods_request = None;
-                workspace.pods_loading = false;
-                workspace.pods_error = Some(err_desc.clone());
-            }
-            if workspace.pods_action_request == Some(request_id) {
-                workspace.pods_action_request = None;
-                workspace.pods_loading = false;
-                workspace.pods_error = Some(err_desc.clone());
-            }
-            if workspace.quadlets_request == Some(request_id) {
-                workspace.quadlets_request = None;
-                workspace.quadlets_loading = false;
-                workspace.quadlets_error = Some(err_desc.clone());
-            }
-            if workspace.quadlets_action_request == Some(request_id) {
-                workspace.quadlets_action_request = None;
-                workspace.quadlets_loading = false;
-                workspace.quadlets_error = Some(err_desc.clone());
-            }
-            if workspace.changes_request == Some(request_id) {
-                workspace.changes_request = None;
-                workspace.changes_loading = false;
-            }
-            if let Some(hub) = workspace.hub_dialog.as_mut() {
-                if hub.search_request == Some(request_id) {
-                    hub.searching = false;
-                    hub.search_request = None;
-                    hub.search_error = Some(err_desc.clone());
-                }
-                if hub.tags_request == Some(request_id) {
-                    hub.tags_loading = false;
-                    hub.tags_request = None;
-                    hub.tags_error = Some(err_desc.clone());
-                }
-            }
-            if workspace
-                .terminal_request
-                .as_ref()
-                .is_some_and(|(pending, ..)| *pending == request_id)
-            {
-                workspace.terminal_request = None;
-            }
-        });
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, _| {
+                workspace.apply_failed(request_id, &err_desc)
+            });
+        }
         // 只有明确具备动作意图的用户操作（label 为 Some）失败时才向右上角弹提示；
         // 后台静默采样、列表查询等只读请求失败只记录内部状态，杜绝弹窗轰炸。
         if let Some(label) = label {

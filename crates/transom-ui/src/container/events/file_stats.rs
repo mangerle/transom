@@ -1,4 +1,7 @@
 //! 日志、统计、文件浏览与传输进度。
+//!
+//! 设计原理（Why）：事件处理只按请求 id 定位标签页，具体状态流转收敛到
+//! [`ContainerWorkspace`] 的具名方法（见 `apply.rs`）。
 
 use super::super::*;
 
@@ -20,22 +23,19 @@ impl AppShell {
                 let Some(tab_id) = self.container_request_tab(request_id, cx) else {
                     return;
                 };
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    if workspace.logs_request == Some(request_id) {
-                        workspace.append_logs(&bytes);
-                    }
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_logs_chunk(request_id, &bytes)
+                    });
+                }
             }
             ContainerAppEvent::LogsClosed { request_id } => {
                 let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    if workspace.logs_request == Some(request_id) {
-                        workspace.logs_request = None;
-                        workspace.logs_follow = false;
-                    }
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| workspace.apply_logs_closed(request_id));
+                }
             }
             ContainerAppEvent::StatsUpdated {
                 request_id,
@@ -46,66 +46,21 @@ impl AppShell {
                     return;
                 };
                 log::debug!("收到容器统计更新，请求: {request_id}");
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    if workspace.stats_request != Some(request_id) {
-                        return;
-                    }
-                    let mut stats = stats;
-                    if stats.host_load.is_none()
-                        && let Some(prev) = &workspace.stats
-                        && prev.host_load.is_some()
-                    {
-                        stats.host_load = prev.host_load;
-                    }
-                    workspace.stats_high_cpu = if stats.cpu_percent >= 90.0 {
-                        workspace.stats_high_cpu.saturating_add(1)
-                    } else {
-                        0
-                    };
-                    workspace.stats_high_memory = if stats.memory_percent >= 90.0 {
-                        workspace.stats_high_memory.saturating_add(1)
-                    } else {
-                        0
-                    };
-                    let high_cpu = workspace.stats_high_cpu >= 3;
-                    let high_memory = workspace.stats_high_memory >= 3;
-                    let alert_due = workspace
-                        .stats_alert_at
-                        .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(300));
-                    if (high_cpu || high_memory) && alert_due {
-                        workspace.stats_alert_at = Some(std::time::Instant::now());
-                        workspace.notice = Some(if high_cpu {
-                            rust_i18n::t!("container.stats.alert_cpu").to_string()
-                        } else {
-                            rust_i18n::t!("container.stats.alert_memory").to_string()
-                        });
-                    }
-                    workspace.stats = Some(stats.clone());
-                    let due = workspace
-                        .stats_last_append
-                        .is_none_or(|last| last.elapsed() >= workspace.stats_interval.interval());
-                    if due {
-                        workspace.stats_last_append = Some(std::time::Instant::now());
-                        workspace.stats_history.push_back(stats);
-                        while workspace.stats_history.len() > STATS_HISTORY_LIMIT {
-                            workspace.stats_history.pop_front();
-                        }
-                    }
-                    workspace.stats_error = None;
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_stats_updated(request_id, stats)
+                    });
+                }
             }
             ContainerAppEvent::StatsUnavailable { request_id, error } => {
                 let Some(tab_id) = self.container_request_tab(request_id, cx) else {
                     return;
                 };
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    if workspace.stats_request == Some(request_id) {
-                        workspace.stats_error = Some(
-                            rust_i18n::t!("container.stats.reconnecting", error = error)
-                                .to_string(),
-                        );
-                    }
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_stats_unavailable(request_id, &error)
+                    });
+                }
             }
             ContainerAppEvent::DirListed {
                 request_id,
@@ -115,16 +70,11 @@ impl AppShell {
                 let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    if workspace.files.request == Some(request_id) {
-                        log::info!("容器目录已加载，路径: {path}，条目: {}", entries.len());
-                        workspace.files.request = None;
-                        workspace.files.path = path;
-                        workspace.files.entries = entries;
-                        workspace.files.loading = false;
-                        workspace.files.scroll.set_offset(point(px(0.0), px(0.0)));
-                    }
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_dir_listed(request_id, path, entries)
+                    });
+                }
             }
             ContainerAppEvent::FilePreview {
                 request_id,
@@ -137,13 +87,11 @@ impl AppShell {
                 let Some(tab_id) = self.take_container_request(request_id, cx) else {
                     return;
                 };
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.files.preview = Some((path, content, truncated));
-                    workspace.files.preview_binary = binary;
-                    if binary {
-                        workspace.files.preview_editor = None;
-                    }
-                });
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_file_preview(path, content, truncated, binary)
+                    });
+                }
             }
             ContainerAppEvent::TransferProgress {
                 request_id,
@@ -153,33 +101,19 @@ impl AppShell {
                 let Some(tab_id) = self.container_request_tab(request_id, cx) else {
                     return;
                 };
-                self.with_container_mut(tab_id, cx, |workspace| {
-                    workspace.notice = Some(match total {
-                        Some(total) if total > 0 => format!(
-                            "{} / {}",
-                            crate::format::format_size(transferred),
-                            crate::format::format_size(total)
-                        ),
-                        _ => crate::format::format_size(transferred),
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_transfer_progress(transferred, total)
                     });
-                });
+                }
             }
             ContainerAppEvent::BuildProgress { request_id, line } => {
-                if let Some(tab_id) = self.container_request_tab(request_id, cx) {
-                    self.with_container_mut(tab_id, cx, |workspace| {
-                        workspace.notice = line.lines().last().map(str::to_string);
-                        if let Some(b) = workspace
-                            .build_dialog
-                            .as_mut()
-                            .filter(|b| b.request_id == Some(request_id))
-                        {
-                            b.logs.extend(line.lines().map(str::to_string));
-                            if b.logs.len() > crate::container::types::BUILD_LOG_LIMIT {
-                                let excess =
-                                    b.logs.len() - crate::container::types::BUILD_LOG_LIMIT;
-                                b.logs.drain(..excess);
-                            }
-                        }
+                let Some(tab_id) = self.container_request_tab(request_id, cx) else {
+                    return;
+                };
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, _| {
+                        workspace.apply_build_progress(request_id, &line)
                     });
                 }
             }

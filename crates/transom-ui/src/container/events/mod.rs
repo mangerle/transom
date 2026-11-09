@@ -3,6 +3,7 @@
 //! 分发器只做分类，具体状态更新在 connection / listing / file_stats /
 //! operations 四个子模块，以及已有的 pull / result / system / terminal。
 
+mod apply;
 mod connection;
 mod file_stats;
 mod listing;
