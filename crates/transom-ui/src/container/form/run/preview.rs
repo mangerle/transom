@@ -4,8 +4,9 @@
 //! - 直观呈现根据当前表单动态拼装的 `docker run` 命令，消除图形界面的配置黑盒感；
 //! - 提供后台服务与交互排查双预设切换，并支持一键将完整命令复制到系统剪贴板。
 
+use super::view::edit_run_form;
 use crate::app::AppShell;
-use crate::container::types::RunPreset;
+use crate::container::types::{RunContainerFormState, RunPreset};
 use crate::format::format_size;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -17,25 +18,21 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 impl AppShell {
-    /// 渲染右侧预览与摘要区。
+    /// 渲染右侧预览与摘要区；表单状态由弹窗宿主从实体读出后注入。
     pub(super) fn render_run_preview_panel(
         &self,
+        form: &RunContainerFormState,
         app: &Entity<AppShell>,
-        tab_id: transom_core::TabId,
         p: &Palette,
         cx: &App,
     ) -> AnyElement {
-        let Some(form) = self.state.containers.run_form.as_ref() else {
-            return div().into_any_element();
-        };
-
         let preview_cmd = form.generate_preview_command(cx);
         let copy_toast = form.copy_toast;
         let current_preset = form.preset;
         let image_raw = form.image.read(cx).value().trim().to_string();
 
         // 查找已有镜像的元数据摘要
-        let image_meta = self.state.container_workspace(tab_id).and_then(|ws| {
+        let image_meta = self.state.container_workspace(form.tab_id).and_then(|ws| {
             let state = &ws.read(cx).state;
             state
                 .images
@@ -77,12 +74,10 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            if let Some(f) = this.state.containers.run_form.as_mut()
-                                            {
-                                                f.preset = RunPreset::Daemon;
-                                                f.restart = Some("unless-stopped".to_string());
-                                                cx.notify();
-                                            }
+                                            edit_run_form(this, cx, |form| {
+                                                form.preset = RunPreset::Daemon;
+                                                form.restart = Some("unless-stopped".to_string());
+                                            });
                                         },
                                     )),
                             )
@@ -99,12 +94,10 @@ impl AppShell {
                                     .on_click(crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            if let Some(f) = this.state.containers.run_form.as_mut()
-                                            {
-                                                f.preset = RunPreset::Interactive;
-                                                f.restart = None;
-                                                cx.notify();
-                                            }
+                                            edit_run_form(this, cx, |form| {
+                                                form.preset = RunPreset::Interactive;
+                                                form.restart = None;
+                                            });
                                         },
                                     )),
                             ),
@@ -230,11 +223,7 @@ impl AppShell {
                                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                                 cmd_to_copy.clone(),
                                             ));
-                                            if let Some(f) = this.state.containers.run_form.as_mut()
-                                            {
-                                                f.copy_toast = true;
-                                                cx.notify();
-                                            }
+                                            edit_run_form(this, cx, |form| form.copy_toast = true);
                                         },
                                     )),
                             ),

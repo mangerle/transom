@@ -40,7 +40,10 @@ mod view;
 
 pub(crate) use entity::ContainerWorkspace;
 pub(crate) use event::ContainerWorkspaceEvent;
-pub(crate) use form::{ContainerFormEvent, ContainerFormFolders, ContainerFormView};
+pub(crate) use form::{
+    ContainerFormEvent, ContainerFormFolders, ContainerFormView, ContainerRunFormEvent,
+    ContainerRunFormView,
+};
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use types::{

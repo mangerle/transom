@@ -69,14 +69,12 @@ pub(crate) struct ContainerDiscovery {
 
 /// 引擎连接侧栏与其余容器弹窗的顶层状态。
 ///
-/// 连接表单已实体化为 `ContainerFormView`，本结构只保留仍由外壳统一持有
-/// 的侧栏与标签级弹窗字段。
+/// 连接表单与运行容器表单已实体化为 `ContainerFormView` / `ContainerRunFormView`，
+/// 本结构只保留仍由外壳统一持有的侧栏与标签级弹窗字段。
 #[derive(Default)]
 pub(crate) struct ContainerUiState {
     pub(crate) sidebar_open: bool,
     pub(crate) fullscreen: Option<TabId>,
-    /// 运行容器表单。
-    pub(crate) run_form: Option<ContainerRunForm>,
     /// 拉取镜像 / 新建卷 / 新建网络的弹窗：字段随分类不同。
     pub(crate) create_dialog: Option<ContainerCreateDialog>,
     /// 最近一次「发现本机引擎」的结果面板。

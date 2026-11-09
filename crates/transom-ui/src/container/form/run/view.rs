@@ -6,6 +6,7 @@
 
 use crate::app::AppShell;
 use crate::container::form::RUN_RESTART_POLICIES;
+use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -15,19 +16,14 @@ use gpui_kit::component::{Icon, Selectable, Sizable};
 use gpui_kit::*;
 
 impl AppShell {
-    /// 渲染运行容器表单整体弹窗体。
+    /// 渲染运行容器表单整体弹窗体；表单状态由弹窗宿主从实体读出后注入。
     pub(crate) fn render_container_run_form_body(
         &self,
+        form: &RunContainerFormState,
         app: &Entity<AppShell>,
-        _window: &mut Window,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.containers.run_form.as_ref() else {
-            return div().into_any_element();
-        };
-
-        let tab_id = form.tab_id;
         let restart = form.restart.clone();
         let error = form.error.clone();
 
@@ -61,9 +57,9 @@ impl AppShell {
                         )),
                 )
                 // 2. 结构化端口映射
-                .child(self.render_port_mappings_section(app, p))
+                .child(self.render_port_mappings_section(form, app, p))
                 // 3. 结构化数据卷挂载
-                .child(self.render_volume_mappings_section(app, p))
+                .child(self.render_volume_mappings_section(form, app, p))
                 // 4. 高级选项（直接展开平铺呈现）
                 .child(
                     div()
@@ -74,7 +70,7 @@ impl AppShell {
                         .child(rust_i18n::t!("container.run.advanced_title").to_string()),
                 )
                 // 结构化环境变量
-                .child(self.render_env_vars_section(app, p))
+                .child(self.render_env_vars_section(form, app, p))
                 // 自定义启动命令
                 .child(crate::widgets::form_field(
                     rust_i18n::t!("container.run.command").to_string(),
@@ -210,18 +206,14 @@ impl AppShell {
                                     crate::dialog_host::on_event(
                                         app,
                                         move |this, _: &ClickEvent, _, cx| {
-                                            let Some(form) =
-                                                this.state.containers.run_form.as_mut()
-                                            else {
-                                                return;
-                                            };
-                                            form.restart =
-                                                if form.restart.as_deref() == Some(*policy) {
-                                                    None
-                                                } else {
-                                                    Some((*policy).to_string())
-                                                };
-                                            cx.notify();
+                                            edit_run_form(this, cx, |form| {
+                                                form.restart =
+                                                    if form.restart.as_deref() == Some(*policy) {
+                                                        None
+                                                    } else {
+                                                        Some((*policy).to_string())
+                                                    };
+                                            });
                                         },
                                     ),
                                 )
@@ -252,14 +244,18 @@ impl AppShell {
             .gap_4()
             .items_start()
             .child(left_panel)
-            .child(self.render_run_preview_panel(app, tab_id, p, cx));
+            .child(self.render_run_preview_panel(form, app, p, cx));
 
         let cancel_btn = Button::new("container-run-cancel")
             .ghost()
             .label(rust_i18n::t!("common.cancel").to_string())
             .on_click(crate::dialog_host::on_event(
                 app,
-                |this, _: &ClickEvent, _, cx| this.dismiss_container_run(cx),
+                |this, _: &ClickEvent, _, cx| {
+                    let view = this.state.modals.tools.run_form.clone();
+                    view.update(cx, |view, cx| view.close(cx));
+                    cx.notify();
+                },
             ))
             .into_any_element();
 
@@ -286,8 +282,10 @@ impl AppShell {
             .label(submit_label)
             .on_click(crate::dialog_host::on_event(
                 app,
-                move |this, _: &ClickEvent, _, cx| {
-                    this.submit_container_run(tab_id, cx);
+                |this, _: &ClickEvent, _, cx| {
+                    let view = this.state.modals.tools.run_form.clone();
+                    view.update(cx, |view, cx| view.submit(cx));
+                    cx.notify();
                 },
             ))
             .into_any_element();
@@ -310,13 +308,27 @@ impl AppShell {
     }
 }
 
+/// 把渲染回调转成对运行表单实体的就地修改。
+///
+/// 本阶段渲染仍在外壳，回调只能经实体更新；`edit_state` 是迁移期桥接入口，
+/// 实体更新后再通知外壳重绘，弹窗栈才能按新状态对账。
+pub(super) fn edit_run_form(
+    shell: &mut AppShell,
+    cx: &mut Context<AppShell>,
+    update: impl FnOnce(&mut RunContainerFormState),
+) {
+    let view = shell.state.modals.tools.run_form.clone();
+    view.update(cx, |view, cx| view.edit_state(cx, update));
+    cx.notify();
+}
+
 /// 运行表单的布尔开关行。
 fn run_toggle(
     app: &Entity<AppShell>,
     id: &'static str,
     label: String,
     checked: bool,
-    set: fn(&mut crate::container::types::RunContainerFormState, bool),
+    set: fn(&mut RunContainerFormState, bool),
     p: &Palette,
 ) -> AnyElement {
     h_flex()
@@ -329,10 +341,7 @@ fn run_toggle(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, &next: &bool, _, cx| {
-                        if let Some(form) = this.state.containers.run_form.as_mut() {
-                            set(form, next);
-                        }
-                        cx.notify();
+                        edit_run_form(this, cx, |form| set(form, next));
                     },
                 )),
         )

@@ -21,7 +21,7 @@ impl PortMappingItem {
         container: Option<u16>,
         protocol: &str,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         let id = format!(
             "port-{}",
@@ -70,7 +70,7 @@ impl VolumeMappingItem {
         container: Option<&str>,
         read_only: bool,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         let id = format!(
             "vol-{}",
@@ -118,7 +118,7 @@ impl EnvVarItem {
         key_str: Option<&str>,
         val_str: Option<&str>,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         let id = format!(
             "env-{}",
@@ -153,7 +153,7 @@ pub(crate) fn run_input(
     placeholder: &'static str,
     initial: Option<String>,
     window: &mut Window,
-    cx: &mut Context<crate::app::AppShell>,
+    cx: &mut Context<impl Sized>,
 ) -> Entity<InputState> {
     cx.new(|cx| {
         let mut state =

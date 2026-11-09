@@ -25,9 +25,6 @@ pub(crate) enum RunPreset {
     Interactive,
 }
 
-/// 运行新容器表单会话状态。
-pub(crate) type ContainerRunForm = RunContainerFormState;
-
 /// 运行新容器表单会话状态实现。
 pub(crate) struct RunContainerFormState {
     pub(crate) tab_id: TabId,
@@ -67,7 +64,7 @@ impl RunContainerFormState {
         tab_id: TabId,
         image_hint: Option<String>,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         let (name_hint, ports_hint) = if let Some(ref img) = image_hint {
             infer_image_defaults(img)
@@ -122,7 +119,7 @@ impl RunContainerFormState {
         tab_id: TabId,
         details: &transom_core::ContainerDetails,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         Self::build_from_details_inner(tab_id, details, false, window, cx)
     }
@@ -132,7 +129,7 @@ impl RunContainerFormState {
         tab_id: TabId,
         details: &transom_core::ContainerDetails,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         Self::build_from_details_inner(tab_id, details, true, window, cx)
     }
@@ -142,7 +139,7 @@ impl RunContainerFormState {
         details: &transom_core::ContainerDetails,
         is_recreate: bool,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
     ) -> Self {
         let name_hint = if details.name.is_empty() {
             None

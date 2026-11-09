@@ -115,7 +115,12 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerRunForm => {
-                shell.dismiss_container_run(cx);
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .run_form
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::ContainerCreate => {
@@ -286,15 +291,12 @@ impl ModalKind {
             }
             ModalKind::ContainerFolderForm => shell.submit_engine_folder_form(window, cx),
             ModalKind::ContainerRunForm => {
-                if let Some(tab_id) = shell
+                shell
                     .state
-                    .containers
+                    .modals
+                    .tools
                     .run_form
-                    .as_ref()
-                    .map(|form| form.tab_id)
-                {
-                    shell.submit_container_run(tab_id, cx);
-                }
+                    .update(cx, |view, cx| view.submit(cx));
             }
             ModalKind::ContainerCreate => {
                 if let Some(tab_id) = shell
@@ -416,13 +418,16 @@ impl ModalKind {
                     .as_ref()
                     .map(|form| form.input.clone())
             }),
-            ModalKind::ContainerRunForm => input_focus(shell, |state| {
-                state
-                    .containers
-                    .run_form
-                    .as_ref()
-                    .map(|form| form.image.clone())
-            }),
+            ModalKind::ContainerRunForm => shell
+                .state
+                .modals
+                .tools
+                .run_form
+                .read(cx)
+                .state()
+                .map_or(ModalFocus::None, |form| {
+                    ModalFocus::Input(form.image.clone())
+                }),
             ModalKind::ContainerCreate => {
                 let input = shell
                     .state

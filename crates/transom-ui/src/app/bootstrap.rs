@@ -223,6 +223,14 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.container_form = Some(container_form_subscription);
+        // 运行容器表单只上交提交意图：目标工作区定位与命令投递仍归外壳。
+        let container_run_form_subscription = cx.subscribe(
+            &self.state.modals.tools.run_form,
+            |shell, _view, event: &crate::container::ContainerRunFormEvent, cx| {
+                shell.on_container_run_form_event(event, cx);
+            },
+        );
+        self.state.tasks.subscriptions.container_run_form = Some(container_run_form_subscription);
         let metrics_subscription = cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
@@ -371,6 +379,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     let connection_prompts = cx.new(|_| crate::connection::ConnectionPromptsView::new());
     let container_form =
         cx.new(|_| crate::container::ContainerFormView::new(services.command_tx.clone()));
+    let container_run_form = cx.new(|_| crate::container::ContainerRunFormView::new());
     AppState {
         services,
         local_shells,
@@ -393,6 +402,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
                 key_wizard,
                 replay,
                 container_form,
+                run_form: container_run_form,
             },
             inputs.quick_open_state.clone(),
             SnippetPanelState {

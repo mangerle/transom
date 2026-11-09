@@ -50,6 +50,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) session_form: Option<Subscription>,
     /// 容器引擎连接表单：保存落目录与删除连接由外壳处理。
     pub(crate) container_form: Option<Subscription>,
+    /// 运行容器表单：提交后的命令投递与通知由外壳处理。
+    pub(crate) container_run_form: Option<Subscription>,
     pub(crate) known_hosts: Option<Subscription>,
     /// 连接确认弹窗：凭据暂存与剪贴板授权由外壳处理。
     pub(crate) connection_prompts: Option<Subscription>,
@@ -78,6 +80,7 @@ impl PanelSubscriptions {
             settings: None,
             session_form: None,
             container_form: None,
+            container_run_form: None,
             known_hosts: None,
             connection_prompts: None,
             key_wizard: None,

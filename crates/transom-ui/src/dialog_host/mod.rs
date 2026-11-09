@@ -166,8 +166,9 @@ pub(crate) use stack::OpenModals;
 
 impl ModalKind {
     /// 弹窗体：内容与页脚仍由各领域自己渲染。
-    /// 设置、已知主机、备份、审计查看器、密钥向导、会话回放、会话表单与连接
-    /// 确认弹窗的状态归实体，先克隆句柄再进入 `update`，其它弹窗直接读外壳。
+    /// 设置、已知主机、备份、审计查看器、密钥向导、会话回放、会话表单、
+    /// 连接确认与运行容器表单的状态归实体，先克隆句柄再进入 `update`，
+    /// 其它弹窗直接读外壳。
     ///
     /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到实体的可变
     /// `update`”这类借用冲突：实体分支先克隆句柄、立即结束外壳借用。
@@ -231,6 +232,17 @@ impl ModalKind {
             };
             return view.update(cx, |view, cx| view.render_body(&folders, p, cx));
         }
+        if self == ModalKind::ContainerRunForm {
+            // 表单状态归实体：先读句柄与只读状态，再交给外壳渲染。这里只读、
+            // 不 update 实体，避免渲染期双重租借。
+            let shell = app.read(cx);
+            let view = shell.state.modals.tools.run_form.clone();
+            let view = view.read(cx);
+            let Some(form) = view.state() else {
+                return div().into_any_element();
+            };
+            return shell.render_container_run_form_body(form, app, cx, p);
+        }
         if matches!(
             self,
             ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt
@@ -271,7 +283,8 @@ impl ModalKind {
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerForm => div().into_any_element(),
             ModalKind::ContainerFolderForm => shell.render_engine_folder_form_body(app, cx, p),
-            ModalKind::ContainerRunForm => shell.render_container_run_form_body(app, window, cx, p),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerRunForm => div().into_any_element(),
             ModalKind::ContainerCreate => {
                 shell.render_container_create_dialog_body(app, window, cx, p)
             }

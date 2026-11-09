@@ -3,9 +3,13 @@
 //! 设计原理（Why）：
 //! - 结构化微表格交互彻底替代传统松散手写的字符串，杜绝语法和分隔符格式错误；
 //! - 各条目均包含直观的增删、协议与只读模式快速切换控制。
+//!
+//! 本阶段渲染仍由外壳完成：表单状态由弹窗宿主从 [`ContainerRunFormView`] 读出
+//! 后注入，回调经实体更新，待渲染迁移后再改为实体方法。
 
+use super::view::edit_run_form;
 use crate::app::AppShell;
-use crate::container::types::run_form::{EnvVarItem, PortMappingItem, VolumeMappingItem};
+use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -18,13 +22,10 @@ impl AppShell {
     /// 渲染结构化端口映射区域。
     pub(super) fn render_port_mappings_section(
         &self,
+        form: &RunContainerFormState,
         app: &Entity<AppShell>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.containers.run_form.as_ref() else {
-            return div().into_any_element();
-        };
-
         let mut list = v_flex().gap_1p5().w_full();
 
         if form.ports.is_empty() {
@@ -72,17 +73,17 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut()
-                                        && let Some(target) =
-                                            f.ports.iter_mut().find(|p| p.id == port_id)
-                                    {
-                                        target.protocol = if is_udp {
-                                            "tcp".to_string()
-                                        } else {
-                                            "udp".to_string()
-                                        };
-                                        cx.notify();
-                                    }
+                                    edit_run_form(this, cx, |form| {
+                                        if let Some(target) =
+                                            form.ports.iter_mut().find(|p| p.id == port_id)
+                                        {
+                                            target.protocol = if is_udp {
+                                                "tcp".to_string()
+                                            } else {
+                                                "udp".to_string()
+                                            };
+                                        }
+                                    });
                                 },
                             )),
                     )
@@ -95,10 +96,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.ports.retain(|p| p.id != del_port_id);
-                                        cx.notify();
-                                    }
+                                    edit_run_form(this, cx, |form| {
+                                        form.ports.retain(|p| p.id != del_port_id);
+                                    });
                                 },
                             )),
                     );
@@ -130,12 +130,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.ports.push(PortMappingItem::new(
-                                            None, None, "tcp", window, cx,
-                                        ));
-                                        cx.notify();
-                                    }
+                                    let view = this.state.modals.tools.run_form.clone();
+                                    view.update(cx, |view, cx| view.add_port(window, cx));
+                                    cx.notify();
                                 },
                             )),
                     ),
@@ -147,13 +144,10 @@ impl AppShell {
     /// 渲染结构化数据卷挂载区域。
     pub(super) fn render_volume_mappings_section(
         &self,
+        form: &RunContainerFormState,
         app: &Entity<AppShell>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.containers.run_form.as_ref() else {
-            return div().into_any_element();
-        };
-
         let mut list = v_flex().gap_1p5().w_full();
 
         if form.volumes.is_empty() {
@@ -194,13 +188,13 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut()
-                                        && let Some(target) =
-                                            f.volumes.iter_mut().find(|v| v.id == vol_id)
-                                    {
-                                        target.read_only = !read_only;
-                                        cx.notify();
-                                    }
+                                    edit_run_form(this, cx, |form| {
+                                        if let Some(target) =
+                                            form.volumes.iter_mut().find(|v| v.id == vol_id)
+                                        {
+                                            target.read_only = !read_only;
+                                        }
+                                    });
                                 },
                             )),
                     )
@@ -212,10 +206,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.volumes.retain(|v| v.id != del_vol_id);
-                                        cx.notify();
-                                    }
+                                    edit_run_form(this, cx, |form| {
+                                        form.volumes.retain(|v| v.id != del_vol_id);
+                                    });
                                 },
                             )),
                     );
@@ -247,12 +240,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.volumes.push(VolumeMappingItem::new(
-                                            None, None, false, window, cx,
-                                        ));
-                                        cx.notify();
-                                    }
+                                    let view = this.state.modals.tools.run_form.clone();
+                                    view.update(cx, |view, cx| view.add_volume(window, cx));
+                                    cx.notify();
                                 },
                             )),
                     ),
@@ -264,13 +254,10 @@ impl AppShell {
     /// 渲染结构化环境变量区域。
     pub(super) fn render_env_vars_section(
         &self,
+        form: &RunContainerFormState,
         app: &Entity<AppShell>,
         p: &Palette,
     ) -> AnyElement {
-        let Some(form) = self.state.containers.run_form.as_ref() else {
-            return div().into_any_element();
-        };
-
         let mut list = v_flex().gap_1p5().w_full();
 
         if form.envs.is_empty() {
@@ -307,10 +294,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.envs.retain(|e| e.id != env_id);
-                                        cx.notify();
-                                    }
+                                    edit_run_form(this, cx, |form| {
+                                        form.envs.retain(|e| e.id != env_id);
+                                    });
                                 },
                             )),
                     );
@@ -342,10 +328,9 @@ impl AppShell {
                             .on_click(crate::dialog_host::on_event(
                                 app,
                                 |this, _: &ClickEvent, window, cx| {
-                                    if let Some(f) = this.state.containers.run_form.as_mut() {
-                                        f.envs.push(EnvVarItem::new(None, None, window, cx));
-                                        cx.notify();
-                                    }
+                                    let view = this.state.modals.tools.run_form.clone();
+                                    view.update(cx, |view, cx| view.add_env(window, cx));
+                                    cx.notify();
                                 },
                             )),
                     ),

@@ -36,21 +36,15 @@ pub(in crate::app::dialog_host) fn container_folder_form_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_run_form_open(shell: &AppShell, _cx: &App) -> bool {
-    shell.state.containers.run_form.is_some()
+pub(in crate::app::dialog_host) fn container_run_form_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.tools.run_form.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn container_run_form_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .state
-        .containers
-        .run_form
-        .as_ref()
-        .map(|form| form.text_values(cx))
-        .unwrap_or_default()
+    shell.state.modals.tools.run_form.read(cx).text_values(cx)
 }
 
 pub(in crate::app::dialog_host) fn container_create_open(shell: &AppShell, _cx: &App) -> bool {

@@ -14,9 +14,7 @@
 use crate::app::AppShell;
 use crate::app_assets::AppIcon;
 use crate::container::list::create_button_label;
-use crate::container::types::{
-    ContainerFormState, ContainerRunForm, ContainerSection, EndpointChoice,
-};
+use crate::container::types::{ContainerFormState, ContainerSection, EndpointChoice};
 use crate::palette::Palette;
 use crate::session_appearance::{
     SESSION_COLOR_CHOICES, SESSION_ICON_CHOICES, session_color, session_icon,
@@ -43,6 +41,7 @@ mod run;
 
 pub(crate) use entity::{ContainerFormEvent, ContainerFormView};
 pub(crate) use render::ContainerFormFolders;
+pub(crate) use run::{ContainerRunFormEvent, ContainerRunFormView};
 
 /// 重启策略档位：与引擎允许集合保持一致，留空表示 `no`。
 const RUN_RESTART_POLICIES: [&str; 4] = ["no", "on-failure", "always", "unless-stopped"];
