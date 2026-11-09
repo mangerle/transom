@@ -141,9 +141,9 @@ mod tests {
         #[cfg(unix)]
         let script = "printf stdout; printf stderr >&2";
         #[cfg(windows)]
-        // echo 会追加 CRLF，且不会像 set /p 那样把重定向前的空格写进 stderr。
+        // echo 会追加 CRLF；stderr 的重定向放在命令前，避免空格被 echo 写入内容。
         // 末尾显式成功退出，避免把命令解释器的退出码假设混入管道测试。
-        let script = "(echo stdout) & (echo stderr 1>&2) & exit /b 0";
+        let script = "(echo stdout) & (1>&2 echo stderr) & exit /b 0";
         let output = output_with_timeout(command(script), Duration::from_secs(5)).unwrap();
         assert!(output.status.success());
         #[cfg(unix)]
