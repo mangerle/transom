@@ -223,44 +223,71 @@ mod tests {
     fn opens_pty_and_transfers_bytes() {
         use serialport::TTYPort;
         use std::io::Write;
+        use std::sync::mpsc;
 
-        let (mut master, slave) = TTYPort::pair().unwrap();
-        let name = slave.name().unwrap();
-        drop(slave);
-        #[cfg(target_os = "macos")]
-        let baud_rate = 0;
-        #[cfg(not(target_os = "macos"))]
-        let baud_rate = 9_600;
-        let mut session = open_serial_port(&SerialConnection::new(name, baud_rate), baud_rate)
-            .expect("伪终端串口应能打开");
+        let (result_tx, result_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let result = (|| -> Result<(), String> {
+                let (mut master, slave) =
+                    TTYPort::pair().map_err(|error| format!("创建伪终端失败: {error}"))?;
+                let name = slave
+                    .name()
+                    .ok_or_else(|| "伪终端从端缺少设备路径".to_string())?;
+                drop(slave);
+                #[cfg(target_os = "macos")]
+                let baud_rate = 0;
+                #[cfg(not(target_os = "macos"))]
+                let baud_rate = 9_600;
+                let mut session =
+                    open_serial_port(&SerialConnection::new(name, baud_rate), baud_rate)
+                        .map_err(|error| format!("伪终端串口应能打开: {error}"))?;
 
-        session.io.writer.write_all(b"ping").unwrap();
-        session.io.writer.flush().unwrap();
-        master.set_timeout(Duration::from_millis(500)).unwrap();
-        let mut received = [0u8; 4];
-        let mut total = 0;
-        while total < received.len() {
-            match master.read(&mut received[total..]) {
-                Ok(0) => break,
-                Ok(count) => total += count,
-                Err(error)
-                    if matches!(
-                        error.kind(),
-                        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
-                    ) =>
-                {
-                    break;
+                session
+                    .io
+                    .writer
+                    .write_all(b"ping")
+                    .map_err(|error| format!("写入伪终端失败: {error}"))?;
+                master
+                    .set_timeout(Duration::from_millis(500))
+                    .map_err(|error| format!("设置伪终端读超时失败: {error}"))?;
+                let mut received = [0u8; 4];
+                master
+                    .read_exact(&mut received)
+                    .map_err(|error| format!("读取伪终端输出失败: {error}"))?;
+                if received != *b"ping" {
+                    return Err(format!("伪终端输出不匹配: {received:?}"));
                 }
-                Err(error) => panic!("读取伪终端失败: {error}"),
+
+                master
+                    .write_all(b"pong")
+                    .map_err(|error| format!("写入伪终端输入失败: {error}"))?;
+                let mut incoming = [0u8; 4];
+                session
+                    .io
+                    .reader
+                    .read_exact(&mut incoming)
+                    .map_err(|error| format!("读取串口输入失败: {error}"))?;
+                if incoming != *b"pong" {
+                    return Err(format!("串口输入不匹配: {incoming:?}"));
+                }
+                Ok(())
+            })();
+            let _ = result_tx.send(result);
+        });
+
+        match result_rx.recv_timeout(Duration::from_secs(10)) {
+            Ok(Ok(())) => worker.join().expect("伪终端测试线程不应异常终止"),
+            Ok(Err(message)) => {
+                let _ = worker.join();
+                panic!("{message}");
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                panic!("伪终端串口测试超过 10 秒仍未完成，底层读写未被及时唤醒")
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("伪终端串口测试线程未返回结果便退出")
             }
         }
-        assert_eq!(&received[..total], b"ping");
-
-        master.write_all(b"pong").unwrap();
-        master.flush().unwrap();
-        let mut incoming = [0u8; 4];
-        let count = session.io.reader.read(&mut incoming).unwrap();
-        assert_eq!(&incoming[..count], b"pong");
     }
 
     #[test]

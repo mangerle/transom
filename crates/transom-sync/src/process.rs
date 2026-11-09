@@ -141,7 +141,9 @@ mod tests {
         #[cfg(unix)]
         let script = "printf stdout; printf stderr >&2";
         #[cfg(windows)]
-        let script = "<nul set /p =stdout & <nul set /p =stderr 1>&2";
+        // set /p 在 NUL 输入读到 EOF 时可能返回非零；本测试只验证双管道排空，
+        // 因此两个输出都完成后显式以成功状态退出。
+        let script = "(<nul set /p =stdout) & (<nul set /p =stderr 1>&2) & exit /b 0";
         let output = output_with_timeout(command(script), Duration::from_secs(5)).unwrap();
         assert!(output.status.success());
         assert_eq!(output.stdout, b"stdout");
