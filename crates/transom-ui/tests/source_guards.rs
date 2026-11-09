@@ -857,6 +857,62 @@ fn session_form_is_owned_by_entity() {
     );
 }
 
+/// 容器引擎连接表单必须由实体持有：打开状态、输入控件、保存/测试/删除动作
+/// 与渲染都归 `ContainerFormView`，外壳只保留打开入口、分组快照注入与落目录。
+#[test]
+fn container_form_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 modal_hub.rs 失败");
+    assert!(
+        hub.contains("container_form: Entity<ContainerFormView>"),
+        "ModalHub 的容器连接表单必须持有 Entity<ContainerFormView>"
+    );
+    let entity = std::fs::read_to_string(root.join("src/container/form/entity.rs"))
+        .expect("读取容器连接表单实体失败");
+    assert!(
+        entity.contains("pub(crate) struct ContainerFormView"),
+        "ContainerFormView 实体必须存在于 container/form/entity.rs"
+    );
+    let dialogs = std::fs::read_to_string(root.join("src/container/types/dialogs.rs"))
+        .expect("读取容器界面状态失败");
+    assert!(
+        !dialogs.contains("form: Option<ContainerFormState>"),
+        "ContainerUiState 不得重新持有连接表单状态"
+    );
+    assert!(
+        !root.join("src/container/form/engine_actions.rs").exists(),
+        "旧的外壳动作文件 engine_actions.rs 不得复活"
+    );
+    let mut offenders = Vec::new();
+    for file in [
+        "src/container/form/appearance.rs",
+        "src/container/form/connection.rs",
+        "src/container/form/render.rs",
+        "src/container/form/entity.rs",
+    ] {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content.contains("impl AppShell {") || content.contains("Context<AppShell>") {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "容器连接表单的旧外壳渲染/动作不得复活，跨域数据走 ContainerFormEvent：\n{}",
+        offenders.join("\n")
+    );
+    let connection_events =
+        std::fs::read_to_string(root.join("src/container/events/connection.rs"))
+            .expect("读取容器连接事件失败");
+    assert!(
+        connection_events.contains("set_test_result"),
+        "测试连接结果必须按 request_id 回写 ContainerFormView"
+    );
+}
+
 /// 搁置项必须走控制平面：UI 不得直接构造 git 进程或读写搁置项存储。
 #[test]
 fn shelf_operations_use_command_bus() {
