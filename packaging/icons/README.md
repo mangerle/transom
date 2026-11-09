@@ -7,10 +7,10 @@ Windows NSIS、macOS `.app`/`.dmg` 与 Linux AppImage 共用；DEB 仍只携带
 重新生成（需要 `resvg` 与 Pillow）：
 
 ```bash
-resvg --width 1024 --height 1024 logo/transom-logo.svg packaging/icons/1024x1024.png
+resvg --width 1024 --height 1024 logo/transom-logo.svg "packaging/icons/512x512@2x.png"
 python3 - <<'PY'
 from PIL import Image
-base = Image.open('packaging/icons/1024x1024.png').convert('RGBA')
+base = Image.open('packaging/icons/512x512@2x.png').convert('RGBA')
 for size in [16, 32, 48, 64, 128, 256, 512]:
     base.resize((size, size), Image.Resampling.LANCZOS).save(
         f'packaging/icons/{size}x{size}.png', optimize=True
@@ -23,5 +23,7 @@ base.resize((256, 256), Image.Resampling.LANCZOS).save(
 PY
 ```
 
-macOS 的 `.icns` 不在仓库内维护：cargo-packager 在打包时读取上面的 PNG
-列表并按 ICNS 图标类型自动合成。
+macOS 的 `.icns` 不在仓库内维护：cargo-packager 在打包时读取 Cargo.toml
+里的 PNG 列表并按 ICNS 图标类型自动合成。`512x512@2x.png` 必须保留 `@2x`
+后缀：cargo-packager 据此按 2x 密度识别 1024 像素图标；若按 1x 处理，
+ICNS 没有 1024@1x 类型，macOS 打包会报 `No matching IconType`。

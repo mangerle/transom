@@ -125,7 +125,7 @@ icons = [
     "../../packaging/icons/128x128.png",
     "../../packaging/icons/256x256.png",
     "../../packaging/icons/512x512.png",
-    "../../packaging/icons/1024x1024.png",
+    "../../packaging/icons/512x512@2x.png",
     "../../packaging/icons/icon.ico",
 ]
 resources = [
