@@ -18,7 +18,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "1.7.0"
+version = "1.7.1"
 edition = "2024"
 # shipup 0.5.1 的编译下限为 1.96；自更新是桌面分发的主链路，
 # 因此工作区 MSRV 随之上调，CI 的最低版本门禁也同步改为 1.96。
