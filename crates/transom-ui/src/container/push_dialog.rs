@@ -4,6 +4,9 @@
 //! - 将推送镜像与已配置的 `ContainerRegistry` 凭证无缝联动，用户只需下拉选择目标源；
 //! - 自动根据所选仓库域名与源镜像 Tag 智能补全目标 Tag 前缀与版本；
 //! - 自动注入 Base64 AuthConfig 凭证头部，彻底解决私有仓库 401/403 鉴权失败问题。
+//!
+//! 动作归属（Why）：打开、提交与关闭只读写本标签页状态并投递命令；仓库配置
+//! 从全局设置读取，不依赖外壳字段，因此全部落在 [`ContainerWorkspace`] 上。
 
 use super::list::dropdown_trigger;
 use super::*;
@@ -16,13 +19,12 @@ use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{ContainerCommand, ContainerRegistry, ContainerRequestId, TabId};
+use transom_core::{ContainerCommand, ContainerRegistry, ContainerRequestId};
 
-impl AppShell {
+impl ContainerWorkspace {
     /// 打开推送到远端镜像仓库弹窗。
-    pub(crate) fn open_container_push_dialog(
+    pub(crate) fn open_push_dialog(
         &mut self,
-        tab_id: TabId,
         image_id: String,
         source_tag: String,
         window: &mut Window,
@@ -31,11 +33,11 @@ impl AppShell {
         let registries = app_settings(cx).container_registries.clone();
         let default_reg = registries
             .iter()
-            .find(|r| r.is_default)
+            .find(|registry| registry.is_default)
             .cloned()
             .unwrap_or_else(ContainerRegistry::docker_hub);
 
-        // 拆解源镜像名称与 tag（例如 "nginx:alpine" -> ("nginx", "alpine")）
+        // 拆解源镜像名称与 tag（例如 "nginx:alpine" -> ("nginx", "alpine")）。
         let (repo_part, tag_part) = if let Some((repo, tag)) = source_tag.split_once(':') {
             (repo.to_string(), tag.to_string())
         } else {
@@ -60,60 +62,60 @@ impl AppShell {
                 .default_value(tag_part)
         });
 
-        let sub1 = cx.subscribe(&target_repo, move |this, _, event: &InputEvent, cx| {
+        let sub1 = cx.subscribe(&target_repo, |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                this.submit_container_push_dialog(tab_id, cx);
+                this.submit_push_dialog(cx);
             }
         });
 
-        let sub2 = cx.subscribe(&target_tag, move |this, _, event: &InputEvent, cx| {
+        let sub2 = cx.subscribe(&target_tag, |this, _, event: &InputEvent, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                this.submit_container_push_dialog(tab_id, cx);
+                this.submit_push_dialog(cx);
             }
         });
 
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.push_dialog = Some(ContainerPushDialog {
-                image_id,
-                source_tag,
-                selected_registry_id: default_reg.id,
-                target_repo,
-                target_tag,
-                error: None,
-                _subscriptions: vec![sub1, sub2],
-            });
+        self.state.push_dialog = Some(ContainerPushDialog {
+            image_id,
+            source_tag,
+            selected_registry_id: default_reg.id,
+            target_repo,
+            target_tag,
+            error: None,
+            _subscriptions: vec![sub1, sub2],
         });
         cx.notify();
     }
 
+    /// 关闭推送弹窗。
+    pub(crate) fn cancel_push_dialog(&mut self, cx: &mut Context<Self>) {
+        self.state.push_dialog = None;
+        cx.notify();
+    }
+
     /// 提交推送到远端请求。
-    pub(crate) fn submit_container_push_dialog(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let (image_id, repo, tag, registry) = {
-            let Some(workspace) = self.state.container_workspace(tab_id) else {
-                return;
-            };
-            let workspace = &workspace.read(cx).state;
-            let Some(push) = workspace.push_dialog.as_ref() else {
-                return;
-            };
-            let repo = push.target_repo.read(cx).value().trim().to_string();
-            let tag = push.target_tag.read(cx).value().trim().to_string();
-            let reg = app_settings(cx)
-                .container_registries
-                .iter()
-                .find(|r| r.id == push.selected_registry_id)
-                .cloned()
-                .unwrap_or_else(ContainerRegistry::docker_hub);
-            (push.image_id.clone(), repo, tag, reg)
+    ///
+    /// 目标仓库或标签为空时保持弹窗打开并就地显示错误；成功后关闭弹窗、
+    /// 记录进行中的通知并投递「打标签 + 推送」命令。
+    pub(crate) fn submit_push_dialog(&mut self, cx: &mut Context<Self>) {
+        let Some(push) = self.state.push_dialog.as_ref() else {
+            return;
         };
+        let image_id = push.image_id.clone();
+        let selected_registry_id = push.selected_registry_id.clone();
+        let repo = push.target_repo.read(cx).value().trim().to_string();
+        let tag = push.target_tag.read(cx).value().trim().to_string();
+        let registry = app_settings(cx)
+            .container_registries
+            .iter()
+            .find(|registry| registry.id == selected_registry_id)
+            .cloned()
+            .unwrap_or_else(ContainerRegistry::docker_hub);
 
         if repo.is_empty() || tag.is_empty() {
-            self.with_container_mut(tab_id, cx, |workspace| {
-                if let Some(push) = workspace.push_dialog.as_mut() {
-                    push.error =
-                        Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
-                }
-            });
+            if let Some(push) = self.state.push_dialog.as_mut() {
+                push.error =
+                    Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
+            }
             cx.notify();
             return;
         }
@@ -125,255 +127,254 @@ impl AppShell {
         let request_id = ContainerRequestId::new();
 
         // 打标签与推送放在同一条命令里顺序执行，避免 push 抢在 tag 完成之前。
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::PushTaggedImage {
-                        tab_id,
-                        request_id,
-                        source_image: image_id,
-                        repo: target_repo,
-                        tag: Some(tag),
-                        auth,
-                    },
-                );
-            });
-        }
-
-        // 关闭推送弹窗并记录通知
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.push_dialog = None;
-            workspace.notice = Some(
-                rust_i18n::t!("container.push.pushing_notice", reference = target_full_ref)
-                    .to_string(),
-            );
-        });
-        cx.notify();
-    }
-
-    /// 渲染推送到远端弹窗主体。
-    pub(crate) fn render_container_push_dialog_body(
-        &self,
-        tab_id: TabId,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
-            return div().into_any_element();
-        };
-        let workspace = &workspace.read(cx).state;
-        let Some(push) = workspace.push_dialog.as_ref() else {
-            return div().into_any_element();
-        };
-
-        let source_tag = push.source_tag.clone();
-        let selected_reg_id = push.selected_registry_id.clone();
-        let registries = app_settings(cx).container_registries.clone();
-        let target_repo = push.target_repo.clone();
-        let target_tag = push.target_tag.clone();
-        let error = push.error.clone();
-
-        let current_registry = registries
-            .iter()
-            .find(|r| r.id == selected_reg_id)
-            .cloned()
-            .unwrap_or_else(ContainerRegistry::docker_hub);
-
-        let app_menu = app.clone();
-        let reg_menu = dropdown_trigger(
-            "container-push-registry-select",
-            current_registry.name.clone(),
-            IconName::ChevronDown,
-            None,
-            move |menu, _, _| {
-                let mut menu = menu;
-                for reg in &registries {
-                    let app_item = app_menu.clone();
-                    let reg_item = reg.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(reg.name.clone())
-                            .checked(reg.id == selected_reg_id)
-                            .on_click(move |_, window, cx| {
-                                app_item.update(cx, |this, cx| {
-                                    let target_repo = this
-                                        .with_container_mut(tab_id, cx, |ws| {
-                                            let p = ws.push_dialog.as_mut()?;
-                                            p.selected_registry_id = reg_item.id.clone();
-                                            Some(p.target_repo.clone())
-                                        })
-                                        .flatten();
-                                    if let Some(target_repo) = target_repo {
-                                        // 自动根据所选仓库域名补全前缀
-                                        let current_val = target_repo.read(cx).value();
-                                        let pure_name = current_val
-                                            .as_ref()
-                                            .rsplit('/')
-                                            .next()
-                                            .unwrap_or(current_val.as_ref());
-                                        let new_val = if reg_item.id == "docker-hub" {
-                                            pure_name.to_string()
-                                        } else {
-                                            format!("{}/{}", reg_item.domain(), pure_name)
-                                        };
-                                        target_repo.update(cx, |input, cx| {
-                                            input.set_value(new_val, window, cx);
-                                        });
-                                    }
-                                    cx.notify();
-                                });
-                            }),
-                    );
-                }
-                menu
+        self.send_tracked(
+            request_id,
+            ContainerCommand::PushTaggedImage {
+                tab_id: self.tab_id,
+                request_id,
+                source_image: image_id,
+                repo: target_repo,
+                tag: Some(tag),
+                auth,
             },
         );
 
-        let auth_tip = if !current_registry.username.is_empty() {
-            rust_i18n::t!(
-                "container.push.auth_user_hint",
-                user = current_registry.username
-            )
-            .to_string()
-        } else {
-            rust_i18n::t!("container.push.auth_anonymous_hint").to_string()
-        };
+        self.state.push_dialog = None;
+        self.state.notice = Some(
+            rust_i18n::t!("container.push.pushing_notice", reference = target_full_ref).to_string(),
+        );
+        cx.notify();
+    }
+}
 
-        let app_cancel = app.clone();
-        let app_confirm = app.clone();
+/// 渲染推送到远端弹窗主体。
+///
+/// 设计原理（Why）：仓库配置快照由宿主在渲染期传入，弹窗只读状态；下拉切换
+/// 仓库、取消与确认都直接 `update` 工作区实体，不再经外壳转发。
+pub(crate) fn render_container_push_dialog_body(
+    view: &Entity<ContainerWorkspace>,
+    state: &ContainerWorkspaceState,
+    registries: &[ContainerRegistry],
+    p: &Palette,
+) -> AnyElement {
+    let Some(push) = state.push_dialog.as_ref() else {
+        return div().into_any_element();
+    };
 
-        v_flex()
-            .w_full()
-            .gap_3()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.push.source_image").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .p_3()
-                            .gap_2()
-                            .items_center()
-                            .rounded(p.radius.lg)
-                            .bg(p.muted.opacity(0.04))
-                            .border_1()
-                            .border_color(p.border.opacity(0.18))
-                            .child(Icon::new(IconName::Box).small().text_color(p.primary))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_family(p.mono_font_family.clone())
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(p.foreground)
-                                    .child(source_tag),
-                            ),
-                    ),
-            )
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.push.target_registry").to_string()),
-                    )
-                    .child(reg_menu),
-            )
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.push.target_path").to_string()),
-                    )
-                    .child(Input::new(&target_repo).w_full()),
-            )
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.push.target_tag").to_string()),
-                    )
-                    .child(Input::new(&target_tag).w_full()),
-            )
-            .child(
-                h_flex()
-                    .px_3()
-                    .py_2()
-                    .gap_2()
-                    .items_center()
-                    .rounded(p.radius.md)
-                    .bg(p.muted.opacity(0.04))
-                    .child(
-                        Icon::new(IconName::Info)
-                            .xsmall()
-                            .text_color(p.muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(auth_tip),
-                    ),
-            )
-            .when_some(error, |this, err| {
-                this.child(
+    let source_tag = push.source_tag.clone();
+    let selected_reg_id = push.selected_registry_id.clone();
+    let target_repo = push.target_repo.clone();
+    let target_tag = push.target_tag.clone();
+    let error = push.error.clone();
+
+    let current_registry = registries
+        .iter()
+        .find(|registry| registry.id == selected_reg_id)
+        .cloned()
+        .unwrap_or_else(ContainerRegistry::docker_hub);
+
+    let registries_snapshot = registries.to_vec();
+    let view_for_menu = view.clone();
+    let reg_menu = dropdown_trigger(
+        "container-push-registry-select",
+        current_registry.name.clone(),
+        IconName::ChevronDown,
+        None,
+        move |menu, _, _| {
+            let mut menu = menu;
+            for registry in &registries_snapshot {
+                let view_item = view_for_menu.clone();
+                let registry_item = registry.clone();
+                let selected = registry.id == selected_reg_id;
+                menu = menu.item(
+                    PopupMenuItem::new(registry.name.clone())
+                        .checked(selected)
+                        .on_click(move |_, window, cx| {
+                            let registry_item = registry_item.clone();
+                            view_item.update(cx, |workspace, cx| {
+                                workspace.select_push_registry(&registry_item, window, cx);
+                            });
+                        }),
+                );
+            }
+            menu
+        },
+    );
+
+    let auth_tip = if !current_registry.username.is_empty() {
+        rust_i18n::t!(
+            "container.push.auth_user_hint",
+            user = current_registry.username
+        )
+        .to_string()
+    } else {
+        rust_i18n::t!("container.push.auth_anonymous_hint").to_string()
+    };
+
+    v_flex()
+        .w_full()
+        .gap_3()
+        .child(
+            v_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.push.source_image").to_string()),
+                )
+                .child(
                     h_flex()
-                        .w_full()
                         .p_3()
                         .gap_2()
                         .items_center()
                         .rounded(p.radius.lg)
-                        .bg(p.danger.opacity(0.12))
-                        .text_color(p.danger)
-                        .child(Icon::new(IconName::TriangleAlert).small())
-                        .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(err)),
+                        .bg(p.muted.opacity(0.04))
+                        .border_1()
+                        .border_color(p.border.opacity(0.18))
+                        .child(Icon::new(IconName::Box).small().text_color(p.primary))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_family(p.mono_font_family.clone())
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(p.foreground)
+                                .child(source_tag),
+                        ),
+                ),
+        )
+        .child(
+            v_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.push.target_registry").to_string()),
                 )
-            })
-            .child(
+                .child(reg_menu),
+        )
+        .child(
+            v_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.push.target_path").to_string()),
+                )
+                .child(Input::new(&target_repo).w_full()),
+        )
+        .child(
+            v_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("container.push.target_tag").to_string()),
+                )
+                .child(Input::new(&target_tag).w_full()),
+        )
+        .child(
+            h_flex()
+                .px_3()
+                .py_2()
+                .gap_2()
+                .items_center()
+                .rounded(p.radius.md)
+                .bg(p.muted.opacity(0.04))
+                .child(
+                    Icon::new(IconName::Info)
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(auth_tip),
+                ),
+        )
+        .when_some(error, |this, err| {
+            this.child(
                 h_flex()
-                    .justify_end()
+                    .w_full()
+                    .p_3()
                     .gap_2()
-                    .child(
-                        Button::new("container-push-cancel")
-                            .ghost()
-                            .small()
-                            .label(rust_i18n::t!("container.push.cancel").to_string())
-                            .on_click(move |_, _, cx| {
-                                app_cancel.update(cx, |this, cx| {
-                                    this.with_container_mut(tab_id, cx, |ws| {
-                                        ws.push_dialog = None;
-                                    });
-                                    cx.notify();
-                                });
-                            }),
-                    )
-                    .child(
-                        Button::new("container-push-confirm")
-                            .primary()
-                            .small()
-                            .icon(IconName::Upload)
-                            .label(rust_i18n::t!("container.push.submit").to_string())
-                            .on_click(move |_, _, cx| {
-                                app_confirm.update(cx, |this, cx| {
-                                    this.submit_container_push_dialog(tab_id, cx);
-                                });
-                            }),
-                    ),
+                    .items_center()
+                    .rounded(p.radius.lg)
+                    .bg(p.danger.opacity(0.12))
+                    .text_color(p.danger)
+                    .child(Icon::new(IconName::TriangleAlert).small())
+                    .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(err)),
             )
-            .into_any_element()
+        })
+        .child(
+            h_flex()
+                .justify_end()
+                .gap_2()
+                .child(
+                    Button::new("container-push-cancel")
+                        .ghost()
+                        .small()
+                        .label(rust_i18n::t!("container.push.cancel").to_string())
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _, cx| {
+                                view.update(cx, |workspace, cx| {
+                                    workspace.cancel_push_dialog(cx);
+                                });
+                            }
+                        }),
+                )
+                .child(
+                    Button::new("container-push-confirm")
+                        .primary()
+                        .small()
+                        .icon(IconName::Upload)
+                        .label(rust_i18n::t!("container.push.submit").to_string())
+                        .on_click({
+                            let view = view.clone();
+                            move |_, _, cx| {
+                                view.update(cx, |workspace, cx| {
+                                    workspace.submit_push_dialog(cx);
+                                });
+                            }
+                        }),
+                ),
+        )
+        .into_any_element()
+}
+
+impl ContainerWorkspace {
+    /// 切换推送目标仓库，并按仓库域名补全目标引用前缀。
+    ///
+    /// 设计原理（Why）：仓库下拉只改本弹窗的选中项与目标输入框；补全规则与
+    /// 迁移前一致——Docker Hub 只留镜像名，其余仓库拼上域名前缀。
+    fn select_push_registry(
+        &mut self,
+        registry: &ContainerRegistry,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(push) = self.state.push_dialog.as_mut() else {
+            return;
+        };
+        push.selected_registry_id = registry.id.clone();
+        let target_repo = push.target_repo.clone();
+        let current_value = target_repo.read(cx).value();
+        let pure_name = current_value
+            .as_ref()
+            .rsplit('/')
+            .next()
+            .unwrap_or(current_value.as_ref());
+        let new_value = if registry.id == "docker-hub" {
+            pure_name.to_string()
+        } else {
+            format!("{}/{}", registry.domain(), pure_name)
+        };
+        target_repo.update(cx, |input, cx| input.set_value(new_value, window, cx));
+        cx.notify();
     }
 }

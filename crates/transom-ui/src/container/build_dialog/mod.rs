@@ -6,3 +6,5 @@ mod actions;
 mod render;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use render::render_container_build_dialog_body;

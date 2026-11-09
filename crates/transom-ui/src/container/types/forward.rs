@@ -20,3 +20,22 @@ pub(crate) struct ContainerForwardDialog {
     pub(crate) ssh_sessions: Vec<(String, TabId, ConnectionId)>,
     pub(crate) selected_ssh_index: usize,
 }
+
+/// 打开端口转发弹窗所需的参数集合。
+///
+/// 设计原理（Why）：打开动作同时需要容器身份、端口信息、两个输入控件与
+/// 候选 SSH 会话；平铺参数会超过 clippy 的参数上限，且调用点难以看清字段归属。
+pub(crate) struct ContainerForwardOpenParams {
+    /// 目标容器名（已去掉 Docker 的 `/` 前缀）。
+    pub(crate) container_name: String,
+    /// 容器内私有端口。
+    pub(crate) private_port: u16,
+    /// 已发布到宿主机的端口。
+    pub(crate) published_port: Option<u16>,
+    /// 本地监听端口输入框。
+    pub(crate) local_port_input: Entity<InputState>,
+    /// 目标主机输入框。
+    pub(crate) target_host_input: Entity<InputState>,
+    /// 可用 SSH 会话列表：(会话名称, tab_id, connection_id)。
+    pub(crate) ssh_sessions: Vec<(String, TabId, ConnectionId)>,
+}

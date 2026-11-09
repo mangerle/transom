@@ -73,17 +73,17 @@ impl AppShell {
         if let Some((message, success)) = toast {
             self.show_toast(message, success, window, cx);
         }
-        if self
-            .with_container(tab_id, cx, |workspace| workspace.pods_dialog_open)
-            .unwrap_or(false)
-        {
-            self.refresh_container_pods(tab_id, cx);
-        }
-        if self
-            .with_container(tab_id, cx, |workspace| workspace.quadlets_dialog_open)
-            .unwrap_or(false)
-        {
-            self.refresh_container_quadlets(tab_id, cx);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            let (pods_open, quadlets_open) = {
+                let state = &workspace.read(cx).state;
+                (state.pods_dialog_open, state.quadlets_dialog_open)
+            };
+            if pods_open {
+                workspace.update(cx, |workspace, cx| workspace.refresh_pods(cx));
+            }
+            if quadlets_open {
+                workspace.update(cx, |workspace, cx| workspace.refresh_quadlets(cx));
+            }
         }
         if refresh && let Some(workspace) = self.state.container_workspace(tab_id) {
             workspace.update(cx, |workspace, _| workspace.refresh_section());

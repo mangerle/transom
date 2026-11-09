@@ -18,22 +18,14 @@ impl AppShell {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tab_id = self.take_container_request(request_id, cx);
-        if let Some(tab_id) = tab_id {
-            let applied = self.with_container_mut(tab_id, cx, |workspace| {
-                let Some(hub) = workspace.hub_dialog.as_mut() else {
-                    return false;
-                };
-                if hub.search_request != Some(request_id) {
-                    return false;
-                }
-                hub.searching = false;
-                hub.search_request = None;
-                hub.results = results;
-                hub.search_error = None;
-                true
+        let Some(tab_id) = self.take_container_request(request_id, cx) else {
+            return;
+        };
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            let applied = workspace.update(cx, |workspace, _| {
+                workspace.apply_images_searched(request_id, results)
             });
-            if applied == Some(true) {
+            if applied {
                 cx.notify();
             }
         }
@@ -49,31 +41,13 @@ impl AppShell {
         let Some(tab_id) = self.take_container_request(request_id, cx) else {
             return;
         };
-        let applied = self.with_container_mut(tab_id, cx, |workspace| {
-            let Some(hub) = workspace.hub_dialog.as_mut() else {
-                return false;
-            };
-            if hub.tags_request != Some(request_id) {
-                return false;
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            let applied = workspace.update(cx, |workspace, _| {
+                workspace.apply_image_tags_listed(request_id, tags)
+            });
+            if applied {
+                cx.notify();
             }
-            hub.tags = tags;
-            hub.tags_loading = false;
-            hub.tags_error = None;
-            hub.tags_request = None;
-            // 若当前选中的 tag 不在实时列表里（仓库已删除该 tag），回落到 latest。
-            if let Some(detail) = hub.selected_detail.as_ref() {
-                let selected = hub
-                    .selected_tags
-                    .entry(detail.name.clone())
-                    .or_insert_with(|| "latest".to_string());
-                if !hub.tags.is_empty() && !hub.tags.iter().any(|tag| tag == selected) {
-                    *selected = hub.tags[0].clone();
-                }
-            }
-            true
-        });
-        if applied == Some(true) {
-            cx.notify();
         }
     }
 

@@ -3,6 +3,8 @@
 use super::ModalKind;
 use super::body::ModalFocus;
 use crate::app::AppShell;
+use crate::container::ContainerWorkspaceState;
+use crate::palette::Palette;
 use gpui_kit::*;
 
 impl ModalKind {
@@ -34,42 +36,42 @@ impl ModalKind {
                 Some(true)
             }
             ModalKind::ContainerTagImage => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.tag_image.is_some())
                 {
-                    shell.cancel_image_tag(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.cancel_image_tag(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerCommit => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.commit_container.is_some())
                 {
-                    shell.cancel_container_commit(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.cancel_container_commit(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerUpdate => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.update_container.is_some())
                 {
-                    shell.cancel_container_update(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.cancel_container_update(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerNetworkConnect => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.connect_network.is_some())
                 {
-                    shell.cancel_network_connect(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.cancel_network_connect(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerExportConfig => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.export_config.is_some())
                 {
-                    shell.cancel_container_export(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.cancel_container_export(cx));
                 }
                 Some(true)
             }
@@ -94,54 +96,52 @@ impl ModalKind {
                 Some(true)
             }
             ModalKind::ContainerHub => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.hub_dialog.is_some())
                 {
-                    shell.with_container_mut(tab_id, cx, |ws| ws.hub_dialog = None);
-                    cx.notify();
+                    workspace.update(cx, |workspace, cx| workspace.close_hub_dialog(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerPush => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.push_dialog.is_some())
                 {
-                    shell.with_container_mut(tab_id, cx, |ws| ws.push_dialog = None);
-                    cx.notify();
+                    workspace.update(cx, |workspace, cx| workspace.cancel_push_dialog(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerSystemDf => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.system_df_dialog_open)
                 {
-                    shell.with_container_mut(tab_id, cx, |ws| ws.system_df_dialog_open = false);
-                    cx.notify();
+                    workspace.update(cx, |workspace, cx| workspace.close_system_df_dialog(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerBuild => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.build_dialog.is_some())
                 {
-                    shell.with_container_mut(tab_id, cx, |ws| ws.build_dialog = None);
-                    cx.notify();
+                    workspace.update(cx, |workspace, cx| workspace.close_build_dialog(cx));
                 }
                 Some(true)
             }
             ModalKind::ContainerForward => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
                 {
-                    shell.cancel_container_port_forward(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.cancel_container_port_forward(cx)
+                    });
                 }
                 Some(true)
             }
             ModalKind::ContainerPods => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.pods_dialog_open)
                 {
-                    shell.close_container_pods_dialog(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.close_pods_dialog(cx));
                 }
                 Some(true)
             }
@@ -153,7 +153,7 @@ impl ModalKind {
     pub(super) fn container_commit(
         self,
         shell: &mut AppShell,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Option<()> {
         match self {
@@ -178,42 +178,43 @@ impl ModalKind {
                 Some(())
             }
             ModalKind::ContainerTagImage => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.tag_image.is_some())
                 {
-                    shell.submit_image_tag(tab_id, window, cx);
+                    workspace.update(cx, |workspace, cx| workspace.submit_image_tag(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerCommit => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.commit_container.is_some())
                 {
-                    shell.submit_container_commit(tab_id, window, cx);
+                    workspace.update(cx, |workspace, cx| workspace.submit_container_commit(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerUpdate => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.update_container.is_some())
                 {
-                    shell.submit_container_update(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.submit_container_update(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerNetworkConnect => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.connect_network.is_some())
                 {
-                    shell.submit_network_connect(tab_id, window, cx);
+                    workspace.update(cx, |workspace, cx| workspace.submit_network_connect(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerExportConfig => {
-                if let Some((tab_id, _)) =
+                // 导出弹窗没有“提交”：确认键与关闭键同义，直接关闭。
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.export_config.is_some())
                 {
-                    shell.cancel_container_export(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.cancel_container_export(cx));
                 }
                 Some(())
             }
@@ -238,34 +239,36 @@ impl ModalKind {
                 Some(())
             }
             ModalKind::ContainerHub => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.hub_dialog.is_some())
                 {
-                    shell.execute_hub_search(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerPush => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.push_dialog.is_some())
                 {
-                    shell.submit_container_push_dialog(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.submit_push_dialog(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerBuild => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.build_dialog.is_some())
                 {
-                    shell.submit_container_build_dialog(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| workspace.submit_build_dialog(cx));
                 }
                 Some(())
             }
             ModalKind::ContainerForward => {
-                if let Some((tab_id, _)) =
+                if let Some((_, workspace)) =
                     shell.find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
                 {
-                    shell.submit_container_port_forward(tab_id, cx);
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.submit_container_port_forward(cx)
+                    });
                 }
                 Some(())
             }
@@ -340,5 +343,108 @@ impl ModalKind {
             _ => return None,
         };
         Some(focus)
+    }
+}
+
+impl ModalKind {
+    /// 渲染容器工作区实体持有的模态弹窗主体。
+    ///
+    /// 设计原理（Why）：弹窗状态归各标签页的 [`ContainerWorkspace`]，渲染函数
+    /// 只接收实体句柄、只读状态快照与 `Palette`；取消/确认回调直接 `update`
+    /// 实体。宿主只负责按种类找到当前打开该弹窗的工作区并注入参数，
+    /// 不再把 `Context<AppShell>` 传进任何容器弹窗体。
+    ///
+    /// 返回 `None` 表示这个种类不是容器工作区实体弹窗，交回宿主继续分发。
+    pub(super) fn container_workspace_body(
+        self,
+        shell: &AppShell,
+        cx: &App,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        let predicate: fn(&ContainerWorkspaceState) -> bool = match self {
+            ModalKind::ContainerConfirm => |state| state.confirm.is_some(),
+            ModalKind::ContainerRename => |state| state.rename_container.is_some(),
+            ModalKind::ContainerTagImage => |state| state.tag_image.is_some(),
+            ModalKind::ContainerCommit => |state| state.commit_container.is_some(),
+            ModalKind::ContainerUpdate => |state| state.update_container.is_some(),
+            ModalKind::ContainerNetworkConnect => |state| state.connect_network.is_some(),
+            ModalKind::ContainerExportConfig => |state| state.export_config.is_some(),
+            ModalKind::ContainerFileRename => |state| state.files.prompt_input.is_some(),
+            ModalKind::ContainerFileNewDir => {
+                |state| state.files.new_dir_open && state.files.new_dir_input.is_some()
+            }
+            ModalKind::ContainerForward => |state| state.forward_dialog.is_some(),
+            ModalKind::ContainerPush => |state| state.push_dialog.is_some(),
+            ModalKind::ContainerSystemDf => |state| state.system_df_dialog_open,
+            ModalKind::ContainerBuild => |state| state.build_dialog.is_some(),
+            ModalKind::ContainerHub => |state| state.hub_dialog.is_some(),
+            ModalKind::ContainerPods => |state| state.pods_dialog_open,
+            ModalKind::ContainerQuadlet => |state| state.quadlets_dialog_open,
+            _ => return None,
+        };
+        let (_, view) = shell.find_container_modal_tab(cx, predicate)?;
+        let state = view.read(cx);
+        let element = match self {
+            ModalKind::ContainerConfirm => {
+                crate::container::render_container_confirm_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerRename => {
+                crate::container::render_container_rename_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerTagImage => {
+                crate::container::render_container_tag_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerCommit => {
+                crate::container::render_container_commit_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerUpdate => {
+                crate::container::render_container_update_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerNetworkConnect => {
+                crate::container::render_container_network_connect_dialog_body(
+                    &view,
+                    &state.state,
+                    p,
+                )
+            }
+            ModalKind::ContainerExportConfig => {
+                crate::container::render_container_export_config_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerFileRename => {
+                crate::container::render_container_file_rename_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerFileNewDir => {
+                crate::container::render_container_file_new_dir_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerForward => {
+                crate::container::render_container_forward_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerPush => {
+                let registries = crate::app::app_settings(cx).container_registries.clone();
+                crate::container::render_container_push_dialog_body(
+                    &view,
+                    &state.state,
+                    &registries,
+                    p,
+                )
+            }
+            ModalKind::ContainerSystemDf => {
+                crate::container::render_container_system_df_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerBuild => {
+                crate::container::render_container_build_dialog_body(&view, &state.state, cx, p)
+            }
+            ModalKind::ContainerHub => {
+                crate::container::render_container_hub_dialog_body(&view, &state.state, cx, p)
+            }
+            ModalKind::ContainerPods => {
+                crate::container::render_container_pods_dialog_body(&view, &state.state, p)
+            }
+            ModalKind::ContainerQuadlet => {
+                crate::container::render_container_quadlet_dialog_body(&view, &state.state, p)
+            }
+            _ => return None,
+        };
+        Some(element)
     }
 }

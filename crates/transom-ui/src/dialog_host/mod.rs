@@ -280,32 +280,11 @@ impl ModalKind {
             };
             return view.update(cx, |view, cx| view.render_body(create_input, p, cx));
         }
-        if matches!(
-            self,
-            ModalKind::ContainerConfirm | ModalKind::ContainerRename
-        ) {
+        if let Some(element) = {
             let shell = app.read(cx);
-            return match self {
-                ModalKind::ContainerConfirm => {
-                    let Some((_, view)) =
-                        shell.find_container_modal_tab(cx, |workspace| workspace.confirm.is_some())
-                    else {
-                        return div().into_any_element();
-                    };
-                    let state = view.read(cx);
-                    crate::container::render_container_confirm_dialog_body(&view, &state.state, p)
-                }
-                ModalKind::ContainerRename => {
-                    let Some((_, view)) = shell.find_container_modal_tab(cx, |workspace| {
-                        workspace.rename_container.is_some()
-                    }) else {
-                        return div().into_any_element();
-                    };
-                    let state = view.read(cx);
-                    crate::container::render_container_rename_dialog_body(&view, &state.state, p)
-                }
-                _ => unreachable!(),
-            };
+            self.container_workspace_body(shell, cx, p)
+        } {
+            return element;
         }
         if matches!(
             self,
@@ -352,64 +331,28 @@ impl ModalKind {
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerCreate => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
-            ModalKind::ContainerConfirm | ModalKind::ContainerRename => div().into_any_element(),
-            ModalKind::ContainerTagImage => shell.render_container_tag_dialog_body(app, cx, p),
-            ModalKind::ContainerCommit => shell.render_container_commit_dialog_body(app, cx, p),
-            ModalKind::ContainerUpdate => shell.render_container_update_dialog_body(app, cx, p),
-            ModalKind::ContainerNetworkConnect => {
-                shell.render_container_network_connect_dialog_body(app, cx, p)
-            }
-            ModalKind::ContainerExportConfig => {
-                shell.render_container_export_config_dialog_body(app, cx, p)
-            }
-            ModalKind::ContainerFileRename => {
-                shell.render_container_file_rename_dialog_body(app, cx, p)
-            }
-            ModalKind::ContainerFileNewDir => {
-                shell.render_container_file_new_dir_dialog_body(app, cx, p)
-            }
-            ModalKind::ContainerHub => shell
-                .find_container_modal_tab(cx, |ws| ws.hub_dialog.is_some())
-                .map_or_else(
-                    || div().into_any_element(),
-                    |(tab_id, _)| {
-                        shell.render_container_hub_dialog_body(tab_id, app, window, cx, p)
-                    },
-                ),
-            ModalKind::ContainerPush => shell
-                .find_container_modal_tab(cx, |ws| ws.push_dialog.is_some())
-                .map_or_else(
-                    || div().into_any_element(),
-                    |(tab_id, _)| {
-                        shell.render_container_push_dialog_body(tab_id, app, window, cx, p)
-                    },
-                ),
-            ModalKind::ContainerSystemDf => shell
-                .find_container_modal_tab(cx, |ws| ws.system_df_dialog_open)
-                .map_or_else(
-                    || div().into_any_element(),
-                    |(tab_id, _)| {
-                        shell.render_container_system_df_dialog_body(tab_id, app, window, cx, p)
-                    },
-                ),
-            ModalKind::ContainerBuild => shell
-                .find_container_modal_tab(cx, |ws| ws.build_dialog.is_some())
-                .map_or_else(
-                    || div().into_any_element(),
-                    |(tab_id, _)| {
-                        shell.render_container_build_dialog_body(tab_id, app, window, cx, p)
-                    },
-                ),
-            ModalKind::ContainerForward => shell
-                .find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
-                .map_or_else(
-                    || div().into_any_element(),
-                    |(tab_id, _)| {
-                        shell.render_container_forward_dialog_body(tab_id, app, window, cx, p)
-                    },
-                ),
-            ModalKind::ContainerPods => shell.render_container_pods_dialog_body(app, cx, p),
-            ModalKind::ContainerQuadlet => shell.render_container_quadlet_dialog_body(app, cx, p),
+            // 以下容器弹窗由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerConfirm
+            | ModalKind::ContainerRename
+            | ModalKind::ContainerTagImage
+            | ModalKind::ContainerCommit
+            | ModalKind::ContainerUpdate
+            | ModalKind::ContainerNetworkConnect
+            | ModalKind::ContainerExportConfig
+            | ModalKind::ContainerFileRename
+            | ModalKind::ContainerFileNewDir => div().into_any_element(),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerHub => div().into_any_element(),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerPush => div().into_any_element(),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerSystemDf => div().into_any_element(),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerBuild => div().into_any_element(),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerForward => div().into_any_element(),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerPods | ModalKind::ContainerQuadlet => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::SessionForm => div().into_any_element(),
             ModalKind::FolderForm => shell.render_folder_form_body(app, window, cx, p),

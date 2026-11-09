@@ -17,7 +17,10 @@ use super::types::{
 use crate::app::AppShell;
 use gpui_kit::{Context, EventEmitter};
 use std::path::PathBuf;
-use transom_core::TabId;
+use transom_core::{
+    BindAddress, ConnectionId, ForwardCommand, ForwardKind, ForwardRule, ForwardState, TabId,
+    TargetAddress,
+};
 
 /// 容器工作区向外壳发出的动作意图。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +131,25 @@ pub(crate) enum ContainerWorkspaceEvent {
         /// 是否为成功提示。
         success: bool,
     },
+    /// 启动一条容器端口的 SSH 本地转发。
+    ///
+    /// 设计原理（Why）：转发规则要写入目标 SSH 标签页的转发状态并投递到命令
+    /// 总线，这属于外壳状态；实体只负责校验与拼装参数，事件自带全部字段，
+    /// 外壳处理时不回读工作区实体。
+    StartPortForward {
+        /// 目标 SSH 标签页。
+        ssh_tab_id: TabId,
+        /// 目标 SSH 连接 id。
+        connection_id: ConnectionId,
+        /// 规则名（容器名:端口）。
+        rule_name: String,
+        /// 本地监听端口。
+        bind_port: u16,
+        /// 目标主机。
+        target_host: String,
+        /// 目标端口。
+        target_port: u16,
+    },
     /// 对列表行执行动作；具体分发由外壳统一完成，其中部分动作需要窗口。
     RunRowAction {
         target: RowTarget,
@@ -161,13 +183,19 @@ impl AppShell {
                 cx.notify();
             }
             ContainerWorkspaceEvent::OpenSystemDf => {
-                self.open_container_system_df_dialog(tab_id, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| workspace.open_system_df_dialog(cx));
+                }
             }
             ContainerWorkspaceEvent::OpenPods => {
-                self.open_container_pods_dialog(tab_id, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| workspace.open_pods_dialog(cx));
+                }
             }
             ContainerWorkspaceEvent::OpenQuadlet => {
-                self.open_container_quadlets_dialog(tab_id, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| workspace.open_quadlets_dialog(cx));
+                }
             }
             ContainerWorkspaceEvent::CreateComposeFromTemplate(content) => {
                 self.create_local_compose_with_content(tab_id, content.clone(), cx);
@@ -189,6 +217,36 @@ impl AppShell {
             }
             ContainerWorkspaceEvent::SaveImage(image) => {
                 self.save_image(tab_id, image.clone(), cx);
+            }
+            ContainerWorkspaceEvent::StartPortForward {
+                ssh_tab_id,
+                connection_id,
+                rule_name,
+                bind_port,
+                target_host,
+                target_port,
+            } => {
+                let rule = ForwardRule::new(
+                    rule_name.clone(),
+                    ForwardKind::Local {
+                        bind: BindAddress {
+                            host: "127.0.0.1".into(),
+                            port: *bind_port,
+                        },
+                        target: TargetAddress {
+                            host: target_host.clone(),
+                            port: *target_port,
+                        },
+                    },
+                );
+                self.state
+                    .set_forward_status(*ssh_tab_id, rule.id, ForwardState::Starting, None);
+                self.state.send_command(ForwardCommand::ForwardStart {
+                    tab_id: *ssh_tab_id,
+                    connection_id: *connection_id,
+                    rule,
+                });
+                cx.notify();
             }
             // 打开输入表单与弹窗需要 `Window`，事件派发阶段拿不到；行动作里的
             // 详情页切换、复制与生命周期也统一交给渲染期执行，避免两套分发逻辑。

@@ -59,7 +59,9 @@ impl AppShell {
         self.show_toast(msg, succeeded, window, cx);
 
         // 清理完成后，重新统计磁盘占用并刷新各资源列表
-        self.refresh_container_system_df(tab_id, cx);
+        if let Some(workspace) = self.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, cx| workspace.refresh_system_df(cx));
+        }
         if let Some(workspace) = self.state.container_workspace(tab_id) {
             workspace.update(cx, |workspace, _| workspace.refresh_all());
         }

@@ -3,41 +3,6 @@
 use super::*;
 
 impl AppShell {
-    /// 更新容器资源配置（内存、CPU、重启策略）。
-    pub(crate) fn update_container_resources(
-        &mut self,
-        tab_id: TabId,
-        container: String,
-        spec: transom_core::ContainerUpdateSpec,
-        cx: &mut Context<Self>,
-    ) {
-        let request_id = ContainerRequestId::new();
-        self.with_container_mut(tab_id, cx, |workspace| {
-            workspace.busy = true;
-            workspace.notice = Some(
-                rust_i18n::t!(
-                    "container.action.running",
-                    action = rust_i18n::t!("container.action.update")
-                )
-                .to_string(),
-            );
-        });
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::UpdateContainer {
-                        tab_id,
-                        request_id,
-                        container,
-                        spec,
-                    },
-                );
-            });
-        }
-        cx.notify();
-    }
-
     /// 消费拉取/新建弹窗实体上交的提交意图。
     ///
     /// 主输入仍归各标签工作区，实体读不到，因此事件只携带附加字段：外壳先读
@@ -317,5 +282,21 @@ impl ContainerWorkspace {
             ContainerConfirm::Compose(_) => return None,
         };
         Some(command)
+    }
+}
+
+impl ContainerWorkspace {
+    /// 重新发起引擎连接：状态先回到「连接中」，避免占位页继续显示旧错误。
+    ///
+    /// 设计原理（Why）：重试只依赖本标签页的 profile 与命令通道，属于实体
+    /// 自身动作；外壳不再中转，渲染回调直接更新实体即可。
+    pub(crate) fn reconnect(&mut self, cx: &mut Context<Self>) {
+        let profile = self.state.profile.clone();
+        self.send(ContainerCommand::Connect {
+            tab_id: self.tab_id,
+            profile,
+        });
+        self.state.status = ContainerWorkspaceStatus::Connecting;
+        cx.notify();
     }
 }

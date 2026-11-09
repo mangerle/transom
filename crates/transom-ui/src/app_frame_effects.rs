@@ -225,7 +225,11 @@ impl AppShell {
                 self.open_container_run_form(tab_id, image.clone(), window, cx);
             }
             ContainerWorkspaceEvent::OpenImageHub => {
-                self.open_container_hub_dialog(tab_id, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_hub_dialog(window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenCreateDialog(section) => {
                 let view = self.state.modals.tools.create_dialog.clone();
@@ -233,7 +237,11 @@ impl AppShell {
                 cx.notify();
             }
             ContainerWorkspaceEvent::OpenBuildDialog => {
-                self.open_container_build_dialog(tab_id, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_build_dialog(window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenPortForward {
                 container,
@@ -277,22 +285,46 @@ impl AppShell {
                 self.show_toast(message.clone(), false, window, cx);
             }
             ContainerWorkspaceEvent::OpenContainerUpdate(name) => {
-                self.open_container_update(tab_id, name.clone(), window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_container_update(name.clone(), window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenContainerExport(name) => {
-                self.open_container_export(tab_id, name.clone(), cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_container_export(name.clone(), cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenContainerCommit(name) => {
-                self.open_container_commit(tab_id, name.clone(), window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_container_commit(name.clone(), window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenImageTag(image) => {
-                self.open_image_tag(tab_id, image.clone(), window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_image_tag(image.clone(), window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenImagePush { id, reference } => {
-                self.open_container_push_dialog(tab_id, id.clone(), reference.clone(), window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_push_dialog(id.clone(), reference.clone(), window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::OpenNetworkConnect(network) => {
-                self.open_network_connect(tab_id, network.clone(), window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_network_connect(network.clone(), window, cx);
+                    });
+                }
             }
             ContainerWorkspaceEvent::CloneContainer { id, name } => {
                 self.clone_container(tab_id, id, name, window, cx);

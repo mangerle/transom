@@ -39,6 +39,7 @@ mod types;
 mod update;
 mod view;
 
+pub(crate) use build_dialog::render_container_build_dialog_body;
 pub(crate) use create_dialog_view::{ContainerCreateDialogEvent, ContainerCreateDialogView};
 pub(crate) use entity::ContainerWorkspace;
 pub(crate) use event::ContainerWorkspaceEvent;
@@ -46,16 +47,27 @@ pub(crate) use form::{
     ContainerFormEvent, ContainerFormFolders, ContainerFormView, ContainerRunFormEvent,
     ContainerRunFormView,
 };
+pub(crate) use hub::render_container_hub_dialog_body;
 pub(crate) use modals::{
-    render_container_confirm_dialog_body, render_container_rename_dialog_body,
+    render_container_commit_dialog_body, render_container_confirm_dialog_body,
+    render_container_export_config_dialog_body, render_container_file_new_dir_dialog_body,
+    render_container_file_rename_dialog_body, render_container_forward_dialog_body,
+    render_container_network_connect_dialog_body, render_container_pods_dialog_body,
+    render_container_quadlet_dialog_body, render_container_rename_dialog_body,
+    render_container_tag_dialog_body, render_container_update_dialog_body,
 };
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
+pub(crate) use push_dialog::render_container_push_dialog_body;
+pub(crate) use system_df_dialog::render_container_system_df_dialog_body;
 pub(crate) use types::{
     ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,
     ContainerDiscovery, ContainerFilePrompt, ContainerFilesState, ContainerHubDialog,
     ContainerPushDialog, ContainerSection, ContainerTerminalState, ContainerUiState,
     ContainerWorkspaceState, ContainerWorkspaceStatus, RowAction, RowTarget,
+};
+pub(crate) use view::{
+    render_container_connection_state, render_container_list_content, render_container_tab_body,
 };
 
 use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};

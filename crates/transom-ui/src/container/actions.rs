@@ -420,13 +420,21 @@ impl AppShell {
                 let RowTarget::Container { name, .. } = target else {
                     return;
                 };
-                self.open_container_export(tab_id, name, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_container_export(name, cx);
+                    });
+                }
             }
             RowAction::Commit => {
                 let RowTarget::Container { name, .. } = target else {
                     return;
                 };
-                self.open_container_commit(tab_id, name, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_container_commit(name, window, cx);
+                    });
+                }
             }
             RowAction::Clone => {
                 let RowTarget::Container { id, name } = target else {
@@ -438,7 +446,11 @@ impl AppShell {
                 let RowTarget::Image(id) = target else {
                     return;
                 };
-                self.open_image_tag(tab_id, id, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_image_tag(id, window, cx);
+                    });
+                }
             }
             RowAction::Push => {
                 let RowTarget::Image(id) = target else {
@@ -456,7 +468,11 @@ impl AppShell {
                             .map(|item| item.display_name())
                     })
                     .unwrap_or_else(|| id.clone());
-                self.open_container_push_dialog(tab_id, id, reference, window, cx);
+                if let Some(workspace) = self.state.container_workspace(tab_id) {
+                    workspace.update(cx, |workspace, cx| {
+                        workspace.open_push_dialog(id, reference, window, cx);
+                    });
+                }
             }
             RowAction::Save => {
                 let RowTarget::Image(id) = target else {
