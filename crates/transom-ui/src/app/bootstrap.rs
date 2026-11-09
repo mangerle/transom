@@ -73,6 +73,7 @@ impl AppShell {
                 restart_requested,
                 local_shells,
             },
+            window,
             cx,
         );
 
@@ -240,6 +241,18 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.container_create = Some(container_create_subscription);
+        // 容器侧栏只上交目录/窗口动作：事件自带数据，外壳在渲染期统一执行。
+        let container_sidebar_subscription = cx.subscribe(
+            &self.state.containers.sidebar,
+            |shell, _view, event: &crate::container::ContainerSidebarEvent, cx| {
+                shell
+                    .state
+                    .window_requests
+                    .push_container_sidebar(event.clone());
+                cx.notify();
+            },
+        );
+        self.state.tasks.subscriptions.container_sidebar = Some(container_sidebar_subscription);
         let metrics_subscription = cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
@@ -355,7 +368,11 @@ struct BootstrapState {
 }
 
 /// 组装 `AppState`：把启动准备、实体句柄与事件订阅一次性收进状态。
-fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState {
+fn assemble_state(
+    input: BootstrapState,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) -> AppState {
     let BootstrapState {
         services,
         prepared,
@@ -463,7 +480,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
         },
         open_modals: crate::dialog_host::OpenModals::default(),
         dialog_hint: None,
-        containers: crate::container::ContainerUiState::default(),
+        containers: crate::container::ContainerUiState::new(window, cx),
         git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
         toast_seq: 0,
         last_toast: None,

@@ -19,8 +19,15 @@ pub(in crate::app::dialog_host) fn container_form_values(
         .text_values(cx)
 }
 
-pub(in crate::app::dialog_host) fn container_folder_form_open(shell: &AppShell, _cx: &App) -> bool {
-    shell.state.containers.engine_folder_form.is_some()
+pub(in crate::app::dialog_host) fn container_folder_form_open(shell: &AppShell, cx: &App) -> bool {
+    shell
+        .state
+        .containers
+        .sidebar
+        .read(cx)
+        .state
+        .engine_folder_form
+        .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_folder_form_values(
@@ -30,6 +37,9 @@ pub(in crate::app::dialog_host) fn container_folder_form_values(
     shell
         .state
         .containers
+        .sidebar
+        .read(cx)
+        .state
         .engine_folder_form
         .as_ref()
         .map(|form| vec![form.input.read(cx).value().to_string()])

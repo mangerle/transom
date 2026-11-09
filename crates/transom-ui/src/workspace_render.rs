@@ -129,7 +129,22 @@ impl AppShell {
         if self.state.sidebar.visible {
             // 左侧槽位一次只承载一种内容：容器连接、Git 仓库、纵向标签面板或会话树。
             let content = if self.state.containers.sidebar_open {
-                self.render_container_sidebar(window, cx, p)
+                // 目录与连接状态由外壳按渲染快照注入，侧栏实体不反查外壳。
+                let sidebar = self.state.containers.sidebar.clone();
+                let profile_states = self.state.container_profile_states(cx);
+                let active = self.state.active_engine_profile_id();
+                let state = sidebar.read(cx);
+                crate::container::render_container_sidebar(
+                    crate::container::ContainerSidebarParams {
+                        view: &sidebar,
+                        state: &state.state,
+                        cx,
+                        catalog: &self.state.catalog,
+                        active,
+                        profile_states: &profile_states,
+                    },
+                    p,
+                )
             } else if self.state.git.sidebar_open {
                 self.render_git_sidebar(window, cx, p)
             } else if self.show_vertical_tabs_panel(app_settings(cx)) {

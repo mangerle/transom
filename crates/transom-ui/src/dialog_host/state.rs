@@ -111,7 +111,11 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerFolderForm => {
-                shell.state.containers.engine_folder_form = None;
+                shell
+                    .state
+                    .containers
+                    .sidebar
+                    .update(cx, |sidebar, cx| sidebar.dismiss_folder_form(cx));
                 true
             }
             ModalKind::ContainerRunForm => {
@@ -294,7 +298,13 @@ impl ModalKind {
                     .container_form
                     .update(cx, |view, cx| view.save(cx));
             }
-            ModalKind::ContainerFolderForm => shell.submit_engine_folder_form(window, cx),
+            ModalKind::ContainerFolderForm => {
+                shell
+                    .state
+                    .containers
+                    .sidebar
+                    .update(cx, |sidebar, cx| sidebar.submit_folder_form(cx));
+            }
             ModalKind::ContainerRunForm => {
                 shell
                     .state
@@ -413,13 +423,17 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |form| {
                     ModalFocus::Input(form.name.clone())
                 }),
-            ModalKind::ContainerFolderForm => input_focus(shell, |state| {
-                state
-                    .containers
-                    .engine_folder_form
-                    .as_ref()
-                    .map(|form| form.input.clone())
-            }),
+            ModalKind::ContainerFolderForm => shell
+                .state
+                .containers
+                .sidebar
+                .read(cx)
+                .state
+                .engine_folder_form
+                .as_ref()
+                .map_or(ModalFocus::None, |form| {
+                    ModalFocus::Input(form.input.clone())
+                }),
             ModalKind::ContainerRunForm => shell
                 .state
                 .modals

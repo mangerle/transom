@@ -150,48 +150,6 @@ impl AppShell {
     }
 
     /// 保存引擎连接配置（新建或更新）。
-    /// 发起一次本机引擎发现：用户不必手填 socket/管道路径。
-    pub(crate) fn discover_engines(&mut self, cx: &mut Context<Self>) {
-        if self.state.containers.discovering {
-            return;
-        }
-        self.state.containers.discovering = true;
-        self.state.containers.discovery = None;
-        self.state.send_command(ContainerCommand::Discover {
-            request_id: ContainerRequestId::new(),
-        });
-        cx.notify();
-    }
-
-    /// 收起发现结果面板。
-    pub(crate) fn dismiss_container_discovery(&mut self, cx: &mut Context<Self>) {
-        self.state.containers.discovery = None;
-        cx.notify();
-    }
-
-    /// 添加一个发现的引擎：同种类同端点已保存时不再重复入库，直接打开工作区。
-    pub(crate) fn add_discovered_engine(
-        &mut self,
-        profile: ContainerEngineProfile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let duplicated = self.state.catalog.engines.iter().any(|saved| {
-            saved.engine.kind == profile.engine.kind
-                && saved.engine.endpoint.describe() == profile.engine.endpoint.describe()
-        });
-        if !duplicated {
-            self.state.catalog.engines.push(profile.clone());
-            self.state.persist_catalog();
-        }
-        if let Some(discovery) = self.state.containers.discovery.as_mut() {
-            discovery.candidates.retain(|candidate| {
-                candidate.engine.endpoint.describe() != profile.engine.endpoint.describe()
-            });
-        }
-        self.open_engine_workspace(profile, window, cx);
-    }
-
     /// 新建连接并放进指定分组（`None` 为根层级）。
     pub(crate) fn open_new_container_in_folder(
         &mut self,

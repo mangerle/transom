@@ -26,6 +26,8 @@ pub(crate) enum WindowRequest {
         tab_id: TabId,
         event: ContainerWorkspaceEvent,
     },
+    /// 容器侧栏动作：侧栏是单例实体，事件自带全部数据。
+    ContainerSidebar(crate::container::ContainerSidebarEvent),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -54,6 +56,13 @@ impl WindowRequests {
     /// 容器工作区的窗口动作：事件在派发阶段不持有实体句柄，直接连标签 id 入队。
     pub(crate) fn push_container(&mut self, tab_id: TabId, event: ContainerWorkspaceEvent) {
         self.items.push(WindowRequest::Container { tab_id, event });
+    }
+
+    pub(crate) fn push_container_sidebar(
+        &mut self,
+        event: crate::container::ContainerSidebarEvent,
+    ) {
+        self.items.push(WindowRequest::ContainerSidebar(event));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

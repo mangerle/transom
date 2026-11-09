@@ -45,6 +45,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     /// 容器工作区发往外壳的意图事件：一个标签一份订阅，按标签回收。
     pub(crate) container_workspaces: HashMap<TabId, Subscription>,
+    /// 容器引擎侧栏发往外壳的意图事件：侧栏是单例实体。
+    pub(crate) container_sidebar: Option<Subscription>,
     pub(crate) settings: Option<Subscription>,
     /// 会话表单：保存落目录与删除会话由外壳处理。
     pub(crate) session_form: Option<Subscription>,
@@ -79,6 +81,7 @@ impl PanelSubscriptions {
             monitor: None,
             forward: HashMap::new(),
             container_workspaces: HashMap::new(),
+            container_sidebar: None,
             settings: None,
             session_form: None,
             container_form: None,

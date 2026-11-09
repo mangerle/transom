@@ -362,6 +362,9 @@ impl AppShell {
                 WindowRequest::Container { tab_id, event } => {
                     self.handle_container_request(tab_id, &event, window, cx);
                 }
+                WindowRequest::ContainerSidebar(event) => {
+                    self.on_container_sidebar_event(&event, window, cx);
+                }
             }
         }
     }

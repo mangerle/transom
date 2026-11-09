@@ -75,20 +75,29 @@ pub(crate) struct ContainerDiscovery {
 /// 连接表单、运行容器表单与拉取/新建弹窗已实体化为 `ContainerFormView` /
 /// `ContainerRunFormView` / `ContainerCreateDialogView`，本结构只保留仍由外壳
 /// 统一持有的侧栏与标签级弹窗字段。
-#[derive(Default)]
 pub(crate) struct ContainerUiState {
     pub(crate) sidebar_open: bool,
     pub(crate) fullscreen: Option<TabId>,
-    /// 最近一次「发现本机引擎」的结果面板。
-    pub(crate) discovery: Option<ContainerDiscovery>,
-    /// 正在进行的发现请求，避免连点重复探测。
-    pub(crate) discovering: bool,
-    /// 侧栏当前单选高亮的引擎连接。
-    pub(crate) sidebar_selected: Option<transom_core::EngineProfileId>,
-    /// 侧栏搜索框：首次渲染时创建，随后复用。
-    pub(crate) sidebar_search: Option<Entity<InputState>>,
-    /// 引擎分组的新建/重命名弹窗。
-    pub(crate) engine_folder_form: Option<EngineFolderForm>,
+    /// 引擎连接侧栏实体：搜索、选中、分组表单与发现面板状态都归它。
+    pub(crate) sidebar: Entity<super::super::ContainerSidebarView>,
+}
+
+impl ContainerUiState {
+    /// 创建侧栏实体并组装顶层状态。
+    ///
+    /// 设计原理（Why）：侧栏搜索框需要 `Window` 才能创建，因此不在 `Default`
+    /// 里惰性构造，而是在启动时一次性建好；之后整窗复用同一实体。
+    pub(crate) fn new(
+        window: &mut Window,
+        cx: &mut gpui_kit::Context<crate::app::AppShell>,
+    ) -> Self {
+        let sidebar = cx.new(|cx| super::super::ContainerSidebarView::new(window, cx));
+        Self {
+            sidebar_open: false,
+            fullscreen: None,
+            sidebar,
+        }
+    }
 }
 
 /// 引擎分组表单：只编辑名称，父级与“是否重命名”在打开时确定。

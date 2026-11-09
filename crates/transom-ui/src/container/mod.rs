@@ -28,6 +28,7 @@ mod push_dialog;
 mod quadlet;
 mod rename;
 mod sidebar;
+mod sidebar_events;
 mod stats;
 mod stats_actions;
 mod system_df_dialog;
@@ -59,6 +60,10 @@ pub(crate) use modals::{
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use push_dialog::render_container_push_dialog_body;
+pub(crate) use sidebar::{
+    ContainerSidebarDrag, ContainerSidebarEvent, ContainerSidebarParams, ContainerSidebarTarget,
+    ContainerSidebarView, render_container_sidebar, render_engine_folder_form_body,
+};
 pub(crate) use system_df_dialog::render_container_system_df_dialog_body;
 pub(crate) use types::{
     ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,
@@ -109,6 +114,20 @@ impl AppState {
     pub(crate) fn container_workspace(&self, tab_id: TabId) -> Option<Entity<ContainerWorkspace>> {
         match &self.workspace.tab(tab_id)?.content {
             TabContent::Containers(workspace) => Some(workspace.clone()),
+            _ => None,
+        }
+    }
+
+    /// 当前活动标签对应的引擎连接 id；不是容器标签时返回 `None`。
+    ///
+    /// 纯状态查询，不依赖 GPUI 上下文，因此放在 [`AppState`] 上。
+    pub(crate) fn active_engine_profile_id(&self) -> Option<transom_core::EngineProfileId> {
+        let tab = self
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.workspace.tab(tab_id))?;
+        match &tab.session.connection {
+            Connection::ContainerEngine(profile) => Some(profile.id),
             _ => None,
         }
     }

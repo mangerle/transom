@@ -64,12 +64,16 @@ impl AppShell {
             ContainerAppEvent::EnginesDiscovered {
                 engines, failures, ..
             } => {
-                self.state.containers.discovering = false;
-                self.state.containers.discovery = Some(ContainerDiscovery {
-                    candidates: engines,
-                    failures,
+                let sidebar = self.state.containers.sidebar.clone();
+                sidebar.update(cx, |sidebar, cx| {
+                    sidebar.apply_discovery(
+                        ContainerDiscovery {
+                            candidates: engines,
+                            failures,
+                        },
+                        cx,
+                    );
                 });
-                cx.notify();
             }
             ContainerAppEvent::TestFinished {
                 request_id,

@@ -325,7 +325,16 @@ impl ModalKind {
             ModalKind::EditorGotoLine => shell.render_editor_goto_line_body(app, cx, p),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerForm => div().into_any_element(),
-            ModalKind::ContainerFolderForm => shell.render_engine_folder_form_body(app, cx, p),
+            ModalKind::ContainerFolderForm => {
+                let sidebar = shell.state.containers.sidebar.clone();
+                let state = sidebar.read(cx);
+                crate::container::render_engine_folder_form_body(
+                    &sidebar,
+                    &state.state,
+                    &shell.state.catalog,
+                    p,
+                )
+            }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerRunForm => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
