@@ -101,7 +101,7 @@ impl AppShell {
         pods: Vec<transom_core::ContainerPodSummary>,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.take_container_request(request_id, cx) else {
+        let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
             return;
         };
         if let Some(workspace) = self.state.container_workspace(tab_id) {

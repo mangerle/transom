@@ -575,7 +575,7 @@ fn editor_panel_has_no_sync_callback_channel() {
 fn panel_entities_have_no_parent_entity_handle() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut offenders = Vec::new();
-    for base in ["monitor", "editor", "forward", "sftp"] {
+    for base in ["monitor", "editor", "forward", "sftp", "container"] {
         for entry in walkdir_like(&root.join(base)) {
             if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
                 continue;
@@ -1108,7 +1108,9 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/push_dialog.rs",
         "src/container/system_df_dialog.rs",
         "src/container/build_dialog/render.rs",
+        "src/container/build_dialog/actions.rs",
         "src/container/hub/dialog.rs",
+        "src/container/hub/mod.rs",
         "src/container/view/mod.rs",
         "src/container/sidebar.rs",
         "src/container/sidebar/entity.rs",
@@ -1273,6 +1275,54 @@ fn container_migration_bridge_is_removed() {
     assert!(
         offenders.is_empty(),
         "with_container 迁移桥不得复活：\n{}",
+        offenders.join("\n")
+    );
+
+    let container = std::fs::read_to_string(root.join("src/container/mod.rs"))
+        .expect("读取 container/mod.rs 失败");
+    for forbidden in [
+        "fn take_container_request(",
+        "fn container_request_tab(",
+        "fn container_request_label(",
+    ] {
+        assert!(
+            !container.contains(forbidden),
+            "请求反查访问器必须归 AppState，不得留在 container/mod.rs：{forbidden}"
+        );
+    }
+}
+
+/// 容器实体不得持有父实体句柄或同步回交外壳的通道。
+///
+/// 设计原理（Why）：容器工作区与侧栏只通过事件向外壳表达意图，数据由外壳
+/// 注入；一旦出现 `WeakEntity<AppShell>` 或 `with_shell` 同步回调，就会重新
+/// 引入双向调用与双重租借风险。
+#[test]
+fn container_entities_have_no_parent_handle_or_sync_callback() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/container");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            for forbidden in ["WeakEntity<AppShell>", "with_shell(", "read_shell("] {
+                if trimmed.contains(forbidden) {
+                    offenders.push(format!("{}: {trimmed}", entry.display()));
+                }
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "容器实体不得持有父实体句柄或同步回交通道：\n{}",
         offenders.join("\n")
     );
 }

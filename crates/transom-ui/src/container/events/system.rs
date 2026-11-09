@@ -11,7 +11,7 @@ impl AppShell {
         usage: transom_core::ContainerSystemDiskUsage,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.take_container_request(request_id, cx) else {
+        let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
             return;
         };
         if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -29,7 +29,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.take_container_request(request_id, cx) else {
+        let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
             return;
         };
 
@@ -73,7 +73,7 @@ impl AppShell {
         changes: Vec<transom_core::ContainerFileSystemChange>,
         cx: &mut Context<Self>,
     ) {
-        let Some(tab_id) = self.take_container_request(request_id, cx) else {
+        let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
             return;
         };
         if let Some(workspace) = self.state.container_workspace(tab_id) {

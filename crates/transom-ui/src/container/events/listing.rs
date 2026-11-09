@@ -17,7 +17,7 @@ impl AppShell {
                 request_id,
                 containers,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -30,7 +30,7 @@ impl AppShell {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -40,7 +40,7 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::ImagesListed { request_id, images } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -51,7 +51,7 @@ impl AppShell {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -62,7 +62,7 @@ impl AppShell {
                 request_id,
                 volumes,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -73,7 +73,7 @@ impl AppShell {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -86,7 +86,7 @@ impl AppShell {
                 request_id,
                 networks,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -97,7 +97,7 @@ impl AppShell {
                 request_id,
                 details,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -110,7 +110,7 @@ impl AppShell {
                 request_id,
                 projects,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -129,7 +129,7 @@ impl AppShell {
                 request_id,
                 processes,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {

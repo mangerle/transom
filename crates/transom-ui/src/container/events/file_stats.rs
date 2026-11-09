@@ -20,7 +20,7 @@ impl AppShell {
                 exit,
             } => self.on_container_exec_ready(tab_id, request_id, *io, exit, window, cx),
             ContainerAppEvent::LogsChunk { request_id, bytes } => {
-                let Some(tab_id) = self.container_request_tab(request_id, cx) else {
+                let Some(tab_id) = self.state.container_request_tab(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -30,7 +30,7 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::LogsClosed { request_id } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -42,7 +42,7 @@ impl AppShell {
                 container: _,
                 stats,
             } => {
-                let Some(tab_id) = self.container_request_tab(request_id, cx) else {
+                let Some(tab_id) = self.state.container_request_tab(request_id, cx) else {
                     return;
                 };
                 log::debug!("收到容器统计更新，请求: {request_id}");
@@ -53,7 +53,7 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::StatsUnavailable { request_id, error } => {
-                let Some(tab_id) = self.container_request_tab(request_id, cx) else {
+                let Some(tab_id) = self.state.container_request_tab(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -67,7 +67,7 @@ impl AppShell {
                 path,
                 entries,
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -84,7 +84,7 @@ impl AppShell {
                 binary,
                 ..
             } => {
-                let Some(tab_id) = self.take_container_request(request_id, cx) else {
+                let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -98,7 +98,7 @@ impl AppShell {
                 transferred,
                 total,
             } => {
-                let Some(tab_id) = self.container_request_tab(request_id, cx) else {
+                let Some(tab_id) = self.state.container_request_tab(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -108,7 +108,7 @@ impl AppShell {
                 }
             }
             ContainerAppEvent::BuildProgress { request_id, line } => {
-                let Some(tab_id) = self.container_request_tab(request_id, cx) else {
+                let Some(tab_id) = self.state.container_request_tab(request_id, cx) else {
                     return;
                 };
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
