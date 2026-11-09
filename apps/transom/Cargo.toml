@@ -115,8 +115,9 @@ long-description = "Transom 是一款基于 GPUI 的原生终端工作台，支�
 # Linux AppImage、Windows NSIS 与 macOS .app 都登记 `ssh://` 候选处理程序。
 # macOS 写入 CFBundleURLTypes；NSIS 在每用户安装作用域登记 URL Protocol。
 # 是否成为系统默认仍由用户的操作系统设置决定。
+# cargo-packager 的 BundleTypeRole 按 camelCase 反序列化，role 必须写小写 viewer。
 deep-link-protocols = [
-    { schemes = ["ssh"], name = "SSH URL", role = "Viewer" },
+    { schemes = ["ssh"], name = "SSH URL", role = "viewer" },
 ]
 icons = [
     "../../packaging/icons/32x32.png",
