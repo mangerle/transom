@@ -151,6 +151,27 @@ async fn send_on_connection(
     key: &str,
     pool: &Arc<ConnectionPool>,
 ) -> Result<PooledResponse, ContainerError> {
+    // 连接在响应体读完的瞬间就归还进池，但 hyper 的连接驱动可能还没被调度到
+    // “愿意接收下一个请求”的状态；此时直接发送会被 hyper 以
+    // “connection was not ready”（错误文本显示为 operation was canceled）拒绝。
+    // 先等待驱动就绪，避免把一条健康连接误判为失效后重连。
+    match tokio::time::timeout(REQUEST_TIMEOUT, connection.sender.ready()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            connection.driver.abort();
+            return Err(ContainerError::Http {
+                operation: operation.to_string(),
+                message: error.to_string(),
+            });
+        }
+        Err(_) => {
+            connection.driver.abort();
+            return Err(ContainerError::Http {
+                operation: operation.to_string(),
+                message: "等待连接就绪超时".to_string(),
+            });
+        }
+    }
     let request = build_request(method, path, Bytes::new(), None, false)?;
     let response = match tokio::time::timeout(
         REQUEST_TIMEOUT,
