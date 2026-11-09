@@ -107,7 +107,22 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: 运行全工作区测试
-        run: cargo test --locked --workspace
+        shell: bash
+        run: |
+          set +e
+          cargo test --locked --workspace 2>&1 | tee cargo-test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            failures=$(grep -E '^test .+ \.\.\. FAILED$|^thread .+ panicked at |^---- .+ stdout ----$' cargo-test.log | head -n 40)
+            if [ -z "$failures" ]; then
+              echo "::error title=工作区测试失败::未从日志中提取到失败测试，请查看原始日志"
+            else
+              while IFS= read -r line; do
+                echo "::error title=工作区测试失败::$line"
+              done <<< "$failures"
+            fi
+            exit "$status"
+          fi
 
       - name: 编译检查全部目标
         run: cargo check --locked --workspace --all-targets
