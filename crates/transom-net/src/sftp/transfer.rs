@@ -11,6 +11,7 @@ use super::hash::hex_encode;
 use russh_sftp::client::fs::File as RemoteFileHandle;
 use russh_sftp::protocol::FileAttributes;
 use sha2::{Digest, Sha256};
+use std::fs::OpenOptions;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -413,12 +414,17 @@ async fn open_local_download_target(
 pub(crate) async fn set_local_mtime(path: &Path, mtime: u32) -> Result<(), AppError> {
     let path = path.to_path_buf();
     tokio::task::spawn_blocking(move || {
-        let file = std::fs::File::open(&path).map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::SftpFailed,
-                format!("打开本地文件失败 {}: {error}", path.display()),
-            )
-        })?;
+        // Windows 的 SetFileTime 要求句柄具备 FILE_WRITE_ATTRIBUTES；只读句柄
+        // 会返回权限错误，导致修改时间静默保留失败。
+        let file = OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .map_err(|error| {
+                AppError::with_detail(
+                    ErrorCode::SftpFailed,
+                    format!("打开本地文件以设置修改时间失败 {}: {error}", path.display()),
+                )
+            })?;
         file.set_modified(UNIX_EPOCH + Duration::from_secs(u64::from(mtime)))
             .map_err(|error| {
                 AppError::with_detail(
