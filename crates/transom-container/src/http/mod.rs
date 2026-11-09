@@ -41,7 +41,6 @@ pub type RequestBody = Full<Bytes>;
 /// 未消费的 HTTP 响应。
 pub struct RawResponse {
     pub status: StatusCode,
-    pub headers: HeaderMap,
     pub body: Incoming,
     /// 连接驱动任务守卫：响应释放时中止后台驱动。
     _connection: ConnectionGuard,
@@ -162,7 +161,6 @@ pub async fn request_with_timeout(
     let (parts, body) = response.into_parts();
     Ok(RawResponse {
         status: parts.status,
-        headers: parts.headers,
         body,
         _connection: ConnectionGuard(Some(driver)),
     })
@@ -294,7 +292,6 @@ where
     let (parts, body) = response.into_parts();
     Ok(RawResponse {
         status: parts.status,
-        headers: parts.headers,
         body,
         _connection: ConnectionGuard(Some(driver)),
     })

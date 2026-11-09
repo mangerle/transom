@@ -21,7 +21,6 @@ pub fn pump_body(
 ) -> tokio::task::JoinHandle<()> {
     let RawResponse {
         status: _,
-        headers: _,
         body,
         _connection,
     } = response;

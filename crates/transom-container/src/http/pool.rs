@@ -8,6 +8,7 @@ use hyper::Method;
 use hyper::StatusCode;
 use hyper::body::Incoming;
 use hyper::client::conn::http1::SendRequest;
+use hyper::header::HeaderMap;
 use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -93,6 +94,7 @@ impl Drop for ConnectionLease {
 /// 池化请求的响应：保留响应体与连接租约。
 pub struct PooledResponse {
     pub status: StatusCode,
+    pub headers: HeaderMap,
     pub body: Incoming,
     pub lease: ConnectionLease,
 }
@@ -175,6 +177,7 @@ async fn send_on_connection(
     let (parts, body) = response.into_parts();
     Ok(PooledResponse {
         status: parts.status,
+        headers: parts.headers,
         body,
         lease: ConnectionLease {
             key: key.to_string(),

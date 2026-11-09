@@ -55,11 +55,15 @@ impl DockerApi {
     /// # Errors
     /// 端点不可达、权限不足或响应无法解析时返回 `ContainerError`。
     pub async fn probe(&self, kind: ContainerEngineKind) -> Result<ProbedEngine, ContainerError> {
-        let response =
-            http::request(&self.transport, Method::GET, "/_ping", Bytes::new(), None).await?;
-        let ping_status = response.status;
-        let ping_header = http::header_str(&response.headers, "API-Version");
-        let ping_body = http::read_body_text(response.body, 1024).await;
+        let http::PooledResponse {
+            status: ping_status,
+            headers,
+            body,
+            mut lease,
+        } = http::pooled_request(&self.pool, &self.transport, Method::GET, "/_ping").await?;
+        let ping_header = http::header_str(&headers, "API-Version");
+        let ping_body =
+            String::from_utf8_lossy(&http::read_body_bytes(body, 1024).await?).to_string();
         if !ping_status.is_success() {
             return Err(ContainerError::Api {
                 operation: "探测引擎 /_ping".to_string(),
@@ -67,6 +71,9 @@ impl DockerApi {
                 body: ping_body,
             });
         }
+        // /_ping 与 /version 都是普通 GET；响应体读完后立即归还，让版本协商
+        // 与后续列表复用同一条连接。
+        lease.mark_reusable();
 
         // 版本接口在个别代理后面可能不可用；此时仍可用 _ping 头里的 API 版本。
         let (version, api_version) = match self
@@ -156,6 +163,7 @@ impl DockerApi {
             status,
             body,
             mut lease,
+            ..
         } = http::pooled_request(&self.pool, &self.transport, Method::GET, &path)
             .await
             .inspect_err(|error| log_request_error(operation, error))?;
