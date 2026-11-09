@@ -441,7 +441,9 @@ fn app_shell_keeps_single_state_field() {
     let start = content
         .find("pub(crate) struct AppShell {")
         .expect("未找到 AppShell 定义");
-    let end = content[start..].find("\n}\n").expect("AppShell 定义未闭合") + start;
+    // Windows 检出可能使用 CRLF；只匹配换行后的闭合花括号，避免把行尾格式
+    // 当作结构错误。
+    let end = content[start..].find("\n}").expect("AppShell 定义未闭合") + start;
     let body = &content[start..end];
     let fields: Vec<&str> = body
         .lines()
