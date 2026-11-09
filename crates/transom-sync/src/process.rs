@@ -141,13 +141,21 @@ mod tests {
         #[cfg(unix)]
         let script = "printf stdout; printf stderr >&2";
         #[cfg(windows)]
-        // set /p 在 NUL 输入读到 EOF 时可能返回非零；本测试只验证双管道排空，
-        // 因此两个输出都完成后显式以成功状态退出。
-        let script = "(<nul set /p =stdout) & (<nul set /p =stderr 1>&2) & exit /b 0";
+        // echo 会追加 CRLF，且不会像 set /p 那样把重定向前的空格写进 stderr。
+        // 末尾显式成功退出，避免把命令解释器的退出码假设混入管道测试。
+        let script = "(echo stdout) & (echo stderr 1>&2) & exit /b 0";
         let output = output_with_timeout(command(script), Duration::from_secs(5)).unwrap();
         assert!(output.status.success());
-        assert_eq!(output.stdout, b"stdout");
-        assert_eq!(output.stderr, b"stderr");
+        #[cfg(unix)]
+        {
+            assert_eq!(output.stdout, b"stdout");
+            assert_eq!(output.stderr, b"stderr");
+        }
+        #[cfg(windows)]
+        {
+            assert_eq!(output.stdout, b"stdout\r\n");
+            assert_eq!(output.stderr, b"stderr\r\n");
+        }
     }
 
     #[test]
