@@ -1,16 +1,30 @@
-transom (1.6.2) unstable; urgency=medium
+transom (1.7.0) unstable; urgency=medium
 
   * 接入 shipup 0.5.1 自更新：设置 → 关于新增软件更新分组，支持检查、
     下载进度、Ed25519 验签、安装与优雅重启；启动时执行崩溃自检并在
-    首帧稳定后确认升级，连续两次启动失败自动回滚。
-  * 新增 transom-updater 封装 crate，更新清单与安装包均使用 Ed25519
-    签名，工作区 MSRV 提升至 1.96。
-  * 新增 GitHub Actions CI 与 Release 流水线：Linux deb/AppImage、
-    Windows NSIS/zip、macOS dmg/自更新 zip，覆盖 x86_64 与 arm64；
-    发布任务生成并复验 latest.json。
-  * 补充 Windows/macOS 打包图标、cargo-packager 元数据与发布文档。
+    首帧稳定后确认升级，连续两次启动失败自动回滚；新增 transom-updater
+    封装 crate，更新清单使用 Ed25519 签名，安装包摘要写入清单校验。
+  * 新增 GitHub Actions CI 与 Release 流水线：覆盖 Linux deb/AppImage、
+    Windows NSIS/便携 zip、macOS dmg/自更新 zip 与 x86_64/arm64 双架构，
+    发布任务生成并复验 latest.json；补充打包图标与 cargo-packager 元数据，
+    工作区 MSRV 提升至 1.96。Windows 与 macOS 产物暂不做操作系统级代码
+    签名，更新链路以 Ed25519 清单校验为准。
+  * 完成 Windows 平台支持：统一三端单实例与 ssh 深链，补齐 SSH Agent
+    认证与转发、PowerShell 本地集成、WSL 客户端桥接、SFTP 本地符号链接
+    与修改时间保留、原子文件替换与私有文件 DACL，以及桌面注册和本地
+    系统与进程采样。
+  * Git 面板全面重构：提交历史改为可拖拽底部工具窗，新增独立 Stash
+    页签并与 Shelf 分离、三方合并冲突解决器、双栏并排差异、分支搜索与
+    双击检出、Push 弹窗与提交说明历史下拉；对齐 IDEA 右键菜单，接入
+    作者、可执行路径、受保护分支、自动抓取、空白忽略与默认差异模式等
+    GitSettings。
+  * 容器工作区完成阶段 3 实体化：侧栏与弹窗的渲染和动作下沉到实体，
+    删除 with_container 迁移桥并补齐源码守卫；探测请求纳入连接池，CLI
+    子进程树统一回收，并自动发现 Windows WSL 容器引擎。
+  * 终端支持本地 Shell 选择与管理员内嵌终端；新增 GitHub Pages 项目
+    主页，补充发布、架构与运维文档。
 
- -- wangle <wangle@agree.com.cn>  Sun, 08 Nov 2026 16:05:00 +0800
+ -- wangle <wangle@agree.com.cn>  Mon, 09 Nov 2026 15:05:00 +0800
 
 transom (1.6.1) unstable; urgency=medium
 
