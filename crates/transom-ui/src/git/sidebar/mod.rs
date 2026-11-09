@@ -256,7 +256,7 @@ fn render_git_sidebar_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu
     ))
 }
 
-/// 单行项目的右键菜单：打开 / 刷新 / 移到分组 / 移除。
+/// 单行项目的右键菜单：打开 / 在本地终端打开 / 刷新 / 移到分组 / 移除。
 fn render_git_project_menu(
     menu: PopupMenu,
     app: Entity<AppShell>,
@@ -265,6 +265,7 @@ fn render_git_project_menu(
 ) -> PopupMenu {
     let app_refresh = app.clone();
     let app_open = app.clone();
+    let app_terminal = app.clone();
     let mut menu = menu
         .item(menu_item(
             rust_i18n::t!("git.menu.open").to_string(),
@@ -282,6 +283,25 @@ fn render_git_project_menu(
                     return;
                 };
                 app_open.update(cx, |this, cx| this.open_git_tab(project, window, cx));
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("git.menu.open_in_terminal").to_string(),
+            IconName::Terminal,
+            move |_, _, cx| {
+                app_terminal.update(cx, |this, cx| {
+                    // 目录不能只在渲染期捕获：菜单弹出后项目可能被移除，点击时按 id 现取。
+                    let path = this
+                        .state
+                        .git
+                        .projects
+                        .iter()
+                        .find(|item| item.id == id)
+                        .map(|item| item.path.clone());
+                    if let Some(path) = path {
+                        this.spawn_local_terminal(Some(path), cx);
+                    }
+                });
             },
         ))
         .item(menu_item(

@@ -7395,6 +7395,9 @@ git:
     open:
       en: "Open Git Panel"
       zh-CN: "打开 Git 面板"
+    open_in_terminal:
+      en: "Open in Local Terminal"
+      zh-CN: "在本地终端打开"
     remove:
       en: "Remove from List"
       zh-CN: "从列表移除"
