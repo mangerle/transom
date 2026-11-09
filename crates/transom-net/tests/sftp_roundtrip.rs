@@ -423,6 +423,9 @@ async fn sftp_list_upload_download_and_mutations() {
     std::fs::write(dir.path().join("recursive/root.txt"), b"root").unwrap();
     std::fs::write(dir.path().join("recursive/a/one.txt"), b"one").unwrap();
     std::fs::write(dir.path().join("recursive/a/b/two.txt"), b"two").unwrap();
+    // Windows 普通 CI 账户不能创建文件符号链接，mock 在非 Unix 平台会返回
+    // OpUnsupported；链接相关行为由 Linux/macOS 覆盖，递归删除本身仍全平台执行。
+    #[cfg(unix)]
     client
         .symlink("/seed.txt", "/recursive/seed.link")
         .await
@@ -432,6 +435,7 @@ async fn sftp_list_upload_download_and_mutations() {
         .await
         .expect("非空目录应可递归删除");
     assert!(!dir.path().join("recursive").exists());
+    #[cfg(unix)]
     assert!(
         dir.path().join("seed.txt").exists(),
         "递归删除不得跟随符号链接误删目标"
@@ -443,24 +447,26 @@ async fn sftp_list_upload_download_and_mutations() {
     assert_eq!(meta.size, 4);
     assert!(meta.mtime.is_some());
 
-    client
-        .symlink("/seed.txt", "/seed.link")
-        .await
-        .expect("create symlink");
-    let link_meta = client.stat("/seed.link").await.expect("stat symlink");
-    assert!(link_meta.is_symlink);
-    assert_eq!(link_meta.link_target.as_deref(), Some("/seed.txt"));
     #[cfg(unix)]
-    assert_eq!(
-        std::fs::read_link(dir.path().join("seed.link")).expect("read created link"),
-        std::path::PathBuf::from("/seed.txt")
-    );
-    client
-        .delete("/seed.link", false)
-        .await
-        .expect("delete symlink");
-    assert!(!dir.path().join("seed.link").exists());
-    assert!(dir.path().join("seed.txt").exists());
+    {
+        client
+            .symlink("/seed.txt", "/seed.link")
+            .await
+            .expect("create symlink");
+        let link_meta = client.stat("/seed.link").await.expect("stat symlink");
+        assert!(link_meta.is_symlink);
+        assert_eq!(link_meta.link_target.as_deref(), Some("/seed.txt"));
+        assert_eq!(
+            std::fs::read_link(dir.path().join("seed.link")).expect("read created link"),
+            std::path::PathBuf::from("/seed.txt")
+        );
+        client
+            .delete("/seed.link", false)
+            .await
+            .expect("delete symlink");
+        assert!(!dir.path().join("seed.link").exists());
+        assert!(dir.path().join("seed.txt").exists());
+    }
 
     let local_tree = dir.path().join("local-tree");
     std::fs::create_dir_all(local_tree.join("src")).unwrap();
