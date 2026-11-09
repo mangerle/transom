@@ -12,13 +12,12 @@
 //!
 //! # 代价与局限
 //! 事件只携带结果，外壳处理时禁止回读实体，否则会在实体派发期间触发 GPUI 的
-//! 双重租借崩溃。本阶段渲染仍留在 `form/run/*` 的 `impl AppShell` 上，字段
-//! 修改暂经 [`ContainerRunFormView::edit_state`] 桥接；渲染迁移完成后删除该
-//! 入口，改为具名状态方法。
+//! 双重租借崩溃。渲染与字段动作都归本实体；预览卡所需的镜像摘要由弹窗宿主
+//! 在只读外壳里快照后注入，实体不反查工作区。
 
-use crate::container::types::RunContainerFormState;
 use crate::container::types::run_form::{EnvVarItem, PortMappingItem, VolumeMappingItem};
-use gpui_kit::{App, Context, EventEmitter, Window};
+use crate::container::types::{RunContainerFormState, RunPreset};
+use gpui_kit::{App, ClipboardItem, Context, EventEmitter, Window};
 use transom_core::{ContainerCreateSpec, ContainerDetails, TabId};
 
 /// 运行容器表单交给外壳处理的意图。
@@ -141,22 +140,6 @@ impl ContainerRunFormView {
         });
     }
 
-    /// 在打开期就地修改字段并重绘；关闭状态下忽略。
-    ///
-    /// 这是渲染迁移前的临时桥：本阶段 `form/run/*` 仍由外壳渲染，回调拿不到
-    /// `&mut RunContainerFormState`，只能经实体更新；渲染迁入实体后删除本入口，
-    /// 改为具名状态方法。
-    pub(crate) fn edit_state(
-        &mut self,
-        cx: &mut Context<Self>,
-        update: impl FnOnce(&mut RunContainerFormState),
-    ) {
-        if let Some(form) = self.state.as_mut() {
-            update(form);
-            cx.notify();
-        }
-    }
-
     /// 追加一条端口映射行；窗口用于创建输入控件。
     pub(crate) fn add_port(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(form) = self.state.as_mut() {
@@ -179,6 +162,99 @@ impl ContainerRunFormView {
     pub(crate) fn add_env(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(form) = self.state.as_mut() {
             form.envs.push(EnvVarItem::new(None, None, window, cx));
+            cx.notify();
+        }
+    }
+
+    /// 切换「自动移除」开关。
+    pub(super) fn set_auto_remove(&mut self, checked: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.auto_remove = checked);
+    }
+
+    /// 切换只读根文件系统开关。
+    pub(super) fn set_read_only_rootfs(&mut self, checked: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.read_only_rootfs = checked);
+    }
+
+    /// 切换特权模式开关。
+    pub(super) fn set_privileged(&mut self, checked: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.privileged = checked);
+    }
+
+    /// 切换 init 进程开关。
+    pub(super) fn set_init(&mut self, checked: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.init = checked);
+    }
+
+    /// 套用运行预设：后台常驻会重置重启策略，交互调试则清空重启策略。
+    pub(super) fn set_preset(&mut self, preset: RunPreset, cx: &mut Context<Self>) {
+        self.edit(cx, |form| {
+            form.preset = preset;
+            form.restart = match preset {
+                RunPreset::Daemon => Some("unless-stopped".to_string()),
+                RunPreset::Interactive => None,
+            };
+        });
+    }
+
+    /// 切换重启策略；再次点击当前档位表示留空（`no`）。
+    pub(super) fn toggle_restart(&mut self, policy: &'static str, cx: &mut Context<Self>) {
+        self.edit(cx, |form| {
+            form.restart = if form.restart.as_deref() == Some(policy) {
+                None
+            } else {
+                Some(policy.to_string())
+            };
+        });
+    }
+
+    /// 切换端口映射协议；找不到对应行时保持原状。
+    pub(super) fn toggle_port_protocol(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.edit(cx, |form| {
+            if let Some(target) = form.ports.iter_mut().find(|port| port.id == id) {
+                target.protocol = if target.protocol == "udp" {
+                    "tcp".to_string()
+                } else {
+                    "udp".to_string()
+                };
+            }
+        });
+    }
+
+    /// 删除一条端口映射行。
+    pub(super) fn remove_port(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.ports.retain(|port| port.id != id));
+    }
+
+    /// 切换数据卷挂载的只读模式；找不到对应行时保持原状。
+    pub(super) fn toggle_volume_read_only(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.edit(cx, |form| {
+            if let Some(target) = form.volumes.iter_mut().find(|volume| volume.id == id) {
+                target.read_only = !target.read_only;
+            }
+        });
+    }
+
+    /// 删除一条数据卷挂载行。
+    pub(super) fn remove_volume(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.volumes.retain(|volume| volume.id != id));
+    }
+
+    /// 删除一条环境变量行。
+    pub(super) fn remove_env(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.envs.retain(|env| env.id != id));
+    }
+
+    /// 复制预览命令到剪贴板，并把复制按钮切到已复制态。
+    pub(super) fn copy_command(&mut self, command: &str, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(command.to_string()));
+        self.edit(cx, |form| form.copy_toast = true);
+    }
+
+    /// 在表单内就地修改字段并重绘；关闭状态下忽略。
+    fn edit(&mut self, cx: &mut Context<Self>, update: impl FnOnce(&mut RunContainerFormState)) {
+        if let Some(form) = self.state.as_mut() {
+            update(form);
             cx.notify();
         }
     }

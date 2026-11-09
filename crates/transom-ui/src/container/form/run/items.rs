@@ -2,13 +2,11 @@
 //!
 //! 设计原理（Why）：
 //! - 结构化微表格交互彻底替代传统松散手写的字符串，杜绝语法和分隔符格式错误；
-//! - 各条目均包含直观的增删、协议与只读模式快速切换控制。
-//!
-//! 本阶段渲染仍由外壳完成：表单状态由弹窗宿主从 [`ContainerRunFormView`] 读出
-//! 后注入，回调经实体更新，待渲染迁移后再改为实体方法。
+//! - 各条目均包含直观的增删、协议与只读模式快速切换控制；
+//! - 行内动作通过 [`cx.listener`] 回到实体具名方法，新增、切换与删除都只改
+//!   本次打开期的状态，不再经过外壳转发。
 
-use super::view::edit_run_form;
-use crate::app::AppShell;
+use super::ContainerRunFormView;
 use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
@@ -18,13 +16,13 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 
-impl AppShell {
+impl ContainerRunFormView {
     /// 渲染结构化端口映射区域。
     pub(super) fn render_port_mappings_section(
         &self,
         form: &RunContainerFormState,
-        app: &Entity<AppShell>,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let mut list = v_flex().gap_1p5().w_full();
 
@@ -41,8 +39,7 @@ impl AppShell {
             for (idx, item) in form.ports.iter().enumerate() {
                 let port_id = item.id.clone();
                 let del_port_id = port_id.clone();
-                let protocol = item.protocol.clone();
-                let is_udp = protocol == "udp";
+                let is_udp = item.protocol == "udp";
 
                 let row = h_flex()
                     .gap_2()
@@ -70,22 +67,9 @@ impl AppShell {
                             } else {
                                 rust_i18n::t!("container.run.toggle_udp").to_string()
                             })
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    edit_run_form(this, cx, |form| {
-                                        if let Some(target) =
-                                            form.ports.iter_mut().find(|p| p.id == port_id)
-                                        {
-                                            target.protocol = if is_udp {
-                                                "tcp".to_string()
-                                            } else {
-                                                "udp".to_string()
-                                            };
-                                        }
-                                    });
-                                },
-                            )),
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.toggle_port_protocol(&port_id, cx);
+                            })),
                     )
                     .child(
                         // 删除按钮
@@ -93,14 +77,9 @@ impl AppShell {
                             .xsmall()
                             .ghost()
                             .icon(IconName::Trash)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    edit_run_form(this, cx, |form| {
-                                        form.ports.retain(|p| p.id != del_port_id);
-                                    });
-                                },
-                            )),
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.remove_port(&del_port_id, cx);
+                            })),
                     );
 
                 list = list.child(row);
@@ -127,14 +106,9 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::Plus)
                             .label(rust_i18n::t!("container.run.add_port").to_string())
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, _: &ClickEvent, window, cx| {
-                                    let view = this.state.modals.tools.run_form.clone();
-                                    view.update(cx, |view, cx| view.add_port(window, cx));
-                                    cx.notify();
-                                },
-                            )),
+                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                                this.add_port(window, cx);
+                            })),
                     ),
             )
             .child(list)
@@ -145,8 +119,8 @@ impl AppShell {
     pub(super) fn render_volume_mappings_section(
         &self,
         form: &RunContainerFormState,
-        app: &Entity<AppShell>,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let mut list = v_flex().gap_1p5().w_full();
 
@@ -185,32 +159,18 @@ impl AppShell {
                             } else {
                                 rust_i18n::t!("container.run.read_write").to_string()
                             })
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    edit_run_form(this, cx, |form| {
-                                        if let Some(target) =
-                                            form.volumes.iter_mut().find(|v| v.id == vol_id)
-                                        {
-                                            target.read_only = !read_only;
-                                        }
-                                    });
-                                },
-                            )),
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.toggle_volume_read_only(&vol_id, cx);
+                            })),
                     )
                     .child(
                         Button::new(ElementId::Name(format!("del-vol-{idx}").into()))
                             .xsmall()
                             .ghost()
                             .icon(IconName::Trash)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    edit_run_form(this, cx, |form| {
-                                        form.volumes.retain(|v| v.id != del_vol_id);
-                                    });
-                                },
-                            )),
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.remove_volume(&del_vol_id, cx);
+                            })),
                     );
 
                 list = list.child(row);
@@ -237,14 +197,9 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::Plus)
                             .label(rust_i18n::t!("container.run.add_volume").to_string())
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, _: &ClickEvent, window, cx| {
-                                    let view = this.state.modals.tools.run_form.clone();
-                                    view.update(cx, |view, cx| view.add_volume(window, cx));
-                                    cx.notify();
-                                },
-                            )),
+                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                                this.add_volume(window, cx);
+                            })),
                     ),
             )
             .child(list)
@@ -255,8 +210,8 @@ impl AppShell {
     pub(super) fn render_env_vars_section(
         &self,
         form: &RunContainerFormState,
-        app: &Entity<AppShell>,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let mut list = v_flex().gap_1p5().w_full();
 
@@ -291,14 +246,9 @@ impl AppShell {
                             .xsmall()
                             .ghost()
                             .icon(IconName::Trash)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                move |this, _: &ClickEvent, _, cx| {
-                                    edit_run_form(this, cx, |form| {
-                                        form.envs.retain(|e| e.id != env_id);
-                                    });
-                                },
-                            )),
+                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.remove_env(&env_id, cx);
+                            })),
                     );
 
                 list = list.child(row);
@@ -325,14 +275,9 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::Plus)
                             .label(rust_i18n::t!("container.run.add_env").to_string())
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, _: &ClickEvent, window, cx| {
-                                    let view = this.state.modals.tools.run_form.clone();
-                                    view.update(cx, |view, cx| view.add_env(window, cx));
-                                    cx.notify();
-                                },
-                            )),
+                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                                this.add_env(window, cx);
+                            })),
                     ),
             )
             .child(list)

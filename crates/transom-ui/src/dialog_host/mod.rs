@@ -233,15 +233,32 @@ impl ModalKind {
             return view.update(cx, |view, cx| view.render_body(&folders, p, cx));
         }
         if self == ModalKind::ContainerRunForm {
-            // 表单状态归实体：先读句柄与只读状态，再交给外壳渲染。这里只读、
-            // 不 update 实体，避免渲染期双重租借。
-            let shell = app.read(cx);
-            let view = shell.state.modals.tools.run_form.clone();
-            let view = view.read(cx);
-            let Some(form) = view.state() else {
-                return div().into_any_element();
+            // 镜像摘要由外壳在读锁内快照后注入，实体不反查工作区；快照读完即
+            // 结束外壳借用，随后的实体 update 才不会撞上双重租借。
+            let (view, image_meta) = {
+                let shell = app.read(cx);
+                let view = shell.state.modals.tools.run_form.clone();
+                let image_meta = view.read(cx).state().and_then(|form| {
+                    let image_raw = form.image.read(cx).value().trim().to_string();
+                    shell
+                        .state
+                        .container_workspace(form.tab_id)
+                        .and_then(|workspace| {
+                            workspace
+                                .read(cx)
+                                .state
+                                .images
+                                .iter()
+                                .find(|image| {
+                                    image.tags.contains(&image_raw)
+                                        || image.id.starts_with(&image_raw)
+                                })
+                                .cloned()
+                        })
+                });
+                (view, image_meta)
             };
-            return shell.render_container_run_form_body(form, app, cx, p);
+            return view.update(cx, |view, cx| view.render_body(image_meta.as_ref(), p, cx));
         }
         if matches!(
             self,

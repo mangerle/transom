@@ -2,10 +2,11 @@
 //!
 //! 设计原理（Why）：
 //! - 直观呈现根据当前表单动态拼装的 `docker run` 命令，消除图形界面的配置黑盒感；
-//! - 提供后台服务与交互排查双预设切换，并支持一键将完整命令复制到系统剪贴板。
+//! - 提供后台服务与交互排查双预设切换，并支持一键将完整命令复制到系统剪贴板；
+//! - 预览与预设动作都归 [`ContainerRunFormView`]，镜像摘要由弹窗宿主在只读
+//!   外壳里快照注入，实体不反查工作区。
 
-use super::view::edit_run_form;
-use crate::app::AppShell;
+use super::ContainerRunFormView;
 use crate::container::types::{RunContainerFormState, RunPreset};
 use crate::format::format_size;
 use crate::palette::Palette;
@@ -16,32 +17,22 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Icon, Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_core::ContainerImageSummary;
 
-impl AppShell {
-    /// 渲染右侧预览与摘要区；表单状态由弹窗宿主从实体读出后注入。
+impl ContainerRunFormView {
+    /// 渲染右侧预览与摘要区；镜像摘要由外壳按当前镜像输入匹配后注入。
     pub(super) fn render_run_preview_panel(
         &self,
         form: &RunContainerFormState,
-        app: &Entity<AppShell>,
+        image_meta: Option<&ContainerImageSummary>,
         p: &Palette,
-        cx: &App,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let preview_cmd = form.generate_preview_command(cx);
+        let cmd_to_copy = preview_cmd.clone();
         let copy_toast = form.copy_toast;
         let current_preset = form.preset;
         let image_raw = form.image.read(cx).value().trim().to_string();
-
-        // 查找已有镜像的元数据摘要
-        let image_meta = self.state.container_workspace(form.tab_id).and_then(|ws| {
-            let state = &ws.read(cx).state;
-            state
-                .images
-                .iter()
-                .find(|img| img.tags.contains(&image_raw) || img.id.starts_with(&image_raw))
-                .cloned()
-        });
-
-        let cmd_to_copy = preview_cmd.clone();
 
         v_flex()
             .w(px(270.0))
@@ -71,15 +62,9 @@ impl AppShell {
                                     .selected(current_preset == RunPreset::Daemon)
                                     .icon(IconName::Server)
                                     .label(rust_i18n::t!("container.run.preset_daemon").to_string())
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, _, cx| {
-                                            edit_run_form(this, cx, |form| {
-                                                form.preset = RunPreset::Daemon;
-                                                form.restart = Some("unless-stopped".to_string());
-                                            });
-                                        },
-                                    )),
+                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                        this.set_preset(RunPreset::Daemon, cx);
+                                    })),
                             )
                             .child(
                                 Button::new("preset-interactive-btn")
@@ -91,15 +76,9 @@ impl AppShell {
                                         rust_i18n::t!("container.run.preset_interactive")
                                             .to_string(),
                                     )
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, _, cx| {
-                                            edit_run_form(this, cx, |form| {
-                                                form.preset = RunPreset::Interactive;
-                                                form.restart = None;
-                                            });
-                                        },
-                                    )),
+                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                        this.set_preset(RunPreset::Interactive, cx);
+                                    })),
                             ),
                     ),
             )
@@ -217,15 +196,9 @@ impl AppShell {
                                     } else {
                                         rust_i18n::t!("container.run.copy_command").to_string()
                                     })
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        move |this, _: &ClickEvent, _, cx| {
-                                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                                cmd_to_copy.clone(),
-                                            ));
-                                            edit_run_form(this, cx, |form| form.copy_toast = true);
-                                        },
-                                    )),
+                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.copy_command(&cmd_to_copy, cx);
+                                    })),
                             ),
                     )
                     .child(
