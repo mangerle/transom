@@ -151,6 +151,49 @@ impl AppShell {
         }
     }
 
+    /// 创建面板实体、登记它发往外壳的意图事件订阅，并挂到窗格上。
+    ///
+    /// 设计原理（Why）：创建、订阅与挂载必须成对发生。面板的跨域动作
+    /// （关闭面板、新建/重命名、删除确认、窗口类请求）全部走
+    /// [`SftpPanelEvent`] 上报，漏登记订阅时事件被静默丢弃，表现为按钮
+    /// 点击后毫无反应。把三件事收进唯一入口后，SSH 双栏与本地单栏不会
+    /// 因为各写一份创建代码而出现行为分叉。
+    ///
+    /// 返回 `false` 表示窗格已不存在，此时不会创建面板实体。
+    ///
+    /// [`SftpPanelEvent`]: crate::sftp::SftpPanelEvent
+    pub(crate) fn attach_sftp_panel_view(
+        &mut self,
+        tab_id: TabId,
+        index: usize,
+        state: SftpPanelState,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(pane) = self
+            .state
+            .workspace
+            .tabs
+            .get_mut(index)
+            .and_then(|tab| tab.session_pane_mut())
+        else {
+            return false;
+        };
+        let view = cx.new(|_| SftpPanelView::new(state, tab_id));
+        let subscription = cx.subscribe(
+            &view,
+            |shell, _view, event: &crate::sftp::SftpPanelEvent, cx| {
+                shell.on_sftp_panel_event(event, cx);
+            },
+        );
+        self.state
+            .tasks
+            .subscriptions
+            .sftp
+            .insert(tab_id, subscription);
+        pane.sftp_view = Some(view);
+        true
+    }
+
     /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
     pub(crate) fn focus_active_sftp_panel(&self, window: &mut Window, cx: &mut Context<Self>) {
         let focus_handle = self
@@ -363,22 +406,9 @@ impl AppShell {
             },
             cx,
         );
-        let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
+        if !self.attach_sftp_panel_view(tab_id, index, state, cx) {
             return;
-        };
-        let view = cx.new(|_| SftpPanelView::new(state, tab_id));
-        let subscription = cx.subscribe(
-            &view,
-            |shell, _view, event: &crate::sftp::SftpPanelEvent, cx| {
-                shell.on_sftp_panel_event(event, cx);
-            },
-        );
-        self.state
-            .tasks
-            .subscriptions
-            .sftp
-            .insert(tab_id, subscription);
-        pane.sftp_view = Some(view);
+        }
         if open {
             // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
             self.spawn_local_dir_refresh(tab_id, None, cx);

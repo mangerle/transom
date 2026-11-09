@@ -55,12 +55,9 @@ impl AppShell {
             },
         );
 
-        // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
+        // 主连接与命令通道在挂载之前取好：面板之后自己解析目标列与投递命令。
         let main_connection = self.state.workspace.tabs[index].connection_id;
         let command_tx = Some(self.state.services.command_tx.clone());
-        let Some(pane) = self.state.workspace.tabs[index].session_pane_mut() else {
-            return;
-        };
         let state = SftpPanelState {
             main_connection,
             command_tx,
@@ -109,8 +106,11 @@ impl AppShell {
             pending_width_adjustment: None,
             _subscriptions: vec![local_enter_sub],
         };
-        let view = cx.new(|_| SftpPanelView::new(state, tab_id));
-        pane.sftp_view = Some(view);
+        // 本地单栏与 SSH 双栏共用挂载入口：创建实体、登记事件订阅与挂到
+        // 窗格三者必须成对，否则关闭、新建、删除确认等意图会被静默丢弃。
+        if !self.attach_sftp_panel_view(tab_id, index, state, cx) {
+            return;
+        }
         // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
         self.spawn_local_dir_refresh(tab_id, None, cx);
         cx.notify();
