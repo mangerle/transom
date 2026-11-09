@@ -166,149 +166,18 @@ impl AppShell {
         cx.notify();
     }
 
-    /// 创建卷/网络，或拉取镜像（按当前分类解释输入框）。
-    pub(crate) fn submit_container_create(
+    /// 消费拉取/新建弹窗实体上交的提交意图。
+    ///
+    /// 主输入仍归各标签工作区，实体读不到，因此事件只携带附加字段：外壳先读
+    /// `create_input` 做空值校验，失败时写回实体错误并保持弹窗，成功投递命令后
+    /// 才关闭实体。事件自带目标标签与分类，处理时禁止回读实体。
+    pub(crate) fn on_container_create_event(
         &mut self,
-        tab_id: TabId,
+        event: &ContainerCreateDialogEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // 附加输入都挂在弹窗状态上，取走它们必须在借用工作区之前。
-        let dialog = self.state.containers.create_dialog.as_ref();
-        let read_input = |input: &Option<Entity<InputState>>| {
-            input
-                .as_ref()
-                .map(|input| input.read(cx).value().trim().to_string())
-                .filter(|value| !value.is_empty())
-        };
-        let driver = read_input(&dialog.and_then(|dialog| dialog.driver.clone()));
-        let subnet = read_input(&dialog.and_then(|dialog| dialog.subnet.clone()));
-        let gateway = read_input(&dialog.and_then(|dialog| dialog.gateway.clone()));
-        let dockerfile = read_input(&dialog.and_then(|dialog| dialog.dockerfile.clone()));
-        let tag = read_input(&dialog.and_then(|dialog| dialog.tag.clone()));
-        let internal = dialog.is_some_and(|dialog| dialog.internal);
-        let Some((section, value, create_input)) = self
-            .with_container(tab_id, cx, |workspace| {
-                Some((
-                    workspace.section,
-                    workspace.create_input.read(cx).value().trim().to_string(),
-                    workspace.create_input.clone(),
-                ))
-            })
-            .flatten()
-        else {
-            return;
-        };
-        if value.is_empty() {
-            self.show_toast(
-                rust_i18n::t!("container.create_dialog.name_required").to_string(),
-                false,
-                window,
-                cx,
-            );
-            return;
-        }
-        let request_id = ContainerRequestId::new();
-        let command = match section {
-            ContainerSection::Images => {
-                let tags = tag.map(|t| vec![t]).unwrap_or_default();
-                ContainerCommand::BuildImage {
-                    tab_id,
-                    request_id,
-                    spec: transom_core::ContainerBuildSpec {
-                        context_path: value,
-                        dockerfile,
-                        tags,
-                        no_cache: false,
-                        ..Default::default()
-                    },
-                }
-            }
-            ContainerSection::Volumes => ContainerCommand::CreateVolume {
-                tab_id,
-                request_id,
-                name: value,
-                driver,
-            },
-            ContainerSection::Networks => {
-                // 子网/网关/仅内部访问由领域层校验，界面只负责把错误说清楚。
-                let mut spec = ContainerNetworkSpec {
-                    name: value,
-                    driver,
-                    subnet,
-                    gateway,
-                    internal,
-                };
-                if let Err(error) = spec.validate() {
-                    self.show_toast(error, false, window, cx);
-                    return;
-                }
-                ContainerCommand::CreateNetwork {
-                    tab_id,
-                    request_id,
-                    spec,
-                }
-            }
-            _ => return,
-        };
-        self.with_container_mut(tab_id, cx, |workspace| workspace.busy = true);
-        create_input.update(cx, |input, cx| input.set_value("", window, cx));
-        self.state.containers.create_dialog = None;
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(request_id, command);
-            });
-        }
-        cx.notify();
-    }
-
-    /// 打开拉取/新建弹窗：镜像只有一个引用输入，卷与网络多一个驱动输入，
-    /// 网络再加子网、网关与「仅内部访问」。
-    pub(crate) fn open_container_create_dialog(
-        &mut self,
-        tab_id: TabId,
-        section: ContainerSection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let driver = matches!(
-            section,
-            ContainerSection::Volumes | ContainerSection::Networks
-        )
-        .then(|| {
-            cx.new(|cx| {
-                InputState::new(window, cx).placeholder(
-                    rust_i18n::t!("container.create_dialog.driver_placeholder").to_string(),
-                )
-            })
-        });
-        let network = section == ContainerSection::Networks;
-        let subnet = network.then(|| {
-            cx.new(|cx| {
-                InputState::new(window, cx).placeholder(
-                    rust_i18n::t!("container.create_dialog.subnet_placeholder").to_string(),
-                )
-            })
-        });
-        let gateway = network.then(|| {
-            cx.new(|cx| {
-                InputState::new(window, cx).placeholder(
-                    rust_i18n::t!("container.create_dialog.gateway_placeholder").to_string(),
-                )
-            })
-        });
-        let is_image = section == ContainerSection::Images;
-        let dockerfile = is_image.then(|| {
-            cx.new(|cx| InputState::new(window, cx).placeholder("Dockerfile".to_string()))
-        });
-        let tag = is_image.then(|| {
-            cx.new(|cx| {
-                InputState::new(window, cx).placeholder(
-                    rust_i18n::t!("container.create_dialog.tag_placeholder").to_string(),
-                )
-            })
-        });
-        self.state.containers.create_dialog = Some(ContainerCreateDialog {
+        let ContainerCreateDialogEvent::Submit {
             tab_id,
             section,
             driver,
@@ -316,13 +185,85 @@ impl AppShell {
             gateway,
             dockerfile,
             tag,
-            internal: false,
+            internal,
+        } = event;
+        let Some(workspace) = self.state.container_workspace(*tab_id) else {
+            self.close_container_create_dialog(cx);
+            return;
+        };
+        let (value, create_input) = {
+            let state = &workspace.read(cx).state;
+            (
+                state.create_input.read(cx).value().trim().to_string(),
+                state.create_input.clone(),
+            )
+        };
+        if value.is_empty() {
+            let view = self.state.modals.tools.create_dialog.clone();
+            view.update(cx, |view, cx| {
+                view.set_error(
+                    rust_i18n::t!("container.create_dialog.name_required").to_string(),
+                    cx,
+                )
+            });
+            cx.notify();
+            return;
+        }
+        let request_id = ContainerRequestId::new();
+        let command = match section {
+            ContainerSection::Images => {
+                let tags = tag.clone().map(|t| vec![t]).unwrap_or_default();
+                ContainerCommand::BuildImage {
+                    tab_id: *tab_id,
+                    request_id,
+                    spec: transom_core::ContainerBuildSpec {
+                        context_path: value,
+                        dockerfile: dockerfile.clone(),
+                        tags,
+                        no_cache: false,
+                        ..Default::default()
+                    },
+                }
+            }
+            ContainerSection::Volumes => ContainerCommand::CreateVolume {
+                tab_id: *tab_id,
+                request_id,
+                name: value,
+                driver: driver.clone(),
+            },
+            ContainerSection::Networks => {
+                // 子网/网关/仅内部访问由领域层校验，界面只负责把错误说清楚。
+                let mut spec = ContainerNetworkSpec {
+                    name: value,
+                    driver: driver.clone(),
+                    subnet: subnet.clone(),
+                    gateway: gateway.clone(),
+                    internal: *internal,
+                };
+                if let Err(error) = spec.validate() {
+                    self.show_toast(error, false, window, cx);
+                    return;
+                }
+                ContainerCommand::CreateNetwork {
+                    tab_id: *tab_id,
+                    request_id,
+                    spec,
+                }
+            }
+            _ => return,
+        };
+        workspace.update(cx, |workspace, _| {
+            workspace.state.busy = true;
+            workspace.send_tracked(request_id, command);
         });
-        cx.notify();
+        create_input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.close_container_create_dialog(cx);
     }
 
-    pub(crate) fn dismiss_container_create(&mut self, cx: &mut Context<Self>) {
-        self.state.containers.create_dialog = None;
+    /// 关闭拉取/新建弹窗：实体丢弃本次打开期的附加输入。
+    fn close_container_create_dialog(&mut self, cx: &mut Context<Self>) {
+        let view = self.state.modals.tools.create_dialog.clone();
+        view.update(cx, |view, cx| view.close(cx));
         cx.notify();
     }
 

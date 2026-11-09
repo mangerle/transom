@@ -13,7 +13,6 @@
 
 use crate::app::AppShell;
 use crate::app_assets::AppIcon;
-use crate::container::list::create_button_label;
 use crate::container::types::{ContainerFormState, ContainerSection, EndpointChoice};
 use crate::palette::Palette;
 use crate::session_appearance::{
@@ -34,7 +33,6 @@ use transom_core::{
 
 mod appearance;
 mod connection;
-mod create;
 mod entity;
 mod render;
 mod run;

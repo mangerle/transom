@@ -228,7 +228,9 @@ impl AppShell {
                 self.open_container_hub_dialog(tab_id, window, cx);
             }
             ContainerWorkspaceEvent::OpenCreateDialog(section) => {
-                self.open_container_create_dialog(tab_id, *section, window, cx);
+                let view = self.state.modals.tools.create_dialog.clone();
+                view.update(cx, |view, cx| view.open(tab_id, *section, window, cx));
+                cx.notify();
             }
             ContainerWorkspaceEvent::OpenBuildDialog => {
                 self.open_container_build_dialog(tab_id, window, cx);

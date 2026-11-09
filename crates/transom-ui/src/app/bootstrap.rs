@@ -231,6 +231,15 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.container_run_form = Some(container_run_form_subscription);
+        // 拉取/新建弹窗只上交附加字段：主输入校验、命令投递与关闭仍归外壳。
+        let container_create_subscription = cx.subscribe_in(
+            &self.state.modals.tools.create_dialog,
+            window,
+            |shell, _view, event: &crate::container::ContainerCreateDialogEvent, window, cx| {
+                shell.on_container_create_event(event, window, cx);
+            },
+        );
+        self.state.tasks.subscriptions.container_create = Some(container_create_subscription);
         let metrics_subscription = cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
@@ -380,6 +389,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     let container_form =
         cx.new(|_| crate::container::ContainerFormView::new(services.command_tx.clone()));
     let container_run_form = cx.new(|_| crate::container::ContainerRunFormView::new());
+    let container_create_dialog = cx.new(|_| crate::container::ContainerCreateDialogView::new());
     AppState {
         services,
         local_shells,
@@ -403,6 +413,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
                 replay,
                 container_form,
                 run_form: container_run_form,
+                create_dialog: container_create_dialog,
             },
             inputs.quick_open_state.clone(),
             SnippetPanelState {

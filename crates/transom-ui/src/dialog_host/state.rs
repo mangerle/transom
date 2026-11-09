@@ -124,7 +124,12 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerCreate => {
-                shell.dismiss_container_create(cx);
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .create_dialog
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::SessionForm => {
@@ -299,15 +304,12 @@ impl ModalKind {
                     .update(cx, |view, cx| view.submit(cx));
             }
             ModalKind::ContainerCreate => {
-                if let Some(tab_id) = shell
+                shell
                     .state
-                    .containers
+                    .modals
+                    .tools
                     .create_dialog
-                    .as_ref()
-                    .map(|dialog| dialog.tab_id)
-                {
-                    shell.submit_container_create(tab_id, window, cx);
-                }
+                    .update(cx, |view, cx| view.submit(cx));
             }
             ModalKind::SessionForm => {
                 shell
@@ -431,9 +433,11 @@ impl ModalKind {
             ModalKind::ContainerCreate => {
                 let input = shell
                     .state
-                    .containers
+                    .modals
+                    .tools
                     .create_dialog
-                    .as_ref()
+                    .read(cx)
+                    .state()
                     .and_then(|dialog| {
                         let workspace = shell.state.container_workspace(dialog.tab_id)?;
                         Some(workspace.read(cx).state.create_input.clone())

@@ -52,6 +52,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) container_form: Option<Subscription>,
     /// 运行容器表单：提交后的命令投递与通知由外壳处理。
     pub(crate) container_run_form: Option<Subscription>,
+    /// 拉取/新建弹窗：主输入校验、命令投递与关闭由外壳处理。
+    pub(crate) container_create: Option<Subscription>,
     pub(crate) known_hosts: Option<Subscription>,
     /// 连接确认弹窗：凭据暂存与剪贴板授权由外壳处理。
     pub(crate) connection_prompts: Option<Subscription>,
@@ -81,6 +83,7 @@ impl PanelSubscriptions {
             session_form: None,
             container_form: None,
             container_run_form: None,
+            container_create: None,
             known_hosts: None,
             connection_prompts: None,
             key_wizard: None,

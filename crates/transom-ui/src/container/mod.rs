@@ -5,6 +5,7 @@ mod build_dialog;
 mod commit;
 mod compose;
 mod compose_templates;
+mod create_dialog_view;
 mod detail;
 mod engines;
 mod entity;
@@ -38,6 +39,7 @@ mod types;
 mod update;
 mod view;
 
+pub(crate) use create_dialog_view::{ContainerCreateDialogEvent, ContainerCreateDialogView};
 pub(crate) use entity::ContainerWorkspace;
 pub(crate) use event::ContainerWorkspaceEvent;
 pub(crate) use form::{

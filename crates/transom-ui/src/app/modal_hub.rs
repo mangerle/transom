@@ -14,7 +14,7 @@ use super::batch::BatchEditForm;
 use crate::audit_viewer::AuditViewerView;
 use crate::backup::BackupPromptView;
 use crate::connection::{ConnectionPromptsView, PendingCredential};
-use crate::container::{ContainerFormView, ContainerRunFormView};
+use crate::container::{ContainerCreateDialogView, ContainerFormView, ContainerRunFormView};
 use crate::keys::{KeyWizardView, KnownHostsView};
 use crate::record::ReplayModalView;
 use crate::session_form::SessionFormView;
@@ -63,6 +63,8 @@ pub(crate) struct ToolModalEntities {
     pub(crate) container_form: Entity<ContainerFormView>,
     /// 运行容器表单；打开状态、输入控件与提交动作归实体。
     pub(crate) run_form: Entity<ContainerRunFormView>,
+    /// 拉取镜像 / 新建卷与网络的弹窗；附加输入与提交动作归实体。
+    pub(crate) create_dialog: Entity<ContainerCreateDialogView>,
 }
 
 /// 工具类浮层：查看器、备份、快捷入口与一次性确认。
@@ -83,6 +85,8 @@ pub(crate) struct ToolModals {
     pub(crate) container_form: Entity<ContainerFormView>,
     /// 运行容器表单实体；打开状态、输入控件与提交动作归实体。
     pub(crate) run_form: Entity<ContainerRunFormView>,
+    /// 拉取/新建弹窗实体；附加输入、错误提示与提交动作归实体。
+    pub(crate) create_dialog: Entity<ContainerCreateDialogView>,
 }
 
 /// Git 仓库管理、克隆与分支操作类弹窗。
@@ -159,6 +163,7 @@ impl ModalHub {
                 key_wizard: tools.key_wizard,
                 container_form: tools.container_form,
                 run_form: tools.run_form,
+                create_dialog: tools.create_dialog,
             },
             git: GitModals::new(),
             settings,

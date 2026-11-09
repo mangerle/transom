@@ -2,11 +2,12 @@
 
 use super::*;
 
-/// 拉取/新建弹窗的状态。
+/// 拉取/新建弹窗一次打开期的状态，由 `ContainerCreateDialogView` 持有。
 ///
 /// 设计原理（Why）：原先把输入框常驻在中栏底部，三个分类各占一行高度却几乎
 /// 用不到（真实窗口实测：用户要求去掉底部新增行）。改成按需弹窗后，主输入仍
-/// 复用工作区的 `create_input`（校验与提交路径不变），弹窗只多带一个驱动输入。
+/// 复用工作区的 `create_input`（分类切换清空与校验路径不变），弹窗只多带
+/// 驱动、子网、网关、Dockerfile、tag 与「仅内部访问」这些附加字段。
 #[derive(Clone)]
 pub(crate) struct ContainerCreateDialog {
     pub(crate) tab_id: TabId,
@@ -22,6 +23,8 @@ pub(crate) struct ContainerCreateDialog {
     pub(crate) tag: Option<Entity<InputState>>,
     /// 仅宿主机内部可见（`--internal`）。
     pub(crate) internal: bool,
+    /// 外壳校验失败的原因：主输入为空、网络参数非法等；`None` 表示无错误。
+    pub(crate) error: Option<String>,
 }
 
 /// 一键清理的目标：卷与镜像各自独立待确认。
@@ -69,14 +72,13 @@ pub(crate) struct ContainerDiscovery {
 
 /// 引擎连接侧栏与其余容器弹窗的顶层状态。
 ///
-/// 连接表单与运行容器表单已实体化为 `ContainerFormView` / `ContainerRunFormView`，
-/// 本结构只保留仍由外壳统一持有的侧栏与标签级弹窗字段。
+/// 连接表单、运行容器表单与拉取/新建弹窗已实体化为 `ContainerFormView` /
+/// `ContainerRunFormView` / `ContainerCreateDialogView`，本结构只保留仍由外壳
+/// 统一持有的侧栏与标签级弹窗字段。
 #[derive(Default)]
 pub(crate) struct ContainerUiState {
     pub(crate) sidebar_open: bool,
     pub(crate) fullscreen: Option<TabId>,
-    /// 拉取镜像 / 新建卷 / 新建网络的弹窗：字段随分类不同。
-    pub(crate) create_dialog: Option<ContainerCreateDialog>,
     /// 最近一次「发现本机引擎」的结果面板。
     pub(crate) discovery: Option<ContainerDiscovery>,
     /// 正在进行的发现请求，避免连点重复探测。

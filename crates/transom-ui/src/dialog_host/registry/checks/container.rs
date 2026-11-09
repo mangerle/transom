@@ -47,41 +47,32 @@ pub(in crate::app::dialog_host) fn container_run_form_values(
     shell.state.modals.tools.run_form.read(cx).text_values(cx)
 }
 
-pub(in crate::app::dialog_host) fn container_create_open(shell: &AppShell, _cx: &App) -> bool {
-    shell.state.containers.create_dialog.is_some()
+pub(in crate::app::dialog_host) fn container_create_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.tools.create_dialog.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn container_create_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .state
-        .containers
-        .create_dialog
-        .as_ref()
-        .map(|dialog| {
-            let mut values = Vec::new();
-            if let Some(workspace) = shell.state.container_workspace(dialog.tab_id) {
-                values.push(
-                    workspace
-                        .read(cx)
-                        .state
-                        .create_input
-                        .read(cx)
-                        .value()
-                        .to_string(),
-                );
-            }
-            for input in [&dialog.driver, &dialog.subnet, &dialog.gateway]
-                .into_iter()
-                .flatten()
-            {
-                values.push(input.read(cx).value().to_string());
-            }
-            values
-        })
-        .unwrap_or_default()
+    let view = shell.state.modals.tools.create_dialog.read(cx);
+    let Some(dialog) = view.state() else {
+        return Vec::new();
+    };
+    let mut values = Vec::with_capacity(4);
+    if let Some(workspace) = shell.state.container_workspace(dialog.tab_id) {
+        values.push(
+            workspace
+                .read(cx)
+                .state
+                .create_input
+                .read(cx)
+                .value()
+                .to_string(),
+        );
+    }
+    values.extend(view.text_values(cx));
+    values
 }
 
 pub(in crate::app::dialog_host) fn container_confirm_open(shell: &AppShell, cx: &App) -> bool {

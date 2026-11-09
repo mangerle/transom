@@ -260,6 +260,26 @@ impl ModalKind {
             };
             return view.update(cx, |view, cx| view.render_body(image_meta.as_ref(), p, cx));
         }
+        if self == ModalKind::ContainerCreate {
+            // 主输入仍归目标工作区：弹窗宿主在只读外壳里取出句柄后注入实体，
+            // 实体不反查工作区；句柄读完即结束外壳借用，随后的实体 update
+            // 才不会撞上双重租借。
+            let (view, create_input) = {
+                let shell = app.read(cx);
+                let view = shell.state.modals.tools.create_dialog.clone();
+                let create_input = view.read(cx).state().and_then(|dialog| {
+                    shell
+                        .state
+                        .container_workspace(dialog.tab_id)
+                        .map(|workspace| workspace.read(cx).state.create_input.clone())
+                });
+                (view, create_input)
+            };
+            let Some(create_input) = create_input else {
+                return div().into_any_element();
+            };
+            return view.update(cx, |view, cx| view.render_body(create_input, p, cx));
+        }
         if matches!(
             self,
             ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt
@@ -302,9 +322,8 @@ impl ModalKind {
             ModalKind::ContainerFolderForm => shell.render_engine_folder_form_body(app, cx, p),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerRunForm => div().into_any_element(),
-            ModalKind::ContainerCreate => {
-                shell.render_container_create_dialog_body(app, window, cx, p)
-            }
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerCreate => div().into_any_element(),
             ModalKind::ContainerConfirm => shell.render_container_confirm_dialog_body(app, cx, p),
             ModalKind::ContainerRename => shell.render_container_rename_dialog_body(app, cx, p),
             ModalKind::ContainerTagImage => shell.render_container_tag_dialog_body(app, cx, p),
