@@ -214,6 +214,15 @@ impl AppShell {
             },
         );
         self.state.tasks.subscriptions.session_form = Some(session_form_subscription);
+        // 容器连接表单的保存与删除仍由外壳落目录：实体只上交意图。
+        let container_form_subscription = cx.subscribe_in(
+            &self.state.modals.tools.container_form,
+            window,
+            |shell, _view, event: &crate::container::ContainerFormEvent, window, cx| {
+                shell.on_container_form_event(event, window, cx);
+            },
+        );
+        self.state.tasks.subscriptions.container_form = Some(container_form_subscription);
         let metrics_subscription = cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
@@ -360,6 +369,8 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
     let key_wizard = cx.new(|_| KeyWizardView::new(default_ssh_dir(), services.command_tx.clone()));
     let replay = cx.new(|_| crate::record::ReplayModalView::new());
     let connection_prompts = cx.new(|_| crate::connection::ConnectionPromptsView::new());
+    let container_form =
+        cx.new(|_| crate::container::ContainerFormView::new(services.command_tx.clone()));
     AppState {
         services,
         local_shells,
@@ -381,6 +392,7 @@ fn assemble_state(input: BootstrapState, cx: &mut Context<AppShell>) -> AppState
                 audit_viewer,
                 key_wizard,
                 replay,
+                container_form,
             },
             inputs.quick_open_state.clone(),
             SnippetPanelState {

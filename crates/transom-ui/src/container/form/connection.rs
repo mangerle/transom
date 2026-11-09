@@ -16,12 +16,12 @@ const REMOTE_CHOICES: &[EndpointChoice] = &[
     EndpointChoice::Cli,
 ];
 
-impl AppShell {
-    pub(super) fn render_engine_form_connection_card(
+impl ContainerFormView {
+    pub(super) fn render_connection_card(
         &self,
-        app: &Entity<AppShell>,
         form: &ContainerFormState,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let available = EndpointChoice::available();
 
@@ -33,30 +33,18 @@ impl AppShell {
                     .small()
                     .label("Docker")
                     .selected(form.kind == ContainerEngineKind::Docker)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.containers.form.as_mut() {
-                                form.kind = ContainerEngineKind::Docker;
-                            }
-                            cx.notify();
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.set_kind(ContainerEngineKind::Docker, cx)
+                    })),
             )
             .child(
                 Button::new("container-kind-podman")
                     .small()
                     .label("Podman")
                     .selected(form.kind == ContainerEngineKind::Podman)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.containers.form.as_mut() {
-                                form.kind = ContainerEngineKind::Podman;
-                            }
-                            cx.notify();
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.set_kind(ContainerEngineKind::Podman, cx)
+                    })),
             );
 
         // 本地端点选项按钮
@@ -66,7 +54,7 @@ impl AppShell {
                 .filter(|&&c| available.contains(&c))
                 .map(|&choice| {
                     let selected = form.endpoint_choice == choice;
-                    Self::endpoint_choice_button(choice, selected, app, p)
+                    self.endpoint_choice_button(choice, selected, cx)
                 }),
         );
 
@@ -77,7 +65,7 @@ impl AppShell {
                 .filter(|&&c| available.contains(&c))
                 .map(|&choice| {
                     let selected = form.endpoint_choice == choice;
-                    Self::endpoint_choice_button(choice, selected, app, p)
+                    self.endpoint_choice_button(choice, selected, cx)
                 }),
         );
 
@@ -124,10 +112,10 @@ impl AppShell {
 
     /// 单个端点选项按钮；切换时重置测试状态并更新占位提示。
     fn endpoint_choice_button(
+        &self,
         choice: EndpointChoice,
         selected: bool,
-        app: &Entity<AppShell>,
-        _p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         Button::new(ElementId::Name(
             format!("container-endpoint-{choice:?}").into(),
@@ -135,36 +123,18 @@ impl AppShell {
         .xsmall()
         .label(rust_i18n::t!(choice.label_key()).to_string())
         .selected(selected)
-        .on_click(crate::dialog_host::on_event(
-            app,
-            move |this, _: &ClickEvent, window, cx| {
-                if let Some(form) = this.state.containers.form.as_mut() {
-                    form.endpoint_choice = choice;
-                    form.test_status = None;
-                    form.endpoint_value.update(cx, |input, cx| {
-                        input.set_placeholder(
-                            rust_i18n::t!(choice.placeholder_key()).to_string(),
-                            window,
-                            cx,
-                        );
-                    });
-                }
-                cx.notify();
-            },
-        ))
+        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+            this.set_endpoint_choice(choice, window, cx);
+        }))
         .into_any_element()
     }
 
-    // -------------------------------------------------------------------------
-    // 动态扩展字段
-    // -------------------------------------------------------------------------
-
     /// 根据当前端点档位返回附加字段卡片；无附加字段时返回 `None`。
-    pub(super) fn render_engine_form_extra_fields(
+    pub(super) fn render_extra_fields(
         &self,
-        app: &Entity<AppShell>,
         form: &ContainerFormState,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         match form.endpoint_choice {
             EndpointChoice::Auto | EndpointChoice::Wslc => None,
@@ -181,9 +151,9 @@ impl AppShell {
                 )
             }
 
-            EndpointChoice::Tcp => Some(self.render_engine_form_tcp_fields(app, form, p)),
+            EndpointChoice::Tcp => Some(self.render_tcp_fields(form, p, cx)),
 
-            EndpointChoice::Ssh => Some(self.render_engine_form_ssh_fields(app, form, p)),
+            EndpointChoice::Ssh => Some(self.render_ssh_fields(form, p, cx)),
 
             EndpointChoice::Cli => Some(
                 v_flex()
@@ -204,11 +174,11 @@ impl AppShell {
     }
 
     /// TCP 端点字段：URL 输入 + 可选 TLS 证书配置区块。
-    fn render_engine_form_tcp_fields(
+    fn render_tcp_fields(
         &self,
-        app: &Entity<AppShell>,
         form: &ContainerFormState,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let tls_enabled = form.tls.enabled;
 
@@ -228,16 +198,9 @@ impl AppShell {
                         Checkbox::new("container-form-tls-enable")
                             .small()
                             .checked(tls_enabled)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, &checked, _, cx| {
-                                    if let Some(form) = this.state.containers.form.as_mut() {
-                                        form.tls.enabled = checked;
-                                        form.test_status = None;
-                                    }
-                                    cx.notify();
-                                },
-                            )),
+                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                this.set_tls_enabled(*checked, cx);
+                            })),
                     )
                     .child(
                         div()
@@ -274,11 +237,11 @@ impl AppShell {
     }
 
     /// SSH 端点字段：主机 + 端口/用户（同排）+ 私钥路径。
-    fn render_engine_form_ssh_fields(
+    fn render_ssh_fields(
         &self,
-        app: &Entity<AppShell>,
         form: &ContainerFormState,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let use_sudo = form.ssh.use_sudo;
         let mut fields = v_flex()
@@ -325,16 +288,9 @@ impl AppShell {
                         Checkbox::new("container-form-ssh-sudo")
                             .small()
                             .checked(use_sudo)
-                            .on_click(crate::dialog_host::on_event(
-                                app,
-                                |this, &checked, _, cx| {
-                                    if let Some(form) = this.state.containers.form.as_mut() {
-                                        form.ssh.use_sudo = checked;
-                                        form.test_status = None;
-                                    }
-                                    cx.notify();
-                                },
-                            )),
+                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                this.set_ssh_sudo(*checked, cx);
+                            })),
                     )
                     .child(
                         div()
@@ -353,8 +309,4 @@ impl AppShell {
 
         fields.into_any_element()
     }
-
-    // -------------------------------------------------------------------------
-    // 页脚
-    // -------------------------------------------------------------------------
 }

@@ -67,11 +67,13 @@ pub(crate) struct ContainerDiscovery {
     pub(crate) failures: Vec<String>,
 }
 
-/// 引擎连接侧栏与表单的顶层状态。
+/// 引擎连接侧栏与其余容器弹窗的顶层状态。
+///
+/// 连接表单已实体化为 `ContainerFormView`，本结构只保留仍由外壳统一持有
+/// 的侧栏与标签级弹窗字段。
 #[derive(Default)]
 pub(crate) struct ContainerUiState {
     pub(crate) sidebar_open: bool,
-    pub(crate) form: Option<ContainerFormState>,
     pub(crate) fullscreen: Option<TabId>,
     /// 运行容器表单。
     pub(crate) run_form: Option<ContainerRunForm>,

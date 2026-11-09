@@ -76,33 +76,10 @@ impl AppShell {
                 info,
                 error,
             } => {
-                if let Some(form) = self.state.containers.form.as_mut()
-                    && form.test_request == Some(request_id)
-                {
-                    form.test_request = None;
-                    match (info, error) {
-                        (Some(info), _) => {
-                            form.test_ok = true;
-                            form.test_status = Some(
-                                rust_i18n::t!(
-                                    "container.form.test_ok",
-                                    platform = info.platform,
-                                    version = info.version
-                                )
-                                .to_string(),
-                            );
-                        }
-                        (None, Some(error)) => {
-                            form.test_ok = false;
-                            form.test_status = Some(localized_error(&error));
-                        }
-                        (None, None) => {
-                            form.test_ok = false;
-                            form.test_status =
-                                Some(rust_i18n::t!("container.form.test_failed").to_string());
-                        }
-                    }
-                }
+                let form = self.state.modals.tools.container_form.clone();
+                form.update(cx, |form, cx| {
+                    form.set_test_result(request_id, info, error, cx);
+                });
             }
             ContainerAppEvent::Disconnected { tab_id } => {
                 self.with_container_mut(tab_id, cx, |workspace| {

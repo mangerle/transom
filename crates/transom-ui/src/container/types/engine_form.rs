@@ -76,9 +76,13 @@ impl ContainerFormState {
         ]
     }
 
+    /// 构造一次打开期的表单状态；输入控件随实体一起创建。
+    ///
+    /// `cx` 泛化为表单实体自己的上下文：实体化后不再要求调用方是 `AppShell`，
+    /// 输入框仍由这里统一创建，打开入口只负责传初始值。
     pub(crate) fn new(
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<impl Sized>,
         profile: Option<&ContainerEngineProfile>,
         initial_folder: Option<transom_core::FolderId>,
     ) -> Self {

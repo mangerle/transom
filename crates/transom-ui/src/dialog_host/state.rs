@@ -102,7 +102,12 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerForm => {
-                shell.state.containers.form = None;
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .container_form
+                    .update(cx, |view, cx| view.close(cx));
                 true
             }
             ModalKind::ContainerFolderForm => {
@@ -271,7 +276,14 @@ impl ModalKind {
             ModalKind::SftpFilter => shell.save_sftp_filter_modal(window, cx),
             ModalKind::SftpSync => shell.start_sftp_sync(window, cx),
             ModalKind::EditorGotoLine => shell.commit_editor_goto_line(window, cx),
-            ModalKind::ContainerForm => shell.save_container_form(cx),
+            ModalKind::ContainerForm => {
+                shell
+                    .state
+                    .modals
+                    .tools
+                    .container_form
+                    .update(cx, |view, cx| view.save(cx));
+            }
             ModalKind::ContainerFolderForm => shell.submit_engine_folder_form(window, cx),
             ModalKind::ContainerRunForm => {
                 if let Some(tab_id) = shell
@@ -387,9 +399,16 @@ impl ModalKind {
                     .as_ref()
                     .map(|modal| modal.input.clone())
             }),
-            ModalKind::ContainerForm => input_focus(shell, |state| {
-                state.containers.form.as_ref().map(|form| form.name.clone())
-            }),
+            ModalKind::ContainerForm => shell
+                .state
+                .modals
+                .tools
+                .container_form
+                .read(cx)
+                .state()
+                .map_or(ModalFocus::None, |form| {
+                    ModalFocus::Input(form.name.clone())
+                }),
             ModalKind::ContainerFolderForm => input_focus(shell, |state| {
                 state
                     .containers

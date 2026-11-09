@@ -2,8 +2,8 @@
 use crate::app::AppShell;
 use gpui_kit::App;
 
-pub(in crate::app::dialog_host) fn container_form_open(shell: &AppShell, _cx: &App) -> bool {
-    shell.state.containers.form.is_some()
+pub(in crate::app::dialog_host) fn container_form_open(shell: &AppShell, cx: &App) -> bool {
+    shell.state.modals.tools.container_form.read(cx).is_open()
 }
 
 pub(in crate::app::dialog_host) fn container_form_values(
@@ -12,11 +12,11 @@ pub(in crate::app::dialog_host) fn container_form_values(
 ) -> Vec<String> {
     shell
         .state
-        .containers
-        .form
-        .as_ref()
-        .map(|form| form.text_values(cx))
-        .unwrap_or_default()
+        .modals
+        .tools
+        .container_form
+        .read(cx)
+        .text_values(cx)
 }
 
 pub(in crate::app::dialog_host) fn container_folder_form_open(shell: &AppShell, _cx: &App) -> bool {

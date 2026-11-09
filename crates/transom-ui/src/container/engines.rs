@@ -222,6 +222,25 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 消费引擎连接表单实体上交的保存与删除意图。
+    ///
+    /// 事件自带完整配置与 id，处理时禁止回读实体：实体 emit 期间仍被租借。
+    pub(crate) fn on_container_form_event(
+        &mut self,
+        event: &ContainerFormEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            ContainerFormEvent::Save(profile) => {
+                self.save_container_profile((**profile).clone(), cx);
+            }
+            ContainerFormEvent::Delete(id) => {
+                self.delete_container_profile(*id, window, cx);
+            }
+        }
+    }
+
     /// 删除引擎连接配置并关闭其工作区标签。
     pub(crate) fn delete_container_profile(
         &mut self,

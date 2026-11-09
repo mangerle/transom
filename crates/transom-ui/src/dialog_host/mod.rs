@@ -21,6 +21,7 @@
 //!      容器动作与输入框动作两路。
 
 use crate::app::AppShell;
+use crate::container::ContainerFormFolders;
 use crate::palette::Palette;
 use gpui_kit::base::actions::{Cancel, Confirm};
 use gpui_kit::component::input::{
@@ -211,6 +212,25 @@ impl ModalKind {
             let view = app.read(cx).state.modals.session.form.clone();
             return view.update(cx, |view, cx| view.render_body(window, cx, p));
         }
+        if self == ModalKind::ContainerForm {
+            // 分组候选由外壳在读锁内快照后注入，实体不反查目录；快照读完即
+            // 结束外壳借用，随后的实体 update 才不会撞上双重租借。
+            let (view, folders) = {
+                let shell = app.read(cx);
+                let options = shell
+                    .state
+                    .catalog
+                    .engine_folders
+                    .iter()
+                    .map(|folder| (folder.id, folder.name.clone()))
+                    .collect();
+                (
+                    shell.state.modals.tools.container_form.clone(),
+                    ContainerFormFolders { options },
+                )
+            };
+            return view.update(cx, |view, cx| view.render_body(&folders, p, cx));
+        }
         if matches!(
             self,
             ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt
@@ -248,7 +268,8 @@ impl ModalKind {
             ModalKind::SftpSearch => shell.render_sftp_search_body(app, cx, p),
             ModalKind::SftpSync => shell.render_sftp_sync_body(app, cx, p),
             ModalKind::EditorGotoLine => shell.render_editor_goto_line_body(app, cx, p),
-            ModalKind::ContainerForm => shell.render_container_form_body(app, window, cx, p),
+            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
+            ModalKind::ContainerForm => div().into_any_element(),
             ModalKind::ContainerFolderForm => shell.render_engine_folder_form_body(app, cx, p),
             ModalKind::ContainerRunForm => shell.render_container_run_form_body(app, window, cx, p),
             ModalKind::ContainerCreate => {

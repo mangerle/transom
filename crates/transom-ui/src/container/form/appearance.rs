@@ -5,12 +5,12 @@ use super::*;
 /// 外观色板色块尺寸；与会话表单保持一致。
 const APPEARANCE_SWATCH_SIZE: f32 = 18.0;
 
-impl AppShell {
-    pub(super) fn render_engine_form_appearance_card(
+impl ContainerFormView {
+    pub(super) fn render_appearance_card(
         &self,
-        app: &Entity<AppShell>,
         form: &ContainerFormState,
         p: &Palette,
+        cx: &mut Context<Self>,
     ) -> AnyElement {
         let default_icon = session_icon(form.icon).unwrap_or(AppIcon::Named(IconName::Boxes));
 
@@ -23,15 +23,9 @@ impl AppShell {
                     .icon(default_icon)
                     .selected(form.icon == SessionIcon::Auto)
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.containers.form.as_mut() {
-                                form.icon = SessionIcon::Auto;
-                            }
-                            cx.notify();
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.set_icon(SessionIcon::Auto, cx)
+                    })),
             )
             .children(SESSION_ICON_CHOICES.into_iter().map(|choice| {
                 let Some(name) = session_icon(choice) else {
@@ -43,15 +37,7 @@ impl AppShell {
                 .small()
                 .icon(name)
                 .selected(form.icon == choice)
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    move |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.containers.form.as_mut() {
-                            form.icon = choice;
-                        }
-                        cx.notify();
-                    },
-                ))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_icon(choice, cx)))
                 .into_any_element()
             }));
 
@@ -75,15 +61,9 @@ impl AppShell {
                         Tooltip::new(rust_i18n::t!("form.color_none").to_string())
                             .build(_window, cx)
                     })
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.containers.form.as_mut() {
-                                form.color = SessionColor::None;
-                            }
-                            cx.notify();
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.set_color(SessionColor::None, cx)
+                    })),
             )
             .children(SESSION_COLOR_CHOICES.into_iter().map(|choice| {
                 let Some(value) = session_color(choice) else {
@@ -103,15 +83,9 @@ impl AppShell {
                         p.border
                     })
                     .cursor_pointer()
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        move |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.containers.form.as_mut() {
-                                form.color = choice;
-                            }
-                            cx.notify();
-                        },
-                    ))
+                    .on_click(
+                        cx.listener(move |this, _: &ClickEvent, _, cx| this.set_color(choice, cx)),
+                    )
                     .into_any_element()
             }));
 
@@ -133,8 +107,4 @@ impl AppShell {
             .child(color_row)
             .into_any_element()
     }
-
-    // -------------------------------------------------------------------------
-    // 连接类型卡：引擎种类 + 端点分组（本地 / 远端）
-    // -------------------------------------------------------------------------
 }
