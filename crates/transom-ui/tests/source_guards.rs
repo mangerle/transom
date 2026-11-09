@@ -29,6 +29,19 @@ fn walkdir_like(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// 统一使用 `/` 作为源码路径分隔符，避免 Windows 的反斜杠使后缀白名单失效。
+fn normalized_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+#[test]
+fn source_guard_paths_use_forward_slashes() {
+    assert_eq!(
+        normalized_path(Path::new(r"C:\repo\transom-ui\src\settings\mod.rs")),
+        "C:/repo/transom-ui/src/settings/mod.rs"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // 国际化守卫：UI 源码不得再出现硬编码中文文案
 // ---------------------------------------------------------------------------
@@ -72,7 +85,7 @@ fn ui_source_files() -> Vec<(String, String)> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for base in ["crates/transom-ui/src", "crates/transom-terminal/src"] {
         for entry in walkdir_like(&root.join(base)) {
-            let path = entry.display().to_string();
+            let path = normalized_path(&entry);
             if path.ends_with("tests.rs") {
                 continue;
             }
@@ -470,7 +483,7 @@ fn monitor_rendering_belongs_to_entity() {
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
         .filter_map(|path| {
             let content = std::fs::read_to_string(&path).ok()?;
-            Some((path.display().to_string(), content))
+            Some((normalized_path(&path), content))
         })
     {
         if path.ends_with("ops.rs") {
@@ -512,7 +525,7 @@ fn settings_rendering_belongs_to_entity() {
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
         .filter_map(|path| {
             let content = std::fs::read_to_string(&path).ok()?;
-            Some((path.display().to_string(), content))
+            Some((normalized_path(&path), content))
         })
     {
         if path.ends_with("handler.rs") || path.ends_with("settings/mod.rs") {
@@ -544,7 +557,7 @@ fn editor_panel_has_no_sync_callback_channel() {
             continue;
         };
         if content.contains("with_shell(") || content.contains("read_shell(") {
-            offenders.push(entry.display().to_string());
+            offenders.push(normalized_path(&entry));
         }
     }
     assert!(
@@ -831,7 +844,7 @@ fn session_form_is_owned_by_entity() {
             continue;
         };
         if content.contains("impl AppShell {") {
-            offenders.push(entry.display().to_string());
+            offenders.push(normalized_path(&entry));
         }
     }
     assert!(
