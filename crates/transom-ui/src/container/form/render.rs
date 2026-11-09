@@ -8,7 +8,7 @@ use super::*;
 /// 时一次性读入，保持“数据向下、意图向上”的单向依赖。
 pub(crate) struct ContainerFormFolders {
     /// 分组 id 与显示名，顺序与目录一致。
-    pub(crate) options: Vec<(transom_core::FolderId, String)>,
+    pub(crate) options: Vec<(FolderId, String)>,
 }
 
 impl ContainerFormView {

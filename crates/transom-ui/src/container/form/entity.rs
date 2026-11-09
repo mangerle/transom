@@ -66,7 +66,7 @@ impl ContainerFormView {
     pub(crate) fn open(
         &mut self,
         profile: Option<ContainerEngineProfile>,
-        folder: Option<transom_core::FolderId>,
+        folder: Option<FolderId>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -214,11 +214,7 @@ impl ContainerFormView {
     }
 
     /// 选择分组；切换分组后旧测试结果不再对应当前配置。
-    pub(super) fn set_folder(
-        &mut self,
-        folder: Option<transom_core::FolderId>,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn set_folder(&mut self, folder: Option<FolderId>, cx: &mut Context<Self>) {
         self.edit(cx, |form| {
             form.folder_id = folder;
             form.test_status = None;
