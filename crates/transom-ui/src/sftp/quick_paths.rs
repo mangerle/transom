@@ -90,16 +90,27 @@ fn expand_home(value: &str, home: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    fn test_home() -> PathBuf {
+        #[cfg(unix)]
+        {
+            PathBuf::from("/home/tester")
+        }
+        #[cfg(windows)]
+        {
+            PathBuf::from(r"C:\home\tester")
+        }
+    }
+
     #[test]
     fn parses_home_expanded_xdg_dirs() {
-        let home = Path::new("/home/tester");
+        let home = test_home();
         let parsed = parse_user_dirs(
             r#"# XDG user dirs
 XDG_DESKTOP_DIR="$HOME/桌面"
 XDG_DOWNLOAD_DIR="${HOME}/下载"
 XDG_DOCUMENTS_DIR="$HOME/文档"
 "#,
-            home,
+            &home,
         );
         assert_eq!(parsed.desktop, Some(home.join("桌面")));
         assert_eq!(parsed.downloads, Some(home.join("下载")));
@@ -107,26 +118,30 @@ XDG_DOCUMENTS_DIR="$HOME/文档"
 
     #[test]
     fn parses_absolute_and_ignores_malformed_lines() {
-        let home = Path::new("/home/tester");
-        let parsed = parse_user_dirs(
-            r#"XDG_DESKTOP_DIR="/data/Desktop"
+        let home = test_home();
+        #[cfg(unix)]
+        let absolute_desktop = "/data/Desktop";
+        #[cfg(windows)]
+        let absolute_desktop = r"C:\data\Desktop";
+        let content = format!(
+            r#"XDG_DESKTOP_DIR="{absolute_desktop}"
 not-a-pair
 XDG_DOWNLOAD_DIR=
 XDG_DOWNLOAD_DIR="relative/path"
-"#,
-            home,
+"#
         );
-        assert_eq!(parsed.desktop, Some(PathBuf::from("/data/Desktop")));
+        let parsed = parse_user_dirs(&content, &home);
+        assert_eq!(parsed.desktop, Some(PathBuf::from(absolute_desktop)));
         assert_eq!(parsed.downloads, None);
     }
 
     #[test]
     fn expands_home_only_at_path_start() {
-        let home = Path::new("/home/tester");
-        assert_eq!(expand_home("$HOME/a", home), Some(home.join("a")));
-        assert_eq!(expand_home("${HOME}/b", home), Some(home.join("b")));
-        assert_eq!(expand_home("$HOME", home), Some(home.to_path_buf()));
-        assert_eq!(expand_home("prefix/$HOME", home), None);
-        assert_eq!(expand_home("", home), None);
+        let home = test_home();
+        assert_eq!(expand_home("$HOME/a", &home), Some(home.join("a")));
+        assert_eq!(expand_home("${HOME}/b", &home), Some(home.join("b")));
+        assert_eq!(expand_home("$HOME", &home), Some(home.to_path_buf()));
+        assert_eq!(expand_home("prefix/$HOME", &home), None);
+        assert_eq!(expand_home("", &home), None);
     }
 }

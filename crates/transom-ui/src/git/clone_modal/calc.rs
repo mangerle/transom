@@ -1,5 +1,7 @@
 //! 克隆地址解析、路径拼接与进度百分比解析。
 
+use std::path::Path;
+
 /// 从一段进度文本里取最新的百分比。
 ///
 /// git 用 `\r` 反复刷新同一行，控制器按行拼接后送上来；这里取最后一个 `%`
@@ -51,21 +53,27 @@ pub(crate) fn clone_destination(
     repo: &str,
     fallback_base: &str,
 ) -> String {
-    let current = current.trim().trim_end_matches('/');
-    let base = previous_repo
-        .and_then(|previous| current.strip_suffix(&format!("/{previous}")))
-        .unwrap_or(current);
-    let base = if base.is_empty() {
-        fallback_base.trim_end_matches('/')
+    let current = Path::new(current.trim());
+    let should_replace_previous = previous_repo.is_some_and(|previous| {
+        current.file_name().and_then(|name| name.to_str()) == Some(previous)
+    });
+    let base = if should_replace_previous {
+        current.parent().unwrap_or_else(|| Path::new(""))
+    } else {
+        current
+    };
+    let base = if base.as_os_str().is_empty() {
+        Path::new(fallback_base.trim())
     } else {
         base
     };
-    std::path::Path::new(base).join(repo).display().to_string()
+    base.join(repo).display().to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{clone_destination, clone_percent, repo_name_from_url};
+    use std::path::Path;
 
     #[test]
     fn repo_name_supports_ssh_https_and_scp_forms() {
@@ -90,26 +98,39 @@ mod tests {
 
     #[test]
     fn destination_appends_and_replaces_only_the_previous_auto_repo() {
+        #[cfg(unix)]
+        let base = "/home/wangle/data";
+        #[cfg(windows)]
+        let base = r"C:\home\wangle\data";
+        #[cfg(unix)]
+        let fallback = "/home/wangle";
+        #[cfg(windows)]
+        let fallback = r"C:\home\wangle";
+        let previous = Path::new(base).join("absf").display().to_string();
         assert_eq!(
-            clone_destination("/home/wangle/data", None, "absf", "/home/wangle"),
-            "/home/wangle/data/absf"
+            clone_destination(base, None, "absf", fallback),
+            Path::new(base).join("absf").display().to_string()
+        );
+        assert_eq!(
+            clone_destination(&previous, Some("absf"), "xyz", fallback),
+            Path::new(base).join("xyz").display().to_string()
         );
         assert_eq!(
             clone_destination(
-                "/home/wangle/data/absf",
+                &Path::new(fallback).join("manual").display().to_string(),
                 Some("absf"),
                 "xyz",
-                "/home/wangle"
+                fallback,
             ),
-            "/home/wangle/data/xyz"
+            Path::new(fallback)
+                .join("manual")
+                .join("xyz")
+                .display()
+                .to_string()
         );
         assert_eq!(
-            clone_destination("/tmp/manual", Some("absf"), "xyz", "/home/wangle"),
-            "/tmp/manual/xyz"
-        );
-        assert_eq!(
-            clone_destination("", None, "absf", "/home/wangle"),
-            "/home/wangle/absf"
+            clone_destination("", None, "absf", fallback),
+            Path::new(fallback).join("absf").display().to_string()
         );
     }
 
