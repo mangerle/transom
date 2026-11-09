@@ -6,6 +6,17 @@
 
 use super::super::*;
 
+/// 自动调度下一条下载任务所需的参数：任务 ID、工作区、镜像引用与仓库凭据。
+type ScheduledPull = (
+    String,
+    TabId,
+    String,
+    Option<transom_core::ContainerRegistryAuth>,
+);
+
+/// 下载任务结束后的收尾数据：任务引用与下一条待启动命令。
+type PullFinishedOutcome = (String, Option<ScheduledPull>);
+
 impl ContainerWorkspace {
     /// 应用容器列表响应：重建 Compose 视图、修正选中项并自动 inspect。
     pub(crate) fn apply_containers_listed(
@@ -512,5 +523,32 @@ impl ContainerWorkspace {
                 build.logs.drain(..excess);
             }
         }
+    }
+}
+
+impl ContainerWorkspace {
+    /// 应用分层下载进度。
+    pub(crate) fn apply_pull_progress(
+        &mut self,
+        task_id: &str,
+        status: String,
+        layers: Vec<transom_core::ImageLayerProgress>,
+    ) {
+        self.state.pull_manager.on_progress(task_id, status, layers);
+    }
+
+    /// 应用下载任务结束：返回任务引用与队列中下一个待启动命令。
+    ///
+    /// 设计原理（Why）：`on_finished` 会推进队列并返回下一条命令，外壳只负责
+    /// 弹提示与投递；把队列状态留在实体里，避免外壳闭包操作下载管理器内部。
+    pub(crate) fn apply_pull_finished(
+        &mut self,
+        task_id: &str,
+        error_msg: Option<String>,
+    ) -> Option<PullFinishedOutcome> {
+        let task = self.state.pull_manager.get(task_id)?;
+        let reference = task.reference.clone();
+        let next = self.state.pull_manager.on_finished(task_id, error_msg);
+        Some((reference, next))
     }
 }

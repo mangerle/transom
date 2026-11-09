@@ -1091,6 +1091,33 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/files_actions/mutate.rs",
         "src/container/files_actions/prompt.rs",
         "src/container/files_actions/transfer.rs",
+        "src/container/modals/tag.rs",
+        "src/container/modals/export.rs",
+        "src/container/modals/commit.rs",
+        "src/container/modals/update.rs",
+        "src/container/modals/forward.rs",
+        "src/container/modals/network.rs",
+        "src/container/modals/files.rs",
+        "src/container/modals/pods.rs",
+        "src/container/modals/quadlet.rs",
+        "src/container/tag.rs",
+        "src/container/export.rs",
+        "src/container/commit.rs",
+        "src/container/update.rs",
+        "src/container/network_connect.rs",
+        "src/container/push_dialog.rs",
+        "src/container/system_df_dialog.rs",
+        "src/container/build_dialog/render.rs",
+        "src/container/hub/dialog.rs",
+        "src/container/view/mod.rs",
+        "src/container/sidebar.rs",
+        "src/container/sidebar/entity.rs",
+        "src/container/sidebar/drag.rs",
+        "src/container/sidebar/empty.rs",
+        "src/container/sidebar/engine_row.rs",
+        "src/container/sidebar/folder_form.rs",
+        "src/container/sidebar/folder_row.rs",
+        "src/container/sidebar/rows.rs",
     ];
     let mut offenders = Vec::new();
     for file in files {
@@ -1109,6 +1136,143 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
     assert!(
         offenders.is_empty(),
         "已下沉的容器渲染文件不得再挂回外壳：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 提取源码中所有以 `header` 开头的 impl 块正文。
+///
+/// 设计原理（Why）：只看文件级字符串会把“实体 impl 里的 render 方法”误判成
+/// 外壳渲染；按花括号配平切出 `impl AppShell` 块，才能精确约束外壳。
+fn impl_blocks<'a>(content: &'a str, header: &str) -> Vec<&'a str> {
+    let mut blocks = Vec::new();
+    let mut search = 0;
+    while let Some(relative) = content[search..].find(header) {
+        let start = search + relative;
+        let Some(body_start) = content[start..].find('{') else {
+            break;
+        };
+        let body = &content[start + body_start..];
+        let mut depth = 0usize;
+        let mut end = 0usize;
+        for (offset, ch) in body.char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = offset;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        blocks.push(&body[..end]);
+        search = start + body_start + end + 1;
+    }
+    blocks
+}
+
+/// 容器渲染方法不得再挂回 `impl AppShell`：正文渲染必须落在自由函数或实体方法，
+/// 外壳只保留窗口级布局、焦点与全屏入口。
+#[test]
+fn container_has_no_shell_render_methods() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/container")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for block in impl_blocks(&content, "impl AppShell {") {
+            if block.contains("fn render_") {
+                offenders.push(entry.display().to_string());
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "容器渲染不得再挂回 impl AppShell，请改为自由函数或实体方法：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 容器侧栏必须由实体持有：搜索、选中、分组表单与发现面板状态都归
+/// `ContainerSidebarView`，侧栏目录不得再由 `ContainerUiState` 平铺。
+#[test]
+fn container_sidebar_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dialogs = std::fs::read_to_string(root.join("src/container/types/dialogs.rs"))
+        .expect("读取容器界面状态失败");
+    assert!(
+        dialogs.contains("sidebar: Entity<super::super::ContainerSidebarView>"),
+        "ContainerUiState 必须持有 Entity<ContainerSidebarView>"
+    );
+    for forbidden in [
+        "sidebar_search: Option<Entity<InputState>>",
+        "sidebar_selected: Option<transom_core::EngineProfileId>",
+        "engine_folder_form: Option<EngineFolderForm>",
+        "discovery: Option<ContainerDiscovery>",
+        "discovering: bool",
+    ] {
+        assert!(
+            !dialogs.contains(forbidden),
+            "侧栏状态不得继续平铺在 ContainerUiState：{forbidden}"
+        );
+    }
+    let entity = std::fs::read_to_string(root.join("src/container/sidebar/entity.rs"))
+        .expect("读取侧栏实体失败");
+    assert!(
+        entity.contains("pub(crate) struct ContainerSidebarView"),
+        "ContainerSidebarView 实体必须存在于 container/sidebar/entity.rs"
+    );
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/container/sidebar")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        let uses_shell_context = content.lines().any(|line| {
+            let line = line.trim_start();
+            !line.starts_with("//") && line.contains("Context<AppShell>")
+        });
+        if content.contains("impl AppShell") || uses_shell_context {
+            offenders.push(entry.display().to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "侧栏实体文件不得回挂外壳，跨域动作走 ContainerSidebarEvent：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// `with_container*` 迁移桥必须彻底删除，事件处理与动作直接操作实体。
+#[test]
+fn container_migration_bridge_is_removed() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for forbidden in ["with_container(", "with_container_mut("] {
+            if content.contains(forbidden) {
+                offenders.push(format!("{}: {forbidden}", entry.display()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "with_container 迁移桥不得复活：\n{}",
         offenders.join("\n")
     );
 }

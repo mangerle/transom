@@ -77,10 +77,7 @@ impl AppShell {
             && let Some(workspace) = self.state.container_workspace(tab_id)
         {
             workspace.update(cx, |workspace, cx| {
-                workspace
-                    .state
-                    .pull_manager
-                    .on_progress(&task_id, status, layers);
+                workspace.apply_pull_progress(&task_id, status, layers);
                 cx.notify();
             });
         }
@@ -108,13 +105,7 @@ impl AppShell {
                 continue;
             };
             let found = workspace.update(cx, |workspace, _| {
-                let task = workspace.state.pull_manager.get(&task_id)?;
-                let reference = task.reference.clone();
-                let next = workspace
-                    .state
-                    .pull_manager
-                    .on_finished(&task_id, error_msg.clone());
-                Some((reference, next))
+                workspace.apply_pull_finished(&task_id, error_msg.clone())
             });
             if let Some((reference, next)) = found {
                 target_tab = Some(tab_id);

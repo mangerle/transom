@@ -120,28 +120,38 @@ impl 面板                                       →  面板自己的动作
 
 容器侧的在途请求登记、命令跟踪投递、列表刷新（防抖/单分类/全量预热）、
 选择项、生命周期与清理动作已迁入 `impl ContainerWorkspace`；请求按标签归属，
-事件用 `request_id` 在实体上反查标签，迟到结果自然丢弃。渲染编排仍在
-`AppShell`，通过 `with_container` 迁移期桥只读状态；拉取抽屉与工作区头部（分类页签、引擎标识、工具条按钮）已按“实体状态 +
-实体句柄 + Palette”的参数对象模式迁出为容器模块内的自由渲染函数；头部需要
-外壳弹窗/全屏时经 `ContainerWorkspaceEvent` 事件上交，订阅按标签持有并在
-`prune_tab_overlays` 统一回收。中栏列表与工具条（筛选/排序/更多菜单、行内动作）也已迁出；需要 `Window`
-的动作经 `ContainerWorkspaceEvent` → `WindowRequests` 排到渲染期执行。右侧基础信息与原始 inspect 页也已迁出：字段行、端口、存储、环境变量与健康
-时间线的复制/跳转只依赖实体句柄与状态快照，端口转发经工作区事件排队执行。
-日志页的跟随/行数/时间戳/倒序、复制与导出也已随渲染一起下沉到工作区实体，
-导出结果经实体 notice 提示。统计页的六张卡片、采样档位、图表形态、进程与端口
-折叠及 CSV 导出也已随动作一起下沉，导出结果同样走实体 notice。镜像、卷、网络、镜像历史与容器详情头部的渲染/动作也已下沉，跨页动作经
-`ContainerWorkspaceEvent` 排队到渲染期执行。文件页的目录加载/预览/编辑保存/重命名/复制/chmod/chown/新建目录/上传下载
-也已下沉，弹窗状态由实体持有、渲染仍由 dialog_host 统一组装。变更、终端、删除确认、Compose 详情/拓扑/YAML 与详情头部动作组也已下沉，
-镜像 tag/push、网络连接等跨窗口动作经工作区事件排队。详情分发、头部与页签条也改为自由函数：输入框文本由外壳读取后以
-`ContainerDetailParams` 注入，Compose YAML/依赖加载与页签切换归实体，卷备份/
-恢复与 YAML 编辑器创建经事件排队。引擎连接表单已迁为 `Entity<ContainerFormView>`：表单状态/校验/测试与删除意图
-归实体，目录持久化、测试回包与删除确认由外壳消费事件；运行容器表单也已迁为 `Entity<ContainerRunFormView>`：打开/克隆/重建预填、
-校验、端口/卷/环境变量编辑、预设与渲染归实体，提交经事件交外壳投递命令；
-拉取镜像/新建卷网络弹窗也已迁为 `Entity<ContainerCreateDialogView>`：附加字段
-状态、校验与渲染归实体，主输入仍归标签页工作区，提交事件由外壳读取主输入后
-构造命令。危险操作确认与重命名弹窗也已下沉：动作与渲染归工作区实体，
-`dialog_host` 只负责定位当前打开的工作区并注入状态。其余组件沿用同一模式
-继续下沉，最终删除迁移桥。
+事件用 `request_id` 在实体上反查标签，迟到结果自然丢弃。**`with_container` /
+`with_container_mut` 迁移桥已删除**，事件处理与动作全部改为「先取实体句柄，
+再 `workspace.update`」；列表、动作结果、日志/统计与文件事件的状态流转收敛到
+`container/events/apply.rs` 的实体具名方法。
+
+渲染已全部下沉：拉取抽屉、工作区头部（分类页签、引擎标识、工具条按钮）、
+中栏列表与工具条、右侧详情全部页签、文件页、变更、终端、Compose 详情/拓扑/
+YAML、镜像/卷/网络/镜像历史、详情头部与页签条均为容器模块内的自由渲染函数，
+以「实体句柄 + 只读状态快照 + Palette」为参数；需要 `Window` 或跨领域的动作经
+`ContainerWorkspaceEvent` → `WindowRequests` 排到渲染期执行。标签骨架（头部、
+列表/详情分栏、拉取抽屉）拆为 `render_container_tab_body`，连接态占位页与列表
+内容也改为自由函数；外壳只在 `workspace/panes.rs` 保留窗口级入口：列表焦点/
+键盘包装、`notice` 转通知与全屏覆盖层。分栏拖拽状态随工作区实体存活。
+
+14 个容器模态弹窗（确认、重命名、tag、export、commit、update、forward、
+network、files、pods、quadlet、push、system_df、build、hub）的渲染改为自由
+函数，取消/确认/提交直接调用实体方法；`dialog_host` 只按弹窗种类找到当前打开的
+工作区并注入状态。危险操作确认与重命名、文件弹窗、Pod/Quadlet 操作、构建与
+镜像中心的状态都归工作区实体，跨窗口动作经事件排队。
+
+容器引擎侧栏已迁为单例 `Entity<ContainerSidebarView>`：搜索框、选中项、分组
+表单与引擎发现面板归实体；引擎/分组目录与连接状态由外壳按渲染快照注入，
+侧栏渲染不反查外壳。折叠、改名、删除、移动、拖放与目录持久化经
+`ContainerSidebarEvent` 交外壳（`container/sidebar_events.rs`），打开工作区、
+连接表单与 SSH 会话联动也由外壳消费事件完成。
+
+`dialog_host` 的容器弹窗分发集中在 `container_workspace_body`：先按种类谓词
+定位工作区，再调用对应自由渲染函数；取消/提交动作同样直接 `update` 实体。
+源码守卫 `migrated_container_render_slices_do_not_return_to_shell` 覆盖全部已
+下沉文件，`container_has_no_shell_render_methods` 禁止容器渲染重新挂回
+`impl AppShell`，`container_sidebar_is_owned_by_entity` 与
+`container_migration_bridge_is_removed` 防止侧栏状态回退与迁移桥复活。
 
 Git 侧已迁 `GitWorkspace::load_log` 与实体命令通道；其余 Git 动作仍在外壳。
 

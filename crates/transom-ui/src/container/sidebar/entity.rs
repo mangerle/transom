@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::container::types::EngineFolderForm;
+use gpui_kit::component::input::InputEvent;
 use transom_core::SessionId;
 
 /// 侧栏发给外壳的动作意图。
@@ -75,6 +76,8 @@ pub(crate) struct ContainerSidebarViewState {
     pub(crate) discovery: Option<ContainerDiscovery>,
     /// 正在进行的发现请求，避免连点重复探测。
     pub(crate) discovering: bool,
+    /// 搜索框变化时通知侧栏实体，外壳再经观察器整壳重绘。
+    _search_subscription: Subscription,
 }
 
 /// 容器引擎侧栏实体。
@@ -89,6 +92,11 @@ impl ContainerSidebarView {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.sidebar.search").to_string())
         });
+        let search_subscription = cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         Self {
             state: ContainerSidebarViewState {
                 search,
@@ -96,6 +104,7 @@ impl ContainerSidebarView {
                 engine_folder_form: None,
                 discovery: None,
                 discovering: false,
+                _search_subscription: search_subscription,
             },
         }
     }
