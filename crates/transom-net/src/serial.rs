@@ -43,7 +43,19 @@ pub fn open_serial(connection: &SerialConnection) -> Result<SerialSession, AppEr
         ));
     }
 
-    let port = serialport::new(connection.port.trim(), connection.baud_rate)
+    open_serial_port(connection, connection.baud_rate)
+}
+
+/// 以显式波特率打开串口，供生产入口与伪终端测试共用。
+///
+/// macOS 的 `serialport` 只能用波特率 0 打开伪终端，否则会因无法对 PTY
+/// 执行 `IOSSIOSPEED` 而返回 `ENOTTY`；公开入口仍拒绝 0，避免真实设备
+/// 因错误配置被静默按默认速率打开。
+fn open_serial_port(
+    connection: &SerialConnection,
+    baud_rate: u32,
+) -> Result<SerialSession, AppError> {
+    let port = serialport::new(connection.port.trim(), baud_rate)
         .data_bits(map_data_bits(connection.data_bits))
         .parity(map_parity(connection.parity))
         .stop_bits(map_stop_bits(connection.stop_bits))
@@ -55,7 +67,7 @@ pub fn open_serial(connection: &SerialConnection) -> Result<SerialSession, AppEr
                 ErrorCode::ConnectionFailed,
                 format!(
                     "打开串口失败，端口: {}，波特率: {}，原因: {error}",
-                    connection.port, connection.baud_rate
+                    connection.port, baud_rate
                 ),
             )
         })?;
@@ -215,7 +227,12 @@ mod tests {
         let (mut master, slave) = TTYPort::pair().unwrap();
         let name = slave.name().unwrap();
         drop(slave);
-        let mut session = open_serial(&SerialConnection::new(name, 9_600)).unwrap();
+        #[cfg(target_os = "macos")]
+        let baud_rate = 0;
+        #[cfg(not(target_os = "macos"))]
+        let baud_rate = 9_600;
+        let mut session = open_serial_port(&SerialConnection::new(name, baud_rate), baud_rate)
+            .expect("伪终端串口应能打开");
 
         session.io.writer.write_all(b"ping").unwrap();
         session.io.writer.flush().unwrap();

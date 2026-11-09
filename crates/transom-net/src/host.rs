@@ -62,26 +62,35 @@ pub async fn probe_tcp(host: &str, port: u16, timeout: Duration) -> Result<Durat
 /// MAC 无法解析、无可用广播路由或套接字创建失败时返回 [`NetError::Wake`]；
 /// 两个约定端口只要有一次发送成功即视为已唤醒投递。
 pub async fn send_wake_on_lan(mac: &str) -> Result<(), NetError> {
+    let targets = WOL_PORTS.map(|port| SocketAddr::from((Ipv4Addr::BROADCAST, port)));
+    send_wake_on_lan_to(mac, SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)), &targets).await
+}
+
+/// 向指定目标发送魔法包；目标地址可注入以保证测试不依赖宿主广播路由。
+async fn send_wake_on_lan_to(
+    mac: &str,
+    bind_address: SocketAddr,
+    targets: &[SocketAddr],
+) -> Result<(), NetError> {
     let address = MacAddress::from_str(mac).map_err(|error| NetError::Wake {
         mac: mac.to_string(),
         reason: error.to_string(),
     })?;
     let packet = magic_packet(&address.octets());
-    let socket = UdpSocket::bind("0.0.0.0:0")
+    let socket = UdpSocket::bind(bind_address)
         .await
         .map_err(|source| wake_io_error(mac, source))?;
     socket
         .set_broadcast(true)
         .map_err(|source| wake_io_error(mac, source))?;
 
-    let mut failures: Vec<String> = Vec::with_capacity(WOL_PORTS.len());
-    for port in WOL_PORTS {
-        let target = SocketAddr::from((Ipv4Addr::BROADCAST, port));
-        if let Err(source) = socket.send_to(&packet, target).await {
-            failures.push(format!("{port}: {source}"));
+    let mut failures: Vec<String> = Vec::with_capacity(targets.len());
+    for target in targets {
+        if let Err(source) = socket.send_to(&packet, *target).await {
+            failures.push(format!("{}: {source}", target.port()));
         }
     }
-    if failures.len() == WOL_PORTS.len() {
+    if failures.len() == targets.len() {
         return Err(NetError::Wake {
             mac: mac.to_string(),
             reason: failures.join("；"),
@@ -152,9 +161,15 @@ mod tests {
         let error = probe_tcp("127.0.0.1", port, Duration::from_secs(2))
             .await
             .expect_err("已关闭的端口不应判定可达");
-        assert!(matches!(error, NetError::Connect { .. }));
+        // Windows CI 对刚释放的临时端口不一定立即返回 RST；连接被拒与探测超时
+        // 都是不可达的合法表达，分别映射到连接失败与超时错误码。
+        let expected_code = match &error {
+            NetError::Connect { .. } => transom_core::ErrorCode::ConnectionFailed,
+            NetError::ProbeTimeout { .. } => transom_core::ErrorCode::Timeout,
+            other => panic!("已关闭端口返回了非预期错误: {other}"),
+        };
         let app_error = transom_core::AppError::from(error);
-        assert_eq!(app_error.code, transom_core::ErrorCode::ConnectionFailed);
+        assert_eq!(app_error.code, expected_code);
     }
 
     /// 非法 MAC 在发包前就被拒绝：不能把无法解析的字符串编成包扔进网络。
@@ -167,12 +182,34 @@ mod tests {
         assert!(error.to_string().contains("not-a-mac"));
     }
 
-    /// 广播路径不可在回环上验证收包，这里确认发送不失败即可：
-    /// 套接字创建、`set_broadcast` 与两个端口的 `send_to` 全链路走通。
+    /// 用本机 UDP 目标验证套接字创建、广播选项与 `send_to` 全链路。
+    ///
+    /// CI 宿主未必有默认广播路由，因此不能把 `255.255.255.255` 的发送成功
+    /// 当作正确性前提；这里只替换目标地址，仍执行与生产路径相同的发送逻辑。
     #[tokio::test]
-    async fn wake_sends_broadcast_without_error() {
-        send_wake_on_lan("aa:bb:cc:dd:ee:ff")
+    async fn wake_sends_packet_to_injected_target() {
+        let listener = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
             .await
-            .expect("用户态广播发送不应失败");
+            .expect("本机 UDP 监听器应创建成功");
+        let target = listener.local_addr().expect("监听器地址应可读取");
+        send_wake_on_lan_to(
+            "aa:bb:cc:dd:ee:ff",
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
+            &[target],
+        )
+        .await
+        .expect("用户态魔法包发送不应失败");
+
+        let mut received = [0u8; 102];
+        let (count, _) =
+            tokio::time::timeout(Duration::from_secs(1), listener.recv_from(&mut received))
+                .await
+                .expect("本机魔法包应在超时前到达")
+                .expect("本机魔法包应可读取");
+        assert_eq!(count, received.len());
+        assert_eq!(
+            received.as_slice(),
+            magic_packet(&[0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]).as_slice()
+        );
     }
 }
