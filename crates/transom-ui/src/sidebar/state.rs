@@ -5,6 +5,7 @@
 //! 形成自包含的侧栏状态单元，降低顶层单体复杂度并收敛侧栏交互边界。
 
 use super::SidebarRow;
+use super::SidebarSlotSync;
 use gpui_kit::Entity;
 use gpui_kit::component::input::InputState;
 use std::collections::HashSet;
@@ -22,6 +23,8 @@ pub(crate) struct SidebarRowsCache {
 pub(crate) struct SidebarState {
     /// 侧栏显隐状态。
     pub(crate) visible: bool,
+    /// 侧栏在可拖拽分组里的槽位宽度同步状态：收起/展开与停靠侧切换后据此恢复。
+    pub(crate) slot: SidebarSlotSync,
     /// 侧栏搜索框状态。
     pub(crate) search: Entity<InputState>,
     /// 侧栏行快照缓存：目录与搜索词不变时复用。
@@ -39,6 +42,7 @@ impl SidebarState {
     pub(crate) fn new(visible: bool, search: Entity<InputState>) -> Self {
         Self {
             visible,
+            slot: SidebarSlotSync::new(visible),
             search,
             rows_cache: None,
             selection_mode: false,

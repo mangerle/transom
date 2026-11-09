@@ -53,12 +53,12 @@ impl AppShell {
         };
         // ResizableState 按面板索引记录尺寸：折叠时若移除首个面板，
         // 主终端会继承侧边栏的固定尺寸，再次展开时布局被撑满。
-        // 因此面板始终参与分组，仅切换可见性以保持索引稳定。
-        let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
-        let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
-        let sidebar_panel = self.build_sidebar_panel(window, cx, p, rem);
+        // 因此面板始终参与分组，仅切换可见性以保持索引稳定；侧栏槽位的
+        // 宽度由同步函数修正，保证收起后尺寸表与实际占位一致。
+        let sidebar_width = self.sync_sidebar_panel_slot(window, cx);
+        let sidebar_panel = self.build_sidebar_panel(window, cx, p, rem, sidebar_width);
 
-        let plan = self.plan_workspace_layout(window, cx);
+        let plan = self.plan_workspace_layout(window, cx, sidebar_width);
         // 折叠状态变化时把 SFTP 面板同步到内容宽度：必须赶在分组构建之前，
         // 本帧的面板尺寸才能反映新的宽度。
         self.sync_sftp_panel_width(window, cx);
@@ -111,9 +111,8 @@ impl AppShell {
             StatusBarLayoutInput {
                 p,
                 rem,
-                panels_state: &panels_state,
-                sidebar_min_width,
-                sidebar_max_width,
+                sidebar_visible: self.state.sidebar.visible,
+                sidebar_width,
             },
             cx,
         );
@@ -243,19 +242,12 @@ impl AppShell {
         let StatusBarLayoutInput {
             p,
             rem,
-            panels_state,
-            sidebar_min_width,
-            sidebar_max_width,
+            sidebar_visible,
+            sidebar_width,
         } = input;
-        let divider_x = if self.state.sidebar.visible {
-            let sidebar_width = panels_state
-                .read(cx)
-                .sizes()
-                .first()
-                .copied()
-                .filter(|width| *width >= sidebar_min_width && *width <= sidebar_max_width)
-                .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
-                .as_f32();
+        // 分界线取同步函数给出的侧栏实际宽度，不反查分栏尺寸表：
+        // 收起/展开的过渡帧里尺寸表还是旧值，直接读会让状态栏分界线跳一下。
+        let divider_x = if sidebar_visible {
             rem_px(size::ACTIVITY_BAR_WIDTH, rem) + px(sidebar_width)
         } else {
             px(0.0)

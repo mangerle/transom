@@ -6,6 +6,7 @@
 use super::*;
 use crate::palette::Palette;
 use crate::sftp::SftpPanelState;
+use crate::sidebar::{SidebarSlotLayout, sync_sidebar_slot};
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::{ResizablePanel, ResizablePanelGroup, h_resizable};
 use gpui_kit::component::resizable::resizable_panel;
@@ -31,19 +32,76 @@ pub(super) struct WorkspaceGroupInput<'a> {
     pub(super) rem: Pixels,
 }
 
-/// 工作区状态栏布局输入：宽度切分所需的调色板、密度与分栏状态。
+/// 工作区状态栏布局输入：宽度切分所需的调色板、密度与侧栏宽度。
 pub(super) struct StatusBarLayoutInput<'a> {
     pub(super) p: &'a Palette,
     pub(super) rem: Pixels,
-    pub(super) panels_state: &'a Entity<ResizableState>,
-    pub(super) sidebar_min_width: Pixels,
-    pub(super) sidebar_max_width: Pixels,
+    pub(super) sidebar_visible: bool,
+    pub(super) sidebar_width: f32,
 }
 
 impl AppShell {
+    /// 同步侧栏在可拖拽分组里的槽位宽度，返回本帧侧栏应使用的宽度。
+    ///
+    /// 设计原理（Why）：`ResizableState` 按面板索引记录宽度，侧栏收起后
+    /// 0 号面板不再参与布局与测量，尺寸表却留着收起前的宽度；停靠侧切换还会
+    /// 换成另一份分栏状态。这里在构建分组之前把槽位修正到与布局一致，
+    /// 否则随后拖动任意分隔条都会用过期宽度计算差值，表现为面板跳动。
+    pub(super) fn sync_sidebar_panel_slot(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> f32 {
+        if self.state.immersive {
+            return 0.0;
+        }
+        let rem = window.rem_size();
+        let side_left = app_settings(cx).window.sftp_panel_side.is_left();
+        let active_tab = self.state.workspace.active_tab;
+        let show_sftp = active_tab
+            .and_then(|tab_id| self.sftp_state(tab_id, cx))
+            .is_some_and(|panel| panel.open);
+        let show_forwards = active_tab
+            .and_then(|tab_id| self.state.workspace.tab(tab_id))
+            .is_some_and(|tab| tab.forwards_view().is_some());
+        // 侧栏之后的固定面板（SFTP、转发）在停靠左侧时紧邻 0 号槽位；
+        // 写入侧栏宽度会先挤窄它们，同步函数需要据此恢复原宽度。
+        let main_index = if side_left {
+            1 + usize::from(show_sftp) + usize::from(show_forwards)
+        } else {
+            1
+        };
+        let panels = if side_left {
+            self.state.workspace_panels_left.clone()
+        } else {
+            self.state.workspace_panels.clone()
+        };
+        sync_sidebar_slot(
+            &mut self.state.sidebar.slot,
+            &panels,
+            SidebarSlotLayout {
+                visible: self.state.sidebar.visible,
+                default_width: rem_px(size::SIDEBAR_WIDTH, rem).as_f32(),
+                min_width: rem_px(size::SIDEBAR_MIN_WIDTH, rem).as_f32(),
+                max_width: rem_px(size::SIDEBAR_MAX_WIDTH, rem).as_f32(),
+                main_index,
+            },
+            window,
+            cx,
+        )
+    }
+
     /// 计算外层布局。设计原理（Why）：这些算术只在渲染时需要，抽出来后
     /// `render` 只负责按 plan 拼装面板，宽度规则可以单独核对与调整。
-    pub(super) fn plan_workspace_layout(&self, window: &Window, cx: &App) -> WorkspaceChromeLayout {
+    ///
+    /// `sidebar_width` 由 [`Self::sync_sidebar_panel_slot`] 给出，与侧栏面板
+    /// 实际占位一致；不再从尺寸表反查，避免过渡帧读到旧宽度。
+    pub(super) fn plan_workspace_layout(
+        &self,
+        window: &Window,
+        cx: &App,
+        sidebar_width: f32,
+    ) -> WorkspaceChromeLayout {
         let rem = window.rem_size();
         let active_panel = self
             .state
@@ -64,27 +122,13 @@ impl AppShell {
             .map(SftpPanelState::all_collapsed_width)
             .unwrap_or(32.0);
         let show_forwards = active_panel.is_some_and(|tab| tab.forwards_view().is_some());
-        // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
-        // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
-        let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
-        let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
         let sidebar_width = if self.state.sidebar.visible {
-            let panels_state = if app_settings(cx).window.sftp_panel_side.is_left() {
-                &self.state.workspace_panels_left
-            } else {
-                &self.state.workspace_panels
-            };
-            panels_state
-                .read(cx)
-                .sizes()
-                .first()
-                .copied()
-                .filter(|width| *width >= sidebar_min_width && *width <= sidebar_max_width)
-                .unwrap_or(rem_px(size::SIDEBAR_WIDTH, rem))
-                .as_f32()
+            sidebar_width
         } else {
             0.0
         };
+        // 固定面板不能把右侧关闭按钮挤出窗口：按当前窗口宽度给 SFTP 一个上限。
+        // 预留活动栏、侧栏、前向面板与主面板最小宽度，剩余空间才归 SFTP。
         let forward_width = if show_forwards {
             rem_px(size::FORWARD_PANEL_WIDTH, rem).as_f32()
         } else {
@@ -118,11 +162,12 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
         rem: Pixels,
+        sidebar_width: f32,
     ) -> ResizablePanel {
         let sidebar_min_width = rem_px(size::SIDEBAR_MIN_WIDTH, rem);
         let sidebar_max_width = rem_px(size::SIDEBAR_MAX_WIDTH, rem);
         let mut sidebar_panel = resizable_panel()
-            .size(rem_px(size::SIDEBAR_WIDTH, rem))
+            .size(px(sidebar_width))
             .size_range(sidebar_min_width..sidebar_max_width)
             .fixed()
             .visible(self.state.sidebar.visible);

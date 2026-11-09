@@ -1,10 +1,12 @@
 //! 会话树侧边栏：搜索、文件夹树渲染与根层级拖放区域。
 
 mod folders;
+mod slot;
 mod state;
 mod tree;
 
 pub(crate) use folders::FolderForm;
+pub(crate) use slot::{SidebarSlotLayout, SidebarSlotSync, sync_sidebar_slot};
 pub(crate) use state::{SidebarRowsCache, SidebarState};
 
 /// 侧栏工具图标按钮配置属性。
