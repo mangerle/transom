@@ -5,10 +5,11 @@ use gpui_kit::*;
 /// 把设置里的映射解析成运行期查表结构；坏条目跳过并留日志。
 pub(crate) fn build_custom_keys(
     bindings: &[transom_core::TerminalKeyBinding],
+    os: OperatingSystem,
 ) -> Vec<(KeybindingKeystroke, Vec<u8>)> {
     let mut custom = Vec::with_capacity(bindings.len());
     for binding in bindings {
-        let keystroke = match Keystroke::parse(&binding.keys) {
+        let keystroke = match Keystroke::parse_with_os(&binding.keys, os) {
             Ok(keystroke) => keystroke,
             Err(error) => {
                 log::warn!("自定义按键映射无法解析，已忽略: {error}");

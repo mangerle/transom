@@ -277,9 +277,10 @@ pub fn focus_bytes(mode: TermMode, focused: bool) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::OperatingSystem;
 
     fn key(spec: &str) -> Keystroke {
-        Keystroke::parse(spec).unwrap()
+        Keystroke::parse_with_os(spec, OperatingSystem::Linux).unwrap()
     }
 
     #[test]

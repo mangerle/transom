@@ -191,9 +191,15 @@ impl AppShell {
                 let cancel_app = app.clone();
                 let commit_app = app.clone();
 
+                let dialog = dialog.w(width).max_w(width);
+                // 差异查看器占视口高度的大部分，垂直居中比固定顶部偏移更稳定；
+                // 短表单仍沿用组件库的默认上沿位置，避免视觉重心整体下坠。
+                let dialog = if kind == ModalKind::DiffViewer {
+                    dialog.centered()
+                } else {
+                    dialog
+                };
                 dialog
-                    .w(width)
-                    .max_w(width)
                     // 普通表单弹窗保留可见关闭件；危险决策走上面的 AlertDialog。
                     .close_button(true)
                     // 容器遮罩按 `window_paddings` 内缩定位：客户端装饰下实测内缩

@@ -136,7 +136,7 @@ impl SettingsView {
             .read(cx)
             .value()
             .to_string();
-        match crate::keymap::parse_terminal_key_bindings(&raw) {
+        match crate::keymap::parse_terminal_key_bindings(&raw, cx.platform_info().os) {
             Ok(bindings) => {
                 update_app_settings(cx, |s| s.terminal_profile.key_bindings = bindings);
                 true

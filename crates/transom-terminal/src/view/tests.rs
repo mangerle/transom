@@ -2,7 +2,7 @@ use crate::view::build_custom_keys;
 use crate::view_ime::{
     ime_caret_index_for_query, ime_column_to_utf16_index, ime_utf16_index_to_column_cells,
 };
-use gpui_kit::Keystroke;
+use gpui_kit::{Keystroke, OperatingSystem};
 use transom_core::TerminalKeyBinding;
 
 /// 自定义映射按 gpui 键位语法匹配，修饰键不同不得误命中。
@@ -12,7 +12,7 @@ fn custom_keys_match_exact_modifiers_and_decode_bytes() {
         keys: "ctrl-shift-left".into(),
         sequence: "\\e[1;6D".into(),
     }];
-    let custom = build_custom_keys(&bindings);
+    let custom = build_custom_keys(&bindings, OperatingSystem::Linux);
     assert_eq!(custom.len(), 1);
     assert_eq!(custom[0].1, b"\x1b[1;6D");
     let exact = Keystroke::parse("ctrl-shift-left").unwrap();
@@ -34,7 +34,7 @@ fn invalid_custom_keys_are_skipped() {
             sequence: "\\q".into(),
         },
     ];
-    assert!(build_custom_keys(&bindings).is_empty());
+    assert!(build_custom_keys(&bindings, OperatingSystem::Linux).is_empty());
 }
 
 /// IME 定位折算：ASCII 单格、非 ASCII 双格近似，越界收敛到端点。

@@ -31,10 +31,12 @@ pub(crate) use preview::{apply_theme_preview, register_theme_document};
 
 use document::extract_terminal_palettes;
 
+use gpui_kit::base::input::CursorBlink;
 use gpui_kit::component::theme::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Window, px};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Duration;
 use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, TerminalPalette, UiThemeMode};
 
 /// 解析结果：当前生效主题与浅/深两槽位的兜底配置。
@@ -166,6 +168,9 @@ pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
         theme.dark_theme = resolved.dark;
         theme.font_size = px(density.font_size());
         theme.mono_font_size = px(density.mono_font_size());
+        // 输入光标在持续空闲后停止闪烁，避免整个窗口因光标计时器永久重绘；
+        // 一旦重新聚焦、输入或移动光标，组件库会从显示态恢复。
+        theme.cursor_blink = CursorBlink::default().with_idle_timeout(Duration::from_secs(5));
         if let Some(family) = bundled_mono_font {
             theme.mono_font_family = family;
         }

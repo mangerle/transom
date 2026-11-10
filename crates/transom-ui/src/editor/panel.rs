@@ -1,7 +1,8 @@
 //! SFTP 内置编辑器的面板状态与几何/语言换算。
 //!
 //! 窗体动作在 `editor_actions.rs`，打开与读取在 `editor_open.rs`，
-//! 保存回传在 `editor_ops.rs`，关闭保护在 `editor_close.rs`，渲染在 `editor_view.rs`。
+//! 保存回传在 `editor_ops.rs`，关闭保护在 `editor_close.rs`，未保存变更装饰在
+//! `editor_decorations.rs`，渲染在 `editor_view.rs`。
 //!
 //! 设计原理（Why）：
 //! - 容器是可拖拽、可折叠、可最大化的非阻塞面板，而不是模态弹窗。编辑远程配置的
@@ -14,6 +15,7 @@
 //!   再按语法名匹配），只在扩展名确实无法命中的情况下重定向，其余一律原样透传，
 //!   避免维护一张会随语法集版本过期的语言别名表。
 
+use gpui_kit::base::input::{GutterDecorationCollection, OverviewRulerDecorationCollection};
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
@@ -79,6 +81,14 @@ pub(crate) struct EditorPanelState {
     /// 传给编辑器的高亮 token（扩展名或语法名），未识别时为 `text`。
     pub(crate) language: String,
     pub(crate) editor: Entity<EditorState>,
+    /// 行号槽中的未保存变更标记；集合随面板存活，跨编辑自动跟踪偏移。
+    pub(crate) gutter_decorations: GutterDecorationCollection,
+    /// 滚动条轨道上的未保存变更标记，与行号槽共用同一份差异结果。
+    pub(crate) overview_ruler_decorations: OverviewRulerDecorationCollection,
+    /// 变更装饰的代数；异步差异结果只在代数仍匹配时应用。
+    pub(crate) decoration_revision: u64,
+    /// 防抖等待或后台差异计算任务；新编辑会丢弃旧任务。
+    pub(crate) decoration_task: Option<Task<()>>,
     /// 最近一次与远端一致的内容，用于脏检查与恢复；回传成功后整体替换。
     pub(crate) baseline: SharedString,
     /// 远端文本版本指纹：读取装载与回传成功时刷新，保存请求携带它做并发

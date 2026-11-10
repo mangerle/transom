@@ -7,6 +7,7 @@
 
 use gpui_kit::*;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use transom_core::{ShortcutSettings, TerminalKeyBinding};
 use transom_terminal::{TERMINAL_CONTEXT, TerminalCopy, TerminalPaste};
@@ -93,23 +94,38 @@ pub(crate) struct ShortcutSpec {
     /// 命中"的上下文（工作区与终端），把 SFTP/编辑器面板的专属键也收进去，
     /// 会让终端白丢 Ctrl+F/Ctrl+S 这些 Shell 与 vim 赖以工作的控制码。
     pub(crate) context: &'static str,
-    bind: fn(&str, &'static str) -> KeyBinding,
+    bind: fn(&str, &'static str, &App) -> Option<KeyBinding>,
     /// 动作实例工厂：命令面板据此派发真实 Action，并由组件自动关联键位提示。
     ///
-    /// 为什么与 `bind` 分开：`KeyBinding::new` 要求具体的 Action 值，而面板需要
-    /// 装箱的 `Box<dyn Action>`；两处各生成一次，避免面板维护一份平行动作清单。
+    /// 为什么与 `bind` 分开：键位装载要求具体的 Action 值，而面板需要装箱的
+    /// `Box<dyn Action>`；两处各生成一次，避免面板维护一份平行动作清单。
     pub(crate) action: fn() -> Box<dyn Action>,
 }
 
 macro_rules! bind_fn {
     ($bind:ident, $make:ident, $action:ident) => {
-        fn $bind(key: &str, context: &'static str) -> KeyBinding {
-            KeyBinding::new(key, $action, Some(context))
+        fn $bind(key: &str, context: &'static str, cx: &App) -> Option<KeyBinding> {
+            load_key_binding(key, $action, context, cx)
         }
         fn $make() -> Box<dyn Action> {
             Box::new($action)
         }
     };
+}
+
+/// 从运行期字符串装载一条键位。
+///
+/// 为什么不用 `KeyBinding::new`：0.3.12 起该构造器只接受 `&'static str`，
+/// 且不会解析 `secondary-` 别名。用户改键与平台展开都发生在运行期，必须走
+/// `KeyBinding::load`；解析失败时记录中文告警并跳过该条，避免一条坏配置
+/// 让整个快捷键系统失效。
+fn load_key_binding<A: Action>(
+    key: &str,
+    action: A,
+    context: &'static str,
+    cx: &App,
+) -> Option<KeyBinding> {
+    load_boxed_key_binding(key, Box::new(action), context, cx)
 }
 
 bind_fn!(bind_new_session, action_new_session, NewSession);
@@ -460,26 +476,65 @@ pub(crate) fn spec_by_id(id: &str) -> Option<&'static ShortcutSpec> {
 
 /// 生成全部应用键位：用户可改键的动作（含面板专属上下文）+ 固定的 SFTP 键位
 /// + 弹窗栈内多行输入框的提交键位。
-pub(crate) fn bindings(custom: &ShortcutSettings) -> Vec<KeyBinding> {
-    let mut bindings = custom_bindings(custom);
+pub(crate) fn bindings(custom: &ShortcutSettings, cx: &App) -> Vec<KeyBinding> {
+    let mut bindings = custom_bindings(custom, cx);
     bindings.extend(crate::dialog_host::dialog_bindings());
-    bindings.extend([
-        // 显示/隐藏隐藏项与删除键暂不进可改键表：`secondary-h` 用裸 Ctrl 而非
-        // `$app`，后者在非 macOS 展开成 Ctrl+Shift，会与 `$app-s`（SFTP 面板开关）
-        // 撞车；`delete` 只在非输入框的行上生效，改键收益低于误配风险。
-        KeyBinding::new("ctrl-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
-        KeyBinding::new("secondary-h", ToggleSftpHidden, Some(SFTP_CONTEXT)),
-        KeyBinding::new("delete", DeleteSftpSelection, Some(SFTP_ACTION_CONTEXT)),
-    ]);
+    // 显示/隐藏隐藏项与删除键暂不进可改键表：`secondary-h` 用裸 Ctrl 而非
+    // `$app`，后者在非 macOS 展开成 Ctrl+Shift，会与 `$app-s`（SFTP 面板开关）
+    // 撞车；`delete` 只在非输入框的行上生效，改键收益低于误配风险。
+    for (key, action, context) in [
+        (
+            "ctrl-h",
+            Box::new(ToggleSftpHidden) as Box<dyn Action>,
+            SFTP_CONTEXT,
+        ),
+        (
+            "secondary-h",
+            Box::new(ToggleSftpHidden) as Box<dyn Action>,
+            SFTP_CONTEXT,
+        ),
+        (
+            "delete",
+            Box::new(DeleteSftpSelection) as Box<dyn Action>,
+            SFTP_ACTION_CONTEXT,
+        ),
+    ] {
+        if let Some(binding) = load_boxed_key_binding(key, action, context, cx) {
+            bindings.push(binding);
+        }
+    }
     bindings
 }
 
-fn custom_bindings(custom: &ShortcutSettings) -> Vec<KeyBinding> {
+fn load_boxed_key_binding(
+    key: &str,
+    action: Box<dyn Action>,
+    context: &'static str,
+    cx: &App,
+) -> Option<KeyBinding> {
+    let predicate = match KeyBindingContextPredicate::parse(context) {
+        Ok(predicate) => predicate,
+        Err(error) => {
+            log::warn!("快捷键上下文无法解析，已忽略，上下文: {context}，原因: {error}");
+            return None;
+        }
+    };
+    match KeyBinding::load(key, action, Some(Rc::new(predicate)), false, None, cx) {
+        Ok(binding) => Some(binding),
+        Err(error) => {
+            log::warn!("快捷键无法解析，已忽略，按键: {key}，上下文: {context}，原因: {error}");
+            None
+        }
+    }
+}
+
+fn custom_bindings(custom: &ShortcutSettings, cx: &App) -> Vec<KeyBinding> {
     let mut bindings = Vec::with_capacity(SPECS.len());
+    let os = cx.platform_info().os;
     for spec in SPECS {
-        for key in effective_keys(spec, custom) {
-            if is_valid_key(&key) {
-                bindings.push((spec.bind)(&key, spec.context));
+        for key in effective_keys(spec, custom, os) {
+            if let Some(binding) = (spec.bind)(&key, spec.context, cx) {
+                bindings.push(binding);
             }
         }
     }
@@ -487,12 +542,16 @@ fn custom_bindings(custom: &ShortcutSettings) -> Vec<KeyBinding> {
 }
 
 /// 计算动作当前生效的键位集合；非法或空覆盖自动回退默认值。
-pub(crate) fn effective_keys(spec: &ShortcutSpec, custom: &ShortcutSettings) -> Vec<String> {
+pub(crate) fn effective_keys(
+    spec: &ShortcutSpec,
+    custom: &ShortcutSettings,
+    os: OperatingSystem,
+) -> Vec<String> {
     if let Some(raw_keys) = custom.bindings.get(spec.id) {
         let keys: Vec<String> = raw_keys
             .iter()
             .map(|key| expand_app_placeholder(key.trim()))
-            .filter(|key| is_valid_key(key))
+            .filter(|key| is_valid_key(key, os))
             .collect();
         if !keys.is_empty() {
             return keys;
@@ -508,11 +567,14 @@ pub(crate) fn effective_keys(spec: &ShortcutSpec, custom: &ShortcutSettings) -> 
 ///
 /// 上下文必须随键位一起带出：抑制绑定只有注册在同一个上下文里才盖得住旧绑定，
 /// 否则旧键位会继续触发改键前注册的动作。
-pub(crate) fn effective_key_strings(custom: &ShortcutSettings) -> Vec<(String, &'static str)> {
+pub(crate) fn effective_key_strings(
+    custom: &ShortcutSettings,
+    os: OperatingSystem,
+) -> Vec<(String, &'static str)> {
     let mut keys = Vec::new();
     for spec in SPECS {
         keys.extend(
-            effective_keys(spec, custom)
+            effective_keys(spec, custom, os)
                 .into_iter()
                 .map(|key| (key, spec.context)),
         );
@@ -524,11 +586,15 @@ pub(crate) fn effective_key_strings(custom: &ShortcutSettings) -> Vec<(String, &
 ///
 /// GPUI 的键位表只支持追加；在重新绑定前用 `NoAction` 覆盖旧键位，
 /// 随后再追加新绑定，即可在不重建组件默认键位的前提下完成运行时改键。
-pub(crate) fn suppression_bindings(entries: &[(String, &'static str)]) -> Vec<KeyBinding> {
+pub(crate) fn suppression_bindings(
+    entries: &[(String, &'static str)],
+    cx: &App,
+) -> Vec<KeyBinding> {
     entries
         .iter()
-        .filter(|(key, _)| is_valid_key(key))
-        .map(|(key, context)| KeyBinding::new(key, NoAction {}, Some(*context)))
+        .filter_map(|(key, context)| {
+            load_boxed_key_binding(key, Box::new(NoAction {}), context, cx)
+        })
         .collect()
 }
 
@@ -537,11 +603,14 @@ pub(crate) fn suppression_bindings(entries: &[(String, &'static str)]) -> Vec<Ke
 /// 校验分三层：核心层负责 `键 = 序列` 语法与转义字节；这里补上 gpui 键位
 /// 语法、重复绑定与"无修饰键单字符"拦截。最后一层是刻意加的：把 `a` 绑成
 /// 某个序列会直接吃掉正常输入，几乎一定是误配置。
-pub(crate) fn parse_terminal_key_bindings(text: &str) -> Result<Vec<TerminalKeyBinding>, String> {
+pub(crate) fn parse_terminal_key_bindings(
+    text: &str,
+    os: OperatingSystem,
+) -> Result<Vec<TerminalKeyBinding>, String> {
     let bindings = TerminalKeyBinding::parse_multiline(text)?;
     let mut seen: HashMap<KeybindingKeystroke, String> = HashMap::with_capacity(bindings.len());
     for binding in &bindings {
-        let keystroke = Keystroke::parse(&binding.keys)
+        let keystroke = Keystroke::parse_with_os(&binding.keys, os)
             .map_err(|_| rust_i18n::t!("keymap.parse_failed", keys = binding.keys).to_string())?;
         let parsed = KeybindingKeystroke::from_keystroke(keystroke);
         let modifiers = parsed.modifiers();
@@ -574,18 +643,19 @@ pub(crate) fn parse_terminal_key_bindings(text: &str) -> Result<Vec<TerminalKeyB
 /// 反之，SFTP 面板与编辑面板的专属键在终端聚焦时根本匹配不到，绝不能收进来：
 /// 收了就是白丢 Ctrl+F、Ctrl+S、Ctrl+G 这些 Shell 与 vim 赖以工作的控制码。
 /// 代价与局限：判断依据是上下文字符串相等，新增上下文时要同步这里。
-pub(crate) fn reserved_keystrokes(custom: &ShortcutSettings) -> Vec<KeybindingKeystroke> {
+pub(crate) fn reserved_keystrokes(
+    custom: &ShortcutSettings,
+    os: OperatingSystem,
+) -> Vec<KeybindingKeystroke> {
     let mut reserved = Vec::new();
     for spec in SPECS {
         if !shares_focus_with_terminal(spec.context) {
             continue;
         }
-        for key in effective_keys(spec, custom) {
-            if !is_valid_key(&key) {
-                continue;
+        for key in effective_keys(spec, custom, os) {
+            if let Ok(keystroke) = Keystroke::parse_with_os(&key, os) {
+                reserved.push(KeybindingKeystroke::from_keystroke(keystroke));
             }
-            let binding = (spec.bind)(&key, spec.context);
-            reserved.extend(binding.keystrokes().iter().cloned());
         }
     }
     reserved
@@ -601,30 +671,31 @@ pub(crate) fn conflict_with(
     id: &str,
     candidate: &str,
     custom: &ShortcutSettings,
+    os: OperatingSystem,
 ) -> Option<&'static ShortcutSpec> {
-    let candidate = Keystroke::parse(candidate).ok()?;
+    let candidate = Keystroke::parse_with_os(candidate, os).ok()?;
     SPECS.iter().filter(|spec| spec.id != id).find(|spec| {
-        effective_keys(spec, custom)
+        effective_keys(spec, custom, os)
             .iter()
-            .any(|key| Keystroke::parse(key).is_ok_and(|key| key == candidate))
+            .any(|key| Keystroke::parse_with_os(key, os).is_ok_and(|key| key == candidate))
     })
 }
 
 /// 列出当前配置中的所有键位冲突，供设置页提示。
 pub(crate) fn conflict_pairs(
     custom: &ShortcutSettings,
+    os: OperatingSystem,
 ) -> Vec<(&'static ShortcutSpec, &'static ShortcutSpec)> {
     let mut pairs = Vec::new();
     for (index, first) in SPECS.iter().enumerate() {
         for second in SPECS.iter().skip(index + 1) {
-            let first_keys: Vec<Keystroke> = effective_keys(first, custom)
+            let first_keys: Vec<Keystroke> = effective_keys(first, custom, os)
                 .iter()
-                .filter_map(|key| Keystroke::parse(key).ok())
+                .filter_map(|key| Keystroke::parse_with_os(key, os).ok())
                 .collect();
-            if effective_keys(second, custom)
-                .iter()
-                .any(|key| Keystroke::parse(key).is_ok_and(|key| first_keys.contains(&key)))
-            {
+            if effective_keys(second, custom, os).iter().any(|key| {
+                Keystroke::parse_with_os(key, os).is_ok_and(|key| first_keys.contains(&key))
+            }) {
                 pairs.push((first, second));
             }
         }
@@ -642,7 +713,10 @@ pub(crate) enum CaptureIssue {
 }
 
 /// 将捕获的按键转换为 GPUI 可解析的字符串。
-pub(crate) fn format_captured(keystroke: &Keystroke) -> Result<String, CaptureIssue> {
+pub(crate) fn format_captured(
+    keystroke: &Keystroke,
+    os: OperatingSystem,
+) -> Result<String, CaptureIssue> {
     let modifier_only = matches!(
         keystroke.key.as_str(),
         "control" | "shift" | "alt" | "platform" | "function"
@@ -657,7 +731,7 @@ pub(crate) fn format_captured(keystroke: &Keystroke) -> Result<String, CaptureIs
     if !has_modifier && !is_function_key(&keystroke.key) {
         return Err(CaptureIssue::NeedsModifier);
     }
-    Ok(keystroke.unparse())
+    Ok(keystroke.unparse(os))
 }
 
 fn is_function_key(key: &str) -> bool {
@@ -665,8 +739,10 @@ fn is_function_key(key: &str) -> bool {
         .is_some_and(|number| number.parse::<u8>().is_ok())
 }
 
-fn is_valid_key(key: &str) -> bool {
-    !key.is_empty() && key.split_whitespace().count() == 1 && Keystroke::parse(key).is_ok()
+fn is_valid_key(key: &str, os: OperatingSystem) -> bool {
+    !key.is_empty()
+        && key.split_whitespace().count() == 1
+        && Keystroke::parse_with_os(key, os).is_ok()
 }
 
 fn app_prefix() -> &'static str {

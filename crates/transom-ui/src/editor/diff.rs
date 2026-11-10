@@ -141,6 +141,12 @@ impl EditorPanels {
             item.caret = super::caret_of(&item.editor, cx);
             item.written_size = Some(meta.size);
         }
+        let editor = item.editor.clone();
+        let dirty = item.dirty;
+        self.clear_change_decorations(&editor, cx);
+        if dirty {
+            self.schedule_change_decorations(&editor, cx);
+        }
         cx.notify();
         true
     }

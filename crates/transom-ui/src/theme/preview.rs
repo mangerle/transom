@@ -7,9 +7,11 @@
 use super::document::{ThemeDocumentError, ThemeDraft};
 use super::{apply_surface_transparency, rebuild_terminal_bindings};
 use crate::app::{app_settings, update_app_settings};
+use gpui_kit::base::input::CursorBlink;
 use gpui_kit::component::theme::{Theme, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, px};
 use std::rc::Rc;
+use std::time::Duration;
 use transom_core::FOLLOW_UI_THEME;
 
 /// 立即应用主题草稿，返回终端跟随色板是否也随之改变。
@@ -34,6 +36,8 @@ pub(crate) fn apply_theme_preview(draft: &ThemeDraft, cx: &mut App) -> bool {
         }
         theme.font_size = px(density.font_size());
         theme.mono_font_size = px(density.mono_font_size());
+        // 预览换装同样沿用空闲停止闪烁策略，避免退出预览后行为跳变。
+        theme.cursor_blink = CursorBlink::default().with_idle_timeout(Duration::from_secs(5));
         if let Some(family) = bundled_mono_font {
             theme.mono_font_family = family;
         }

@@ -4878,6 +4878,9 @@ diff:
   next_hunk:
     en: Next change
     zh-CN: 下一处差异
+  current_hunk_marker:
+    en: 'Change %{index} of %{count}; open the next change'
+    zh-CN: '第 %{index}/%{count} 处变更，打开下一处'
   apply_local:
     en: Apply to local
     zh-CN: 应用到本地

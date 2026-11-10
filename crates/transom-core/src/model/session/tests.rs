@@ -143,8 +143,10 @@ fn local_connection_env_multiline_parsing() {
     assert_eq!(env.get("BAR"), Some(&"baz".to_string()));
     assert_eq!(env.get("EMPTY"), Some(&"".to_string()));
 
-    let mut local = LocalConnection::default();
-    local.env = env;
+    let local = LocalConnection {
+        env,
+        ..Default::default()
+    };
     let multiline = local.env_to_multiline();
     assert!(multiline.contains("FOO=bar"));
     assert!(multiline.contains("BAR=baz"));

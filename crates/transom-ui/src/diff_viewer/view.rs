@@ -6,7 +6,9 @@ use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::diff::Diff;
+use gpui_kit::component::diff::{
+    Diff, DiffDecoration, DiffGutterMarker, DiffLinePosition, DiffLineRange, DiffSide, DiffState,
+};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
@@ -36,7 +38,7 @@ impl AppShell {
             remote = viewer.remote_path.as_str()
         )
         .to_string();
-        let body = render_body(viewer, p);
+        let body = render_body(viewer, app, p);
         let toolbar = render_toolbar(viewer, app, p);
         let footer = render_footer(viewer, app, p);
         let dialog = v_flex()
@@ -63,7 +65,11 @@ impl AppShell {
     }
 }
 
-pub(crate) fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
+pub(crate) fn render_body(
+    viewer: &DiffViewerState,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
     if viewer.phase == DiffPhase::Loading {
         return v_flex()
             .flex_1()
@@ -93,13 +99,7 @@ pub(crate) fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
             .into_any_element();
     }
     match viewer.view.as_ref() {
-        Some(state) => Diff::new(state)
-            .line_number(true)
-            .syntax_highlight(true)
-            .change_background(true)
-            .flex_1()
-            .w_full()
-            .into_any_element(),
+        Some(state) => render_ready_diff(viewer, app, state, p),
         None => v_flex()
             .flex_1()
             .items_center()
@@ -109,6 +109,67 @@ pub(crate) fn render_body(viewer: &DiffViewerState, p: &Palette) -> AnyElement {
             .child(rust_i18n::t!("diff.not_ready").to_string())
             .into_any_element(),
     }
+}
+
+fn render_ready_diff(
+    viewer: &DiffViewerState,
+    app: &Entity<AppShell>,
+    state: &Entity<DiffState>,
+    p: &Palette,
+) -> AnyElement {
+    let Some((path, hunk, index, count)) = viewer
+        .diff_path
+        .as_ref()
+        .zip(viewer.diff.as_ref())
+        .zip(viewer.hunk_index)
+        .and_then(|((path, diff), index)| {
+            diff.hunks
+                .get(index)
+                .map(|hunk| (path.clone(), *hunk, index, diff.hunks.len()))
+        })
+    else {
+        return Diff::new(state)
+            .line_number(true)
+            .syntax_highlight(true)
+            .change_background(true)
+            .flex_1()
+            .w_full()
+            .into_any_element();
+    };
+
+    let start = hunk.new_start.saturating_add(1);
+    let end = hunk.new_start.saturating_add(hunk.new_len).max(start);
+    let line_range = DiffLineRange::new(path.clone(), DiffSide::Modified, start, end);
+    let position = DiffLinePosition::new(path, DiffSide::Modified, start);
+    let label =
+        rust_i18n::t!("diff.current_hunk_marker", index = index + 1, count = count).to_string();
+    let next_app = app.clone();
+    Diff::new(state)
+        .line_number(true)
+        .syntax_highlight(true)
+        .change_background(true)
+        .decorations([DiffDecoration::new(line_range).with_background(p.tone.primary_subtle)])
+        .gutter_markers([DiffGutterMarker::new(
+            ElementId::Name(format!("diff-current-hunk-{index}").into()),
+            position,
+        )
+        .with_label(label.clone())])
+        .render_gutter_marker(move |marker, _, _cx| {
+            let label = marker.label().clone();
+            let next_app = next_app.clone();
+            Button::new(marker.id().clone())
+                .ghost()
+                .xsmall()
+                .icon(IconName::ChevronRight)
+                .tooltip(label.clone())
+                .accessibility_label(label)
+                .on_click(move |_, _, cx| {
+                    next_app.update(cx, |shell, cx| shell.step_diff_hunk(true, cx));
+                })
+        })
+        .flex_1()
+        .w_full()
+        .into_any_element()
 }
 
 fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) -> AnyElement {

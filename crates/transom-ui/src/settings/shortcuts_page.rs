@@ -23,7 +23,7 @@ impl SettingsView {
             .map(|spec| self.render_shortcut_row(spec, p, cx))
             .collect();
 
-        let conflicts = keymap::conflict_pairs(&app_settings(cx).shortcuts);
+        let conflicts = keymap::conflict_pairs(&app_settings(cx).shortcuts, cx.platform_info().os);
         let conflict_warning = (!conflicts.is_empty()).then(|| {
             let detail = conflicts
                 .iter()
@@ -98,13 +98,14 @@ impl SettingsView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let effective = keymap::effective_keys(spec, &app_settings(cx).shortcuts);
+        let effective =
+            keymap::effective_keys(spec, &app_settings(cx).shortcuts, cx.platform_info().os);
         let customized = app_settings(cx).shortcuts.bindings.contains_key(spec.id);
         let id = spec.id;
         let key_elements = h_flex()
             .gap_1()
             .children(effective.into_iter().map(|key_str| {
-                if let Ok(keystroke) = Keystroke::parse(&key_str) {
+                if let Ok(keystroke) = Keystroke::parse_with_os(&key_str, cx.platform_info().os) {
                     Kbd::new(keystroke).outline().into_any_element()
                 } else {
                     div()

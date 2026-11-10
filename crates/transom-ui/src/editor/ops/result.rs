@@ -85,6 +85,8 @@ impl EditorPanels {
         };
         if close_after {
             self.remove_panel(&editor);
+        } else {
+            self.clear_change_decorations(&editor, cx);
         }
         let pending_close = self.pending_close();
         let dirty_tabs = self.dirty_tabs();

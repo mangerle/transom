@@ -176,6 +176,7 @@ impl EditorPanels {
             item.showing_diff = false;
             item.diff = None;
         });
+        self.clear_change_decorations(editor, cx);
         self.defer_close_resume(window, cx);
         cx.notify();
     }

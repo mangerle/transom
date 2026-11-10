@@ -27,7 +27,7 @@ impl Render for TerminalView {
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_hover(cx.listener(Self::on_terminal_hover))
-            .on_scroll_wheel(cx.listener(Self::on_scroll))
+            .on_scroll(cx.listener(Self::on_scroll))
             .child(self.render_canvas(cx));
         let layer = Self::wrap_context_menu(layer, menu_entity, right_click);
 

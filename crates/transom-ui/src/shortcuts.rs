@@ -37,11 +37,12 @@ impl AppShell {
     /// 输入框、命令面板等组件自带的默认绑定。
     pub(crate) fn apply_shortcut_settings(&mut self, cx: &mut Context<Self>) {
         let previous = std::mem::take(&mut self.state.shortcut_recording.applied_keys);
-        let suppression = keymap::suppression_bindings(&previous);
-        let bindings = keymap::bindings(&app_settings(cx).shortcuts);
-        let reserved = keymap::reserved_keystrokes(&app_settings(cx).shortcuts);
+        let suppression = keymap::suppression_bindings(&previous, cx);
+        let bindings = keymap::bindings(&app_settings(cx).shortcuts, cx);
+        let reserved =
+            keymap::reserved_keystrokes(&app_settings(cx).shortcuts, cx.platform_info().os);
         self.state.shortcut_recording.applied_keys =
-            keymap::effective_key_strings(&app_settings(cx).shortcuts);
+            keymap::effective_key_strings(&app_settings(cx).shortcuts, cx.platform_info().os);
         cx.bind_keys(suppression);
         cx.bind_keys(bindings);
         *self.state.shortcut_recording.filter.write() = reserved;
@@ -65,11 +66,14 @@ impl AppShell {
             return;
         }
 
-        match keymap::format_captured(keystroke) {
+        match keymap::format_captured(keystroke, cx.platform_info().os) {
             Ok(candidate) => {
-                if let Some(conflict) =
-                    keymap::conflict_with(id, &candidate, &app_settings(cx).shortcuts)
-                {
+                if let Some(conflict) = keymap::conflict_with(
+                    id,
+                    &candidate,
+                    &app_settings(cx).shortcuts,
+                    cx.platform_info().os,
+                ) {
                     let name = rust_i18n::t!(conflict.label_key).to_string();
                     if let Some(capture) = self.state.shortcut_recording.capture.as_mut() {
                         capture.error = Some(

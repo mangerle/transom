@@ -147,7 +147,7 @@ impl EditorPanels {
     /// 读取态与新建态共用一套装配，只差初始状态字段（见 `PanelSeed`）；
     /// 新建面板可编辑、无在途任务，读取面板等待 `SftpTextRead` 装载内容。
     /// 返回读取请求：只有读取态需要外壳投递 `ReadText`。
-    /// 编辑器输入与光标订阅：标记脏状态、同步光标并避免自激重绘。
+    /// 编辑器输入与光标订阅：标记脏状态、刷新变更装饰、同步光标并避免自激重绘。
     fn subscribe_editor(
         &mut self,
         editor: &Entity<EditorState>,
@@ -157,6 +157,7 @@ impl EditorPanels {
             if !matches!(event, InputEvent::Change) {
                 return;
             }
+            let mut schedule_decorations = false;
             if let Some(item) = this
                 .manager_mut()
                 .panels
@@ -172,6 +173,10 @@ impl EditorPanels {
                 item.phase = EditorPhase::Idle;
                 item.written_size = None;
                 item.error = None;
+                schedule_decorations = true;
+            }
+            if schedule_decorations {
+                this.schedule_change_decorations(&editor, cx);
             }
             cx.notify();
         });
@@ -249,6 +254,11 @@ impl EditorPanels {
                 .searchable(true)
                 .soft_wrap(settings.soft_wrap)
         });
+        let (gutter_decorations, overview_ruler_decorations) = editor.update(cx, |state, cx| {
+            let gutter = state.create_gutter_decorations_collection(Vec::new(), cx);
+            let overview = state.create_overview_ruler_decorations_collection(Vec::new(), cx);
+            (gutter, overview)
+        });
         let (permissions, writable, caret) = self.prepare_editor_state(&editor, &seed, window, cx);
         let cascade = self.len();
         let viewport = window.viewport_size();
@@ -262,6 +272,10 @@ impl EditorPanels {
             file_name,
             language,
             editor,
+            gutter_decorations,
+            overview_ruler_decorations,
+            decoration_revision: 0,
+            decoration_task: None,
             baseline: SharedString::default(),
             remote_meta,
             new_file,
@@ -353,6 +367,7 @@ impl EditorPanels {
         } else {
             editor.update(cx, |state, cx| state.focus(window, cx));
         }
+        self.clear_change_decorations(&editor, cx);
         cx.notify();
     }
 

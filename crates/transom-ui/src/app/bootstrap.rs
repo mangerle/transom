@@ -517,11 +517,14 @@ fn prepare_bootstrap(
             Some(transom_terminal::TERMINAL_CONTEXT),
         ),
     ]);
-    cx.bind_keys(keymap::bindings(&settings.shortcuts));
+    let bindings = keymap::bindings(&settings.shortcuts, cx);
+    cx.bind_keys(bindings);
     let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
         &settings.shortcuts,
+        cx.platform_info().os,
     )));
-    let applied_shortcut_keys = keymap::effective_key_strings(&settings.shortcuts);
+    let applied_shortcut_keys =
+        keymap::effective_key_strings(&settings.shortcuts, cx.platform_info().os);
     let history: Arc<parking_lot::RwLock<Vec<String>>> =
         Arc::new(parking_lot::RwLock::new(if settings.history.enabled {
             services.history.load()

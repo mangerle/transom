@@ -168,7 +168,7 @@ impl TerminalView {
         state
             .clear_on_first_resize
             .store(clear_on_first_resize, std::sync::atomic::Ordering::Relaxed);
-        let custom_keys = build_custom_keys(&profile.key_bindings);
+        let custom_keys = build_custom_keys(&profile.key_bindings, cx.platform_info().os);
 
         let recorder = RecorderHandle::new();
         let TerminalIo {
@@ -346,7 +346,7 @@ impl TerminalView {
         self.profile.palette = profile.palette.clone();
         if self.profile.key_bindings != profile.key_bindings {
             self.profile.key_bindings = profile.key_bindings.clone();
-            self.custom_keys = build_custom_keys(&self.profile.key_bindings);
+            self.custom_keys = build_custom_keys(&self.profile.key_bindings, cx.platform_info().os);
         }
         // 背景透明度参与渲染：折算成背景色的 alpha，透出下层应用背景。
         self.profile.background_transparency = profile.background_transparency;

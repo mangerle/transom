@@ -13,6 +13,7 @@ mod banner;
 mod close;
 mod code_link;
 mod code_open;
+mod decorations;
 mod diff;
 mod drag_tracker;
 mod entity;
