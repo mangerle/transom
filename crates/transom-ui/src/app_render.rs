@@ -8,8 +8,6 @@ use crate::keymap;
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::h_flex;
-use gpui_kit::component::WindowExt;
-use gpui_kit::component::notification::Notification;
 use gpui_kit::*;
 
 /// 工作区外层布局的渲染输入。
@@ -169,12 +167,8 @@ impl AppShell {
 
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.run_frame_effects(window, cx);
+        self.schedule_frame_effects(window, cx);
         let p = Palette::from(cx);
-        // 弹窗栈对账必须每帧执行：状态变更点分散在菜单、快捷键、拖放与异步
-        // 回调等二十多处，逐点补容器开关必然漏；渲染是唯一汇聚点。真正的
-        // 开关动作被延到绘制之后执行，避免在渲染过程中移交焦点。
-        self.reconcile_dialogs(window, cx);
         // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
         // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
         let rem = window.rem_size();
@@ -192,16 +186,6 @@ impl Render for AppShell {
             },
         );
 
-        // 错误在写入时入队（见 AppShell::set_error），这里统一转成应用内通知。
-        // 延迟到绘制结束后推送，避免在渲染期间修改通知层。
-        let pending_errors = self.state.pending_notices.drain();
-        if !pending_errors.is_empty() {
-            cx.defer_in(window, move |_, window, cx| {
-                for message in pending_errors {
-                    window.push_notification(Notification::error(message).autohide(false), cx);
-                }
-            });
-        }
         // 编辑面板先于模态弹窗入层：模态遮罩应当盖住悬浮面板，反之会出现
         // 弹窗在面板下面、用户点不到确认按钮的层序错误。
         let overlays = self.render_overlays(window, cx);

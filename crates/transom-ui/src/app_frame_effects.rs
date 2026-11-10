@@ -382,6 +382,27 @@ impl AppShell {
         }
     }
 
+    /// 安排一次绘制后的副作用处理。
+    ///
+    /// 渲染期只登记请求，真正的子实体刷新、窗口请求排空、弹窗对账和错误通知
+    /// 投递都在 `defer_in` 回调中执行。这样 `Render::render` 不再直接修改状态，
+    /// 也避免在渲染借用期间打开弹窗或更新其他实体。
+    pub(super) fn schedule_frame_effects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state.frame_effects_scheduled {
+            return;
+        }
+        self.state.frame_effects_scheduled = true;
+        cx.defer_in(window, |this, window, cx| {
+            this.state.frame_effects_scheduled = false;
+            this.run_frame_effects(window, cx);
+            this.reconcile_dialogs(window, cx);
+            let pending_errors = this.state.pending_notices.drain();
+            for message in pending_errors {
+                window.push_notification(Notification::error(message).autohide(false), cx);
+            }
+        });
+    }
+
     pub(super) fn run_frame_effects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         sync_stats_sampling(&mut self.state, cx);
         if let Some(error) = self.state.take_persistence_error() {

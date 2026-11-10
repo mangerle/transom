@@ -110,6 +110,8 @@ pub(crate) struct AppState {
     pub(in crate::app) toast_seq: u64,
     /// 上一条 Toast 提示的内容与时间戳，用于短时间内的相同通知防抖去重。
     pub(in crate::app) last_toast: Option<(String, std::time::Instant)>,
+    /// 当前是否已安排绘制后的帧副作用，避免同一帧重复调度。
+    pub(in crate::app) frame_effects_scheduled: bool,
     /// 关于页请求"安装完成后立即重启"的跨层信号。
     ///
     /// 界面只置位并退出事件循环；真正拉起新进程必须等 `main` 完成控制器

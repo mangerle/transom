@@ -422,6 +422,28 @@ fn terminal_view_does_not_bind_global_keys() {
     );
 }
 
+/// 渲染主路径不得直接执行帧副作用或弹窗对账。
+#[test]
+fn render_effects_are_deferred() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let render =
+        std::fs::read_to_string(root.join("src/app_render.rs")).expect("读取外壳渲染文件失败");
+    assert!(
+        render.contains("schedule_frame_effects("),
+        "渲染应只安排延迟副作用"
+    );
+    for forbidden in [
+        "run_frame_effects(",
+        "reconcile_dialogs(",
+        "pending_notices.drain()",
+    ] {
+        assert!(
+            !render.contains(forbidden),
+            "Render::render 不得直接执行副作用：{forbidden}"
+        );
+    }
+}
+
 /// 可无限增长的数据列表必须使用虚拟列表，不能在渲染时全量生成元素。
 #[test]
 fn large_lists_use_virtualization() {

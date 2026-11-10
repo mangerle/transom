@@ -484,6 +484,7 @@ fn assemble_state(
         git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
         toast_seq: 0,
         last_toast: None,
+        frame_effects_scheduled: false,
         restart_requested,
     }
 }
