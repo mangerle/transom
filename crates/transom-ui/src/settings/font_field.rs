@@ -7,8 +7,9 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
 
+use super::font_coverage::{ChineseFontSupport, chinese_font_support, clear_chinese_support_cache};
 use super::font_select::{
-    CJK_DEFAULT_KEY, FontSelect, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select,
+    CJK_DEFAULT_KEY, FontSelect, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select, selected_font,
 };
 use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
@@ -37,14 +38,19 @@ pub(crate) struct FontFieldSpec {
     pub select: Entity<FontSelect>,
     /// 标题下方的补充说明（文案键）；与下拉同属一行，一起画分割线。
     pub note_key: Option<&'static str>,
+    /// 所选字族缺少中文字形时，是否在设置行内显示警告。
+    ///
+    /// 主终端字体只负责英文与数字，不应因缺少中文而报警；界面字体和终端
+    /// 中文字体则以中文呈现为目标，需要显式提示系统回退带来的混排风险。
+    pub warn_if_chinese_unsupported: bool,
 }
 
 impl SettingsView {
     /// 字体配置行：左侧标题与说明，右侧是字体族下拉 + 本地字体导入按钮。
     ///
     /// 下拉的选项来自文本系统的已安装字体清单，弹层里可输入搜索；默认项
-    /// 置顶，表示跟随主题/系统回退。导入按钮把字体文件注册进文本系统后
-    /// 刷新三个字体字段的选项，并选中新注册的族名。
+    /// 置顶，终端主字体默认使用内置 JetBrains Mono。导入按钮把字体文件注册
+    /// 进文本系统后刷新三个字体字段的选项，并选中新注册的族名。
     pub(crate) fn setting_font_field(
         spec: FontFieldSpec,
         p: &Palette,
@@ -55,7 +61,19 @@ impl SettingsView {
             label,
             select,
             note_key,
+            warn_if_chinese_unsupported,
         } = spec;
+        let warning = warn_if_chinese_unsupported
+            .then(|| selected_font(&select, cx))
+            .flatten()
+            .filter(|family| chinese_font_support(cx, family) == ChineseFontSupport::MissingGlyphs)
+            .map(|family| {
+                crate::widgets::notice(
+                    crate::widgets::NoticeKind::Warning,
+                    rust_i18n::t!("settings.font_cjk_unsupported", font = family).to_string(),
+                    p,
+                )
+            });
         let control = h_flex()
             .gap_1p5()
             .items_center()
@@ -80,7 +98,7 @@ impl SettingsView {
             )
             .into_any_element();
         let note = note_key.map(|key| rust_i18n::t!(key).to_string());
-        crate::widgets::setting_text_row(label, note, control, p)
+        crate::widgets::setting_text_row_with_extra(label, note, warning, control, p)
     }
 
     /// 唤起系统文件选择器导入外部字体文件（.ttf, .otf, .ttc 等），注册后选中新族名。
@@ -170,6 +188,7 @@ impl SettingsView {
                     return;
                 };
 
+                clear_chinese_support_cache();
                 self.refresh_font_selects(window, cx);
                 select.update(cx, |state, cx| {
                     state.set_selected_value(&family, window, cx);

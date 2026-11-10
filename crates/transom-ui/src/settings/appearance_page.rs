@@ -242,6 +242,7 @@ impl SettingsView {
                     label: rust_i18n::t!("settings.ui_font_family").to_string(),
                     select: self.state.ui_font_family.clone(),
                     note_key: Some("settings.ui_font_note"),
+                    warn_if_chinese_unsupported: true,
                 },
                 p,
                 cx,

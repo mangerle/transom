@@ -14,6 +14,7 @@ pub(crate) use event::{SettingsEvent, SettingsRequest};
 mod appearance_page;
 mod containers_page;
 mod files_page;
+mod font_coverage;
 mod font_field;
 mod font_select;
 mod general_page;

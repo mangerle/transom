@@ -37,6 +37,20 @@ pub(crate) fn setting_text_row(
     control: AnyElement,
     p: &Palette,
 ) -> AnyElement {
+    setting_text_row_with_extra(title, description, None, control, p)
+}
+
+/// 与 [`setting_text_row`] 同构，并在说明下方追加一个自定义内容。
+///
+/// 字体页用它在同一设置行内展示“所选字体缺少中文字形”等动态警告，使提示
+/// 与触发它的控件保持同一边框和分割线，不必在行外另起一块视觉区域。
+pub(crate) fn setting_text_row_with_extra(
+    title: String,
+    description: Option<String>,
+    extra: Option<AnyElement>,
+    control: AnyElement,
+    p: &Palette,
+) -> AnyElement {
     h_flex()
         .w_full()
         .py(rems(space::SM))
@@ -58,7 +72,8 @@ pub(crate) fn setting_text_row(
                             .text_color(p.muted_foreground)
                             .child(description),
                     )
-                }),
+                })
+                .when_some(extra, |this, extra| this.child(extra)),
         )
         .child(div().flex_none().child(control))
         .into_any_element()

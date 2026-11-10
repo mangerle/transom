@@ -14,7 +14,10 @@
 use super::SettingsEvent;
 use super::SettingsView;
 use super::WindowAppearanceSnapshot;
-use super::font_select::{CJK_DEFAULT_KEY, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select};
+use super::font_coverage::clear_chinese_support_cache;
+use super::font_select::{
+    CJK_DEFAULT_KEY, FontSelectEvent, MONO_DEFAULT_KEY, UI_DEFAULT_KEY, reset_font_select,
+};
 use super::modal_state::local_shell_choice;
 use crate::app::{app_settings, app_settings_mut, update_app_settings};
 use crate::cloud_sync::DEFAULT_SYNC_DIRECTORY;
@@ -55,7 +58,16 @@ impl SettingsView {
                 }
             },
         );
-        self._subscriptions = vec![transparency_sub, divider_sub];
+        let ui_font = self.state.ui_font_family.clone();
+        let ui_font_sub = cx.subscribe_in(&ui_font, window, |_, _, _: &FontSelectEvent, _, cx| {
+            cx.notify();
+        });
+        let cjk_font = self.state.cjk_font.clone();
+        let cjk_font_sub =
+            cx.subscribe_in(&cjk_font, window, |_, _, _: &FontSelectEvent, _, cx| {
+                cx.notify();
+            });
+        self._subscriptions = vec![transparency_sub, divider_sub, ui_font_sub, cjk_font_sub];
     }
 
     /// 注入监控面板当前的采样档位，供"采样频率"下拉显示选中项。
@@ -75,6 +87,7 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) {
         self.state.jump_page = page.filter(|page| *page < super::page_entries().len());
+        clear_chinese_support_cache();
         self.state.local_shell_choice =
             local_shell_choice(app_settings(cx), &self.services.local_shells);
         let local_shell_path = app_settings(cx).local_shell.clone().unwrap_or_default();

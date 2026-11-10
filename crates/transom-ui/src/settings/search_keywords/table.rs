@@ -26,7 +26,11 @@ impl GroupSearch {
             ),
             GroupSearch::UiFont => (
                 "settings.ui_font_group",
-                &["settings.ui_font_family", "settings.ui_font_note"],
+                &[
+                    "settings.ui_font_family",
+                    "settings.ui_font_note",
+                    "settings.font_cjk_unsupported",
+                ],
             ),
             GroupSearch::WindowAppearance => (
                 "settings.window_appearance_group",
@@ -54,6 +58,7 @@ impl GroupSearch {
                     "settings.font_family",
                     "settings.cjk_font",
                     "settings.cjk_font_note",
+                    "settings.font_cjk_unsupported",
                 ],
             ),
             GroupSearch::LocalShell => (

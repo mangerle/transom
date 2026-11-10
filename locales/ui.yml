@@ -2550,9 +2550,9 @@ settings:
   font_imported_success:
     en: 'Successfully loaded font: %{name}'
     zh-CN: 已成功加载字体：%{name}
-  font_default_mono_label:
-    en: Default Mono (follows app)
-    zh-CN: 默认等宽（跟随应用）
+  font_cjk_unsupported:
+    en: 'The selected font "%{font}" has no Chinese glyphs. Chinese text will fall back to the system font and may look inconsistent.'
+    zh-CN: '所选字体“%{font}”不包含中文字形，中文会回退到系统字体，可能出现中英文风格不一致。'
   font_missing_suffix:
     en: ' (not installed)'
     zh-CN: （未安装）
@@ -3596,7 +3596,7 @@ settings:
     zh-CN: 读取字体文件的线程创建失败
   font_preset_default_mono:
     en: Default Mono (JetBrains Mono)
-    zh-CN: 默认等宽 (JetBrains Mono)
+    zh-CN: 默认等宽（JetBrains Mono）
   font_preset_system_fallback:
     en: Follow system fallback
     zh-CN: 跟随系统回退

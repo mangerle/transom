@@ -6,16 +6,19 @@
 //! 不在应用层重写焦点、键盘或弹层逻辑。
 
 use gpui_kit::component::searchable_list::{SearchableListItem, SearchableVec};
-use gpui_kit::component::select::SelectState;
+use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::{App, AppContext, Context, Entity, SharedString, Window};
 
 /// 三个字体字段各自的默认项文案键。
-pub(crate) const MONO_DEFAULT_KEY: &str = "settings.font_default_mono_label";
+pub(crate) const MONO_DEFAULT_KEY: &str = "settings.font_preset_default_mono";
 pub(crate) const CJK_DEFAULT_KEY: &str = "settings.font_preset_system_fallback";
 pub(crate) const UI_DEFAULT_KEY: &str = "settings.ui_font_family_hint";
 
 /// 字体选择器的状态类型别名，避免在字段和调用点重复展开泛型。
 pub(crate) type FontSelect = SelectState<SearchableVec<FontChoice>>;
+
+/// 字体选择器发出的确认事件；设置页据此刷新动态中文覆盖提示。
+pub(crate) type FontSelectEvent = SelectEvent<SearchableVec<FontChoice>>;
 
 /// 字体下拉里的一项。
 ///

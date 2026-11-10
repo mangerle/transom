@@ -37,7 +37,8 @@ pub(crate) use controls::{dropdown, number_stepper, path_value};
 pub(crate) use dialog::{dialog_actions, dialog_body};
 pub(crate) use empty::empty_state;
 pub(crate) use form::{
-    form_field, secret_field, setting_field_row, setting_frame, setting_row, setting_text_row,
+    form_field, secret_field, setting_field_row, setting_frame, setting_row,
+    setting_text_row_with_extra,
 };
 pub(crate) use list_row::{list_row, table_header};
 pub(crate) use menu::{MenuItem, menu_item};
