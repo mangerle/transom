@@ -7,7 +7,7 @@ use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
@@ -23,47 +23,37 @@ pub(crate) fn render_ssh_fields(
     cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
-    let auth_password = if form.auth == AuthChoice::Password {
-        Button::new("auth-password")
-            .primary()
-            .small()
-            .label(rust_i18n::t!("form.auth_password").to_string())
-    } else {
-        Button::new("auth-password")
-            .small()
-            .label(rust_i18n::t!("form.auth_password").to_string())
-    }
-    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-        this.edit(cx, |form| form.auth = AuthChoice::Password);
-    }));
-
-    let auth_key = if form.auth == AuthChoice::PrivateKey {
-        Button::new("auth-key")
-            .primary()
-            .small()
-            .label(rust_i18n::t!("form.auth_key").to_string())
-    } else {
-        Button::new("auth-key")
-            .small()
-            .label(rust_i18n::t!("form.auth_key").to_string())
-    }
-    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-        this.edit(cx, |form| form.auth = AuthChoice::PrivateKey);
-    }));
-
-    let auth_agent = if form.auth == AuthChoice::Agent {
-        Button::new("auth-agent")
-            .primary()
-            .small()
-            .label(rust_i18n::t!("form.auth_agent").to_string())
-    } else {
-        Button::new("auth-agent")
-            .small()
-            .label(rust_i18n::t!("form.auth_agent").to_string())
-    }
-    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-        this.edit(cx, |form| form.auth = AuthChoice::Agent);
-    }));
+    let auth_selector = ButtonGroup::new("auth-methods")
+        .small()
+        .child(
+            Button::new("auth-password")
+                .small()
+                .label(rust_i18n::t!("form.auth_password").to_string())
+                .selected(form.auth == AuthChoice::Password),
+        )
+        .child(
+            Button::new("auth-key")
+                .small()
+                .label(rust_i18n::t!("form.auth_key").to_string())
+                .selected(form.auth == AuthChoice::PrivateKey),
+        )
+        .child(
+            Button::new("auth-agent")
+                .small()
+                .label(rust_i18n::t!("form.auth_agent").to_string())
+                .selected(form.auth == AuthChoice::Agent),
+        )
+        .on_click(cx.listener(|this, clicks: &Vec<usize>, _, cx| {
+            let choice = match clicks.first() {
+                Some(0) => Some(AuthChoice::Password),
+                Some(1) => Some(AuthChoice::PrivateKey),
+                Some(2) => Some(AuthChoice::Agent),
+                _ => None,
+            };
+            if let Some(choice) = choice {
+                this.edit(cx, |form| form.auth = choice);
+            }
+        }));
 
     let mut fields = v_flex().gap_3();
 
@@ -141,13 +131,7 @@ pub(crate) fn render_ssh_fields(
                             .text_color(p.muted_foreground)
                             .child(rust_i18n::t!("form.auth").to_string()),
                     )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(auth_password)
-                            .child(auth_key)
-                            .child(auth_agent),
-                    ),
+                    .child(auth_selector),
             );
     }
 

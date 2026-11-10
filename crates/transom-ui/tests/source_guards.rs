@@ -478,6 +478,30 @@ fn terminal_view_does_not_bind_global_keys() {
     );
 }
 
+/// 选择型控件和应用内命令必须使用正确的语义组件与变体。
+#[test]
+fn selection_and_command_semantics_are_explicit() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let auth =
+        std::fs::read_to_string(root.join("src/session_form/ssh.rs")).expect("读取 SSH 表单失败");
+    assert!(auth.contains("ButtonGroup::new(\"auth-methods\")"));
+    let forward =
+        std::fs::read_to_string(root.join("src/forward/view.rs")).expect("读取转发视图失败");
+    assert!(forward.contains("ButtonGroup::new(\"forward-kind\")"));
+    let snippets =
+        std::fs::read_to_string(root.join("src/snippets/card.rs")).expect("读取片段卡片失败");
+    assert!(
+        !snippets.contains(".link()"),
+        "应用内新增命令不得使用 Link 语义"
+    );
+    let container_list = std::fs::read_to_string(root.join("src/container/list/render.rs"))
+        .expect("读取容器列表失败");
+    assert!(
+        !container_list.contains(".left_0()"),
+        "选中行不得使用左侧强调条"
+    );
+}
+
 /// 渲染主路径不得直接执行帧副作用或弹窗对账。
 #[test]
 fn render_effects_are_deferred() {

@@ -113,19 +113,7 @@ pub(crate) fn list_row(
         .cursor_pointer();
 
     if selected {
-        element = element
-            .bg(p.primary.opacity(0.06))
-            .text_color(p.foreground)
-            .child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .top(px(6.0))
-                    .bottom(px(6.0))
-                    .w(px(2.0))
-                    .rounded_full()
-                    .bg(p.primary),
-            );
+        element = element.bg(p.list_active).text_color(p.foreground);
     } else {
         element = element
             .text_color(p.foreground)

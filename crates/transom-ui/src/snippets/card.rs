@@ -147,7 +147,7 @@ pub(super) fn render_snippets_card(
             )
             .child(snippets_form_button(
                 Button::new("snippets-empty-add")
-                    .link()
+                    .ghost()
                     .xsmall()
                     .label(rust_i18n::t!("snippets.add").to_string()),
                 app,

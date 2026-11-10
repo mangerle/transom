@@ -167,7 +167,7 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-run")
                 .xsmall()
-                .primary()
+                .outline()
                 .icon(IconName::Play)
                 .accessibility_label(rust_i18n::t!("container.action.run").to_string())
                 .tooltip(rust_i18n::t!("container.action.run").to_string())
@@ -182,7 +182,7 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-explore-hub")
                 .xsmall()
-                .primary()
+                .outline()
                 .icon(IconName::Globe)
                 .accessibility_label(
                     rust_i18n::t!("container.pull_manager.explore_market").to_string(),
@@ -199,7 +199,7 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-create-volume")
                 .xsmall()
-                .primary()
+                .outline()
                 .icon(IconName::Plus)
                 .accessibility_label(rust_i18n::t!("container.create_dialog.volume").to_string())
                 .tooltip(rust_i18n::t!("container.create_dialog.volume").to_string())
@@ -216,7 +216,7 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-create-network")
                 .xsmall()
-                .primary()
+                .outline()
                 .icon(IconName::Plus)
                 .accessibility_label(rust_i18n::t!("container.create_dialog.network").to_string())
                 .tooltip(rust_i18n::t!("container.create_dialog.network").to_string())
@@ -233,7 +233,7 @@ fn render_list_toolbar(
             let menu_view = view.clone();
             Button::new("container-main-new-compose")
                 .xsmall()
-                .primary()
+                .outline()
                 .icon(IconName::FilePlus)
                 .accessibility_label(rust_i18n::t!("container.compose.new_yaml").to_string())
                 .tooltip(rust_i18n::t!("container.compose.new_yaml").to_string())

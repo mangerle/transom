@@ -6,9 +6,9 @@ use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_core::{ForwardKind, ForwardState};
@@ -150,7 +150,7 @@ impl ForwardView {
                     } else {
                         Button::new(ElementId::Name(format!("forward-start-{rule_id}").into()))
                             .small()
-                            .primary()
+                            .outline()
                             .label(rust_i18n::t!("forward.start").to_string())
                             .on_click(cx.listener(move |_this, _, _, cx| {
                                 cx.emit(super::ForwardPanelEvent::StartRule { tab_id, rule_id });
@@ -182,56 +182,38 @@ impl ForwardView {
 
     /// 转发类型三选一：本地/远程/动态。
     fn render_kind_selector(&self, kind: ForwardKindChoice, cx: &mut Context<Self>) -> AnyElement {
-        let local_button = if kind == ForwardKindChoice::Local {
-            Button::new("forward-mode-local")
-                .primary()
-                .small()
-                .label(rust_i18n::t!("forward.local").to_string())
-        } else {
-            Button::new("forward-mode-local")
-                .small()
-                .label(rust_i18n::t!("forward.local").to_string())
-        }
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.state.kind = ForwardKindChoice::Local;
-            cx.notify();
-        }));
-
-        let remote_button = if kind == ForwardKindChoice::Remote {
-            Button::new("forward-mode-remote")
-                .primary()
-                .small()
-                .label(rust_i18n::t!("forward.remote").to_string())
-        } else {
-            Button::new("forward-mode-remote")
-                .small()
-                .label(rust_i18n::t!("forward.remote").to_string())
-        }
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.state.kind = ForwardKindChoice::Remote;
-            cx.notify();
-        }));
-
-        let dynamic_button = if kind == ForwardKindChoice::Dynamic {
-            Button::new("forward-mode-dynamic")
-                .primary()
-                .small()
-                .label(rust_i18n::t!("forward.dynamic").to_string())
-        } else {
-            Button::new("forward-mode-dynamic")
-                .small()
-                .label(rust_i18n::t!("forward.dynamic").to_string())
-        }
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.state.kind = ForwardKindChoice::Dynamic;
-            cx.notify();
-        }));
-
-        h_flex()
-            .gap_2()
-            .child(local_button)
-            .child(remote_button)
-            .child(dynamic_button)
+        ButtonGroup::new("forward-kind")
+            .small()
+            .child(
+                Button::new("forward-mode-local")
+                    .small()
+                    .label(rust_i18n::t!("forward.local").to_string())
+                    .selected(kind == ForwardKindChoice::Local),
+            )
+            .child(
+                Button::new("forward-mode-remote")
+                    .small()
+                    .label(rust_i18n::t!("forward.remote").to_string())
+                    .selected(kind == ForwardKindChoice::Remote),
+            )
+            .child(
+                Button::new("forward-mode-dynamic")
+                    .small()
+                    .label(rust_i18n::t!("forward.dynamic").to_string())
+                    .selected(kind == ForwardKindChoice::Dynamic),
+            )
+            .on_click(cx.listener(|this, clicks: &Vec<usize>, _, cx| {
+                let kind = match clicks.first() {
+                    Some(0) => Some(ForwardKindChoice::Local),
+                    Some(1) => Some(ForwardKindChoice::Remote),
+                    Some(2) => Some(ForwardKindChoice::Dynamic),
+                    _ => None,
+                };
+                if let Some(kind) = kind {
+                    this.state.kind = kind;
+                    cx.notify();
+                }
+            }))
             .into_any_element()
     }
 
