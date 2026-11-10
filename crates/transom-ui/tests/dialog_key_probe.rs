@@ -529,3 +529,33 @@ fn 弹窗打开时工作区上下文的快捷键不再命中() {
         "弹窗打开时仍命中工作区快捷键，需要给弹窗补遮罩上下文排除"
     );
 }
+
+#[test]
+fn alert_dialog_escape_runs_cancel_and_closes() {
+    let mut app = TestAppContext::single();
+    let cx = probe_window(&mut app);
+    let log = new_log();
+    let cancel_log = Rc::clone(&log);
+
+    cx.update(move |window, cx| {
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let cancel_log = Rc::clone(&cancel_log);
+            alert
+                .title("Delete item")
+                .description("This cannot be undone.")
+                .confirm()
+                .on_cancel(move |_, _, _| {
+                    mark(&cancel_log, "cancel");
+                    true
+                })
+        });
+    });
+    paint(cx);
+    assert!(dialog_open(cx), "AlertDialog 应已打开");
+
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+
+    assert_eq!(hits(&log), vec!["cancel".to_string()]);
+    assert!(!dialog_open(cx), "AlertDialog 取消后应关闭");
+}
