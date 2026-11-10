@@ -7,6 +7,7 @@ mod builder;
 mod defaults;
 mod entity;
 mod init;
+mod local;
 mod proxy;
 mod serial;
 mod ssh;

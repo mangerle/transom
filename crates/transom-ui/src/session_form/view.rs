@@ -6,6 +6,7 @@
 
 use super::appearance::default_icon_for;
 use super::entity::SessionFormView;
+use super::local::render_local_fields;
 use super::serial::render_serial_fields;
 use super::ssh::render_ssh_fields;
 use super::telnet::render_telnet_fields;
@@ -109,6 +110,9 @@ impl SessionFormView {
         match form.connection {
             ConnectionChoice::Ssh => {
                 content = content.child(render_ssh_fields(form, cx, p));
+            }
+            ConnectionChoice::Local => {
+                content = content.child(render_local_fields(form, cx, p));
             }
             ConnectionChoice::Mosh => {
                 content = content

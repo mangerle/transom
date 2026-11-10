@@ -15,6 +15,7 @@ pub(super) struct BrokerConfig {
     pub(super) shell_args: Vec<String>,
     pub(super) working_dir: Option<PathBuf>,
     pub(super) command: Option<Vec<String>>,
+    pub(super) env: std::collections::BTreeMap<String, String>,
     pub(super) size: TerminalSize,
     pub(super) shell_integration: bool,
 }

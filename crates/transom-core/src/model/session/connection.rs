@@ -3,6 +3,7 @@
 use super::ssh::{AuthMethod, SessionOptions, SshConnection};
 use crate::model::container::ContainerEngineProfile;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -23,11 +24,42 @@ pub struct LocalConnection {
     /// 保存的本地会话才可能长期携带它。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<Vec<String>>,
+    /// 附加环境变量字典；启动时注入到子进程环境中。
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
 }
 
 impl LocalConnection {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// 将多行 `KEY=VALUE` 文本解析为环境变量字典。
+    pub fn env_from_multiline(text: &str) -> BTreeMap<String, String> {
+        let mut map = BTreeMap::new();
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some((key, value)) = trimmed.split_once('=') {
+                let k = key.trim().to_string();
+                let v = value.trim().to_string();
+                if !k.is_empty() {
+                    map.insert(k, v);
+                }
+            }
+        }
+        map
+    }
+
+    /// 将环境变量字典转换为多行 `KEY=VALUE` 文本。
+    pub fn env_to_multiline(&self) -> String {
+        self.env
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 

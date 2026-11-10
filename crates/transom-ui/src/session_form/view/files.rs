@@ -45,4 +45,27 @@ impl SessionFormView {
             .update(cx, |state, cx| state.set_value(&text, window, cx));
         cx.notify();
     }
+
+    /// 选择本地终端工作目录并回填路径。
+    pub(crate) fn pick_working_dir(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(form) = self.state() else {
+            return;
+        };
+        let title = rust_i18n::t!("form.local.pick_dir").to_string();
+        let mut dialog = rfd::FileDialog::new().set_title(&title);
+        let current = form.local_working_dir.read(cx).value().trim().to_string();
+        if !current.is_empty() {
+            let path = std::path::PathBuf::from(&current);
+            if path.is_dir() {
+                dialog = dialog.set_directory(&path);
+            }
+        }
+        let Some(path) = dialog.pick_folder() else {
+            return;
+        };
+        let text = path.to_string_lossy().to_string();
+        form.local_working_dir
+            .update(cx, |state, cx| state.set_value(&text, window, cx));
+        cx.notify();
+    }
 }

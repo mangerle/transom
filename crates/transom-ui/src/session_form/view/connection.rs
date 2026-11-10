@@ -30,6 +30,15 @@ impl SessionFormView {
                             })),
                     )
                     .child(
+                        Button::new("conn-local")
+                            .small()
+                            .label(rust_i18n::t!("form.conn_local").to_string())
+                            .selected(form.connection == ConnectionChoice::Local)
+                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                this.set_connection(ConnectionChoice::Local, cx);
+                            })),
+                    )
+                    .child(
                         Button::new("conn-serial")
                             .small()
                             .label(rust_i18n::t!("form.conn_serial").to_string())

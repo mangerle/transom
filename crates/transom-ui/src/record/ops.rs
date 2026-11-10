@@ -176,6 +176,7 @@ impl AppShell {
                 run_as_admin: false,
                 working_dir: None,
                 command: None,
+                ..Default::default()
             }),
         );
         let session_id = dummy_session.id;

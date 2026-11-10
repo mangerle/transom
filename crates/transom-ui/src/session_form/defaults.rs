@@ -62,11 +62,27 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         block_view,
     } = init;
     let connection = match base.as_ref().map(|session| &session.connection) {
+        Some(Connection::Local(_)) => ConnectionChoice::Local,
         Some(Connection::Serial(_)) => ConnectionChoice::Serial,
         Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
         Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
         _ => ConnectionChoice::Ssh,
     };
+    let local = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Local(local) => Some(local),
+        _ => None,
+    });
+    let local_working_dir = local
+        .and_then(|l| l.working_dir.as_ref().map(|p| p.display().to_string()))
+        .unwrap_or_default();
+    let local_shell = local.and_then(|l| l.shell.clone()).unwrap_or_default();
+    let local_shell_args = local.map(|l| l.shell_args.join(" ")).unwrap_or_default();
+    let local_command = local
+        .and_then(|l| l.command.as_ref().map(|c| c.join(" ")))
+        .unwrap_or_default();
+    let local_run_as_admin = local.map(|l| l.run_as_admin).unwrap_or(false);
+    let local_env = local.map(|l| l.env_to_multiline()).unwrap_or_default();
+    let available_shells = transom_platform::shell::discover_shells();
     let serial = base.as_ref().and_then(|session| match &session.connection {
         Connection::Serial(serial) => Some(serial),
         _ => None,
@@ -148,6 +164,13 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         serial_stop_bits,
         serial_flow_control,
         telnet_encoding,
+        local_working_dir,
+        local_shell,
+        local_shell_args,
+        local_command,
+        local_run_as_admin,
+        local_env,
+        available_shells,
         identities,
         jump_options,
         folder_options,

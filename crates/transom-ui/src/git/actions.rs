@@ -435,6 +435,7 @@ fn git_placeholder_session(project: &GitProject) -> Session {
             run_as_admin: false,
             working_dir: Some(project.path.clone()),
             command: None,
+            ..Default::default()
         }),
     )
 }

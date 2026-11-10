@@ -23,6 +23,7 @@ const SWATCH_SIZE: f32 = 18.0;
 pub(crate) fn default_icon_for(connection: ConnectionChoice) -> IconName {
     match connection {
         ConnectionChoice::Ssh => IconName::Server,
+        ConnectionChoice::Local => IconName::Terminal,
         ConnectionChoice::Serial => IconName::Cable,
         ConnectionChoice::Telnet => IconName::Network,
         ConnectionChoice::Mosh => IconName::Radio,

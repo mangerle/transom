@@ -20,6 +20,7 @@ pub(crate) enum AuthChoice {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConnectionChoice {
     Ssh,
+    Local,
     Serial,
     Telnet,
     Mosh,
@@ -81,6 +82,20 @@ pub(crate) struct SessionForm {
     /// Telnet 字符编码；远端为老设备或 BBS 时选择 GBK/Big5。
     pub telnet_encoding: TextEncoding,
     pub startup_commands: Entity<TextareaState>,
+    /// 本地终端工作目录
+    pub local_working_dir: Entity<InputState>,
+    /// 本地终端 Shell 程序路径/名称
+    pub local_shell: Entity<InputState>,
+    /// 本地终端 Shell 启动参数
+    pub local_shell_args: Entity<InputState>,
+    /// 本地终端启动执行程序/命令
+    pub local_command: Entity<InputState>,
+    /// 本地终端 Windows 管理员提权运行
+    pub local_run_as_admin: bool,
+    /// 本地终端环境变量定义（多行 KEY=VALUE）
+    pub local_env: Entity<TextareaState>,
+    /// 系统已发现可用的 Shell 候选列表
+    pub available_shells: Vec<transom_platform::shell::ShellOption>,
     /// SSH 连接超时（秒）；留空或非法值回退会话存量/默认。
     pub connect_timeout: Entity<InputState>,
     /// SSH keepalive 间隔（秒），0 表示禁用。
@@ -142,6 +157,10 @@ impl SessionForm {
             &self.passphrase,
             &self.serial_port,
             &self.serial_baud,
+            &self.local_working_dir,
+            &self.local_shell,
+            &self.local_shell_args,
+            &self.local_command,
             &self.connect_timeout,
             &self.keepalive,
             &self.mosh_server_path,
@@ -156,6 +175,7 @@ impl SessionForm {
             .map(|input| input.read(cx).value().to_string())
             .collect();
         values.push(self.startup_commands.read(cx).value().to_string());
+        values.push(self.local_env.read(cx).value().to_string());
         values
     }
 }
@@ -241,6 +261,13 @@ pub(crate) struct SessionFormSeed {
     pub serial_stop_bits: SerialStopBits,
     pub serial_flow_control: SerialFlowControl,
     pub telnet_encoding: TextEncoding,
+    pub local_working_dir: String,
+    pub local_shell: String,
+    pub local_shell_args: String,
+    pub local_command: String,
+    pub local_run_as_admin: bool,
+    pub local_env: String,
+    pub available_shells: Vec<transom_platform::shell::ShellOption>,
     /// 可选凭据模板清单；表单只认这份快照，不回查目录。
     pub identities: Vec<IdentityOption>,
     /// 可选跳板机清单；同样只认快照。

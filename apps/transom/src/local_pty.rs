@@ -63,6 +63,9 @@ pub(crate) fn spawn(
     }
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
+    for (key, value) in &local.env {
+        command.env(key, value);
+    }
 
     let preload = if shell_integration && exec_argv.is_none() {
         local_shell::prepare(&shell)

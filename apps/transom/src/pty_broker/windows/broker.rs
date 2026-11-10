@@ -29,6 +29,7 @@ pub(crate) fn run(token: &str) -> anyhow::Result<()> {
         run_as_admin: false,
         working_dir: config.working_dir,
         command: config.command,
+        env: config.env,
     };
     let LocalPtySession {
         master,

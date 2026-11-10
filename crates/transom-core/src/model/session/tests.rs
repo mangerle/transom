@@ -120,11 +120,35 @@ fn session_round_trips_through_json() {
 
 #[test]
 fn local_connection_roundtrip() {
-    let session = Session::new("local", Connection::Local(LocalConnection::default()));
+    let mut local = LocalConnection::default();
+    local.env.insert("FOO".to_string(), "bar".to_string());
+    local.env.insert("PATH".to_string(), "/opt/bin".to_string());
+    let session = Session::new("local", Connection::Local(local));
     let json = serde_json::to_string(&session).unwrap();
     let decoded: Session = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded.name, "local");
-    assert!(matches!(decoded.connection, Connection::Local(_)));
+    if let Connection::Local(decoded_local) = decoded.connection {
+        assert_eq!(decoded_local.env.get("FOO"), Some(&"bar".to_string()));
+        assert_eq!(decoded_local.env.get("PATH"), Some(&"/opt/bin".to_string()));
+    } else {
+        panic!("解构连接类型失败，非 Local 连接");
+    }
+}
+
+#[test]
+fn local_connection_env_multiline_parsing() {
+    let text = "# 这是注释\nFOO=bar\n\n  BAR = baz \n# 另一行注释\nEMPTY=\n";
+    let env = LocalConnection::env_from_multiline(text);
+    assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
+    assert_eq!(env.get("BAR"), Some(&"baz".to_string()));
+    assert_eq!(env.get("EMPTY"), Some(&"".to_string()));
+
+    let mut local = LocalConnection::default();
+    local.env = env;
+    let multiline = local.env_to_multiline();
+    assert!(multiline.contains("FOO=bar"));
+    assert!(multiline.contains("BAR=baz"));
+    assert!(multiline.contains("EMPTY="));
 }
 
 #[test]

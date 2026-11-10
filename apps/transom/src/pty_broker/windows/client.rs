@@ -60,6 +60,7 @@ pub(crate) fn open_elevated_pty(
             shell_args: local.shell_args.clone(),
             working_dir: local.working_dir.clone(),
             command: local.command.clone(),
+            env: local.env.clone(),
             size,
             shell_integration,
         },

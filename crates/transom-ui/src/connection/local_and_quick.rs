@@ -134,6 +134,7 @@ impl AppShell {
                 run_as_admin,
                 working_dir,
                 command,
+                ..Default::default()
             }),
         );
         self.state

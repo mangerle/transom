@@ -7,8 +7,8 @@ use super::types::{
 use gpui_kit::Context;
 use std::path::PathBuf;
 use transom_core::{
-    AuthMethod, Connection, OutboundProxy, ProxyAuth, ProxyJumpConfig, SerialConnection, Session,
-    SshConnection, StartupCommands, TelnetConnection, TerminalProfile,
+    AuthMethod, Connection, LocalConnection, OutboundProxy, ProxyAuth, ProxyJumpConfig,
+    SerialConnection, Session, SshConnection, StartupCommands, TelnetConnection, TerminalProfile,
 };
 use zeroize::Zeroizing;
 
@@ -28,6 +28,11 @@ impl SessionForm {
                 let built = self.build_ssh_connection(cx)?;
                 (built.connection, built.password, built.key_passphrase)
             }
+            ConnectionChoice::Local => (
+                Connection::Local(self.build_local_connection(cx)?),
+                None,
+                None,
+            ),
             ConnectionChoice::Mosh => {
                 let built = self.build_mosh_connection(cx)?;
                 (built.connection, built.password, built.key_passphrase)
@@ -61,7 +66,7 @@ impl SessionForm {
             ConnectionChoice::Ssh | ConnectionChoice::Telnet | ConnectionChoice::Mosh => {
                 self.build_proxy(cx)?
             }
-            ConnectionChoice::Serial => None,
+            ConnectionChoice::Serial | ConnectionChoice::Local => None,
         };
         session.icon = self.icon;
         session.color = self.color;
@@ -76,6 +81,58 @@ impl SessionForm {
             folder_path,
             password,
             key_passphrase,
+        })
+    }
+
+    /// 组装本地终端连接参数。
+    fn build_local_connection(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<LocalConnection, String> {
+        let dir_text = self.local_working_dir.read(cx).value().trim().to_string();
+        let working_dir = if dir_text.is_empty() {
+            None
+        } else {
+            let path = if let Some(stripped) = dir_text.strip_prefix("~/") {
+                directories::UserDirs::new()
+                    .map(|u| u.home_dir().join(stripped))
+                    .unwrap_or_else(|| PathBuf::from(&dir_text))
+            } else if dir_text == "~" {
+                directories::UserDirs::new()
+                    .map(|u| u.home_dir().to_path_buf())
+                    .unwrap_or_else(|| PathBuf::from(&dir_text))
+            } else {
+                PathBuf::from(&dir_text)
+            };
+            Some(path)
+        };
+        let shell_text = self.local_shell.read(cx).value().trim().to_string();
+        let shell = (!shell_text.is_empty()).then_some(shell_text);
+
+        let args_text = self.local_shell_args.read(cx).value().trim().to_string();
+        let shell_args = if args_text.is_empty() {
+            Vec::new()
+        } else {
+            args_text.split_whitespace().map(String::from).collect()
+        };
+
+        let cmd_text = self.local_command.read(cx).value().trim().to_string();
+        let command = if cmd_text.is_empty() {
+            None
+        } else {
+            Some(cmd_text.split_whitespace().map(String::from).collect())
+        };
+
+        let env_text = self.local_env.read(cx).value();
+        let env = LocalConnection::env_from_multiline(&env_text);
+
+        Ok(LocalConnection {
+            shell,
+            shell_args,
+            run_as_admin: self.local_run_as_admin,
+            working_dir,
+            command,
+            env,
         })
     }
 

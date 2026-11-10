@@ -477,6 +477,9 @@ form:
   connection_type:
     en: Connection Type
     zh-CN: 连接方式
+  conn_local:
+    en: Local Terminal
+    zh-CN: 本地终端
   conn_serial:
     en: Serial Port
     zh-CN: 串口
@@ -622,6 +625,55 @@ form:
     port_placeholder:
       en: Leave empty to auto-assign
       zh-CN: 留空自动分配
+  local:
+    group:
+      en: Local Terminal Settings
+      zh-CN: 本地终端设置
+    working_dir:
+      en: Working Directory
+      zh-CN: 工作目录
+    working_dir_placeholder:
+      en: Leave empty for user home directory
+      zh-CN: 留空默认使用用户主目录
+    pick_dir:
+      en: Select Folder
+      zh-CN: 选择目录
+    shell:
+      en: Shell Program
+      zh-CN: Shell 程序
+    shell_placeholder:
+      en: System default (e.g. /bin/zsh, bash, pwsh)
+      zh-CN: 系统默认（如 /bin/zsh、bash、pwsh）
+    choose_shell:
+      en: Choose Shell
+      zh-CN: 选择 Shell
+    shell_args:
+      en: Shell Arguments
+      zh-CN: Shell 启动参数
+    shell_args_placeholder:
+      en: e.g. -l
+      zh-CN: 例如 -l
+    command:
+      en: Startup Command
+      zh-CN: 启动执行程序/命令
+    command_placeholder:
+      en: Optional (e.g. htop, lazygit)
+      zh-CN: 可选（如 htop、lazygit）
+    run_as_admin:
+      en: Run as Administrator (Windows)
+      zh-CN: 以管理员身份运行（仅 Windows）
+    run_as_admin_hint:
+      en: Runs with elevated UAC privileges in current tab via ConPTY broker.
+      zh-CN: 通过提权代理在当前标签页中以管理员权限运行。
+    env:
+      en: Environment Variables
+      zh-CN: 环境变量
+    env_placeholder:
+      en: KEY=VALUE (one per line)
+      zh-CN: 每行一组 KEY=VALUE，例如 PATH=/opt/bin:$PATH
+    env_hint:
+      en: Injected into the local shell process environment upon launch.
+      zh-CN: 终端建立时注入到子进程环境中，每行一组 KEY=VALUE。
 prompt:
   password_field:
     en: Login password
