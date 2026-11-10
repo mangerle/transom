@@ -176,7 +176,7 @@ pub(crate) fn render_raw_inspect(
         .rounded(p.radius.md)
         .bg(p.muted.opacity(0.2))
         .border_1()
-        .border_color(p.border.opacity(0.5))
+        .border_color(p.stroke.strong)
         .child(code_body);
 
     scroll_body(v_flex().child(toolbar).child(code_card), p).into_any_element()

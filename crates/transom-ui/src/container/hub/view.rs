@@ -25,7 +25,7 @@ pub(crate) fn render_hub_header(current_registry_name: &str, p: &Palette) -> Any
         .justify_between()
         .pb_3()
         .border_b_1()
-        .border_color(p.border.opacity(0.12))
+        .border_color(p.stroke.faint)
         .child(
             h_flex()
                 .gap_3()
@@ -35,7 +35,7 @@ pub(crate) fn render_hub_header(current_registry_name: &str, p: &Palette) -> Any
                         .w(px(34.0))
                         .h(px(34.0))
                         .rounded(p.radius.md)
-                        .bg(p.primary.opacity(0.12))
+                        .bg(p.tone.primary_subtle)
                         .items_center()
                         .justify_center()
                         .child(
@@ -69,9 +69,9 @@ pub(crate) fn render_hub_header(current_registry_name: &str, p: &Palette) -> Any
                 .px_2p5()
                 .py_1()
                 .rounded(p.radius.full)
-                .bg(p.muted.opacity(0.08))
+                .bg(p.surface.faint)
                 .border_1()
-                .border_color(p.border.opacity(0.15))
+                .border_color(p.stroke.subtle)
                 .child(
                     div()
                         .w(px(6.0))
@@ -152,7 +152,7 @@ pub(crate) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
             .gap_2()
             .rounded(p.radius.lg)
             .border_1()
-            .border_color(p.border.opacity(0.15))
+            .border_color(p.stroke.subtle)
             .bg(p.muted.opacity(0.03))
             .hover(|s| s.bg(p.muted.opacity(0.06)))
             .child(
@@ -307,7 +307,7 @@ where
         .items_center()
         .pt_2()
         .border_t_1()
-        .border_color(p.border.opacity(0.12))
+        .border_color(p.stroke.faint)
         .child(
             h_flex()
                 .gap_1p5()

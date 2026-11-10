@@ -109,7 +109,7 @@ impl SessionFormView {
                 },
             ));
         if !options.is_empty() {
-            list = list.child(div().h(px(1.0)).my_1().bg(p.foreground.opacity(0.08)));
+            list = list.child(div().h(px(1.0)).my_1().bg(p.surface.contrast));
         }
         for path in options {
             let pick_entity = entity.clone();

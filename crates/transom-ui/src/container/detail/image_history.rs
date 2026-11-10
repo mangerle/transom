@@ -57,7 +57,7 @@ pub(crate) fn render_image_history(
                 .items_center()
                 .p_2()
                 .rounded(p.radius.md)
-                .bg(p.muted.opacity(0.4))
+                .bg(p.surface.pressed)
                 .child(
                     div().text_xs().text_color(p.muted_foreground).child(
                         rust_i18n::t!(
@@ -121,9 +121,9 @@ pub(crate) fn render_image_history(
                 .gap_1p5()
                 .p_2()
                 .rounded(p.radius.md)
-                .bg(p.muted.opacity(0.35))
+                .bg(p.surface.active)
                 .border_1()
-                .border_color(p.border.opacity(0.5))
+                .border_color(p.stroke.strong)
                 .child(
                     h_flex()
                         .justify_between()
@@ -264,9 +264,9 @@ pub(crate) fn render_image_history(
                     .items_center()
                     .p_2()
                     .rounded(p.radius.md)
-                    .bg(p.muted.opacity(0.35))
+                    .bg(p.surface.active)
                     .border_1()
-                    .border_color(p.border.opacity(0.5))
+                    .border_color(p.stroke.strong)
                     .child(
                         h_flex()
                             .gap_2()

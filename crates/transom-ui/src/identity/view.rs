@@ -40,7 +40,7 @@ impl SettingsView {
                 .gap_2()
                 .items_center()
                 .border_b_1()
-                .border_color(p.border.opacity(0.5))
+                .border_color(p.stroke.strong)
                 .child(Icon::new(IconName::KeyRound).with_size(px(14.0)))
                 .child(div().flex_1().text_sm().child(format!(
                     "{} · {}",

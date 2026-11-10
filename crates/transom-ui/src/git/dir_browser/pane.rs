@@ -283,13 +283,13 @@ fn entry_row(
                     .min_w_0()
                     .truncate()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.8))
+                    .text_color(p.text.subtle)
                     .child(entry.name),
             )
             .child(
                 div()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.8))
+                    .text_color(p.text.subtle)
                     .child(format_size(entry.size)),
             )
             .into_any_element();

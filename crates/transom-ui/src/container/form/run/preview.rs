@@ -90,7 +90,7 @@ impl ContainerRunFormView {
                     .rounded(p.radius.md)
                     .bg(p.muted.opacity(0.06))
                     .border_1()
-                    .border_color(p.border.opacity(0.12))
+                    .border_color(p.stroke.faint)
                     .child(
                         h_flex()
                             .gap_1p5()

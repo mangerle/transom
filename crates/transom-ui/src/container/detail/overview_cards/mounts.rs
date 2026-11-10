@@ -46,7 +46,7 @@ pub(crate) fn render_mounts_card(
             .rounded(p.radius.sm)
             .bg(p.background)
             .border_1()
-            .border_color(p.border.opacity(0.3))
+            .border_color(p.stroke.muted)
             .child(
                 h_flex()
                     .gap_1p5()

@@ -143,7 +143,7 @@ pub(crate) fn render_container_forward_dialog_body(
             .map(|(idx, (name, _, _))| {
                 let is_selected = idx == selected_index;
                 let bg_color = if is_selected {
-                    p.primary.opacity(0.12)
+                    p.tone.primary_subtle
                 } else {
                     p.list_background
                 };

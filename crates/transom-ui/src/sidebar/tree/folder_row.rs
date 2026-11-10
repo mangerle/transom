@@ -123,7 +123,7 @@ fn folder_band(
         band = band.child(
             div()
                 .text_xs()
-                .text_color(p.muted_foreground.opacity(0.7))
+                .text_color(p.text.muted)
                 .child(format!("({})", row.folder_count)),
         );
     }

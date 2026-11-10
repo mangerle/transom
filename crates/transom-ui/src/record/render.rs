@@ -187,7 +187,7 @@ fn replay_row(
         .border_1()
         .border_color(border)
         .cursor_pointer()
-        .hover(|s| s.bg(p.muted.opacity(0.4)))
+        .hover(|s| s.bg(p.surface.pressed))
         .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
             if event.click_count() >= 2 {
                 this.select(idx, cx);

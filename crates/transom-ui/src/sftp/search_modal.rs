@@ -316,7 +316,7 @@ fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
         .gap_2()
         .p_1()
         .rounded_md()
-        .hover(|s| s.bg(p.muted.opacity(0.3)))
+        .hover(|s| s.bg(p.surface.hover))
         .cursor_pointer()
         .child(
             Icon::new(IconName::File)

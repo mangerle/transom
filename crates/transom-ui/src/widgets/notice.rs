@@ -40,8 +40,8 @@ pub(crate) fn notice(
 ) -> AnyElement {
     let (accent, background, text) = match kind {
         NoticeKind::Success => (p.success, p.muted, p.foreground),
-        NoticeKind::Error => (p.danger, p.danger.opacity(0.12), p.danger),
-        NoticeKind::Warning => (p.warning, p.warning.opacity(0.12), p.foreground),
+        NoticeKind::Error => (p.danger, p.tone.danger_subtle, p.danger),
+        NoticeKind::Warning => (p.warning, p.tone.warning_subtle, p.foreground),
     };
     h_flex()
         .w_full()

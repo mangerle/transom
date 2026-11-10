@@ -326,7 +326,7 @@ fn run_error_banner(error: String, p: &Palette) -> AnyElement {
         .gap_1p5()
         .p_2()
         .rounded(p.radius.md)
-        .bg(p.danger.opacity(0.12))
+        .bg(p.tone.danger_subtle)
         .items_center()
         .child(
             Icon::new(IconName::CircleAlert)

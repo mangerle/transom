@@ -88,7 +88,7 @@ pub(crate) fn ports_card(
         .id("container-stats-card-ports")
         .w_full()
         .rounded(px(10.0))
-        .bg(p.muted.opacity(0.04))
+        .bg(p.surface.ghost)
         .overflow_hidden()
         .child(header_btn);
 

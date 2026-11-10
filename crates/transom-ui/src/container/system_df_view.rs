@@ -36,7 +36,7 @@ pub(crate) fn render_stacked_usage_bar(
         .w_full()
         .h(px(10.0))
         .rounded_full()
-        .bg(p.muted.opacity(0.12))
+        .bg(p.surface.subtle)
         .overflow_hidden();
 
     if total > 0.0 {
@@ -91,9 +91,9 @@ pub(crate) fn render_stacked_usage_bar(
         .w_full()
         .p_3()
         .rounded(p.radius.md)
-        .bg(p.muted.opacity(0.04))
+        .bg(p.surface.ghost)
         .border_1()
-        .border_color(p.border.opacity(0.4))
+        .border_color(p.stroke.medium)
         .child(bar)
         .child(legend)
         .into_any_element()
@@ -185,7 +185,7 @@ fn render_df_detail_row(
         .rounded(p.radius.md)
         .bg(p.list_background)
         .border_1()
-        .border_color(p.border.opacity(0.3))
+        .border_color(p.stroke.muted)
         .child(
             h_flex()
                 .gap_2p5()
@@ -217,7 +217,7 @@ fn render_df_detail_row(
                         .px_2()
                         .py_0p5()
                         .rounded(p.radius.full)
-                        .bg(p.warning.opacity(0.12))
+                        .bg(p.tone.warning_subtle)
                         .text_color(p.warning)
                         .font_weight(FontWeight::MEDIUM)
                         .child(format!(
@@ -227,7 +227,7 @@ fn render_df_detail_row(
                 } else {
                     div()
                         .text_xs()
-                        .text_color(p.muted_foreground.opacity(0.7))
+                        .text_color(p.text.muted)
                         .child(rust_i18n::t!("container.system_df.optimal").to_string())
                 }),
         )

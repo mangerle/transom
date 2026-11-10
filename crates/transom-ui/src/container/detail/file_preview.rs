@@ -136,7 +136,7 @@ pub(super) fn render_file_preview(
             .overflow_y_scroll()
             .p_2()
             .rounded(p.radius.md)
-            .bg(p.muted.opacity(0.3))
+            .bg(p.surface.hover)
             .font_family(p.mono_font_family.clone())
             .text_size(p.mono_font_size)
             .child(content.clone())

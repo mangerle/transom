@@ -59,7 +59,7 @@ pub(crate) fn render_health_timeline(
                     .items_center()
                     .pt_1()
                     .child(crate::widgets::status_dot_bare(dot_color))
-                    .child(div().w(px(1.0)).h(px(16.0)).bg(p.border.opacity(0.4))),
+                    .child(div().w(px(1.0)).h(px(16.0)).bg(p.stroke.medium)),
             )
             .child(
                 v_flex()

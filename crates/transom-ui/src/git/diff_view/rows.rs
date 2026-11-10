@@ -146,9 +146,9 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
         if row.tone == Tone::Paired {
             let left_cell = row.left.as_ref();
             let right_cell = row.right.as_ref();
-            let del_bg = p.danger.opacity(0.12);
+            let del_bg = p.tone.danger_subtle;
             let del_word_bg = p.danger.opacity(0.30);
-            let add_bg = p.success.opacity(0.12);
+            let add_bg = p.tone.success_subtle;
             let add_word_bg = p.success.opacity(0.30);
 
             let mut group = gpui_kit::base::v_flex().w_full();
@@ -210,13 +210,13 @@ pub(crate) fn render_row(row: Row, options: &GitDiffOptions, p: &Palette) -> Any
             Tone::Added => (
                 row.right.clone(),
                 "+",
-                p.success.opacity(0.12),
+                p.tone.success_subtle,
                 p.success.opacity(0.30),
             ),
             Tone::Removed => (
                 row.left.clone(),
                 "-",
-                p.danger.opacity(0.12),
+                p.tone.danger_subtle,
                 p.danger.opacity(0.30),
             ),
             _ => (
@@ -293,14 +293,14 @@ fn side(
     p: &Palette,
 ) -> AnyElement {
     let (side_bg, word_bg) = match (cell.is_some(), tone) {
-        (false, _) => (p.muted.opacity(0.12), p.primary.opacity(0.30)),
+        (false, _) => (p.surface.subtle, p.primary.opacity(0.30)),
         (true, Tone::Added) => (p.success.opacity(0.14), p.success.opacity(0.32)),
         (true, Tone::Removed) => (p.danger.opacity(0.14), p.danger.opacity(0.32)),
         (true, Tone::Paired) => {
             if is_right {
-                (p.success.opacity(0.12), p.success.opacity(0.30))
+                (p.tone.success_subtle, p.success.opacity(0.30))
             } else {
-                (p.danger.opacity(0.12), p.danger.opacity(0.30))
+                (p.tone.danger_subtle, p.danger.opacity(0.30))
             }
         }
         (true, Tone::Context) => (p.background, p.primary.opacity(0.30)),

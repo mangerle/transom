@@ -41,7 +41,7 @@ impl HourlyStatus {
     pub(crate) fn color(self, p: &Palette) -> Hsla {
         match self {
             Self::Running => p.success,
-            Self::Exited => p.muted_foreground.opacity(0.4),
+            Self::Exited => p.text.disabled,
             Self::Error => p.warning,
             Self::OomKilled => p.danger,
             Self::Unknown => p.border.opacity(0.25),
@@ -206,7 +206,7 @@ pub(crate) fn render_status_timeline(timeline: &StatusTimeline, p: &Palette) -> 
         .px_1p5()
         .py(px(2.0))
         .rounded(p.radius.sm)
-        .bg(p.muted.opacity(0.12));
+        .bg(p.surface.subtle);
 
     for (idx, &status) in timeline.buckets.iter().enumerate() {
         let hours_ago = 24 - idx;

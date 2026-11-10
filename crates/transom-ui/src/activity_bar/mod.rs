@@ -185,9 +185,7 @@ impl AppShell {
                 .text_color(p.sidebar_accent_foreground)
                 .cursor_pointer();
         } else if disabled {
-            button = button
-                .text_color(p.muted_foreground.opacity(0.4))
-                .cursor_not_allowed();
+            button = button.text_color(p.text.disabled).cursor_not_allowed();
         } else {
             button = button
                 .cursor_pointer()

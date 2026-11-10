@@ -261,9 +261,9 @@ fn render_compose_overview_and_topology(
         .justify_between()
         .p_3()
         .rounded(p.radius.lg)
-        .bg(p.muted.opacity(0.04))
+        .bg(p.surface.ghost)
         .border_1()
-        .border_color(p.border.opacity(0.3))
+        .border_color(p.stroke.muted)
         .child(
             h_flex()
                 .gap_2()
@@ -281,11 +281,11 @@ fn render_compose_overview_and_topology(
                         .py_0p5()
                         .rounded(p.radius.full)
                         .bg(if project.running == project.total && project.total > 0 {
-                            p.success.opacity(0.12)
+                            p.tone.success_subtle
                         } else if project.running > 0 {
-                            p.warning.opacity(0.12)
+                            p.tone.warning_subtle
                         } else {
-                            p.muted.opacity(0.4)
+                            p.surface.pressed
                         })
                         .text_color(if project.running == project.total && project.total > 0 {
                             p.success

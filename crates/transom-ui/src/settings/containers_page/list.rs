@@ -69,7 +69,7 @@ impl SettingsView {
                 .gap_3()
                 .rounded(p.radius.lg)
                 .border_1()
-                .border_color(p.border.opacity(0.15))
+                .border_color(p.stroke.subtle)
                 .bg(p.muted.opacity(0.03))
                 .hover(|s| s.bg(p.muted.opacity(0.06)))
                 .items_center()
@@ -87,9 +87,9 @@ impl SettingsView {
                                 .h(px(36.0))
                                 .rounded(p.radius.md)
                                 .bg(if is_docker_hub {
-                                    p.primary.opacity(0.12)
+                                    p.tone.primary_subtle
                                 } else {
-                                    p.muted.opacity(0.08)
+                                    p.surface.faint
                                 })
                                 .items_center()
                                 .justify_center()
@@ -150,7 +150,7 @@ impl SettingsView {
                                                     .px_1p5()
                                                     .py_0p5()
                                                     .rounded(p.radius.full)
-                                                    .bg(p.success.opacity(0.12))
+                                                    .bg(p.tone.success_subtle)
                                                     .border_1()
                                                     .border_color(p.success.opacity(0.25))
                                                     .child(
@@ -189,7 +189,7 @@ impl SettingsView {
                                         .child(
                                             div()
                                                 .text_xs()
-                                                .text_color(p.muted_foreground.opacity(0.8))
+                                                .text_color(p.text.subtle)
                                                 .child(auth_summary),
                                         ),
                                 ),

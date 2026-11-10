@@ -2,11 +2,142 @@
 
 use crate::app::AppShell;
 use crate::keymap;
-use gpui_kit::base::RadiusTokens;
+use gpui_kit::base::{ColorTokens, RadiusTokens};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_core::{AppError, DividerWidth, ErrorCode};
+
+/// 应用级表面语义令牌。
+///
+/// 为什么集中定义：页面直接对基础颜色乘透明度会让同一视觉层级散落在不同文件里，
+/// 主题无法分别调整弱表面、悬浮、按压和选中态。这里把高频表面层级收敛为
+/// 稳定语义，页面只表达“这是什么状态”，不再重复决定透明度数值。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SurfaceTokens {
+    /// 最弱的表面提亮，用于卡片内部的细微分区。
+    pub(crate) ghost: Hsla,
+    /// 弱表面，用于次级卡片、预览块和轻量分组。
+    pub(crate) faint: Hsla,
+    /// 次级表面，用于强调底色、标签底和弱选中区域。
+    pub(crate) subtle: Hsla,
+    /// 指针悬浮时的控件表面。
+    pub(crate) hover: Hsla,
+    /// 已激活但仍可继续交互的表面，强于 hover、弱于 pressed。
+    pub(crate) active: Hsla,
+    /// 按压或拖拽中的控件表面。
+    pub(crate) pressed: Hsla,
+    /// 列表当前项与选中项表面。
+    pub(crate) selected: Hsla,
+    /// 浮层与弹窗表面。
+    pub(crate) floating: Hsla,
+    /// 以文字色叠加的轻量强调表面，用于极弱分割与交互反馈。
+    pub(crate) contrast: Hsla,
+}
+
+/// 应用级边界语义令牌。
+///
+/// 边界强度必须与表面层级成套使用；页面只选择语义强度，避免同一个
+/// 0.3 透明度在不同主题和不同背景下失去可辨识度。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct BorderTokens {
+    /// 最弱边界，用于内部分割与辅助轮廓。
+    pub(crate) faint: Hsla,
+    /// 弱边界，用于卡片、预览和轻量容器。
+    pub(crate) subtle: Hsla,
+    /// 中等边界，用于普通分组与交互区域。
+    pub(crate) muted: Hsla,
+    /// 较强边界，用于需要明确分隔的结构。
+    pub(crate) medium: Hsla,
+    /// 强边界，用于强调区域与临时编辑边界。
+    pub(crate) strong: Hsla,
+}
+
+/// 应用级语义色调令牌。
+///
+/// 这些底色来自主题的语义色，但不再由调用点临时选择透明度，因此主题切换时
+/// 危险、警告、成功和主强调的弱背景仍保持一致层级。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ToneTokens {
+    /// 主强调色的弱背景。
+    pub(crate) primary_subtle: Hsla,
+    /// 危险语义的弱背景。
+    pub(crate) danger_subtle: Hsla,
+    /// 警告语义的弱背景。
+    pub(crate) warning_subtle: Hsla,
+    /// 成功语义的弱背景。
+    pub(crate) success_subtle: Hsla,
+}
+
+/// 应用级文字语义令牌。
+///
+/// 基础文字色由主题提供；这里只定义在弱化信息中反复出现的层级，避免页面用
+/// 任意透明度表达禁用、辅助和次级文字。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TextTokens {
+    /// 次级辅助文字，比 muted_foreground 更弱一档。
+    pub(crate) subtle: Hsla,
+    /// 弱说明文字与低优先级标签。
+    pub(crate) muted: Hsla,
+    /// 禁用状态的文字与图标。
+    pub(crate) disabled: Hsla,
+}
+
+impl SurfaceTokens {
+    /// 从主题语义色派生表面层级。
+    ///
+    /// 透明度只允许在本模块集中定义：主题只需提供 muted、foreground、surface
+    /// 等基础色，应用级界面即可获得一致的弱表面和交互表面。
+    fn from_theme(colors: &ColorTokens, selected: Hsla) -> Self {
+        Self {
+            ghost: colors.muted.opacity(0.04),
+            faint: colors.muted.opacity(0.08),
+            subtle: colors.muted.opacity(0.12),
+            hover: colors.muted.opacity(0.30),
+            active: colors.muted.opacity(0.35),
+            pressed: colors.muted.opacity(0.40),
+            selected,
+            floating: colors.surface,
+            contrast: colors.foreground.opacity(0.08),
+        }
+    }
+}
+
+impl BorderTokens {
+    /// 从主题边界色派生边界强度层级。
+    fn from_color(border: Hsla) -> Self {
+        Self {
+            faint: border.opacity(0.12),
+            subtle: border.opacity(0.15),
+            muted: border.opacity(0.30),
+            medium: border.opacity(0.40),
+            strong: border.opacity(0.50),
+        }
+    }
+}
+
+impl ToneTokens {
+    /// 从主题语义色派生弱色背景。
+    fn from_theme(colors: &ColorTokens, warning: Hsla, success: Hsla) -> Self {
+        Self {
+            primary_subtle: colors.primary.opacity(0.12),
+            danger_subtle: colors.destructive.opacity(0.12),
+            warning_subtle: warning.opacity(0.12),
+            success_subtle: success.opacity(0.12),
+        }
+    }
+}
+
+impl TextTokens {
+    /// 从主题次级文字色派生文字层级。
+    fn from_color(muted_foreground: Hsla) -> Self {
+        Self {
+            subtle: muted_foreground.opacity(0.80),
+            muted: muted_foreground.opacity(0.70),
+            disabled: muted_foreground.opacity(0.40),
+        }
+    }
+}
 
 /// 全局 UI 调色板快照，用于各子视图渲染统一配色。
 ///
@@ -21,6 +152,14 @@ pub(crate) struct Palette {
     pub(crate) border: Hsla,
     pub(crate) muted: Hsla,
     pub(crate) muted_foreground: Hsla,
+    /// 表面层级语义令牌。
+    pub(crate) surface: SurfaceTokens,
+    /// 边界层级语义令牌。
+    pub(crate) stroke: BorderTokens,
+    /// 语义色调令牌。
+    pub(crate) tone: ToneTokens,
+    /// 文字层级语义令牌。
+    pub(crate) text: TextTokens,
     pub(crate) sidebar: Hsla,
     pub(crate) sidebar_foreground: Hsla,
     pub(crate) sidebar_border: Hsla,
@@ -84,6 +223,7 @@ pub(crate) struct Palette {
 impl Palette {
     pub(crate) fn from(cx: &App) -> Self {
         let theme = cx.theme();
+        let colors = theme.semantic_tokens().colors;
         let divider = crate::divider::settings(cx);
         // 主题里已经按窗口透明度折算过表面色的 alpha，这里直接取用：
         // 自绘界面与 gpui-kit 组件必须共用同一份透明度，否则会出现割裂。
@@ -93,6 +233,10 @@ impl Palette {
             border: theme.border,
             muted: theme.muted,
             muted_foreground: theme.muted_foreground,
+            surface: SurfaceTokens::from_theme(&colors, theme.colors.list_active),
+            stroke: BorderTokens::from_color(colors.border),
+            tone: ToneTokens::from_theme(&colors, theme.warning, theme.success),
+            text: TextTokens::from_color(colors.muted_foreground),
             sidebar: theme.sidebar,
             sidebar_foreground: theme.sidebar_foreground,
             sidebar_border: theme.sidebar_border,
@@ -238,7 +382,43 @@ fn locale_displays_detail(locale: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::locale_displays_detail;
+    use super::{BorderTokens, SurfaceTokens, TextTokens, ToneTokens, locale_displays_detail};
+    use gpui_kit::component::theme::Theme;
+
+    #[test]
+    fn semantic_tokens_derive_from_active_theme_colors() {
+        let theme = Theme::default();
+        let colors = theme.semantic_tokens().colors;
+
+        let surface = SurfaceTokens::from_theme(&colors, theme.colors.list_active);
+        assert_eq!(surface.ghost, colors.muted.opacity(0.04));
+        assert_eq!(surface.faint, colors.muted.opacity(0.08));
+        assert_eq!(surface.subtle, colors.muted.opacity(0.12));
+        assert_eq!(surface.hover, colors.muted.opacity(0.30));
+        assert_eq!(surface.active, colors.muted.opacity(0.35));
+        assert_eq!(surface.pressed, colors.muted.opacity(0.40));
+        assert_eq!(surface.selected, theme.colors.list_active);
+        assert_eq!(surface.floating, colors.surface);
+        assert_eq!(surface.contrast, colors.foreground.opacity(0.08));
+
+        let stroke = BorderTokens::from_color(colors.border);
+        assert_eq!(stroke.faint, colors.border.opacity(0.12));
+        assert_eq!(stroke.subtle, colors.border.opacity(0.15));
+        assert_eq!(stroke.muted, colors.border.opacity(0.30));
+        assert_eq!(stroke.medium, colors.border.opacity(0.40));
+        assert_eq!(stroke.strong, colors.border.opacity(0.50));
+
+        let tone = ToneTokens::from_theme(&colors, theme.warning, theme.success);
+        assert_eq!(tone.primary_subtle, colors.primary.opacity(0.12));
+        assert_eq!(tone.danger_subtle, colors.destructive.opacity(0.12));
+        assert_eq!(tone.warning_subtle, theme.warning.opacity(0.12));
+        assert_eq!(tone.success_subtle, theme.success.opacity(0.12));
+
+        let text = TextTokens::from_color(colors.muted_foreground);
+        assert_eq!(text.subtle, colors.muted_foreground.opacity(0.80));
+        assert_eq!(text.muted, colors.muted_foreground.opacity(0.70));
+        assert_eq!(text.disabled, colors.muted_foreground.opacity(0.40));
+    }
 
     #[test]
     fn chinese_locales_show_raw_detail() {

@@ -40,7 +40,7 @@ impl SettingsView {
             .rounded(p.radius.lg)
             .border_1()
             .border_color(p.border.opacity(0.18))
-            .bg(p.muted.opacity(0.04))
+            .bg(p.surface.ghost)
             .child(
                 div()
                     .text_sm()

@@ -205,7 +205,7 @@ pub(crate) fn render_container_build_dialog_body(
                             .id("container-build-logs-scroll")
                             .p_2()
                             .rounded(p.radius.lg)
-                            .bg(p.muted.opacity(0.04))
+                            .bg(p.surface.ghost)
                             .border_1()
                             .border_color(p.border.opacity(0.18))
                             .text_color(p.foreground)
@@ -239,7 +239,7 @@ pub(crate) fn render_container_build_dialog_body(
                     .gap_2()
                     .items_center()
                     .rounded(p.radius.lg)
-                    .bg(p.success.opacity(0.12))
+                    .bg(p.tone.success_subtle)
                     .text_color(p.success)
                     .child(Icon::new(IconName::Check).small())
                     .child(
@@ -258,7 +258,7 @@ pub(crate) fn render_container_build_dialog_body(
                     .gap_2()
                     .items_center()
                     .rounded(p.radius.lg)
-                    .bg(p.danger.opacity(0.12))
+                    .bg(p.tone.danger_subtle)
                     .text_color(p.danger)
                     .child(Icon::new(IconName::TriangleAlert).small())
                     .child(

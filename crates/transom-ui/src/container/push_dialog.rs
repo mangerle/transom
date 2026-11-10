@@ -229,7 +229,7 @@ pub(crate) fn render_container_push_dialog_body(
                         .gap_2()
                         .items_center()
                         .rounded(p.radius.lg)
-                        .bg(p.muted.opacity(0.04))
+                        .bg(p.surface.ghost)
                         .border_1()
                         .border_color(p.border.opacity(0.18))
                         .child(Icon::new(IconName::Box).small().text_color(p.primary))
@@ -283,7 +283,7 @@ pub(crate) fn render_container_push_dialog_body(
                 .gap_2()
                 .items_center()
                 .rounded(p.radius.md)
-                .bg(p.muted.opacity(0.04))
+                .bg(p.surface.ghost)
                 .child(
                     Icon::new(IconName::Info)
                         .xsmall()
@@ -304,7 +304,7 @@ pub(crate) fn render_container_push_dialog_body(
                     .gap_2()
                     .items_center()
                     .rounded(p.radius.lg)
-                    .bg(p.danger.opacity(0.12))
+                    .bg(p.tone.danger_subtle)
                     .text_color(p.danger)
                     .child(Icon::new(IconName::TriangleAlert).small())
                     .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(err)),

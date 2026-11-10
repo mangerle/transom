@@ -175,7 +175,7 @@ pub(crate) fn render_pull_drawer(
                 .p_2p5()
                 .gap_1p5()
                 .rounded(px(10.0))
-                .bg(p.muted.opacity(0.04));
+                .bg(p.surface.ghost);
 
             // 完成态平滑淡出：正常显示为弱化半透明，鼠标悬停时完全聚焦
             if is_finished {

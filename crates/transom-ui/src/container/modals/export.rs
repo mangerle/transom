@@ -73,7 +73,7 @@ pub(crate) fn render_container_export_config_dialog_body(
         .overflow_y_scroll()
         .p_2p5()
         .rounded(p.radius.md)
-        .bg(p.muted.opacity(0.3))
+        .bg(p.surface.hover)
         .border_1()
         .border_color(p.border)
         .text_xs()

@@ -32,7 +32,7 @@ impl ContainerRunFormView {
                     .px_2()
                     .py_1p5()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.8))
+                    .text_color(p.text.subtle)
                     .child(rust_i18n::t!("container.run.empty_ports_hint").to_string()),
             );
         } else {
@@ -131,7 +131,7 @@ impl ContainerRunFormView {
                     .px_2()
                     .py_1p5()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.8))
+                    .text_color(p.text.subtle)
                     .child(rust_i18n::t!("container.run.empty_volumes_hint").to_string()),
             );
         } else {
@@ -223,7 +223,7 @@ impl ContainerRunFormView {
                     .px_2()
                     .py_1p5()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.8))
+                    .text_color(p.text.subtle)
                     .child(rust_i18n::t!("container.run.empty_env_hint").to_string()),
             );
         } else {

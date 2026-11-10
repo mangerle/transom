@@ -289,7 +289,7 @@ fn empty_card_shell(
         .rounded(p.radius.md)
         .border_1()
         .border_color(p.border)
-        .bg(p.muted.opacity(0.35))
+        .bg(p.surface.active)
         .cursor_pointer()
         .hover(|style| {
             style

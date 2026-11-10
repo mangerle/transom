@@ -17,7 +17,7 @@ pub(crate) fn stat_card(
         .min_w_0()
         .min_h(px(160.0))
         .rounded(px(10.0))
-        .bg(p.muted.opacity(0.04))
+        .bg(p.surface.ghost)
         .overflow_hidden()
         .child(
             h_flex()
@@ -94,7 +94,7 @@ pub(crate) fn usage_bar_slim(fraction: f32, color: Hsla, p: &Palette) -> AnyElem
         .h(px(4.0))
         .w_full()
         .rounded_full()
-        .bg(p.muted.opacity(0.08))
+        .bg(p.surface.faint)
         .child(
             div()
                 .h_full()

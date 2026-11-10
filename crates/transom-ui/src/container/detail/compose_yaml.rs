@@ -69,12 +69,7 @@ pub(crate) fn render_path_breadcrumbs(
     let mut crumbs = h_flex().gap_1p5().items_center();
     for (i, seg) in segments.iter().enumerate() {
         if i > 0 {
-            crumbs = crumbs.child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.4))
-                    .child("/"),
-            );
+            crumbs = crumbs.child(div().text_xs().text_color(p.text.disabled).child("/"));
         }
         let is_last = i == segments.len() - 1;
         crumbs = crumbs.child(
@@ -109,9 +104,9 @@ pub(crate) fn render_line_numbers(
         .pr_1p5()
         .items_end()
         .overflow_hidden()
-        .bg(p.muted.opacity(0.08))
+        .bg(p.surface.faint)
         .border_r_1()
-        .border_color(p.border.opacity(0.3));
+        .border_color(p.stroke.muted);
 
     for line_num in 1..=line_count.max(1) {
         let is_err = error_line == Some(line_num);

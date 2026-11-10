@@ -181,7 +181,7 @@ pub(crate) fn render(
                 .px_1p5()
                 .items_center()
                 .rounded(px(3.0))
-                .bg(p.muted.opacity(0.35))
+                .bg(p.surface.active)
                 .text_xs()
                 .text_color(p.muted_foreground)
                 .child(s)

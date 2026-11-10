@@ -156,7 +156,7 @@ fn chmod_grid(perms: u32, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
                 .rounded(p.radius.md)
                 .border_1()
                 .border_color(p.border)
-                .bg(p.muted.opacity(0.4))
+                .bg(p.surface.pressed)
                 .items_center()
                 .justify_between()
                 .child(

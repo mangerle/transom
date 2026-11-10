@@ -95,7 +95,7 @@ where
         .gap_3()
         .rounded(p.radius.lg)
         .border_1()
-        .border_color(p.border.opacity(0.15))
+        .border_color(p.stroke.subtle)
         .bg(p.muted.opacity(0.03))
         .hover(|s| {
             s.bg(p.muted.opacity(0.07))
@@ -116,9 +116,9 @@ where
                         .h(px(38.0))
                         .rounded(p.radius.md)
                         .bg(if is_official {
-                            p.primary.opacity(0.12)
+                            p.tone.primary_subtle
                         } else {
-                            p.muted.opacity(0.08)
+                            p.surface.faint
                         })
                         .items_center()
                         .justify_center()
@@ -172,7 +172,7 @@ where
                                             .px_1p5()
                                             .py_0p5()
                                             .rounded(p.radius.full)
-                                            .bg(p.primary.opacity(0.12))
+                                            .bg(p.tone.primary_subtle)
                                             .border_1()
                                             .border_color(p.primary.opacity(0.20))
                                             .child(
@@ -199,7 +199,7 @@ where
                                             .py_0p5()
                                             .text_xs()
                                             .rounded(p.radius.sm)
-                                            .bg(p.muted.opacity(0.08))
+                                            .bg(p.surface.faint)
                                             .text_color(p.muted_foreground)
                                             .child(
                                                 rust_i18n::t!("container.hub.automated")
@@ -246,7 +246,7 @@ where
                                     div()
                                         .text_xs()
                                         .font_weight(FontWeight::MEDIUM)
-                                        .text_color(p.muted_foreground.opacity(0.8))
+                                        .text_color(p.text.subtle)
                                         .child(
                                             rust_i18n::t!("container.hub.tag_col_tag").to_string(),
                                         ),

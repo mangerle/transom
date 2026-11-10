@@ -140,7 +140,7 @@ fn property_row(label: &str, value: String, p: &Palette) -> AnyElement {
         .py_1p5()
         .px_3()
         .rounded(p.radius.md)
-        .bg(p.muted.opacity(0.3))
+        .bg(p.surface.hover)
         .items_start()
         .child(
             div()

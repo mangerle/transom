@@ -357,7 +357,7 @@ impl AppShell {
                                 .py_1()
                                 .gap_2()
                                 .items_center()
-                                .bg(p.muted.opacity(0.35))
+                                .bg(p.surface.active)
                                 .child(Icon::new(IconName::Package).xsmall().text_color(p.primary))
                                 .child(
                                     div()

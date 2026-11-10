@@ -466,6 +466,64 @@ fn widgets_use_design_tokens() {
     );
 }
 
+/// 高频透明度必须使用应用级语义令牌。
+///
+/// 这些表达式曾散落在业务页面中，导致同一视觉层级由不同文件各自决定透明度。
+/// 集中到 `Palette` 后，页面只选择 surface、stroke、tone、text 语义，主题切换
+/// 才能整体调整最终观感。
+#[test]
+fn high_frequency_opacity_uses_semantic_tokens() {
+    const RAW_EXPRESSIONS: &[&str] = &[
+        "p.muted.opacity(0.04)",
+        "p.muted.opacity(0.08)",
+        "p.muted.opacity(0.12)",
+        "p.muted.opacity(0.3)",
+        "p.muted.opacity(0.30)",
+        "p.muted.opacity(0.35)",
+        "p.muted.opacity(0.4)",
+        "p.muted.opacity(0.40)",
+        "p.border.opacity(0.12)",
+        "p.border.opacity(0.15)",
+        "p.border.opacity(0.3)",
+        "p.border.opacity(0.30)",
+        "p.border.opacity(0.4)",
+        "p.border.opacity(0.40)",
+        "p.border.opacity(0.5)",
+        "p.border.opacity(0.50)",
+        "p.danger.opacity(0.12)",
+        "p.warning.opacity(0.12)",
+        "p.success.opacity(0.12)",
+        "p.primary.opacity(0.12)",
+        "p.muted_foreground.opacity(0.8)",
+        "p.muted_foreground.opacity(0.80)",
+        "p.muted_foreground.opacity(0.7)",
+        "p.muted_foreground.opacity(0.70)",
+        "p.muted_foreground.opacity(0.4)",
+        "p.muted_foreground.opacity(0.40)",
+        "p.foreground.opacity(0.08)",
+    ];
+
+    let mut offenders = Vec::new();
+    for (path, content) in ui_source_files() {
+        if !path.contains("/crates/transom-ui/src/") || path.ends_with("/palette.rs") {
+            continue;
+        }
+        for (index, line) in content.lines().enumerate() {
+            for expression in RAW_EXPRESSIONS {
+                if line.contains(expression) {
+                    offenders.push(format!("{path}:{}: {}", index + 1, line.trim()));
+                }
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "业务页面仍直接使用高频透明度，请改用 Palette 的 surface/stroke/tone/text 语义令牌：\n{}",
+        offenders.join("\n")
+    );
+}
+
 /// 终端专属按键必须由应用初始化一次性注册，不能在每个终端实体构造时追加。
 #[test]
 fn terminal_view_does_not_bind_global_keys() {

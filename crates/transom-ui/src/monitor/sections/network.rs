@@ -209,7 +209,7 @@ fn interface_row(interface: &transom_core::InterfaceRate, p: &Palette) -> AnyEle
         .px_1()
         .py_0p5()
         .rounded_sm()
-        .hover(|s| s.bg(p.muted.opacity(0.3)))
+        .hover(|s| s.bg(p.surface.hover))
         .text_xs()
         .child(
             div()

@@ -40,7 +40,7 @@ pub(super) fn render_commit_row(
         })
         .hover(|style| {
             if !is_selected {
-                style.bg(p.muted.opacity(0.35))
+                style.bg(p.surface.active)
             } else {
                 style
             }
@@ -84,7 +84,7 @@ pub(super) fn render_commit_row(
                         .child(
                             div()
                                 .px_1()
-                                .bg(p.muted.opacity(0.3))
+                                .bg(p.surface.hover)
                                 .rounded_sm()
                                 .font_weight(FontWeight::MEDIUM)
                                 .child(commit.short_oid().to_string()),
@@ -146,7 +146,7 @@ pub(super) fn render_commit_detail_card(
                         .cursor_pointer()
                         .px_1p5()
                         .py_0p5()
-                        .bg(p.muted.opacity(0.3))
+                        .bg(p.surface.hover)
                         .rounded_sm()
                         .hover(|s| s.bg(p.muted.opacity(0.6)))
                         .child(
@@ -214,7 +214,7 @@ pub(super) fn render_file_row(
         .gap_2()
         .items_center()
         .cursor_pointer()
-        .hover(|s| s.bg(p.muted.opacity(0.3)))
+        .hover(|s| s.bg(p.surface.hover))
         .child(
             div()
                 .w(px(14.0))

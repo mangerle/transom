@@ -50,7 +50,7 @@ pub(super) fn render_push_dialog(
         .py_2()
         .gap_2()
         .items_center()
-        .bg(p.muted.opacity(0.4))
+        .bg(p.surface.pressed)
         .border_b_1()
         .border_color(p.divider(p.border))
         .child(
@@ -59,7 +59,7 @@ pub(super) fn render_push_dialog(
                 .items_center()
                 .px_2()
                 .py_1()
-                .bg(p.muted.opacity(0.35))
+                .bg(p.surface.active)
                 .rounded_sm()
                 .child(
                     Icon::new(IconName::FolderGit)
@@ -284,7 +284,7 @@ pub(super) fn render_push_dialog(
             .py_1p5()
             .gap_2()
             .items_center()
-            .bg(p.danger.opacity(0.12))
+            .bg(p.tone.danger_subtle)
             .border_b_1()
             .border_color(p.danger.opacity(0.4))
             .child(

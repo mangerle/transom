@@ -77,7 +77,7 @@ pub(crate) fn render_env_card(
         .rounded(p.radius.sm)
         .bg(p.background)
         .border_1()
-        .border_color(p.border.opacity(0.3))
+        .border_color(p.stroke.muted)
         .children(items)
         .children(count_hint);
 

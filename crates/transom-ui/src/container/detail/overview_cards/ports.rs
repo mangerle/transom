@@ -70,9 +70,9 @@ pub(crate) fn render_port_chips(
                     .px_2()
                     .py_1()
                     .rounded(p.radius.sm)
-                    .bg(p.muted.opacity(0.12))
+                    .bg(p.surface.subtle)
                     .border_1()
-                    .border_color(p.border.opacity(0.4))
+                    .border_color(p.stroke.medium)
                     .child(
                         Button::new(ElementId::Name(format!("chip-open-{public}").into()))
                             .ghost()
@@ -101,9 +101,9 @@ pub(crate) fn render_port_chips(
                     .px_2()
                     .py_1()
                     .rounded(p.radius.sm)
-                    .bg(p.muted.opacity(0.08))
+                    .bg(p.surface.faint)
                     .border_1()
-                    .border_color(p.border.opacity(0.3))
+                    .border_color(p.stroke.muted)
                     .child(
                         div()
                             .text_size(rems(0.6875))

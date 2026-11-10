@@ -72,7 +72,7 @@ impl CollapsibleCard {
             .rounded_md()
             .border_1()
             .border_color(p.border.opacity(0.65))
-            .bg(p.muted.opacity(0.35));
+            .bg(p.surface.active);
 
         // 标题栏：点击整行可切换折叠/展开
         let mut header = h_flex()
@@ -84,7 +84,7 @@ impl CollapsibleCard {
             .items_center()
             .rounded_t_md()
             .cursor_pointer()
-            .hover(|s| s.bg(p.muted.opacity(0.4)))
+            .hover(|s| s.bg(p.surface.pressed))
             .on_click(on_toggle)
             .child(
                 h_flex()
@@ -124,7 +124,7 @@ impl CollapsibleCard {
                 .overflow_hidden()
                 .p_2p5()
                 .border_t_1()
-                .border_color(p.border.opacity(0.4))
+                .border_color(p.stroke.medium)
                 .child(content);
             card = card.child(
                 Collapsible::new()

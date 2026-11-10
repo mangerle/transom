@@ -54,7 +54,7 @@ pub(crate) fn progress_bar(fraction: f32, color: Hsla, p: &Palette) -> AnyElemen
         .w_full()
         .h(rems(space::XS))
         .rounded_full()
-        .bg(p.foreground.opacity(0.08))
+        .bg(p.surface.contrast)
         .child(
             div()
                 .h_full()

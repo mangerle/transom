@@ -202,7 +202,7 @@ impl AppShell {
                         .text_xs()
                         .text_color(p.danger)
                         .cursor_pointer()
-                        .hover(|style| style.bg(p.danger.opacity(0.12)))
+                        .hover(|style| style.bg(p.tone.danger_subtle))
                         .child(rust_i18n::t!("zmodem.cancel").to_string())
                         .on_click(cancel),
                 )

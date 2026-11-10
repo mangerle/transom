@@ -71,7 +71,7 @@ pub(crate) fn render_container_discovery(
         .gap_1()
         .p_2()
         .rounded(p.radius.md)
-        .bg(p.muted.opacity(0.35));
+        .bg(p.surface.active);
     let view_dismiss = view.clone();
     body = body.child(
         h_flex()
@@ -172,7 +172,7 @@ pub(crate) fn render_container_discovery(
                 .mt_2()
                 .pt_1()
                 .border_t_1()
-                .border_color(p.border.opacity(0.4))
+                .border_color(p.stroke.medium)
                 .text_xs()
                 .font_weight(FontWeight::BOLD)
                 .text_color(p.muted_foreground)

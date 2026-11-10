@@ -239,7 +239,7 @@ pub(super) fn trigger_rule_row(
         .gap_2()
         .items_center()
         .border_b_1()
-        .border_color(p.border.opacity(0.5))
+        .border_color(p.stroke.strong)
         .child(
             Switch::new(ElementId::Name(format!("trigger-switch-{id}").into()))
                 .checked(is_enabled)

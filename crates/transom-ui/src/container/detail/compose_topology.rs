@@ -94,16 +94,13 @@ pub(crate) fn render_compose_topology_board(
                     .child(tier_name),
             )
             .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.7))
-                    .child(
-                        rust_i18n::t!(
-                            "container.compose.service_count",
-                            count = tier_services.len()
-                        )
-                        .to_string(),
-                    ),
+                div().text_xs().text_color(p.text.muted).child(
+                    rust_i18n::t!(
+                        "container.compose.service_count",
+                        count = tier_services.len()
+                    )
+                    .to_string(),
+                ),
             );
 
         tier_block = tier_block.child(tier_header);
@@ -156,13 +153,13 @@ fn render_tier_connector_line(p: &Palette) -> AnyElement {
                 .bg(p.muted.opacity(0.06))
                 .border_1()
                 .border_color(p.border.opacity(0.2))
-                .child(div().w(px(24.0)).h(px(1.0)).bg(p.border.opacity(0.5)))
+                .child(div().w(px(24.0)).h(px(1.0)).bg(p.stroke.strong))
                 .child(
                     Icon::new(IconName::ArrowDown)
                         .with_size(px(11.0))
                         .text_color(p.muted_foreground),
                 )
-                .child(div().w(px(24.0)).h(px(1.0)).bg(p.border.opacity(0.5))),
+                .child(div().w(px(24.0)).h(px(1.0)).bg(p.stroke.strong)),
         )
         .into_any_element()
 }
@@ -387,7 +384,7 @@ fn render_topology_card(
             .items_center()
             .pt_1()
             .border_t_1()
-            .border_color(p.border.opacity(0.15))
+            .border_color(p.stroke.subtle)
             .text_xs();
 
         // 依赖的上游
@@ -407,7 +404,7 @@ fn render_topology_card(
                         .bg(if is_dep_focused {
                             p.primary.opacity(0.15)
                         } else {
-                            p.muted.opacity(0.3)
+                            p.surface.hover
                         })
                         .text_color(if is_dep_focused {
                             p.primary
@@ -442,7 +439,7 @@ fn render_topology_card(
                         .bg(if is_down_focused {
                             p.warning.opacity(0.15)
                         } else {
-                            p.muted.opacity(0.3)
+                            p.surface.hover
                         })
                         .text_color(if is_down_focused {
                             p.warning

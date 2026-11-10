@@ -299,7 +299,7 @@ fn key_row(
         .bg(if is_selected {
             p.sidebar_accent
         } else {
-            p.muted.opacity(0.35)
+            p.surface.active
         })
         .hover(|style| {
             if is_selected {

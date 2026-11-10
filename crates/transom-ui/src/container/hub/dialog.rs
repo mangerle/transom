@@ -242,7 +242,7 @@ pub(crate) fn render_container_hub_dialog_body(
                     .w(px(40.0))
                     .h(px(40.0))
                     .rounded(p.radius.full)
-                    .bg(p.danger.opacity(0.12))
+                    .bg(p.tone.danger_subtle)
                     .items_center()
                     .justify_center()
                     .child(
@@ -278,7 +278,7 @@ pub(crate) fn render_container_hub_dialog_body(
                         .w(px(44.0))
                         .h(px(44.0))
                         .rounded(p.radius.full)
-                        .bg(p.muted.opacity(0.08))
+                        .bg(p.surface.faint)
                         .items_center()
                         .justify_center()
                         .child(

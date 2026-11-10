@@ -117,7 +117,7 @@ impl AppShell {
             .child(
                 div()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.7))
+                    .text_color(p.text.muted)
                     .child(row.project_count.to_string()),
             );
         band = band.child(reorder_overlay(&overlay_app, anchor, true, p));
@@ -264,7 +264,7 @@ impl AppShell {
             band = band.child(
                 div()
                     .text_xs()
-                    .text_color(p.muted_foreground.opacity(0.7))
+                    .text_color(p.text.muted)
                     .child(badge.dirty.to_string()),
             );
         }

@@ -37,7 +37,7 @@ impl MonitorView {
                     ListItem::new(ElementId::Name(format!("service-item-{idx}").into()))
                         .p_1p5()
                         .rounded_sm()
-                        .bg(p.danger.opacity(0.12))
+                        .bg(p.tone.danger_subtle)
                         .border_1()
                         .border_color(p.danger.opacity(0.3))
                         .child(
