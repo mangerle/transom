@@ -1,5 +1,6 @@
 //! Git 差异视图显示选项与状态模型。
 
+use gpui_kit::component::VirtualListScrollHandle;
 use transom_core::{DiffContent, GitRequestId};
 
 /// 空白处理档位（对应 IDEA 差异工具条的「忽略差异」）。
@@ -65,6 +66,8 @@ pub(crate) struct GitDiffState {
     pub content: Option<DiffContent>,
     pub loading: bool,
     pub error: Option<String>,
+    /// 差异行的虚拟滚动句柄。
+    pub scroll_handle: VirtualListScrollHandle,
     pub request_id: GitRequestId,
 }
 

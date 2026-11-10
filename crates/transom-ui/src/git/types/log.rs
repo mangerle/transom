@@ -1,5 +1,6 @@
 //! Git 日志状态与跳转定位模型。
 
+use gpui_kit::component::VirtualListScrollHandle;
 use transom_core::{CommitEntry, GitRequestId};
 use transom_git::GraphRow;
 
@@ -13,6 +14,8 @@ pub(crate) struct GitLogState {
     pub has_more: bool,
     pub loading: bool,
     pub error: Option<String>,
+    /// 提交表的虚拟滚动句柄。
+    pub scroll_handle: VirtualListScrollHandle,
     /// 查询范围（当前分支 / 全部引用）。
     pub scope: transom_core::LogScope,
     /// 当前在途的日志请求：`(请求 id, 是否为追加页)`。
@@ -126,6 +129,7 @@ impl Default for GitLogState {
             has_more: false,
             loading: false,
             error: None,
+            scroll_handle: VirtualListScrollHandle::new(),
             scope: transom_core::LogScope::CurrentBranch,
             request: None,
             columns: LogColumns::default(),

@@ -8,17 +8,19 @@ use super::log_refs::ref_chip;
 use super::menus::{CommitMenuTarget, render_commit_menu};
 use super::{placeholder, placeholder_colored};
 use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::git::graph_paint::{self, GraphCell};
 use crate::git::relative_time;
 use crate::git::types::{LogColumn, LogColumns};
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
-use gpui_kit::component::scroll::ScrollableElement;
+use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use std::rc::Rc;
 use transom_core::{GitProject, TabId};
 
 type State = crate::git::GitWorkspaceState;
@@ -33,11 +35,23 @@ const TIME_WIDTH: f32 = 96.0;
 
 /// 中栏提交表。
 pub(crate) fn render_log_table(
+    workspace: Entity<GitWorkspace>,
     state: &State,
     app: Entity<AppShell>,
     tab_id: TabId,
     p: &Palette,
 ) -> AnyElement {
+    let entries_len = state.log.entries.len();
+    if state.log.loading && entries_len == 0 {
+        return placeholder(rust_i18n::t!("git.log.loading").to_string(), p);
+    }
+    if let Some(error) = state.log.error.clone() {
+        return placeholder_colored(error, p.danger);
+    }
+    if entries_len == 0 {
+        return placeholder(rust_i18n::t!("git.log.empty").to_string(), p);
+    }
+    let selected = state.selected_commit;
     let lane_count = state
         .log
         .rows
@@ -46,69 +60,88 @@ pub(crate) fn render_log_table(
         .max()
         .unwrap_or(1)
         .clamp(1, 8);
-    let selected = state.selected_commit;
-    let mut rows: Vec<AnyElement> = Vec::with_capacity(state.log.entries.len() + 2);
-    if state.log.loading && state.log.entries.is_empty() {
-        rows.push(placeholder(rust_i18n::t!("git.log.loading").to_string(), p));
-    } else if let Some(error) = state.log.error.clone() {
-        rows.push(placeholder_colored(error, p.danger));
-    } else if state.log.entries.is_empty() {
-        rows.push(placeholder(rust_i18n::t!("git.log.empty").to_string(), p));
-    }
     let cur_branch = state.status.as_ref().and_then(|status| match &status.head {
         transom_core::HeadState::OnBranch(name) => Some(name.clone()),
         _ => None,
     });
-    for (index, entry) in state.log.entries.iter().enumerate() {
-        let shape = RowShape {
-            project: state.project.clone(),
-            cell: GraphCell::at(&state.log.rows, index),
-            lanes: lane_count,
-            selected: selected == Some(index),
-            columns: state.log.columns,
-            can_fold: index == 0 && entry.parents.len() == 1,
-            is_tip: index == 0,
-            on_branch: matches!(
-                state.status.as_ref().map(|status| &status.head),
-                Some(transom_core::HeadState::OnBranch(_))
-            ),
-            current_branch: cur_branch.clone(),
-        };
-        rows.push(render_commit_row(tab_id, entry, &shape, &app, p));
-    }
-    if state.log.has_more && !state.log.loading {
-        let more_app = app.clone();
-        rows.push(
-            h_flex()
-                .justify_center()
-                .py_2()
-                .child(
-                    Button::new("git-log-more")
-                        .ghost()
-                        .xsmall()
-                        .label(rust_i18n::t!("git.log.load_more").to_string())
-                        .on_click(move |_, _, cx| {
-                            more_app.update(cx, |this, cx| {
-                                this.git_load_more_log(tab_id, cx);
-                            });
-                        }),
-                )
-                .into_any_element(),
-        );
-    }
+    let on_branch = matches!(
+        state.status.as_ref().map(|status| &status.head),
+        Some(transom_core::HeadState::OnBranch(_))
+    );
+    let has_more = state.log.has_more && !state.log.loading;
+    let scroll = state.log.scroll_handle.clone();
+    let item_count = entries_len + usize::from(has_more);
+    let item_sizes = Rc::new(vec![size(px(0.0), px(ROW_HEIGHT)); item_count]);
     let context_columns = state.log.columns;
     let context_app = app.clone();
+    let p = p.clone();
+    let more_app = app.clone();
+    let rows_app = app.clone();
+    let workspace_for_rows = workspace;
+    let list = v_virtual_list(
+        app.clone(),
+        ElementId::Name("git-log-virtual-list".into()),
+        item_sizes,
+        move |_app, range, _window, cx| {
+            let workspace = workspace_for_rows.clone();
+            let workspace = workspace.read(cx);
+            let state = &workspace.state;
+            range
+                .filter_map(|index| {
+                    if index >= entries_len {
+                        if !has_more {
+                            return None;
+                        }
+                        let app = more_app.clone();
+                        return Some(
+                            h_flex()
+                                .justify_center()
+                                .py_2()
+                                .child(
+                                    Button::new("git-log-more")
+                                        .ghost()
+                                        .xsmall()
+                                        .label(rust_i18n::t!("git.log.load_more").to_string())
+                                        .on_click(move |_, _, cx| {
+                                            app.update(cx, |this, cx| {
+                                                this.git_load_more_log(tab_id, cx);
+                                            });
+                                        }),
+                                )
+                                .into_any_element(),
+                        );
+                    }
+                    let entry = state.log.entries.get(index)?;
+                    let shape = RowShape {
+                        project: state.project.clone(),
+                        cell: GraphCell::at(&state.log.rows, index),
+                        lanes: lane_count,
+                        selected: selected == Some(index),
+                        columns: state.log.columns,
+                        can_fold: index == 0 && entry.parents.len() == 1,
+                        is_tip: index == 0,
+                        on_branch,
+                        current_branch: cur_branch.clone(),
+                    };
+                    Some(render_commit_row(tab_id, entry, &shape, &rows_app, &p))
+                })
+                .collect()
+        },
+    )
+    .track_scroll(&scroll)
+    .w_full()
+    .h_full();
     v_flex()
         .w_full()
         .flex_1()
         .min_w_0()
         .min_h_0()
-        .overflow_y_scrollbar()
-        .children(rows)
+        .relative()
+        .child(ScrollBounce::new("git-log-scroll", &scroll, list).enabled(false))
+        .child(Scrollbar::vertical(&scroll).viewport_from_layout())
         .context_menu(move |mut menu, _window, _cx| {
-            let menu_app = context_app.clone();
             for column in [LogColumn::Author, LogColumn::Time] {
-                let item_app = menu_app.clone();
+                let item_app = context_app.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!(column.i18n_key()).to_string())
                         .checked(column.is_shown(&context_columns))

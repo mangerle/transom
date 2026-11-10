@@ -1,6 +1,7 @@
 //! 工作区主体状态与查询/日志辅助方法。
 
 use super::super::*;
+use gpui_kit::component::VirtualListScrollHandle;
 
 /// 一个引擎工作区的全部界面状态。
 pub(crate) struct ContainerWorkspaceState {
@@ -24,6 +25,8 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) list_split: Entity<ResizableState>,
     /// 列表键盘导航焦点句柄。
     pub(crate) list_focus_handle: FocusHandle,
+    /// 列表虚拟滚动句柄。
+    pub(crate) list_scroll: VirtualListScrollHandle,
     pub(crate) containers: Vec<ContainerSummary>,
     pub(crate) images: Vec<ContainerImageSummary>,
     pub(crate) volumes: Vec<ContainerVolumeSummary>,
@@ -226,6 +229,7 @@ impl ContainerWorkspaceState {
             sort_desc: false,
             list_split: cx.new(|_| ResizableState::default()),
             list_focus_handle: cx.focus_handle(),
+            list_scroll: VirtualListScrollHandle::new(),
             containers: Vec::new(),
             images: Vec::new(),
             volumes: Vec::new(),

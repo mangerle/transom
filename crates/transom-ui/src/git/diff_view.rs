@@ -23,13 +23,14 @@ use crate::git::GitWorkspaceState as State;
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::scroll::ScrollableElement;
+use gpui_kit::component::scroll::Scrollbar;
 
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use std::rc::Rc;
 use transom_core::TabId;
 
 /// 行高与行号列宽（px）。
@@ -60,6 +61,7 @@ pub(crate) struct Cell {
 }
 
 /// 一行差异（并排模式下左右各一格）。
+#[derive(Clone)]
 pub(crate) struct Row {
     left: Option<Cell>,
     right: Option<Cell>,
@@ -222,17 +224,42 @@ pub(crate) fn render(
             Some(content) => {
                 let row_list = rows
                     .unwrap_or_else(|| build_rows(&content.old_text, &content.new_text, &options));
-                v_flex()
+                let row_count = row_list.len();
+                let row_list = Rc::new(row_list);
+                let row_sizes = Rc::new(vec![size(px(0.0), px(LINE_HEIGHT)); row_count]);
+                let scroll = diff.scroll_handle.clone();
+                let options_for_rows = options;
+                let palette = p.clone();
+                let list = v_virtual_list(
+                    app.clone(),
+                    ElementId::Name("git-diff-virtual-list".into()),
+                    row_sizes,
+                    move |_workspace, range, _window, _cx| {
+                        range
+                            .filter_map(|index| {
+                                row_list
+                                    .get(index)
+                                    .cloned()
+                                    .map(|row| render_row(row, &options_for_rows, &palette))
+                            })
+                            .collect()
+                    },
+                )
+                .track_scroll(&scroll)
+                .w_full()
+                .h_full();
+                div()
+                    .relative()
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scrollbar()
                     .when(content.truncated, |el| {
                         el.child(placeholder(
                             rust_i18n::t!("git.diff.truncated").to_string(),
                             p,
                         ))
                     })
-                    .children(row_list.into_iter().map(|row| render_row(row, &options, p)))
+                    .child(ScrollBounce::new("git-diff-scroll", &scroll, list).enabled(false))
+                    .child(Scrollbar::vertical(&scroll).viewport_from_layout())
                     .into_any_element()
             }
         }

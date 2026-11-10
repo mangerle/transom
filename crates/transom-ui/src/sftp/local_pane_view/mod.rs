@@ -49,13 +49,16 @@ pub(crate) struct SftpLocalPaneProps {
     pub(crate) diff_ready: bool,
 }
 
-/// 本地内容渲染输入：条目、选中集与滚动句柄的只读借用。
-struct LocalContentInput<'a> {
+/// 本地内容渲染输入：条目、选中集与滚动句柄。
+///
+/// 条目与选中集按值传入，随后直接转成 `Rc` 交给虚拟列表闭包，避免每帧
+/// 再复制一遍完整目录内容。
+struct LocalContentInput {
     tab_id: TabId,
-    entries: &'a [LocalFileEntry],
-    selection: &'a std::collections::BTreeSet<std::path::PathBuf>,
-    primary: Option<&'a std::path::Path>,
-    scroll: &'a VirtualListScrollHandle,
+    entries: Vec<LocalFileEntry>,
+    selection: std::collections::BTreeSet<std::path::PathBuf>,
+    primary: Option<std::path::PathBuf>,
+    scroll: VirtualListScrollHandle,
     remote_available: bool,
 }
 
@@ -63,7 +66,7 @@ impl SftpPanelView {
     /// 本地内容：空态或虚拟列表；行菜单与选择态在闭包内构造。
     fn render_local_content(
         &self,
-        input: LocalContentInput<'_>,
+        input: LocalContentInput,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -75,9 +78,9 @@ impl SftpPanelView {
             scroll,
             remote_available,
         } = input;
-        let local_selection = std::rc::Rc::new(selection.clone());
-        let local_primary = std::rc::Rc::new(primary.map(|path| path.to_path_buf()));
-        let local_entries = entries.to_vec();
+        let local_selection = std::rc::Rc::new(selection);
+        let local_primary = std::rc::Rc::new(primary);
+        let local_entries = std::rc::Rc::new(entries);
         if local_entries.is_empty() {
             crate::widgets::empty_state(
                 IconName::FolderOpen,
@@ -93,7 +96,7 @@ impl SftpPanelView {
                     .map(|entry| SftpRowPath::Local(entry.path.clone()))
                     .collect(),
             );
-            let local_entries_rc = std::rc::Rc::new(local_entries);
+            let local_entries_rc = local_entries.clone();
             let p = p.clone();
             let app_entity = cx.entity().clone();
             v_virtual_list(
@@ -148,7 +151,7 @@ impl SftpPanelView {
                         .collect()
                 },
             )
-            .track_scroll(scroll)
+            .track_scroll(&scroll)
             .into_any_element()
         }
     }
@@ -175,10 +178,10 @@ impl SftpPanelView {
         let local_content = self.render_local_content(
             LocalContentInput {
                 tab_id,
-                entries: &local_entries,
-                selection: &local_selection,
-                primary: local_primary.as_deref(),
-                scroll: &local_scroll_handle,
+                entries: local_entries,
+                selection: local_selection,
+                primary: local_primary,
+                scroll: local_scroll_handle.clone(),
                 remote_available,
             },
             p,

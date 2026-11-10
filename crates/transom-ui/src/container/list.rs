@@ -82,6 +82,7 @@ pub(crate) struct ListRow {
 /// 不再反查 `AppShell`。焦点与按键装饰留在外壳的标签骨架里，避免把窗口级
 /// 焦点管理塞进纯渲染函数。
 pub(crate) fn render_container_list(
+    app_entity: Entity<AppShell>,
     view: &Entity<ContainerWorkspace>,
     workspace: &ContainerWorkspaceState,
     query: &str,
@@ -103,10 +104,12 @@ pub(crate) fn render_container_list(
         p,
     );
     let body = render_rows(
+        app_entity,
         view,
-        &rows,
-        &workspace.selected,
-        &workspace.list_focus_handle,
+        rows,
+        workspace.selected.clone(),
+        workspace.list_focus_handle.clone(),
+        workspace.list_scroll.clone(),
         p,
     );
     let toolbar_header = h_flex()

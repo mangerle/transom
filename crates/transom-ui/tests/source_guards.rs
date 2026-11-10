@@ -422,6 +422,26 @@ fn terminal_view_does_not_bind_global_keys() {
     );
 }
 
+/// 可无限增长的数据列表必须使用虚拟列表，不能在渲染时全量生成元素。
+#[test]
+fn large_lists_use_virtualization() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (relative, required) in [
+        ("src/git/log_view/log_table.rs", "v_virtual_list"),
+        ("src/git/diff_view.rs", "v_virtual_list"),
+        ("src/container/list/render.rs", "v_virtual_list"),
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取列表文件失败");
+        assert!(content.contains(required), "{relative} 必须使用虚拟列表");
+    }
+    let local_sftp = std::fs::read_to_string(root.join("src/sftp/local_pane_view/mod.rs"))
+        .expect("读取 SFTP 本地列表失败");
+    assert!(
+        !local_sftp.contains("entries.to_vec()"),
+        "SFTP 本地列表不得每帧复制完整条目集合"
+    );
+}
+
 /// 可变列表的元素身份必须使用业务标识，不能使用会漂移的位置索引。
 #[test]
 fn mutable_list_identities_use_business_ids() {

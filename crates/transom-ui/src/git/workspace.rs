@@ -262,7 +262,7 @@ impl AppShell {
         let details_width = state.details_width;
         let left = refs_open
             .then(|| log_view::render_refs_panel(state, app.clone(), tab_id, refs_width, p, cx));
-        let table = log_view::render_log_table(state, app.clone(), tab_id, p);
+        let table = log_view::render_log_table(workspace.clone(), state, app.clone(), tab_id, p);
         let right = log_view::render_right_panel(state, app.clone(), tab_id, details_width, p);
         let toggle_app = app.clone();
         h_flex()

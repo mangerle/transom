@@ -5,14 +5,21 @@
 //! `AppShell` 的渲染方法。
 
 use super::*;
+use crate::app::AppShell;
 use crate::widgets::status_dot_bare;
+use gpui_kit::base::{ScrollBounce, v_virtual_list};
+use gpui_kit::component::VirtualListScrollHandle;
+use gpui_kit::component::scroll::Scrollbar;
+use std::rc::Rc;
 
 /// 渲染列表；空结果给出可行动的提示而不是白屏。
 pub(crate) fn render_rows(
+    app_entity: Entity<AppShell>,
     view: &Entity<ContainerWorkspace>,
-    rows: &[ListRow],
-    selected: &Option<String>,
-    focus_handle: &FocusHandle,
+    rows: Vec<ListRow>,
+    selected: Option<String>,
+    focus_handle: FocusHandle,
+    scroll: VirtualListScrollHandle,
     p: &Palette,
 ) -> AnyElement {
     if rows.is_empty() {
@@ -30,17 +37,41 @@ pub(crate) fn render_rows(
             ))
             .into_any_element();
     }
-    let mut list = v_flex().gap_0p5().w_full();
-    for row in rows {
-        let is_selected = selected.as_deref() == Some(row_key(&row.target));
-        list = list.child(list_row(view, row, is_selected, focus_handle, p));
-    }
+    let row_count = rows.len();
+    let rows = Rc::new(rows);
+    let item_sizes = Rc::new(vec![size(px(0.0), px(40.0)); row_count]);
+    let p = p.clone();
+    let view_for_rows = view.clone();
+    let list = v_virtual_list(
+        app_entity,
+        ElementId::Name("container-list-virtual-list".into()),
+        item_sizes,
+        move |_app, range, _window, _cx| {
+            range
+                .filter_map(|index| {
+                    let row = rows.get(index)?;
+                    let is_selected = selected.as_deref() == Some(row_key(&row.target));
+                    Some(list_row(
+                        &view_for_rows,
+                        row,
+                        is_selected,
+                        &focus_handle,
+                        &p,
+                    ))
+                })
+                .collect()
+        },
+    )
+    .track_scroll(&scroll)
+    .w_full()
+    .h_full();
     div()
         .id("container-list-scroll")
+        .relative()
         .flex_1()
         .min_h_0()
-        .overflow_y_scroll()
-        .child(list)
+        .child(ScrollBounce::new("container-list-scroll-bounce", &scroll, list).enabled(false))
+        .child(Scrollbar::vertical(&scroll).viewport_from_layout())
         .into_any_element()
 }
 

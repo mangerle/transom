@@ -425,7 +425,13 @@ impl AppShell {
             ) {
                 return crate::container::render_container_connection_state(&view, &state.state, p);
             }
-            let list = crate::container::render_container_list_content(&view, &state.state, cx, p);
+            let list = crate::container::render_container_list_content(
+                cx.entity(),
+                &view,
+                &state.state,
+                cx,
+                p,
+            );
             // 焦点与按键仍归外壳：列表渲染函数只画内容，键盘事件到来时再按当前
             // 状态重算行集合，避免把窗口级焦点管理塞进纯渲染函数。
             let list_focus = state.state.list_focus_handle.clone();

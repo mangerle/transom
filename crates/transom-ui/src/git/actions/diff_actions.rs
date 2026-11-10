@@ -36,6 +36,7 @@ impl AppShell {
                 content: None,
                 loading: true,
                 error: None,
+                scroll_handle: gpui_kit::component::VirtualListScrollHandle::new(),
                 request_id,
             };
             state.diff = Some(new_diff.clone());
