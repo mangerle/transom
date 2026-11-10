@@ -1,12 +1,12 @@
 //! 本地分支右键上下文菜单（全方位对齐 IntelliJ IDEA 引用上下文菜单）。
 //!
 //! 设计原理（Why）：
-//! - 遵循 IDEA 本地分支项的右键菜单分组和快捷键口径；
+//! - 遵循 IDEA 本地分支项的右键菜单分组口径；
 //! - 贯穿确定性 `GitProject` 与 `TabId`，彻底根除跨标签页盲查项目失败导致的点击静默失效；
 //! - 参数收敛为专用目标结构体，符合复杂度控制与参数对象规范。
 
 use crate::app::AppShell;
-use crate::widgets::{menu_item, menu_item_with_shortcut};
+use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::prelude::FluentBuilder;
@@ -117,11 +117,10 @@ pub(crate) fn render_local_branch_menu(
                 });
             },
         ))
-        // 5. 推送... (Ctrl+Shift+K)
-        .item(menu_item_with_shortcut(
+        // 5. 推送...
+        .item(menu_item(
             rust_i18n::t!("git.menu.push").to_string(),
             IconName::ArrowUpFromLine,
-            "Ctrl+Shift+K",
             move |_, _, cx| {
                 let target = name_push.clone();
                 let project = project_push.clone();
@@ -146,11 +145,10 @@ pub(crate) fn render_local_branch_menu(
             },
         ))
         .item(PopupMenuItem::separator())
-        // 7. 重命名... (F2)
-        .item(menu_item_with_shortcut(
+        // 7. 重命名...
+        .item(menu_item(
             rust_i18n::t!("git.menu.rename_branch").to_string(),
             IconName::Pencil,
-            "F2",
             move |_, window, cx| {
                 let old = name_rename.clone();
                 let project = project_rename.clone();
@@ -165,12 +163,11 @@ pub(crate) fn render_local_branch_menu(
                 });
             },
         ))
-        // 8. 删除(D) (仅非当前检出分支允许删除)
+        // 8. 删除（仅非当前检出分支允许删除）
         .when(!is_current, |m| {
-            m.item(menu_item_with_shortcut(
+            m.item(menu_item(
                 rust_i18n::t!("git.menu.delete_ref").to_string(),
                 IconName::Trash,
-                "Delete",
                 move |_, _, cx| {
                     let name = name_delete.clone();
                     let project = project_delete.clone();

@@ -410,6 +410,18 @@ fn widgets_use_design_tokens() {
     );
 }
 
+/// 终端专属按键必须由应用初始化一次性注册，不能在每个终端实体构造时追加。
+#[test]
+fn terminal_view_does_not_bind_global_keys() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../transom-terminal/src/view/mod.rs");
+    let content = std::fs::read_to_string(&path).expect("读取终端视图失败");
+    assert!(
+        !content.contains("cx.bind_keys("),
+        "TerminalView::new 不得追加全局 keymap；终端按键应在应用初始化阶段注册"
+    );
+}
+
 /// 菜单项必须走 widgets 构造器：`PopupMenuItem::new(...)` 紧随 `.icon(...)`
 /// 是迁移前的写法，散落回页面会让图标顺序与禁用语义各自漂移。
 ///

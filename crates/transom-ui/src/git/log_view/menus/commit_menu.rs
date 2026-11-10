@@ -1,13 +1,13 @@
 //! 提交表格行右键上下文菜单（全方位对齐 IntelliJ IDEA 提交上下文菜单）。
 //!
 //! 设计原理（Why）：
-//! - 顺序、分组、文案与快捷键完整对齐 IDEA；
+//! - 顺序、分组与文案对齐 IDEA；
 //! - 菜单操作不持有界面的可变引用，通过目标包 `CommitMenuTarget` 解耦；
 //! - 包含向智能体上下文添加、拣选、还原、重置、交互式变基、新建分支/标记与父子跳转。
 
 use crate::app::AppShell;
 use crate::git::types::LogJump;
-use crate::widgets::{MenuItem, menu_item, menu_item_with_shortcut};
+use crate::widgets::{MenuItem, menu_item};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
@@ -61,11 +61,10 @@ pub(crate) fn render_commit_menu(
     let cur_branch_name = current_branch.unwrap_or_else(|| "HEAD".to_string());
 
     menu
-        // 1. 复制修订号 (Ctrl+Alt+Shift+C)
-        .item(menu_item_with_shortcut(
+        // 1. 复制修订号
+        .item(menu_item(
             rust_i18n::t!("git.menu.copy_oid").to_string(),
             IconName::Copy,
-            "Ctrl+Alt+Shift+C",
             {
                 let copy_app = app.clone();
                 move |_, _, cx| {
@@ -247,13 +246,12 @@ pub(crate) fn render_commit_menu(
             }),
         )
         .item(PopupMenuItem::separator())
-        // 11. 编辑提交信息... (F2)
+        // 11. 编辑提交信息...
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.edit_commit_message").to_string(),
                 IconName::Pencil,
             )
-            .shortcut("F2")
             .disabled(!can_fold)
             .render({
                 let edit_app = app.clone();
@@ -390,11 +388,10 @@ pub(crate) fn render_commit_menu(
                 }
             },
         ))
-        // 18. 新建分支... (Ctrl+Alt+N)
-        .item(menu_item_with_shortcut(
+        // 18. 新建分支...
+        .item(menu_item(
             rust_i18n::t!("git.menu.new_branch_from").to_string(),
             IconName::GitBranchPlus,
-            "Ctrl+Alt+N",
             {
                 let branch_app = app.clone();
                 let branch_project = project.clone();

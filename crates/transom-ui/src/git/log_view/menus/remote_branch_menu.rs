@@ -1,12 +1,12 @@
 //! 远程分支右键上下文菜单（全方位对齐 IntelliJ IDEA 引用上下文菜单）。
 //!
 //! 设计原理（Why）：
-//! - 遵循 IDEA 远程分支项的右键菜单分组和快捷键口径；
+//! - 遵循 IDEA 远程分支项的右键菜单分组口径；
 //! - 贯穿确定性 `GitProject` 与 `TabId`，彻底根除跨标签页盲查项目失败导致的点击静默失效；
 //! - 参数收敛为专用目标结构体，符合复杂度控制与参数对象规范。
 
 use crate::app::AppShell;
-use crate::widgets::{menu_item, menu_item_with_shortcut};
+use crate::widgets::menu_item;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
@@ -208,11 +208,10 @@ pub(crate) fn render_remote_branch_menu(
             },
         ))
         .item(PopupMenuItem::separator())
-        // 10. 删除(D)
-        .item(menu_item_with_shortcut(
+        // 10. 删除
+        .item(menu_item(
             rust_i18n::t!("git.menu.delete_ref").to_string(),
             IconName::Trash,
-            "Delete",
             move |_, _, cx| {
                 let name = name_delete.clone();
                 let project = project_delete.clone();

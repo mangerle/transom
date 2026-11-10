@@ -160,11 +160,6 @@ impl TerminalView {
             shell_integration_enabled,
             clear_on_first_resize,
         } = params;
-        cx.bind_keys([
-            KeyBinding::new("tab", SendTab, Some(CONTEXT)),
-            KeyBinding::new("shift-tab", SendBacktab, Some(CONTEXT)),
-        ]);
-
         let focus_handle = cx.focus_handle().tab_stop(false);
         let (event_tx, event_rx) = flume::bounded(256);
         let renderer = TerminalRenderer::new(&profile, window, cx);

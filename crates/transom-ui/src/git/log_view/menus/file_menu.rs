@@ -1,14 +1,14 @@
 //! 提交详情变更文件树节点的右键上下文菜单（全方位对齐 IntelliJ IDEA 变更树菜单）。
 //!
 //! 设计原理（Why）：
-//! - 遵循 IDEA 变更树项的右键菜单分组和快捷键口径；
-//! - 第一组为核心比较与差异浏览（显示差异 Ctrl+D、新标签页差异、与本地比较）；
-//! - 第二组为源码跳转（编辑源 F4、打开仓库版本）；
+//! - 遵循 IDEA 变更树项的右键菜单分组口径；
+//! - 第一组为核心比较与差异浏览（显示差异、新标签页差异、与本地比较）；
+//! - 第二组为源码跳转（编辑源、打开仓库版本）；
 //! - 第三组为精细化更改操作（还原、优选、提取到单独提交、创建补丁等）；
 //! - 第四组为该文件的历史回溯与智能体协同（迄今历史、添加到智能体上下文）。
 
 use crate::app::AppShell;
-use crate::widgets::{MenuItem, menu_item, menu_item_with_shortcut};
+use crate::widgets::{MenuItem, menu_item};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
@@ -54,11 +54,10 @@ pub(crate) fn render_file_tree_menu(
     let path_ai = full_path;
 
     menu
-        // 1. 显示差异 (Ctrl+D)
-        .item(menu_item_with_shortcut(
+        // 1. 显示差异
+        .item(menu_item(
             rust_i18n::t!("git.menu.show_diff").to_string(),
             IconName::GitCompare,
-            "Ctrl+D",
             move |_, _, cx| {
                 let path = path_diff.clone();
                 diff_app.update(cx, |this, cx| {
@@ -102,11 +101,10 @@ pub(crate) fn render_file_tree_menu(
             }),
         )
         .item(PopupMenuItem::separator())
-        // 5. 编辑源 (F4)
-        .item(menu_item_with_shortcut(
+        // 5. 编辑源
+        .item(menu_item(
             rust_i18n::t!("git.menu.edit_source").to_string(),
             IconName::FileCode,
-            "F4",
             {
                 let project = edit_project;
                 move |_, _, cx| {

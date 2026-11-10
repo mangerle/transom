@@ -45,6 +45,6 @@ pub use shell_integration::{
 };
 pub use trigger::{CompiledTrigger, TriggerEngine, TriggerMatchResult};
 pub use view::{
-    CONTEXT as TERMINAL_CONTEXT, KeyFilter, TerminalCopy, TerminalPaste, TerminalView,
-    TerminalViewParams,
+    CONTEXT as TERMINAL_CONTEXT, KeyFilter, SendBacktab, SendTab, TerminalCopy, TerminalPaste,
+    TerminalView, TerminalViewParams,
 };

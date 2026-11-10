@@ -500,6 +500,18 @@ fn prepare_bootstrap(
     settings.window.normalize();
     // 设置与进程同生命周期，装进 Global；外壳不再持字段。
     install_app_settings(cx, settings.clone());
+    cx.bind_keys([
+        KeyBinding::new(
+            "tab",
+            transom_terminal::SendTab,
+            Some(transom_terminal::TERMINAL_CONTEXT),
+        ),
+        KeyBinding::new(
+            "shift-tab",
+            transom_terminal::SendBacktab,
+            Some(transom_terminal::TERMINAL_CONTEXT),
+        ),
+    ]);
     cx.bind_keys(keymap::bindings(&settings.shortcuts));
     let shortcut_filter = Arc::new(parking_lot::RwLock::new(keymap::reserved_keystrokes(
         &settings.shortcuts,
