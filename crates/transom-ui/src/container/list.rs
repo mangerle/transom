@@ -164,6 +164,7 @@ fn render_list_toolbar(
                 .xsmall()
                 .primary()
                 .icon(IconName::Play)
+                .accessibility_label(rust_i18n::t!("container.action.run").to_string())
                 .tooltip(rust_i18n::t!("container.action.run").to_string())
                 .on_click(move |_, _, cx| {
                     view.update(cx, |_workspace, cx| {
@@ -178,6 +179,9 @@ fn render_list_toolbar(
                 .xsmall()
                 .primary()
                 .icon(IconName::Globe)
+                .accessibility_label(
+                    rust_i18n::t!("container.pull_manager.explore_market").to_string(),
+                )
                 .tooltip(rust_i18n::t!("container.pull_manager.explore_market").to_string())
                 .on_click(move |_, _, cx| {
                     view.update(cx, |_workspace, cx| {
@@ -192,6 +196,7 @@ fn render_list_toolbar(
                 .xsmall()
                 .primary()
                 .icon(IconName::Plus)
+                .accessibility_label(rust_i18n::t!("container.create_dialog.volume").to_string())
                 .tooltip(rust_i18n::t!("container.create_dialog.volume").to_string())
                 .on_click(move |_, _, cx| {
                     view.update(cx, |_workspace, cx| {
@@ -208,6 +213,7 @@ fn render_list_toolbar(
                 .xsmall()
                 .primary()
                 .icon(IconName::Plus)
+                .accessibility_label(rust_i18n::t!("container.create_dialog.network").to_string())
                 .tooltip(rust_i18n::t!("container.create_dialog.network").to_string())
                 .on_click(move |_, _, cx| {
                     view.update(cx, |_workspace, cx| {
@@ -224,6 +230,7 @@ fn render_list_toolbar(
                 .xsmall()
                 .primary()
                 .icon(IconName::FilePlus)
+                .accessibility_label(rust_i18n::t!("container.compose.new_yaml").to_string())
                 .tooltip(rust_i18n::t!("container.compose.new_yaml").to_string())
                 .dropdown_menu(move |menu, _, _| {
                     let mut menu = menu;

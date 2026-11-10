@@ -15,7 +15,8 @@ use gpui_kit::*;
 pub(crate) struct IconButton {
     id: ElementId,
     icon: IconName,
-    tooltip: SharedString,
+    accessibility_label: SharedString,
+    tooltip: Option<SharedString>,
     selected: bool,
     disabled: bool,
     size: IconButtonSize,
@@ -47,16 +48,32 @@ impl IconButton {
     pub(crate) fn new(
         id: impl Into<ElementId>,
         icon: IconName,
-        tooltip: impl Into<SharedString>,
+        accessibility_label: impl Into<SharedString>,
     ) -> Self {
+        let accessibility_label = accessibility_label.into();
         Self {
             id: id.into(),
             icon,
-            tooltip: tooltip.into(),
+            tooltip: Some(accessibility_label.clone()),
+            accessibility_label,
             selected: false,
             disabled: false,
             size: IconButtonSize::Regular,
         }
+    }
+
+    /// 覆盖 tooltip 文案；tooltip 是可选的视觉补充，不替代可访问名。
+    pub(crate) fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
+        self.tooltip = Some(tooltip.into());
+        self
+    }
+
+    /// 控制是否显示 tooltip；熟悉的重复操作可只保留可访问名。
+    pub(crate) fn show_tooltip(mut self, show: bool) -> Self {
+        if !show {
+            self.tooltip = None;
+        }
+        self
     }
 
     /// 选中态：用于隐藏文件、同步导航、筛选等开关型按钮。
@@ -80,15 +97,19 @@ impl IconButton {
     /// 生成底层 `Button`；调用方继续链式接 `.on_click(...)`。
     pub(crate) fn render(self) -> Button {
         let size = rems(self.size.rem());
-        Button::new(self.id)
+        let mut button = Button::new(self.id)
             .ghost()
             .xsmall()
             .icon(self.icon)
-            .tooltip(self.tooltip)
+            .accessibility_label(self.accessibility_label)
             .selected(self.selected)
             .disabled(self.disabled)
             .w(size)
-            .h(size)
+            .h(size);
+        if let Some(tooltip) = self.tooltip {
+            button = button.tooltip(tooltip);
+        }
+        button
     }
 }
 

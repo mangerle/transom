@@ -119,6 +119,7 @@ pub(super) fn copyable_field(
         .ghost()
         .xsmall()
         .icon(IconName::Copy)
+        .accessibility_label(rust_i18n::t!("common.copy").to_string())
         .tooltip(rust_i18n::t!("common.copy").to_string())
         .on_click({
             let view = view.clone();

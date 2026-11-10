@@ -265,6 +265,7 @@ fn search_bar_button(
         .xsmall()
         .icon(icon)
         .selected(selected)
+        .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .on_click(move |_, window, cx| {
             entity.update(cx, |view, cx| match action {

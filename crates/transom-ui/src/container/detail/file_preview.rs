@@ -107,6 +107,7 @@ pub(super) fn render_file_preview(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Close)
+                .accessibility_label("Close file preview")
                 .on_click(move |_, _, cx| {
                     close_view.update(cx, |workspace, cx| {
                         workspace.close_preview_container_file(cx);

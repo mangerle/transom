@@ -78,6 +78,7 @@ impl SessionFormView {
                     .small()
                     .icon(default_icon)
                     .selected(icon == SessionIcon::Auto)
+                    .accessibility_label(rust_i18n::t!("form.icon_auto").to_string())
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                         this.edit(cx, |form| form.icon = SessionIcon::Auto);
@@ -90,6 +91,7 @@ impl SessionFormView {
                 Button::new(ElementId::Name(format!("session-icon-{choice:?}").into()))
                     .small()
                     .icon(name)
+                    .accessibility_label(format!("{choice:?}"))
                     .selected(icon == choice)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.edit(cx, |form| form.icon = choice);

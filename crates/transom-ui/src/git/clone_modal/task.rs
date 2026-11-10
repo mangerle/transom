@@ -186,6 +186,7 @@ impl AppShell {
                         .ghost()
                         .xsmall()
                         .icon(IconName::Close)
+                        .accessibility_label(rust_i18n::t!("git.clone.cancel").to_string())
                         .tooltip(rust_i18n::t!("git.clone.cancel").to_string())
                         .on_click(move |_, _, cx| {
                             cancel_app.update(cx, |this, cx| this.git_cancel_clone_task(cx));
@@ -198,6 +199,7 @@ impl AppShell {
                         .ghost()
                         .xsmall()
                         .icon(IconName::Close)
+                        .accessibility_label(rust_i18n::t!("git.clone.close").to_string())
                         .tooltip(rust_i18n::t!("git.clone.close").to_string())
                         .on_click(move |_, _, cx| {
                             close_app.update(cx, |this, cx| {

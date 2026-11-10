@@ -129,6 +129,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::RotateCw)
+                    .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_refresh(&refresh_project, cx);
@@ -140,6 +141,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::Download)
+                    .accessibility_label(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_remote_action(
@@ -154,6 +156,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowDownToLine)
+                    .accessibility_label(rust_i18n::t!("git.toolbar.pull").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.pull").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_remote_action(
@@ -168,6 +171,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowUpFromLine)
+                    .accessibility_label(rust_i18n::t!("git.toolbar.push").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.push").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_remote_action(
@@ -273,6 +277,7 @@ impl AppShell {
                         .ghost()
                         .xsmall()
                         .icon(IconName::PanelLeftOpen)
+                        .accessibility_label(rust_i18n::t!("git.refs.panel_toggle").to_string())
                         .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
                         .on_click(move |_, _, cx| {
                             toggle_app.update(cx, |this, cx| {

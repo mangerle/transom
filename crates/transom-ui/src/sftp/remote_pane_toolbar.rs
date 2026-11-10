@@ -74,6 +74,7 @@ impl SftpPanelView {
             .primary()
             .xsmall()
             .icon(IconName::Download)
+            .accessibility_label(rust_i18n::t!("sftp.download").to_string())
             .tooltip(rust_i18n::t!("sftp.download").to_string())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.download_pane(target, cx);

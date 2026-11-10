@@ -29,6 +29,7 @@ pub(super) fn render_tab_entry(
     shell: &AppShell,
     entry: &StripEntry,
     can_tile: bool,
+    window: &mut Window,
     p: &Palette,
     app_entity: &Entity<AppShell>,
     cx: &mut Context<AppShell>,
@@ -42,6 +43,12 @@ pub(super) fn render_tab_entry(
     };
 
     let group = shell.state.workspace.group(group_id)?;
+    let focus = window
+        .use_keyed_state(format!("workspace-tab-focus-{group_id}"), cx, |_, cx| {
+            cx.focus_handle().tab_stop(true)
+        })
+        .read(cx)
+        .clone();
     let tile_enabled = !composite && can_tile;
     let tab = shell
         .state
@@ -97,7 +104,12 @@ pub(super) fn render_tab_entry(
         .min_w(rems(size::TAB_MIN_WIDTH))
         .overflow_hidden()
         .border_color(p.divider(p.border))
-        .cursor_pointer();
+        .cursor_pointer()
+        .track_focus(&focus)
+        .role(Role::Tab)
+        .aria_selected(active)
+        .aria_label(title.clone())
+        .tab_index(0);
 
     if active {
         tab_element = tab_element
@@ -150,12 +162,19 @@ pub(super) fn render_tab_entry(
             p.muted_foreground,
         ))
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+            window.focus(&focus, cx);
             let modifiers = event.modifiers();
             if modifiers.control || modifiers.platform {
                 this.toggle_tab_selection(&selection_groups, cx);
             } else {
                 this.clear_tab_selection(cx);
                 this.activate_tab(active_pane, window, cx);
+            }
+        }))
+        .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                this.activate_tab(active_pane, window, cx);
+                cx.stop_propagation();
             }
         }))
         .context_menu(move |menu, window, cx| {

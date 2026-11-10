@@ -160,6 +160,7 @@ fn render_compose_yaml_editor(
                         .ghost()
                         .xsmall()
                         .icon(IconName::RotateCw)
+                        .accessibility_label(rust_i18n::t!("common.refresh").to_string())
                         .tooltip(rust_i18n::t!("common.refresh").to_string())
                         .disabled(is_saving)
                         .on_click(move |_, _, cx| {

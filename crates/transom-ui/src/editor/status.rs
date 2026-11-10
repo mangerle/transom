@@ -204,6 +204,7 @@ impl EditorPanels {
             .warning()
             .xsmall()
             .icon(IconName::Shield)
+            .accessibility_label(rust_i18n::t!("editor.sudo_save").to_string())
             .tooltip(rust_i18n::t!("editor.sudo_save").to_string())
             .disabled(!item.dirty || busy)
             .on_click(cx.listener(move |this, _, window, cx| {

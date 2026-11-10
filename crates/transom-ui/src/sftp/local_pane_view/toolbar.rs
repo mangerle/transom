@@ -170,6 +170,7 @@ pub(super) fn render_local_toolbar(
                             .primary()
                             .xsmall()
                             .icon(IconName::Upload)
+                            .accessibility_label(rust_i18n::t!("sftp.upload").to_string())
                             .tooltip(rust_i18n::t!("sftp.upload").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.queue_upload(tab_id, cx);

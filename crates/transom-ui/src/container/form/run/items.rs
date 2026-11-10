@@ -77,6 +77,7 @@ impl ContainerRunFormView {
                             .xsmall()
                             .ghost()
                             .icon(IconName::Trash)
+                            .accessibility_label("Delete port mapping")
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.remove_port(&del_port_id, cx);
                             })),
@@ -168,6 +169,7 @@ impl ContainerRunFormView {
                             .xsmall()
                             .ghost()
                             .icon(IconName::Trash)
+                            .accessibility_label("Delete volume mapping")
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.remove_volume(&del_vol_id, cx);
                             })),
@@ -246,6 +248,7 @@ impl ContainerRunFormView {
                             .xsmall()
                             .ghost()
                             .icon(IconName::Trash)
+                            .accessibility_label("Delete environment variable")
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.remove_env(&env_id, cx);
                             })),

@@ -137,6 +137,7 @@ pub(crate) fn list_row(
                 .ghost()
                 .xsmall()
                 .icon(action.icon())
+                .accessibility_label(rust_i18n::t!(action.label_key()).to_string())
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
                     view.update(cx, |workspace, cx| {

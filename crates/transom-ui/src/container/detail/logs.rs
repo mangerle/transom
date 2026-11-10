@@ -220,6 +220,7 @@ pub(crate) fn render_logs(
         .ghost()
         .xsmall()
         .icon(IconName::Ellipsis)
+        .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _, _| {
             let timestamps_view = more_view.clone();

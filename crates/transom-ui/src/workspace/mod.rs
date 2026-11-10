@@ -50,7 +50,7 @@ impl AppShell {
             .overflow_hidden()
             .bg(p.background);
         if !self.state.immersive && app_settings(cx).window.tab_position != TabPosition::Left {
-            main = main.child(self.render_tab_strip(p, cx));
+            main = main.child(self.render_tab_strip(window, p, cx));
         }
         if let Some(tab_id) = disconnected_tab {
             main = main.child(self.render_reconnect_banner(tab_id, p, cx));

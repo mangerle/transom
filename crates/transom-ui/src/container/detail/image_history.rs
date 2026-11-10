@@ -335,6 +335,7 @@ pub(crate) fn copy_button(
         .xsmall()
         .ghost()
         .icon(IconName::Copy)
+        .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .on_click(move |_, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));

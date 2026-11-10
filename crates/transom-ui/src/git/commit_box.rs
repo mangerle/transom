@@ -61,6 +61,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::Clock)
+            .accessibility_label(rust_i18n::t!("git.commit.recent_messages").to_string())
             .tooltip(rust_i18n::t!("git.commit.recent_messages").to_string())
             .dropdown_menu({
                 let message_input = props.message.clone();
@@ -153,6 +154,7 @@ impl AppShell {
                             .ghost()
                             .small()
                             .icon(IconName::Settings)
+                            .accessibility_label(rust_i18n::t!("git.commit.settings").to_string())
                             .tooltip(rust_i18n::t!("git.commit.settings").to_string())
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.open_git_settings(window, cx);

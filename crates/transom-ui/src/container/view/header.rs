@@ -182,6 +182,7 @@ fn render_container_tab_actions(
                     .ghost()
                     .xsmall()
                     .icon(IconName::Layers)
+                    .accessibility_label(rust_i18n::t!("container.pods.title").to_string())
                     .tooltip(rust_i18n::t!("container.pods.title").to_string())
                     .on_click(move |_, _, cx| {
                         view.update(cx, |_workspace, cx| {
@@ -197,6 +198,7 @@ fn render_container_tab_actions(
                     .ghost()
                     .xsmall()
                     .icon(IconName::Settings)
+                    .accessibility_label(rust_i18n::t!("container.quadlet.title").to_string())
                     .tooltip(rust_i18n::t!("container.quadlet.title").to_string())
                     .on_click(move |_, _, cx| {
                         view.update(cx, |_workspace, cx| {
@@ -211,6 +213,7 @@ fn render_container_tab_actions(
                 .ghost()
                 .xsmall()
                 .icon(IconName::HardDrive)
+                .accessibility_label(rust_i18n::t!("container.system_df.title").to_string())
                 .tooltip(rust_i18n::t!("container.system_df.title").to_string())
                 .on_click(move |_, _, cx| {
                     view.update(cx, |_workspace, cx| {
@@ -224,6 +227,7 @@ fn render_container_tab_actions(
                 .ghost()
                 .xsmall()
                 .icon(IconName::RefreshCw)
+                .accessibility_label("Refresh container workspace")
                 .on_click(move |_, _, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.refresh_all();
@@ -240,6 +244,11 @@ fn render_container_tab_actions(
                     IconName::Minimize
                 } else {
                     IconName::Expand
+                })
+                .accessibility_label(if fullscreen {
+                    "Exit fullscreen"
+                } else {
+                    "Enter fullscreen"
                 })
                 .on_click(move |_, _, cx| {
                     view.update(cx, |_workspace, cx| {

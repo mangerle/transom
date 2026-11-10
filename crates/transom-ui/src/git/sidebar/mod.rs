@@ -119,6 +119,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::FolderPlus)
+                    .accessibility_label(rust_i18n::t!("git.sidebar.new_folder").to_string())
                     .tooltip(rust_i18n::t!("git.sidebar.new_folder").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_git_folder_modal(window, cx);
@@ -129,6 +130,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::RotateCw)
+                    .accessibility_label(rust_i18n::t!("git.sidebar.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.sidebar.refresh").to_string())
                     .on_click(cx.listener(|this, _, _window, cx| {
                         this.refresh_all_git_projects(cx);
@@ -139,6 +141,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::Download)
+                    .accessibility_label(rust_i18n::t!("git.clone.title").to_string())
                     .tooltip(rust_i18n::t!("git.clone.title").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_git_clone_modal(window, cx);
@@ -149,6 +152,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::Plus)
+                    .accessibility_label(rust_i18n::t!("git.sidebar.add").to_string())
                     .tooltip(rust_i18n::t!("git.sidebar.add").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_git_project_modal(None, window, cx);

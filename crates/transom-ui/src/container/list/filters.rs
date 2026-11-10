@@ -175,6 +175,7 @@ pub(crate) fn render_more_menu(
         .xsmall()
         .ghost()
         .icon(IconName::Ellipsis)
+        .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _, _| {
             let mut menu = menu;

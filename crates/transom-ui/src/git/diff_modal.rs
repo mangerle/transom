@@ -95,6 +95,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::X)
+                    .accessibility_label(rust_i18n::t!("common.close").to_string())
                     .tooltip(rust_i18n::t!("common.close").to_string())
                     .on_click(move |_, _, cx| {
                         close_app.update(cx, |this, cx| {

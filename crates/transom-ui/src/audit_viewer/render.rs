@@ -278,6 +278,7 @@ fn audit_file_row(
                 rust_i18n::t!("common.delete").to_string(),
             )
             .size(crate::widgets::IconButtonSize::Compact)
+            .tooltip(rust_i18n::t!("audit_viewer.delete_log").to_string())
             .render()
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();

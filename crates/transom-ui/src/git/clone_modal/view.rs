@@ -72,6 +72,9 @@ impl AppShell {
                                         .ghost()
                                         .small()
                                         .icon(IconName::FolderOpen)
+                                        .accessibility_label(
+                                            rust_i18n::t!("git.clone.browse").to_string(),
+                                        )
                                         .tooltip(rust_i18n::t!("git.clone.browse").to_string())
                                         .on_click({
                                             let app = app.clone();

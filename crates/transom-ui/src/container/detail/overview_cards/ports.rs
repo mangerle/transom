@@ -43,6 +43,7 @@ pub(crate) fn render_port_chips(
             .ghost()
             .xsmall()
             .icon(IconName::ArrowLeftRight)
+            .accessibility_label(rust_i18n::t!("container.forward.button_tooltip").to_string())
             .tooltip(rust_i18n::t!("container.forward.button_tooltip").to_string())
             .on_click({
                 let view = view.clone();

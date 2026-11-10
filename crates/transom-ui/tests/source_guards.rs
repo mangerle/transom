@@ -422,6 +422,89 @@ fn terminal_view_does_not_bind_global_keys() {
     );
 }
 
+/// 标签导航必须保留可聚焦、可键盘激活的语义，不能退化为纯点击 div。
+#[test]
+fn tabs_have_keyboard_semantics() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_tabs = std::fs::read_to_string(root.join("src/workspace/tab_strip/item.rs"))
+        .expect("读取主标签栏失败");
+    for required in [
+        ".track_focus(",
+        ".role(Role::Tab)",
+        ".aria_selected(",
+        ".on_key_down(",
+    ] {
+        assert!(
+            workspace_tabs.contains(required),
+            "主标签栏缺少键盘/可访问语义：{required}"
+        );
+    }
+    let diff_tabs = std::fs::read_to_string(root.join("src/git/diff_view/tabs.rs"))
+        .expect("读取 Git diff 标签栏失败");
+    assert!(
+        diff_tabs.contains("Button::new("),
+        "Git diff 标签必须使用 Button"
+    );
+    assert!(
+        diff_tabs.contains("IconButton::new("),
+        "Git diff 标签关闭动作必须使用 IconButton"
+    );
+}
+
+/// 直接构造的图标按钮必须提供可访问名；tooltip 不能替代 accessibility_label。
+#[test]
+fn icon_buttons_have_accessibility_labels() {
+    let mut offenders = Vec::new();
+    for (path, content) in ui_source_files() {
+        offenders.extend(icon_button_offenders(&path, &content));
+    }
+    let terminal_root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../transom-terminal/src");
+    for entry in walkdir_like(&terminal_root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        offenders.extend(icon_button_offenders(&normalized_path(&entry), &content));
+    }
+    assert!(
+        offenders.is_empty(),
+        "图标按钮必须设置 label 或 accessibility_label：\n{}",
+        offenders.join("\n")
+    );
+}
+
+fn icon_button_offenders(path: &str, content: &str) -> Vec<String> {
+    let mut offenders = Vec::new();
+    let mut offset = 0;
+    while let Some(relative) = content[offset..].find("Button::new(") {
+        let start = offset + relative;
+        let Some(end_relative) = content[start..].find(';') else {
+            break;
+        };
+        let end = start + end_relative;
+        let chain = &content[start..end];
+        if chain.contains(".icon(")
+            && !chain.contains(".label(")
+            && !chain.contains(".accessibility_label(")
+        {
+            let line = content[..start]
+                .bytes()
+                .filter(|byte| *byte == b'\n')
+                .count()
+                + 1;
+            offenders.push(format!(
+                "{path}:{line}: {}",
+                chain.lines().next().unwrap_or_default().trim()
+            ));
+        }
+        offset = end + 1;
+    }
+    offenders
+}
+
 /// 菜单项必须走 widgets 构造器：`PopupMenuItem::new(...)` 紧随 `.icon(...)`
 /// 是迁移前的写法，散落回页面会让图标顺序与禁用语义各自漂移。
 ///

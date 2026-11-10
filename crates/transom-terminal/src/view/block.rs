@@ -171,6 +171,7 @@ impl TerminalView {
                         .ghost()
                         .small()
                         .icon(IconName::Copy)
+                        .accessibility_label("Copy command output")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.copy_block_output(block_id, cx);
                         })),
@@ -180,6 +181,7 @@ impl TerminalView {
                         .ghost()
                         .small()
                         .icon(IconName::FileText)
+                        .accessibility_label("Copy command output as Markdown")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.copy_block_markdown(block_id, cx);
                         })),
@@ -189,6 +191,7 @@ impl TerminalView {
                         .ghost()
                         .small()
                         .icon(IconName::Play)
+                        .accessibility_label("Rerun command")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.rerun_block(block_id, cx);
                         })),
@@ -198,6 +201,11 @@ impl TerminalView {
                         .ghost()
                         .small()
                         .icon(fold_icon)
+                        .accessibility_label(if collapsed {
+                            "Expand command output"
+                        } else {
+                            "Collapse command output"
+                        })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.toggle_block(block_id, cx);
                         })),

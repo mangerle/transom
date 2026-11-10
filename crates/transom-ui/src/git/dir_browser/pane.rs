@@ -125,6 +125,7 @@ fn actions_row(
                 .ghost()
                 .xsmall()
                 .icon(IconName::FolderPlus)
+                .accessibility_label(rust_i18n::t!("git.browser.mkdir").to_string())
                 .tooltip(rust_i18n::t!("git.browser.mkdir").to_string())
                 .on_click(move |_, window, cx| {
                     mkdir_app.update(cx, |this, cx| {
@@ -142,6 +143,7 @@ fn actions_row(
                     IconName::EyeOff
                 })
                 .selected(picker.browser.show_hidden)
+                .accessibility_label(rust_i18n::t!("sftp.nav.show_dotfiles").to_string())
                 .tooltip(rust_i18n::t!("sftp.nav.show_dotfiles").to_string())
                 .on_click(move |_, _, cx| {
                     hidden_app.update(cx, |this, cx| this.git_toggle_hidden(target, cx));
@@ -152,6 +154,7 @@ fn actions_row(
                 .ghost()
                 .xsmall()
                 .icon(IconName::RefreshCw)
+                .accessibility_label(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
                 .tooltip(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
                 .on_click(move |_, _, cx| {
                     refresh_app.update(cx, |this, cx| this.git_refresh_browser(target, cx));
@@ -175,6 +178,7 @@ fn quick_path_button(
         .xsmall()
         .icon(icon)
         .disabled(path.is_none())
+        .accessibility_label(rust_i18n::t!(tooltip_key).to_string())
         .tooltip(rust_i18n::t!(tooltip_key).to_string())
         .on_click(move |_, window, cx| {
             click_app.update(cx, |this, cx| {
@@ -380,6 +384,7 @@ fn draft_row(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Check)
+                .accessibility_label(rust_i18n::t!("git.name.confirm").to_string())
                 .tooltip(rust_i18n::t!("git.name.confirm").to_string())
                 .on_click(move |_, window, cx| {
                     ok_app.update(cx, |this, cx| {
@@ -392,6 +397,7 @@ fn draft_row(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Close)
+                .accessibility_label(rust_i18n::t!("git.project.cancel").to_string())
                 .tooltip(rust_i18n::t!("git.project.cancel").to_string())
                 .on_click(move |_, _, cx| {
                     cancel_app.update(cx, |this, cx| {

@@ -11,8 +11,10 @@ use super::GUTTER_WIDTH;
 use crate::app::AppShell;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::assets::IconName;
-use gpui_kit::base::h_flex;
+use gpui_kit::base::{Selectable, h_flex};
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
@@ -47,22 +49,15 @@ pub(crate) fn render_diff_tab_bar(
             let tab_app = app.clone();
             let close_app = app.clone();
             h_flex()
-                .id(ElementId::NamedInteger("git-diff-tab".into(), idx as u64))
                 .items_center()
                 .gap_1p5()
                 .px_2()
                 .py_0p5()
                 .rounded(px(2.0))
-                .cursor_pointer()
                 .bg(if is_active {
                     p.background
                 } else {
                     gpui::transparent_black()
-                })
-                .text_color(if is_active {
-                    p.foreground
-                } else {
-                    p.muted_foreground
                 })
                 .border_color(if is_active {
                     p.primary
@@ -70,57 +65,35 @@ pub(crate) fn render_diff_tab_bar(
                     gpui::transparent_black()
                 })
                 .border_b_2()
-                .hover(|s| {
-                    if !is_active {
-                        s.bg(p.muted.opacity(0.35))
-                    } else {
-                        s
-                    }
-                })
                 .child(
-                    Icon::new(IconName::FileCode)
-                        .xsmall()
-                        .text_color(if is_active {
-                            p.primary
-                        } else {
-                            p.muted_foreground
-                        }),
+                    Button::new(ElementId::Name(
+                        format!("git-diff-tab-{}", tab_item.path).into(),
+                    ))
+                    .ghost()
+                    .xsmall()
+                    .selected(is_active)
+                    .icon(IconName::FileCode)
+                    .label(file_name)
+                    .on_click(move |_, _, cx| {
+                        tab_app.update(cx, |this, cx| {
+                            this.git_select_diff_tab(tab_id, idx, cx);
+                        });
+                    }),
                 )
                 .child(
-                    div()
-                        .text_xs()
-                        .font_weight(if is_active {
-                            FontWeight::MEDIUM
-                        } else {
-                            FontWeight::NORMAL
-                        })
-                        .child(file_name),
+                    IconButton::new(
+                        ElementId::Name(format!("git-diff-tab-close-{}", tab_item.path).into()),
+                        IconName::X,
+                        "Close diff tab",
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        close_app.update(cx, |this, cx| {
+                            this.git_close_diff_tab(tab_id, idx, cx);
+                        });
+                    }),
                 )
-                .child(
-                    h_flex()
-                        .id(ElementId::NamedInteger(
-                            "git-diff-tab-close".into(),
-                            idx as u64,
-                        ))
-                        .p_0p5()
-                        .rounded(px(2.0))
-                        .hover(|s| s.bg(p.muted))
-                        .child(
-                            Icon::new(IconName::X)
-                                .xsmall()
-                                .text_color(p.muted_foreground),
-                        )
-                        .on_click(move |_, _, cx| {
-                            close_app.update(cx, |this, cx| {
-                                this.git_close_diff_tab(tab_id, idx, cx);
-                            });
-                        }),
-                )
-                .on_click(move |_, _, cx| {
-                    tab_app.update(cx, |this, cx| {
-                        this.git_select_diff_tab(tab_id, idx, cx);
-                    });
-                })
         }));
     Some(bar.into_any_element())
 }

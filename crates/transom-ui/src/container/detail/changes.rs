@@ -198,6 +198,7 @@ pub(crate) fn render_container_changes(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Copy)
+                .accessibility_label(rust_i18n::t!("container.detail.copy_path").to_string())
                 .tooltip(rust_i18n::t!("container.detail.copy_path").to_string())
                 .on_click(move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(copy_path.clone()));

@@ -322,6 +322,11 @@ impl SftpPanelView {
                     } else {
                         IconName::ChevronUp
                     })
+                    .accessibility_label(if queue_expanded {
+                        rust_i18n::t!("sftp.queue.collapse").to_string()
+                    } else {
+                        rust_i18n::t!("sftp.queue.expand").to_string()
+                    })
                     .tooltip(if queue_expanded {
                         rust_i18n::t!("sftp.queue.collapse").to_string()
                     } else {

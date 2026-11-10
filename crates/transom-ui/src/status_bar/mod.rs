@@ -125,6 +125,7 @@ impl AppShell {
             let mut btn = Button::new("status-bar-git-log")
                 .xsmall()
                 .icon(IconName::GitCommitHorizontal)
+                .accessibility_label(tooltip_text.to_string())
                 .tooltip(tooltip_text.to_string())
                 .on_click(move |_, _, cx| {
                     app_entity.update(cx, |this, cx| {

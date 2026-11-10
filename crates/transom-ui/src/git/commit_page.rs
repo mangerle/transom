@@ -217,6 +217,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::RotateCw)
+                            .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                             .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_refresh(&refresh_project, cx);
@@ -227,6 +228,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::Undo2)
+                            .accessibility_label(rust_i18n::t!("git.menu.discard").to_string())
                             .tooltip(rust_i18n::t!("git.menu.discard").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_rollback_checked(&rollback_project, cx);
@@ -237,6 +239,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::GitCompare)
+                            .accessibility_label(rust_i18n::t!("git.menu.show_diff").to_string())
                             .tooltip(rust_i18n::t!("git.menu.show_diff").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_open_first_worktree_diff(tab_id, cx);
@@ -247,6 +250,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::PackagePlus)
+                            .accessibility_label(rust_i18n::t!("git.shelf.create").to_string())
                             .tooltip(rust_i18n::t!("git.shelf.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_shelve_checked(tab_id, cx);
@@ -257,6 +261,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::Archive)
+                            .accessibility_label(rust_i18n::t!("git.stash.create").to_string())
                             .tooltip(rust_i18n::t!("git.stash.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_stash_checked(tab_id, cx);
@@ -268,6 +273,9 @@ impl AppShell {
                             .xsmall()
                             .icon(IconName::FolderTree)
                             .when(by_directory, |btn| btn.bg(p.muted.opacity(0.8)))
+                            .accessibility_label(
+                                rust_i18n::t!("git.group.by_directory").to_string(),
+                            )
                             .tooltip(rust_i18n::t!("git.group.by_directory").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_toggle_group_by_directory(&tree_project, cx);
@@ -278,6 +286,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::ChevronDown)
+                            .accessibility_label(rust_i18n::t!("git.group.expand_all").to_string())
                             .tooltip(rust_i18n::t!("git.group.expand_all").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_expand_all_groups(&expand_project, cx);
@@ -288,6 +297,9 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::ChevronRight)
+                            .accessibility_label(
+                                rust_i18n::t!("git.group.collapse_all").to_string(),
+                            )
                             .tooltip(rust_i18n::t!("git.group.collapse_all").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.git_collapse_all_groups(&collapse_project, cx);

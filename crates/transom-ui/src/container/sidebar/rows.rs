@@ -13,6 +13,7 @@ pub(crate) fn engine_sidebar_button(
         .ghost()
         .xsmall()
         .icon(icon)
+        .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .on_click(on_click)
         .into_any_element()

@@ -196,7 +196,12 @@ pub(crate) fn render_refs_action_bar(
 
 /// 构造一个 IDEA 风格的图标动作按钮。
 fn toolbar_button(id: &'static str, icon: IconName, tooltip: String) -> Button {
-    Button::new(id).ghost().xsmall().icon(icon).tooltip(tooltip)
+    Button::new(id)
+        .ghost()
+        .xsmall()
+        .icon(icon)
+        .accessibility_label(tooltip.clone())
+        .tooltip(tooltip)
 }
 
 /// 动作条内的轻量分组分隔线。

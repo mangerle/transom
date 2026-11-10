@@ -75,6 +75,9 @@ pub(super) fn render_entry_row(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Download)
+                .accessibility_label(
+                    rust_i18n::t!("container.files.download_directory_tooltip").to_string(),
+                )
                 .tooltip(rust_i18n::t!("container.files.download_directory_tooltip").to_string())
                 .on_click({
                     let view = view.clone();
@@ -102,6 +105,7 @@ pub(super) fn render_entry_row(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Download)
+                .accessibility_label("Download file")
                 .on_click({
                     let view = view.clone();
                     let path = entry_path.clone();
@@ -121,6 +125,7 @@ pub(super) fn render_entry_row(
             .ghost()
             .xsmall()
             .icon(IconName::Pen)
+            .accessibility_label("Rename file")
             .on_click({
                 let view = view.clone();
                 let path = entry_path.clone();
@@ -138,6 +143,7 @@ pub(super) fn render_entry_row(
             .ghost()
             .xsmall()
             .icon(IconName::Trash)
+            .accessibility_label("Delete file")
             .on_click({
                 let view = view.clone();
                 let path = entry_path.clone();

@@ -52,6 +52,7 @@ pub(crate) fn processes_card(
                 .xsmall()
                 .icon(IconName::RefreshCw)
                 .disabled(!is_running)
+                .accessibility_label(refresh_tooltip.clone())
                 .tooltip(refresh_tooltip)
                 .on_click({
                     let view = view.clone();

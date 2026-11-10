@@ -81,6 +81,9 @@ pub(crate) fn render_pull_drawer(
                             .ghost()
                             .xsmall()
                             .icon(IconName::Trash)
+                            .accessibility_label(
+                                rust_i18n::t!("container.pull_manager.clear_finished").to_string(),
+                            )
                             .tooltip(
                                 rust_i18n::t!("container.pull_manager.clear_finished").to_string(),
                             )
@@ -100,6 +103,9 @@ pub(crate) fn render_pull_drawer(
                         .ghost()
                         .xsmall()
                         .icon(IconName::X)
+                        .accessibility_label(
+                            rust_i18n::t!("container.pull_manager.close_drawer").to_string(),
+                        )
                         .tooltip(rust_i18n::t!("container.pull_manager.close_drawer").to_string())
                         .on_click({
                             let view = view.clone();
@@ -262,6 +268,7 @@ pub(crate) fn render_pull_drawer(
                                 .ghost()
                                 .xsmall()
                                 .icon(IconName::Trash)
+                                .accessibility_label("Remove pull task")
                                 .on_click({
                                     let view = view.clone();
                                     let remove_task_id = remove_task_id.clone();

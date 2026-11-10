@@ -122,6 +122,7 @@ pub(crate) fn render(
                 .ghost()
                 .xsmall()
                 .icon(IconName::ChevronUp)
+                .accessibility_label(rust_i18n::t!("git.diff.prev_difference").to_string())
                 .tooltip(rust_i18n::t!("git.diff.prev_difference").to_string()),
         )
         .child(
@@ -129,6 +130,7 @@ pub(crate) fn render(
                 .ghost()
                 .xsmall()
                 .icon(IconName::ChevronDown)
+                .accessibility_label(rust_i18n::t!("git.diff.next_difference").to_string())
                 .tooltip(rust_i18n::t!("git.diff.next_difference").to_string()),
         )
         .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
@@ -137,6 +139,7 @@ pub(crate) fn render(
                 .ghost()
                 .xsmall()
                 .icon(IconName::ChevronLeft)
+                .accessibility_label(rust_i18n::t!("git.diff.prev_file").to_string())
                 .tooltip(rust_i18n::t!("git.diff.prev_file").to_string())
                 .disabled(current_tab_idx == 0)
                 .on_click(move |_, _, cx| {
@@ -158,6 +161,7 @@ pub(crate) fn render(
                 .ghost()
                 .xsmall()
                 .icon(IconName::ChevronRight)
+                .accessibility_label(rust_i18n::t!("git.diff.next_file").to_string())
                 .tooltip(rust_i18n::t!("git.diff.next_file").to_string())
                 .disabled(total_tabs <= 1 || current_tab_idx + 1 >= total_tabs)
                 .on_click(move |_, _, cx| {

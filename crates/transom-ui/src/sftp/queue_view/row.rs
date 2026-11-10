@@ -66,6 +66,7 @@ pub(super) fn render_queue_task_row(
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
+                    .show_tooltip(false)
                     .render()
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cancel_task(tab_id, task_id, cx);

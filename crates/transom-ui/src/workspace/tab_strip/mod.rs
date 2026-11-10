@@ -17,7 +17,12 @@ use gpui_kit::*;
 
 impl AppShell {
     /// 渲染主工作区顶部标签栏。
-    pub(super) fn render_tab_strip(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_tab_strip(
+        &mut self,
+        window: &mut Window,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         // 底边不画在容器上：活动标签的强调线要顶替自己那一段底边，容器级
         // 边框无法被条目内元素覆盖，改为条目与右侧空白区各自画一段。
         let mut tab_strip = h_flex()
@@ -33,7 +38,8 @@ impl AppShell {
         let can_tile = entries.len() >= 2;
 
         for entry in &entries {
-            if let Some(element) = item::render_tab_entry(self, entry, can_tile, p, &app_entity, cx)
+            if let Some(element) =
+                item::render_tab_entry(self, entry, can_tile, window, p, &app_entity, cx)
             {
                 tab_strip = tab_strip.child(element);
             }
@@ -54,6 +60,7 @@ impl AppShell {
                             .ghost()
                             .xsmall()
                             .icon(IconName::Plus)
+                            .accessibility_label(rust_i18n::t!("app.new_local").to_string())
                             .tooltip(rust_i18n::t!("app.new_local").to_string())
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_local_terminal(window, cx);

@@ -40,6 +40,7 @@ impl SftpPanelView {
             .xsmall()
             .icon(IconName::Plus)
             .selected(open)
+            .accessibility_label(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string())
             .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
 
         // 候选由外壳在标签变化时推送：渲染期不读工作区。

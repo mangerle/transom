@@ -186,6 +186,7 @@ pub(crate) fn render_terminal(
                     Button::new("container-terminal-open-menu")
                         .small()
                         .icon(IconName::ChevronDown)
+                        .accessibility_label(user_tooltip.clone())
                         .tooltip(user_tooltip)
                         .dropdown_menu(move |menu, _, _| {
                             populate_terminal_menu(menu, menu_view.clone())

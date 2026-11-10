@@ -331,6 +331,11 @@ fn render_topology_card(
                 } else {
                     IconName::Play
                 })
+                .accessibility_label(if is_running {
+                    rust_i18n::t!("container.action.stop").to_string()
+                } else {
+                    rust_i18n::t!("container.action.start").to_string()
+                })
                 .tooltip(if is_running {
                     rust_i18n::t!("container.action.stop").to_string()
                 } else {
@@ -361,6 +366,7 @@ fn render_topology_card(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Info)
+                .accessibility_label(rust_i18n::t!("container.detail.overview").to_string())
                 .tooltip(rust_i18n::t!("container.detail.overview").to_string())
                 .on_click(move |_, _, cx| {
                     inspect_view.update(cx, |workspace, cx| {

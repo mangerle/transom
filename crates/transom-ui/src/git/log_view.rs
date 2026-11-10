@@ -221,6 +221,7 @@ pub(crate) fn render_filter_bar(
                 .ghost()
                 .xsmall()
                 .icon(IconName::CircleSlash)
+                .accessibility_label(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .tooltip(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .on_click({
                     let abort_app = app.clone();
@@ -239,6 +240,7 @@ pub(crate) fn render_filter_bar(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Search)
+                .accessibility_label("Apply filter")
                 .on_click({
                     let apply_app = app.clone();
                     move |_, _, cx| {

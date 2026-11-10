@@ -107,6 +107,13 @@ pub(crate) fn stats_toolbar(
                     SparklineChartType::Line => IconName::ChartLine,
                     SparklineChartType::Bar => IconName::ChartBar,
                 })
+                .accessibility_label(
+                    rust_i18n::t!(match chrome.chart {
+                        SparklineChartType::Line => "monitor.view.chart_line_tooltip",
+                        SparklineChartType::Bar => "monitor.view.chart_bar_tooltip",
+                    })
+                    .to_string(),
+                )
                 .tooltip(
                     rust_i18n::t!(match chrome.chart {
                         SparklineChartType::Line => "monitor.view.chart_line_tooltip",
@@ -129,6 +136,7 @@ pub(crate) fn stats_toolbar(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Download)
+                .accessibility_label(rust_i18n::t!("container.stats.export_csv").to_string())
                 .tooltip(rust_i18n::t!("container.stats.export_csv").to_string())
                 .on_click({
                     let view = view.clone();

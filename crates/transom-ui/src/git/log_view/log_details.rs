@@ -121,6 +121,7 @@ fn render_files_section(
                         .ghost()
                         .xsmall()
                         .icon(IconName::GitCompare)
+                        .accessibility_label(rust_i18n::t!("git.details.compare_diff").to_string())
                         .tooltip(rust_i18n::t!("git.details.compare_diff").to_string())
                         .on_click({
                             let toolbar_app = toolbar_app.clone();
@@ -140,6 +141,7 @@ fn render_files_section(
                         .ghost()
                         .xsmall()
                         .icon(IconName::ExternalLink)
+                        .accessibility_label(rust_i18n::t!("git.details.open_in_tab").to_string())
                         .tooltip(rust_i18n::t!("git.details.open_in_tab").to_string())
                         .on_click({
                             let toolbar_app = toolbar_app.clone();

@@ -149,6 +149,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                     .ghost()
                     .compact()
                     .icon(IconName::ArrowUp)
+                    .accessibility_label(rust_i18n::t!("diff.prev_hunk").to_string())
                     .tooltip(rust_i18n::t!("diff.prev_hunk").to_string())
                     .on_click(crate::dialog_host::on_event(
                         app,
@@ -162,6 +163,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                     .ghost()
                     .compact()
                     .icon(IconName::ArrowDown)
+                    .accessibility_label(rust_i18n::t!("diff.next_hunk").to_string())
                     .tooltip(rust_i18n::t!("diff.next_hunk").to_string())
                     .on_click(crate::dialog_host::on_event(
                         app,

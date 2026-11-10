@@ -149,6 +149,9 @@ pub(crate) fn render_network_detail(
                     .ghost()
                     .xsmall()
                     .icon(IconName::Close)
+                    .accessibility_label(
+                        rust_i18n::t!("container.action.disconnect_network").to_string(),
+                    )
                     .tooltip(rust_i18n::t!("container.action.disconnect_network").to_string())
                     .on_click(move |_, _, cx| {
                         disconnect_view.update(cx, |workspace, cx| {

@@ -29,6 +29,7 @@ pub(crate) fn render_mode_toggle(
                 .ghost()
                 .xsmall()
                 .icon(IconName::Columns2)
+                .accessibility_label("Side-by-side diff")
                 .when(side_by_side, |btn| btn.primary())
                 .on_click({
                     let app = app.clone();
@@ -42,6 +43,7 @@ pub(crate) fn render_mode_toggle(
                 .ghost()
                 .xsmall()
                 .icon(IconName::List)
+                .accessibility_label("Unified diff")
                 .when(!side_by_side, |btn| btn.primary())
                 .on_click({
                     let app = app.clone();
@@ -74,6 +76,7 @@ pub(crate) fn render_ignore_menu(
         .ghost()
         .xsmall()
         .icon(IconName::EyeOff)
+        .accessibility_label(rust_i18n::t!("git.diff.ignore_title").to_string())
         .tooltip(rust_i18n::t!("git.diff.ignore_title").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
@@ -119,6 +122,7 @@ pub(crate) fn render_highlight_menu(
         .ghost()
         .xsmall()
         .icon(IconName::Highlighter)
+        .accessibility_label(rust_i18n::t!("git.diff.highlight_title").to_string())
         .tooltip(rust_i18n::t!("git.diff.highlight_title").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
@@ -163,6 +167,7 @@ pub(crate) fn render_appearance_menu(
         .ghost()
         .xsmall()
         .icon(IconName::Palette)
+        .accessibility_label(rust_i18n::t!("git.diff.settings").to_string())
         .tooltip(rust_i18n::t!("git.diff.settings").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             let numbers_app = app.clone();
@@ -215,6 +220,7 @@ pub(crate) fn render_settings_menu() -> AnyElement {
         .ghost()
         .xsmall()
         .icon(IconName::Settings)
+        .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
             menu.item(

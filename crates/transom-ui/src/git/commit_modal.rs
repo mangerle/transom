@@ -157,6 +157,7 @@ impl AppShell {
             .ghost()
             .xsmall()
             .icon(IconName::Eye)
+            .accessibility_label(rust_i18n::t!("git.group.by").to_string())
             .tooltip(rust_i18n::t!("git.group.by").to_string())
             .dropdown_menu(move |menu, _window, _cx| {
                 let flat_app = app.clone();

@@ -96,6 +96,9 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                         .xsmall()
                         .ghost()
                         .icon(IconName::Download)
+                        .accessibility_label(
+                            rust_i18n::t!("container.action.backup_volume").to_string(),
+                        )
                         .tooltip(rust_i18n::t!("container.action.backup_volume").to_string())
                         .on_click(move |_, _, cx| {
                             backup_view.update(cx, |_, cx| {
@@ -112,6 +115,9 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                         .xsmall()
                         .ghost()
                         .icon(IconName::Upload)
+                        .accessibility_label(
+                            rust_i18n::t!("container.action.restore_volume").to_string(),
+                        )
                         .tooltip(rust_i18n::t!("container.action.restore_volume").to_string())
                         .on_click(move |_, _, cx| {
                             restore_view.update(cx, |_, cx| {

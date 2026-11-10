@@ -58,6 +58,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::RotateCw)
+                    .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_refresh(&refresh_project, cx);
@@ -193,6 +194,7 @@ impl AppShell {
                 .ghost()
                 .xsmall()
                 .icon(IconName::Play)
+                .accessibility_label(rust_i18n::t!("git.stash.apply").to_string())
                 .tooltip(rust_i18n::t!("git.stash.apply").to_string())
                 .on_click(cx.listener({
                     let project = view.project.clone();
@@ -207,6 +209,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowDownToLine)
+                    .accessibility_label(rust_i18n::t!("git.stash.pop").to_string())
                     .tooltip(rust_i18n::t!("git.stash.pop").to_string())
                     .on_click(cx.listener({
                         let project = view.project.clone();

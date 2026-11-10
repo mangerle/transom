@@ -333,6 +333,7 @@ impl AppShell {
             .xsmall()
             .icon(IconName::Megaphone)
             .selected(self.state.broadcast.open)
+            .accessibility_label(rust_i18n::t!("broadcast.title").to_string())
             .tooltip(rust_i18n::t!("broadcast.title").to_string())
             .on_click(cx.listener(|this, _, window, cx| {
                 this.toggle_broadcast_bar(window, cx);
@@ -400,6 +401,11 @@ impl AppShell {
                 IconName::ArrowDown
             } else {
                 IconName::ArrowUp
+            })
+            .accessibility_label(if multiline {
+                rust_i18n::t!("broadcast.collapse").to_string()
+            } else {
+                rust_i18n::t!("broadcast.expand").to_string()
             })
             .tooltip(if multiline {
                 rust_i18n::t!("broadcast.collapse").to_string()

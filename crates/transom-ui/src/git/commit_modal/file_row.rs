@@ -172,6 +172,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::GitCompare)
+                    .accessibility_label("Show diff")
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
                         this.git_open_worktree_diff(

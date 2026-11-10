@@ -95,6 +95,7 @@ pub(crate) fn render_container_discovery(
                     .ghost()
                     .xsmall()
                     .icon(IconName::Close)
+                    .accessibility_label("Dismiss container discovery")
                     .on_click(move |_, _, cx| {
                         view_dismiss.update(cx, |sidebar, cx| {
                             sidebar.dismiss_discovery(cx);

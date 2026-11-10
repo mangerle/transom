@@ -111,6 +111,7 @@ pub(super) fn container_header_actions(
         .xsmall()
         .ghost()
         .icon(IconName::Ellipsis)
+        .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu({
             let view = view.clone();

@@ -69,6 +69,7 @@ impl SettingsView {
                     .outline()
                     .small()
                     .icon(IconName::FolderOpen)
+                    .accessibility_label(rust_i18n::t!("settings.import_font_tooltip").to_string())
                     .tooltip(rust_i18n::t!("settings.import_font_tooltip").to_string())
                     .on_click(cx.listener({
                         let select = select.clone();

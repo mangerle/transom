@@ -303,6 +303,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowUp)
+                    .accessibility_label("Move step up")
                     .disabled(running || up_index == 0)
                     .on_click({
                         let app = app.clone();
@@ -316,6 +317,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowDown)
+                    .accessibility_label("Move step down")
                     .disabled(running || down_index + 1 >= total)
                     .on_click({
                         let app = app.clone();

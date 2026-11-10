@@ -16,6 +16,7 @@ pub(super) fn render_toolbar(
             .ghost()
             .xsmall()
             .icon(IconName::ArrowLeft)
+            .accessibility_label("Open parent folder")
             .on_click(move |_, _, cx| {
                 up_view.update(cx, |workspace, cx| {
                     workspace.load_container_dir(parent.clone(), cx);
@@ -35,6 +36,7 @@ pub(super) fn render_toolbar(
             .ghost()
             .xsmall()
             .icon(IconName::RefreshCw)
+            .accessibility_label("Refresh container files")
             .on_click(move |_, _, cx| {
                 refresh_view.update(cx, |workspace, cx| {
                     workspace.load_container_dir(refresh_path.clone(), cx);

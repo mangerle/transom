@@ -213,6 +213,7 @@ impl SftpPanelView {
                         .ghost()
                         .xsmall()
                         .icon(IconName::X)
+                        .accessibility_label(rust_i18n::t!("app.close").to_string())
                         .tooltip(rust_i18n::t!("app.close").to_string())
                         .on_click(cx.listener(move |_this, _, _, cx| {
                             cx.emit(crate::sftp::SftpPanelEvent::ClosePanel { tab_id });

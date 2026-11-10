@@ -95,6 +95,7 @@ pub(super) fn render_detail_tab_buttons(
                             .xsmall()
                             .ghost()
                             .icon(IconName::ChevronDown)
+                            .accessibility_label(user_tooltip.clone())
                             .tooltip(user_tooltip.clone())
                             .dropdown_menu(move |menu, _, _| {
                                 terminal::populate_terminal_menu(menu, menu_view.clone())

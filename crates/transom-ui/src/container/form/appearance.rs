@@ -21,6 +21,7 @@ impl ContainerFormView {
                 Button::new("container-form-icon-auto")
                     .small()
                     .icon(default_icon)
+                    .accessibility_label(rust_i18n::t!("form.icon_auto").to_string())
                     .selected(form.icon == SessionIcon::Auto)
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -36,6 +37,7 @@ impl ContainerFormView {
                 ))
                 .small()
                 .icon(name)
+                .accessibility_label(format!("{choice:?}"))
                 .selected(form.icon == choice)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_icon(choice, cx)))
                 .into_any_element()
