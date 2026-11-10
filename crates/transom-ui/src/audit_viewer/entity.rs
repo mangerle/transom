@@ -66,13 +66,6 @@ impl AuditViewerView {
         self.state.as_ref()
     }
 
-    /// 当前选中项下标；未打开时返回 0，供视图按钮读取。
-    pub(crate) fn selected_index(&self) -> usize {
-        self.state
-            .as_ref()
-            .map_or(0, |viewer| viewer.selected_index)
-    }
-
     /// 关闭查看器；在途扫描结果因世代号变化被丢弃。
     pub(crate) fn close(&mut self, cx: &mut Context<Self>) {
         self.seq = self.seq.wrapping_add(1);
@@ -141,6 +134,32 @@ impl AuditViewerView {
         })
         .detach();
         cx.notify();
+    }
+
+    /// 按路径选择审计日志，避免异步刷新后索引指向另一份文件。
+    pub(crate) fn select_path(&mut self, path: &str, cx: &mut Context<Self>) {
+        let index = self.state.as_ref().and_then(|viewer| {
+            viewer
+                .entries
+                .iter()
+                .position(|entry| entry.path.to_string_lossy() == path)
+        });
+        if let Some(index) = index {
+            self.select(index, cx);
+        }
+    }
+
+    /// 按路径删除审计日志，避免异步刷新后误删另一份文件。
+    pub(crate) fn delete_path(&mut self, path: &str, cx: &mut Context<Self>) {
+        let index = self.state.as_ref().and_then(|viewer| {
+            viewer
+                .entries
+                .iter()
+                .position(|entry| entry.path.to_string_lossy() == path)
+        });
+        if let Some(index) = index {
+            self.delete(index, cx);
+        }
     }
 
     /// 切换“仅当前会话”与“全部会话”范围。

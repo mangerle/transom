@@ -431,6 +431,28 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 按提交 OID 选择提交；刷新或插入新提交后仍指向同一条记录。
+    pub(crate) fn git_select_commit_by_oid(
+        &mut self,
+        tab_id: TabId,
+        oid: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let index = workspace
+            .read(cx)
+            .state
+            .log
+            .entries
+            .iter()
+            .position(|entry| entry.oid == oid);
+        if let Some(index) = index {
+            self.git_select_commit_by_index(tab_id, index, cx);
+        }
+    }
+
     /// 选中一条提交（渲染层按行号回调）。
     pub(crate) fn git_select_commit_by_index(
         &mut self,

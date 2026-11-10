@@ -110,6 +110,34 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 按提交 OID 循环切换动作，避免重排后索引指向另一条待办。
+    pub(crate) fn git_rebase_cycle_by_oid(&mut self, oid: &str, cx: &mut Context<Self>) {
+        let index = self
+            .state
+            .modals
+            .git
+            .rebase
+            .as_ref()
+            .and_then(|modal| modal.steps.iter().position(|step| step.oid == oid));
+        if let Some(index) = index {
+            self.git_rebase_cycle(index, cx);
+        }
+    }
+
+    /// 按提交 OID 上移/下移一行，避免重排后索引指向另一条待办。
+    pub(crate) fn git_rebase_move_by_oid(&mut self, oid: &str, up: bool, cx: &mut Context<Self>) {
+        let index = self
+            .state
+            .modals
+            .git
+            .rebase
+            .as_ref()
+            .and_then(|modal| modal.steps.iter().position(|step| step.oid == oid));
+        if let Some(index) = index {
+            self.git_rebase_move(index, up, cx);
+        }
+    }
+
     /// 上移/下移一行：重排待办清单就是重排历史顺序。
     pub(crate) fn git_rebase_move(&mut self, index: usize, up: bool, cx: &mut Context<Self>) {
         let Some(modal) = self.state.modals.git.rebase.as_mut() else {
@@ -287,11 +315,12 @@ impl AppShell {
         running: bool,
         p: &Palette,
     ) -> AnyElement {
-        let up_index = index;
-        let down_index = index;
-        let cycle_index = index;
+        let step_oid = step.oid.clone();
+        let up_oid = step.oid.clone();
+        let down_oid = step.oid.clone();
+        let cycle_oid = step.oid.clone();
         h_flex()
-            .id(ElementId::Name(format!("git-rebase-{index}").into()))
+            .id(ElementId::Name(format!("git-rebase-{step_oid}").into()))
             .px_1()
             .py_0p5()
             .gap_1()
@@ -299,35 +328,41 @@ impl AppShell {
             .rounded(px(4.0))
             .hover(|style| style.bg(p.list_hover))
             .child(
-                Button::new(ElementId::Name(format!("git-rebase-up-{index}").into()))
+                Button::new(ElementId::Name(format!("git-rebase-up-{step_oid}").into()))
                     .ghost()
                     .xsmall()
                     .icon(IconName::ArrowUp)
                     .accessibility_label("Move step up")
-                    .disabled(running || up_index == 0)
+                    .disabled(running || index == 0)
                     .on_click({
                         let app = app.clone();
                         move |_, _, cx| {
-                            app.update(cx, |this, cx| this.git_rebase_move(up_index, true, cx));
+                            app.update(cx, |this, cx| {
+                                this.git_rebase_move_by_oid(&up_oid, true, cx)
+                            });
                         }
                     }),
             )
             .child(
-                Button::new(ElementId::Name(format!("git-rebase-down-{index}").into()))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::ArrowDown)
-                    .accessibility_label("Move step down")
-                    .disabled(running || down_index + 1 >= total)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, _, cx| {
-                            app.update(cx, |this, cx| this.git_rebase_move(down_index, false, cx));
-                        }
-                    }),
+                Button::new(ElementId::Name(
+                    format!("git-rebase-down-{step_oid}").into(),
+                ))
+                .ghost()
+                .xsmall()
+                .icon(IconName::ArrowDown)
+                .accessibility_label("Move step down")
+                .disabled(running || index + 1 >= total)
+                .on_click({
+                    let app = app.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            this.git_rebase_move_by_oid(&down_oid, false, cx)
+                        });
+                    }
+                }),
             )
             .child(
-                Button::new(ElementId::Name(format!("git-rebase-act-{index}").into()))
+                Button::new(ElementId::Name(format!("git-rebase-act-{step_oid}").into()))
                     .ghost()
                     .xsmall()
                     .label(rust_i18n::t!(step.action.i18n_key()).to_string())
@@ -336,7 +371,7 @@ impl AppShell {
                     .on_click({
                         let app = app.clone();
                         move |_, _, cx| {
-                            app.update(cx, |this, cx| this.git_rebase_cycle(cycle_index, cx));
+                            app.update(cx, |this, cx| this.git_rebase_cycle_by_oid(&cycle_oid, cx));
                         }
                     }),
             )

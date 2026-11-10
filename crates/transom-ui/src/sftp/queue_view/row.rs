@@ -20,7 +20,6 @@ use crate::sftp::transfer_presentation::{display_name, progress_percent, status_
 
 /// 渲染单条传输任务行。
 pub(super) fn render_queue_task_row(
-    idx: usize,
     task: &TransferTask,
     tab_id: TabId,
     p: &Palette,
@@ -49,7 +48,7 @@ pub(super) fn render_queue_task_row(
             actions = actions
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-pause-{idx}"),
+                        format!("queue-pause-{task_id}"),
                         IconName::Pause,
                         rust_i18n::t!("sftp.queue.pause_task").to_string(),
                     )
@@ -61,7 +60,7 @@ pub(super) fn render_queue_task_row(
                 )
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-cancel-{idx}"),
+                        format!("queue-cancel-{task_id}"),
                         IconName::X,
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
@@ -76,7 +75,7 @@ pub(super) fn render_queue_task_row(
         TransferStatus::Verifying => {
             actions = actions.child(
                 crate::widgets::IconButton::new(
-                    format!("queue-cancel-{idx}"),
+                    format!("queue-cancel-{task_id}"),
                     IconName::X,
                     rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                 )
@@ -91,7 +90,7 @@ pub(super) fn render_queue_task_row(
             actions = actions
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-prioritize-{idx}"),
+                        format!("queue-prioritize-{task_id}"),
                         IconName::ArrowUpToLine,
                         rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
                     )
@@ -103,7 +102,7 @@ pub(super) fn render_queue_task_row(
                 )
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-resume-{idx}"),
+                        format!("queue-resume-{task_id}"),
                         IconName::Play,
                         rust_i18n::t!("sftp.queue.resume_task").to_string(),
                     )
@@ -115,7 +114,7 @@ pub(super) fn render_queue_task_row(
                 )
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-cancel-{idx}"),
+                        format!("queue-cancel-{task_id}"),
                         IconName::X,
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
@@ -130,7 +129,7 @@ pub(super) fn render_queue_task_row(
             actions = actions
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-prioritize-{idx}"),
+                        format!("queue-prioritize-{task_id}"),
                         IconName::ArrowUpToLine,
                         rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
                     )
@@ -142,7 +141,7 @@ pub(super) fn render_queue_task_row(
                 )
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-cancel-{idx}"),
+                        format!("queue-cancel-{task_id}"),
                         IconName::X,
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
@@ -157,7 +156,7 @@ pub(super) fn render_queue_task_row(
             actions = actions
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-retry-{idx}"),
+                        format!("queue-retry-{task_id}"),
                         IconName::RotateCw,
                         rust_i18n::t!("sftp.queue.retry_task").to_string(),
                     )
@@ -171,7 +170,7 @@ pub(super) fn render_queue_task_row(
                 // 队列才能清掉失败记录，对只想收起失败项的用户是多余的步骤。
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-remove-{idx}"),
+                        format!("queue-remove-{task_id}"),
                         IconName::Trash,
                         rust_i18n::t!("sftp.overlay_remove").to_string(),
                     )
@@ -183,7 +182,7 @@ pub(super) fn render_queue_task_row(
                 )
                 .child(
                     crate::widgets::IconButton::new(
-                        format!("queue-cancel-{idx}"),
+                        format!("queue-cancel-{task_id}"),
                         IconName::X,
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
@@ -197,7 +196,7 @@ pub(super) fn render_queue_task_row(
         TransferStatus::Completed | TransferStatus::Cancelled => {
             actions = actions.child(
                 crate::widgets::IconButton::new(
-                    format!("queue-remove-{idx}"),
+                    format!("queue-remove-{task_id}"),
                     IconName::Trash,
                     rust_i18n::t!("sftp.overlay_remove").to_string(),
                 )
@@ -211,7 +210,7 @@ pub(super) fn render_queue_task_row(
     }
 
     h_flex()
-        .id(ElementId::Name(format!("queue-task-{idx}").into()))
+        .id(ElementId::Name(format!("queue-task-{task_id}").into()))
         .px_2()
         .py_1()
         .gap_2()

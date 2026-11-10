@@ -48,6 +48,8 @@ pub(crate) fn render_diff_tab_bar(
                 .unwrap_or_else(|| tab_item.path.clone());
             let tab_app = app.clone();
             let close_app = app.clone();
+            let select_path = tab_item.path.clone();
+            let close_path = tab_item.path.clone();
             h_flex()
                 .items_center()
                 .gap_1p5()
@@ -76,7 +78,7 @@ pub(crate) fn render_diff_tab_bar(
                     .label(file_name)
                     .on_click(move |_, _, cx| {
                         tab_app.update(cx, |this, cx| {
-                            this.git_select_diff_tab(tab_id, idx, cx);
+                            this.git_select_diff_tab_by_path(tab_id, &select_path, cx);
                         });
                     }),
                 )
@@ -90,7 +92,7 @@ pub(crate) fn render_diff_tab_bar(
                     .render()
                     .on_click(move |_, _, cx| {
                         close_app.update(cx, |this, cx| {
-                            this.git_close_diff_tab(tab_id, idx, cx);
+                            this.git_close_diff_tab_by_path(tab_id, &close_path, cx);
                         });
                     }),
                 )

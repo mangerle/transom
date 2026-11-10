@@ -74,7 +74,7 @@ pub(crate) fn render_log_table(
             ),
             current_branch: cur_branch.clone(),
         };
-        rows.push(render_commit_row(tab_id, index, entry, &shape, &app, p));
+        rows.push(render_commit_row(tab_id, entry, &shape, &app, p));
     }
     if state.log.has_more && !state.log.loading {
         let more_app = app.clone();
@@ -145,7 +145,6 @@ struct RowShape {
 /// 一行提交。
 fn render_commit_row(
     tab_id: TabId,
-    index: usize,
     entry: &transom_core::CommitEntry,
     shape: &RowShape,
     app: &Entity<AppShell>,
@@ -159,13 +158,14 @@ fn render_commit_row(
     let select_app = app.clone();
     let menu_app = app.clone();
     let oid = entry.oid.clone();
+    let select_oid = oid.clone();
     let parents = entry.parents.clone();
     // 菜单闭包要活过本次渲染，因此把需要的字段先取成局部值，不留 `shape` 的借用。
     let on_branch = shape.on_branch;
     let is_tip = shape.is_tip;
     let current_branch = shape.current_branch.clone();
     h_flex()
-        .id(ElementId::Name(format!("git-commit-{index}").into()))
+        .id(ElementId::Name(format!("git-commit-{oid}").into()))
         .h(px(ROW_HEIGHT))
         .items_center()
         .gap_2()
@@ -215,7 +215,7 @@ fn render_commit_row(
         })
         .on_click(move |_, _, cx| {
             select_app.update(cx, |this, cx| {
-                this.git_select_commit_by_index(tab_id, index, cx);
+                this.git_select_commit_by_oid(tab_id, &select_oid, cx);
             });
         })
         .context_menu(move |menu, _window, _cx| {

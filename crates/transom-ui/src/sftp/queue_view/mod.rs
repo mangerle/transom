@@ -65,8 +65,8 @@ impl SftpPanelView {
                     .into_any_element(),
             );
         } else {
-            for (idx, task) in queue.iter().enumerate() {
-                queue_rows.push(render_queue_task_row(idx, task, tab_id, p, cx));
+            for task in queue {
+                queue_rows.push(render_queue_task_row(task, tab_id, p, cx));
             }
         }
 

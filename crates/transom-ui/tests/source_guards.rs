@@ -422,6 +422,50 @@ fn terminal_view_does_not_bind_global_keys() {
     );
 }
 
+/// 可变列表的元素身份必须使用业务标识，不能使用会漂移的位置索引。
+#[test]
+fn mutable_list_identities_use_business_ids() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let cases = [
+        (
+            "src/git/rebase_modal.rs",
+            &[
+                "git-rebase-{index}",
+                "git-rebase-up-{index}",
+                "git-rebase-act-{index}",
+            ][..],
+        ),
+        (
+            "src/sftp/queue_view/row.rs",
+            &[
+                "queue-task-{idx}",
+                "queue-cancel-{idx}",
+                "queue-remove-{idx}",
+            ][..],
+        ),
+        (
+            "src/audit_viewer/render.rs",
+            &["audit-log-item-{idx}", "delete-audit-log-{idx}"][..],
+        ),
+        ("src/git/log_view/log_table.rs", &["git-commit-{index}"][..]),
+    ];
+    for (relative, forbidden) in cases {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取列表文件失败");
+        for needle in forbidden {
+            assert!(
+                !content.contains(needle),
+                "{relative} 仍使用位置索引作为身份：{needle}"
+            );
+        }
+    }
+    let diff_tabs = std::fs::read_to_string(root.join("src/git/diff_view/tabs.rs"))
+        .expect("读取 Git diff 标签失败");
+    assert!(
+        !diff_tabs.contains("NamedInteger(\"git-diff-tab\""),
+        "Git diff 标签不得使用位置索引作为 ElementId"
+    );
+}
+
 /// 标签导航必须保留可聚焦、可键盘激活的语义，不能退化为纯点击 div。
 #[test]
 fn tabs_have_keyboard_semantics() {

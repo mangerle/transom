@@ -141,14 +141,9 @@ impl AuditViewerView {
                     ),
             );
         } else {
-            for (idx, entry) in viewer.entries.iter().enumerate() {
-                file_list = file_list.child(audit_file_row(
-                    idx,
-                    entry,
-                    idx == viewer.selected_index,
-                    cx,
-                    p,
-                ));
+            for (index, entry) in viewer.entries.iter().enumerate() {
+                file_list =
+                    file_list.child(audit_file_row(entry, index == viewer.selected_index, cx, p));
             }
         }
 
@@ -218,7 +213,6 @@ fn render_audit_content(viewer: &AuditViewer, current_search: &str, p: &Palette)
 
 /// 单条审计日志行：文件名、时间/大小与删除入口。
 fn audit_file_row(
-    idx: usize,
     entry: &AuditLogEntry,
     is_selected: bool,
     cx: &mut Context<AuditViewerView>,
@@ -234,8 +228,13 @@ fn audit_file_row(
     } else {
         gpui::transparent_black()
     };
+    let entry_path = entry.path.to_string_lossy().to_string();
+    let item_path = entry_path.clone();
+    let delete_path = entry_path.clone();
     h_flex()
-        .id(ElementId::Name(format!("audit-log-item-{idx}").into()))
+        .id(ElementId::Name(
+            format!("audit-log-item-{entry_path}").into(),
+        ))
         .p_2()
         .rounded(p.radius.sm)
         .bg(bg_color)
@@ -247,7 +246,7 @@ fn audit_file_row(
         .justify_between()
         .gap_2()
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-            this.select(idx, cx);
+            this.select_path(&item_path, cx);
         }))
         .child(
             v_flex()
@@ -273,7 +272,7 @@ fn audit_file_row(
         )
         .child(
             crate::widgets::IconButton::new(
-                ElementId::Name(format!("delete-audit-log-{idx}").into()),
+                ElementId::Name(format!("delete-audit-log-{delete_path}").into()),
                 IconName::Trash,
                 rust_i18n::t!("common.delete").to_string(),
             )
@@ -282,7 +281,7 @@ fn audit_file_row(
             .render()
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
-                this.delete(idx, cx);
+                this.delete_path(&delete_path, cx);
             })),
         )
         .into_any_element()
@@ -295,6 +294,9 @@ fn audit_file_action_buttons(
     content_empty: bool,
 ) -> Vec<Button> {
     let has_selected = selected_path.is_some();
+    let delete_path = selected_path
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string());
     let mut buttons = Vec::with_capacity(3);
     if let Some(path) = selected_path {
         buttons.push(
@@ -322,9 +324,10 @@ fn audit_file_action_buttons(
             .disabled(!has_selected)
             .icon(IconName::Trash)
             .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                let idx = this.selected_index();
-                this.delete(idx, cx);
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                if let Some(path) = delete_path.as_deref() {
+                    this.delete_path(path, cx);
+                }
             })),
     );
 

@@ -84,6 +84,48 @@ impl AppShell {
         }
     }
 
+    /// 按文件路径切换差异标签；路径是稳定身份，不受标签顺序变化影响。
+    pub(crate) fn git_select_diff_tab_by_path(
+        &mut self,
+        tab_id: TabId,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let index = workspace
+            .read(cx)
+            .state
+            .diff_tabs
+            .iter()
+            .position(|tab| tab.path == path);
+        if let Some(index) = index {
+            self.git_select_diff_tab(tab_id, index, cx);
+        }
+    }
+
+    /// 按文件路径关闭差异标签；路径是稳定身份，不受标签顺序变化影响。
+    pub(crate) fn git_close_diff_tab_by_path(
+        &mut self,
+        tab_id: TabId,
+        path: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        let index = workspace
+            .read(cx)
+            .state
+            .diff_tabs
+            .iter()
+            .position(|tab| tab.path == path);
+        if let Some(index) = index {
+            self.git_close_diff_tab(tab_id, index, cx);
+        }
+    }
+
     /// 关闭指定的差异文件标签。
     pub(crate) fn git_close_diff_tab(
         &mut self,
