@@ -152,6 +152,22 @@ impl ModalKind {
     fn spec(self, window: &Window) -> ModalSpec {
         registry::spec(self, window)
     }
+
+    /// 该弹窗是否承载需要明确取舍的危险或授权决策。
+    ///
+    /// AlertDialog 默认不显示右上角关闭件，也不接受遮罩点击关闭；用它承载
+    /// 主机指纹、剪贴板授权和删除确认，可以让用户必须显式选择确认或取消，
+    /// 避免普通表单弹窗的关闭路径绕过业务决策。
+    fn uses_alert_dialog(self) -> bool {
+        matches!(
+            self,
+            Self::HostKeyConfirm
+                | Self::ClipboardPrompt
+                | Self::ForwardConfirm
+                | Self::SftpConfirm
+                | Self::ContainerConfirm
+        )
+    }
 }
 
 mod body;

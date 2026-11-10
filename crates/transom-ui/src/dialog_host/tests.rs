@@ -57,6 +57,36 @@ const ALL: &[ModalKind] = &[
     ModalKind::GitConflict,
 ];
 
+/// 危险或授权决策必须走 AlertDialog，不能退化成带关闭件的普通表单弹窗。
+#[test]
+fn consequential_decisions_use_alert_dialog() {
+    for kind in [
+        ModalKind::HostKeyConfirm,
+        ModalKind::ClipboardPrompt,
+        ModalKind::ForwardConfirm,
+        ModalKind::SftpConfirm,
+        ModalKind::ContainerConfirm,
+    ] {
+        assert!(
+            kind.uses_alert_dialog(),
+            "弹窗 {:?} 必须使用 AlertDialog",
+            kind
+        );
+    }
+    for kind in [
+        ModalKind::AuthPrompt,
+        ModalKind::SftpInput,
+        ModalKind::ContainerForm,
+        ModalKind::Settings,
+    ] {
+        assert!(
+            !kind.uses_alert_dialog(),
+            "普通表单弹窗 {:?} 不应使用 AlertDialog",
+            kind
+        );
+    }
+}
+
 #[test]
 fn registry_covers_every_kind_exactly_once() {
     assert_eq!(

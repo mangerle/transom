@@ -159,38 +159,66 @@ impl AppShell {
         };
         let app = cx.entity().clone();
         let width = kind.spec(window).width;
-        window.open_dialog(cx, move |dialog, _window, _cx| {
-            let cancel_app = app.clone();
-            let commit_app = app.clone();
+        if kind.uses_alert_dialog() {
+            window.open_alert_dialog(cx, move |alert, _window, _cx| {
+                let cancel_app = app.clone();
+                let commit_app = app.clone();
 
-            dialog
-                .w(width)
-                .max_w(width)
-                // 右上角关闭件保留：用户要一个看得见的出口。遮罩点击关闭与
-                // 入场动画按拍板关掉——对本应用的高危确认框，点外面就关是误操作源。
-                .close_button(true)
-                // 容器遮罩按 `window_paddings` 内缩定位：客户端装饰下实测内缩
-                // 20px，会把压暗层上沿留在自绘顶栏中部。压暗改由宿主画满窗面，
-                // 见 `AppShell::dialog_dim`。
-                .overlay(false)
-                .overlay_closable(false)
-                .entrance(DialogEntrance::None)
-                .child(body.clone())
-                .on_cancel(move |_, window, cx| {
-                    let closed = cancel_modal(&cancel_app, kind, window, cx);
-                    if closed {
-                        close_layer(&cancel_app, kind, cx);
-                    }
-                    closed
-                })
-                .on_ok(move |_, window, cx| {
-                    let closed = commit_modal(&commit_app, kind, window, cx);
-                    if closed {
-                        close_layer(&commit_app, kind, cx);
-                    }
-                    closed
-                })
-        });
+                alert
+                    .width(width)
+                    .entrance(DialogEntrance::None)
+                    // 各领域已经渲染了带具体动作文案的页脚；空 footer 只用于
+                    // 关闭 AlertDialog 的默认 OK 页脚，避免出现第二组按钮。
+                    .footer(div())
+                    .child(body.clone())
+                    .on_cancel(move |_, window, cx| {
+                        let closed = cancel_modal(&cancel_app, kind, window, cx);
+                        if closed {
+                            close_layer(&cancel_app, kind, cx);
+                        }
+                        closed
+                    })
+                    .on_ok(move |_, window, cx| {
+                        let closed = commit_modal(&commit_app, kind, window, cx);
+                        if closed {
+                            close_layer(&commit_app, kind, cx);
+                        }
+                        closed
+                    })
+            });
+        } else {
+            window.open_dialog(cx, move |dialog, _window, _cx| {
+                let cancel_app = app.clone();
+                let commit_app = app.clone();
+
+                dialog
+                    .w(width)
+                    .max_w(width)
+                    // 普通表单弹窗保留可见关闭件；危险决策走上面的 AlertDialog。
+                    .close_button(true)
+                    // 容器遮罩按 `window_paddings` 内缩定位：客户端装饰下实测内缩
+                    // 20px，会把压暗层上沿留在自绘顶栏中部。压暗改由宿主画满窗面，
+                    // 见 `AppShell::dialog_dim`。
+                    .overlay(false)
+                    .overlay_closable(false)
+                    .entrance(DialogEntrance::None)
+                    .child(body.clone())
+                    .on_cancel(move |_, window, cx| {
+                        let closed = cancel_modal(&cancel_app, kind, window, cx);
+                        if closed {
+                            close_layer(&cancel_app, kind, cx);
+                        }
+                        closed
+                    })
+                    .on_ok(move |_, window, cx| {
+                        let closed = commit_modal(&commit_app, kind, window, cx);
+                        if closed {
+                            close_layer(&commit_app, kind, cx);
+                        }
+                        closed
+                    })
+            });
+        }
     }
 }
 
