@@ -68,6 +68,7 @@ impl SettingsView {
                 cx.notify();
             });
         self._subscriptions = vec![transparency_sub, divider_sub, ui_font_sub, cjk_font_sub];
+        super::theme_editor::install_theme_editor_subscription(self, cx);
     }
 
     /// 注入监控面板当前的采样档位，供"采样频率"下拉显示选中项。
@@ -96,8 +97,10 @@ impl SettingsView {
         });
         // 界面主题与密度在弹窗内即时预览，取消时凭这份快照恢复。
         self.state.appearance_snapshot = Some(app_settings(cx).appearance.clone());
+        self.state.terminal_profile_snapshot = Some(app_settings(cx).terminal_profile.clone());
 
         self.fill_appearance_inputs(window, cx);
+        self.prepare_theme_editor(window, cx);
         let profile = app_settings(cx).terminal_profile.clone();
         // 旧配置里可能存着“不透明”档：窗口背景现在只有透明与毛玻璃两档，
         // 直接按透明处理，界面上也不会出现两个按钮都没选中的状态。
@@ -203,11 +206,19 @@ impl SettingsView {
 
     /// 保存设置：收集表单 → 落盘 → 通知外壳热应用 → 关闭弹窗。
     pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.theme_editor.dirty() {
+            cx.emit(SettingsEvent::Error(
+                rust_i18n::t!("settings.theme_editor_save_required").to_string(),
+            ));
+            cx.notify();
+            return;
+        }
         if !self.collect_settings_from_form(window, cx) {
             return;
         }
         // 窗口外观已随本次保存落盘，取消时的回滚快照作废。
         self.state.window_appearance_snapshot = None;
+        self.state.terminal_profile_snapshot = None;
         let settings_snapshot = app_settings(cx).clone();
         if !self.persist_settings_reported(&settings_snapshot, cx) {
             // 保存失败时保持弹窗打开，让用户看到错误并重试，而不是误以为已保存。
@@ -240,12 +251,17 @@ impl SettingsView {
             let appearance = app_settings(cx).appearance.clone();
             crate::theme::apply_appearance(&appearance, cx);
         }
+        if let Some(snapshot) = self.state.terminal_profile_snapshot.take() {
+            update_app_settings(cx, |settings| settings.terminal_profile = snapshot);
+            cx.emit(SettingsEvent::ProfilePreview);
+        }
         // 滑块是即时预览：取消要把窗口外观改回打开弹窗时的值。
         if let Some(snapshot) = self.state.window_appearance_snapshot.take() {
             update_app_settings(cx, |s| s.window.window_transparency = snapshot.transparency);
             update_app_settings(cx, |s| s.window.window_background = snapshot.background);
             crate::window_appearance::refresh_window(window, cx);
         }
+        self.theme_editor.discard_draft();
         self.state.registry_edit = None;
         cx.emit(SettingsEvent::Cancelled);
         self.state.open = false;

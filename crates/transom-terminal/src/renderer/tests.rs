@@ -36,6 +36,10 @@ fn palette_colors_match_immediate_conversion() {
     );
     assert_eq!(palette_rgb(palette.cursor), immediate(palette.cursor));
     assert_eq!(palette_rgb(palette.selection), immediate(palette.selection));
+    assert_eq!(
+        cached.intense_foreground,
+        immediate(palette.foreground_intense.unwrap_or(palette.foreground))
+    );
     assert_eq!(cached.foreground, immediate(palette.foreground));
     assert_eq!(cached.background, immediate(palette.background));
     for slot in 0..16 {

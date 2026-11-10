@@ -279,7 +279,11 @@
           "#c678dd",
           "#56b6c2",
           "#ffffff"
-        ]
+        ],
+        "foregroundIntense": "#FFFFFF",
+        "lineHighlight": "#2C313A",
+        "findMatchBackground": "#264F78",
+        "findMatchBorder": "#61AFEF"
       }
     }
   ],

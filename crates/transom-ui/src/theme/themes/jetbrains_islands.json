@@ -286,7 +286,11 @@
           "#D970FF",
           "#40FFE9",
           "#FFFFFF"
-        ]
+        ],
+        "foregroundIntense": "#FFFFFF",
+        "lineHighlight": "#26282E",
+        "findMatchBackground": "#2F5D8A",
+        "findMatchBorder": "#467FF2"
       }
     },
     {
@@ -574,7 +578,11 @@
           "#AC48CE",
           "#1F7F74",
           "#6E6E71"
-        ]
+        ],
+        "foregroundIntense": "#000000",
+        "lineHighlight": "#EEF1F5",
+        "findMatchBackground": "#A6D2FF",
+        "findMatchBorder": "#225CD6"
       }
     }
   ]

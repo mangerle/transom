@@ -1,4 +1,5 @@
 // 设计令牌例外：终端网格的字体、单元格与字形几何由渲染器测量，保持物理像素。
+mod contrast;
 mod decorations;
 mod palette;
 mod pipeline;
@@ -51,6 +52,12 @@ pub(crate) struct TerminalRenderer {
     line_height: f32,
     /// 背景不透明度系数：1.0 为完全不透明，按背景透明度设置折算。
     background_alpha: f32,
+    /// 外观设置是否要求粗体默认前景使用 intense 槽位。
+    bold_is_bright: bool,
+    /// 终端正文最小显示对比度；1.0 关闭修正。
+    minimum_contrast_ratio: f32,
+    /// 对比度修正的颜色组合缓存，只在渲染线程访问。
+    contrast_cache: parking_lot::Mutex<contrast::TerminalContrastCache>,
 }
 
 /// 背景透明度（百分比）折算成不透明度系数。
@@ -84,6 +91,9 @@ impl TerminalRenderer {
             highlight_rules: CompiledHighlight::compile(&profile.highlight),
             line_height: profile.line_height.max(1.0),
             background_alpha: background_alpha(profile.background_transparency),
+            bold_is_bright: profile.bold_is_bright,
+            minimum_contrast_ratio: contrast::normalize_ratio(profile.minimum_contrast_ratio),
+            contrast_cache: parking_lot::Mutex::new(Default::default()),
         };
         renderer.measure(window);
         renderer
@@ -246,6 +256,8 @@ impl TerminalRenderer {
         // 渲染阶段流水线：
         // Pass 1: 终端底色与半透明填充
         self.paint_background_pass(bounds, default_bg, window);
+        // Pass 1.5: 聚焦终端的当前行底色；显式单元格背景仍会覆盖它
+        self.paint_line_highlight_pass(&ctx, window);
         // Pass 2: Kitty 协议图形绘制
         self.paint_graphics_pass(&ctx, graphics, window);
         // Pass 3: 脏行视觉扫描缓存重构

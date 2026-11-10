@@ -24,6 +24,8 @@ use gpui_kit::*;
 pub(super) enum GroupSearch {
     /// 外观页：界面主题组。
     UiTheme,
+    /// 外观页：主题文档编辑器组。
+    ThemeEditor,
     /// 外观页：界面字体组。
     UiFont,
     /// 外观页：窗口外观组。
@@ -126,7 +128,9 @@ impl GroupSearch {
     pub(super) fn page_title_key(self) -> &'static str {
         use GroupSearch::*;
         match self {
-            UiTheme | UiFont | WindowAppearance | Divider => "settings.tab_appearance",
+            UiTheme | ThemeEditor | UiFont | WindowAppearance | Divider => {
+                "settings.tab_appearance"
+            }
             TerminalFont | LocalShell | Cursor | TerminalTheme | Highlight | Trigger
             | BlockView | KeyBindings => "settings.tab_terminal",
             Editor | FilePanel | Transfer | Zmodem | Audit | Identities | History => {
@@ -174,6 +178,7 @@ mod tests {
     /// 穷尽匹配仍会强制补齐关键词，编译期兜底。
     const ALL: &[GroupSearch] = &[
         GroupSearch::UiTheme,
+        GroupSearch::ThemeEditor,
         GroupSearch::UiFont,
         GroupSearch::WindowAppearance,
         GroupSearch::Divider,

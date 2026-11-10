@@ -12,7 +12,7 @@ use crate::trigger_panel::TriggerEditState;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::slider::SliderState;
 use gpui_kit::*;
-use transom_core::{AppSettings, AppearanceSettings, WindowBackgroundMode};
+use transom_core::{AppSettings, AppearanceSettings, TerminalProfile, WindowBackgroundMode};
 use transom_platform::shell::ShellOption;
 
 use super::font_select::{
@@ -77,6 +77,8 @@ pub(crate) struct SettingsModalState {
     pub(crate) window_transparency: Entity<SliderState>,
     pub(crate) window_appearance_snapshot: Option<WindowAppearanceSnapshot>,
     pub(crate) appearance_snapshot: Option<AppearanceSettings>,
+    /// 终端 profile 在主题编辑器预览前的快照：取消设置时恢复调色板与对比度。
+    pub(crate) terminal_profile_snapshot: Option<TerminalProfile>,
     pub(crate) sync_form: SyncFormInputs,
     pub(crate) proxy: ProxyFormInputs,
     pub(crate) identity_edit: Option<IdentityEditState>,
@@ -302,6 +304,7 @@ impl SettingsModalState {
             window_transparency: appearance.window_transparency,
             window_appearance_snapshot: None,
             appearance_snapshot: None,
+            terminal_profile_snapshot: None,
             identity_edit: None,
             trigger_edit: None,
             registry_edit: None,

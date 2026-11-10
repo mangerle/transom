@@ -47,6 +47,38 @@ impl TerminalRenderer {
         window.paint_quad(fill(bounds, default_fill));
     }
 
+    /// 聚焦时给光标所在行铺主题当前行底色。
+    ///
+    /// 该底色先于单元格背景绘制，显式 ANSI 背景仍保持最高优先级；缩到 0.72
+    /// alpha 是为了在浅色和深色主题里都保留正文层次，而不是把整行洗成实色。
+    pub(super) fn paint_line_highlight_pass(
+        &self,
+        ctx: &RenderPassContext<'_>,
+        window: &mut Window,
+    ) {
+        if !ctx.request.highlight_current_line
+            || !ctx.cursor_visible
+            || !(0..ctx.rows as i32).contains(&ctx.cursor_row_raw)
+        {
+            return;
+        }
+        let mut color = self.color(self.palette.line_highlight);
+        color.a = 0.72;
+        window.paint_quad(fill(
+            Bounds {
+                origin: Point {
+                    x: ctx.origin.x,
+                    y: ctx.origin.y + self.cell_height * ctx.cursor_row_raw as f32,
+                },
+                size: Size {
+                    width: self.cell_width * ctx.cols as f32,
+                    height: self.cell_height,
+                },
+            },
+            color,
+        ));
+    }
+
     /// 第二阶段：绘制 Kitty 协议图形（画在默认底色之上、文本之下）。
     pub(super) fn paint_graphics_pass(
         &self,

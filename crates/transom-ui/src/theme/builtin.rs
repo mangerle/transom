@@ -33,8 +33,14 @@ pub(crate) const TRANSMOM_DARK: &str = include_str!("themes/transom_dark.json");
 /// 以 " Dark"/" Light" 结尾构成一族，明暗切换时 [`super::resolve`] 自动联动。
 pub(crate) const JETBRAINS_ISLANDS: &str = include_str!("themes/jetbrains_islands.json");
 
+/// 主流编辑器与终端主题集合。
+///
+/// 数据移植自 nyaterm 的 Apache-2.0 许可主题目录，并按 Transom 的语义 token 映射规则
+/// 补齐编辑器高亮与终端伴生色板。每套都提供完整 16 色 ANSI，不允许只换背景色。
+pub(crate) const POPULAR_THEMES: &str = include_str!("themes/popular_themes.json");
+
 /// 全部内置主题集合，启动时按顺序注册（内存注入，消除热重载前的首帧竞态）。
-pub(crate) const ALL: &[&str] = &[TRANSMOM_DARK, JETBRAINS_ISLANDS];
+pub(crate) const ALL: &[&str] = &[TRANSMOM_DARK, JETBRAINS_ISLANDS, POPULAR_THEMES];
 
 /// 内置主题的受管落盘清单：(目录内文件名, 内容)。
 ///
@@ -44,4 +50,5 @@ pub(crate) const ALL: &[&str] = &[TRANSMOM_DARK, JETBRAINS_ISLANDS];
 pub(crate) const MANAGED_FILES: &[(&str, &str)] = &[
     ("transom-dark.json", TRANSMOM_DARK),
     ("jetbrains-islands.json", JETBRAINS_ISLANDS),
+    ("popular-themes.json", POPULAR_THEMES),
 ];

@@ -6,6 +6,7 @@
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
+use crate::settings::SettingsEvent;
 use crate::settings::SettingsView;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -26,11 +27,26 @@ impl SettingsView {
 
         let follow_card = self.render_follow_theme_card(follow_selected, p, cx);
 
-        let theme_cards: Vec<AnyElement> = themes
-            .into_iter()
+        let dark_cards: Vec<AnyElement> = themes
+            .iter()
+            .filter(|theme| theme.mode == transom_core::PaletteMode::Dark)
             .enumerate()
             .map(|(idx, theme)| {
-                self.render_theme_card(idx, &theme, theme.name == current_theme_name, p, cx)
+                self.render_theme_card(idx, theme, theme.name == current_theme_name, p, cx)
+            })
+            .collect();
+        let light_cards: Vec<AnyElement> = themes
+            .iter()
+            .filter(|theme| theme.mode == transom_core::PaletteMode::Light)
+            .enumerate()
+            .map(|(idx, theme)| {
+                self.render_theme_card(
+                    dark_cards.len() + idx,
+                    theme,
+                    theme.name == current_theme_name,
+                    p,
+                    cx,
+                )
             })
             .collect();
 
@@ -47,11 +63,73 @@ impl SettingsView {
                 )
                 .child(
                     v_flex()
-                        .gap_2p5()
+                        .gap_3()
                         .children([follow_card])
-                        .children(theme_cards),
+                        .child(preset_theme_section(
+                            rust_i18n::t!("settings.theme_group_dark").to_string(),
+                            dark_cards,
+                            p,
+                        ))
+                        .child(preset_theme_section(
+                            rust_i18n::t!("settings.theme_group_light").to_string(),
+                            light_cards,
+                            p,
+                        )),
                 )
+                .child(self.render_terminal_contrast_row(p, cx))
                 .into_any_element(),
+            p,
+        )
+    }
+
+    /// 终端正文最小显示对比度。
+    ///
+    /// 修正发生在渲染层，不改变 ANSI、复制文本和会话记录；显式终端配色与
+    /// 跟随界面主题都共享这一设置。
+    fn render_terminal_contrast_row(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let ratio = app_settings(cx).terminal_profile.minimum_contrast_ratio;
+        let current = if (ratio - 3.0).abs() < 0.01 {
+            "3"
+        } else if (ratio - 4.5).abs() < 0.01 {
+            "4.5"
+        } else if (ratio - 7.0).abs() < 0.01 {
+            "7"
+        } else if (ratio - 21.0).abs() < 0.01 {
+            "21"
+        } else {
+            "1"
+        };
+        let options = ["1", "3", "4.5", "7", "21"]
+            .into_iter()
+            .map(|value| {
+                let key = match value {
+                    "3" => "settings.terminal_contrast_minimum",
+                    "4.5" => "settings.terminal_contrast_aa",
+                    "7" => "settings.terminal_contrast_aaa",
+                    "21" => "settings.terminal_contrast_maximum",
+                    _ => "settings.terminal_contrast_off",
+                };
+                (value, rust_i18n::t!(key).to_string())
+            })
+            .collect();
+        let dropdown = Self::setting_dropdown(
+            "dropdown-terminal-minimum-contrast",
+            current,
+            options,
+            |_this, value, cx| {
+                let ratio = value.parse::<f32>().unwrap_or(1.0).clamp(1.0, 21.0);
+                update_app_settings(cx, |settings| {
+                    settings.terminal_profile.minimum_contrast_ratio = ratio;
+                });
+                cx.emit(SettingsEvent::ProfilePreview);
+                cx.notify();
+            },
+            cx,
+        );
+        crate::widgets::setting_row(
+            "settings.terminal_minimum_contrast",
+            Some("settings.terminal_minimum_contrast_desc"),
+            dropdown,
             p,
         )
     }
@@ -132,7 +210,7 @@ impl SettingsView {
 
         let dots = h_flex()
             .gap_1()
-            .children(theme.palette.ansi.iter().take(8).map(|color| {
+            .children(theme.palette.ansi.iter().map(|color| {
                 div()
                     .size(px(10.0))
                     .rounded_full()
@@ -210,6 +288,15 @@ impl SettingsView {
             .child(terminal_preview(theme, p))
             .into_any_element()
     }
+}
+
+fn preset_theme_section(title: String, cards: Vec<AnyElement>, p: &Palette) -> AnyElement {
+    v_flex()
+        .w_full()
+        .gap_2p5()
+        .child(div().text_xs().text_color(p.muted_foreground).child(title))
+        .children(cards)
+        .into_any_element()
 }
 
 /// 终端配色预览：背景、提示符、目录与文件行。

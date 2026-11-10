@@ -19,13 +19,23 @@
 //! `apply_config` 之后于同一闭包内写入。
 
 mod builtin;
+mod document;
+mod preview;
 pub(crate) mod tokens;
+
+pub(crate) use document::{
+    MAX_THEME_DOCUMENT_BYTES, ThemeDraft, parse_single_theme_document, serialize_theme_document,
+    theme_file_stem, unique_theme_name,
+};
+pub(crate) use preview::{apply_theme_preview, register_theme_document};
+
+use document::extract_terminal_palettes;
 
 use gpui_kit::component::theme::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Window, px};
 use std::collections::HashMap;
 use std::rc::Rc;
-use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, Rgb, TerminalPalette, UiThemeMode};
+use transom_core::{AppearanceSettings, FOLLOW_UI_THEME, TerminalPalette, UiThemeMode};
 
 /// 解析结果：当前生效主题与浅/深两槽位的兜底配置。
 struct ResolvedThemes {
@@ -92,6 +102,24 @@ impl ResolvedThemes {
 /// 为什么用命名约定而不是数据字段：主题配置来自上游 `ThemeConfig` 类型，无
 /// 法追加族名字段；后缀约定零 schema 成本，且与 Zed 生态的主题命名习惯一致。
 fn companion_name(name: &str, mode: ThemeMode) -> Option<String> {
+    let explicit = match (name, mode) {
+        ("Dracula", ThemeMode::Light) => Some("Dracula Light"),
+        ("Dracula Light", ThemeMode::Dark) => Some("Dracula"),
+        ("Nord", ThemeMode::Light) => Some("Nord Light"),
+        ("Nord Light", ThemeMode::Dark) => Some("Nord"),
+        ("One Dark Pro", ThemeMode::Light) => Some("One Light"),
+        ("One Light", ThemeMode::Dark) => Some("One Dark Pro"),
+        ("Catppuccin Mocha", ThemeMode::Light) => Some("Catppuccin Latte"),
+        ("Catppuccin Latte", ThemeMode::Dark) => Some("Catppuccin Mocha"),
+        ("Rosé Pine", ThemeMode::Light) => Some("Rosé Pine Dawn"),
+        ("Rosé Pine Dawn", ThemeMode::Dark) => Some("Rosé Pine"),
+        ("Nya High Contrast", ThemeMode::Light) => Some("Nya High Contrast White"),
+        ("Nya High Contrast White", ThemeMode::Dark) => Some("Nya High Contrast"),
+        _ => None,
+    };
+    if let Some(name) = explicit {
+        return Some(name.to_string());
+    }
     let family = name
         .strip_suffix(" Dark")
         .or_else(|| name.strip_suffix(" Light"))?;
@@ -296,51 +324,6 @@ pub(crate) fn register_builtin(cx: &mut App) {
     }
 }
 
-/// 从主题 JSON 提取伴生的终端调色板（自定义 `terminal` 节）。
-///
-/// gpui-kit 的 `ThemeSet` 契约没有终端概念，未知字段会被 serde 静默忽略，
-/// 因此终端配色作为旁路字段与 UI 主题共存于同一文件；解析层自行读取，
-/// 键缺失或字段非法时返回空——主题可以不带终端配色。
-fn extract_terminal_palettes(content: &str) -> Vec<(String, TerminalPalette)> {
-    let Ok(doc) = serde_json::from_str::<serde_json::Value>(content) else {
-        return Vec::new();
-    };
-    let Some(themes) = doc["themes"].as_array() else {
-        return Vec::new();
-    };
-    let parse_rgb =
-        |value: &serde_json::Value| -> Option<Rgb> { value.as_str().and_then(Rgb::parse_hex) };
-    themes
-        .iter()
-        .filter_map(|theme| {
-            let name = theme["name"].as_str()?.to_string();
-            let terminal = &theme["terminal"];
-            let background = parse_rgb(&terminal["background"])?;
-            let foreground = parse_rgb(&terminal["foreground"])?;
-            let cursor = parse_rgb(&terminal["cursor"])?;
-            let selection = parse_rgb(&terminal["selection"])?;
-            let ansi_values = terminal["ansi"].as_array()?;
-            if ansi_values.len() != 16 {
-                return None;
-            }
-            let mut ansi = [Rgb::new(0, 0, 0); 16];
-            for (slot, value) in ansi_values.iter().enumerate() {
-                ansi[slot] = parse_rgb(value)?;
-            }
-            Some((
-                name,
-                TerminalPalette {
-                    background,
-                    foreground,
-                    cursor,
-                    selection,
-                    ansi,
-                },
-            ))
-        })
-        .collect()
-}
-
 /// 主题名到伴生终端调色板的绑定表：启动与热重载时从内置与用户目录主题
 /// 重建。热重载后新增的伴生主题要重启才会进入绑定表（目录变动只触发
 /// 注册表 reload，无回调），属已知局限。
@@ -384,12 +367,20 @@ pub(crate) fn resolve_terminal_palette(
     if profile_theme_name != FOLLOW_UI_THEME {
         return None;
     }
-    let bindings = cx.try_global::<TerminalPaletteBindings>()?;
-    bindings
-        .0
-        .get(active_ui_theme_name)
-        .cloned()
+    terminal_palette_for_ui_theme(active_ui_theme_name, cx)
         .or_else(|| Some(TerminalPalette::default()))
+}
+
+/// 返回某套 UI 主题显式携带的终端色板；没有伴生色板时返回 `None`。
+///
+/// 与 [`resolve_terminal_palette`] 的区别是不做默认主题兜底，供主题编辑器原样
+/// 导出当前 UI 主题，避免把“没有终端节”误写成某套默认色板。
+pub(crate) fn terminal_palette_for_ui_theme(
+    ui_theme_name: &str,
+    cx: &App,
+) -> Option<TerminalPalette> {
+    let bindings = cx.try_global::<TerminalPaletteBindings>()?;
+    bindings.0.get(ui_theme_name).cloned()
 }
 
 /// 把内置主题落盘为用户主题目录内的受管文件。

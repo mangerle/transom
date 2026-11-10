@@ -16,6 +16,7 @@
 
 use super::SettingsModalState;
 use super::event::SettingsEvent;
+use super::theme_editor::ThemeEditorState;
 use super::update::UpdatePanel;
 use crate::app::Persistence;
 use gpui_kit::*;
@@ -52,6 +53,8 @@ pub(crate) struct SettingsView {
     pub(crate) _subscriptions: Vec<Subscription>,
     /// 关于页自更新状态机与在途任务。
     pub(crate) update: UpdatePanel,
+    /// 主题文档编辑器与即时预览任务。
+    pub(crate) theme_editor: ThemeEditorState,
 }
 
 impl EventEmitter<SettingsEvent> for SettingsView {}
@@ -69,12 +72,14 @@ impl SettingsView {
         catalog: SessionCatalog,
     ) -> Self {
         let state = SettingsModalState::new(window, cx, settings, &services.local_shells);
+        let theme_editor = ThemeEditorState::new(window, cx);
         let mut this = Self {
             state,
             services,
             catalog,
             _subscriptions: Vec::new(),
             update: UpdatePanel::default(),
+            theme_editor,
         };
         this.install_subscriptions(window, cx);
         this

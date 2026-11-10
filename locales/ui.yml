@@ -2601,6 +2601,87 @@ settings:
   ui_theme_group:
     en: Interface Theme
     zh-CN: 界面主题
+  theme_group_dark:
+    en: Dark Themes
+    zh-CN: 深色主题
+  theme_group_light:
+    en: Light Themes
+    zh-CN: 浅色主题
+  theme_editor_group:
+    en: Theme Editor
+    zh-CN: 主题编辑器
+  theme_editor_note:
+    en: Edit a complete ThemeSet JSON document. Valid changes preview immediately; save writes a user theme under the theme directory.
+    zh-CN: 编辑完整的 ThemeSet JSON。内容有效时立即预览；保存会把自定义主题写入用户主题目录。
+  theme_editor_load_active:
+    en: Load Current Theme
+    zh-CN: 载入当前主题
+  theme_editor_save:
+    en: Save to Themes
+    zh-CN: 保存到主题目录
+  theme_editor_import:
+    en: Import JSON…
+    zh-CN: 导入 JSON…
+  theme_editor_export:
+    en: Export JSON…
+    zh-CN: 导出 JSON…
+  theme_editor_json_filter:
+    en: Theme JSON
+    zh-CN: 主题 JSON
+  theme_editor_preview_ok:
+    en: Theme JSON is valid and previewing.
+    zh-CN: 主题 JSON 有效，正在预览。
+  theme_editor_saved:
+    en: "Saved theme %{name} to %{path}"
+    zh-CN: "已保存主题 %{name}，路径: %{path}"
+  theme_editor_save_failed:
+    en: "Failed to save theme: %{error}"
+    zh-CN: "保存主题失败，原因: %{error}"
+  theme_editor_save_required:
+    en: Save or discard the theme editor draft before saving settings.
+    zh-CN: 请先保存或放弃主题编辑器草稿，再保存设置。
+  theme_editor_open_failed:
+    en: "Failed to open theme file at %{path}: %{error}"
+    zh-CN: "打开主题文件失败，路径: %{path}，原因: %{error}"
+  theme_editor_read_failed:
+    en: "Failed to read theme file at %{path}: %{error}"
+    zh-CN: "读取主题文件失败，路径: %{path}，原因: %{error}"
+  theme_editor_file_too_large:
+    en: "Theme file exceeds the 1 MiB limit at %{path}; read at least %{bytes} bytes."
+    zh-CN: "主题文件超过 1 MiB 上限，路径: %{path}，实际至少 %{bytes} 字节"
+  theme_editor_not_utf8:
+    en: "Theme file is not UTF-8 at %{path}: %{error}"
+    zh-CN: "主题文件不是 UTF-8，路径: %{path}，原因: %{error}"
+  theme_editor_output_without_parent:
+    en: "Theme output path has no parent directory: %{path}"
+    zh-CN: "主题输出路径没有父目录: %{path}"
+  theme_editor_create_dir_failed:
+    en: "Failed to create theme directory at %{path}: %{error}"
+    zh-CN: "创建主题目录失败，路径: %{path}，原因: %{error}"
+  theme_editor_temp_write_failed:
+    en: "Failed to write temporary theme file at %{path}: %{error}"
+    zh-CN: "写入主题临时文件失败，路径: %{path}，原因: %{error}"
+  theme_editor_replace_failed:
+    en: "Failed to replace theme file at %{path}: %{error}"
+    zh-CN: "替换主题文件失败，路径: %{path}，原因: %{error}"
+  theme_editor_imported:
+    en: Theme imported into the editor.
+    zh-CN: 已导入主题到编辑器。
+  theme_editor_import_failed:
+    en: "Failed to import theme: %{error}"
+    zh-CN: "导入主题失败，原因: %{error}"
+  theme_editor_exported:
+    en: "Theme exported to %{path}"
+    zh-CN: "已导出主题，路径: %{path}"
+  theme_editor_export_failed:
+    en: "Failed to export theme: %{error}"
+    zh-CN: "导出主题失败，原因: %{error}"
+  theme_editor_thread_failed:
+    en: The background I/O task could not be started.
+    zh-CN: 后台文件任务启动失败。
+  theme_editor_missing_active:
+    en: The active theme %{name} is not registered.
+    zh-CN: 当前主题 %{name} 未注册。
   terminal_theme_group:
     en: Terminal Color Schemes
     zh-CN: 终端配色
@@ -2877,6 +2958,27 @@ settings:
   terminal_theme_note:
     en: Presets below override the theme-following palette; the choice applies to new sessions and, after saving, live panes.
     zh-CN: 下方预设会覆盖"跟随界面主题"的配色；选择应用于新会话，保存后立即作用于已打开的窗格。
+  terminal_minimum_contrast:
+    en: Minimum Text Contrast
+    zh-CN: 终端最小正文对比度
+  terminal_minimum_contrast_desc:
+    en: Correct only rendered glyphs against their cell background. ANSI values, copied text and recordings remain unchanged.
+    zh-CN: 仅按单元格背景修正终端字形显示，不修改 ANSI、复制文本或会话记录。
+  terminal_contrast_off:
+    en: "Off"
+    zh-CN: 关闭
+  terminal_contrast_minimum:
+    en: "3:1"
+    zh-CN: "3:1"
+  terminal_contrast_aa:
+    en: "4.5:1 (WCAG AA)"
+    zh-CN: "4.5:1（WCAG AA）"
+  terminal_contrast_aaa:
+    en: "7:1 (WCAG AAA)"
+    zh-CN: "7:1（WCAG AAA）"
+  terminal_contrast_maximum:
+    en: "21:1 (Maximum)"
+    zh-CN: "21:1（最高）"
   ui_font_family:
     en: Interface Font
     zh-CN: 界面字体

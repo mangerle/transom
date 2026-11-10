@@ -237,6 +237,33 @@ fn builtin_neutral_ramp_keeps_separators_visible() {
     );
 }
 
+/// 每套 UI 主题携带的终端伴生色板必须与终端预设目录逐值一致。
+///
+/// 用户显式选择 “JetBrains Islands Dark” 与“跟随界面主题”时看到同一组颜色，
+/// 否则两套入口会在同一主题下产生可观察色差。
+#[test]
+fn ui_companion_terminal_palettes_match_terminal_presets() {
+    let presets = transom_core::preset_themes();
+    let mut checked = 0usize;
+    for content in builtin::ALL {
+        for (name, palette) in extract_terminal_palettes(content) {
+            let preset = presets
+                .iter()
+                .find(|preset| preset.name == name)
+                .unwrap_or_else(|| panic!("终端预设缺少主题伴生色板: {name}"));
+            assert_eq!(preset.palette, palette, "{name} 的终端色板不一致");
+            checked += 1;
+        }
+    }
+    assert!(checked >= 23, "应覆盖全部内置 UI 主题的终端色板");
+    for name in ["JetBrains Islands Dark", "JetBrains Islands Light"] {
+        assert!(
+            presets.iter().any(|preset| preset.name == name),
+            "{name} 必须可单独选择"
+        );
+    }
+}
+
 /// 注册逻辑本体：不依赖 App，直接验证 load_themes_from_str 能把内置主题
 /// 装进注册表并被 sorted_themes 列出（复现真实启动序列的核心步骤）。
 #[test]
@@ -338,6 +365,18 @@ fn companion_name_pairs_by_suffix() {
     assert_eq!(
         companion_name("Transom Dark", ThemeMode::Light),
         Some("Transom Light".into())
+    );
+    assert_eq!(
+        companion_name("Catppuccin Mocha", ThemeMode::Light),
+        Some("Catppuccin Latte".into())
+    );
+    assert_eq!(
+        companion_name("One Light", ThemeMode::Dark),
+        Some("One Dark Pro".into())
+    );
+    assert_eq!(
+        companion_name("Rosé Pine", ThemeMode::Light),
+        Some("Rosé Pine Dawn".into())
     );
     assert_eq!(companion_name("Default", ThemeMode::Dark), None);
 }

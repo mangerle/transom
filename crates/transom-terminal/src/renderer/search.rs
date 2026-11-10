@@ -18,6 +18,15 @@ const SEARCH_STRIP_MARGIN: Pixels = px(2.0);
 /// 刻度条两侧各留出的空隙，保证与终端正文之间有可见分界。
 const SEARCH_TICK_INSET: Pixels = px(2.0);
 
+struct SearchHitPaint {
+    start: usize,
+    end: usize,
+    y: Pixels,
+    origin: Point<Pixels>,
+    color: Hsla,
+    border: Option<Hsla>,
+}
+
 impl TerminalRenderer {
     /// 检索刻度带在给定绘制区域内的矩形。
     ///
@@ -46,39 +55,92 @@ impl TerminalRenderer {
         let Some(row) = row else {
             return;
         };
+        let mut hit_color = self.color(self.palette.find_match_background);
         for (start, end) in &row.hits {
-            self.paint_hit_span(*start, *end, y, origin, SEARCH_HIT_ALPHA, window);
+            let mut color = hit_color;
+            color.a = SEARCH_HIT_ALPHA;
+            self.paint_hit_span(
+                SearchHitPaint {
+                    start: *start,
+                    end: *end,
+                    y,
+                    origin,
+                    color,
+                    border: None,
+                },
+                window,
+            );
         }
         if let Some((start, end)) = row.current {
-            self.paint_hit_span(start, end, y, origin, SEARCH_CURRENT_ALPHA, window);
+            hit_color.a = SEARCH_CURRENT_ALPHA;
+            self.paint_hit_span(
+                SearchHitPaint {
+                    start,
+                    end,
+                    y,
+                    origin,
+                    color: hit_color,
+                    border: Some(self.color(self.palette.find_match_border)),
+                },
+                window,
+            );
         }
     }
 
-    fn paint_hit_span(
-        &self,
-        start: usize,
-        end: usize,
-        y: Pixels,
-        origin: Point<Pixels>,
-        alpha: f32,
-        window: &mut Window,
-    ) {
-        let mut color = self.color(self.palette.cursor);
-        color.a = alpha;
-        let width = self.cell_width * end.saturating_sub(start).max(1) as f32;
-        window.paint_quad(fill(
-            Bounds {
-                origin: Point {
-                    x: origin.x + self.cell_width * start as f32,
-                    y,
-                },
-                size: Size {
-                    width,
-                    height: self.cell_height,
-                },
+    fn paint_hit_span(&self, paint: SearchHitPaint, window: &mut Window) {
+        let width = self.cell_width * paint.end.saturating_sub(paint.start).max(1) as f32;
+        let bounds = Bounds {
+            origin: Point {
+                x: paint.origin.x + self.cell_width * paint.start as f32,
+                y: paint.y,
             },
-            color,
-        ));
+            size: Size {
+                width,
+                height: self.cell_height,
+            },
+        };
+        window.paint_quad(fill(bounds, paint.color));
+        if let Some(border) = paint.border {
+            let thickness = px(1.0);
+            for edge in [
+                Bounds {
+                    origin: bounds.origin,
+                    size: Size {
+                        width: bounds.size.width,
+                        height: thickness,
+                    },
+                },
+                Bounds {
+                    origin: Point {
+                        x: bounds.origin.x,
+                        y: bounds.origin.y + bounds.size.height - thickness,
+                    },
+                    size: Size {
+                        width: bounds.size.width,
+                        height: thickness,
+                    },
+                },
+                Bounds {
+                    origin: bounds.origin,
+                    size: Size {
+                        width: thickness,
+                        height: bounds.size.height,
+                    },
+                },
+                Bounds {
+                    origin: Point {
+                        x: bounds.origin.x + bounds.size.width - thickness,
+                        y: bounds.origin.y,
+                    },
+                    size: Size {
+                        width: thickness,
+                        height: bounds.size.height,
+                    },
+                },
+            ] {
+                window.paint_quad(fill(edge, border));
+            }
+        }
     }
 
     /// 绘制右侧刻度带：把整个缓冲区的标记分布压缩到一屏高度内，并提供点击跳转的靶区。

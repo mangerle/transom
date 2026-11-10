@@ -101,6 +101,10 @@ static SETTINGS_PAGES: &[PageSpec] = &[
         icon: IconName::Palette,
         groups: &[
             plain(GroupSearch::UiTheme, SettingsView::render_settings_ui_theme),
+            plain(
+                GroupSearch::ThemeEditor,
+                SettingsView::render_settings_theme_editor,
+            ),
             plain(GroupSearch::UiFont, SettingsView::render_settings_ui_font),
             plain(
                 GroupSearch::WindowAppearance,

@@ -18,6 +18,7 @@ rand.workspace = true
 transom-platform.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 serde_json.workspace = true
+thiserror.workspace = true
 transom-core.workspace = true
 transom-store.workspace = true
 transom-desktop.workspace = true

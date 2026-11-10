@@ -5,13 +5,40 @@ use super::key_bindings::TerminalKeyBinding;
 use crate::model::color::Rgb;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerminalPalette {
     pub background: Rgb,
     pub foreground: Rgb,
+    /// 粗体默认前景色；`None` 表示继续使用普通前景色。
+    ///
+    /// 该槽位与 ANSI bright 色分离：部分主题希望粗体正文和 ANSI 明亮色采用
+    /// 不同对比度，只有保留独立令牌才不会被迫复用八号色。
+    #[serde(default)]
+    pub foreground_intense: Option<Rgb>,
     pub cursor: Rgb,
     pub selection: Rgb,
+    /// 当前行高亮底色，供聚焦中的终端行使用。
+    #[serde(default = "default_line_highlight")]
+    pub line_highlight: Rgb,
+    /// 普通检索命中底色。
+    #[serde(default = "default_find_match_background")]
+    pub find_match_background: Rgb,
+    /// 当前检索命中边框色。
+    #[serde(default = "default_find_match_border")]
+    pub find_match_border: Rgb,
     pub ansi: [Rgb; 16],
+}
+
+fn default_line_highlight() -> Rgb {
+    Rgb::from_hex(0x2c313a)
+}
+
+fn default_find_match_background() -> Rgb {
+    Rgb::from_hex(0x264f78)
+}
+
+fn default_find_match_border() -> Rgb {
+    Rgb::from_hex(0x61afef)
 }
 
 impl Default for TerminalPalette {
@@ -19,8 +46,12 @@ impl Default for TerminalPalette {
         Self {
             background: Rgb::from_hex(0x1e2127),
             foreground: Rgb::from_hex(0xabb2bf),
+            foreground_intense: Some(Rgb::from_hex(0xffffff)),
             cursor: Rgb::from_hex(0x528bff),
             selection: Rgb::from_hex(0x3e4451),
+            line_highlight: default_line_highlight(),
+            find_match_background: default_find_match_background(),
+            find_match_border: default_find_match_border(),
             ansi: [
                 Rgb::from_hex(0x1e2127),
                 Rgb::from_hex(0xe06c75),
@@ -76,6 +107,10 @@ fn default_theme_name() -> String {
     FOLLOW_UI_THEME.to_string()
 }
 
+fn default_minimum_contrast_ratio() -> f32 {
+    1.0
+}
+
 /// 终端自定义按键映射：把一组按键组合直接转换成原始字节序列。
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +151,12 @@ pub struct TerminalProfile {
     pub highlight: TerminalHighlight,
     #[serde(default = "default_theme_name")]
     pub theme_name: String,
+    /// 终端正文的最小显示对比度；1.0 表示关闭自动修正。
+    ///
+    /// 该值只影响绘制结果，不会改写终端输出、ANSI 槽位或主题文件。取值限制在
+    /// 1.0 到 21.0，避免外部配置产生无意义或不可达的目标。
+    #[serde(default = "default_minimum_contrast_ratio")]
+    pub minimum_contrast_ratio: f32,
     pub palette: TerminalPalette,
     /// 终端背景透明度（百分比）：0 表示完全不透明，100 表示完全透明。
     ///
@@ -144,6 +185,7 @@ impl Default for TerminalProfile {
             scroll_on_input: true,
             alternate_scroll: true,
             theme_name: default_theme_name(),
+            minimum_contrast_ratio: default_minimum_contrast_ratio(),
             highlight: TerminalHighlight::default(),
             palette: TerminalPalette::default(),
             background_transparency: 0,

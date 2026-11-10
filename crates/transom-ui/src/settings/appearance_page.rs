@@ -16,8 +16,8 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::{
-    DividerColor, DividerWidth, PaletteMode, UiDensity, UiThemeMode, WindowBackgroundMode,
-    preset_themes,
+    DividerColor, DividerWidth, PaletteMode, TerminalPalette, UiDensity, UiThemeMode,
+    WindowBackgroundMode, preset_themes,
 };
 
 mod window;
@@ -43,11 +43,45 @@ impl SettingsView {
 
         let (mode_row, density_row) = self.render_ui_mode_rows(p, cx);
 
-        let cards: Vec<AnyElement> = themes
+        let dark_themes: Vec<_> = themes
+            .iter()
+            .filter(|config| config.mode == ThemeMode::Dark)
+            .collect();
+        let light_themes: Vec<_> = themes
+            .iter()
+            .filter(|config| config.mode == ThemeMode::Light)
+            .collect();
+        let dark_cards: Vec<AnyElement> = dark_themes
             .iter()
             .enumerate()
             .map(|(idx, config)| self.render_theme_option(idx, config, active_name.as_ref(), p, cx))
             .collect();
+        let light_cards: Vec<AnyElement> = light_themes
+            .iter()
+            .enumerate()
+            .map(|(idx, config)| {
+                self.render_theme_option(
+                    dark_cards.len() + idx,
+                    config,
+                    active_name.as_ref(),
+                    p,
+                    cx,
+                )
+            })
+            .collect();
+        let cards = v_flex()
+            .w_full()
+            .gap_3()
+            .child(theme_section(
+                rust_i18n::t!("settings.theme_group_dark").to_string(),
+                dark_cards,
+                p,
+            ))
+            .child(theme_section(
+                rust_i18n::t!("settings.theme_group_light").to_string(),
+                light_cards,
+                p,
+            ));
 
         // 明暗反差提示：界面主题与终端配色一个深一个浅时给出文案，不改用户选择。
         let terminal_mode = preset_themes()
@@ -69,7 +103,7 @@ impl SettingsView {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("settings.ui_theme_note").to_string()),
             )
-            .children(cards)
+            .child(cards)
             .when(contrast_hint, |this| {
                 this.child(crate::widgets::notice(
                     crate::widgets::NoticeKind::Warning,
@@ -208,7 +242,10 @@ impl SettingsView {
                     cx,
                 );
             }))
-            .child(theme_color_dots(config))
+            .child(theme_color_dots(
+                config,
+                crate::theme::terminal_palette_for_ui_theme(config.name.as_ref(), cx).as_ref(),
+            ))
             .child(
                 div()
                     .text_sm()
@@ -269,25 +306,42 @@ fn divider_width_from_value(value: &str) -> Option<DividerWidth> {
     }
 }
 
-/// 从主题配置解析三个预览色点（背景、前景、强调色）；解析失败显示透明点。
+/// 主题卡色点：界面背景、前景、主色，再加终端 ANSI 前八色。
 ///
-/// 主题文件的颜色值是字符串（hex 或 Tailwind 名），交给 gpui-kit 的解析器
-/// 统一处理，解析规则与实际应用主题时一致，避免预览与真实效果色差。
-fn theme_color_dots(config: &ThemeConfig) -> AnyElement {
-    let entries = [
+/// 同卡展示 UI 与终端色板，用户不必先选中主题再切到终端页确认是否会破坏
+/// 原有配色；没有伴生终端色板的用户主题只显示三个界面色点。
+fn theme_color_dots(config: &ThemeConfig, terminal: Option<&TerminalPalette>) -> AnyElement {
+    let ui_entries = [
         config.colors.background.as_deref(),
         config.colors.foreground.as_deref(),
         config.colors.primary.as_deref(),
     ];
     h_flex()
         .gap_1()
-        .children(entries.into_iter().map(|value| {
+        .children(ui_entries.into_iter().map(|value| {
             let color = value.and_then(|value| try_parse_color(value).ok());
             div()
                 .size(px(10.0))
                 .rounded_full()
                 .bg(color.unwrap_or(transparent_black()))
         }))
+        .children(terminal.into_iter().flat_map(|palette| {
+            palette.ansi.iter().take(8).map(|color| {
+                div()
+                    .size(px(8.0))
+                    .rounded_full()
+                    .bg(Hsla::from(rgb(color.to_hex())))
+            })
+        }))
+        .into_any_element()
+}
+
+fn theme_section(title: String, cards: Vec<AnyElement>, p: &Palette) -> AnyElement {
+    v_flex()
+        .w_full()
+        .gap_2()
+        .child(div().text_xs().text_color(p.muted_foreground).child(title))
+        .children(cards)
         .into_any_element()
 }
 

@@ -31,6 +31,8 @@ pub(crate) struct PaintRequest<'a> {
     pub(crate) block_style: BlockViewStyle,
     /// 本帧要绘制的 Kitty 图像放置。
     pub(crate) graphics: &'a [GraphicsPlacement],
+    /// 终端是否持有键盘焦点；只有聚焦时才绘制当前行底色。
+    pub(crate) highlight_current_line: bool,
 }
 
 /// 本帧需要重建绘制缓存的行集合。

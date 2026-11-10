@@ -24,6 +24,16 @@ impl GroupSearch {
                     "settings.theme_mode_light",
                 ],
             ),
+            GroupSearch::ThemeEditor => (
+                "settings.theme_editor_group",
+                &[
+                    "settings.theme_editor_note",
+                    "settings.theme_editor_load_active",
+                    "settings.theme_editor_save",
+                    "settings.theme_editor_import",
+                    "settings.theme_editor_export",
+                ],
+            ),
             GroupSearch::UiFont => (
                 "settings.ui_font_group",
                 &[
@@ -99,6 +109,13 @@ impl GroupSearch {
                     "settings.terminal_follow_ui",
                     "settings.terminal_follow_ui_note",
                     "settings.terminal_theme_note",
+                    "settings.terminal_minimum_contrast",
+                    "settings.terminal_minimum_contrast_desc",
+                    "settings.terminal_contrast_off",
+                    "settings.terminal_contrast_minimum",
+                    "settings.terminal_contrast_aa",
+                    "settings.terminal_contrast_aaa",
+                    "settings.terminal_contrast_maximum",
                 ],
             ),
             GroupSearch::Highlight => (

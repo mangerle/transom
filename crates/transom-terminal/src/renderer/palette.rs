@@ -5,6 +5,7 @@ use super::*;
 /// 换来的确定性失效复杂度远超其命中占比。
 pub(crate) struct PaletteColors {
     pub(super) foreground: Hsla,
+    pub(super) intense_foreground: Hsla,
     pub(super) background: Hsla,
     pub(super) cursor: Hsla,
     pub(super) selection: Hsla,
@@ -45,6 +46,9 @@ impl PaletteColors {
         }
         Self {
             foreground: palette_rgb(palette.foreground),
+            intense_foreground: palette_rgb(
+                palette.foreground_intense.unwrap_or(palette.foreground),
+            ),
             background: palette_rgb(palette.background),
             cursor: palette_rgb(palette.cursor),
             selection: palette_rgb(palette.selection),
@@ -102,7 +106,8 @@ impl TerminalRenderer {
             | NamedColor::BrightMagenta
             | NamedColor::BrightCyan
             | NamedColor::BrightWhite => cached.ansi[named as usize],
-            NamedColor::Foreground | NamedColor::BrightForeground => cached.foreground,
+            NamedColor::Foreground => cached.foreground,
+            NamedColor::BrightForeground => cached.intense_foreground,
             NamedColor::Background => cached.background,
             NamedColor::Cursor => cached.cursor,
             NamedColor::DimBlack
@@ -135,13 +140,29 @@ impl TerminalRenderer {
     }
 
     pub(crate) fn cell_colors(&self, cell: &Cell, colors: &Colors) -> (Hsla, Hsla) {
-        let mut fg = self.resolve(cell.fg, colors);
+        let mut fg = if self.bold_is_bright
+            && cell.flags.contains(Flags::BOLD)
+            && matches!(cell.fg, Color::Named(NamedColor::Foreground))
+        {
+            self.palette_colors.intense_foreground
+        } else {
+            self.resolve(cell.fg, colors)
+        };
         let mut bg = self.resolve(cell.bg, colors);
         if cell.flags.contains(Flags::INVERSE) {
             std::mem::swap(&mut fg, &mut bg);
         }
         if cell.flags.contains(Flags::DIM) {
             fg.a *= 0.7;
+        }
+        if self.minimum_contrast_ratio > 1.0 {
+            fg = contrast::corrected_color(
+                &mut self.contrast_cache.lock(),
+                fg,
+                bg,
+                self.minimum_contrast_ratio,
+                cell.c,
+            );
         }
         (fg, bg)
     }

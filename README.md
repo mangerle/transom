@@ -47,6 +47,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 - Local terminals can use a configured default shell or a per-launch shell choice. Windows discovers Command Prompt, Windows PowerShell, PowerShell 7, Git Bash and WSL; Linux/macOS discover `$SHELL` and `/etc/shells`. On Windows, elevated shells run inside the current Transom tab through a UAC-approved PTY broker.
 - Buffer search with a regex toggle plus an overview tick band that shows hits across the entire scrollback and jumps on click.
 - Always-on highlighting for `ERROR` / `WARN` / `INFO` / `DEBUG`, IPv4 addresses and UUIDs, and up to 32 custom keywords, all mapped to theme palette slots so they follow your colorscheme.
+- Theme-aware selection, current-line and search-hit colors, plus optional 3:1 / 4.5:1 / 7:1 / 21:1 minimum text contrast correction that changes rendered glyphs only, never ANSI values, copied text or recordings.
 - Rectangular column select with <kbd>Alt</kbd>+drag that still works inside `vim` and `htop`, configurable double-click word separators, and OSC 133 / OSC 777 desktop notifications when a command crosses a runtime threshold.
 - Snippets bar for repeating a saved one-liner across the focused pane.
 - Command history with inline suggestions: commands are collected from shell-integration markers (OSC 133 reported text, falling back to a grid snapshot between prompt end and the cursor), stored in `~/.config/transom/history.json`, and offered as you type — <kbd>Tab</kbd> completes the top match, <kbd>Enter</kbd> still runs what you typed.
@@ -62,7 +63,8 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 - Built-in remote editor with read-only protection, unified-diff preview before saving, and backup-on-write; `chmod` as a 9-cell grid or octal literal; hover previews for images and the first lines of text files; `Ctrl+F` filename filter.
 
 ### Interface
-- Six built-in themes (One Dark, Dracula, Monokai Pro, Nord, Solarized Dark, Gruvbox Dark), client-side window controls with drag and double-click maximize, remembered window geometry, and full-screen immersive mode.
+- 23 built-in UI themes and 23 terminal color schemes, including Transom Dark, JetBrains Islands Dark/Light, GitHub Dark/Light, Catppuccin Mocha/Latte, One Dark Pro/One Light, Dracula/Dracula Light, Nord/Nord Light, Tokyo Night, Rosé Pine/Rosé Pine Dawn, Gruvbox Dark, Monokai Pro, Solarized Light, WindTerm Dark/Light and the Nya high-contrast pair. UI and terminal themes can be selected independently, or the terminal can follow the active UI theme.
+- Theme editor with live JSON preview, per-theme contrast diagnostics, import/export, safe custom-theme naming and writes to `~/.config/transom/themes`; client-side window controls with drag and double-click maximize, remembered window geometry, and full-screen immersive mode.
 - Bilingual UI (English / 简体中文) switchable in settings — this README mirrors the app.
 - Optional session audit: every connection's raw output stream can be recorded to `~/.config/transom/audit`, one file per connection named after session, host and start time. Off by default because the log captures whatever was shown on screen.
 - Every shortcut is remappable with conflict detection. `$app` below means <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd>+<kbd>Shift</kbd> elsewhere.
@@ -202,4 +204,4 @@ Issues and pull requests are welcome. Open an issue before large changes so the 
 
 ## License
 
-Licensed under the **Apache License, Version 2.0**. See [`LICENSE`](./LICENSE). Third-party dependencies remain under their own licenses; notable ones: GPUI (MIT/Apache-2.0), russh (MIT), russh-sftp (MIT), alacritty_terminal (Apache-2.0).
+Licensed under the **Apache License, Version 2.0**. See [`LICENSE`](./LICENSE). Third-party dependencies remain under their own licenses; notable ones: GPUI (MIT/Apache-2.0), russh (MIT), russh-sftp (MIT), alacritty_terminal (Apache-2.0). Theme provenance and mapping notes are recorded in [`docs/theme-attribution.md`](./docs/theme-attribution.md).

@@ -186,6 +186,7 @@ fn submit_canvas_paint(
             block_layout: prepared.block_layout.as_deref(),
             block_style: inputs.block_style,
             graphics: &prepared.graphics,
+            highlight_current_line: inputs.focus_handle.is_focused(window),
         },
         &mut row_cache,
         &prepared.damage,

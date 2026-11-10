@@ -32,6 +32,7 @@ pub(crate) mod sync_form;
 mod sync_page;
 mod terminal_page;
 mod terminal_themes;
+mod theme_editor;
 mod update;
 mod window_page;
 

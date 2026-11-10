@@ -135,8 +135,48 @@ fn default_profile_is_stable() {
     assert_eq!(profile.scrollback, 10_000);
     assert_eq!(profile.cursor_shape, TerminalCursorShape::Block);
     assert_eq!(profile.palette.ansi.len(), 16);
+    assert_eq!(profile.minimum_contrast_ratio, 1.0);
+    assert!(profile.palette.foreground_intense.is_some());
     assert!(TerminalInteraction::default().copy_on_select);
     assert!(TerminalInteraction::default().right_click_paste);
+}
+
+/// 终端对比度与新增语义色必须对旧配置保持向后兼容。
+#[test]
+fn terminal_palette_semantic_fields_default_for_legacy_documents() {
+    let profile = TerminalProfile::default();
+    let mut value = serde_json::to_value(&profile).expect("默认配置应可序列化");
+    value
+        .as_object_mut()
+        .expect("配置为对象")
+        .remove("minimum_contrast_ratio");
+    let palette = value
+        .get_mut("palette")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("调色板为对象");
+    for field in [
+        "foreground_intense",
+        "line_highlight",
+        "find_match_background",
+        "find_match_border",
+    ] {
+        palette.remove(field);
+    }
+    let decoded: TerminalProfile = serde_json::from_value(value).expect("旧配置应能解析");
+    assert_eq!(decoded.minimum_contrast_ratio, 1.0);
+    assert_eq!(decoded.palette.foreground_intense, None);
+    assert_eq!(
+        decoded.palette.line_highlight,
+        TerminalPalette::default().line_highlight
+    );
+    assert_eq!(
+        decoded.palette.find_match_background,
+        TerminalPalette::default().find_match_background
+    );
+    assert_eq!(
+        decoded.palette.find_match_border,
+        TerminalPalette::default().find_match_border
+    );
 }
 
 /// 双重字体是后加的字段：老的会话与设置文件里没有它，必须按"跟随系统回退"降级，
