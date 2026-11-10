@@ -478,6 +478,43 @@ fn terminal_view_does_not_bind_global_keys() {
     );
 }
 
+/// UI 文案统一使用单字符省略号；技术转义示例除外。
+#[test]
+fn ui_copy_uses_single_ellipsis() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../locales/ui.yml");
+    let content = std::fs::read_to_string(path).expect("读取界面文案失败");
+    let offenders: Vec<String> = content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains("...") && !line.contains("\\u{...}"))
+        .map(|(index, line)| format!("{}: {}", index + 1, line.trim()))
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "界面文案应使用单字符省略号：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 拖拽预览和加载占位必须复用主题与组件，而不是固定颜色或字符点。
+#[test]
+fn feedback_uses_theme_and_progress_components() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let drag = std::fs::read_to_string(root.join("src/sftp/side_remote/types.rs"))
+        .expect("读取 SFTP 拖拽预览失败");
+    assert!(
+        drag.contains("Palette::from(cx)"),
+        "拖拽预览必须读取主题调色板"
+    );
+    assert!(!drag.contains("hsla("), "拖拽预览不得硬编码颜色");
+    let system_df = std::fs::read_to_string(root.join("src/container/system_df_dialog.rs"))
+        .expect("读取磁盘用量弹窗失败");
+    assert!(
+        !system_df.contains("\"...\".to_string()"),
+        "加载态不得使用字符点"
+    );
+}
+
 /// 选择型控件和应用内命令必须使用正确的语义组件与变体。
 #[test]
 fn selection_and_command_semantics_are_explicit() {

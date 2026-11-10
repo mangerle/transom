@@ -9,6 +9,7 @@ use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::*;
 
@@ -127,9 +128,9 @@ pub(crate) fn render_container_system_df_dialog_body(
                         .font_weight(FontWeight::BOLD)
                         .text_color(p.foreground)
                         .child(if loading && state.system_df.is_none() {
-                            "...".to_string()
+                            Spinner::new().small().color(p.primary).into_any_element()
                         } else {
-                            total_size_str
+                            div().child(total_size_str).into_any_element()
                         }),
                 ),
         )
@@ -153,9 +154,9 @@ pub(crate) fn render_container_system_df_dialog_body(
                             p.muted_foreground
                         })
                         .child(if loading && state.system_df.is_none() {
-                            "...".to_string()
+                            Spinner::new().small().color(p.primary).into_any_element()
                         } else {
-                            reclaim_size_str
+                            div().child(reclaim_size_str).into_any_element()
                         }),
                 ),
         );

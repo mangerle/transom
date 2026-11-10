@@ -76,11 +76,11 @@ app:
     en: Quick Open
     zh-CN: 快速打开
   quick_open_placeholder:
-    en: Search sessions, actions, settings or themes; type > for actions only, or paste a host...
-    zh-CN: 搜索会话、动作、设置或主题，输入 > 只看动作，或填入主机地址直接连接...
+    en: Search sessions, actions, settings or themes; type > for actions only, or paste a host…
+    zh-CN: 搜索会话、动作、设置或主题，输入 > 只看动作，或填入主机地址直接连接…
   palette_action_placeholder:
-    en: Action mode — search actions, settings pages, themes or snippets...
-    zh-CN: 动作模式 — 搜索动作、设置页、主题或快捷命令...
+    en: Action mode — search actions, settings pages, themes or snippets…
+    zh-CN: 动作模式 — 搜索动作、设置页、主题或快捷命令…
   palette_actions:
     en: Actions
     zh-CN: 动作
@@ -472,8 +472,8 @@ form:
     en: Commands after connect
     zh-CN: 连接后自动执行
   startup_hint:
-    en: One command per line, executed in the interactive shell after the session is ready. For example cd /srv, export PATH=..., or sudo -i.
-    zh-CN: 每行一条命令，在会话就绪后写入交互式 Shell 顺序执行，例如 cd /srv、export PATH=... 或 sudo -i。
+    en: One command per line, executed in the interactive shell after the session is ready. For example cd /srv, export PATH=…, or sudo -i.
+    zh-CN: 每行一条命令，在会话就绪后写入交互式 Shell 顺序执行，例如 cd /srv、export PATH=… 或 sudo -i。
   connection_type:
     en: Connection Type
     zh-CN: 连接方式
@@ -816,8 +816,8 @@ status:
     en: Connected
     zh-CN: 已连接
   connecting:
-    en: Connecting...
-    zh-CN: 连接中...
+    en: Connecting…
+    zh-CN: 连接中…
   waiting_password:
     en: Waiting for password
     zh-CN: 等待输入密码
@@ -1001,8 +1001,8 @@ sftp:
     en: Confirm delete
     zh-CN: 确认删除
   loading:
-    en: Loading...
-    zh-CN: 加载中...
+    en: Loading…
+    zh-CN: 加载中…
   empty:
     en: Empty directory
     zh-CN: 空目录
@@ -1341,8 +1341,8 @@ sftp:
       zh-CN: 远端
   sync:
     scanning:
-      en: Scanning and comparing local and remote directories...
-      zh-CN: 正在扫描并比较本地与远端目录，请稍候...
+      en: Scanning and comparing local and remote directories…
+      zh-CN: 正在扫描并比较本地与远端目录，请稍候…
     rescan:
       en: Rescan
       zh-CN: 重新扫描
@@ -1402,8 +1402,8 @@ sftp:
       zh-CN: 目录
   search:
     placeholder:
-      en: Type a file name keyword or text to search...
-      zh-CN: 键入文件名关键字或搜索文本内容...
+      en: Type a file name keyword or text to search…
+      zh-CN: 键入文件名关键字或搜索文本内容…
     error_empty:
       en: Search keyword cannot be empty
       zh-CN: 搜索关键字不能为空
@@ -1411,8 +1411,8 @@ sftp:
       en: 'Search root: %{path}'
       zh-CN: '检索根目录: %{path}'
     searching_short:
-      en: Searching...
-      zh-CN: 检索中...
+      en: Searching…
+      zh-CN: 检索中…
     search:
       en: Search
       zh-CN: 检索
@@ -1423,8 +1423,8 @@ sftp:
       en: Case sensitive
       zh-CN: 区分大小写
     searching_hint:
-      en: Searching on the remote server, please wait...
-      zh-CN: 正在远程服务器执行检索，请稍候...
+      en: Searching on the remote server, please wait…
+      zh-CN: 正在远程服务器执行检索，请稍候…
     no_results:
       en: No matches. Adjust the keyword and search again.
       zh-CN: 暂无匹配的条目，请调整关键字后重新检索
@@ -1642,8 +1642,8 @@ sftp:
       en: This will permanently delete %{count} local item(s) (folders are deleted recursively), bypassing the Trash. This cannot be undone.
       zh-CN: 将永久删除 %{count} 个本地项目（目录按递归删除），不经回收站，此操作不可撤销。
     deleting:
-      en: Deleting %{count} local item(s)...
-      zh-CN: 正在删除 %{count} 个本地项目...
+      en: Deleting %{count} local item(s)…
+      zh-CN: 正在删除 %{count} 个本地项目…
     deleted:
       en: Deleted %{count} local item(s)
       zh-CN: 已删除 %{count} 个本地项目
@@ -1661,14 +1661,14 @@ sftp:
       en: Extract Here
       zh-CN: 解压到当前目录
     extract_to_new_folder:
-      en: Extract to New Folder...
-      zh-CN: 解压至新文件夹...
+      en: Extract to New Folder…
+      zh-CN: 解压至新文件夹…
     compress_tar_gz:
-      en: Compress Remotely to .tar.gz...
-      zh-CN: 远程压缩为 .tar.gz...
+      en: Compress Remotely to .tar.gz…
+      zh-CN: 远程压缩为 .tar.gz…
     compress_zip:
-      en: Compress Remotely to .zip...
-      zh-CN: 远程压缩为 .zip...
+      en: Compress Remotely to .zip…
+      zh-CN: 远程压缩为 .zip…
     copy_abs_path:
       en: Copy Absolute Path
       zh-CN: 复制绝对路径
@@ -1819,17 +1819,17 @@ sftp:
       en: Copied %{count} side-remote item(s); paste into local or another remote pane
       zh-CN: 已复制并列远端 %{count} 个条目，可粘贴至本地或其他远端
     remote_path_placeholder:
-      en: Remote path...
-      zh-CN: 远端路径...
+      en: Remote path…
+      zh-CN: 远端路径…
     filter_placeholder:
-      en: Filter files (fuzzy match)...
-      zh-CN: 过滤文件 (模糊匹配)...
+      en: Filter files (fuzzy match)…
+      zh-CN: 过滤文件 (模糊匹配)…
     filter_remote_placeholder:
-      en: Filter remote files (fuzzy match)...
-      zh-CN: 过滤远程文件 (模糊匹配名称)...
+      en: Filter remote files (fuzzy match)…
+      zh-CN: 过滤远程文件 (模糊匹配名称)…
     filter_local_placeholder:
-      en: Filter local files (fuzzy match)...
-      zh-CN: 过滤本地文件 (模糊匹配名称)...
+      en: Filter local files (fuzzy match)…
+      zh-CN: 过滤本地文件 (模糊匹配名称)…
   queue_actions:
     no_remote_upload:
       en: No remote connection in this tab; cannot upload
@@ -2413,8 +2413,8 @@ settings:
     en: Not checked yet
     zh-CN: 尚未检查更新
   update_checking:
-    en: Checking the release manifest...
-    zh-CN: 正在检查更新清单...
+    en: Checking the release manifest…
+    zh-CN: 正在检查更新清单…
   update_up_to_date:
     en: You are running the latest version
     zh-CN: 当前已是最新版本
@@ -2428,8 +2428,8 @@ settings:
     en: v%{version} downloaded and signature verified
     zh-CN: v%{version} 已下载并通过签名校验
   update_installing:
-    en: Installing v%{version}...
-    zh-CN: 正在安装 v%{version}...
+    en: Installing v%{version}…
+    zh-CN: 正在安装 v%{version}…
   update_installed:
     en: v%{version} installed
     zh-CN: v%{version} 已安装
@@ -2482,8 +2482,8 @@ settings:
     en: Restart now
     zh-CN: 立即重启
   update_busy_action:
-    en: Working...
-    zh-CN: 处理中...
+    en: Working…
+    zh-CN: 处理中…
   update_thread_failed:
     en: Failed to start the background update task
     zh-CN: 启动后台更新任务失败
@@ -3052,8 +3052,8 @@ settings:
     en: Test
     zh-CN: 测试
   git_testing_executable:
-    en: Testing...
-    zh-CN: 检测中...
+    en: Testing…
+    zh-CN: 检测中…
   git_test_success:
     en: "Git detected: %{version}"
     zh-CN: "检测成功: %{version}"
@@ -4083,8 +4083,8 @@ backup:
     en: A backup that includes stored passphrases must be encrypted. Set a passphrase or uncheck "Include stored passphrases".
     zh-CN: 包含已保存口令的备份必须加密；请设置备份口令，或取消勾选“包含已保存的口令”。
   processing:
-    en: Processing, please wait...
-    zh-CN: 正在处理，请稍候...
+    en: Processing, please wait…
+    zh-CN: 正在处理，请稍候…
   exported:
     en: Backup exported to %{path}
     zh-CN: 备份已导出到 %{path}
@@ -4132,8 +4132,8 @@ keys:
     en: Generate Keypair
     zh-CN: 生成密钥对
   generating:
-    en: Generating...
-    zh-CN: 生成中...
+    en: Generating…
+    zh-CN: 生成中…
   existing_title:
     en: Local Public Keys
     zh-CN: 本机公钥
@@ -4186,8 +4186,8 @@ keys:
     en: 'Failed to export public key: %{error}'
     zh-CN: '导出公钥失败: %{error}'
   deploying:
-    en: Deploying %{key} to %{host}...
-    zh-CN: 正在部署 %{key} 到 %{host} ...
+    en: Deploying %{key} to %{host}…
+    zh-CN: 正在部署 %{key} 到 %{host} …
   deploy_send_failed:
     en: Failed to send the deploy request; the app may have exited
     zh-CN: 发送部署请求失败，应用可能已退出
@@ -4254,8 +4254,8 @@ audit_viewer:
     en: (File is very large, displaying first 2 MiB)
     zh-CN: (日志文件过大，当前展示前 2 MiB)
   search_placeholder:
-    en: Search in log...
-    zh-CN: 在日志中搜索...
+    en: Search in log…
+    zh-CN: 在日志中搜索…
   open_viewer:
     en: Open Log Viewer
     zh-CN: 打开应用内日志查看器
@@ -4288,8 +4288,8 @@ recorder:
     en: Record Session / Stop
     zh-CN: 录制会话 / 停止
   replay_menu:
-    en: Replay Interactive Script...
-    zh-CN: 回放交互脚本...
+    en: Replay Interactive Script…
+    zh-CN: 回放交互脚本…
   start_btn:
     en: Start Recording Session
     zh-CN: 开始录制会话
@@ -4318,8 +4318,8 @@ recorder:
     en: No user inputs found in recording
     zh-CN: 该录制脚本中未找到任何可回放的按键输入
   replaying_start:
-    en: Replaying '%{title}' (%{count} steps)...
-    zh-CN: 正在回放脚本 '%{title}'（共 %{count} 步输入）...
+    en: Replaying '%{title}' (%{count} steps)…
+    zh-CN: 正在回放脚本 '%{title}'（共 %{count} 步输入）…
   replay_completed:
     en: Script replay completed
     zh-CN: 交互脚本回放已完成
@@ -4339,8 +4339,8 @@ recorder:
     en: Select a recorded script to execute inputs on the active terminal.
     zh-CN: 选择已有录制脚本可一键在当前终端中按时间序自动化执行输入。
   pick_external:
-    en: Pick External .cast File...
-    zh-CN: 选择外部 .cast 文件...
+    en: Pick External .cast File…
+    zh-CN: 选择外部 .cast 文件…
   start_replay:
     en: Start Replay
     zh-CN: 开始回放执行
@@ -6051,8 +6051,8 @@ container:
       zh-CN: 退出码
   inspect:
     search_placeholder:
-      en: Search JSON keys or values...
-      zh-CN: 搜索 JSON 键名或参数值...
+      en: Search JSON keys or values…
+      zh-CN: 搜索 JSON 键名或参数值…
     stats_total:
       en: '%{lines} lines · %{bytes} bytes'
       zh-CN: '%{lines} 行 · %{bytes} 字节'
@@ -6982,14 +6982,14 @@ container:
       en: Docker Hub (Official)
       zh-CN: Docker Hub (官方)
     searching:
-      en: Searching...
-      zh-CN: 检索中...
+      en: Searching…
+      zh-CN: 检索中…
     search:
       en: Search
       zh-CN: 搜索
     searching_hint:
-      en: Searching registry for images...
-      zh-CN: 正在向镜像中心检索镜像...
+      en: Searching registry for images…
+      zh-CN: 正在向镜像中心检索镜像…
     empty_hint:
       en: Search official or private registry images, supports one-click queuing
       zh-CN: 输入镜像名搜索官方镜像或私有源镜像，支持一键入队下载
@@ -7033,7 +7033,7 @@ container:
       en: Available Version Tags
       zh-CN: 可用版本标签 (Tags)
     tags_loading:
-      en: Loading tags from registry...
+      en: Loading tags from registry…
       zh-CN: 正在从仓库读取实时标签…
     tags_empty:
       en: The registry returned no tags; enter one manually.
@@ -7134,8 +7134,8 @@ container:
       en: Target repository and tag cannot be empty
       zh-CN: 目标仓库名称与 Tag 不能为空
     pushing_notice:
-      en: 'Pushing image %{reference} to remote registry...'
-      zh-CN: '正在推送镜像 %{reference} 到远端仓库...'
+      en: 'Pushing image %{reference} to remote registry…'
+      zh-CN: '正在推送镜像 %{reference} 到远端仓库…'
     auth_user_hint:
       en: 'Will use credentials of user "%{user}" for authentication'
       zh-CN: '将使用用户「%{user}」的凭证进行推送鉴权'
@@ -7247,8 +7247,8 @@ git:
       en: "No repositories yet. Add a local Git project to start."
       zh-CN: "还没有仓库。添加一个本机 Git 项目开始使用。"
     loading:
-      en: "Reading repository..."
-      zh-CN: "正在读取仓库..."
+      en: "Reading repository…"
+      zh-CN: "正在读取仓库…"
     unavailable:
       en: "Unavailable"
       zh-CN: "不可用"
@@ -7279,8 +7279,8 @@ git:
       zh-CN: "在此分组添加仓库"
   browser:
     loading:
-      en: "Reading folder..."
-      zh-CN: "正在读取目录..."
+      en: "Reading folder…"
+      zh-CN: "正在读取目录…"
     empty:
       en: "No subfolders here"
       zh-CN: "这里没有子目录"
@@ -7319,8 +7319,8 @@ git:
       en: "Initialize this folder as a Git repository"
       zh-CN: "把这个目录初始化为 Git 仓库"
     probing:
-      en: "Detecting..."
-      zh-CN: "正在检测..."
+      en: "Detecting…"
+      zh-CN: "正在检测…"
     is_repo:
       en: "Git repository"
       zh-CN: "是 Git 仓库"
@@ -7371,8 +7371,8 @@ git:
       en: "Close"
       zh-CN: "关闭"
     running:
-      en: "Cloning..."
-      zh-CN: "正在克隆..."
+      en: "Cloning…"
+      zh-CN: "正在克隆…"
     task_title:
       en: "Cloning %{repo}"
       zh-CN: "正在克隆 %{repo}"
@@ -7426,7 +7426,7 @@ git:
       en: "Copy Commit Hash"
       zh-CN: "复制提交号"
     create_patch:
-      en: "Create Patch..."
+      en: "Create Patch…"
       zh-CN: "创建补丁…"
     browse:
       en: "Browse on Remote"
@@ -7435,7 +7435,7 @@ git:
       en: "Push All Previous Commits"
       zh-CN: "推送此前所有提交"
     rebase_from_here:
-      en: "Interactively Rebase from Here..."
+      en: "Interactively Rebase from Here…"
       zh-CN: "从这里交互式变基…"
     jump_parent:
       en: "Go to Parent Commit"
@@ -7444,10 +7444,10 @@ git:
       en: "Go to Child Commit"
       zh-CN: "转到子提交"
     new_branch_from:
-      en: "New Branch from Here..."
-      zh-CN: "从此提交新建分支..."
+      en: "New Branch from Here…"
+      zh-CN: "从此提交新建分支…"
     rename_branch:
-      en: "Rename Branch..."
+      en: "Rename Branch…"
       zh-CN: "重命名分支…"
     cherry_pick:
       en: "Cherry-pick"
@@ -7537,7 +7537,7 @@ git:
       en: "Cherry-pick Selected Changes"
       zh-CN: "优选所选更改"
     extract_to_commit:
-      en: "Extract Selected Changes into Separate Commit..."
+      en: "Extract Selected Changes into Separate Commit…"
       zh-CN: "将所选更改提取到单独的提交…"
     delete_selected_changes:
       en: "Delete Selected Changes"
@@ -7561,13 +7561,13 @@ git:
       en: "Show Repository at Revision"
       zh-CN: "在修订版中显示仓库"
     reset_current_branch_here:
-      en: "Reset Current Branch to Here..."
+      en: "Reset Current Branch to Here…"
       zh-CN: "将当前分支重置到此处…"
     undo_commit:
-      en: "Undo Commit..."
+      en: "Undo Commit…"
       zh-CN: "撤销提交…"
     edit_commit_message:
-      en: "Edit Commit Message..."
+      en: "Edit Commit Message…"
       zh-CN: "编辑提交信息…"
     drop_commit:
       en: "Delete Commit"
@@ -7576,13 +7576,13 @@ git:
       en: "Rebase '%{branch}' onto Selected Commit"
       zh-CN: "将 '%{branch}' 变基到所选提交"
     new_branch_from_ref:
-      en: "New Branch from '%{branch}'..."
+      en: "New Branch from '%{branch}'…"
       zh-CN: "从 '%{branch}' 新建分支…"
     show_diff_with_worktree:
       en: "Show Diff with Working Tree"
       zh-CN: "显示与工作树的差异"
     new_worktree_from_ref:
-      en: "New Worktree from '%{branch}'..."
+      en: "New Worktree from '%{branch}'…"
       zh-CN: "从 '%{branch}' 新建工作树…"
     tracked_branch:
       en: "Tracked Branch '%{upstream}'"
@@ -7704,8 +7704,8 @@ git:
       en: "Commits above the baseline are rewritten. Click the action to cycle pick / squash / fixup / drop / reword; conflicts stop the rebase and you can abort it from the commit menu."
       zh-CN: "基线之上的提交会被改写。点动作格依次切换 pick / squash / fixup / drop / reword；冲突时变基会停在原地，可在提交菜单里「中止变基」回退。"
     loading:
-      en: "Reading commit list..."
-      zh-CN: "正在读取提交清单..."
+      en: "Reading commit list…"
+      zh-CN: "正在读取提交清单…"
     empty:
       en: "No commits above the selected baseline"
       zh-CN: "所选基线之上没有提交"
@@ -7742,8 +7742,8 @@ git:
       en: No shelves yet
       zh-CN: 还没有搁置项
     files_loading:
-      en: Reading shelf content...
-      zh-CN: 正在读取搁置内容...
+      en: Reading shelf content…
+      zh-CN: 正在读取搁置内容…
     no_files:
       en: This shelf contains no files
       zh-CN: 该搁置项不含文件
@@ -7773,8 +7773,8 @@ git:
       en: No stashes yet
       zh-CN: 暂无贮藏项
     files_loading:
-      en: Reading stash content...
-      zh-CN: 正在读取贮藏内容...
+      en: Reading stash content…
+      zh-CN: 正在读取贮藏内容…
     no_files:
       en: This stash contains no files
       zh-CN: 该贮藏项不含文件
@@ -7886,8 +7886,8 @@ git:
       en: "No commits"
       zh-CN: "没有提交"
     loading:
-      en: "Loading history..."
-      zh-CN: "正在读取历史..."
+      en: "Loading history…"
+      zh-CN: "正在读取历史…"
     load_more:
       en: "Load more"
       zh-CN: "加载更多"
@@ -7995,8 +7995,8 @@ git:
       en: "Select a file to compare"
       zh-CN: "选择一个文件查看差异"
     loading:
-      en: "Loading diff..."
-      zh-CN: "正在读取差异..."
+      en: "Loading diff…"
+      zh-CN: "正在读取差异…"
     binary:
       en: "Binary file, text comparison unavailable"
       zh-CN: "二进制文件，无法按文本比较"
@@ -8198,15 +8198,15 @@ git:
       en: "Local Changes"
       zh-CN: "本地更改"
     loading:
-      en: "Reading working tree..."
-      zh-CN: "正在读取工作区..."
+      en: "Reading working tree…"
+      zh-CN: "正在读取工作区…"
   repo:
     init_action:
       en: "Initialize Git Repository"
       zh-CN: "初始化 Git 仓库"
     init_running:
-      en: "Initializing repository..."
-      zh-CN: "正在初始化仓库..."
+      en: "Initializing repository…"
+      zh-CN: "正在初始化仓库…"
     not_repo:
       en: "This folder is not a Git repository"
       zh-CN: "这个目录还不是 Git 仓库"
@@ -8236,8 +8236,8 @@ git:
       en: Paths
       zh-CN: 路径
     loading_paths:
-      en: Loading file list...
-      zh-CN: 正在读取文件清单...
+      en: Loading file list…
+      zh-CN: 正在读取文件清单…
     placeholder:
       en: "Filter by message"
       zh-CN: "按提交消息过滤"
@@ -8380,11 +8380,11 @@ git:
       en: "There are %{count} conflict files"
       zh-CN: "存在 %{count} 个冲突文件待解决"
     resolve_btn:
-      en: "Resolve Conflicts..."
-      zh-CN: "解决冲突..."
+      en: "Resolve Conflicts…"
+      zh-CN: "解决冲突…"
     resolve_menu:
-      en: "Resolve Conflicts..."
-      zh-CN: "解决冲突..."
+      en: "Resolve Conflicts…"
+      zh-CN: "解决冲突…"
     accept_ours:
       en: "Accept Ours"
       zh-CN: "接受本地版本"
@@ -8395,14 +8395,14 @@ git:
       en: "Mark Resolved"
       zh-CN: "标记为已解决"
     resolving:
-      en: "Resolving..."
-      zh-CN: "正在解决..."
+      en: "Resolving…"
+      zh-CN: "正在解决…"
     files_list:
       en: "Conflict Files"
       zh-CN: "冲突文件清单"
     loading_content:
-      en: "Loading 3-way version content..."
-      zh-CN: "正在读取三方版本内容..."
+      en: "Loading 3-way version content…"
+      zh-CN: "正在读取三方版本内容…"
     col_ours:
       en: "Local (Ours)"
       zh-CN: "本地版本 (Ours)"

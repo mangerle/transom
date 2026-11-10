@@ -4,6 +4,7 @@
 //! - 实现初衷：定义跨栏拖拽载荷 SftpDragItem、拖拽浮层视觉 SftpDragPreview 与剪贴板状态 SftpClipboardData；
 //! - 核心优势：纯数据契约与共享列构造，供视图渲染与动作调度解耦引用。
 
+use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneState;
 use crate::sftp::entity::SftpPanelView;
 use gpui_kit::assets::IconName;
@@ -63,14 +64,15 @@ impl SftpDragPreview {
 }
 
 impl Render for SftpDragPreview {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
         h_flex()
             .px_2()
             .py_1()
             .gap_1p5()
-            .rounded(px(4.0))
-            .bg(hsla(0.0, 0.0, 0.15, 0.95))
-            .text_color(hsla(0.0, 0.0, 0.95, 1.0))
+            .rounded(p.radius.sm)
+            .bg(p.popover.opacity(0.95))
+            .text_color(p.foreground)
             .text_xs()
             .items_center()
             .child(Icon::new(IconName::File).xsmall())
@@ -79,8 +81,8 @@ impl Render for SftpDragPreview {
                 this.child(
                     div()
                         .px_1()
-                        .rounded(px(2.0))
-                        .bg(hsla(0.0, 0.0, 0.3, 0.9))
+                        .rounded(p.radius.sm)
+                        .bg(p.muted.opacity(0.9))
                         .child(format!("+{}", self.count - 1)),
                 )
             })
