@@ -336,6 +336,7 @@ impl EditorPanels {
             Editor::new(editor)
                 .appearance(false)
                 .bordered(false)
+                // 设计令牌例外：编辑器字号由用户设置动态控制，不能映射到固定字号档位。
                 .text_size(px(font_size))
                 .w_full()
                 .flex_1()

@@ -430,6 +430,7 @@ impl AppShell {
                 &view,
                 &state.state,
                 cx,
+                window.rem_size(),
                 p,
             );
             // 焦点与按键仍归外壳：列表渲染函数只画内容，键盘事件到来时再按当前

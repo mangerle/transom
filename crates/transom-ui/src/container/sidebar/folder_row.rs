@@ -24,7 +24,7 @@ pub(crate) fn render_engine_folder_row(
             format!("container-engine-folder-{folder_id}").into(),
         ))
         .w_full()
-        .h(ROW_HEIGHT)
+        .h(rems(ROW_HEIGHT_REM))
         .pl(indent_padding(row.depth))
         .pr(px(4.0))
         .flex()
@@ -120,7 +120,7 @@ pub(crate) fn render_engine_folder_row(
         ))
         .relative()
         .w_full()
-        .h(BAND_HEIGHT)
+        .h(rems(BAND_HEIGHT_REM))
         .px_2()
         .gap_1()
         .items_center()

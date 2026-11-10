@@ -1,3 +1,4 @@
+// 设计令牌例外：终端网格的字体、单元格与字形几何由渲染器测量，保持物理像素。
 mod decorations;
 mod palette;
 mod pipeline;

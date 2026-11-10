@@ -1,5 +1,6 @@
 //! 容器统计专用走势图：固定 120 个采样槽位，不依赖主机监控窗口。
 
+// 设计令牌例外：走势图 canvas 的像素几何属于数据可视化绘制，保持物理像素。
 use crate::monitor::SparklineChartType;
 use gpui_kit::base::h_flex;
 use gpui_kit::gpui::{PathBuilder, fill};

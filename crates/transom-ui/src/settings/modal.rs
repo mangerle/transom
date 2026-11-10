@@ -5,7 +5,7 @@ use super::search_keywords::GroupSearch;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use crate::theme::tokens::size;
+use crate::theme::tokens::{rem_px, size};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
@@ -283,7 +283,7 @@ impl SettingsView {
     pub(crate) fn render_body(
         &self,
         app: &Entity<SettingsView>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
@@ -302,7 +302,7 @@ impl SettingsView {
             None => ("app-settings".to_string(), None),
         };
         let mut settings_component = Settings::new(settings_id)
-            .sidebar_width(px(220.0))
+            .sidebar_width(rem_px(13.75, window.rem_size()))
             .pages(Self::build_settings_pages(&app_entity, p));
         if let Some(index) = jump_index {
             settings_component = settings_component.default_selected_index(index);

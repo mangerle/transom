@@ -48,7 +48,7 @@ pub(super) fn overview_card(
                 .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
                 .child(
                     div()
-                        .text_size(px(11.0))
+                        .text_size(rems(0.6875))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(p.muted_foreground)
                         .child(title.into()),
@@ -90,7 +90,7 @@ pub(super) fn copyable_field(
     let mut val_el = div()
         .flex_1()
         .min_w_0()
-        .text_size(px(12.0))
+        .text_size(rems(0.75))
         .truncate()
         .child(display_str);
 
@@ -105,7 +105,7 @@ pub(super) fn copyable_field(
             div()
                 .w(px(96.0))
                 .flex_none()
-                .text_size(px(11.0))
+                .text_size(rems(0.6875))
                 .text_color(p.muted_foreground)
                 .child(label.into()),
         )

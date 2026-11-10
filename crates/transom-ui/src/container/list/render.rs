@@ -12,16 +12,30 @@ use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::scroll::Scrollbar;
 use std::rc::Rc;
 
+/// 容器列表虚拟渲染参数。
+pub(crate) struct ContainerRowsParams<'a> {
+    pub(crate) app_entity: Entity<AppShell>,
+    pub(crate) view: &'a Entity<ContainerWorkspace>,
+    pub(crate) rows: Vec<ListRow>,
+    pub(crate) selected: Option<String>,
+    pub(crate) focus_handle: FocusHandle,
+    pub(crate) scroll: VirtualListScrollHandle,
+    pub(crate) rem: Pixels,
+    pub(crate) palette: &'a Palette,
+}
+
 /// 渲染列表；空结果给出可行动的提示而不是白屏。
-pub(crate) fn render_rows(
-    app_entity: Entity<AppShell>,
-    view: &Entity<ContainerWorkspace>,
-    rows: Vec<ListRow>,
-    selected: Option<String>,
-    focus_handle: FocusHandle,
-    scroll: VirtualListScrollHandle,
-    p: &Palette,
-) -> AnyElement {
+pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
+    let ContainerRowsParams {
+        app_entity,
+        view,
+        rows,
+        selected,
+        focus_handle,
+        scroll,
+        rem,
+        palette: p,
+    } = params;
     if rows.is_empty() {
         return v_flex()
             .flex_1()
@@ -39,7 +53,8 @@ pub(crate) fn render_rows(
     }
     let row_count = rows.len();
     let rows = Rc::new(rows);
-    let item_sizes = Rc::new(vec![size(px(0.0), px(40.0)); row_count]);
+    let row_height = rems(2.5).to_pixels(rem);
+    let item_sizes = Rc::new(vec![size(px(0.0), row_height); row_count]);
     let p = p.clone();
     let view_for_rows = view.clone();
     let list = v_virtual_list(
@@ -89,7 +104,7 @@ pub(crate) fn list_row(
         .id(ElementId::Name(row.key.clone().into()))
         .group(group.as_str())
         .w_full()
-        .h(px(40.0))
+        .h(rems(2.5))
         .relative()
         .gap_2()
         .px_2p5()
@@ -123,7 +138,7 @@ pub(crate) fn list_row(
     }
 
     let title_el = div()
-        .text_size(px(13.0))
+        .text_size(rems(0.8125))
         .font_weight(FontWeight::MEDIUM)
         .truncate()
         .child(title);
@@ -134,7 +149,7 @@ pub(crate) fn list_row(
         Some(subtitle) => names
             .child(
                 div()
-                    .text_size(px(11.0))
+                    .text_size(rems(0.6875))
                     .text_color(p.muted_foreground)
                     .font_family(p.mono_font_family.clone())
                     .truncate()
@@ -147,7 +162,7 @@ pub(crate) fn list_row(
     if let Some(badge) = row.badge.clone() {
         element = element.child(
             div()
-                .text_size(px(11.0))
+                .text_size(rems(0.6875))
                 .flex_none()
                 .text_color(p.muted_foreground)
                 .child(badge),

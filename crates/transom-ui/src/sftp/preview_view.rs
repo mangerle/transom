@@ -168,7 +168,7 @@ fn render_text_preview(lines: &[String], truncated: bool, p: &Palette) -> AnyEle
     if lines.is_empty() {
         column = column.child(
             div()
-                .text_size(px(12.0))
+                .text_size(rems(0.75))
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("sftp.preview.empty_file").to_string()),
         );
@@ -199,7 +199,7 @@ fn render_text_preview(lines: &[String], truncated: bool, p: &Palette) -> AnyEle
     if truncated {
         body = body.child(
             div()
-                .text_size(px(11.0))
+                .text_size(rems(0.6875))
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("sftp.preview.head_only").to_string()),
         );

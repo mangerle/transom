@@ -18,7 +18,7 @@ pub(crate) fn render_env_card(
 ) -> AnyElement {
     if env.is_empty() {
         return div()
-            .text_size(px(12.0))
+            .text_size(rems(0.75))
             .text_color(p.muted_foreground)
             .child("—")
             .into_any_element();
@@ -48,7 +48,7 @@ pub(crate) fn render_env_card(
         h_flex()
             .gap_1()
             .items_center()
-            .text_size(px(11.0))
+            .text_size(rems(0.6875))
             .font_family(p.mono_font_family.clone())
             .truncate()
             .child(div().text_color(p.muted_foreground).child(format!("{k}=")))
@@ -60,7 +60,7 @@ pub(crate) fn render_env_card(
         let remaining = env.len() - 12;
         Some(
             div()
-                .text_size(px(11.0))
+                .text_size(rems(0.6875))
                 .text_color(p.muted_foreground)
                 .child(
                     rust_i18n::t!("container.detail.env_more_hint", count = remaining).to_string(),

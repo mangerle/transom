@@ -100,10 +100,11 @@ pub(crate) fn render_container_list_content(
     view: &Entity<ContainerWorkspace>,
     state: &ContainerWorkspaceState,
     cx: &App,
+    rem: Pixels,
     p: &Palette,
 ) -> AnyElement {
     let query = state.query(cx);
-    render_container_list(app_entity, view, state, &query, p)
+    render_container_list(app_entity, view, state, &query, rem, p)
 }
 
 /// 渲染容器工作区的连接态占位页。

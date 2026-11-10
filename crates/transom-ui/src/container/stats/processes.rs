@@ -105,7 +105,7 @@ pub(crate) fn processes_card(
                 )
                 .child(
                     div()
-                        .text_size(px(11.0))
+                        .text_size(rems(0.6875))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("container.stats.processes").to_string()),

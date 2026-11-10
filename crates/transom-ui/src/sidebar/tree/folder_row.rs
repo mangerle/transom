@@ -4,7 +4,7 @@ use super::reorder::{
     RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
 };
 use super::{
-    BAND_HEIGHT, FolderRow, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDrag,
+    BAND_HEIGHT_REM, FolderRow, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDrag,
     SidebarTarget, indent_padding,
 };
 use crate::app::AppShell;
@@ -35,7 +35,7 @@ impl AppShell {
         let element = div()
             .id(ElementId::Name(format!("folder-{folder_id}").into()))
             .w_full()
-            .h(ROW_HEIGHT)
+            .h(rems(ROW_HEIGHT_REM))
             .pl(indent_padding(row.depth))
             .pr(px(4.0))
             .flex()
@@ -88,7 +88,7 @@ fn folder_band(
         .id(ElementId::Name(format!("folder-band-{folder_id}").into()))
         .relative()
         .w_full()
-        .h(BAND_HEIGHT)
+        .h(rems(BAND_HEIGHT_REM))
         .px_2()
         .gap_1()
         .items_center()

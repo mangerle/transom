@@ -25,7 +25,8 @@ use crate::container::types::{ContainerDiscovery, ContainerWorkspaceStatus};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sidebar::{
-    BAND_HEIGHT, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
+    BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
+    indent_padding,
 };
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};

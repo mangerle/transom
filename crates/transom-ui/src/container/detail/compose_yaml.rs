@@ -7,7 +7,7 @@
 
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, px};
+use gpui_kit::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, px, rems};
 
 /// YAML 行级语法校验错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,7 +118,7 @@ pub(crate) fn render_line_numbers(
         gutter = gutter.child(
             div()
                 .h(px(20.0))
-                .text_size(px(11.0))
+                .text_size(rems(0.6875))
                 .font_family(p.mono_font_family.clone())
                 .font_weight(if is_err {
                     FontWeight::BOLD

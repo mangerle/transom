@@ -378,6 +378,62 @@ fn string_literals(line: &str) -> Vec<String> {
     out
 }
 
+/// 页面层字号也必须使用 rem/token；`text_size(px(...))` 会绕过密度缩放。
+#[test]
+fn ui_text_sizes_use_design_tokens() {
+    let mut offenders = Vec::new();
+    for (path, content) in ui_source_files() {
+        let lines: Vec<&str> = content.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
+            let previous_is_exception = index > 0 && lines[index - 1].contains("设计令牌例外");
+            if line.contains(".text_size(px(") && !previous_is_exception {
+                offenders.push(format!("{path}:{}: {}", index + 1, line.trim()));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "页面层字号必须使用 rem/token：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 关键结构尺寸必须使用 rem/token，而不是固定像素。
+#[test]
+fn key_structural_sizes_use_rem_tokens() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let checks = [
+        (
+            "src/container/list/render.rs",
+            &[".h(px(40.0))", ".h(px(40))"][..],
+            "rems(2.5)",
+        ),
+        (
+            "src/sidebar/tree/mod.rs",
+            &[".h(px(38.0))"][..],
+            "ROW_HEIGHT_REM",
+        ),
+        (
+            "src/settings/modal.rs",
+            &[".sidebar_width(px(220.0))"][..],
+            "rem_px(13.75",
+        ),
+    ];
+    for (relative, forbidden, required) in checks {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取结构尺寸文件失败");
+        for needle in forbidden {
+            assert!(
+                !content.contains(needle),
+                "{relative} 仍使用固定结构尺寸：{needle}"
+            );
+        }
+        assert!(
+            content.contains(required),
+            "{relative} 缺少 rem 结构尺寸：{required}"
+        );
+    }
+}
+
 /// 组件层必须走设计令牌：字号、间距、控件尺寸与弹窗宽度不能在这里重新写
 /// `text_xs()` / `px(...)`，否则页面迁移到组件层后仍会随密度切换失调。
 #[test]

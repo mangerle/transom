@@ -149,7 +149,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
             title_row = title_row.child(Icon::new(section.icon()).small().text_color(p.primary));
             title_row = title_row.child(
                 div()
-                    .text_size(px(15.0))
+                    .text_size(rems(0.9375))
                     .font_weight(FontWeight::SEMIBOLD)
                     .max_w(px(220.0))
                     .truncate()
@@ -205,7 +205,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                 .child(Icon::new(section.icon()).small().text_color(p.primary))
                 .child(
                     div()
-                        .text_size(px(15.0))
+                        .text_size(rems(0.9375))
                         .font_weight(FontWeight::SEMIBOLD)
                         .max_w(px(260.0))
                         .truncate()

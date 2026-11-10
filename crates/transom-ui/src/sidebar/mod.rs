@@ -31,7 +31,8 @@ use std::rc::Rc;
 use transom_core::SessionId;
 pub(crate) use tree::SidebarRow;
 pub(crate) use tree::{
-    BAND_HEIGHT, ROW_CHEVRON_SIZE, ROW_HEIGHT, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
+    BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
+    indent_padding,
 };
 use tree::{SidebarDrag, SidebarTarget, build_rows};
 
@@ -68,7 +69,7 @@ impl AppShell {
     /// 都以持久化为终点（见 AppShell 字段注释）。
     pub(crate) fn render_sidebar(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
@@ -80,7 +81,7 @@ impl AppShell {
         } else {
             let item_sizes = Rc::new(
                 rows.iter()
-                    .map(|row| size(px(0.0), row.height()))
+                    .map(|row| size(px(0.0), row.height(window.rem_size())))
                     .collect::<Vec<_>>(),
             );
             let p = p.clone();

@@ -12,6 +12,7 @@
 //! - 路径坐标在 paint 回调里用 `bounds.origin` 现算：gpui 的 `paint_path`
 //!   收视口绝对坐标，构建期拿不到 bounds，事后平移路径顶点既啰嗦又易错。
 
+// 设计令牌例外：提交图 canvas 的列宽、行高、节点半径与线宽属于绘制几何，保持物理像素。
 use gpui_kit::*;
 use transom_git::GraphRow;
 

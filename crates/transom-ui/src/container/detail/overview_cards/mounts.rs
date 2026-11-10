@@ -18,7 +18,7 @@ pub(crate) fn render_mounts_card(
 ) -> AnyElement {
     if mounts.is_empty() {
         return div()
-            .text_size(px(12.0))
+            .text_size(rems(0.75))
             .text_color(p.muted_foreground)
             .child("—")
             .into_any_element();
@@ -58,7 +58,7 @@ pub(crate) fn render_mounts_card(
                     )
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(rems(0.6875))
                             .font_family(p.mono_font_family.clone())
                             .truncate()
                             .child(
@@ -76,13 +76,13 @@ pub(crate) fn render_mounts_card(
                     .items_center()
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(rems(0.6875))
                             .text_color(p.muted_foreground)
                             .child("→"),
                     )
                     .child(
                         div()
-                            .text_size(px(11.0))
+                            .text_size(rems(0.6875))
                             .font_family(p.mono_font_family.clone())
                             .text_color(p.foreground.opacity(0.9))
                             .truncate()

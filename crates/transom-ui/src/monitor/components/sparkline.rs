@@ -1,5 +1,6 @@
 //! 迷你历史时序走势图组件（Sparkline）。
 
+// 设计令牌例外：监控走势图 canvas 的像素几何属于数据可视化绘制，保持物理像素。
 use crate::monitor::types::SparklineChartType;
 use gpui_kit::base::h_flex;
 use gpui_kit::gpui::{PathBuilder, fill};

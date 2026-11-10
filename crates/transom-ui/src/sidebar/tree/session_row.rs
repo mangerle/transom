@@ -4,7 +4,8 @@ use super::reorder::{
     RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
 };
 use super::{
-    BAND_HEIGHT, ROW_HEIGHT, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, indent_padding,
+    BAND_HEIGHT_REM, ROW_HEIGHT_REM, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget,
+    indent_padding,
 };
 use crate::app::AppShell;
 use crate::app_assets::AppIcon;
@@ -59,7 +60,7 @@ fn session_band(
         .id(ElementId::Name(format!("session-band-{session_id}").into()))
         .relative()
         .w_full()
-        .h(BAND_HEIGHT)
+        .h(rems(BAND_HEIGHT_REM))
         .px_2()
         .gap_2()
         .items_center()
@@ -428,7 +429,7 @@ impl AppShell {
         let element = div()
             .id(ElementId::Name(format!("session-{session_id}").into()))
             .w_full()
-            .h(ROW_HEIGHT)
+            .h(rems(ROW_HEIGHT_REM))
             .pl(indent_padding(row.depth))
             .pr(px(4.0))
             .flex()

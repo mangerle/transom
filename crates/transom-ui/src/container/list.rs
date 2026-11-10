@@ -86,6 +86,7 @@ pub(crate) fn render_container_list(
     view: &Entity<ContainerWorkspace>,
     workspace: &ContainerWorkspaceState,
     query: &str,
+    rem: Pixels,
     p: &Palette,
 ) -> AnyElement {
     let rows = list_rows(workspace, query);
@@ -103,15 +104,16 @@ pub(crate) fn render_container_list(
         },
         p,
     );
-    let body = render_rows(
+    let body = render_rows(ContainerRowsParams {
         app_entity,
         view,
         rows,
-        workspace.selected.clone(),
-        workspace.list_focus_handle.clone(),
-        workspace.list_scroll.clone(),
-        p,
-    );
+        selected: workspace.selected.clone(),
+        focus_handle: workspace.list_focus_handle.clone(),
+        scroll: workspace.list_scroll.clone(),
+        rem,
+        palette: p,
+    });
     let toolbar_header = h_flex()
         .h(rems(CONTENT_HEADER_HEIGHT))
         .flex_none()

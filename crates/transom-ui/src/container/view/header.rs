@@ -330,7 +330,7 @@ fn render_section_tabs(
                         .when(count > 0, |this| {
                             this.child(
                                 div()
-                                    .text_size(px(11.0))
+                                    .text_size(rems(0.6875))
                                     .text_color(p.muted_foreground)
                                     .child(count.to_string()),
                             )

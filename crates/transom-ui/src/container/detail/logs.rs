@@ -70,7 +70,7 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
             timestamp_prefix = Some(
                 div()
                     .mr_2()
-                    .text_size(px(11.0))
+                    .text_size(rems(0.6875))
                     .text_color(p.muted_foreground)
                     .child(ts.to_string()),
             );
@@ -133,7 +133,7 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
         .w_full()
         .items_baseline()
         .font_family(p.mono_font_family.clone())
-        .text_size(px(12.0))
+        .text_size(rems(0.75))
         .line_height(relative(1.5));
 
     if let Some(badge) = prefix_badge {
@@ -356,7 +356,7 @@ pub(crate) fn render_logs(
             .px_3()
             .py_2()
             .font_family(p.mono_font_family.clone())
-            .text_size(px(12.0))
+            .text_size(rems(0.75))
             .line_height(relative(1.5))
             .child(rows)
             .into_any_element()

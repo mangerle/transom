@@ -39,7 +39,7 @@ pub(crate) fn stat_card(
                         )
                         .child(
                             div()
-                                .text_size(px(11.0))
+                                .text_size(rems(0.6875))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.muted_foreground)
                                 .truncate()
@@ -68,7 +68,7 @@ pub(crate) fn hero_stat(value: &str, unit: &str, color: Hsla, p: &Palette) -> An
         .child(
             div()
                 .font_family(p.mono_font_family.clone())
-                .text_size(px(26.0))
+                .text_size(rems(1.625))
                 .font_weight(FontWeight::SEMIBOLD)
                 .line_height(px(28.0))
                 .text_color(color)
@@ -77,7 +77,7 @@ pub(crate) fn hero_stat(value: &str, unit: &str, color: Hsla, p: &Palette) -> An
         .when(!unit.is_empty(), |this| {
             this.child(
                 div()
-                    .text_size(px(12.0))
+                    .text_size(rems(0.75))
                     .font_weight(FontWeight::NORMAL)
                     .line_height(px(14.0))
                     .text_color(p.muted_foreground)

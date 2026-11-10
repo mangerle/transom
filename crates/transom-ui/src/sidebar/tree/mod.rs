@@ -14,10 +14,10 @@ use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{CatalogError, DropSide, FolderId, Session, SessionId};
 
-/// 行槽位高度：虚拟列表按它分配空间，渲染时必须严格一致，否则行会错位或裁切。
-pub(crate) const ROW_HEIGHT: Pixels = px(38.0);
-/// 内层高亮条高度：小于行槽位，留出上下间隙，同时把背景限制在内容区，缩进区保持透明。
-pub(crate) const BAND_HEIGHT: Pixels = px(34.0);
+/// 行槽位高度（rem）：虚拟列表按它分配空间，渲染时必须严格一致。
+pub(crate) const ROW_HEIGHT_REM: f32 = 2.375;
+/// 内层高亮条高度（rem）：小于行槽位，留出上下间隙。
+pub(crate) const BAND_HEIGHT_REM: f32 = 2.125;
 /// 缩进基准与每级步长（逻辑像素）。
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;
@@ -74,9 +74,9 @@ pub(crate) enum SidebarRow {
 }
 
 impl SidebarRow {
-    pub(crate) fn height(&self) -> Pixels {
+    pub(crate) fn height(&self, rem_size: Pixels) -> Pixels {
         // 文件夹与会话保持统一行高；内层内容条再压缩，兼顾两行信息与紧凑度。
-        ROW_HEIGHT
+        rems(ROW_HEIGHT_REM).to_pixels(rem_size)
     }
 }
 
