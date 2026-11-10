@@ -43,6 +43,7 @@
 
 ### 终端
 - 标签内自由分屏：切分方向属于每一刀、可嵌套，分隔线可拖拽，支持单窗格最大化与拆出为独立标签。
+- 默认终端字体为随安装包内嵌的 JetBrains Mono，无需系统预装；仍可在设置中切换其他字体。
 - 本地终端支持设置默认 Shell，也可在每次新建时临时选择。Windows 自动发现命令提示符、Windows PowerShell、PowerShell 7、Git Bash 与 WSL；Linux/macOS 从 `$SHELL` 与 `/etc/shells` 发现。Windows 管理员 Shell 经 UAC 授权后仍运行在当前 Transom 标签内。
 - 缓冲区全文检索带正则开关，右侧刻度带显示整块滚动缓冲区的命中分布并支持点击跳转。
 - 常驻高亮 `ERROR` / `WARN` / `INFO` / `DEBUG`、IPv4 与 UUID，另可加最多 32 个自定义关键词；颜色全部取自主题调色板，跟随配色切换。

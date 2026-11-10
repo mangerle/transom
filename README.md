@@ -43,6 +43,7 @@ The name: a *transom* is the crossbar in a doorway, and a porthole is a transom 
 
 ### Terminal
 - Nested split views (split direction belongs to each cut), draggable dividers, per-pane zoom, and pane detach into a tab.
+- JetBrains Mono is embedded in the installer and used as the default terminal font, so no system font installation is required; you can still switch families in settings.
 - Local terminals can use a configured default shell or a per-launch shell choice. Windows discovers Command Prompt, Windows PowerShell, PowerShell 7, Git Bash and WSL; Linux/macOS discover `$SHELL` and `/etc/shells`. On Windows, elevated shells run inside the current Transom tab through a UAC-approved PTY broker.
 - Buffer search with a regex toggle plus an overview tick band that shows hits across the entire scrollback and jumps on click.
 - Always-on highlighting for `ERROR` / `WARN` / `INFO` / `DEBUG`, IPv4 addresses and UUIDs, and up to 32 custom keywords, all mapped to theme palette slots so they follow your colorscheme.

@@ -124,12 +124,23 @@ pub(crate) fn apply_appearance(appearance: &AppearanceSettings, cx: &mut App) {
     let surface_alpha = crate::window_appearance::window_appearance(cx)
         .map(|appearance| appearance.surface_alpha)
         .unwrap_or(1.0);
+    // 主题没有显式指定等宽字体时，优先使用随应用分发的 JetBrains Mono。
+    // 字体注册失败时返回 None，继续保留平台默认字体，避免引用不存在的字族。
+    let bundled_mono_font = resolved
+        .active
+        .mono_font_family
+        .is_none()
+        .then(|| crate::bundled_fonts::default_mono_font_family(cx))
+        .flatten();
     Theme::update(cx, |theme| {
         theme.apply_config(&resolved.active);
         theme.light_theme = resolved.light;
         theme.dark_theme = resolved.dark;
         theme.font_size = px(density.font_size());
         theme.mono_font_size = px(density.mono_font_size());
+        if let Some(family) = bundled_mono_font {
+            theme.mono_font_family = family;
+        }
         // 字体族个体偏好覆盖主题自带字体；None 恢复主题值。族变化会触发
         // edit() 内部的系统字体重解析（edit 检测 font_family 变化）。
         if let Some(family) = appearance.ui_font_family.as_deref() {

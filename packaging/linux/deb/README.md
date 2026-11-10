@@ -47,7 +47,10 @@ for f in $(ldd target/release/transom | awk '/=> \//{print $3}'); do echo "$f ->
   记录，版本号必须与 workspace 版本一致；
 - `usr/share/man/man1/transom.1.gz`：手册页源文件 `transom.1` 自动压缩；
 - `usr/share/metainfo/com.github.mangerle.transom.metainfo.xml`：AppStream
-  元数据（软件中心展示用），id 与桌面条目、图标名逐字一致。
+  元数据（软件中心展示用），id 与桌面条目、图标名逐字一致；
+- `usr/share/doc/transom/fonts/JetBrainsMono-OFL.txt`：内置终端字体
+  JetBrains Mono 的 SIL OFL 1.1 许可证。字体本体编入二进制，运行时由 GPUI
+  注册，不依赖系统安装。
 
 ## 已知缺口
 

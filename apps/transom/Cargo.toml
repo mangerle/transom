@@ -101,6 +101,9 @@ assets = [
     # 校验命令记录在 packaging/linux/deb/README.md。
     ["../../packaging/linux/com.github.mangerle.transom.metainfo.xml", "usr/share/metainfo/com.github.mangerle.transom.metainfo.xml", "644"],
     ["../../README.md", "usr/share/doc/transom/README.md", "644"],
+    # JetBrains Mono 以 OFL 1.1 分发；字体已编入二进制，这里单独携带版权与
+    # 许可证正文，满足再分发时随每份副本提供许可证的要求。
+    ["../../crates/transom-ui/assets/fonts/jetbrains-mono/OFL.txt", "usr/share/doc/transom/fonts/JetBrainsMono-OFL.txt", "644"],
 ]
 maintainer-scripts = "../../packaging/linux/deb"
 
@@ -131,6 +134,7 @@ icons = [
 resources = [
     { src = "../../LICENSE", target = "licenses/LICENSE" },
     { src = "../../README.md", target = "licenses/README.md" },
+    { src = "../../crates/transom-ui/assets/fonts/jetbrains-mono/OFL.txt", target = "licenses/JetBrainsMono-OFL.txt" },
 ]
 
 [package.metadata.packager.windows]
