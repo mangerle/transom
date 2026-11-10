@@ -12,7 +12,7 @@
 //! 写进对应分组，而不是继续平铺字段。
 
 use gpui_kit::{Subscription, Task};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use transom_core::{SessionId, TabId};
 
 /// 可替换的后台任务。
@@ -23,6 +23,8 @@ pub(crate) struct BackgroundTasks {
     pub(crate) sync_pull: Option<Task<()>>,
     /// 首帧稳定后的升级确认任务：延迟执行，避免把"窗口刚创建"误判为健康运行。
     pub(crate) update_confirm: Option<Task<()>>,
+    /// Toast 自动关闭任务；有界保留最近任务，窗口关闭时统一取消。
+    pub(crate) toast_tasks: VecDeque<(u64, Task<()>)>,
 }
 
 impl BackgroundTasks {
@@ -33,6 +35,7 @@ impl BackgroundTasks {
             git_sync: None,
             sync_pull: None,
             update_confirm: None,
+            toast_tasks: VecDeque::with_capacity(32),
         }
     }
 }

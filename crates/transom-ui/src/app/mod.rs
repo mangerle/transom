@@ -233,20 +233,28 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         self.state.toast_seq = self.state.toast_seq.wrapping_add(1);
-        let key = format!("transom-toast-{}", self.state.toast_seq);
+        let sequence = self.state.toast_seq;
+        let key = format!("transom-toast-{sequence}");
         window.push_notification(
             notification.id1::<ToastMarker>(key.clone()).autohide(false),
             cx,
         );
-        cx.spawn_in(window, async move |this, cx| {
+        let task = cx.spawn_in(window, async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_secs(3))
                 .await;
             let _ = this.update_in(cx, |_, window, cx| {
                 window.remove_notification1::<ToastMarker>(key, cx);
             });
-        })
-        .detach();
+        });
+        if self.state.tasks.background.toast_tasks.len() >= 32 {
+            self.state.tasks.background.toast_tasks.pop_front();
+        }
+        self.state
+            .tasks
+            .background
+            .toast_tasks
+            .push_back((sequence, task));
     }
 
     /// 向命令通道投递一条应用命令。

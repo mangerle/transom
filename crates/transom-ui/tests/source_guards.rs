@@ -539,6 +539,24 @@ fn selection_and_command_semantics_are_explicit() {
     );
 }
 
+/// Toast 定时器必须纳入任务容器，不得脱缰 detach。
+#[test]
+fn toast_tasks_are_retained() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app/mod.rs");
+    let content = std::fs::read_to_string(path).expect("读取应用外壳失败");
+    let start = content.find("fn push_toast(").expect("未找到 Toast 定时器");
+    let end = content[start..]
+        .find(
+            "
+    }
+",
+        )
+        .map_or(content.len(), |offset| start + offset);
+    let body = &content[start..end];
+    assert!(body.contains("toast_tasks"), "Toast 定时器必须纳入 TaskHub");
+    assert!(!body.contains(".detach()"), "Toast 定时器不得脱缰 detach");
+}
+
 /// 渲染主路径不得直接执行帧副作用或弹窗对账。
 #[test]
 fn render_effects_are_deferred() {
