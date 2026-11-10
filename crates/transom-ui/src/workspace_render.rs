@@ -6,7 +6,7 @@
 use super::*;
 use crate::palette::Palette;
 use crate::sftp::SftpPanelState;
-use crate::sidebar::{SidebarSlotLayout, sync_sidebar_slot};
+use crate::sidebar::{SidebarSection, SidebarSlotLayout, sync_sidebar_slot};
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::{ResizablePanel, ResizablePanelGroup, h_resizable};
 use gpui_kit::component::resizable::resizable_panel;
@@ -76,11 +76,12 @@ impl AppShell {
         } else {
             self.state.workspace_panels.clone()
         };
+        let sidebar_visible = self.state.sidebar.visible();
         sync_sidebar_slot(
             &mut self.state.sidebar.slot,
             &panels,
             SidebarSlotLayout {
-                visible: self.state.sidebar.visible,
+                visible: sidebar_visible,
                 default_width: rem_px(size::SIDEBAR_WIDTH, rem).as_f32(),
                 min_width: rem_px(size::SIDEBAR_MIN_WIDTH, rem).as_f32(),
                 max_width: rem_px(size::SIDEBAR_MAX_WIDTH, rem).as_f32(),
@@ -122,7 +123,7 @@ impl AppShell {
             .map(SftpPanelState::all_collapsed_width)
             .unwrap_or(32.0);
         let show_forwards = active_panel.is_some_and(|tab| tab.forwards_view().is_some());
-        let sidebar_width = if self.state.sidebar.visible {
+        let sidebar_width = if self.state.sidebar.visible() {
             sidebar_width
         } else {
             0.0
@@ -170,32 +171,40 @@ impl AppShell {
             .size(px(sidebar_width))
             .size_range(sidebar_min_width..sidebar_max_width)
             .fixed()
-            .visible(self.state.sidebar.visible);
-        if self.state.sidebar.visible {
+            .visible(self.state.sidebar.visible());
+        if self.state.sidebar.visible() {
             // 左侧槽位一次只承载一种内容：容器连接、Git 仓库、纵向标签面板或会话树。
-            let content = if self.state.containers.sidebar_open {
-                // 目录与连接状态由外壳按渲染快照注入，侧栏实体不反查外壳。
-                let sidebar = self.state.containers.sidebar.clone();
-                let profile_states = self.state.container_profile_states(cx);
-                let active = self.state.active_engine_profile_id();
-                let state = sidebar.read(cx);
-                crate::container::render_container_sidebar(
-                    crate::container::ContainerSidebarParams {
-                        view: &sidebar,
-                        state: &state.state,
-                        cx,
-                        catalog: &self.state.catalog,
-                        active,
-                        profile_states: &profile_states,
-                    },
-                    p,
-                )
-            } else if self.state.git.sidebar_open {
-                self.render_git_sidebar(window, cx, p)
-            } else if self.show_vertical_tabs_panel(app_settings(cx)) {
-                self.render_vertical_tabs_panel(p, cx)
-            } else {
-                self.render_sidebar(window, cx, p)
+            let section = self
+                .state
+                .sidebar
+                .section()
+                .resolved_for_tab_position(app_settings(cx).window.tab_position);
+            let content = match section {
+                SidebarSection::Containers => {
+                    // 目录与连接状态由外壳按渲染快照注入，侧栏实体不反查外壳。
+                    let sidebar = self.state.containers.sidebar.clone();
+                    let profile_states = self.state.container_profile_states(cx);
+                    let active = self.state.active_engine_profile_id();
+                    let state = sidebar.read(cx);
+                    crate::container::render_container_sidebar(
+                        crate::container::ContainerSidebarParams {
+                            view: &sidebar,
+                            state: &state.state,
+                            cx,
+                            catalog: &self.state.catalog,
+                            active,
+                            profile_states: &profile_states,
+                        },
+                        p,
+                    )
+                }
+                SidebarSection::Git => self.render_git_sidebar(window, cx, p),
+                SidebarSection::Tabs if self.show_vertical_tabs_panel(app_settings(cx)) => {
+                    self.render_vertical_tabs_panel(p, cx)
+                }
+                SidebarSection::Sessions | SidebarSection::Tabs => {
+                    self.render_sidebar(window, cx, p)
+                }
             };
             sidebar_panel = sidebar_panel.child(content);
         }

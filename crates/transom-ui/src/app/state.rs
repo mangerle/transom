@@ -56,8 +56,6 @@ pub(crate) struct AppState {
     pub(in crate::app) workspace_panels_left: Entity<ResizableState>,
     /// 纵向标签面板的搜索框状态。
     pub(in crate::app) vertical_tabs_search: Entity<InputState>,
-    /// 左侧槽位当前是否显示纵向标签面板；为假时槽位显示会话树或收起。
-    pub(in crate::app) vertical_tabs_open: bool,
     /// 统一托管的应用顶层交互模态与表单集合。
     pub(in crate::app) modals: ModalHub,
     /// 统一纳管的应用外壳后台任务与事件订阅。

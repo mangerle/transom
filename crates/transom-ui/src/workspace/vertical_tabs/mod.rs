@@ -23,6 +23,7 @@ use crate::app_assets::AppIcon;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::session_icon;
+use crate::sidebar::SidebarSection;
 use crate::theme::tokens::size;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
@@ -138,15 +139,10 @@ impl AppShell {
         if app_settings(cx).window.tab_position != TabPosition::Left {
             return;
         }
-        if self.state.sidebar.visible
-            && !self.state.containers.sidebar_open
-            && self.state.vertical_tabs_open
-        {
+        if self.state.sidebar.is_showing(SidebarSection::Tabs) {
             return;
         }
-        self.state.sidebar.visible = true;
-        self.state.containers.sidebar_open = false;
-        self.state.vertical_tabs_open = true;
+        self.state.sidebar.show_section(SidebarSection::Tabs);
         cx.notify();
     }
 
@@ -260,8 +256,7 @@ impl AppShell {
 
     pub(crate) fn show_vertical_tabs_panel(&self, settings: &AppSettings) -> bool {
         settings.window.tab_position == TabPosition::Left
-            && self.state.sidebar.visible
-            && self.state.vertical_tabs_open
+            && self.state.sidebar.is_showing(SidebarSection::Tabs)
     }
 }
 
@@ -348,8 +343,7 @@ fn build_new_session_menu(
             IconName::Server,
             move |_, _, cx| {
                 tree_app.update(cx, |this, cx| {
-                    this.state.sidebar.visible = true;
-                    this.state.vertical_tabs_open = false;
+                    this.state.sidebar.show_section(SidebarSection::Sessions);
                     cx.notify();
                 });
             },

@@ -19,6 +19,7 @@ use super::form::GitProjectDraft;
 use super::types::{GitBadge, GitWorkspaceState};
 use crate::app::{AppShell, TerminalTab};
 use crate::palette::localized_error;
+use crate::sidebar::SidebarSection;
 use gpui_kit::*;
 use transom_core::{
     Connection, GitAction, GitCommand, GitProject, GitProjectId, GitRequestId, LocalConnection,
@@ -56,11 +57,8 @@ impl AppShell {
 
     /// 活动栏点击：切换左侧槽位的 Git 项目列表。
     pub(crate) fn toggle_git_sidebar(&mut self, cx: &mut Context<Self>) {
-        let opening = !(self.state.git.sidebar_open && self.state.sidebar.visible);
-        self.state.git.sidebar_open = opening;
-        self.state.sidebar.visible = opening;
+        let opening = self.state.sidebar.toggle_section(SidebarSection::Git);
         if opening {
-            self.state.vertical_tabs_open = false;
             // 展开即刷一遍所有项目：列表里的分支与脏数必须是当下的。
             self.refresh_all_git_projects(cx);
         }

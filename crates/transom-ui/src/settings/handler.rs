@@ -8,6 +8,7 @@
 
 use super::{SettingsEvent, SettingsRequest};
 use crate::app::AppShell;
+use crate::sidebar::SidebarSection;
 use gpui_kit::*;
 use transom_terminal::TerminalView;
 
@@ -45,9 +46,14 @@ impl AppShell {
                 cx.notify();
             }
             SettingsEvent::TabPositionChanged(position) => {
-                self.state.vertical_tabs_open = *position == transom_core::TabPosition::Left;
                 if *position == transom_core::TabPosition::Left {
-                    self.state.sidebar.visible = true;
+                    let section = match self.state.sidebar.section() {
+                        SidebarSection::Sessions => SidebarSection::Tabs,
+                        section => section,
+                    };
+                    self.state.sidebar.show_section(section);
+                } else if self.state.sidebar.section() == SidebarSection::Tabs {
+                    self.state.sidebar.select_section(SidebarSection::Sessions);
                 }
                 cx.notify();
             }

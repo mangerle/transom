@@ -17,6 +17,7 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::sidebar::SidebarSection;
 use drag::{
     ActivityDrag, ActivityDragPreview, render_activity_blank_zone, render_activity_reorder_overlay,
 };
@@ -33,17 +34,16 @@ pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 
 impl AppShell {
     fn activity_item_selected(&self, id: ActivityItemId, monitor_open: bool, cx: &App) -> bool {
+        let section = self
+            .state
+            .sidebar
+            .section()
+            .resolved_for_tab_position(app_settings(cx).window.tab_position);
         match id {
             ActivityItemId::Sessions => {
-                self.state.sidebar.visible
-                    && !self.state.containers.sidebar_open
-                    && !self.state.vertical_tabs_open
+                self.state.sidebar.visible() && section == SidebarSection::Sessions
             }
-            ActivityItemId::Tabs => {
-                self.state.sidebar.visible
-                    && !self.state.containers.sidebar_open
-                    && self.state.vertical_tabs_open
-            }
+            ActivityItemId::Tabs => self.state.sidebar.visible() && section == SidebarSection::Tabs,
             ActivityItemId::Forwards => self
                 .state
                 .workspace
@@ -58,9 +58,9 @@ impl AppShell {
                 .is_some_and(|view| view.read(cx).state.open),
             ActivityItemId::Monitor => monitor_open,
             ActivityItemId::Containers => {
-                self.state.sidebar.visible && self.state.containers.sidebar_open
+                self.state.sidebar.visible() && section == SidebarSection::Containers
             }
-            ActivityItemId::Git => self.state.sidebar.visible && self.state.git.sidebar_open,
+            ActivityItemId::Git => self.state.sidebar.visible() && section == SidebarSection::Git,
             ActivityItemId::Keys => self.state.modals.tools.key_wizard.read(cx).is_open(),
             _ => false,
         }
@@ -127,7 +127,7 @@ impl AppShell {
             .bg(p.sidebar);
         // 侧栏展开时，活动栏右缘就是与侧栏的分界线；侧栏收起后主面板的
         // 手柄线紧贴这条边，这里再画一条会并排成 2px，所以收起时不画。
-        if self.state.sidebar.visible {
+        if self.state.sidebar.visible() {
             bar = bar
                 .border_color(p.divider(p.border))
                 .divider_edge(DividerEdge::Right, p.divider_width);
@@ -220,34 +220,15 @@ impl AppShell {
     ) {
         match id {
             ActivityItemId::Sessions => {
-                // 会话树、纵向标签面板与容器面板共用左侧槽位：
-                // 点击当前已展示的视图时收起槽位；点击非当前视图时切过去并确保展开。
-                let is_current = self.state.sidebar.visible
-                    && !self.state.containers.sidebar_open
-                    && !self.state.vertical_tabs_open;
-                if is_current {
-                    self.state.sidebar.visible = false;
-                } else {
-                    self.state.sidebar.visible = true;
-                    self.state.containers.sidebar_open = false;
-                    self.state.vertical_tabs_open = false;
-                }
+                // 左侧槽位一次只展示一个视图：点击当前视图收起，点击其他视图直接切换。
+                self.state.sidebar.toggle_section(SidebarSection::Sessions);
                 cx.notify();
             }
             ActivityItemId::Tabs => {
                 if app_settings(cx).window.tab_position != TabPosition::Left {
                     return;
                 }
-                let is_current = self.state.sidebar.visible
-                    && !self.state.containers.sidebar_open
-                    && self.state.vertical_tabs_open;
-                if is_current {
-                    self.state.sidebar.visible = false;
-                } else {
-                    self.state.sidebar.visible = true;
-                    self.state.containers.sidebar_open = false;
-                    self.state.vertical_tabs_open = true;
-                }
+                self.state.sidebar.toggle_section(SidebarSection::Tabs);
                 cx.notify();
             }
             ActivityItemId::QuickOpen => self.toggle_quick_open(window, cx),
@@ -255,15 +236,9 @@ impl AppShell {
             ActivityItemId::Sftp => self.toggle_sftp(window, cx),
             ActivityItemId::Monitor => self.toggle_monitor(window, cx),
             ActivityItemId::Containers => {
-                let is_current = self.state.sidebar.visible && self.state.containers.sidebar_open;
-                if is_current {
-                    self.state.sidebar.visible = false;
-                    self.state.containers.sidebar_open = false;
-                } else {
-                    self.state.sidebar.visible = true;
-                    self.state.containers.sidebar_open = true;
-                    self.state.vertical_tabs_open = false;
-                }
+                self.state
+                    .sidebar
+                    .toggle_section(SidebarSection::Containers);
                 cx.notify();
             }
             ActivityItemId::Language => self.toggle_language(cx),

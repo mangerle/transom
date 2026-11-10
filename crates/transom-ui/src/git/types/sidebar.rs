@@ -6,8 +6,6 @@ use transom_core::GitProject;
 /// Git 子系统的全局状态（跨标签页共享的那一小部分）。
 #[derive(Default)]
 pub(crate) struct GitHub {
-    /// 左侧槽位是否正在显示 Git 项目列表。
-    pub sidebar_open: bool,
     /// 已纳入管理的项目列表，顺序即界面显示顺序（用户在侧栏上下拖拽排定，落盘同序）。
     pub projects: Vec<GitProject>,
     /// 单层分组（组标题行），顺序同样是用户拖拽排定的显示顺序。
@@ -33,7 +31,6 @@ pub(crate) struct GitHub {
 impl GitHub {
     pub(crate) fn new(projects: Vec<GitProject>, folders: Vec<transom_core::GitFolder>) -> Self {
         Self {
-            sidebar_open: false,
             projects,
             folders,
             badges: HashMap::new(),

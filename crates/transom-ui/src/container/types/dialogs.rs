@@ -76,7 +76,6 @@ pub(crate) struct ContainerDiscovery {
 /// `ContainerRunFormView` / `ContainerCreateDialogView`，本结构只保留仍由外壳
 /// 统一持有的侧栏与标签级弹窗字段。
 pub(crate) struct ContainerUiState {
-    pub(crate) sidebar_open: bool,
     pub(crate) fullscreen: Option<TabId>,
     /// 引擎连接侧栏实体：搜索、选中、分组表单与发现面板状态都归它。
     pub(crate) sidebar: Entity<super::super::ContainerSidebarView>,
@@ -93,7 +92,6 @@ impl ContainerUiState {
     ) -> Self {
         let sidebar = cx.new(|cx| super::super::ContainerSidebarView::new(window, cx));
         Self {
-            sidebar_open: false,
             fullscreen: None,
             sidebar,
         }

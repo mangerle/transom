@@ -7,6 +7,7 @@ use crate::audit_viewer::AuditViewerEvent;
 use crate::backup::BackupPromptView;
 use crate::keys::{KeyWizardView, KnownHostsEvent, KnownHostsView, default_ssh_dir};
 use crate::record::ReplayEvent;
+use crate::sidebar::SidebarSection;
 use std::sync::atomic::AtomicBool;
 
 impl AppShell {
@@ -51,8 +52,12 @@ impl AppShell {
         });
         // 弹窗内部的滑块/步进器订阅由设置实体自己持有，外壳不再感知这些控件。
         let sidebar_visible = settings.window.sidebar_visible_at_startup();
-        // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式该标志无效。
-        let vertical_tabs_open = settings.window.tab_position == TabPosition::Left;
+        // 左侧标签模式启动即以标签面板作为槽位主视图；顶部模式回到会话树。
+        let sidebar_section = if settings.window.tab_position == TabPosition::Left {
+            SidebarSection::Tabs
+        } else {
+            SidebarSection::Sessions
+        };
         let monitor = cx.new(|cx| crate::monitor::MonitorView::new(window, &settings.monitor, cx));
         let editors = cx.new(|_| EditorPanels::new());
 
@@ -69,7 +74,7 @@ impl AppShell {
                 event_task,
                 known_hosts_records,
                 sidebar_visible,
-                vertical_tabs_open,
+                sidebar_section,
                 restart_requested,
                 local_shells,
             },
@@ -361,7 +366,7 @@ struct BootstrapState {
     event_task: gpui::Task<()>,
     known_hosts_records: Vec<transom_core::HostKeyRecord>,
     sidebar_visible: bool,
-    vertical_tabs_open: bool,
+    sidebar_section: SidebarSection,
     /// 安装完成后由关于页置位的重启意图，随 `run` 返回值交回 `main`。
     restart_requested: Arc<AtomicBool>,
     local_shells: Arc<Vec<transom_platform::shell::ShellOption>>,
@@ -385,7 +390,7 @@ fn assemble_state(
         event_task,
         known_hosts_records,
         sidebar_visible,
-        vertical_tabs_open,
+        sidebar_section,
         restart_requested,
         local_shells,
     } = input;
@@ -412,12 +417,11 @@ fn assemble_state(
         local_shells,
         catalog: prepared.catalog,
         catalog_revision: 0,
-        sidebar: SidebarState::new(sidebar_visible, inputs.search.clone()),
+        sidebar: SidebarState::new(sidebar_visible, sidebar_section, inputs.search.clone()),
         workspace: WorkspaceState::new(),
         workspace_panels: inputs.workspace_panels.clone(),
         workspace_panels_left: inputs.workspace_panels_left.clone(),
         vertical_tabs_search: inputs.vertical_tabs_search.clone(),
-        vertical_tabs_open,
         modals: ModalHub::new(
             session_form,
             known_hosts_view,

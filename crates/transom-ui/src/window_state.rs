@@ -23,7 +23,7 @@ impl AppShell {
         // 崩溃后三者一起退到上次正常退出，不会出现标签组是旧的、侧栏是新的那种
         // 半新半旧；也不必为一次点击写一次配置文件。
         update_app_settings(cx, |s| {
-            s.window.last_sidebar_visible = self.state.sidebar.visible
+            s.window.last_sidebar_visible = self.state.sidebar.visible()
         });
         let sessions: Vec<_> = self.state.workspace.tabs.iter().map(session_key).collect();
         update_app_settings(cx, |s| s.window.previous_tab_sessions = sessions);

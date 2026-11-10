@@ -7,7 +7,7 @@ mod tree;
 
 pub(crate) use folders::FolderForm;
 pub(crate) use slot::{SidebarSlotLayout, SidebarSlotSync, sync_sidebar_slot};
-pub(crate) use state::{SidebarRowsCache, SidebarState};
+pub(crate) use state::{SidebarRowsCache, SidebarSection, SidebarState};
 
 /// 侧栏工具图标按钮配置属性。
 pub(crate) struct SidebarButtonProps<F> {
