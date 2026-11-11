@@ -17,6 +17,7 @@ transom-platform.workspace = true
 transom-core.workspace = true
 alacritty_terminal.workspace = true
 gpui-kit.workspace = true
+transom-ui-icons.workspace = true
 flume.workspace = true
 parking_lot.workspace = true
 log.workspace = true

@@ -14,6 +14,7 @@ members = [
     "crates/transom-zmodem",
     "crates/transom-updater",
     "crates/transom-ui",
+    "crates/transom-ui-icons",
 ]
 resolver = "3"
 
@@ -46,6 +47,7 @@ publish = false
 # syntect 特性带来 gpui-component 的语法高亮后端（语法集由 two_face 随编译内置，
 # 无需注册资产）；编辑远程配置文件需要它，未开启时 EditorState 只会退化为纯文本着色。
 gpui-kit = { version = "0.9.1", features = ["syntect"] }
+rust-embed = "8.13.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -144,6 +146,7 @@ transom-terminal = { path = "crates/transom-terminal" }
 transom-zmodem = { path = "crates/transom-zmodem" }
 transom-updater = { path = "crates/transom-updater" }
 transom-ui = { path = "crates/transom-ui" }
+transom-ui-icons = { path = "crates/transom-ui-icons" }
 
 [profile.dev.package]
 gpui-pre = { opt-level = 3 }

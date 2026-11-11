@@ -1,0 +1,4 @@
+<!-- Transom 自有图标，使用 Apache-2.0 项目许可证。 -->
+<svg stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 4.5C2 3.67 2.67 3 3.5 3H6L7.5 4.5H12.5C13.33 4.5 14 5.17 14 6V11.5C14 12.33 13.33 13 12.5 13H3.5C2.67 13 2 12.33 2 11.5V4.5Z" stroke="#CED0D6"/><path d="M8 6.5V11M6 9L8 11L10 9" stroke="#CED0D6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

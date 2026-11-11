@@ -9021,6 +9021,7 @@ dependencies = [
  "serde_json",
  "transom-core",
  "transom-platform",
+ "transom-ui-icons",
 ]
 
 [[package]]
@@ -9055,8 +9056,19 @@ dependencies = [
  "transom-platform",
  "transom-store",
  "transom-terminal",
+ "transom-ui-icons",
  "transom-updater",
  "zeroize",
+]
+
+[[package]]
+name = "transom-ui-icons"
+version = "1.7.1"
+dependencies = [
+ "gpui-kit",
+ "log",
+ "parking_lot",
+ "rust-embed",
 ]
 
 [[package]]
