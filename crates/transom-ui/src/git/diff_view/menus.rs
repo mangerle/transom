@@ -6,7 +6,6 @@
 use crate::app::AppShell;
 use crate::git::types::{DiffHighlight, GitDiffOptions, IgnoreWhitespace};
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -14,6 +13,20 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::{AppIconElement, UiIcon};
+
+/// 选择型菜单项：选中项使用 New UI 勾选图标，未选中项不画伪单选圆点。
+fn choice_item(
+    label: String,
+    checked: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> PopupMenuItem {
+    if checked {
+        menu_item(label, UiIcon::CHECK, on_click)
+    } else {
+        PopupMenuItem::new(label).on_click(on_click)
+    }
+}
 
 /// 并排 / 统一切换。
 pub(crate) fn render_mode_toggle(
@@ -28,7 +41,7 @@ pub(crate) fn render_mode_toggle(
             Button::new("git-diff-mode-split")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Columns2)
+                .child(AppIconElement::new(UiIcon::EDITOR_PREVIEW).small())
                 .accessibility_label("Side-by-side diff")
                 .when(side_by_side, |btn| btn.primary())
                 .on_click({
@@ -42,7 +55,7 @@ pub(crate) fn render_mode_toggle(
             Button::new("git-diff-mode-unified")
                 .ghost()
                 .xsmall()
-                .icon(IconName::List)
+                .child(AppIconElement::new(UiIcon::EDITOR_ONLY).small())
                 .accessibility_label("Unified diff")
                 .when(!side_by_side, |btn| btn.primary())
                 .on_click({
@@ -75,7 +88,7 @@ pub(crate) fn render_ignore_menu(
     Button::new("git-diff-ignore")
         .ghost()
         .xsmall()
-        .icon(IconName::EyeOff)
+        .icon(UiIcon::HIDE)
         .accessibility_label(rust_i18n::t!("git.diff.ignore_title").to_string())
         .tooltip(rust_i18n::t!("git.diff.ignore_title").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
@@ -88,13 +101,9 @@ pub(crate) fn render_ignore_menu(
             ] {
                 let item_app = app.clone();
                 let checked = current == level;
-                menu = menu.item(menu_item(
+                menu = menu.item(choice_item(
                     rust_i18n::t!(key).to_string(),
-                    if checked {
-                        IconName::Check
-                    } else {
-                        IconName::Circle
-                    },
+                    checked,
                     move |_, _, cx| {
                         set_options(
                             &item_app,
@@ -121,7 +130,7 @@ pub(crate) fn render_highlight_menu(
     Button::new("git-diff-highlight")
         .ghost()
         .xsmall()
-        .icon(IconName::Highlighter)
+        .icon(UiIcon::HIGHLIGHT)
         .accessibility_label(rust_i18n::t!("git.diff.highlight_title").to_string())
         .tooltip(rust_i18n::t!("git.diff.highlight_title").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
@@ -133,13 +142,9 @@ pub(crate) fn render_highlight_menu(
             ] {
                 let item_app = app.clone();
                 let checked = current == level;
-                menu = menu.item(menu_item(
+                menu = menu.item(choice_item(
                     rust_i18n::t!(key).to_string(),
-                    if checked {
-                        IconName::Check
-                    } else {
-                        IconName::Circle
-                    },
+                    checked,
                     move |_, _, cx| {
                         set_options(
                             &item_app,
@@ -166,7 +171,7 @@ pub(crate) fn render_appearance_menu(
     Button::new("git-diff-appearance")
         .ghost()
         .xsmall()
-        .icon(IconName::Palette)
+        .icon(UiIcon::EDITOR_PREVIEW)
         .accessibility_label(rust_i18n::t!("git.diff.settings").to_string())
         .tooltip(rust_i18n::t!("git.diff.settings").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
@@ -174,13 +179,9 @@ pub(crate) fn render_appearance_menu(
             let wrap_app = app.clone();
             let numbers_on = options.show_line_numbers;
             let wrap_on = options.wrap_lines;
-            menu.item(menu_item(
+            menu.item(choice_item(
                 rust_i18n::t!("git.diff.show_line_numbers").to_string(),
-                if numbers_on {
-                    IconName::Check
-                } else {
-                    IconName::Circle
-                },
+                numbers_on,
                 move |_, _, cx| {
                     set_options(
                         &numbers_app,
@@ -192,13 +193,9 @@ pub(crate) fn render_appearance_menu(
                     );
                 },
             ))
-            .item(menu_item(
+            .item(choice_item(
                 rust_i18n::t!("git.diff.wrap_lines").to_string(),
-                if wrap_on {
-                    IconName::Check
-                } else {
-                    IconName::Circle
-                },
+                wrap_on,
                 move |_, _, cx| {
                     set_options(
                         &wrap_app,
@@ -219,7 +216,7 @@ pub(crate) fn render_settings_menu() -> AnyElement {
     Button::new("git-diff-gear")
         .ghost()
         .xsmall()
-        .icon(IconName::Settings)
+        .icon(UiIcon::SETTINGS)
         .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _window, _cx| {

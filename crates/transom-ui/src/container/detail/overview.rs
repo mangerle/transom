@@ -2,6 +2,11 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 基础信息页签：结构化字段与原始 inspect 二选一。
 ///
@@ -117,7 +122,7 @@ pub(crate) fn render_container_overview(
     let raw_btn = Button::new("container-overview-raw-inspect")
         .xsmall()
         .ghost()
-        .icon(IconName::Braces)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
         .label(rust_i18n::t!("container.field.inspect").to_string())
         .on_click({
             let view = view.clone();
@@ -132,7 +137,7 @@ pub(crate) fn render_container_overview(
 
     cards = cards.child(overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),
-        IconName::Info,
+        AppIcon::Custom(CustomIcon::INFO),
         p,
         Some(raw_btn),
         runtime_fields,
@@ -143,7 +148,7 @@ pub(crate) fn render_container_overview(
     let port_chips = render_port_chips(view, &details.ports, browser_host, container_name, p);
     cards = cards.child(overview_card(
         rust_i18n::t!("container.field.ports").to_string(),
-        IconName::Network,
+        AppIcon::Custom(CustomIcon::PORT),
         p,
         None,
         port_chips,
@@ -153,7 +158,7 @@ pub(crate) fn render_container_overview(
     let mounts_el = render_mounts_card(view, &details.mounts, p);
     cards = cards.child(overview_card(
         rust_i18n::t!("container.field.mounts").to_string(),
-        IconName::HardDrive,
+        AppIcon::Custom(CustomIcon::MOUNT),
         p,
         None,
         mounts_el,
@@ -202,7 +207,7 @@ pub(crate) fn linked_containers(
             .gap_2()
             .items_center()
             .child(
-                Icon::new(IconName::Container)
+                AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
                     .xsmall()
                     .text_color(p.muted_foreground),
             )

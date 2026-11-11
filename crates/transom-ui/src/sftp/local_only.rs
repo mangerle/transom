@@ -14,7 +14,6 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, sftp_text_input};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
@@ -22,6 +21,8 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use transom_core::Connection;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     pub(crate) fn open_local_file_panel(
@@ -149,7 +150,7 @@ impl SftpPanelView {
                     .child(
                         crate::widgets::IconButton::new(
                             "local-dismiss-error",
-                            IconName::X,
+                            AppIcon::Ui(UiIcon::CLOSE),
                             rust_i18n::t!("sftp.dismiss_error").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Compact)

@@ -4,15 +4,17 @@ use super::process::{
 use crate::monitor::MonitorView;
 use crate::monitor::types::{ProcessSort, format_size, usage_color};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{ScrollBounce, h_flex, v_virtual_list};
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu};
 use gpui_kit::component::scroll::Scrollbar;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::ProcessInfo;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl MonitorView {
     /// 渲染可点击排序的表头列：当前排序列显示方向箭头，其余列悬停变亮。
@@ -36,13 +38,13 @@ impl MonitorView {
             p.muted_foreground
         };
         let arrow = if ascending {
-            IconName::ChevronUp
+            AppIcon::Ui(UiIcon::CHEVRON_UP)
         } else {
-            IconName::ChevronDown
+            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
         };
         let mut header = h_flex().gap_0p5().items_center().child(label.to_string());
         if active {
-            header = header.child(Icon::new(arrow).xsmall().text_color(color));
+            header = header.child(AppIconElement::new(arrow).xsmall().text_color(color));
         }
         div()
             .id(ElementId::Name(
@@ -179,7 +181,7 @@ impl MonitorView {
         let force_kill = app.clone();
         menu.item(crate::widgets::menu_item(
             rust_i18n::t!("monitor.process_section.trace").to_string(),
-            IconName::Terminal,
+            AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, _, cx| {
                 term.update(cx, |_this, cx| {
                     cx.emit(crate::monitor::MonitorPanelEvent::TraceProcess(pid));
@@ -188,7 +190,7 @@ impl MonitorView {
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("monitor.kill_term").to_string(),
-            IconName::CircleX,
+            AppIcon::Ui(UiIcon::CLOSE),
             move |_, _, cx| {
                 safe_kill.update(cx, |this, cx| {
                     if pid <= 1 {
@@ -203,7 +205,7 @@ impl MonitorView {
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("monitor.kill_kill").to_string(),
-            IconName::Ban,
+            AppIcon::Ui(UiIcon::ABORT),
             move |_, _, cx| {
                 force_kill.update(cx, |this, cx| {
                     if pid <= 1 {
@@ -218,7 +220,7 @@ impl MonitorView {
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("monitor.copy_command").to_string(),
-            IconName::Copy,
+            AppIcon::Ui(UiIcon::COPY),
             move |_, _, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
             },

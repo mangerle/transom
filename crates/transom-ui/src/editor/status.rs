@@ -17,7 +17,6 @@ use super::panel::{EditorPanelState, EditorPhase};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::format_size;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{EditorState, RopeExt};
@@ -27,6 +26,9 @@ use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::format_octal_permissions;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 状态栏高度：单行小字，与编辑器画布之间只留一条分隔线。
 const STATUS_BAR_HEIGHT: f32 = 26.0;
@@ -127,7 +129,7 @@ impl EditorPanels {
         let menu_editor = editor.clone();
         let trigger = crate::widgets::IconButton::new(
             "editor-panel-actions",
-            IconName::Ellipsis,
+            AppIcon::Ui(UiIcon::MORE_HORIZONTAL),
             rust_i18n::t!("editor.actions_more").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -139,7 +141,7 @@ impl EditorPanels {
                 let editor = menu_editor.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("editor.action_compare").to_string(),
-                    IconName::FileDiff,
+                    AppIcon::Ui(UiIcon::DIFF),
                     move |_, _, cx| {
                         panels.update(cx, |this, cx| this.show_editor_diff(&editor, cx));
                     },
@@ -150,7 +152,7 @@ impl EditorPanels {
                 let editor = menu_editor.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("editor.action_compare_local").to_string(),
-                    IconName::FileDiff,
+                    AppIcon::Ui(UiIcon::DIFF),
                     move |_, _, cx| {
                         panels.update(cx, |this, cx| {
                             let Some(source) = this.diff_source(&editor) else {
@@ -166,7 +168,7 @@ impl EditorPanels {
                 let editor = menu_editor.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("editor.action_revert").to_string(),
-                    IconName::RotateCcw,
+                    AppIcon::Ui(UiIcon::UNDO),
                     move |_, _, cx| {
                         panels.update(cx, |this, cx| this.ask_revert_editor_panel(&editor, cx));
                     },
@@ -189,7 +191,7 @@ impl EditorPanels {
         if item.writable {
             return crate::widgets::IconButton::new(
                 "editor-save-upload",
-                IconName::Check,
+                AppIcon::Ui(UiIcon::CHECK),
                 rust_i18n::t!("editor.save_upload_tooltip").to_string(),
             )
             .disabled(!item.dirty || busy)
@@ -203,7 +205,7 @@ impl EditorPanels {
         Button::new("editor-sudo-save")
             .warning()
             .xsmall()
-            .icon(IconName::Shield)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).small())
             .accessibility_label(rust_i18n::t!("editor.sudo_save").to_string())
             .tooltip(rust_i18n::t!("editor.sudo_save").to_string())
             .disabled(!item.dirty || busy)

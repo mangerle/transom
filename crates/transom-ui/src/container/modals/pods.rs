@@ -3,12 +3,14 @@
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::palette::Palette;
 use crate::widgets::{dialog_actions, dialog_body, dialog_cancel_button};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::ContainerPodAction;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染 Pod 列表弹窗：列表、加载/错误状态与启停按钮。
 ///
@@ -28,7 +30,7 @@ pub(crate) fn render_container_pods_dialog_body(
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(Icon::new(IconName::Loader).xsmall())
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).xsmall())
                 .child(
                     div()
                         .text_sm()
@@ -100,7 +102,7 @@ pub(crate) fn render_container_pods_dialog_body(
     let refresh = Button::new("container-pods-refresh")
         .ghost()
         .xsmall()
-        .icon(IconName::RefreshCw)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
         .label(rust_i18n::t!("common.refresh").to_string())
         .on_click({
             let view = view.clone();

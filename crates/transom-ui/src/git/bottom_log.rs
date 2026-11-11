@@ -7,12 +7,13 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{HeadState, TabId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 切换底部 Git 提交记录面板展开/收起。
@@ -98,7 +99,7 @@ impl AppShell {
                             .border_b_2()
                             .text_xs()
                             .child(
-                                Icon::new(IconName::GitCommitHorizontal)
+                                AppIconElement::new(UiIcon::VCS)
                                     .xsmall()
                                     .text_color(p.primary),
                             )
@@ -118,7 +119,7 @@ impl AppShell {
                         Button::new("git-bottom-log-collapse")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Minus)
+                            .icon(UiIcon::CHEVRON_DOWN)
                             .accessibility_label(rust_i18n::t!("git.view.collapse_log").to_string())
                             .tooltip(rust_i18n::t!("git.view.collapse_log").to_string())
                             .on_click({
@@ -134,7 +135,7 @@ impl AppShell {
                         Button::new("git-bottom-log-close")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::X)
+                            .icon(UiIcon::CLOSE)
                             .accessibility_label(rust_i18n::t!("common.close").to_string())
                             .tooltip(rust_i18n::t!("common.close").to_string())
                             .on_click(move |_, _, cx| {

@@ -6,10 +6,11 @@
 use super::ChangeGroup;
 use crate::app::AppShell;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
 use transom_core::{GitAction, GitProject};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 分组头右键菜单：整组暂存/取消暂存/删除与整组回滚。
 ///
@@ -34,14 +35,14 @@ pub(crate) fn render_group_menu(
     let discard_paths = paths.clone();
     menu.item(menu_item(
         rust_i18n::t!(action_label(action)).to_string(),
-        IconName::CirclePlus,
+        AppIcon::Ui(UiIcon::ADD),
         move |_, _, cx| {
             run_group_action(&stage_app, &stage_project, action, &stage_paths, cx);
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.menu.discard_all").to_string(),
-        IconName::Undo2,
+        AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
             run_group_action(
                 &discard_app,

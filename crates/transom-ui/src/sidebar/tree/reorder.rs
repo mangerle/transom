@@ -2,18 +2,17 @@
 
 use super::{SidebarDrag, SidebarTarget};
 use crate::app::AppShell;
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::DropSide;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 侧栏行快捷操作按钮配置属性。
 pub(crate) struct RowActionButtonProps<F> {
     pub(crate) element_id: String,
-    pub(crate) icon: IconName,
+    pub(crate) icon: AppIcon,
     pub(crate) tooltip: String,
     pub(crate) idle_color: Hsla,
     pub(crate) on_click: F,
@@ -81,7 +80,11 @@ impl Render for SidebarDragPreview {
             .shadow_md()
             .text_sm()
             .text_color(p.popover_foreground)
-            .child(Icon::new(self.icon).xsmall().text_color(p.muted_foreground))
+            .child(
+                AppIconElement::new(self.icon)
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
             .child(self.label.clone())
     }
 }

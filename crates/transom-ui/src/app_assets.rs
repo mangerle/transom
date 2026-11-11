@@ -1,110 +1,55 @@
-//! 应用自有 SVG 资产与图标名。
-//!
-//! 设计原理（Why）：`gpui-kit` 的完整图标目录不包含 Docker 品牌图标，而应用
-//! 又需要与通用容器图标区分。这里在默认资产源之上只追加一个受限路径，避免
-//! 复制整套依赖资产，也避免用普通形状冒充品牌标志。
+//! 应用资产源：默认图标库 + `transom-ui-icons` 独立图标包。
 
-use gpui_kit::assets::{AllAssets, IconName};
-use gpui_kit::component::IconNamed;
+use gpui_kit::assets::AllAssets;
 use gpui_kit::*;
-use std::borrow::Cow;
 
-/// 应用自有 Docker 品牌图标在资产源中的路径。
-pub(crate) const DOCKER_ICON_PATH: &str = "icons/docker.svg";
-/// 应用自有 Podman 品牌图标在资产源中的路径。
-pub(crate) const PODMAN_ICON_PATH: &str = "icons/podman.svg";
-
-/// 应用层图标：默认使用 `gpui-kit` 图标，Docker/Podman 相关入口使用品牌图标。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum AppIcon {
-    Named(IconName),
-    Docker,
-    Podman,
-}
-
-impl From<IconName> for AppIcon {
-    fn from(icon: IconName) -> Self {
-        Self::Named(icon)
-    }
-}
-
-impl IconNamed for AppIcon {
-    fn path(self) -> SharedString {
-        match self {
-            Self::Named(icon) => icon.path(),
-            Self::Docker => DOCKER_ICON_PATH.into(),
-            Self::Podman => PODMAN_ICON_PATH.into(),
-        }
-    }
-}
-
-/// 组合默认图标库与应用自有 SVG 的资产源。
+/// 组合默认图标库与独立 IntelliJ 图标包。
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct AppAssets;
 
 impl AssetSource for AppAssets {
-    fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
-        if path == DOCKER_ICON_PATH {
-            return Ok(Some(Cow::Borrowed(include_bytes!(
-                "../assets/icons/docker.svg"
-            ))));
-        }
-        if path == PODMAN_ICON_PATH {
-            return Ok(Some(Cow::Borrowed(include_bytes!(
-                "../assets/icons/podman.svg"
-            ))));
+    fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        if let Some(data) = transom_ui_icons::asset_data(path) {
+            return Ok(Some(data));
         }
         AllAssets.load(path)
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let mut paths = AllAssets.list(path)?;
-        if DOCKER_ICON_PATH.starts_with(path) {
-            paths.push(DOCKER_ICON_PATH.into());
-        }
-        if PODMAN_ICON_PATH.starts_with(path) {
-            paths.push(PODMAN_ICON_PATH.into());
-        }
+        paths.extend(transom_ui_icons::asset_paths());
         Ok(paths)
     }
 }
 
+/// 安装主题感知的 IntelliJ 图标解析器。
+pub(crate) fn install_icon_resolver(cx: &mut App) {
+    transom_ui_icons::install_icon_resolver(cx);
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AppAssets, AssetSource, DOCKER_ICON_PATH, PODMAN_ICON_PATH};
+    use super::{AppAssets, AssetSource};
 
     #[test]
-    fn app_assets_serves_docker_icon_and_delegates_builtin_icons() {
+    fn app_assets_include_every_icon_category() {
         let assets = AppAssets;
-        let docker = assets
-            .load(DOCKER_ICON_PATH)
-            .expect("读取 Docker 图标")
-            .expect("图标存在");
-        assert!(std::str::from_utf8(&docker).is_ok_and(|svg| svg.contains("viewBox")));
-        let podman = assets
-            .load(PODMAN_ICON_PATH)
-            .expect("读取 Podman 图标")
-            .expect("图标存在");
-        assert!(std::str::from_utf8(&podman).is_ok_and(|svg| svg.contains("viewBox")));
+        for path in [
+            "icons/custom/docker.svg",
+            "icons/file-types/rust.svg",
+            "icons/domains/ssh.svg",
+            "icons/ui/settings.svg",
+        ] {
+            assert!(
+                assets.load(path).expect("读取图标资产失败").is_some(),
+                "缺少资产: {path}"
+            );
+        }
         assert!(
             assets
                 .load("icons/search.svg")
-                .expect("读取内置图标")
+                .expect("读取默认 Lucide 资产失败")
                 .is_some()
-        );
-        assert!(
-            assets
-                .list("icons/docker")
-                .expect("列出 Docker 图标")
-                .iter()
-                .any(|path| path.as_ref() == DOCKER_ICON_PATH)
-        );
-        assert!(
-            assets
-                .list("icons/podman")
-                .expect("列出 Podman 图标")
-                .iter()
-                .any(|path| path.as_ref() == PODMAN_ICON_PATH)
         );
     }
 }

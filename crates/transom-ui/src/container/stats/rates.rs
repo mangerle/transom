@@ -2,10 +2,11 @@
 
 use super::*;
 use gpui_kit::prelude::FluentBuilder;
+use transom_ui_icons::AppIconElement;
 
 pub(crate) fn stat_card(
     id: &'static str,
-    icon: IconName,
+    icon: AppIcon,
     title: String,
     summary: AnyElement,
     content: AnyElement,
@@ -33,7 +34,7 @@ pub(crate) fn stat_card(
                         .items_center()
                         .min_w_0()
                         .child(
-                            Icon::new(icon)
+                            AppIconElement::new(icon)
                                 .size(px(14.0))
                                 .text_color(p.muted_foreground),
                         )

@@ -7,17 +7,19 @@ use crate::container::types::{
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{
     ComposeProject, ContainerDetails, ContainerFileEntry, ContainerFileKind, ContainerImageDetails,
     ContainerNetworkDetails, ContainerStats, ContainerSummary, ContainerVolumeDetails, TabId,
 };
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
 
 mod changes;
 mod compose;
@@ -105,27 +107,27 @@ pub(super) fn render_container_detail(
     if selected.is_none() {
         let (icon, title_key, desc_key) = match section {
             ContainerSection::Containers => (
-                IconName::Container,
+                AppIcon::Domain(DomainIcon::CONTAINER),
                 "container.empty.containers_title",
                 "container.empty.containers_desc",
             ),
             ContainerSection::Images => (
-                IconName::Layers,
+                AppIcon::Custom(CustomIcon::IMAGE),
                 "container.empty.images_title",
                 "container.empty.images_desc",
             ),
             ContainerSection::Volumes => (
-                IconName::HardDrive,
+                AppIcon::Custom(CustomIcon::VOLUME),
                 "container.empty.volumes_title",
                 "container.empty.volumes_desc",
             ),
             ContainerSection::Networks => (
-                IconName::Network,
+                AppIcon::Custom(CustomIcon::NETWORK),
                 "container.empty.networks_title",
                 "container.empty.networks_desc",
             ),
             ContainerSection::Compose => (
-                IconName::Boxes,
+                AppIcon::Domain(DomainIcon::CONTAINER),
                 "container.empty.compose_title",
                 "container.empty.compose_desc",
             ),

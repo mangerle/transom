@@ -10,14 +10,18 @@ use super::ContainerRunFormView;
 use crate::container::types::{RunContainerFormState, RunPreset};
 use crate::format::format_size;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Selectable, Sizable};
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ContainerImageSummary;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl ContainerRunFormView {
     /// 渲染右侧预览与摘要区；镜像摘要由外壳按当前镜像输入匹配后注入。
@@ -60,7 +64,10 @@ impl ContainerRunFormView {
                                     .small()
                                     .ghost()
                                     .selected(current_preset == RunPreset::Daemon)
-                                    .icon(IconName::Server)
+                                    .child(
+                                        AppIconElement::new(AppIcon::Custom(CustomIcon::PROCESS))
+                                            .small(),
+                                    )
                                     .label(rust_i18n::t!("container.run.preset_daemon").to_string())
                                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                                         this.set_preset(RunPreset::Daemon, cx);
@@ -71,7 +78,10 @@ impl ContainerRunFormView {
                                     .small()
                                     .ghost()
                                     .selected(current_preset == RunPreset::Interactive)
-                                    .icon(IconName::Terminal)
+                                    .child(
+                                        AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL))
+                                            .small(),
+                                    )
                                     .label(
                                         rust_i18n::t!("container.run.preset_interactive")
                                             .to_string(),
@@ -96,7 +106,7 @@ impl ContainerRunFormView {
                             .gap_1p5()
                             .items_center()
                             .child(
-                                Icon::new(IconName::Layers)
+                                AppIconElement::new(AppIcon::Ui(UiIcon::DEPENDENCIES))
                                     .with_size(px(13.0))
                                     .text_color(p.primary),
                             )
@@ -186,11 +196,14 @@ impl ContainerRunFormView {
                                 Button::new("copy-run-cmd-btn")
                                     .ghost()
                                     .xsmall()
-                                    .icon(if copy_toast {
-                                        IconName::Check
-                                    } else {
-                                        IconName::Copy
-                                    })
+                                    .child(
+                                        AppIconElement::new(if copy_toast {
+                                            AppIcon::Ui(UiIcon::CHECK)
+                                        } else {
+                                            AppIcon::Ui(UiIcon::COPY)
+                                        })
+                                        .small(),
+                                    )
                                     .label(if copy_toast {
                                         rust_i18n::t!("container.run.copied").to_string()
                                     } else {

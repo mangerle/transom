@@ -22,14 +22,16 @@ use super::panel::{
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Editor, EditorState};
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl Render for EditorPanels {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -162,15 +164,7 @@ impl EditorPanels {
                     this.begin_editor_panel_drag(&drag_editor, event.position, cx);
                 })
             })
-            .child(
-                Icon::new(if item.dirty {
-                    IconName::FilePen
-                } else {
-                    IconName::FileText
-                })
-                .xsmall()
-                .text_color(p.muted_foreground),
-            )
+            .child(render_app_icon(AppIcon::for_file(&item.remote_path), 16.0))
             .child(
                 div()
                     .flex_none()
@@ -186,6 +180,13 @@ impl EditorPanels {
                         .text_xs()
                         .text_color(p.muted_foreground)
                         .child(directory.to_string()),
+                )
+            })
+            .when(item.dirty, |this| {
+                this.child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::SHOW))
+                        .with_size(px(6.0))
+                        .text_color(p.primary),
                 )
             })
             .child(div().flex_1())
@@ -209,9 +210,9 @@ impl EditorPanels {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let fold_icon = if item.collapsed {
-            IconName::ChevronUp
+            AppIcon::Ui(UiIcon::CHEVRON_UP)
         } else {
-            IconName::ChevronDown
+            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
         };
         let fold_label = if item.collapsed {
             rust_i18n::t!("editor.expand_panel").to_string()
@@ -219,9 +220,9 @@ impl EditorPanels {
             rust_i18n::t!("editor.collapse_panel").to_string()
         };
         let zoom_icon = if item.maximized {
-            IconName::Minimize2
+            AppIcon::Ui(UiIcon::RESTORE)
         } else {
-            IconName::Maximize2
+            AppIcon::Ui(UiIcon::MAXIMIZE)
         };
         let zoom_label = if item.maximized {
             rust_i18n::t!("editor.restore_panel").to_string()
@@ -268,7 +269,7 @@ impl EditorPanels {
             .child(
                 crate::widgets::IconButton::new(
                     "editor-panel-close",
-                    IconName::Close,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     rust_i18n::t!("editor.close_panel").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -315,12 +316,12 @@ impl EditorPanels {
                     .gap_2()
                     .text_sm()
                     .text_color(p.muted_foreground)
-                    .child(Icon::new(IconName::CircleAlert).xsmall())
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ERROR)).xsmall())
                     .child(rust_i18n::t!("editor.not_loaded").to_string())
                     .child(
                         Button::new("editor-retry-read")
                             .compact()
-                            .icon(IconName::RefreshCw)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                             .label(rust_i18n::t!("editor.retry_read").to_string())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.redrive_editor_read(&retry_editor, cx);

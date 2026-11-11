@@ -7,12 +7,15 @@ use super::ReplayModalState;
 use super::ReplayModalView;
 use super::types::RecordingEntry;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl ReplayModalView {
     /// 渲染回放脚本选择弹窗。
@@ -96,7 +99,9 @@ impl ReplayModalView {
                         Button::new("pick-external-play-btn")
                             .outline()
                             .small()
-                            .icon(IconName::Disc)
+                            .child(
+                                AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR)).small(),
+                            )
                             .label(rust_i18n::t!("recorder.open_player").to_string())
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.pick_external_player(cx);
@@ -106,7 +111,7 @@ impl ReplayModalView {
                         Button::new("pick-external-cast-btn")
                             .ghost()
                             .small()
-                            .icon(IconName::FolderOpen)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                             .label(rust_i18n::t!("recorder.pick_external").to_string())
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.pick_external_replay(cx);
@@ -135,7 +140,7 @@ impl ReplayModalView {
                         Button::new("start-replay-selected-btn")
                             .outline()
                             .disabled(!has_selection)
-                            .icon(IconName::Play)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                             .label(rust_i18n::t!("recorder.start_replay").to_string())
                             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.replay_in_terminal(cx);
@@ -145,7 +150,7 @@ impl ReplayModalView {
                         crate::widgets::dialog_confirm_button(
                             "open-in-player-btn",
                             rust_i18n::t!("recorder.open_player").to_string(),
-                            Some(IconName::Disc),
+                            Some(AppIcon::Domain(DomainIcon::MONITOR)),
                             crate::widgets::DialogConfirmKind::Primary,
                             cx.listener(|this, _: &ClickEvent, _, cx| this.confirm(cx)),
                         )
@@ -212,7 +217,7 @@ fn replay_row(
                 .child(
                     crate::widgets::IconButton::new(
                         ElementId::Name(format!("play-entry-btn-{idx}").into()),
-                        IconName::Disc,
+                        AppIcon::Domain(DomainIcon::MONITOR),
                         rust_i18n::t!("recorder.open_player").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)

@@ -8,12 +8,13 @@ use super::status_item_icon;
 use crate::app::AppShell;
 use crate::app::app_settings_mut;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::StatusItemId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 const PREVIEW_SIZE: f32 = 28.0;
 
@@ -22,11 +23,11 @@ pub(super) struct StatusDrag(StatusItemId);
 
 /// 拖拽预览只显示条目图标，与活动栏保持一致的轻量反馈。
 struct StatusDragPreview {
-    icon: IconName,
+    icon: AppIcon,
 }
 
 impl StatusDragPreview {
-    fn new(icon: IconName) -> Self {
+    fn new(icon: AppIcon) -> Self {
         Self { icon }
     }
 }
@@ -45,7 +46,7 @@ impl Render for StatusDragPreview {
             .border_color(p.border)
             .shadow_md()
             .child(
-                Icon::new(self.icon)
+                AppIconElement::new(self.icon)
                     .small()
                     .text_color(p.popover_foreground),
             )
@@ -57,7 +58,7 @@ pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -
     let app_restore = app.clone();
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("activity.restore_default").to_string(),
-        IconName::RotateCcw,
+        AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
             app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
         },
@@ -168,7 +169,7 @@ fn metrics_item_context_menu(
     let restore_view = view.clone();
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("status.hide_item").to_string(),
-        IconName::EyeOff,
+        AppIcon::Ui(UiIcon::HIDE),
         move |_, _, cx| {
             hide_view.update(cx, |view, cx| {
                 if app_settings_mut(cx).status_bar.set_visible(id, false) {
@@ -182,7 +183,7 @@ fn metrics_item_context_menu(
     .item(PopupMenuItem::separator())
     .item(crate::widgets::menu_item(
         rust_i18n::t!("activity.restore_default").to_string(),
-        IconName::RotateCcw,
+        AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
             restore_view.update(cx, |view, cx| {
                 if app_settings_mut(cx).status_bar.restore_defaults() {

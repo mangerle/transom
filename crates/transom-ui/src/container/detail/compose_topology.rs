@@ -12,6 +12,10 @@ use crate::container::ContainerWorkspace;
 use gpui_kit::prelude::FluentBuilder;
 use std::collections::HashMap;
 use transom_core::{ContainerLifecycleAction, ContainerRequestId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 /// 获取层级语义标题。
 fn tier_label(tier_idx: usize, total_tiers: usize) -> String {
@@ -155,7 +159,7 @@ fn render_tier_connector_line(p: &Palette) -> AnyElement {
                 .border_color(p.border.opacity(0.2))
                 .child(div().w(px(24.0)).h(px(1.0)).bg(p.stroke.strong))
                 .child(
-                    Icon::new(IconName::ArrowDown)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::DOWN))
                         .with_size(px(11.0))
                         .text_color(p.muted_foreground),
                 )
@@ -323,11 +327,14 @@ fn render_topology_card(
             Button::new(ElementId::Name(format!("toggle-{container_id}").into()))
                 .ghost()
                 .xsmall()
-                .icon(if is_running {
-                    IconName::Square
-                } else {
-                    IconName::Play
-                })
+                .child(
+                    AppIconElement::new(if is_running {
+                        AppIcon::Ui(UiIcon::STOP)
+                    } else {
+                        AppIcon::Ui(UiIcon::RUN)
+                    })
+                    .small(),
+                )
                 .accessibility_label(if is_running {
                     rust_i18n::t!("container.action.stop").to_string()
                 } else {
@@ -362,7 +369,7 @@ fn render_topology_card(
             Button::new(ElementId::Name(format!("inspect-{container_id}").into()))
                 .ghost()
                 .xsmall()
-                .icon(IconName::Info)
+                .child(AppIconElement::new(AppIcon::Custom(CustomIcon::INFO)).small())
                 .accessibility_label(rust_i18n::t!("container.detail.overview").to_string())
                 .tooltip(rust_i18n::t!("container.detail.overview").to_string())
                 .on_click(move |_, _, cx| {

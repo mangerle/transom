@@ -8,12 +8,14 @@ use crate::palette::Palette;
 use crate::widgets::{
     DialogConfirmKind, dialog_actions, dialog_body, dialog_cancel_button, dialog_confirm_button,
 };
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, h_flex, v_flex};
-use gpui_kit::component::Icon;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染容器端口建立 SSH 端口转发模态弹窗主体。
 ///
@@ -124,7 +126,7 @@ pub(crate) fn render_container_forward_dialog_body(
                 .border_color(p.warning)
                 .items_center()
                 .child(
-                    Icon::new(IconName::TriangleAlert)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
                         .size(px(14.0))
                         .text_color(p.warning),
                 )
@@ -171,7 +173,7 @@ pub(crate) fn render_container_forward_dialog_body(
                         }
                     })
                     .child(
-                        Icon::new(IconName::Terminal)
+                        AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL))
                             .size(px(13.0))
                             .text_color(text_color),
                     )
@@ -221,7 +223,7 @@ pub(crate) fn render_container_forward_dialog_body(
                 .border_color(p.warning)
                 .items_center()
                 .child(
-                    Icon::new(IconName::TriangleAlert)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
                         .size(px(14.0))
                         .text_color(p.warning),
                 )
@@ -252,7 +254,7 @@ pub(crate) fn render_container_forward_dialog_body(
         dialog_confirm_button(
             "confirm-container-forward",
             rust_i18n::t!("container.forward.submit").to_string(),
-            Some(IconName::ArrowLeftRight),
+            Some(AppIcon::Domain(DomainIcon::FORWARD)),
             DialogConfirmKind::Primary,
             {
                 let view = view.clone();
@@ -268,7 +270,7 @@ pub(crate) fn render_container_forward_dialog_body(
         Button::new("confirm-container-forward-disabled")
             .primary()
             .disabled(true)
-            .icon(IconName::ArrowLeftRight)
+            .child(AppIconElement::new(AppIcon::Domain(DomainIcon::FORWARD)).small())
             .label(rust_i18n::t!("container.forward.submit").to_string())
             .into_any_element()
     };

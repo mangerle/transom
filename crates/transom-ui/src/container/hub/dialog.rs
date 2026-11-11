@@ -15,14 +15,16 @@ use crate::app::app_settings;
 use crate::container::list::dropdown_trigger;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::PopupMenuItem;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::ContainerRegistry;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染镜像仓库弹窗整体界面（根据状态呈现全景详情页或搜索列表）。
 pub(crate) fn render_container_hub_dialog_body(
@@ -133,7 +135,7 @@ pub(crate) fn render_container_hub_dialog_body(
     let reg_menu = dropdown_trigger(
         "container-hub-registry-select",
         current_registry_name.clone(),
-        IconName::ChevronDown,
+        AppIcon::Ui(UiIcon::CHEVRON_DOWN),
         None,
         move |menu, _, _| {
             let mut menu = menu;
@@ -167,11 +169,14 @@ pub(crate) fn render_container_hub_dialog_body(
             Button::new("container-hub-search-btn")
                 .primary()
                 .small()
-                .icon(if searching {
-                    IconName::Loader
-                } else {
-                    IconName::Search
-                })
+                .child(
+                    AppIconElement::new(if searching {
+                        AppIcon::Ui(UiIcon::REFRESH)
+                    } else {
+                        AppIcon::Ui(UiIcon::SEARCH)
+                    })
+                    .small(),
+                )
                 .label(if searching {
                     rust_i18n::t!("container.hub.searching").to_string()
                 } else {
@@ -211,7 +216,7 @@ pub(crate) fn render_container_hub_dialog_body(
                     .items_center()
                     .justify_center()
                     .child(
-                        Icon::new(IconName::Loader)
+                        AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
                             .with_size(px(22.0))
                             .text_color(p.primary),
                     ),
@@ -246,7 +251,7 @@ pub(crate) fn render_container_hub_dialog_body(
                     .items_center()
                     .justify_center()
                     .child(
-                        Icon::new(IconName::CircleAlert)
+                        AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                             .with_size(px(20.0))
                             .text_color(p.danger),
                     ),
@@ -256,7 +261,7 @@ pub(crate) fn render_container_hub_dialog_body(
                 Button::new("container-hub-retry-btn")
                     .secondary()
                     .small()
-                    .icon(IconName::Search)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH)).small())
                     .label(rust_i18n::t!("container.hub.search").to_string())
                     .on_click(move |_, _, cx| {
                         view_retry.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
@@ -282,7 +287,7 @@ pub(crate) fn render_container_hub_dialog_body(
                         .items_center()
                         .justify_center()
                         .child(
-                            Icon::new(IconName::Search)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH))
                                 .with_size(px(22.0))
                                 .text_color(p.muted_foreground),
                         ),

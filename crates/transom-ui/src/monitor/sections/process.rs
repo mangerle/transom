@@ -3,11 +3,14 @@
 use crate::monitor::components::CollapsibleCard;
 use crate::monitor::types::ProcessSort;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Input;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
 
 /// 进程列表可视区高度。
 ///
@@ -87,7 +90,7 @@ impl MonitorView {
 
         CollapsibleCard::new(
             "card-processes",
-            IconName::ListTree,
+            AppIcon::Custom(CustomIcon::PROCESS),
             rust_i18n::t!("monitor.processes").to_string(),
         )
         .collapsed(collapsed)
@@ -258,7 +261,11 @@ impl MonitorView {
                     h_flex()
                         .gap_1()
                         .items_start()
-                        .child(Icon::new(IconName::Terminal).xsmall().text_color(p.primary))
+                        .child(
+                            AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL))
+                                .xsmall()
+                                .text_color(p.primary),
+                        )
                         .child(div().flex_1().child(command.to_string())),
                 )
                 .into_any_element(),

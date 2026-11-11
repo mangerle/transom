@@ -10,13 +10,14 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InputState;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::GitProject;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 新建工作树的表单状态。
 pub(crate) struct GitWorktreeModal {
@@ -121,7 +122,7 @@ impl AppShell {
                     .gap_2()
                     .items_center()
                     .child(
-                        Icon::new(IconName::FolderGit)
+                        AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
                             .xsmall()
                             .text_color(p.primary),
                     )
@@ -225,7 +226,7 @@ fn check(checked: bool, p: &Palette) -> AnyElement {
         .bg(if checked { p.primary } else { p.background })
         .when(checked, |el| {
             el.child(
-                Icon::new(IconName::Check)
+                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
                     .xsmall()
                     .text_color(p.sidebar_accent_foreground),
             )

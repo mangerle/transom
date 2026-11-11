@@ -3,10 +3,11 @@
 use crate::monitor::components::{CollapsibleCard, render_network_dual_sparkline};
 use crate::monitor::types::format_size;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use transom_core::SystemStats;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 
 use crate::monitor::MonitorView;
 
@@ -69,7 +70,7 @@ impl MonitorView {
 
         CollapsibleCard::new(
             "card-network",
-            IconName::Network,
+            AppIcon::Custom(CustomIcon::NETWORK),
             rust_i18n::t!("monitor.network").to_string(),
         )
         .collapsed(collapsed)

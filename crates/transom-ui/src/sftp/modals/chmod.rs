@@ -1,6 +1,9 @@
 //! SFTP 弹窗视图。
 
 use super::common::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     pub(crate) fn render_sftp_chmod_body(
@@ -42,7 +45,7 @@ impl AppShell {
             .child(
                 Button::new("save-sftp-chmod")
                     .primary()
-                    .icon(IconName::Check)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                     .label(rust_i18n::t!("sftp.chmod.apply").to_string())
                     .on_click(crate::dialog_host::on_event(
                         app,

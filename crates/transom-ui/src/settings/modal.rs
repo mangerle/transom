@@ -6,13 +6,17 @@ use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, size};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::setting::{SelectIndex, SettingGroup, SettingItem, SettingPage, Settings};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 组装配 helper：把设置实体的组渲染函数包装成带标题的 `SettingGroup`。
 ///
@@ -76,7 +80,7 @@ struct GroupSpec {
 
 struct PageSpec {
     title_key: &'static str,
-    icon: IconName,
+    icon: AppIcon,
     groups: &'static [GroupSpec],
 }
 
@@ -98,7 +102,7 @@ const fn window(search: GroupSearch, render: WindowGroup) -> GroupSpec {
 static SETTINGS_PAGES: &[PageSpec] = &[
     PageSpec {
         title_key: "settings.tab_appearance",
-        icon: IconName::Palette,
+        icon: AppIcon::Ui(UiIcon::LAYOUT),
         groups: &[
             plain(GroupSearch::UiTheme, SettingsView::render_settings_ui_theme),
             plain(
@@ -115,7 +119,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_terminal",
-        icon: IconName::Terminal,
+        icon: AppIcon::Domain(DomainIcon::TERMINAL),
         groups: &[
             plain(
                 GroupSearch::TerminalFont,
@@ -147,7 +151,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_files",
-        icon: IconName::Folder,
+        icon: AppIcon::Ui(UiIcon::EDITOR_ONLY),
         groups: &[
             plain(GroupSearch::Editor, SettingsView::render_settings_editor),
             plain(
@@ -169,7 +173,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_mouse_clipboard",
-        icon: IconName::ArrowLeftRight,
+        icon: AppIcon::Ui(UiIcon::PASTE),
         groups: &[
             plain(GroupSearch::Mouse, SettingsView::render_settings_mouse),
             plain(
@@ -184,7 +188,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_shortcuts",
-        icon: IconName::Search,
+        icon: AppIcon::Ui(UiIcon::KEYBOARD),
         groups: &[plain(
             GroupSearch::Shortcuts,
             SettingsView::render_settings_shortcuts,
@@ -192,7 +196,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_window_layout",
-        icon: IconName::PanelLeft,
+        icon: AppIcon::Ui(UiIcon::LAYOUT),
         groups: &[
             plain(GroupSearch::Tabs, SettingsView::render_settings_tabs),
             plain(GroupSearch::Window, SettingsView::render_settings_window),
@@ -209,12 +213,12 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_general",
-        icon: IconName::Globe,
+        icon: AppIcon::Ui(UiIcon::SETTINGS),
         groups: GENERAL_PAGE_GROUPS,
     },
     PageSpec {
         title_key: "settings.tab_monitor",
-        icon: IconName::Gauge,
+        icon: AppIcon::Custom(CustomIcon::CPU),
         groups: &[
             plain(
                 GroupSearch::MonitorSections,
@@ -228,7 +232,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_git",
-        icon: IconName::GitBranch,
+        icon: AppIcon::Ui(UiIcon::VCS),
         groups: &[
             plain(
                 GroupSearch::GitExecutable,
@@ -243,7 +247,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_containers",
-        icon: IconName::Container,
+        icon: AppIcon::Ui(UiIcon::DEPENDENCIES),
         groups: &[plain(
             GroupSearch::ContainerRegistries,
             SettingsView::render_settings_container_registries,
@@ -251,7 +255,7 @@ static SETTINGS_PAGES: &[PageSpec] = &[
     },
     PageSpec {
         title_key: "settings.tab_about",
-        icon: IconName::Info,
+        icon: AppIcon::Ui(UiIcon::HELP),
         groups: &[
             window(GroupSearch::About, SettingsView::render_settings_about),
             plain(GroupSearch::Update, SettingsView::render_settings_update),
@@ -334,7 +338,7 @@ impl SettingsView {
                             .gap_2()
                             .items_center()
                             .child(
-                                Icon::new(IconName::Settings)
+                                AppIconElement::new(AppIcon::Ui(UiIcon::SETTINGS))
                                     .size_4()
                                     .text_color(p.sidebar_accent_foreground),
                             )

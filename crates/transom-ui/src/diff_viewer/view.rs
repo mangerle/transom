@@ -3,7 +3,6 @@
 use super::{DiffPhase, DiffViewerState};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::diff::{
@@ -13,6 +12,9 @@ use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::MergeDirection;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 渲染分栏对比对话框；没有面板时返回空元素。
@@ -160,7 +162,7 @@ fn render_ready_diff(
             Button::new(marker.id().clone())
                 .ghost()
                 .xsmall()
-                .icon(IconName::ChevronRight)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_RIGHT)).small())
                 .tooltip(label.clone())
                 .accessibility_label(label)
                 .on_click(move |_, _, cx| {
@@ -209,7 +211,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                 Button::new("diff-prev-hunk")
                     .ghost()
                     .compact()
-                    .icon(IconName::ArrowUp)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::UP)).small())
                     .accessibility_label(rust_i18n::t!("diff.prev_hunk").to_string())
                     .tooltip(rust_i18n::t!("diff.prev_hunk").to_string())
                     .on_click(crate::dialog_host::on_event(
@@ -223,7 +225,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                 Button::new("diff-next-hunk")
                     .ghost()
                     .compact()
-                    .icon(IconName::ArrowDown)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
                     .accessibility_label(rust_i18n::t!("diff.next_hunk").to_string())
                     .tooltip(rust_i18n::t!("diff.next_hunk").to_string())
                     .on_click(crate::dialog_host::on_event(
@@ -239,7 +241,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
             Button::new("diff-apply-local")
                 .ghost()
                 .compact()
-                .icon(IconName::Download)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                 .label(rust_i18n::t!("diff.apply_local").to_string())
                 .disabled(!ready || count == 0)
                 .tooltip(rust_i18n::t!("diff.apply_local_tooltip").to_string())
@@ -254,7 +256,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
             Button::new("diff-apply-remote")
                 .ghost()
                 .compact()
-                .icon(IconName::Upload)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                 .label(rust_i18n::t!("diff.apply_remote").to_string())
                 .disabled(!ready || count == 0 || merge_blocked)
                 .tooltip(if merge_blocked {
@@ -322,7 +324,7 @@ fn render_footer(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) 
                 Button::new("diff-merge-confirm")
                     .danger()
                     .compact()
-                    .icon(IconName::Check)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                     .label(rust_i18n::t!("diff.confirm_action").to_string())
                     .on_click(crate::dialog_host::on_event(
                         app,

@@ -19,12 +19,14 @@
 use super::*;
 use crate::container::list::create_button_label;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 拉取/新建弹窗交给外壳处理的提交意图。
 ///
@@ -312,11 +314,14 @@ impl ContainerCreateDialogView {
             .child(
                 Button::new("container-create-submit")
                     .primary()
-                    .icon(if dialog.section == ContainerSection::Images {
-                        IconName::Plus
-                    } else {
-                        IconName::Check
-                    })
+                    .child(
+                        AppIconElement::new(if dialog.section == ContainerSection::Images {
+                            AppIcon::Ui(UiIcon::ADD)
+                        } else {
+                            AppIcon::Ui(UiIcon::CHECK)
+                        })
+                        .small(),
+                    )
                     .label(title.to_string())
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
             )

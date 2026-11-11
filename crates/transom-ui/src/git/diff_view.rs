@@ -21,12 +21,12 @@ use rows::{build_rows, render_row};
 use crate::app::AppShell;
 use crate::git::GitWorkspaceState as State;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::Scrollbar;
+use transom_ui_icons::UiIcon;
 
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -123,7 +123,7 @@ pub(crate) fn render(
             Button::new("git-diff-prev-diff")
                 .ghost()
                 .xsmall()
-                .icon(IconName::ChevronUp)
+                .icon(UiIcon::CHEVRON_UP)
                 .accessibility_label(rust_i18n::t!("git.diff.prev_difference").to_string())
                 .tooltip(rust_i18n::t!("git.diff.prev_difference").to_string()),
         )
@@ -131,7 +131,7 @@ pub(crate) fn render(
             Button::new("git-diff-next-diff")
                 .ghost()
                 .xsmall()
-                .icon(IconName::ChevronDown)
+                .icon(UiIcon::CHEVRON_DOWN)
                 .accessibility_label(rust_i18n::t!("git.diff.next_difference").to_string())
                 .tooltip(rust_i18n::t!("git.diff.next_difference").to_string()),
         )
@@ -140,7 +140,7 @@ pub(crate) fn render(
             Button::new("git-diff-prev-file")
                 .ghost()
                 .xsmall()
-                .icon(IconName::ChevronLeft)
+                .icon(UiIcon::ARROW_LEFT)
                 .accessibility_label(rust_i18n::t!("git.diff.prev_file").to_string())
                 .tooltip(rust_i18n::t!("git.diff.prev_file").to_string())
                 .disabled(current_tab_idx == 0)
@@ -162,7 +162,7 @@ pub(crate) fn render(
             Button::new("git-diff-next-file")
                 .ghost()
                 .xsmall()
-                .icon(IconName::ChevronRight)
+                .icon(UiIcon::ARROW_RIGHT)
                 .accessibility_label(rust_i18n::t!("git.diff.next_file").to_string())
                 .tooltip(rust_i18n::t!("git.diff.next_file").to_string())
                 .disabled(total_tabs <= 1 || current_tab_idx + 1 >= total_tabs)

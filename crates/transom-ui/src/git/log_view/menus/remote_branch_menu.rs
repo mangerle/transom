@@ -7,10 +7,11 @@
 
 use crate::app::AppShell;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{GitProject, LogScope, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 远程分支菜单目标数据。
 pub(crate) struct RemoteBranchMenuTarget {
@@ -69,7 +70,7 @@ pub(crate) fn render_remote_branch_menu(
         // 1. 签出
         .item(menu_item(
             rust_i18n::t!("git.menu.checkout").to_string(),
-            IconName::ArrowRight,
+            AppIcon::Ui(UiIcon::RIGHT),
             move |_, _, cx| {
                 let name = name_checkout.clone();
                 let project = project_checkout.clone();
@@ -85,7 +86,7 @@ pub(crate) fn render_remote_branch_menu(
                 branch = remote_branch.as_str()
             )
             .to_string(),
-            IconName::GitBranchPlus,
+            AppIcon::Ui(UiIcon::VCS),
             move |_, window, cx| {
                 let start = name_new_branch.clone();
                 let project = project_new_branch.clone();
@@ -97,7 +98,7 @@ pub(crate) fn render_remote_branch_menu(
         // 3. 与 '{current}' 比较
         .item(menu_item(
             rust_i18n::t!("git.menu.compare_with_branch", current = cur.as_str()).to_string(),
-            IconName::GitCompare,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let target = name_compare.clone();
                 app_compare.update(cx, |this, cx| {
@@ -108,7 +109,7 @@ pub(crate) fn render_remote_branch_menu(
         // 4. 显示与工作树的差异
         .item(menu_item(
             rust_i18n::t!("git.menu.show_diff_with_worktree").to_string(),
-            IconName::GitCompare,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let target = name_diff.clone();
                 app_diff.update(cx, |this, cx| {
@@ -125,7 +126,7 @@ pub(crate) fn render_remote_branch_menu(
                 branch = remote_branch.as_str()
             )
             .to_string(),
-            IconName::GitCompareArrows,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let upstream = name_rebase.clone();
                 let project = project_rebase.clone();
@@ -146,7 +147,7 @@ pub(crate) fn render_remote_branch_menu(
                 current = cur.as_str()
             )
             .to_string(),
-            IconName::GitMerge,
+            AppIcon::Ui(UiIcon::MERGE),
             move |_, _, cx| {
                 let reference = name_merge.clone();
                 let project = project_merge.clone();
@@ -166,7 +167,7 @@ pub(crate) fn render_remote_branch_menu(
                 branch = remote_branch.as_str()
             )
             .to_string(),
-            IconName::FolderGit,
+            AppIcon::Ui(UiIcon::FOLDER),
             move |_, window, cx| {
                 let branch = name_worktree.clone();
                 let project = project_worktree.clone();
@@ -178,7 +179,7 @@ pub(crate) fn render_remote_branch_menu(
         // 8. 使用“变基”拉入 '{current}'
         .item(menu_item(
             rust_i18n::t!("git.menu.pull_with_rebase", current = cur.as_str()).to_string(),
-            IconName::RotateCw,
+            AppIcon::Ui(UiIcon::REFRESH),
             move |_, _, cx| {
                 let upstream = name_pull_rebase.clone();
                 let project = project_pull_rebase.clone();
@@ -194,7 +195,7 @@ pub(crate) fn render_remote_branch_menu(
         // 9. 使用“合并”拉入 '{current}'
         .item(menu_item(
             rust_i18n::t!("git.menu.pull_with_merge", current = cur.as_str()).to_string(),
-            IconName::RotateCw,
+            AppIcon::Ui(UiIcon::REFRESH),
             move |_, _, cx| {
                 let reference = name_pull_merge.clone();
                 let project = project_pull_merge.clone();
@@ -211,7 +212,7 @@ pub(crate) fn render_remote_branch_menu(
         // 10. 删除
         .item(menu_item(
             rust_i18n::t!("git.menu.delete_ref").to_string(),
-            IconName::Trash,
+            AppIcon::Ui(UiIcon::DELETE),
             move |_, _, cx| {
                 let name = name_delete.clone();
                 let project = project_delete.clone();

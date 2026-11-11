@@ -15,12 +15,13 @@
 use crate::app::AppShell;
 use crate::palette::{Palette, sftp_text_input};
 use crate::sftp::EditorGotoLineModalState;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::{EditorState, Input, InputEvent, Position, RopeExt};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 把编辑器光标移到 1 基的行列位置，展开被折叠的行并收敛越界值。
 ///
@@ -136,7 +137,7 @@ impl AppShell {
                         .gap_1()
                         .text_xs()
                         .text_color(p.danger)
-                        .child(Icon::new(IconName::CircleAlert).xsmall())
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ERROR)).xsmall())
                         .child(err),
                 )
             });
@@ -153,7 +154,7 @@ impl AppShell {
             .child(crate::widgets::dialog_confirm_button(
                 "editor-goto-confirm",
                 rust_i18n::t!("editor.goto_action").to_string(),
-                Some(IconName::Check),
+                Some(AppIcon::Ui(UiIcon::CHECK)),
                 crate::widgets::DialogConfirmKind::Primary,
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
                     this.commit_editor_goto_line(window, cx);

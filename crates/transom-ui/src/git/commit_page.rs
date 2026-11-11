@@ -20,14 +20,15 @@ use crate::app::AppShell;
 use crate::divider::{h_resizable, v_resizable};
 use crate::git::GitCommitTab;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 提交页左栏初始宽度：改动树 + 消息够用，实际宽度由可拖拽分隔条控制（范围见 `size_range`）。
 const COMMIT_PANEL_WIDTH: f32 = 440.0;
@@ -216,7 +217,7 @@ impl AppShell {
                         Button::new("git-commit-refresh")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::RotateCw)
+                            .icon(UiIcon::REFRESH)
                             .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                             .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -227,7 +228,7 @@ impl AppShell {
                         Button::new("git-commit-rollback")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Undo2)
+                            .icon(UiIcon::UNDO)
                             .accessibility_label(rust_i18n::t!("git.menu.discard").to_string())
                             .tooltip(rust_i18n::t!("git.menu.discard").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -238,7 +239,7 @@ impl AppShell {
                         Button::new("git-commit-show-diff")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::GitCompare)
+                            .icon(UiIcon::DIFF)
                             .accessibility_label(rust_i18n::t!("git.menu.show_diff").to_string())
                             .tooltip(rust_i18n::t!("git.menu.show_diff").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -249,7 +250,7 @@ impl AppShell {
                         Button::new("git-commit-shelve")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::PackagePlus)
+                            .icon(UiIcon::PATCH)
                             .accessibility_label(rust_i18n::t!("git.shelf.create").to_string())
                             .tooltip(rust_i18n::t!("git.shelf.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -260,7 +261,7 @@ impl AppShell {
                         Button::new("git-commit-stash")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Archive)
+                            .icon(UiIcon::SHELVE)
                             .accessibility_label(rust_i18n::t!("git.stash.create").to_string())
                             .tooltip(rust_i18n::t!("git.stash.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -271,7 +272,7 @@ impl AppShell {
                         Button::new("git-commit-group-tree")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::FolderTree)
+                            .icon(UiIcon::TREE)
                             .when(by_directory, |btn| btn.bg(p.muted.opacity(0.8)))
                             .accessibility_label(
                                 rust_i18n::t!("git.group.by_directory").to_string(),
@@ -285,7 +286,7 @@ impl AppShell {
                         Button::new("git-commit-expand-all")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::ChevronDown)
+                            .icon(UiIcon::EXPAND_ALL)
                             .accessibility_label(rust_i18n::t!("git.group.expand_all").to_string())
                             .tooltip(rust_i18n::t!("git.group.expand_all").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -296,7 +297,7 @@ impl AppShell {
                         Button::new("git-commit-collapse-all")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::ChevronRight)
+                            .icon(UiIcon::COLLAPSE_ALL)
                             .accessibility_label(
                                 rust_i18n::t!("git.group.collapse_all").to_string(),
                             )
@@ -358,7 +359,11 @@ impl AppShell {
                                 .gap_2()
                                 .items_center()
                                 .bg(p.surface.active)
-                                .child(Icon::new(IconName::Package).xsmall().text_color(p.primary))
+                                .child(
+                                    AppIconElement::new(UiIcon::PATCH)
+                                        .xsmall()
+                                        .text_color(p.primary),
+                                )
                                 .child(
                                     div()
                                         .flex_1()

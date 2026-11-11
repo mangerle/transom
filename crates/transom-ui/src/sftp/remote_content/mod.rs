@@ -11,13 +11,14 @@ use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteFile, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 远程内容区的渲染输入：条目、加载态、目标列与滚动句柄。
 pub(crate) struct RemoteContentProps {
@@ -224,7 +225,7 @@ impl SftpPanelView {
 fn remote_placeholder(loading: bool, p: &Palette) -> AnyElement {
     if !loading {
         return crate::widgets::empty_state(
-            IconName::FolderOpen,
+            AppIcon::Ui(UiIcon::LIST_FILES),
             rust_i18n::t!("sftp.empty").to_string(),
             rust_i18n::t!("sftp.empty_hint").to_string(),
             p,

@@ -1,6 +1,9 @@
 //! 引擎分组行：折叠、计数与拖拽落点。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染一条引擎分组行。
 ///
@@ -15,9 +18,9 @@ pub(crate) fn render_engine_folder_row(
     let label = row.name.clone();
     let current_name = row.name.clone();
     let chevron = if row.collapsed {
-        IconName::ChevronRight
+        AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
     } else {
-        IconName::ChevronDown
+        AppIcon::Ui(UiIcon::CHEVRON_DOWN)
     };
     let element = div()
         .id(ElementId::Name(
@@ -40,7 +43,9 @@ pub(crate) fn render_engine_folder_row(
         })
         .on_drag(
             ContainerSidebarDrag::Folder(folder_id),
-            move |_, _, _, cx| cx.new(|_| SidebarDragPreview::new(label.clone(), IconName::Folder)),
+            move |_, _, _, cx| {
+                cx.new(|_| SidebarDragPreview::new(label.clone(), AppIcon::Ui(UiIcon::FOLDER)))
+            },
         )
         .on_drop({
             let view = view.clone();
@@ -62,7 +67,7 @@ pub(crate) fn render_engine_folder_row(
                 let name_for_rename = current_name.clone();
                 menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.new_engine_here").to_string(),
-                    IconName::Plus,
+                    AppIcon::Ui(UiIcon::ADD),
                     move |_, _, cx| {
                         view_new_engine.update(cx, |sidebar, cx| {
                             sidebar.request_new_engine(Some(folder_id), cx);
@@ -71,7 +76,7 @@ pub(crate) fn render_engine_folder_row(
                 ))
                 .item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.new_subfolder").to_string(),
-                    IconName::FolderPlus,
+                    AppIcon::Ui(UiIcon::NEW_FOLDER),
                     move |_, window, cx| {
                         view_new_folder.update(cx, |sidebar, cx| {
                             sidebar.open_folder_form(
@@ -86,7 +91,7 @@ pub(crate) fn render_engine_folder_row(
                 ))
                 .item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.rename").to_string(),
-                    IconName::FolderPen,
+                    AppIcon::Ui(UiIcon::EDIT),
                     move |_, window, cx| {
                         view_rename.update(cx, |sidebar, cx| {
                             sidebar.open_folder_form(
@@ -102,7 +107,7 @@ pub(crate) fn render_engine_folder_row(
                 .item(PopupMenuItem::separator())
                 .item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.delete_folder").to_string(),
-                    IconName::Trash,
+                    AppIcon::Ui(UiIcon::DELETE),
                     move |_, _, cx| {
                         view_delete.update(cx, |sidebar, cx| {
                             sidebar.request_delete_folder(folder_id, cx);
@@ -131,15 +136,8 @@ pub(crate) fn render_engine_folder_row(
         .text_color(p.sidebar_foreground)
         .hover(move |style| style.bg(hover_bg))
         .drag_over::<ContainerSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
-        .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
-        .child(
-            Icon::new(if row.collapsed {
-                IconName::Folder
-            } else {
-                IconName::FolderOpen
-            })
-            .with_size(ROW_ICON_SIZE),
-        )
+        .child(AppIconElement::new(chevron).with_size(ROW_CHEVRON_SIZE))
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).with_size(ROW_ICON_SIZE))
         .child(
             div()
                 .flex_1()

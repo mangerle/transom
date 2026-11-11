@@ -6,6 +6,10 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 详情页签按钮组：不含外边距与分隔线，由详情头部把它放在同一行的左端。
 ///
@@ -53,7 +57,7 @@ pub(super) fn render_detail_tab_buttons(
                         format!("container-detail-tab-{}", tab.label_key()).into(),
                     ))
                     .xsmall()
-                    .icon(detail_icon(tab))
+                    .child(AppIconElement::new(detail_icon(tab)).small())
                     .label(rust_i18n::t!(tab.label_key()).to_string())
                     .selected(tab == current)
                     .on_click(move |_, _, cx| {
@@ -79,7 +83,9 @@ pub(super) fn render_detail_tab_buttons(
                         Button::new("container-detail-tab-terminal")
                             .xsmall()
                             .ghost()
-                            .icon(IconName::Terminal)
+                            .child(
+                                AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small(),
+                            )
                             .label(rust_i18n::t!("container.detail.terminal").to_string())
                             .selected(tab == current)
                             .tooltip(user_tooltip.clone())
@@ -94,7 +100,7 @@ pub(super) fn render_detail_tab_buttons(
                         Button::new("container-detail-tab-terminal-menu")
                             .xsmall()
                             .ghost()
-                            .icon(IconName::ChevronDown)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
                             .accessibility_label(user_tooltip.clone())
                             .tooltip(user_tooltip.clone())
                             .dropdown_menu(move |menu, _, _| {

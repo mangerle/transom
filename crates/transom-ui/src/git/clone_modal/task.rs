@@ -4,14 +4,16 @@ use super::calc::clone_percent;
 use crate::app::AppShell;
 use crate::git::form::GitProjectDraft;
 use crate::palette::{Palette, localized_error};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::progress::Progress;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitAppEvent, GitCommand, GitRequestId, SessionColor, SessionIcon};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 在途克隆任务：弹窗关闭后由右下角进度卡接管。
 pub(crate) struct GitCloneTask {
@@ -163,10 +165,10 @@ impl AppShell {
             .items_center()
             .gap_2()
             .child(
-                Icon::new(if error.is_some() {
-                    IconName::CircleAlert
+                AppIconElement::new(if error.is_some() {
+                    AppIcon::Ui(UiIcon::ERROR)
                 } else {
-                    IconName::Download
+                    AppIcon::Ui(UiIcon::DOWNLOAD)
                 })
                 .xsmall()
                 .text_color(if error.is_some() { p.danger } else { p.primary }),
@@ -185,7 +187,7 @@ impl AppShell {
                     Button::new("git-clone-task-cancel")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::Close)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                         .accessibility_label(rust_i18n::t!("git.clone.cancel").to_string())
                         .tooltip(rust_i18n::t!("git.clone.cancel").to_string())
                         .on_click(move |_, _, cx| {
@@ -198,7 +200,7 @@ impl AppShell {
                     Button::new("git-clone-task-close")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::Close)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                         .accessibility_label(rust_i18n::t!("git.clone.close").to_string())
                         .tooltip(rust_i18n::t!("git.clone.close").to_string())
                         .on_click(move |_, _, cx| {

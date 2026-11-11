@@ -11,15 +11,15 @@
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 面板标题栏参数。
 pub(crate) struct PanelHeader {
     title: SharedString,
-    icon: Option<IconName>,
+    icon: Option<AppIcon>,
     border: Hsla,
     actions: Vec<AnyElement>,
 }
@@ -36,7 +36,7 @@ impl PanelHeader {
     }
 
     /// 标题前的语义图标。
-    pub(crate) fn icon(mut self, icon: IconName) -> Self {
+    pub(crate) fn icon(mut self, icon: AppIcon) -> Self {
         self.icon = Some(icon);
         self
     }
@@ -63,7 +63,7 @@ impl PanelHeader {
             .min_w_0()
             .flex_shrink_1();
         if let Some(icon) = icon {
-            left = left.child(Icon::new(icon).small().text_color(p.primary));
+            left = left.child(AppIconElement::new(icon).small().text_color(p.primary));
         }
         left = left.child(
             div()

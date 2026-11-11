@@ -9,14 +9,15 @@
 use crate::app::AppShell;
 use crate::git::{ChangeAccent, change_visual};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::{BTreeMap, HashSet};
 use transom_core::{ChangeCode, CommitFile, GitProject, TabId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 use super::menus::render_file_tree_menu;
 
@@ -177,19 +178,15 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                     .rounded(px(2.0))
                     .hover(|style| style.bg(params.palette.list_hover))
                     .child(
-                        Icon::new(if expanded {
-                            IconName::ChevronDown
+                        AppIconElement::new(if expanded {
+                            UiIcon::CHEVRON_DOWN
                         } else {
-                            IconName::ChevronRight
+                            UiIcon::CHEVRON_RIGHT
                         })
                         .xsmall()
                         .text_color(params.palette.muted_foreground),
                     )
-                    .child(
-                        Icon::new(IconName::Folder)
-                            .xsmall()
-                            .text_color(params.palette.muted_foreground),
-                    )
+                    .child(render_app_icon(UiIcon::FOLDER.into(), 14.0))
                     .child(
                         div()
                             .text_color(params.palette.foreground)
@@ -225,7 +222,7 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
             } => {
                 let indent = params.depth as f32 * 14.0 + 4.0;
                 let is_selected = params.active_path == Some(full_path.as_str());
-                let (status_icon, status_color) = change_status_badge(*change, params.palette);
+                let status_color = change_color(*change, params.palette);
 
                 let click_app = params.app.clone();
                 let menu_app = params.app.clone();
@@ -247,7 +244,7 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                     .when(!is_selected, |style| {
                         style.hover(|hover| hover.bg(params.palette.list_hover))
                     })
-                    .child(Icon::new(status_icon).xsmall().text_color(status_color))
+                    .child(render_app_icon(AppIcon::for_file(full_path), 16.0))
                     .child(
                         div()
                             .flex_1()
@@ -301,17 +298,16 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
     elements
 }
 
-/// 匹配 IDEA 风格的状态徽标与语义颜色。
-fn change_status_badge(change: ChangeCode, p: &Palette) -> (IconName, Hsla) {
+/// 文件名的修改状态语义色；类型图标保持 JetBrains 原始配色。
+fn change_color(change: ChangeCode, p: &Palette) -> Hsla {
     let visual = change_visual(change);
-    let color = match visual.accent {
+    match visual.accent {
         ChangeAccent::Added => p.success,
         ChangeAccent::Modified => p.primary,
         ChangeAccent::Deleted => p.danger,
         ChangeAccent::Conflict => p.warning,
         ChangeAccent::Neutral => p.muted_foreground,
-    };
-    (visual.icon, color)
+    }
 }
 
 #[cfg(test)]

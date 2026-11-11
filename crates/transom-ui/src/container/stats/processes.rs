@@ -3,6 +3,9 @@
 use super::*;
 use crate::widgets::table_header;
 use gpui_kit::component::Disableable;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 pub(crate) struct ContainerProcessesView<'a> {
     pub(crate) processes: &'a [ContainerProcess],
@@ -50,7 +53,7 @@ pub(crate) fn processes_card(
             Button::new("container-processes-refresh")
                 .ghost()
                 .xsmall()
-                .icon(IconName::RefreshCw)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                 .disabled(!is_running)
                 .accessibility_label(refresh_tooltip.clone())
                 .tooltip(refresh_tooltip)
@@ -90,16 +93,16 @@ pub(crate) fn processes_card(
                     }
                 })
                 .child(
-                    Icon::new(if collapsed {
-                        IconName::ChevronRight
+                    AppIconElement::new(if collapsed {
+                        AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
                     } else {
-                        IconName::ChevronDown
+                        AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                     })
                     .size(px(14.0))
                     .text_color(p.muted_foreground),
                 )
                 .child(
-                    Icon::new(IconName::ListTree)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::SHOW_AS_TREE))
                         .size(px(14.0))
                         .text_color(p.muted_foreground),
                 )

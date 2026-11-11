@@ -9,14 +9,16 @@ use super::{ChangeGroup, GroupDisplay, check_box, check_placeholder, hint};
 use crate::app::AppShell;
 use crate::git::actions::GitDiffRequest;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{ChangeCode, GitProject, GitSide, StatusEntry, StatusRecord};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 三组改动清单（模态框与概览屏共用）。
@@ -93,7 +95,7 @@ impl AppShell {
                         .gap_1p5()
                         .items_center()
                         .child(
-                            Icon::new(IconName::TriangleAlert)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
                                 .xsmall()
                                 .text_color(p.warning),
                         )
@@ -268,10 +270,10 @@ impl AppShell {
             .items_center()
             .cursor_pointer()
             .child(
-                Icon::new(if collapsed {
-                    IconName::ChevronRight
+                AppIconElement::new(if collapsed {
+                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
                 } else {
-                    IconName::ChevronDown
+                    AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                 })
                 .xsmall(),
             );
@@ -359,10 +361,10 @@ impl AppShell {
             .font_weight(FontWeight::BOLD)
             .text_color(p.muted_foreground)
             .child(
-                Icon::new(if collapsed {
-                    IconName::ChevronRight
+                AppIconElement::new(if collapsed {
+                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
                 } else {
-                    IconName::ChevronDown
+                    AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                 })
                 .xsmall(),
             );

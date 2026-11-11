@@ -5,6 +5,9 @@ use crate::container::ContainerWorkspace;
 use crate::widgets::status_dot_bare;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 日志页签渲染参数。
 pub(crate) struct ContainerLogsView<'a> {
@@ -169,7 +172,7 @@ pub(crate) fn render_logs(
         .xsmall()
         .when(follow, |b| b.primary())
         .when(!follow, |b| b.ghost())
-        .icon(IconName::ScrollText)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DIFF)).small())
         .label(rust_i18n::t!("container.logs.follow").to_string())
         .on_click({
             let view = view.clone();
@@ -192,7 +195,7 @@ pub(crate) fn render_logs(
         .ghost()
         .xsmall()
         .label(tail_text)
-        .icon(IconName::ChevronDown)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
         .dropdown_menu(move |menu, _, _| {
             let mut menu = menu;
             for choice in LOG_TAIL_CHOICES {
@@ -219,7 +222,7 @@ pub(crate) fn render_logs(
     let more_btn = Button::new("container-logs-more-menu")
         .ghost()
         .xsmall()
-        .icon(IconName::Ellipsis)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::MORE_HORIZONTAL)).small())
         .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _, _| {
@@ -252,7 +255,7 @@ pub(crate) fn render_logs(
             .separator()
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("container.logs.copy").to_string(),
-                IconName::Copy,
+                AppIcon::Ui(UiIcon::COPY),
                 move |_, _, cx| {
                     copy_view.update(cx, |workspace, cx| {
                         workspace.copy_container_logs(cx);
@@ -261,7 +264,7 @@ pub(crate) fn render_logs(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("container.logs.export").to_string(),
-                IconName::Download,
+                AppIcon::Ui(UiIcon::DOWNLOAD),
                 move |_, _window, cx| {
                     export_view.update(cx, |workspace, cx| {
                         workspace.export_container_logs(cx);
@@ -271,7 +274,7 @@ pub(crate) fn render_logs(
             .separator()
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("container.logs.clear").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
                 move |_, _, cx| {
                     clear_view.update(cx, |workspace, cx| {
                         workspace.state.logs.clear();

@@ -14,12 +14,14 @@ use super::font_select::{
 use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::settings::SettingsView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::select::Select;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 字体族下拉的宽度（rem，标准档 256px，与组件库 `w_64` 文本字段同宽）。
 ///
@@ -86,7 +88,7 @@ impl SettingsView {
                 Button::new(format!("{id}-import"))
                     .outline()
                     .small()
-                    .icon(IconName::FolderOpen)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                     .accessibility_label(rust_i18n::t!("settings.import_font_tooltip").to_string())
                     .tooltip(rust_i18n::t!("settings.import_font_tooltip").to_string())
                     .on_click(cx.listener({

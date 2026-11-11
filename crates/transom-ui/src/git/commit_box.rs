@@ -7,7 +7,6 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Textarea, TextareaState};
@@ -15,6 +14,7 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::UiIcon;
 
 /// 提交输入表单属性包。
 pub(crate) struct CommitBoxProps<'a> {
@@ -60,7 +60,7 @@ impl AppShell {
         let recent_btn = Button::new("git-commit-recent-messages")
             .ghost()
             .xsmall()
-            .icon(IconName::Clock)
+            .icon(UiIcon::HISTORY)
             .accessibility_label(rust_i18n::t!("git.commit.recent_messages").to_string())
             .tooltip(rust_i18n::t!("git.commit.recent_messages").to_string())
             .dropdown_menu({
@@ -79,7 +79,7 @@ impl AppShell {
                             let input = message_input.clone();
                             menu = menu.item(menu_item(
                                 text.clone(),
-                                IconName::Clock,
+                                UiIcon::HISTORY,
                                 move |_event, window, cx| {
                                     input.update(cx, |input, cx| {
                                         input.set_value(&text_clone, window, cx);
@@ -141,7 +141,7 @@ impl AppShell {
                         Button::new("git-commit-and-push")
                             .primary()
                             .small()
-                            .icon(IconName::ArrowUpFromLine)
+                            .icon(UiIcon::PUSH)
                             .label(rust_i18n::t!("git.commit.and_push").to_string())
                             .disabled(submitting)
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -153,7 +153,7 @@ impl AppShell {
                         Button::new("git-commit-settings")
                             .ghost()
                             .small()
-                            .icon(IconName::Settings)
+                            .icon(UiIcon::SETTINGS)
                             .accessibility_label(rust_i18n::t!("git.commit.settings").to_string())
                             .tooltip(rust_i18n::t!("git.commit.settings").to_string())
                             .on_click(cx.listener(move |this, _, window, cx| {

@@ -11,13 +11,14 @@ use super::super::menus::{
 use super::model::{RefGroup, RefNode, RefNodeKind, build_nodes};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{LogScope, TabId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::render_app_icon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -54,10 +55,10 @@ pub(crate) fn render_ref_group(
             .text_sm()
             .text_color(p.muted_foreground)
             .child(
-                Icon::new(if expanded {
-                    IconName::ChevronDown
+                AppIconElement::new(if expanded {
+                    UiIcon::CHEVRON_DOWN
                 } else {
-                    IconName::ChevronRight
+                    UiIcon::CHEVRON_RIGHT
                 })
                 .xsmall(),
             )
@@ -123,15 +124,15 @@ fn render_folder_node(
             .rounded(px(3.0))
             .hover(|style| style.bg(p.list_hover))
             .child(
-                Icon::new(if expanded {
-                    IconName::ChevronDown
+                AppIconElement::new(if expanded {
+                    UiIcon::CHEVRON_DOWN
                 } else {
-                    IconName::ChevronRight
+                    UiIcon::CHEVRON_RIGHT
                 })
                 .xsmall(),
             )
             .child(
-                Icon::new(IconName::Folder)
+                AppIconElement::new(UiIcon::FOLDER)
                     .xsmall()
                     .text_color(p.muted_foreground),
             )
@@ -247,7 +248,7 @@ fn render_branch_node(
                     .items_center()
                     .text_xs()
                     .text_color(p.primary)
-                    .child(Icon::new(IconName::ArrowUpRight).xsmall())
+                    .child(AppIconElement::new(UiIcon::UP).xsmall())
                     .child(ahead.to_string()),
             )
         })
@@ -297,19 +298,34 @@ fn render_branch_node(
 
 /// 叶子节点图标与颜色。
 fn branch_icon(node: &RefNode, is_selected: bool, p: &Palette) -> AnyElement {
-    let (icon, color) = match node.kind {
-        RefNodeKind::Head => (IconName::GitBranch, p.success),
-        RefNodeKind::LocalBranch if node.current => (IconName::GitBranch, p.warning),
-        RefNodeKind::LocalBranch => (IconName::GitBranch, p.primary),
-        RefNodeKind::RemoteBranch if node.favorite => (IconName::Star, p.warning),
-        RefNodeKind::RemoteBranch => (IconName::GitBranch, p.muted_foreground),
-        RefNodeKind::Tag => (IconName::Tag, p.warning),
-        RefNodeKind::Folder => (IconName::Folder, p.muted_foreground),
-    };
-    Icon::new(icon)
-        .xsmall()
-        .text_color(if is_selected { p.primary } else { color })
-        .into_any_element()
+    match node.kind {
+        RefNodeKind::Head => AppIconElement::new(UiIcon::VCS)
+            .xsmall()
+            .text_color(if is_selected { p.primary } else { p.success })
+            .into_any_element(),
+        RefNodeKind::LocalBranch => AppIconElement::new(UiIcon::VCS)
+            .xsmall()
+            .text_color(if is_selected {
+                p.primary
+            } else if node.current {
+                p.warning
+            } else {
+                p.primary
+            })
+            .into_any_element(),
+        RefNodeKind::RemoteBranch => AppIconElement::new(UiIcon::VCS)
+            .xsmall()
+            .text_color(if node.favorite {
+                p.warning
+            } else if is_selected {
+                p.primary
+            } else {
+                p.muted_foreground
+            })
+            .into_any_element(),
+        RefNodeKind::Tag => render_app_icon(UiIcon::TAG.into(), 14.0),
+        RefNodeKind::Folder => render_app_icon(UiIcon::FOLDER.into(), 14.0),
+    }
 }
 
 /// 树层级缩进。

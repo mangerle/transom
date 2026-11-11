@@ -9,11 +9,13 @@ use super::{
 };
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 渲染单个文件夹树行，包含折叠切换、拖放放置、右键菜单与整组拨测入口。
@@ -27,9 +29,9 @@ impl AppShell {
         let app_entity = cx.entity().clone();
         let label = row.name.clone();
         let chevron = if row.collapsed {
-            IconName::ChevronRight
+            AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
         } else {
-            IconName::ChevronDown
+            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
         };
 
         let element = div()
@@ -45,7 +47,7 @@ impl AppShell {
                 this.toggle_folder_collapsed(folder_id, cx);
             }))
             .on_drag(SidebarDrag::Folder(folder_id), move |_, _, _, cx| {
-                cx.new(|_| SidebarDragPreview::new(label.clone(), IconName::Folder))
+                cx.new(|_| SidebarDragPreview::new(label.clone(), AppIcon::Ui(UiIcon::FOLDER)))
             })
             .on_drop({
                 let app = app_entity.clone();
@@ -70,7 +72,7 @@ impl AppShell {
 /// 文件夹行主体：折叠箭头、图标、名称、计数、拨测按钮与换序落点。
 fn folder_band(
     row: &FolderRow,
-    chevron: IconName,
+    chevron: AppIcon,
     app: &Entity<AppShell>,
     p: &Palette,
     cx: &mut Context<AppShell>,
@@ -99,15 +101,8 @@ fn folder_band(
         .text_color(p.sidebar_foreground)
         .hover(move |style| style.bg(hover_bg))
         .drag_over::<SidebarDrag>(move |style, _, _, _| style.bg(into_bg))
-        .child(Icon::new(chevron).with_size(ROW_CHEVRON_SIZE))
-        .child(
-            Icon::new(if row.collapsed {
-                IconName::Folder
-            } else {
-                IconName::FolderOpen
-            })
-            .with_size(ROW_ICON_SIZE),
-        )
+        .child(AppIconElement::new(chevron).with_size(ROW_CHEVRON_SIZE))
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).with_size(ROW_ICON_SIZE))
         .child(
             div()
                 .flex_1()
@@ -131,7 +126,7 @@ fn folder_band(
     band = band.child(row_action_button(
         RowActionButtonProps {
             element_id: format!("folder-probe-{folder_id}"),
-            icon: IconName::Radar,
+            icon: AppIcon::Domain(DomainIcon::MONITOR),
             tooltip: rust_i18n::t!("probe.folder_tooltip").to_string(),
             idle_color: p.muted_foreground,
             on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
@@ -160,7 +155,7 @@ fn folder_context_menu(
     let delete = app.clone();
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("menu.new_session_here").to_string(),
-        IconName::Plus,
+        AppIcon::Ui(UiIcon::ADD),
         move |_, window, cx| {
             new_session.update(cx, |this, cx| {
                 this.open_new_session_in_folder(folder_id, window, cx);
@@ -169,7 +164,7 @@ fn folder_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("menu.new_folder").to_string(),
-        IconName::FolderPlus,
+        AppIcon::Ui(UiIcon::NEW_FOLDER),
         move |_, window, cx| {
             new_folder.update(cx, |this, cx| {
                 this.open_new_folder(Some(folder_id), window, cx);
@@ -178,7 +173,7 @@ fn folder_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("menu.rename").to_string(),
-        IconName::FolderPen,
+        AppIcon::Ui(UiIcon::EDIT),
         move |_, window, cx| {
             rename.update(cx, |this, cx| {
                 this.open_rename_folder(folder_id, window, cx);
@@ -188,7 +183,7 @@ fn folder_context_menu(
     .item(PopupMenuItem::separator())
     .item(crate::widgets::menu_item(
         rust_i18n::t!("menu.delete_folder").to_string(),
-        IconName::Trash,
+        AppIcon::Ui(UiIcon::DELETE),
         move |_, _, cx| {
             delete.update(cx, |this, cx| {
                 this.delete_folder(folder_id, cx);

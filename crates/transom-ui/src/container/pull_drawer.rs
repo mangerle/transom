@@ -9,13 +9,15 @@
 
 use super::*;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ContainerCommand;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染镜像下载管理抽屉。
 ///
@@ -52,7 +54,11 @@ pub(crate) fn render_pull_drawer(
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(Icon::new(IconName::Download).small().text_color(p.primary))
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD))
+                        .small()
+                        .text_color(p.primary),
+                )
                 .child(
                     div()
                         .text_sm()
@@ -80,7 +86,7 @@ pub(crate) fn render_pull_drawer(
                         Button::new("pull-drawer-clear")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Trash)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                             .accessibility_label(
                                 rust_i18n::t!("container.pull_manager.clear_finished").to_string(),
                             )
@@ -102,7 +108,7 @@ pub(crate) fn render_pull_drawer(
                     Button::new("pull-drawer-close")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::X)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                         .accessibility_label(
                             rust_i18n::t!("container.pull_manager.close_drawer").to_string(),
                         )
@@ -128,7 +134,7 @@ pub(crate) fn render_pull_drawer(
             .justify_center()
             .gap_2()
             .child(
-                Icon::new(IconName::Check)
+                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
                     .with_size(px(24.0))
                     .text_color(p.muted_foreground),
             )
@@ -267,7 +273,7 @@ pub(crate) fn render_pull_drawer(
                                 ))
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::Trash)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                                 .accessibility_label("Remove pull task")
                                 .on_click({
                                     let view = view.clone();

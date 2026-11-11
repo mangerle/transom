@@ -6,12 +6,12 @@
 //! 标签、分屏布局与焦点。
 
 use crate::app::AppShell;
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use crate::workspace::tab_drag::{TabDrag, TabDragPreview, reorder_groups};
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::GroupId;
+use transom_ui_icons::AppIcon;
 
 /// 给纵向标签行挂上拖拽源与上下换序落点。
 pub(super) fn attach_vertical_tab_drag(

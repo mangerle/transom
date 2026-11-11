@@ -1,6 +1,9 @@
 //! 列表行标识、行内动作与批量动作。
 
 use super::*;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 列表行的操作目标：五种条目各自用能唯一定位自己的标识。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,35 +78,35 @@ impl RowAction {
         }
     }
 
-    pub(crate) fn icon(self) -> gpui_kit::assets::IconName {
-        use gpui_kit::assets::IconName;
+    pub(crate) fn icon(self) -> transom_ui_icons::AppIcon {
+        use transom_ui_icons::AppIcon;
         match self {
-            Self::Overview => IconName::Info,
-            Self::Logs => IconName::ScrollText,
-            Self::Terminal => IconName::Terminal,
-            Self::Stats => IconName::Gauge,
-            Self::Files => IconName::FolderOpen,
-            Self::Start => IconName::Play,
-            Self::Stop => IconName::Square,
-            Self::Restart => IconName::RotateCw,
-            Self::Pause => IconName::Pause,
-            Self::Unpause => IconName::Play,
-            Self::Kill => IconName::CircleAlert,
-            Self::Run => IconName::Play,
-            Self::Tag => IconName::TagPlus,
-            Self::Push => IconName::Upload,
-            Self::Save => IconName::Download,
-            Self::History => IconName::Clock,
-            Self::Rename => IconName::Pen,
-            Self::ExportConfig => IconName::FileText,
-            Self::Commit => IconName::Layers,
-            Self::Clone => IconName::Copy,
-            Self::EditComposeYaml => IconName::FilePen,
-            Self::BackupVolume => IconName::Download,
-            Self::RestoreVolume => IconName::Upload,
-            Self::Remove => IconName::Trash,
-            Self::CopyId => IconName::Copy,
-            Self::CopyName => IconName::Copy,
+            Self::Overview => AppIcon::Custom(CustomIcon::INFO),
+            Self::Logs => AppIcon::Ui(UiIcon::LIST_FILES),
+            Self::Terminal => AppIcon::Domain(DomainIcon::TERMINAL),
+            Self::Stats => AppIcon::Custom(CustomIcon::PROCESS),
+            Self::Files => AppIcon::Ui(UiIcon::FOLDER),
+            Self::Start => AppIcon::Ui(UiIcon::RUN),
+            Self::Stop => AppIcon::Ui(UiIcon::STOP),
+            Self::Restart => AppIcon::Ui(UiIcon::REFRESH),
+            Self::Pause => AppIcon::Ui(UiIcon::PAUSE),
+            Self::Unpause => AppIcon::Ui(UiIcon::RUN),
+            Self::Kill => AppIcon::Ui(UiIcon::ERROR),
+            Self::Run => AppIcon::Ui(UiIcon::RUN),
+            Self::Tag => AppIcon::Ui(UiIcon::TAG),
+            Self::Push => AppIcon::Ui(UiIcon::UPLOAD),
+            Self::Save => AppIcon::Ui(UiIcon::DOWNLOAD),
+            Self::History => AppIcon::Ui(UiIcon::HISTORY),
+            Self::Rename => AppIcon::Ui(UiIcon::EDIT),
+            Self::ExportConfig => AppIcon::Ui(UiIcon::DIFF),
+            Self::Commit => AppIcon::Custom(CustomIcon::IMAGE),
+            Self::Clone => AppIcon::Ui(UiIcon::COPY),
+            Self::EditComposeYaml => AppIcon::Ui(UiIcon::EDIT),
+            Self::BackupVolume => AppIcon::Ui(UiIcon::DOWNLOAD),
+            Self::RestoreVolume => AppIcon::Ui(UiIcon::UPLOAD),
+            Self::Remove => AppIcon::Ui(UiIcon::DELETE),
+            Self::CopyId => AppIcon::Ui(UiIcon::COPY),
+            Self::CopyName => AppIcon::Ui(UiIcon::COPY),
         }
     }
 

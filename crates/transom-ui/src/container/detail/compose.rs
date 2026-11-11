@@ -83,6 +83,9 @@ pub(crate) fn render_compose_detail(
 }
 
 use super::compose_yaml::{render_line_numbers, render_path_breadcrumbs, validate_compose_yaml};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染在线 YAML 编辑器。
 ///
@@ -129,7 +132,7 @@ fn render_compose_yaml_editor(
                     Button::new("compose-yaml-save")
                         .primary()
                         .xsmall()
-                        .icon(IconName::Save)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::SAVE)).small())
                         .label(rust_i18n::t!("common.save").to_string())
                         .disabled(is_saving)
                         .on_click(move |_, _, cx| {
@@ -142,7 +145,7 @@ fn render_compose_yaml_editor(
                     Button::new("compose-yaml-deploy")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::Play)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                         .label(rust_i18n::t!("container.compose.up_deploy").to_string())
                         .disabled(is_saving)
                         .on_click(move |_, _, cx| {
@@ -159,7 +162,7 @@ fn render_compose_yaml_editor(
                     Button::new("compose-yaml-reload")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::RotateCw)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                         .accessibility_label(rust_i18n::t!("common.refresh").to_string())
                         .tooltip(rust_i18n::t!("common.refresh").to_string())
                         .disabled(is_saving)
@@ -183,7 +186,7 @@ fn render_compose_yaml_editor(
             .items_center()
             .bg(p.danger.opacity(0.08))
             .text_color(p.danger)
-            .child(Icon::new(IconName::TriangleAlert).xsmall())
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).xsmall())
             .child(
                 div()
                     .text_xs()
@@ -203,7 +206,7 @@ fn render_compose_yaml_editor(
             .items_center()
             .bg(p.success.opacity(0.04))
             .text_color(p.success)
-            .child(Icon::new(IconName::Check).xsmall())
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).xsmall())
             .child(
                 div()
                     .text_xs()

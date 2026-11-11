@@ -5,14 +5,14 @@
 
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
-use gpui_kit::assets::IconName;
-use gpui_kit::component::Icon;
 use gpui_kit::component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 渲染一个标准空状态。
 pub(crate) fn empty_state(
-    icon: IconName,
+    icon: AppIcon,
     title: impl Into<SharedString>,
     description: impl Into<SharedString>,
     p: &Palette,
@@ -23,7 +23,7 @@ pub(crate) fn empty_state(
             EmptyHeader::new()
                 .media(
                     EmptyMedia::new().child(
-                        Icon::new(icon)
+                        AppIconElement::new(icon)
                             .size(rems(space::XL))
                             .text_color(p.muted_foreground),
                     ),

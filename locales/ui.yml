@@ -5944,6 +5944,9 @@ container:
     search:
       en: Search engine connections
       zh-CN: 搜索引擎连接
+    clear_search:
+      en: Clear search
+      zh-CN: 清空搜索
     no_match:
       en: No matching connections
       zh-CN: 没有匹配的连接

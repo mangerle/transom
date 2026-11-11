@@ -4,17 +4,17 @@
 //! 按钮可以用于页面、工具栏、弹窗与测试，不会把 `AppShell` 的更新逻辑带进来。
 
 use crate::theme::tokens::control;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Selectable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
+use transom_ui_icons::{AppIcon, AppIconElement};
 
 /// 应用图标按钮的构建参数。
 pub(crate) struct IconButton {
     id: ElementId,
-    icon: IconName,
+    icon: AppIcon,
     accessibility_label: SharedString,
     tooltip: Option<SharedString>,
     selected: bool,
@@ -47,13 +47,13 @@ impl IconButton {
     /// 创建图标按钮；默认使用 ghost + xsmall，保持工具栏与侧栏的视觉一致。
     pub(crate) fn new(
         id: impl Into<ElementId>,
-        icon: IconName,
+        icon: impl Into<AppIcon>,
         accessibility_label: impl Into<SharedString>,
     ) -> Self {
         let accessibility_label = accessibility_label.into();
         Self {
             id: id.into(),
-            icon,
+            icon: icon.into(),
             tooltip: Some(accessibility_label.clone()),
             accessibility_label,
             selected: false,
@@ -97,10 +97,14 @@ impl IconButton {
     /// 生成底层 `Button`；调用方继续链式接 `.on_click(...)`。
     pub(crate) fn render(self) -> Button {
         let size = rems(self.size.rem());
+        let icon_size = match self.size {
+            IconButtonSize::Regular => rems(control::ICON),
+            IconButtonSize::Compact | IconButtonSize::RowAction => rems(control::COMPACT_ICON),
+        };
         let mut button = Button::new(self.id)
             .ghost()
             .xsmall()
-            .icon(self.icon)
+            .child(AppIconElement::new(self.icon).with_rems(icon_size))
             .accessibility_label(self.accessibility_label)
             .selected(self.selected)
             .disabled(self.disabled)
@@ -138,7 +142,7 @@ pub(crate) enum DialogConfirmKind {
 pub(crate) fn dialog_confirm_button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
-    icon: Option<IconName>,
+    icon: Option<AppIcon>,
     kind: DialogConfirmKind,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
@@ -147,7 +151,7 @@ pub(crate) fn dialog_confirm_button(
         DialogConfirmKind::Danger => Button::new(id).danger(),
     };
     let button = match icon {
-        Some(icon) => button.icon(icon),
+        Some(icon) => button.child(AppIconElement::new(icon).with_rems(rems(control::ICON))),
         None => button,
     };
     button.label(label.into()).on_click(on_click)

@@ -2,10 +2,10 @@
 
 use crate::app::AppShell;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
 
 /// 日期范围菜单。
 pub(crate) fn render_date_menu(menu: PopupMenu, app: Entity<AppShell>, tab_id: TabId) -> PopupMenu {
@@ -55,12 +55,16 @@ pub(crate) fn render_path_menu(
     let mut menu = menu;
     for path in paths.into_iter().take(300) {
         let item_app = app.clone();
-        menu = menu.item(menu_item(path.clone(), IconName::File, move |_, _, cx| {
-            let path = path.clone();
-            item_app.update(cx, |this, cx| {
-                this.git_set_log_path(tab_id, Some(path), cx);
-            });
-        }));
+        menu = menu.item(menu_item(
+            path.clone(),
+            AppIcon::for_file(&path),
+            move |_, _, cx| {
+                let path = path.clone();
+                item_app.update(cx, |this, cx| {
+                    this.git_set_log_path(tab_id, Some(path), cx);
+                });
+            },
+        ));
     }
     menu
 }

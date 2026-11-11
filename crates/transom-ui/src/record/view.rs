@@ -3,12 +3,14 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::status_bar::BADGE_HEIGHT;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 渲染底栏录制指示器。
@@ -49,7 +51,7 @@ impl AppShell {
         let badge = if !active_is_recording {
             crate::widgets::IconButton::new(
                 "start-recording-btn",
-                IconName::Disc,
+                AppIcon::Custom(CustomIcon::RECORDING),
                 rust_i18n::t!("recorder.start_btn").to_string(),
             )
             .size(crate::widgets::IconButtonSize::Compact)
@@ -77,9 +79,9 @@ impl AppShell {
                 let mut menu = menu.item(crate::widgets::menu_item(
                     toggle_label,
                     if active_is_recording {
-                        IconName::Square
+                        AppIcon::Ui(UiIcon::STOP)
                     } else {
-                        IconName::Disc
+                        AppIcon::Custom(CustomIcon::RECORDING)
                     },
                     {
                         let app = app.clone();
@@ -94,7 +96,7 @@ impl AppShell {
                 if let Some(tab_id) = active_tab_id {
                     menu = menu.item(crate::widgets::menu_item(
                         rust_i18n::t!("recorder.replay_menu").to_string(),
-                        IconName::Play,
+                        AppIcon::Ui(UiIcon::RUN),
                         {
                             let app = app.clone();
                             move |_, window, cx| {

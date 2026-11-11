@@ -2,20 +2,21 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 目标选择列表里的一行快照；下拉内容点开时才构建，闭包内不再借用 `AppShell`。
 pub(super) struct BroadcastTargetRow {
     pub(super) tab_id: TabId,
     pub(super) title: String,
     pub(super) dot_color: Hsla,
-    pub(super) icon: IconName,
+    pub(super) icon: AppIcon,
     pub(super) selected: bool,
 }
 
@@ -48,7 +49,11 @@ pub(super) fn render_target_rows(
                         .flex_none()
                         .bg(row.dot_color),
                 )
-                .child(Icon::new(row.icon).xsmall().text_color(p.muted_foreground))
+                .child(
+                    AppIconElement::new(row.icon)
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
                 .child(
                     Checkbox::new(ElementId::Name(format!("broadcast-target-{tab_id}").into()))
                         .small()

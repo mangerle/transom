@@ -13,7 +13,6 @@ use super::placeholder;
 use crate::app::AppShell;
 use crate::divider::v_resizable;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -22,6 +21,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::UiIcon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -126,7 +126,7 @@ fn render_files_section(
                     Button::new("git-diff-compare-btn")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::GitCompare)
+                        .icon(UiIcon::DIFF)
                         .accessibility_label(rust_i18n::t!("git.details.compare_diff").to_string())
                         .tooltip(rust_i18n::t!("git.details.compare_diff").to_string())
                         .on_click({
@@ -146,7 +146,7 @@ fn render_files_section(
                     Button::new("git-diff-tab-btn")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::ExternalLink)
+                        .icon(UiIcon::EXTERNAL_LINK)
                         .accessibility_label(rust_i18n::t!("git.details.open_in_tab").to_string())
                         .tooltip(rust_i18n::t!("git.details.open_in_tab").to_string())
                         .on_click({

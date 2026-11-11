@@ -8,7 +8,6 @@ use crate::palette::localized_error;
 use crate::settings::ProxyProtocol;
 use crate::settings::modal_state::{LOCAL_SHELL_CUSTOM, LOCAL_SHELL_SYSTEM, shell_program_matches};
 use crate::settings::{SettingsEvent, SettingsView};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 #[cfg(windows)]
 use gpui_kit::component::Disableable;
@@ -18,6 +17,9 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{BellStyle, BlockViewStyle};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     /// 语言组：跟随系统、中文、英文三档。
@@ -461,7 +463,7 @@ impl SettingsView {
                         .child(
                             Button::new("backup-export")
                                 .small()
-                                .icon(IconName::Download)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                                 .label(rust_i18n::t!("backup.export_action").to_string())
                                 .on_click(cx.listener(|_this, _, _window, cx| {
                                     cx.emit(SettingsEvent::OpenBackupExport);
@@ -470,7 +472,7 @@ impl SettingsView {
                         .child(
                             Button::new("backup-import")
                                 .small()
-                                .icon(IconName::Upload)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                                 .label(rust_i18n::t!("backup.import_action").to_string())
                                 .on_click(cx.listener(|_this, _, _window, cx| {
                                     cx.emit(SettingsEvent::OpenBackupImport);

@@ -76,10 +76,10 @@ pub(crate) use self::task::{
 };
 pub(crate) use crate::editor::PendingEditorClose;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
-use gpui_kit::component::Icon;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 pub(crate) fn local_home() -> PathBuf {
     std::env::var_os("HOME")
@@ -115,15 +115,11 @@ pub(crate) fn parent_remote(path: &str) -> String {
 
 pub(crate) use crate::format::format_size;
 
-pub(crate) fn sftp_file_icon(is_dir: bool, p: &Palette) -> AnyElement {
+pub(crate) fn sftp_file_icon(name: &str, is_dir: bool, _p: &Palette) -> AnyElement {
     if is_dir {
-        Icon::new(IconName::Folder)
-            .text_color(p.sidebar_accent_foreground)
-            .into_any_element()
+        render_app_icon(UiIcon::FOLDER.into(), 16.0)
     } else {
-        Icon::new(IconName::File)
-            .text_color(p.muted_foreground)
-            .into_any_element()
+        render_app_icon(AppIcon::for_file(name), 16.0)
     }
 }
 

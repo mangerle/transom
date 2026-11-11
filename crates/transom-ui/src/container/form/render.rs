@@ -1,6 +1,10 @@
 //! 容器引擎连接表单弹窗主体：基础信息卡、分组选择与底部操作区。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染时由外壳注入的引擎分组快照。
 ///
@@ -123,7 +127,7 @@ impl ContainerFormView {
             .child(
                 Button::new("container-form-folder")
                     .small()
-                    .icon(IconName::Folder)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                     .label(label)
                     .dropdown_menu(move |menu, _, _| {
                         let mut menu = menu;
@@ -169,7 +173,7 @@ impl ContainerFormView {
                 Button::new("container-form-delete")
                     .danger()
                     .small()
-                    .icon(IconName::Trash)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                     .label(rust_i18n::t!("common.delete").to_string())
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.delete(cx))),
             );
@@ -180,7 +184,9 @@ impl ContainerFormView {
                 Button::new("container-form-test")
                     .ghost()
                     .small()
-                    .icon(IconName::Gauge)
+                    .child(
+                        AppIconElement::new(AppIcon::Custom(CustomIcon::CONNECTION_TEST)).small(),
+                    )
                     .label(rust_i18n::t!("container.form.test").to_string())
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.test(cx))),
             )
@@ -193,7 +199,7 @@ impl ContainerFormView {
             .child(
                 Button::new("container-form-save")
                     .primary()
-                    .icon(IconName::Check)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                     .label(rust_i18n::t!("common.save").to_string())
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx))),
             );

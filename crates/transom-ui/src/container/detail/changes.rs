@@ -4,6 +4,9 @@ use super::*;
 use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
 use transom_core::{ContainerFileSystemChange, ContainerPathChangeKind};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 变更页渲染参数：容器标识、变更快照、加载态与搜索输入框/关键词快照。
 ///
@@ -77,7 +80,7 @@ pub(crate) fn render_container_changes(
     let refresh_btn = Button::new(ElementId::Name(format!("btn-refresh-diff-{tab_id}").into()))
         .ghost()
         .xsmall()
-        .icon(IconName::RefreshCw)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
         .label(rust_i18n::t!("container.changes.refresh").to_string())
         .on_click(move |_, _, cx| {
             refresh_view.update(cx, |workspace, cx| {
@@ -197,7 +200,7 @@ pub(crate) fn render_container_changes(
                 ))
                 .ghost()
                 .xsmall()
-                .icon(IconName::Copy)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
                 .accessibility_label(rust_i18n::t!("container.detail.copy_path").to_string())
                 .tooltip(rust_i18n::t!("container.detail.copy_path").to_string())
                 .on_click(move |_, _, cx| {

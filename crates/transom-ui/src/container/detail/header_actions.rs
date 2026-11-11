@@ -6,11 +6,13 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
-use gpui_kit::assets::IconName;
 use transom_core::{
     ComposeAction, ComposeProject, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkSummary,
 };
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 
@@ -32,11 +34,14 @@ fn compose_lifecycle_button(
         "compose-start-all"
     })
     .xsmall()
-    .icon(if stop {
-        IconName::Square
-    } else {
-        IconName::Play
-    })
+    .child(
+        AppIconElement::new(if stop {
+            AppIcon::Ui(UiIcon::STOP)
+        } else {
+            AppIcon::Ui(UiIcon::RUN)
+        })
+        .small(),
+    )
     .label(rust_i18n::t!(label_key).to_string())
     .on_click(move |_, _, cx| {
         let action = if stop {
@@ -62,7 +67,7 @@ fn compose_lifecycle_button(
 fn compose_menu_item(
     view: &Entity<ContainerWorkspace>,
     label_key: &'static str,
-    icon: IconName,
+    icon: AppIcon,
     action: ComposeAction,
     name: String,
 ) -> PopupMenuItem {
@@ -104,7 +109,7 @@ pub(super) fn compose_header_actions(
     let more_btn = Button::new("compose-more-actions")
         .xsmall()
         .ghost()
-        .icon(IconName::ChevronDown)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
         .label(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _, _| {
             let view = more_view.clone();
@@ -113,28 +118,28 @@ pub(super) fn compose_header_actions(
             menu = menu.item(compose_menu_item(
                 &view,
                 "container.action.compose_restart",
-                IconName::RotateCw,
+                AppIcon::Ui(UiIcon::REFRESH),
                 ComposeAction::Restart,
                 name.clone(),
             ));
             menu = menu.item(compose_menu_item(
                 &view,
                 "container.action.compose_up",
-                IconName::RefreshCw,
+                AppIcon::Ui(UiIcon::REFRESH),
                 ComposeAction::Up,
                 name.clone(),
             ));
             menu = menu.item(compose_menu_item(
                 &view,
                 "container.action.compose_build",
-                IconName::Layers,
+                AppIcon::Ui(UiIcon::DEPENDENCIES),
                 ComposeAction::Build,
                 name.clone(),
             ));
             menu = menu.item(compose_menu_item(
                 &view,
                 "container.action.compose_pull",
-                IconName::Download,
+                AppIcon::Ui(UiIcon::DOWNLOAD),
                 ComposeAction::Pull,
                 name.clone(),
             ));
@@ -142,7 +147,7 @@ pub(super) fn compose_header_actions(
             menu.item(compose_menu_item(
                 &view,
                 "container.action.compose_down",
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
                 ComposeAction::Down,
                 name.clone(),
             ))
@@ -170,7 +175,7 @@ pub(super) fn image_header_actions(
     vec![
         Button::new("image-tag")
             .xsmall()
-            .icon(IconName::TagPlus)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::TAG)).small())
             .label(rust_i18n::t!("container.action.tag").to_string())
             .on_click(move |_, _, cx| {
                 tag_view.update(cx, |_, cx| {
@@ -180,7 +185,7 @@ pub(super) fn image_header_actions(
             .into_any_element(),
         Button::new("image-push")
             .xsmall()
-            .icon(IconName::Upload)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
             .label(rust_i18n::t!("container.action.push").to_string())
             .on_click(move |_, _, cx| {
                 push_view.update(cx, |_, cx| {
@@ -193,7 +198,7 @@ pub(super) fn image_header_actions(
             .into_any_element(),
         Button::new("image-save")
             .xsmall()
-            .icon(IconName::Download)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
             .label(rust_i18n::t!("container.action.save_image").to_string())
             .on_click(move |_, _, cx| {
                 save_view.update(cx, |_, cx| {
@@ -218,7 +223,7 @@ pub(super) fn network_header_actions(
     vec![
         Button::new("network-connect")
             .xsmall()
-            .icon(IconName::Link)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD_LINK)).small())
             .label(rust_i18n::t!("container.action.connect_network").to_string())
             .on_click(move |_, _, cx| {
                 connect_view.update(cx, |_, cx| {

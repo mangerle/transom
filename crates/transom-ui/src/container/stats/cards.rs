@@ -2,6 +2,8 @@
 
 use super::*;
 use gpui_kit::prelude::FluentBuilder;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 
 /// 统计走势波形图的标准高度，提供更开阔的波形视觉呈现。
 pub(crate) const STAT_SPARKLINE_HEIGHT: f32 = 72.0;
@@ -104,7 +106,7 @@ pub(crate) fn cpu_card(
     };
     stat_card(
         "container-stats-card-cpu",
-        IconName::Cpu,
+        AppIcon::Custom(CustomIcon::CPU),
         rust_i18n::t!("container.stats.cpu").to_string(),
         summary,
         content.into_any_element(),
@@ -220,7 +222,7 @@ pub(crate) fn memory_card(
     };
     stat_card(
         "container-stats-card-memory",
-        IconName::Server,
+        AppIcon::Custom(CustomIcon::MEMORY),
         rust_i18n::t!("container.stats.memory").to_string(),
         summary,
         content.into_any_element(),
@@ -319,7 +321,7 @@ pub(crate) fn network_card(
 
     stat_card(
         "container-stats-card-network",
-        IconName::Network,
+        AppIcon::Custom(CustomIcon::NETWORK),
         rust_i18n::t!("container.stats.network").to_string(),
         div().into_any_element(),
         content.into_any_element(),
@@ -462,7 +464,7 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
 
     stat_card(
         "container-stats-card-disk",
-        IconName::HardDrive,
+        AppIcon::Custom(CustomIcon::DISK),
         rust_i18n::t!("container.stats.disk").to_string(),
         div().into_any_element(),
         content.into_any_element(),

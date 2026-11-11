@@ -14,13 +14,16 @@ use crate::container::types::ContainerWorkspaceStatus;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::divider::h_resizable;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use header::render_container_header;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染容器标签页正文：头部、列表/详情分栏与拉取抽屉。
 ///
@@ -119,26 +122,29 @@ pub(crate) fn render_container_connection_state(
     let profile = state.profile.clone();
     let (icon, title, detail, retry) = match status {
         ContainerWorkspaceStatus::Connecting => (
-            IconName::Loader,
+            AppIcon::Ui(UiIcon::REFRESH),
             rust_i18n::t!("container.state.connecting").to_string(),
             profile.engine.describe(),
             false,
         ),
         ContainerWorkspaceStatus::Failed(error) => (
-            IconName::CircleAlert,
+            AppIcon::Ui(UiIcon::ERROR),
             rust_i18n::t!("container.state.failed").to_string(),
             error,
             true,
         ),
         ContainerWorkspaceStatus::Disconnected => (
-            IconName::CircleAlert,
+            AppIcon::Ui(UiIcon::ERROR),
             rust_i18n::t!("container.state.disconnected").to_string(),
             profile.engine.describe(),
             true,
         ),
-        ContainerWorkspaceStatus::Connected => {
-            (IconName::Container, String::new(), String::new(), false)
-        }
+        ContainerWorkspaceStatus::Connected => (
+            AppIcon::Domain(DomainIcon::CONTAINER),
+            String::new(),
+            String::new(),
+            false,
+        ),
     };
     let mut body = v_flex()
         .size_full()
@@ -146,7 +152,7 @@ pub(crate) fn render_container_connection_state(
         .justify_center()
         .gap_3()
         .child(
-            Icon::new(icon)
+            AppIconElement::new(icon)
                 .with_size(px(28.0))
                 .text_color(p.muted_foreground),
         )
@@ -157,7 +163,7 @@ pub(crate) fn render_container_connection_state(
             Button::new("container-retry")
                 .primary()
                 .small()
-                .icon(IconName::RefreshCw)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                 .label(rust_i18n::t!("common.retry").to_string())
                 .on_click({
                     let view = view.clone();

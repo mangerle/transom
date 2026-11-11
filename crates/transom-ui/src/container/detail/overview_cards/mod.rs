@@ -14,10 +14,12 @@
 use super::*;
 use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 mod environment;
 mod health;
@@ -32,7 +34,7 @@ pub(super) use ports::render_port_chips;
 /// 分组卡片容器：4% 弱底色、圆角、无冗余粗边框、11px 弱色标题。
 pub(super) fn overview_card(
     title: impl Into<SharedString>,
-    icon: IconName,
+    icon: AppIcon,
     p: &Palette,
     extra: Option<AnyElement>,
     content: impl IntoElement,
@@ -45,7 +47,11 @@ pub(super) fn overview_card(
             h_flex()
                 .gap_1p5()
                 .items_center()
-                .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
+                .child(
+                    AppIconElement::new(icon)
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
                 .child(
                     div()
                         .text_size(rems(0.6875))
@@ -118,7 +124,7 @@ pub(super) fn copyable_field(
         ))
         .ghost()
         .xsmall()
-        .icon(IconName::Copy)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
         .accessibility_label(rust_i18n::t!("common.copy").to_string())
         .tooltip(rust_i18n::t!("common.copy").to_string())
         .on_click({

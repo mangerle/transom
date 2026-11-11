@@ -8,7 +8,6 @@ use crate::app::AppShell;
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::tiling::{TiledTabs, TilingId, TilingNode};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -16,6 +15,10 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 渲染并排网格；没有任何有效槽位时返回 `None`，由调用方退回单标签。
@@ -102,16 +105,20 @@ impl AppShell {
                     title = format!("{title} #{serial}");
                 }
                 let tab_icon = match &tab.session.connection {
-                    Connection::Local(_) => IconName::Terminal,
-                    Connection::Serial(_) => IconName::Cable,
-                    Connection::Telnet(_) => IconName::Network,
-                    Connection::Mosh(_) => IconName::Radio,
-                    Connection::ContainerEngine(_) => IconName::Container,
-                    _ => IconName::Server,
+                    Connection::Local(_) => AppIcon::Domain(DomainIcon::TERMINAL),
+                    Connection::Serial(_) => AppIcon::Domain(DomainIcon::SSH),
+                    Connection::Telnet(_) => AppIcon::Domain(DomainIcon::SSH),
+                    Connection::Mosh(_) => AppIcon::Ui(UiIcon::RUN),
+                    Connection::ContainerEngine(_) => AppIcon::Domain(DomainIcon::CONTAINER),
+                    _ => AppIcon::Domain(DomainIcon::SSH),
                 };
                 (title, dot_color, tab_icon)
             }
-            None => (String::new(), p.muted_foreground, IconName::Terminal),
+            None => (
+                String::new(),
+                p.muted_foreground,
+                AppIcon::Domain(DomainIcon::TERMINAL),
+            ),
         };
 
         let header = super::pane_header::pane_header(
@@ -200,7 +207,7 @@ impl AppShell {
             ))
             .ghost()
             .small()
-            .icon(IconName::Plus)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
             .label(rust_i18n::t!("tiling.fill_slot").to_string())
             .dropdown_menu(move |menu, _window, _cx| {
                 let mut menu = menu;

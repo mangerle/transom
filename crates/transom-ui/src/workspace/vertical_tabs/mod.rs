@@ -19,13 +19,11 @@ mod item;
 
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
-use crate::app_assets::AppIcon;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::session_icon;
 use crate::sidebar::SidebarSection;
 use crate::theme::tokens::size;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Input;
@@ -34,6 +32,9 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::AppSettings;
 use transom_core::{GroupId, SessionId, TabPosition};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppState {
     fn group_matches(&self, group_id: GroupId, query_lower: &str) -> bool {
@@ -80,7 +81,7 @@ impl AppState {
                     session.name.clone()
                 },
                 icon: session_icon(session.icon)
-                    .unwrap_or_else(|| crate::connection::icon(&session.connection).into()),
+                    .unwrap_or_else(|| crate::connection::icon(&session.connection)),
             };
             let Some(folder_id) = session.folder_id else {
                 root.push(entry);
@@ -223,7 +224,7 @@ impl AppShell {
             .child(
                 crate::widgets::IconButton::new(
                     "vertical-tabs-new",
-                    IconName::Plus,
+                    AppIcon::Ui(UiIcon::ADD),
                     rust_i18n::t!("app.new_session").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -251,7 +252,7 @@ impl AppShell {
                 rust_i18n::t!("tab.vertical_empty_hint").to_string(),
             )
         };
-        crate::widgets::empty_state(IconName::Terminal, title, hint, p)
+        crate::widgets::empty_state(AppIcon::Domain(DomainIcon::TERMINAL), title, hint, p)
     }
 
     pub(crate) fn show_vertical_tabs_panel(&self, settings: &AppSettings) -> bool {
@@ -304,7 +305,7 @@ fn build_new_session_menu(
         .max_h(px(460.0))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("app.new_local").to_string(),
-            IconName::Terminal,
+            AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, window, cx| {
                 local_app.update(cx, |this, cx| this.open_local_terminal(window, cx));
             },
@@ -314,7 +315,7 @@ fn build_new_session_menu(
                 rust_i18n::t!("app.local_shell_choose").to_string(),
                 shell_submenu,
             )
-            .icon(IconName::Terminal),
+            .icon(AppIcon::Domain(DomainIcon::TERMINAL)),
         )
         .item(PopupMenuItem::separator());
     for entry in &data.root {
@@ -333,14 +334,15 @@ fn build_new_session_menu(
             }
             menu
         });
-        menu =
-            menu.item(PopupMenuItem::submenu(folder.label.clone(), submenu).icon(IconName::Folder));
+        menu = menu.item(
+            PopupMenuItem::submenu(folder.label.clone(), submenu).icon(AppIcon::Ui(UiIcon::FOLDER)),
+        );
     }
     let tree_app = app.clone();
     menu.item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
             rust_i18n::t!("vertical_tabs.open_session_tree").to_string(),
-            IconName::Server,
+            AppIcon::Domain(DomainIcon::SSH),
             move |_, _, cx| {
                 tree_app.update(cx, |this, cx| {
                     this.state.sidebar.show_section(SidebarSection::Sessions);

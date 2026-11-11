@@ -3,18 +3,19 @@
 use crate::activity_bar::{activity_item_icon, activity_item_label};
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use crate::settings::SettingsView;
 use crate::status_bar::{status_item_icon, status_item_label};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{ActivityItemId, StatusItemId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 单个布局条目的显隐行参数。
 struct VisibilityRowOptions {
@@ -109,7 +110,7 @@ impl SettingsView {
                 VisibilityRowOptions {
                     key: format!("status-{}", id.key()),
                     label: status_item_label(id),
-                    icon: status_item_icon(id).into(),
+                    icon: status_item_icon(id),
                     visible: !app_settings(cx).status_bar.is_hidden(id),
                     pinned: false,
                 },
@@ -211,7 +212,7 @@ impl SettingsView {
         let mut trailing = h_flex().items_center().gap_1p5().flex_none();
         if pinned {
             trailing = trailing.child(
-                Icon::new(IconName::Lock)
+                AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED))
                     .xsmall()
                     .text_color(p.muted_foreground),
             );
@@ -240,7 +241,11 @@ impl SettingsView {
                     .min_w_0()
                     .items_center()
                     .gap_2()
-                    .child(Icon::new(icon).small().text_color(p.muted_foreground))
+                    .child(
+                        AppIconElement::new(icon)
+                            .small()
+                            .text_color(p.muted_foreground),
+                    )
                     .child(div().text_sm().truncate().child(label)),
             )
             .child(trailing)

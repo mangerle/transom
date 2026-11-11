@@ -5,15 +5,13 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use crate::tiling::{StripEntry, TiledTabs};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis, TabId};
-
 #[path = "item_parts.rs"]
 pub(super) mod item_parts;
 
@@ -23,6 +21,7 @@ use super::menu::{TabContextMenuParams, build_tab_context_menu};
 use crate::app::app_settings;
 use crate::connection::session_host;
 use crate::workspace::tab_drag::attach_tab_drag;
+use transom_ui_icons::AppIconElement;
 
 /// 渲染标签栏中的单个条目（可以是单标签或并排组）。
 pub(super) fn render_tab_entry(
@@ -217,11 +216,15 @@ pub(super) fn render_tab_entry(
 
     element = element
         .child(crate::widgets::status_dot_bare(dot_color))
-        .child(Icon::new(tab_icon).flex_none().text_color(if active {
-            p.tab_active_foreground
-        } else {
-            p.muted_foreground
-        }))
+        .child(
+            AppIconElement::new(tab_icon)
+                .flex_none()
+                .text_color(if active {
+                    p.tab_active_foreground
+                } else {
+                    p.muted_foreground
+                }),
+        )
         .child(
             div()
                 .text_sm()

@@ -9,16 +9,16 @@
 
 use super::{GitFolderRow, GitProjectRow, render_git_folder_menu, render_git_project_menu};
 use crate::app::AppShell;
-use crate::app_assets::AppIcon;
 use crate::git::types::{GitBadge, GitDropTarget, GitSidebarDrag};
 use crate::palette::Palette;
-use crate::session_appearance::{session_color, session_icon};
-use gpui_kit::assets::IconName;
+use crate::session_appearance::session_color;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{DropSide, GitFolderId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 行槽位高度：与会话侧栏同值，切换面板时行高不会跳。
 const ROW_HEIGHT: Pixels = px(38.0);
@@ -60,7 +60,7 @@ impl AppShell {
                 this.toggle_git_folder_collapsed(folder_id, cx);
             }))
             .on_drag(anchor, move |_, _, _, cx| {
-                cx.new(|_| GitDragPreview::new(label.clone(), AppIcon::Named(IconName::Folder)))
+                cx.new(|_| GitDragPreview::new(label.clone(), UiIcon::FOLDER.into()))
             })
             .context_menu(move |menu, _window, _cx| {
                 render_git_folder_menu(menu, app_entity.clone(), folder_id)
@@ -90,21 +90,14 @@ impl AppShell {
             .hover(move |style| style.bg(hover_bg))
             .drag_over::<GitSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
             .child(
-                Icon::new(if row.collapsed {
-                    IconName::ChevronRight
+                AppIconElement::new(if row.collapsed {
+                    UiIcon::CHEVRON_RIGHT
                 } else {
-                    IconName::ChevronDown
+                    UiIcon::CHEVRON_DOWN
                 })
                 .with_size(ROW_CHEVRON_SIZE),
             )
-            .child(
-                Icon::new(if row.collapsed {
-                    IconName::Folder
-                } else {
-                    IconName::FolderOpen
-                })
-                .with_size(ROW_ICON_SIZE),
-            )
+            .child(render_app_icon(UiIcon::FOLDER.into(), 18.0))
             .child(
                 div()
                     .flex_1()
@@ -169,7 +162,7 @@ impl AppShell {
         let menu_folders = folders.to_vec();
         let project_for_click = project.clone();
         let drag_label = name.clone();
-        let icon_name = session_icon(project.icon).unwrap_or(AppIcon::Named(IconName::GitBranch));
+        let icon_name = UiIcon::VCS.into();
 
         let element = div()
             .id(ElementId::Name(format!("git-project-{id}").into()))
@@ -214,10 +207,12 @@ impl AppShell {
                 p.sidebar_foreground
             })
             .child(
-                Icon::new(icon_name).with_size(ROW_ICON_SIZE).text_color(
-                    session_color(project.color)
-                        .unwrap_or_else(|| state_icon_color(&badge, is_active, p)),
-                ),
+                AppIconElement::new(icon_name)
+                    .with_size(ROW_ICON_SIZE)
+                    .text_color(
+                        session_color(project.color)
+                            .unwrap_or_else(|| state_icon_color(&badge, is_active, p)),
+                    ),
             )
             .child(
                 v_flex()
@@ -323,7 +318,11 @@ impl Render for GitDragPreview {
             .shadow_md()
             .text_sm()
             .text_color(p.popover_foreground)
-            .child(Icon::new(self.icon).xsmall().text_color(p.muted_foreground))
+            .child(
+                AppIconElement::new(self.icon)
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
             .child(self.label.clone())
     }
 }

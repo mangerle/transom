@@ -11,12 +11,14 @@
 use crate::container::ContainerWorkspace;
 use crate::monitor::{SampleIntervalMode, SparklineChartType, usage_color};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{ContainerDetails, ContainerProcess, ContainerStats};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 mod cards;
 mod ports;
@@ -126,7 +128,7 @@ pub(crate) fn render_container_stats(
             .border_1()
             .border_color(p.danger.opacity(0.4))
             .child(
-                Icon::new(IconName::TriangleAlert)
+                AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
                     .small()
                     .text_color(p.danger),
             )

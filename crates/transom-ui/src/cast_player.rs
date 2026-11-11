@@ -12,7 +12,6 @@
 use crate::cast_player_io::{ChannelReader, format_duration};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -23,6 +22,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use transom_core::{TerminalControlHandle, TerminalInteraction, TerminalIo, TerminalProfile};
 use transom_terminal::{CastEvent, CastEventType, CastHeader, TerminalView};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 录像终端输出帧。
 #[derive(Debug, Clone)]
@@ -290,9 +291,9 @@ impl CastPlayerView {
     /// 播放/后退/前进三个按钮。
     fn render_playback_buttons(&self, _p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let play_icon = if self.is_playing {
-            IconName::Pause
+            AppIcon::Ui(UiIcon::PAUSE)
         } else {
-            IconName::Play
+            AppIcon::Ui(UiIcon::RUN)
         };
         let play_tooltip = if self.is_playing {
             rust_i18n::t!("recorder.pause").to_string()
@@ -313,7 +314,7 @@ impl CastPlayerView {
             .child(
                 crate::widgets::IconButton::new(
                     "player-backward-5s",
-                    IconName::RotateCcw,
+                    AppIcon::Ui(UiIcon::UNDO),
                     rust_i18n::t!("recorder.backward_5s").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -325,7 +326,7 @@ impl CastPlayerView {
             .child(
                 crate::widgets::IconButton::new(
                     "player-forward-5s",
-                    IconName::RotateCw,
+                    AppIcon::Ui(UiIcon::REFRESH),
                     rust_i18n::t!("recorder.forward_5s").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -379,7 +380,7 @@ impl CastPlayerView {
             .child(
                 crate::widgets::IconButton::new(
                     "player-restart-btn",
-                    IconName::RefreshCw,
+                    AppIcon::Ui(UiIcon::REFRESH),
                     rust_i18n::t!("recorder.restart").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)

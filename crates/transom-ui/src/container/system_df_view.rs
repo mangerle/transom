@@ -7,10 +7,13 @@
 
 use crate::format::format_size;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染全局存储占用的四色分段堆叠比例条与图例。
 pub(crate) fn render_stacked_usage_bar(
@@ -128,7 +131,7 @@ pub(crate) fn render_df_details_list(
         .w_full()
         .child(render_df_detail_row(
             rust_i18n::t!("container.system_df.category_images").to_string(),
-            IconName::Disc,
+            AppIcon::Domain(DomainIcon::MONITOR),
             usage.images_count,
             usage.images_size,
             usage.images_reclaimable,
@@ -137,7 +140,7 @@ pub(crate) fn render_df_details_list(
         ))
         .child(render_df_detail_row(
             rust_i18n::t!("container.system_df.category_containers").to_string(),
-            IconName::Box,
+            AppIcon::Domain(DomainIcon::CONTAINER),
             usage.containers_count,
             usage.containers_size,
             usage.containers_reclaimable,
@@ -146,7 +149,7 @@ pub(crate) fn render_df_details_list(
         ))
         .child(render_df_detail_row(
             rust_i18n::t!("container.system_df.category_volumes").to_string(),
-            IconName::Database,
+            AppIcon::Custom(CustomIcon::VOLUME),
             usage.volumes_count,
             usage.volumes_size,
             usage.volumes_reclaimable,
@@ -155,7 +158,7 @@ pub(crate) fn render_df_details_list(
         ))
         .child(render_df_detail_row(
             rust_i18n::t!("container.system_df.category_build_cache").to_string(),
-            IconName::Layers,
+            AppIcon::Ui(UiIcon::DEPENDENCIES),
             usage.build_cache_count,
             usage.build_cache_size,
             usage.build_cache_reclaimable,
@@ -167,7 +170,7 @@ pub(crate) fn render_df_details_list(
 
 fn render_df_detail_row(
     title: String,
-    icon: IconName,
+    icon: AppIcon,
     count: usize,
     size: u64,
     reclaimable: u64,
@@ -191,7 +194,7 @@ fn render_df_detail_row(
                 .gap_2p5()
                 .items_center()
                 .child(div().w(px(3.0)).h(px(16.0)).rounded_full().bg(accent_color))
-                .child(Icon::new(icon).small().text_color(accent_color))
+                .child(AppIconElement::new(icon).small().text_color(accent_color))
                 .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
                 .child(
                     div()

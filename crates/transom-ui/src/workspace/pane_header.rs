@@ -8,11 +8,12 @@
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::DividerWidth;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 标题条的渲染输入。
 pub(super) struct PaneHeaderProps<'a> {
@@ -23,7 +24,7 @@ pub(super) struct PaneHeaderProps<'a> {
     /// 是否为当前焦点所在格。
     pub(super) active: bool,
     pub(super) dot_color: Hsla,
-    pub(super) icon: IconName,
+    pub(super) icon: AppIcon,
     pub(super) title: String,
     /// 组内窗格序号；并排格没有序号，传 `None`。
     pub(super) ordinal: Option<usize>,
@@ -82,7 +83,7 @@ where
                 .flex_none()
                 .bg(props.dot_color),
         )
-        .child(Icon::new(props.icon).xsmall());
+        .child(AppIconElement::new(props.icon).xsmall());
     if let Some(ordinal) = props.ordinal {
         header = header.child(
             div()
@@ -121,7 +122,7 @@ where
                     cx.stop_propagation();
                 })
                 .on_click(on_close)
-                .child(Icon::new(IconName::X).xsmall()),
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).xsmall()),
         )
         .divider_edge(DividerEdge::Bottom, underline_width)
 }

@@ -8,14 +8,16 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::PushTagsMode;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 use super::views::{render_commit_detail_card, render_commit_row, render_file_row};
 
@@ -62,7 +64,7 @@ pub(super) fn render_push_dialog(
                 .bg(p.surface.active)
                 .rounded_sm()
                 .child(
-                    Icon::new(IconName::FolderGit)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::VCS))
                         .xsmall()
                         .text_color(p.primary),
                 )
@@ -79,7 +81,7 @@ pub(super) fn render_push_dialog(
                 .gap_1()
                 .items_center()
                 .child(
-                    Icon::new(IconName::GitBranch)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::VCS))
                         .xsmall()
                         .text_color(p.primary),
                 )
@@ -92,7 +94,7 @@ pub(super) fn render_push_dialog(
                 ),
         )
         .child(
-            Icon::new(IconName::ArrowRight)
+            AppIconElement::new(AppIcon::Ui(UiIcon::RIGHT))
                 .xsmall()
                 .text_color(p.muted_foreground),
         )
@@ -101,7 +103,7 @@ pub(super) fn render_push_dialog(
                 .gap_1()
                 .items_center()
                 .child(
-                    Icon::new(IconName::Globe)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::LANGUAGE))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 )
@@ -123,7 +125,11 @@ pub(super) fn render_push_dialog(
                     .bg(p.warning.opacity(0.15))
                     .border_1()
                     .border_color(p.warning.opacity(0.3))
-                    .child(Icon::new(IconName::Shield).xsmall().text_color(p.warning))
+                    .child(
+                        AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED))
+                            .xsmall()
+                            .text_color(p.warning),
+                    )
                     .child(
                         div()
                             .text_xs()
@@ -288,7 +294,7 @@ pub(super) fn render_push_dialog(
             .border_b_1()
             .border_color(p.danger.opacity(0.4))
             .child(
-                Icon::new(IconName::CircleAlert)
+                AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                     .xsmall()
                     .text_color(p.danger),
             )
@@ -414,7 +420,7 @@ pub(super) fn render_push_dialog(
             Button::new("git-push-submit")
                 .primary()
                 .small()
-                .icon(IconName::ArrowUpFromLine)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                 .disabled(running)
                 .label(if running {
                     rust_i18n::t!("git.overview.loading").to_string()

@@ -3,11 +3,10 @@
 use super::GitConflictModal;
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl AppShell {
     pub(super) fn render_conflict_body(
@@ -65,7 +64,7 @@ impl AppShell {
                             this.git_conflict_select_file(idx, cx);
                         });
                     })
-                    .child(Icon::new(IconName::FileText).xsmall().text_color(p.warning))
+                    .child(render_app_icon(AppIcon::for_file(path), 16.0))
                     .child(
                         div()
                             .flex_1()

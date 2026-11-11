@@ -1,6 +1,8 @@
 //! SFTP 弹窗视图。
 
 use super::common::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     pub(crate) fn render_sftp_input_body(
@@ -38,7 +40,7 @@ impl AppShell {
             .child(crate::widgets::dialog_confirm_button(
                 "confirm-sftp-input",
                 rust_i18n::t!("common.confirm").to_string(),
-                Some(IconName::Check),
+                Some(AppIcon::Ui(UiIcon::CHECK)),
                 crate::widgets::DialogConfirmKind::Primary,
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
                     this.commit_sftp_input_modal(window, cx);

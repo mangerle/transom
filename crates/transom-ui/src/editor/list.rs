@@ -13,14 +13,16 @@
 
 use super::entity::EditorPanels;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::EditorState;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl EditorPanels {
     /// 从列表行跳转：展开、置顶并聚焦目标面板，然后收起浮层。
@@ -55,13 +57,20 @@ pub(crate) fn render_editor_list_popover(
         .panels
         .iter()
         .filter(|item| item.tab_id == tab_id)
-        .map(|item| (item.editor.clone(), item.file_name.clone(), item.dirty))
+        .map(|item| {
+            (
+                item.editor.clone(),
+                item.file_name.clone(),
+                item.remote_path.clone(),
+                item.dirty,
+            )
+        })
         .collect();
     let count = rows.len();
     let card_palette = p.clone();
     let trigger = crate::widgets::IconButton::new(
         "sftp-open-editors",
-        IconName::Files,
+        AppIcon::Ui(UiIcon::DIFF),
         if count > 0 {
             rust_i18n::t!("editor.open_editors_tooltip", count = count).to_string()
         } else {
@@ -91,7 +100,7 @@ pub(crate) fn render_editor_list_popover(
 /// 浮层卡片：逐行列出文件，点击置顶并聚焦；行上区分脏/净图标。
 fn render_editor_list_card(
     entity: &Entity<EditorPanels>,
-    rows: &[(Entity<EditorState>, String, bool)],
+    rows: &[(Entity<EditorState>, String, String, bool)],
     p: &Palette,
 ) -> AnyElement {
     if rows.is_empty() {
@@ -106,7 +115,7 @@ fn render_editor_list_card(
     }
     let items: Vec<_> = rows
         .iter()
-        .map(|(editor, file_name, dirty)| {
+        .map(|(editor, file_name, remote_path, dirty)| {
             let row_entity = entity.clone();
             let row_editor = editor.clone();
             h_flex()
@@ -127,19 +136,7 @@ fn render_editor_list_card(
                         this.focus_listed_editor(&row_editor, window, cx);
                     });
                 })
-                .child(
-                    Icon::new(if *dirty {
-                        IconName::FilePen
-                    } else {
-                        IconName::FileText
-                    })
-                    .xsmall()
-                    .text_color(if *dirty {
-                        p.sidebar_accent_foreground
-                    } else {
-                        p.muted_foreground
-                    }),
-                )
+                .child(render_app_icon(AppIcon::for_file(remote_path), 16.0))
                 .child(
                     div()
                         .flex_1()
@@ -148,6 +145,13 @@ fn render_editor_list_card(
                         .text_xs()
                         .child(file_name.clone()),
                 )
+                .when(*dirty, |this| {
+                    this.child(
+                        AppIconElement::new(AppIcon::Ui(UiIcon::SHOW))
+                            .with_size(px(6.0))
+                            .text_color(p.sidebar_accent_foreground),
+                    )
+                })
         })
         .collect();
     v_flex()

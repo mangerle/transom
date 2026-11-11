@@ -12,13 +12,11 @@
 //! - 动态扩展字段卡：根据端点档位追加 SSH / TLS / CLI 参数字段
 
 use crate::app::AppShell;
-use crate::app_assets::AppIcon;
 use crate::container::types::{ContainerFormState, ContainerSection, EndpointChoice};
 use crate::palette::Palette;
 use crate::session_appearance::{
     SESSION_COLOR_CHOICES, SESSION_ICON_CHOICES, session_color, session_icon,
 };
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -30,7 +28,6 @@ use transom_core::{
     AppCommand, ContainerCommand, ContainerEngineKind, ContainerEngineProfile, ContainerRequestId,
     EngineProfileId, FolderId, SessionColor, SessionIcon,
 };
-
 mod appearance;
 mod connection;
 mod entity;

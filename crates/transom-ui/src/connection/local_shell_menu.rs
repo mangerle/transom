@@ -1,10 +1,11 @@
 //! 新建本地终端时的 Shell 选择菜单。
 
 use crate::app::AppShell;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_platform::shell::ShellOption;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
 
 /// 构建“默认 Shell、各已发现 Shell、Windows 管理员 Shell”的统一菜单。
 pub(crate) fn build_local_terminal_menu(
@@ -17,7 +18,7 @@ pub(crate) fn build_local_terminal_menu(
     let default_app = app.clone();
     let mut menu = menu.item(crate::widgets::menu_item(
         rust_i18n::t!("app.local_shell_default").to_string(),
-        IconName::Terminal,
+        AppIcon::Domain(DomainIcon::TERMINAL),
         move |_, window, cx| {
             default_app.update(cx, |this, cx| this.open_local_terminal(window, cx));
         },
@@ -29,7 +30,7 @@ pub(crate) fn build_local_terminal_menu(
         let label = shell.label.clone();
         menu = menu.item(crate::widgets::menu_item(
             label,
-            IconName::Terminal,
+            AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
                     this.spawn_local_shell(shell.clone(), false, cx);
@@ -53,7 +54,7 @@ pub(crate) fn build_local_terminal_menu(
                 let label = shell.label.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     label,
-                    IconName::Terminal,
+                    AppIcon::Domain(DomainIcon::TERMINAL),
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
                             this.spawn_local_shell(shell.clone(), true, cx);

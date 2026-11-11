@@ -2,11 +2,14 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use transom_core::ContainerPort;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 端口映射 Chips 组。
 ///
@@ -42,7 +45,7 @@ pub(crate) fn render_port_chips(
         let forward_btn = Button::new(ElementId::Name(format!("chip-fwd-{}", private_port).into()))
             .ghost()
             .xsmall()
-            .icon(IconName::ArrowLeftRight)
+            .child(AppIconElement::new(AppIcon::Domain(DomainIcon::FORWARD)).small())
             .accessibility_label(rust_i18n::t!("container.forward.button_tooltip").to_string())
             .tooltip(rust_i18n::t!("container.forward.button_tooltip").to_string())
             .on_click({
@@ -77,7 +80,7 @@ pub(crate) fn render_port_chips(
                         Button::new(ElementId::Name(format!("chip-open-{public}").into()))
                             .ghost()
                             .xsmall()
-                            .icon(IconName::ExternalLink)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small())
                             .label(label)
                             .tooltip(url)
                             .on_click(move |_, _, _| {

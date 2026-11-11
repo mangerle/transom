@@ -1,6 +1,9 @@
 //! 跳板机与代理链表单。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染跳板机级联下拉选择与拓扑链展示。
 pub(super) fn render_jump_section(
@@ -42,7 +45,7 @@ pub(super) fn render_jump_section(
                     Button::new("proxy-jump-dropdown")
                         .outline()
                         .small()
-                        .icon(IconName::Route)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DATAFLOW)).small())
                         .label(jump_label)
                         .dropdown_menu({
                             let options = form.jump_options.clone();
@@ -53,7 +56,7 @@ pub(super) fn render_jump_section(
                                 let entity = dropdown_entity.clone();
                                 let mut menu = menu.item(crate::widgets::menu_item(
                                     rust_i18n::t!("form.proxy_jump_none").to_string(),
-                                    IconName::Ban,
+                                    AppIcon::Ui(UiIcon::ABORT),
                                     {
                                         let entity = entity.clone();
                                         move |_, _, cx| {
@@ -75,7 +78,7 @@ pub(super) fn render_jump_section(
                                     let entity = entity.clone();
                                     menu = menu.item(crate::widgets::menu_item(
                                         label,
-                                        IconName::Route,
+                                        AppIcon::Ui(UiIcon::DATAFLOW),
                                         move |_, _, cx| {
                                             entity.update(cx, |this, cx| {
                                                 this.edit(cx, |form| {

@@ -16,7 +16,6 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::types::{GitDropTarget, GitHub, GitSidebarDrag};
 use crate::palette::Palette;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -25,6 +24,8 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GitFolderId, GitProject, GitProjectId};
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 侧栏的一行：分组标题或项目。
 #[derive(Clone)]
@@ -118,7 +119,7 @@ impl AppShell {
                 Button::new("git-sidebar-new-folder")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::FolderPlus)
+                    .icon(UiIcon::ADD)
                     .accessibility_label(rust_i18n::t!("git.sidebar.new_folder").to_string())
                     .tooltip(rust_i18n::t!("git.sidebar.new_folder").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -129,7 +130,7 @@ impl AppShell {
                 Button::new("git-sidebar-refresh")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::RotateCw)
+                    .icon(UiIcon::REFRESH)
                     .accessibility_label(rust_i18n::t!("git.sidebar.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.sidebar.refresh").to_string())
                     .on_click(cx.listener(|this, _, _window, cx| {
@@ -140,7 +141,7 @@ impl AppShell {
                 Button::new("git-sidebar-clone")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Download)
+                    .icon(UiIcon::FETCH)
                     .accessibility_label(rust_i18n::t!("git.clone.title").to_string())
                     .tooltip(rust_i18n::t!("git.clone.title").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -151,7 +152,7 @@ impl AppShell {
                 Button::new("git-sidebar-add")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Plus)
+                    .icon(UiIcon::ADD)
                     .accessibility_label(rust_i18n::t!("git.sidebar.add").to_string())
                     .tooltip(rust_i18n::t!("git.sidebar.add").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -172,7 +173,7 @@ impl AppShell {
                 Button::new("git-sidebar-add-empty")
                     .primary()
                     .small()
-                    .icon(IconName::Plus)
+                    .icon(UiIcon::ADD)
                     .label(rust_i18n::t!("git.sidebar.add").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_git_project_modal(None, window, cx);
@@ -246,14 +247,14 @@ fn render_git_sidebar_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu
     let app_folder = app.clone();
     menu.item(menu_item(
         rust_i18n::t!("git.sidebar.refresh_all").to_string(),
-        IconName::RotateCw,
+        UiIcon::REFRESH,
         move |_, _, cx| {
             app_refresh.update(cx, |this, cx| this.refresh_all_git_projects(cx));
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.sidebar.new_folder").to_string(),
-        IconName::FolderPlus,
+        UiIcon::ADD,
         move |_, window, cx| {
             app_folder.update(cx, |this, cx| this.open_git_folder_modal(window, cx));
         },
@@ -273,7 +274,7 @@ fn render_git_project_menu(
     let mut menu = menu
         .item(menu_item(
             rust_i18n::t!("git.menu.open").to_string(),
-            IconName::FolderOpen,
+            UiIcon::FOLDER,
             move |_, window, cx| {
                 let found = app_open.update(cx, |this, _cx| {
                     this.state
@@ -291,7 +292,7 @@ fn render_git_project_menu(
         ))
         .item(menu_item(
             rust_i18n::t!("git.menu.open_in_terminal").to_string(),
-            IconName::Terminal,
+            DomainIcon::TERMINAL,
             move |_, _, cx| {
                 app_terminal.update(cx, |this, cx| {
                     // 目录不能只在渲染期捕获：菜单弹出后项目可能被移除，点击时按 id 现取。
@@ -310,7 +311,7 @@ fn render_git_project_menu(
         ))
         .item(menu_item(
             rust_i18n::t!("git.menu.refresh").to_string(),
-            IconName::RotateCw,
+            UiIcon::REFRESH,
             move |_, _, cx| {
                 app_refresh.update(cx, |this, cx| {
                     if let Some(project) = this
@@ -333,7 +334,7 @@ fn render_git_project_menu(
         let app_move = app.clone();
         menu = menu.item(menu_item(
             format!("{} {}", rust_i18n::t!("git.menu.move_to"), name),
-            IconName::Folder,
+            UiIcon::FOLDER,
             move |_, _, cx| {
                 app_move.update(cx, |this, cx| {
                     this.apply_git_drop(
@@ -348,7 +349,7 @@ fn render_git_project_menu(
     let app_root = app.clone();
     menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.move_to_root").to_string(),
-        IconName::FolderTree,
+        UiIcon::TREE,
         move |_, _, cx| {
             app_root.update(cx, |this, cx| this.git_move_project_to_root(id, cx));
         },
@@ -356,7 +357,7 @@ fn render_git_project_menu(
     let app_remove = app;
     menu.item(menu_item(
         rust_i18n::t!("git.menu.remove").to_string(),
-        IconName::Trash,
+        UiIcon::DELETE,
         move |_, _, cx| {
             app_remove.update(cx, |this, cx| this.remove_git_project(id, cx));
         },
@@ -370,7 +371,7 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
     let app_delete = app;
     menu.item(menu_item(
         rust_i18n::t!("git.folder.new_project").to_string(),
-        IconName::Plus,
+        UiIcon::ADD,
         move |_, window, cx| {
             app_add.update(cx, |this, cx| {
                 this.open_git_project_modal(Some(id), window, cx);
@@ -379,7 +380,7 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
     ))
     .item(menu_item(
         rust_i18n::t!("git.folder.rename").to_string(),
-        IconName::FolderPen,
+        UiIcon::FOLDER,
         move |_, window, cx| {
             app_rename.update(cx, |this, cx| {
                 this.open_git_rename_folder_modal(id, window, cx);
@@ -388,7 +389,7 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
     ))
     .item(menu_item(
         rust_i18n::t!("git.folder.delete").to_string(),
-        IconName::Trash,
+        UiIcon::DELETE,
         move |_, _, cx| {
             app_delete.update(cx, |this, cx| this.delete_git_folder(id, cx));
         },

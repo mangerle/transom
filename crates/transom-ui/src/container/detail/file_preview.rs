@@ -4,6 +4,9 @@ use super::*;
 use crate::container::ContainerWorkspace;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::input::{Textarea, TextareaState};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 文件预览渲染参数：预览内容与编辑状态属于同一组视图数据。
 pub(super) struct FilePreviewView<'a> {
@@ -60,7 +63,7 @@ pub(super) fn render_file_preview(
                 Button::new("container-file-save")
                     .primary()
                     .xsmall()
-                    .icon(IconName::Save)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::SAVE)).small())
                     .label(rust_i18n::t!("common.save").to_string())
                     .disabled(preview_saving)
                     .on_click(move |_, _, cx| {
@@ -73,7 +76,7 @@ pub(super) fn render_file_preview(
                 Button::new("container-file-cancel-edit")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Close)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                     .label(rust_i18n::t!("common.cancel").to_string())
                     .disabled(preview_saving)
                     .on_click({
@@ -92,7 +95,7 @@ pub(super) fn render_file_preview(
                 Button::new("container-file-edit")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Pen)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDIT)).small())
                     .label(rust_i18n::t!("container.files.edit").to_string())
                     .on_click(move |_, window, cx| {
                         edit_view.update(cx, |workspace, cx| {
@@ -106,7 +109,7 @@ pub(super) fn render_file_preview(
             Button::new("container-file-close-preview")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Close)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                 .accessibility_label("Close file preview")
                 .on_click(move |_, _, cx| {
                     close_view.update(cx, |workspace, cx| {

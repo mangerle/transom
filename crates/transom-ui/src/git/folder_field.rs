@@ -12,13 +12,14 @@
 use crate::app::AppShell;
 use crate::git::form::{GitFolderField, GitHost};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::GitFolder;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染分组字段：标签 + 可输入的选择框。
 ///
@@ -59,7 +60,7 @@ pub(crate) fn render_git_folder_field(
         .trigger_style(trigger_style)
         .trigger(
             Input::new(&field.name).w_full().suffix(
-                Icon::new(IconName::ChevronsUpDown)
+                AppIconElement::new(AppIcon::Ui(UiIcon::SORT_BY))
                     .xsmall()
                     .text_color(p.muted_foreground),
             ),
@@ -91,7 +92,7 @@ fn render_folder_options(
     let root_app = app.clone();
     let mut list = v_flex().min_w(px(240.0)).gap_0p5().child(folder_option_row(
         "git-folder-root",
-        IconName::FolderTree,
+        AppIcon::Ui(UiIcon::SHOW_AS_TREE),
         rust_i18n::t!("git.project.folder_root").to_string(),
         p,
         {
@@ -111,7 +112,7 @@ fn render_folder_options(
         let picked = name.clone();
         list = list.child(folder_option_row(
             format!("git-folder-{name}"),
-            IconName::Folder,
+            AppIcon::Ui(UiIcon::FOLDER),
             name.clone(),
             p,
             move |window, cx| {
@@ -137,7 +138,7 @@ fn render_folder_options(
 /// 一行候选。
 fn folder_option_row(
     id: impl Into<String>,
-    icon: IconName,
+    icon: AppIcon,
     label: String,
     p: &Palette,
     on_click: impl Fn(&mut Window, &mut App) + 'static,
@@ -151,7 +152,11 @@ fn folder_option_row(
         .cursor_pointer()
         .rounded(p.radius.sm)
         .hover(|style| style.bg(p.list_hover))
-        .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
+        .child(
+            AppIconElement::new(icon)
+                .xsmall()
+                .text_color(p.muted_foreground),
+        )
         .child(div().flex_1().min_w_0().truncate().text_xs().child(label))
         .on_click(move |_, window, cx| on_click(window, cx))
         .into_any_element()

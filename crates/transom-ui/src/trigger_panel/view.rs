@@ -2,6 +2,9 @@
 
 use super::*;
 use super::{trigger_editor_fields, trigger_rule_row};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     pub(crate) fn render_settings_triggers(
@@ -43,7 +46,7 @@ impl SettingsView {
                     .child(
                         Button::new("add-trigger-btn")
                             .small()
-                            .icon(IconName::Plus)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                             .label(rust_i18n::t!("trigger.add_rule").to_string())
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_new_trigger(window, cx);

@@ -3,11 +3,13 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::tiling::{MAX_TILING_SLOTS, TilingId};
-use gpui_kit::assets::IconName;
 use gpui_kit::component::Icon;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 标签条目右键上下文菜单的配置参数对象。
 pub(crate) struct TabContextMenuParams {
@@ -58,7 +60,7 @@ pub(crate) fn build_tab_context_menu(
     let mut menu = menu
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.reconnect").to_string(),
-            IconName::RefreshCw,
+            AppIcon::Ui(UiIcon::REFRESH),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -70,7 +72,7 @@ pub(crate) fn build_tab_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.duplicate").to_string(),
-            IconName::Plus,
+            AppIcon::Ui(UiIcon::ADD),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -87,7 +89,7 @@ pub(crate) fn build_tab_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("audit_viewer.menu_item").to_string(),
-            IconName::FileText,
+            AppIcon::Ui(UiIcon::DIFF),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -104,7 +106,7 @@ pub(crate) fn build_tab_context_menu(
         let copy_app = app.clone();
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("menu.copy_host").to_string(),
-            IconName::Copy,
+            AppIcon::Ui(UiIcon::COPY),
             move |_, _, cx| {
                 let text = host.clone();
                 cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
@@ -129,7 +131,7 @@ pub(crate) fn build_tab_context_menu(
         let container_app = app.clone();
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("menu.manage_containers").to_string(),
-            IconName::Boxes,
+            AppIcon::Domain(DomainIcon::CONTAINER),
             move |_, window, cx| {
                 container_app.update(cx, |this, cx| {
                     this.open_container_workspace_for_session(session_id, window, cx);
@@ -141,7 +143,7 @@ pub(crate) fn build_tab_context_menu(
     menu = menu
         .item(crate::widgets::menu_item(
             rust_i18n::t!("recorder.toggle_recording").to_string(),
-            IconName::Disc,
+            AppIcon::Domain(DomainIcon::MONITOR),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -153,7 +155,7 @@ pub(crate) fn build_tab_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("recorder.replay_menu").to_string(),
-            IconName::Play,
+            AppIcon::Ui(UiIcon::RUN),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -166,7 +168,7 @@ pub(crate) fn build_tab_context_menu(
         .item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.split_right").to_string(),
-            IconName::Columns2,
+            AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -179,7 +181,7 @@ pub(crate) fn build_tab_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.split_down").to_string(),
-            IconName::Rows2,
+            AppIcon::Ui(UiIcon::EDITOR_ONLY),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -194,7 +196,7 @@ pub(crate) fn build_tab_context_menu(
         menu = menu
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.toggle_split_axis").to_string(),
-                IconName::ArrowLeftRight,
+                AppIcon::Domain(DomainIcon::FORWARD),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -207,7 +209,7 @@ pub(crate) fn build_tab_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.detach_pane").to_string(),
-                IconName::ArrowUpRight,
+                AppIcon::Ui(UiIcon::UP),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -220,7 +222,7 @@ pub(crate) fn build_tab_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.close_pane").to_string(),
-                IconName::X,
+                AppIcon::Ui(UiIcon::CLOSE),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -236,7 +238,7 @@ pub(crate) fn build_tab_context_menu(
         .item(
             crate::widgets::MenuItem::new(
                 rust_i18n::t!("menu.tile_right").to_string(),
-                IconName::Columns2,
+                AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             )
             .disabled(!tile_enabled)
             .render({
@@ -251,7 +253,7 @@ pub(crate) fn build_tab_context_menu(
         .item(
             crate::widgets::MenuItem::new(
                 rust_i18n::t!("menu.tile_down").to_string(),
-                IconName::Rows2,
+                AppIcon::Ui(UiIcon::EDITOR_ONLY),
             )
             .disabled(!tile_enabled)
             .render({
@@ -268,7 +270,7 @@ pub(crate) fn build_tab_context_menu(
         let app = app.clone();
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("menu.add_to_tiling", count = groups.len()).to_string(),
-            IconName::LayoutGrid,
+            AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
                     if let Some(group) = this.add_groups_to_tiling(set_id, groups.clone(), window) {
@@ -289,7 +291,7 @@ pub(crate) fn build_tab_context_menu(
         let app = app.clone();
         let palette = palette.clone();
         menu = menu.submenu_with_icon(
-            Some(Icon::new(IconName::LayoutGrid)),
+            Some(Icon::new(AppIcon::Ui(UiIcon::EDITOR_PREVIEW))),
             rust_i18n::t!("menu.tile_selected", count = groups.len()).to_string(),
             window,
             cx,
@@ -311,7 +313,7 @@ pub(crate) fn build_tab_context_menu(
         menu = menu.item(
             crate::widgets::MenuItem::new(
                 rust_i18n::t!("menu.tile_selected", count = selected_singles_count).to_string(),
-                IconName::LayoutGrid,
+                AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             )
             .disabled(true)
             .render(|_, _, _| {}),
@@ -320,7 +322,7 @@ pub(crate) fn build_tab_context_menu(
     menu = menu.item(
         crate::widgets::MenuItem::new(
             rust_i18n::t!("menu.untile").to_string(),
-            IconName::Minimize2,
+            AppIcon::Ui(UiIcon::RESTORE),
         )
         .disabled(this_set_id.is_none())
         .render({
@@ -335,7 +337,7 @@ pub(crate) fn build_tab_context_menu(
     menu.item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.close_tab").to_string(),
-            IconName::X,
+            AppIcon::Ui(UiIcon::CLOSE),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -348,7 +350,7 @@ pub(crate) fn build_tab_context_menu(
         .item(
             crate::widgets::MenuItem::new(
                 rust_i18n::t!("menu.close_tiling_group").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
             )
             .disabled(this_set_id.is_none())
             .render({
@@ -364,7 +366,7 @@ pub(crate) fn build_tab_context_menu(
         )
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.close_other_tabs").to_string(),
-            IconName::Trash,
+            AppIcon::Ui(UiIcon::DELETE),
             {
                 let app = app.clone();
                 move |_, window, cx| {

@@ -10,13 +10,15 @@
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::keymap;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::command::{CommandGroup, CommandItem};
 use gpui_kit::component::theme::ThemeRegistry;
 use gpui_kit::*;
 use transom_core::AppSettings;
 use transom_core::{SessionId, SnippetId, TabId, preset_themes};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 面板条目的落点；Action 条目的动作已挂在 `CommandItem` 上，由组件派发。
 #[derive(Clone)]
@@ -98,7 +100,7 @@ impl AppState {
         if hit(needle, &local_label, &local_keywords) {
             items.push((
                 CommandItem::new()
-                    .icon(IconName::Terminal)
+                    .icon(AppIcon::Domain(DomainIcon::TERMINAL))
                     .label(local_label)
                     .keywords(local_keywords),
                 PaletteTarget::Local,
@@ -132,7 +134,7 @@ impl AppState {
         if transom_core::looks_like_host(term) {
             items.push((
                 CommandItem::new()
-                    .icon(IconName::Globe)
+                    .icon(AppIcon::Ui(UiIcon::LANGUAGE))
                     .label(rust_i18n::t!("app.quick_connect", host = term).to_string())
                     .keywords(vec![SharedString::from(term)]),
                 PaletteTarget::QuickConnect,
@@ -168,9 +170,9 @@ impl AppState {
                 // 1. 跳转选中该容器项
                 if hit(needle, name, &keywords) {
                     let icon = if is_running {
-                        IconName::Play
+                        AppIcon::Ui(UiIcon::RUN)
                     } else {
-                        IconName::Square
+                        AppIcon::Ui(UiIcon::STOP)
                     };
                     items.push((
                         CommandItem::new()
@@ -197,7 +199,7 @@ impl AppState {
                     if hit(needle, &stop_label, &stop_keywords) {
                         items.push((
                             CommandItem::new()
-                                .icon(IconName::Square)
+                                .icon(AppIcon::Ui(UiIcon::STOP))
                                 .label(stop_label)
                                 .keywords(stop_keywords),
                             PaletteTarget::ContainerLifecycle {
@@ -219,7 +221,7 @@ impl AppState {
                     if hit(needle, &restart_label, &restart_keywords) {
                         items.push((
                             CommandItem::new()
-                                .icon(IconName::RefreshCw)
+                                .icon(AppIcon::Ui(UiIcon::REFRESH))
                                 .label(restart_label)
                                 .keywords(restart_keywords),
                             PaletteTarget::ContainerLifecycle {
@@ -241,7 +243,7 @@ impl AppState {
                     if hit(needle, &start_label, &start_keywords) {
                         items.push((
                             CommandItem::new()
-                                .icon(IconName::Play)
+                                .icon(AppIcon::Ui(UiIcon::RUN))
                                 .label(start_label)
                                 .keywords(start_keywords),
                             PaletteTarget::ContainerLifecycle {
@@ -330,7 +332,7 @@ impl AppShell {
             .map(|snippet| {
                 (
                     CommandItem::new()
-                        .icon(IconName::Zap)
+                        .icon(AppIcon::Ui(UiIcon::LIGHTNING))
                         .label(snippet.name.clone())
                         .keywords(vec![SharedString::from(snippet.command.clone())]),
                     PaletteTarget::Snippet(snippet.id),
@@ -362,7 +364,7 @@ impl AppShell {
                 let name = theme.name;
                 (
                     CommandItem::new()
-                        .icon(IconName::Paintbrush)
+                        .icon(AppIcon::Ui(UiIcon::LAYOUT))
                         .label(name.clone())
                         .keywords(vec![
                             SharedString::from(name.clone()),
@@ -391,7 +393,7 @@ fn action_items(needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
             hit(needle, &label, &keywords).then(|| {
                 (
                     CommandItem::new()
-                        .icon(IconName::Command)
+                        .icon(AppIcon::Ui(UiIcon::RUN_ANYTHING))
                         .label(label)
                         .keywords(keywords)
                         .action((spec.action)()),
@@ -450,7 +452,7 @@ fn ui_theme_items(needle: &str, cx: &App) -> Vec<(CommandItem, PaletteTarget)> {
             let name = config.name.to_string();
             (
                 CommandItem::new()
-                    .icon(IconName::Palette)
+                    .icon(AppIcon::Ui(UiIcon::LAYOUT))
                     .label(name.clone())
                     .keywords(vec![
                         SharedString::from(name.clone()),

@@ -9,12 +9,14 @@
 use super::ContainerRunFormView;
 use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl ContainerRunFormView {
     /// 渲染结构化端口映射区域。
@@ -76,7 +78,7 @@ impl ContainerRunFormView {
                         Button::new(ElementId::Name(format!("del-port-{idx}").into()))
                             .xsmall()
                             .ghost()
-                            .icon(IconName::Trash)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                             .accessibility_label("Delete port mapping")
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.remove_port(&del_port_id, cx);
@@ -105,7 +107,7 @@ impl ContainerRunFormView {
                         Button::new("add-port-btn")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Plus)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                             .label(rust_i18n::t!("container.run.add_port").to_string())
                             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                                 this.add_port(window, cx);
@@ -168,7 +170,7 @@ impl ContainerRunFormView {
                         Button::new(ElementId::Name(format!("del-vol-{idx}").into()))
                             .xsmall()
                             .ghost()
-                            .icon(IconName::Trash)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                             .accessibility_label("Delete volume mapping")
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.remove_volume(&del_vol_id, cx);
@@ -197,7 +199,7 @@ impl ContainerRunFormView {
                         Button::new("add-volume-btn")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Plus)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                             .label(rust_i18n::t!("container.run.add_volume").to_string())
                             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                                 this.add_volume(window, cx);
@@ -247,7 +249,7 @@ impl ContainerRunFormView {
                         Button::new(ElementId::Name(format!("del-env-{idx}").into()))
                             .xsmall()
                             .ghost()
-                            .icon(IconName::Trash)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                             .accessibility_label("Delete environment variable")
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                 this.remove_env(&env_id, cx);
@@ -276,7 +278,7 @@ impl ContainerRunFormView {
                         Button::new("add-env-btn")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Plus)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                             .label(rust_i18n::t!("container.run.add_env").to_string())
                             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                                 this.add_env(window, cx);

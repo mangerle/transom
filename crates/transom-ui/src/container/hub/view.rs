@@ -6,11 +6,14 @@
 //! - 遵循纯组件契约，接收状态与行为闭包，杜绝跨层借用与重入死锁。
 
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 /// 常用热门探索镜像标签列表。
 pub(crate) const POPULAR_IMAGE_TAGS: &[&str] = &[
@@ -39,7 +42,7 @@ pub(crate) fn render_hub_header(current_registry_name: &str, p: &Palette) -> Any
                         .items_center()
                         .justify_center()
                         .child(
-                            Icon::new(IconName::Globe)
+                            AppIconElement::new(AppIcon::Custom(CustomIcon::DOCKER))
                                 .with_size(px(18.0))
                                 .text_color(p.primary),
                         ),
@@ -112,7 +115,7 @@ where
                 .gap_1()
                 .items_center()
                 .child(
-                    Icon::new(IconName::Sparkles)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::AI_INTENTION))
                         .with_size(px(12.0))
                         .text_color(p.muted_foreground),
                 )
@@ -144,7 +147,7 @@ where
 
 /// 渲染初始未搜索时的探索指南面板。
 pub(crate) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
-    let guide_card = |icon: IconName, icon_color: Hsla, title: String, desc: String| {
+    let guide_card = |icon: AppIcon, icon_color: Hsla, title: String, desc: String| {
         v_flex()
             .flex_1()
             .min_w_0()
@@ -167,7 +170,11 @@ pub(crate) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
                             .bg(icon_color.opacity(0.12))
                             .items_center()
                             .justify_center()
-                            .child(Icon::new(icon).with_size(px(14.0)).text_color(icon_color)),
+                            .child(
+                                AppIconElement::new(icon)
+                                    .with_size(px(14.0))
+                                    .text_color(icon_color),
+                            ),
                     )
                     .child(
                         div()
@@ -205,7 +212,7 @@ pub(crate) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
                         .items_center()
                         .justify_center()
                         .child(
-                            Icon::new(IconName::Globe)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER))
                                 .with_size(px(24.0))
                                 .text_color(p.primary),
                         ),
@@ -229,19 +236,19 @@ pub(crate) fn render_hub_welcome_guide(p: &Palette) -> AnyElement {
                 .w_full()
                 .gap_3()
                 .child(guide_card(
-                    IconName::ShieldCheck,
+                    AppIcon::Ui(UiIcon::LOCKED),
                     p.success,
                     rust_i18n::t!("container.hub.guide_official_title").to_string(),
                     rust_i18n::t!("container.hub.guide_official_desc").to_string(),
                 ))
                 .child(guide_card(
-                    IconName::Star,
+                    AppIcon::Ui(UiIcon::STAR),
                     p.warning,
                     rust_i18n::t!("container.hub.guide_stars_title").to_string(),
                     rust_i18n::t!("container.hub.guide_stars_desc").to_string(),
                 ))
                 .child(guide_card(
-                    IconName::Download,
+                    AppIcon::Ui(UiIcon::DOWNLOAD),
                     p.primary,
                     rust_i18n::t!("container.hub.guide_pull_title").to_string(),
                     rust_i18n::t!("container.hub.guide_pull_desc").to_string(),
@@ -267,7 +274,7 @@ pub(crate) fn render_hub_results_header(
                 .gap_1p5()
                 .items_center()
                 .child(
-                    Icon::new(IconName::Layers)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::DEPENDENCIES))
                         .with_size(px(13.0))
                         .text_color(p.muted_foreground),
                 )
@@ -313,7 +320,7 @@ where
                 .gap_1p5()
                 .items_center()
                 .child(
-                    Icon::new(IconName::CircleAlert)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                         .with_size(px(13.0))
                         .text_color(p.muted_foreground),
                 )

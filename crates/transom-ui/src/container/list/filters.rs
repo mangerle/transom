@@ -13,6 +13,9 @@ use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::prelude::FluentBuilder;
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 统合筛选菜单：状态筛选、快速清理筛选与排序方式收于一处，激活时展示主色指示圆点。
 pub(crate) fn render_unified_filter_menu(
@@ -37,7 +40,7 @@ pub(crate) fn render_unified_filter_menu(
     Button::new("container-filter-unified")
         .xsmall()
         .ghost()
-        .icon(IconName::ListFilter)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FILTER)).small())
         .label(rust_i18n::t!("container.filter.title").to_string())
         .when(is_filtered, |this| this.selected(true))
         .dropdown_menu(move |menu, _, _| {
@@ -174,7 +177,7 @@ pub(crate) fn render_more_menu(
     Button::new("container-more-menu")
         .xsmall()
         .ghost()
-        .icon(IconName::Ellipsis)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::MORE_HORIZONTAL)).small())
         .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _, _| {
@@ -319,7 +322,7 @@ pub(crate) fn active_sort(
 pub(crate) fn dropdown_trigger(
     id: &'static str,
     label: String,
-    icon: IconName,
+    icon: AppIcon,
     tooltip: Option<String>,
     builder: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
 ) -> AnyElement {
@@ -331,5 +334,8 @@ pub(crate) fn dropdown_trigger(
         Some(tooltip) => button.tooltip(tooltip),
         None => button,
     };
-    button.icon(icon).dropdown_menu(builder).into_any_element()
+    button
+        .child(AppIconElement::new(icon).small())
+        .dropdown_menu(builder)
+        .into_any_element()
 }

@@ -6,11 +6,14 @@
 //! - 核心优势：集中管理本地文件操作契约（上传、新建、软链接、属性、删除等）。
 
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 本地列表项右键菜单参数。
 pub(super) struct LocalContextMenuProps {
@@ -35,7 +38,7 @@ pub(super) fn build_local_context_menu(
         return menu
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.menu.go_up").to_string(),
-                IconName::ArrowUp,
+                AppIcon::Ui(UiIcon::UP),
                 {
                     let app = app_entity.clone();
                     move |_, window, cx| {
@@ -47,7 +50,7 @@ pub(super) fn build_local_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.refresh").to_string(),
-                IconName::RefreshCw,
+                AppIcon::Ui(UiIcon::REFRESH),
                 {
                     let app = app_entity;
                     move |_, _, cx| {
@@ -74,7 +77,7 @@ pub(super) fn build_local_context_menu(
     if is_file {
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("common.edit").to_string(),
-            IconName::FilePen,
+            AppIcon::Ui(UiIcon::EDIT),
             {
                 let app = app_entity.clone();
                 move |_, _, cx| {
@@ -89,7 +92,7 @@ pub(super) fn build_local_context_menu(
     if remote_available {
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.upload").to_string(),
-            IconName::Upload,
+            AppIcon::Ui(UiIcon::UPLOAD),
             {
                 let app = app_entity.clone();
                 move |_, _, cx| {
@@ -111,7 +114,7 @@ pub(super) fn build_local_context_menu(
     menu = menu
         .item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.copy_abs_path").to_string(),
-            IconName::Copy,
+            AppIcon::Ui(UiIcon::COPY),
             {
                 let app = app_entity.clone();
                 move |_, _, cx| {
@@ -130,7 +133,7 @@ pub(super) fn build_local_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.create_symlink").to_string(),
-            IconName::Link2,
+            AppIcon::Ui(UiIcon::ADD_LINK),
             {
                 let app = app_entity.clone();
                 move |_, window, cx| {
@@ -145,7 +148,7 @@ pub(super) fn build_local_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.properties").to_string(),
-            IconName::Info,
+            AppIcon::Custom(CustomIcon::INFO),
             {
                 let app = app_entity.clone();
                 move |_, _, cx| {
@@ -161,7 +164,7 @@ pub(super) fn build_local_context_menu(
     {
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.grant_exec").to_string(),
-            IconName::Terminal,
+            AppIcon::Domain(DomainIcon::TERMINAL),
             {
                 let app = app_entity.clone();
                 move |_, _, cx| {
@@ -182,7 +185,7 @@ pub(super) fn build_local_context_menu(
 
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
-        IconName::FolderPlus,
+        AppIcon::Ui(UiIcon::NEW_FOLDER),
         {
             let app = app_entity.clone();
             move |_, window, cx| {
@@ -194,7 +197,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.new_local_file").to_string(),
-        IconName::FilePlus,
+        AppIcon::Ui(UiIcon::ADD_FILE),
         {
             let app = app_entity.clone();
             move |_, window, cx| {
@@ -206,7 +209,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.rename").to_string(),
-        IconName::Pencil,
+        AppIcon::Ui(UiIcon::EDIT),
         {
             let app = app_entity.clone();
             move |_, window, cx| {
@@ -221,7 +224,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.delete").to_string(),
-        IconName::Trash,
+        AppIcon::Ui(UiIcon::DELETE),
         {
             let app = app_entity.clone();
             move |_, _, cx| {
@@ -238,7 +241,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.open_file_manager").to_string(),
-        IconName::FolderOpen,
+        AppIcon::Ui(UiIcon::FOLDER),
         {
             let app = app_entity.clone();
             move |_, _, cx| {
@@ -250,7 +253,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.refresh").to_string(),
-        IconName::RefreshCw,
+        AppIcon::Ui(UiIcon::REFRESH),
         {
             let app = app_entity.clone();
             move |_, _, cx| {
@@ -262,7 +265,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.copy_entries").to_string(),
-        IconName::Copy,
+        AppIcon::Ui(UiIcon::COPY),
         {
             let app = app_entity.clone();
             move |_, _, cx| {
@@ -274,7 +277,7 @@ pub(super) fn build_local_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.paste_here").to_string(),
-        IconName::Clipboard,
+        AppIcon::Ui(UiIcon::PASTE),
         {
             let app = app_entity;
             move |_, _window, cx| {
@@ -298,7 +301,7 @@ pub(super) fn build_local_blank_context_menu(
 ) -> PopupMenu {
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.go_up").to_string(),
-        IconName::ArrowUp,
+        AppIcon::Ui(UiIcon::UP),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -310,7 +313,7 @@ pub(super) fn build_local_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.refresh").to_string(),
-        IconName::RefreshCw,
+        AppIcon::Ui(UiIcon::REFRESH),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -322,7 +325,7 @@ pub(super) fn build_local_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
-        IconName::FolderPlus,
+        AppIcon::Ui(UiIcon::NEW_FOLDER),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -334,7 +337,7 @@ pub(super) fn build_local_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.new_local_file").to_string(),
-        IconName::FilePlus,
+        AppIcon::Ui(UiIcon::ADD_FILE),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -346,7 +349,7 @@ pub(super) fn build_local_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.paste_here").to_string(),
-        IconName::Clipboard,
+        AppIcon::Ui(UiIcon::PASTE),
         move |_, _window, cx| {
             app.update(cx, |this, cx| {
                 this.paste_clipboard(cx);

@@ -8,10 +8,11 @@
 use crate::app::AppShell;
 use crate::git::types::LogJump;
 use crate::widgets::{MenuItem, menu_item};
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{GitProject, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 提交右键菜单的目标包。
 pub(crate) struct CommitMenuTarget {
@@ -64,7 +65,7 @@ pub(crate) fn render_commit_menu(
         // 1. 复制修订号
         .item(menu_item(
             rust_i18n::t!("git.menu.copy_oid").to_string(),
-            IconName::Copy,
+            AppIcon::Ui(UiIcon::COPY),
             {
                 let copy_app = app.clone();
                 move |_, _, cx| {
@@ -78,7 +79,7 @@ pub(crate) fn render_commit_menu(
         // 2. 添加到智能体上下文
         .item(menu_item(
             rust_i18n::t!("git.menu.add_to_agent_context").to_string(),
-            IconName::Sparkles,
+            AppIcon::Ui(UiIcon::AI_INTENTION),
             {
                 let ai_app = app.clone();
                 move |_, _, cx| {
@@ -92,7 +93,7 @@ pub(crate) fn render_commit_menu(
         // 3. 创建补丁...
         .item(menu_item(
             rust_i18n::t!("git.menu.create_patch").to_string(),
-            IconName::Download,
+            AppIcon::Ui(UiIcon::DOWNLOAD),
             {
                 let patch_app = app.clone();
                 let patch_project = project.clone();
@@ -108,7 +109,7 @@ pub(crate) fn render_commit_menu(
         // 4. 优选 (Cherry-pick)
         .item(menu_item(
             rust_i18n::t!("git.menu.cherry_pick").to_string(),
-            IconName::Cherry,
+            AppIcon::Ui(UiIcon::COMMIT),
             {
                 let pick_app = app.clone();
                 let pick_project = project.clone();
@@ -129,7 +130,7 @@ pub(crate) fn render_commit_menu(
         // 5. 签出修订
         .item(menu_item(
             rust_i18n::t!("git.menu.checkout_revision").to_string(),
-            IconName::GitBranch,
+            AppIcon::Ui(UiIcon::VCS),
             {
                 let checkout_app = app.clone();
                 let checkout_project = project.clone();
@@ -145,7 +146,7 @@ pub(crate) fn render_commit_menu(
         // 6. 在修订版中显示仓库
         .item(menu_item(
             rust_i18n::t!("git.menu.browse_repo_at_revision").to_string(),
-            IconName::FolderGit,
+            AppIcon::Ui(UiIcon::FOLDER),
             {
                 let browse_app = app.clone();
                 let browse_project = project.clone();
@@ -162,7 +163,7 @@ pub(crate) fn render_commit_menu(
         // 7. 与本地比较
         .item(menu_item(
             rust_i18n::t!("git.menu.compare_with_local").to_string(),
-            IconName::GitCompareArrows,
+            AppIcon::Ui(UiIcon::DIFF),
             {
                 let compare_app = app.clone();
                 move |_, _, cx| {
@@ -177,7 +178,7 @@ pub(crate) fn render_commit_menu(
         // 8. 将当前分支重置到此处... (三档快捷重置)
         .item(menu_item(
             rust_i18n::t!("git.menu.reset_current_branch_here").to_string(),
-            IconName::RotateCcw,
+            AppIcon::Ui(UiIcon::UNDO),
             {
                 let reset_app = app.clone();
                 let reset_project = project.clone();
@@ -201,7 +202,7 @@ pub(crate) fn render_commit_menu(
         // 9. 还原提交 (Revert)
         .item(menu_item(
             rust_i18n::t!("git.menu.revert_commit").to_string(),
-            IconName::Undo2,
+            AppIcon::Ui(UiIcon::UNDO),
             {
                 let revert_app = app.clone();
                 let revert_project = project.clone();
@@ -222,7 +223,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.undo_commit").to_string(),
-                IconName::RotateCcw,
+                AppIcon::Ui(UiIcon::UNDO),
             )
             .disabled(!on_branch)
             .render({
@@ -250,7 +251,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.edit_commit_message").to_string(),
-                IconName::Pencil,
+                AppIcon::Ui(UiIcon::EDIT),
             )
             .disabled(!can_fold)
             .render({
@@ -266,7 +267,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.fixup_parent").to_string(),
-                IconName::ArrowDownToLine,
+                AppIcon::Ui(UiIcon::DOWNLOAD),
             )
             .disabled(!can_fold)
             .render({
@@ -284,7 +285,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.squash_parent").to_string(),
-                IconName::ArrowDown,
+                AppIcon::Ui(UiIcon::DOWN),
             )
             .disabled(!can_fold)
             .render({
@@ -302,7 +303,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.drop_commit").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
             )
             .disabled(!can_fold)
             .render({
@@ -327,7 +328,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.rebase_from_here").to_string(),
-                IconName::GitPullRequest,
+                AppIcon::Ui(UiIcon::MERGE),
             )
             .disabled(is_tip)
             .render({
@@ -347,7 +348,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.push_up_to").to_string(),
-                IconName::Upload,
+                AppIcon::Ui(UiIcon::UPLOAD),
             )
             .disabled(!on_branch)
             .render({
@@ -371,7 +372,7 @@ pub(crate) fn render_commit_menu(
                 branch = cur_branch_name.as_str()
             )
             .to_string(),
-            IconName::GitCompareArrows,
+            AppIcon::Ui(UiIcon::DIFF),
             {
                 let rebase_app = app.clone();
                 let rebase_project = project.clone();
@@ -391,7 +392,7 @@ pub(crate) fn render_commit_menu(
         // 18. 新建分支...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_branch_from").to_string(),
-            IconName::GitBranchPlus,
+            AppIcon::Ui(UiIcon::VCS),
             {
                 let branch_app = app.clone();
                 let branch_project = project.clone();
@@ -407,7 +408,7 @@ pub(crate) fn render_commit_menu(
         // 19. 新建标记...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_tag_from").to_string(),
-            IconName::Tag,
+            AppIcon::Ui(UiIcon::TAG),
             {
                 let tag_app = app.clone();
                 let tag_project = project;
@@ -424,7 +425,7 @@ pub(crate) fn render_commit_menu(
         // 20. 转到子提交 (向左箭头)
         .item(menu_item(
             rust_i18n::t!("git.menu.jump_child").to_string(),
-            IconName::ArrowDownToLine,
+            AppIcon::Ui(UiIcon::DOWNLOAD),
             {
                 let jump_app = app.clone();
                 let target = jump_oid.clone();
@@ -440,7 +441,7 @@ pub(crate) fn render_commit_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.jump_parent").to_string(),
-                IconName::ArrowUpToLine,
+                AppIcon::Ui(UiIcon::UPLOAD),
             )
             .disabled(parents.is_empty())
             .render({

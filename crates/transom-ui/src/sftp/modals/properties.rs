@@ -1,6 +1,9 @@
 //! SFTP 弹窗视图。
 
 use super::common::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     pub(crate) fn render_sftp_properties_body(
@@ -23,7 +26,7 @@ impl AppShell {
         let footer = h_flex().gap_2().child(
             Button::new("close-sftp-properties")
                 .ghost()
-                .icon(IconName::Close)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                 .label(rust_i18n::t!("app.close").to_string())
                 .on_click(crate::dialog_host::on_event(
                     app,

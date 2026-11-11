@@ -2,13 +2,15 @@
 
 use super::super::*;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染镜像构建弹窗主体。
 ///
@@ -149,10 +151,10 @@ pub(crate) fn render_container_build_dialog_body(
                     }
                 })
                 .child(
-                    Icon::new(if no_cache {
-                        IconName::Check
+                    AppIconElement::new(if no_cache {
+                        AppIcon::Ui(UiIcon::CHECK)
                     } else {
-                        IconName::Square
+                        AppIcon::Ui(UiIcon::STOP)
                     })
                     .xsmall()
                     .text_color(if no_cache {
@@ -174,7 +176,11 @@ pub(crate) fn render_container_build_dialog_body(
                     .w_full()
                     .gap_2()
                     .items_center()
-                    .child(Icon::new(IconName::Loader).xsmall().text_color(p.primary))
+                    .child(
+                        AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
+                            .xsmall()
+                            .text_color(p.primary),
+                    )
                     .child(
                         div()
                             .text_xs()
@@ -241,7 +247,7 @@ pub(crate) fn render_container_build_dialog_body(
                     .rounded(p.radius.lg)
                     .bg(p.tone.success_subtle)
                     .text_color(p.success)
-                    .child(Icon::new(IconName::Check).small())
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                     .child(
                         div()
                             .text_xs()
@@ -260,7 +266,7 @@ pub(crate) fn render_container_build_dialog_body(
                     .rounded(p.radius.lg)
                     .bg(p.tone.danger_subtle)
                     .text_color(p.danger)
-                    .child(Icon::new(IconName::TriangleAlert).small())
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).small())
                     .child(
                         div()
                             .text_xs()

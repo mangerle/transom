@@ -7,13 +7,14 @@
 use super::entity::EditorPanels;
 use super::panel::PanelConfirm;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::EditorState;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl EditorPanels {
     /// 错误横幅：读取/回传失败的现场文本；权限类错误附一条 Sudo 提权出口。
@@ -37,7 +38,7 @@ impl EditorPanels {
             .rounded(p.radius.md)
             .bg(p.muted)
             .child(
-                Icon::new(IconName::CircleAlert)
+                AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                     .xsmall()
                     .text_color(p.danger),
             )
@@ -47,7 +48,7 @@ impl EditorPanels {
                     Button::new("editor-sudo-banner-btn")
                         .warning()
                         .compact()
-                        .icon(IconName::Shield)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).small())
                         .label(rust_i18n::t!("editor.sudo_save_action").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.prompt_sudo_save(&sudo_editor, window, cx);
@@ -88,7 +89,7 @@ impl EditorPanels {
                 Button::new("editor-conflict-reload")
                     .ghost()
                     .compact()
-                    .icon(IconName::RefreshCw)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                     .label(rust_i18n::t!("editor.conflict_reload").to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.redrive_editor_read(&reload_editor, cx);
@@ -164,7 +165,7 @@ impl EditorPanels {
                     Button::new("editor-save-and-close")
                         .primary()
                         .compact()
-                        .icon(IconName::Check)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                         .label(rust_i18n::t!("editor.save_and_close").to_string())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.save_and_close_editor_panel(&save_close_editor, window, cx);

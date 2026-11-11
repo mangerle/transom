@@ -8,12 +8,13 @@ use super::ref_toolbar::render_refs_action_bar;
 use super::worktrees_group::render_worktree_group;
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{RefKind, TabId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -49,7 +50,7 @@ pub(crate) fn render_refs_panel(
                 .border_b_1()
                 .child(
                     Input::new(&search_input).xsmall().prefix(
-                        Icon::new(IconName::Search)
+                        AppIconElement::new(UiIcon::SEARCH)
                             .xsmall()
                             .text_color(p.muted_foreground),
                     ),

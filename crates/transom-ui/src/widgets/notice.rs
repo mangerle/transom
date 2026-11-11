@@ -9,10 +9,11 @@
 
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 提示条语义。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,11 +24,11 @@ pub(crate) enum NoticeKind {
 }
 
 impl NoticeKind {
-    fn icon(self) -> IconName {
+    fn icon(self) -> AppIcon {
         match self {
-            Self::Success => IconName::CircleCheck,
-            Self::Error => IconName::CircleX,
-            Self::Warning => IconName::TriangleAlert,
+            Self::Success => AppIcon::Ui(UiIcon::GREEN_CHECKMARK),
+            Self::Error => AppIcon::Ui(UiIcon::CLOSE),
+            Self::Warning => AppIcon::Ui(UiIcon::WARNING),
         }
     }
 }
@@ -51,7 +52,7 @@ pub(crate) fn notice(
         .py(rems(space::SM))
         .rounded(p.radius.md)
         .bg(background)
-        .child(Icon::new(kind.icon()).small().text_color(accent))
+        .child(AppIconElement::new(kind.icon()).small().text_color(accent))
         .child(
             div()
                 .flex_1()

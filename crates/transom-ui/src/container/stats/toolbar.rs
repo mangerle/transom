@@ -1,6 +1,9 @@
 //! 统计页工具栏：采样档位、刷新与错误提示。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 工具条：采样档位、走势图形态与右侧的采样状态。
 ///
@@ -43,7 +46,7 @@ pub(crate) fn stats_toolbar(
                 .gap_1p5()
                 .items_center()
                 .child(
-                    Icon::new(IconName::CircleAlert)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                         .xsmall()
                         .text_color(p.danger),
                 )
@@ -57,7 +60,7 @@ pub(crate) fn stats_toolbar(
                     Button::new("container-stats-retry")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::RefreshCw)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                         .label(rust_i18n::t!("common.retry").to_string())
                         .on_click({
                             let view = view.clone();
@@ -78,7 +81,7 @@ pub(crate) fn stats_toolbar(
                 .gap_1p5()
                 .items_center()
                 .child(
-                    Icon::new(IconName::Loader)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 )
@@ -104,8 +107,8 @@ pub(crate) fn stats_toolbar(
                 .ghost()
                 .xsmall()
                 .icon(match chrome.chart {
-                    SparklineChartType::Line => IconName::ChartLine,
-                    SparklineChartType::Bar => IconName::ChartBar,
+                    SparklineChartType::Line => AppIcon::Ui(UiIcon::DATAFLOW),
+                    SparklineChartType::Bar => AppIcon::Ui(UiIcon::DATAFLOW),
                 })
                 .accessibility_label(
                     rust_i18n::t!(match chrome.chart {
@@ -135,7 +138,7 @@ pub(crate) fn stats_toolbar(
             Button::new("container-stats-export")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Download)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                 .accessibility_label(rust_i18n::t!("container.stats.export_csv").to_string())
                 .tooltip(rust_i18n::t!("container.stats.export_csv").to_string())
                 .on_click({

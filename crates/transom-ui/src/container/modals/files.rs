@@ -5,10 +5,11 @@ use crate::palette::Palette;
 use crate::widgets::{
     DialogConfirmKind, dialog_actions, dialog_body, dialog_cancel_button, dialog_confirm_button,
 };
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染容器文件重命名模态弹窗主体。
 ///
@@ -41,7 +42,7 @@ pub(crate) fn render_container_file_rename_dialog_body(
     let confirm = dialog_confirm_button(
         "confirm-container-file-rename",
         rust_i18n::t!("common.confirm").to_string(),
-        Some(IconName::Check),
+        Some(AppIcon::Ui(UiIcon::CHECK)),
         DialogConfirmKind::Primary,
         crate::dialog_host::on_event(view, {
             move |workspace, _: &ClickEvent, _, cx| {
@@ -88,7 +89,7 @@ pub(crate) fn render_container_file_new_dir_dialog_body(
     let confirm = dialog_confirm_button(
         "confirm-container-file-mkdir",
         rust_i18n::t!("container.create").to_string(),
-        Some(IconName::Plus),
+        Some(AppIcon::Ui(UiIcon::ADD)),
         DialogConfirmKind::Primary,
         crate::dialog_host::on_event(view, {
             move |workspace, _: &ClickEvent, _, cx| {

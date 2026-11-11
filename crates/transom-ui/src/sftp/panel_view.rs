@@ -12,11 +12,13 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::theme::tokens::size;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 当前活动窗格的 SFTP 面板元素：实体实现 `Render`，外壳只负责挂载。
@@ -212,7 +214,7 @@ impl SftpPanelView {
                     Button::new("sftp-close-all-collapsed")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::X)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                         .accessibility_label(rust_i18n::t!("app.close").to_string())
                         .tooltip(rust_i18n::t!("app.close").to_string())
                         .on_click(cx.listener(move |_this, _, _, cx| {

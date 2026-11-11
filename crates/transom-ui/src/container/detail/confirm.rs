@@ -2,6 +2,9 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 删除按钮：把待确认动作写回工作区实体，确认弹窗仍由外壳统一渲染。
 ///
@@ -16,7 +19,7 @@ pub(crate) fn delete_button(
     Button::new(id)
         .danger()
         .xsmall()
-        .icon(IconName::Trash)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
         .label(rust_i18n::t!("common.delete").to_string())
         .on_click(move |_, _, cx| {
             let confirm = confirm.clone();

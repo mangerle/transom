@@ -12,7 +12,6 @@ use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::workspace::pane_status_indicator;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Selectable;
 use gpui_kit::component::Sizable;
@@ -21,6 +20,10 @@ use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::*;
 use std::collections::HashSet;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 mod rows;
 
 use rows::{BroadcastTargetRow, render_target_rows};
@@ -331,7 +334,7 @@ impl AppShell {
         Button::new("broadcast-trigger")
             .ghost()
             .xsmall()
-            .icon(IconName::Megaphone)
+            .child(AppIconElement::new(AppIcon::Custom(CustomIcon::BROADCAST)).small())
             .selected(self.state.broadcast.open)
             .accessibility_label(rust_i18n::t!("broadcast.title").to_string())
             .tooltip(rust_i18n::t!("broadcast.title").to_string())
@@ -346,7 +349,7 @@ impl AppShell {
         let target_trigger = Button::new("broadcast-targets-trigger")
             .ghost()
             .xsmall()
-            .icon(IconName::SquareCheck)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
             .label(rust_i18n::t!("broadcast.targets").to_string())
             .selected(self.state.broadcast.targets_open)
             .tooltip(rust_i18n::t!("broadcast.targets").to_string());
@@ -386,7 +389,7 @@ impl AppShell {
 
         let close = crate::widgets::IconButton::new(
             "broadcast-close",
-            IconName::X,
+            AppIcon::Ui(UiIcon::CLOSE),
             rust_i18n::t!("app.close").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -397,11 +400,14 @@ impl AppShell {
         let toggle = Button::new("broadcast-mode-toggle")
             .ghost()
             .xsmall()
-            .icon(if multiline {
-                IconName::ArrowDown
-            } else {
-                IconName::ArrowUp
-            })
+            .child(
+                AppIconElement::new(if multiline {
+                    AppIcon::Ui(UiIcon::DOWN)
+                } else {
+                    AppIcon::Ui(UiIcon::UP)
+                })
+                .small(),
+            )
             .accessibility_label(if multiline {
                 rust_i18n::t!("broadcast.collapse").to_string()
             } else {

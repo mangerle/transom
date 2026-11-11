@@ -1,18 +1,19 @@
 //! 引擎侧栏行构建：按分组与搜索词扁平化。
 
 use super::*;
+use transom_ui_icons::AppIconElement;
 
 /// 侧栏图标按钮：与会话树的图标按钮同尺寸、同悬停口径。
 pub(crate) fn engine_sidebar_button(
     id: &'static str,
-    icon: IconName,
+    icon: AppIcon,
     tooltip: String,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
     Button::new(id)
         .ghost()
         .xsmall()
-        .icon(icon)
+        .child(AppIconElement::new(icon).small())
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .on_click(on_click)

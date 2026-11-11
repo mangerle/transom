@@ -12,7 +12,7 @@ pub(crate) use state::{SidebarRowsCache, SidebarSection, SidebarState};
 /// 侧栏工具图标按钮配置属性。
 pub(crate) struct SidebarButtonProps<F> {
     pub(crate) id: &'static str,
-    pub(crate) icon: IconName,
+    pub(crate) icon: AppIcon,
     pub(crate) tooltip: String,
     pub(crate) active: bool,
     pub(crate) on_click: F,
@@ -21,7 +21,6 @@ pub(crate) struct SidebarButtonProps<F> {
 use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
@@ -29,6 +28,8 @@ use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::SessionId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 pub(crate) use tree::SidebarRow;
 pub(crate) use tree::{
     BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
@@ -176,7 +177,7 @@ impl AppShell {
                     .child(Self::sidebar_icon_button(
                         SidebarButtonProps {
                             id: "sidebar-select",
-                            icon: IconName::ListChecks,
+                            icon: AppIcon::Ui(UiIcon::CHECK),
                             tooltip: rust_i18n::t!("batch.select_mode").to_string(),
                             active: self.state.sidebar.selection_mode,
                             on_click: cx.listener(|this, _, _, cx| {
@@ -188,7 +189,7 @@ impl AppShell {
                     .child(Self::sidebar_icon_button(
                         SidebarButtonProps {
                             id: "sidebar-new-folder",
-                            icon: IconName::FolderPlus,
+                            icon: AppIcon::Ui(UiIcon::NEW_FOLDER),
                             tooltip: rust_i18n::t!("folder.new_title").to_string(),
                             active: false,
                             on_click: cx.listener(|this, _, window, cx| {
@@ -200,7 +201,7 @@ impl AppShell {
                     .child(Self::sidebar_icon_button(
                         SidebarButtonProps {
                             id: "sidebar-new",
-                            icon: IconName::Plus,
+                            icon: AppIcon::Ui(UiIcon::ADD),
                             tooltip: rust_i18n::t!("app.new_session").to_string(),
                             active: false,
                             on_click: cx.listener(|this, _, window, cx| {
@@ -256,13 +257,13 @@ impl AppShell {
     fn render_sidebar_empty(&self, query: &str, p: &Palette) -> AnyElement {
         let (icon, title, hint) = if !query.trim().is_empty() {
             (
-                IconName::Search,
+                AppIcon::Ui(UiIcon::SEARCH),
                 rust_i18n::t!("app.no_matches").to_string(),
                 rust_i18n::t!("app.no_matches_hint").to_string(),
             )
         } else {
             (
-                IconName::Server,
+                AppIcon::Ui(UiIcon::PROJECT),
                 rust_i18n::t!("app.no_sessions").to_string(),
                 rust_i18n::t!("app.no_sessions_hint").to_string(),
             )

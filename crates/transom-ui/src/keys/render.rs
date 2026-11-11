@@ -8,12 +8,15 @@ use super::entity::KeyWizardView;
 use super::keygen::{KeyAlgorithm, PublicKeyInfo};
 use super::state::{KeyTarget, KeyWizardState};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, Selectable, h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl KeyWizardView {
     /// 弹窗主体：生成区、公钥列表、部署区与页脚。
@@ -162,7 +165,7 @@ fn render_deploy_section(
                 format!("deploy-key-{}", target.tab_id).into(),
             ))
             .small()
-            .icon(IconName::Server)
+            .child(AppIconElement::new(AppIcon::Domain(DomainIcon::SSH)).small())
             .label(label)
             .on_click(cx.listener({
                 let target = target.clone();
@@ -248,7 +251,7 @@ fn selected_key_summary(
                 .child(
                     Button::new("copy-selected-public-key")
                         .small()
-                        .icon(IconName::Copy)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
                         .label(rust_i18n::t!("common.copy").to_string())
                         .on_click(
                             cx.listener(|this, _: &ClickEvent, _, cx| this.copy_selected_key(cx)),
@@ -257,7 +260,7 @@ fn selected_key_summary(
                 .child(
                     Button::new("export-selected-public-key")
                         .small()
-                        .icon(IconName::Download)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                         .label(rust_i18n::t!("keys.export").to_string())
                         .on_click(
                             cx.listener(|this, _: &ClickEvent, _, cx| this.export_selected_key(cx)),
@@ -312,7 +315,7 @@ fn key_row(
             this.select_key(index, cx);
         }))
         .child(
-            Icon::new(IconName::KeyRound)
+            AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED))
                 .small()
                 .text_color(if is_selected {
                     p.sidebar_accent_foreground
@@ -365,7 +368,7 @@ fn key_row(
         );
     if is_selected {
         row = row.child(
-            Icon::new(IconName::Check)
+            AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
                 .small()
                 .text_color(p.sidebar_accent_foreground),
         );
@@ -411,7 +414,7 @@ fn key_generate_fields(
                     Button::new("generate-key-pair")
                         .primary()
                         .small()
-                        .icon(IconName::KeyRound)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).small())
                         .label(if state.generating {
                             rust_i18n::t!("keys.generating").to_string()
                         } else {

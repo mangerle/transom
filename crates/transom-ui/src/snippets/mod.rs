@@ -9,7 +9,6 @@
 use crate::app::AppShell;
 use crate::palette::{Palette, localized_error};
 use crate::theme::tokens::size;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -17,6 +16,8 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::*;
 use transom_core::{Snippet, SnippetId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 
 /// 卡片里命令预览的单行长度上限，避免一条超长命令把卡片撑破。
 const SNIPPET_PREVIEW_MAX_CHARS: usize = 160;
@@ -232,7 +233,7 @@ impl AppShell {
         let app = cx.entity().clone();
         let trigger = crate::widgets::IconButton::new(
             "snippets-trigger",
-            IconName::ListChecks,
+            AppIcon::Custom(CustomIcon::SNIPPET),
             rust_i18n::t!("snippets.title").to_string(),
         )
         .selected(open)

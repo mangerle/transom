@@ -4,14 +4,12 @@ use super::SessionFormView;
 use super::proxy::render_proxy_section;
 use super::types::{AuthChoice, SessionForm};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
-
 mod auth;
 mod jump;
 

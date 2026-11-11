@@ -1,5 +1,9 @@
 //! 分类、页签、筛选与排序：纯枚举与谓词，不持有界面状态。
 
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
+
 /// 工作区顶部功能标签。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ContainerSection {
@@ -29,14 +33,14 @@ impl ContainerSection {
         }
     }
 
-    pub(crate) fn icon(self) -> gpui_kit::assets::IconName {
-        use gpui_kit::assets::IconName;
+    pub(crate) fn icon(self) -> transom_ui_icons::AppIcon {
+        use transom_ui_icons::AppIcon;
         match self {
-            Self::Compose => IconName::Blocks,
-            Self::Containers => IconName::Boxes,
-            Self::Images => IconName::Layers,
-            Self::Volumes => IconName::Database,
-            Self::Networks => IconName::Network,
+            Self::Compose => AppIcon::Ui(UiIcon::DEPENDENCIES),
+            Self::Containers => AppIcon::Domain(DomainIcon::CONTAINER),
+            Self::Images => AppIcon::Custom(CustomIcon::IMAGE),
+            Self::Volumes => AppIcon::Custom(CustomIcon::VOLUME),
+            Self::Networks => AppIcon::Custom(CustomIcon::NETWORK),
         }
     }
 

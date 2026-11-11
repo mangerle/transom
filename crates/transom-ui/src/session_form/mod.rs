@@ -18,6 +18,5 @@ mod view;
 pub(crate) use entity::{SessionFormEvent, SessionFormView};
 pub(crate) use init::text_input;
 pub(crate) use types::{
-    AuthChoice, BuiltSession, ConnectionChoice, IdentityOption, JumpOption, SessionForm,
-    SessionFormInit,
+    AuthChoice, BuiltSession, IdentityOption, JumpOption, SessionForm, SessionFormInit,
 };

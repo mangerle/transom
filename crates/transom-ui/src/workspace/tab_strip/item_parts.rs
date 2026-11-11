@@ -1,6 +1,9 @@
 //! 标签条目的徽标与关闭按钮等子元素。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染分屏窗格列表徽标。
 pub(super) fn render_pane_badge(
@@ -32,9 +35,9 @@ pub(super) fn render_pane_badge(
     let muted = p.muted_foreground;
     let foreground = p.foreground;
     let badge_icon = if root_axis == SplitAxis::Horizontal {
-        IconName::Columns2
+        AppIcon::Ui(UiIcon::EDITOR_PREVIEW)
     } else {
-        IconName::Rows2
+        AppIcon::Ui(UiIcon::EDITOR_ONLY)
     };
     let group_id = group.id;
     let pane_count = group.pane_count();
@@ -59,7 +62,7 @@ pub(super) fn render_pane_badge(
                                 .gap_2()
                                 .items_center()
                                 .child(crate::widgets::status_dot_bare(dot_color))
-                                .child(Icon::new(icon).xsmall().text_color(muted))
+                                .child(AppIconElement::new(icon).xsmall().text_color(muted))
                                 .child(
                                     div()
                                         .text_xs()
@@ -78,7 +81,9 @@ pub(super) fn render_pane_badge(
                                 );
                             if active {
                                 row = row.child(
-                                    Icon::new(IconName::Check).xsmall().text_color(foreground),
+                                    AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
+                                        .xsmall()
+                                        .text_color(foreground),
                                 );
                             }
                             row
@@ -98,7 +103,7 @@ pub(super) fn render_pane_badge(
                         .item(PopupMenuItem::separator())
                         .item(crate::widgets::menu_item(
                             rust_i18n::t!("menu.restore_panes").to_string(),
-                            IconName::Minimize2,
+                            AppIcon::Ui(UiIcon::RESTORE),
                             {
                                 let app = app_entity.clone();
                                 move |_, _window, cx| {
@@ -129,7 +134,7 @@ pub(crate) fn render_tab_close_button(
         let tiling_id = tiled.id;
         crate::widgets::IconButton::new(
             ElementId::Name(format!("close-{group_id}").into()),
-            IconName::WindowClose,
+            AppIcon::Ui(UiIcon::CLOSE),
             rust_i18n::t!("app.close").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -139,7 +144,7 @@ pub(crate) fn render_tab_close_button(
             let close_all = menu_app.clone();
             menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.close_tab").to_string(),
-                IconName::X,
+                AppIcon::Ui(UiIcon::CLOSE),
                 move |_, window, cx| {
                     close_current.update(cx, |this, cx| {
                         this.close_group(group_id, window, cx);
@@ -148,7 +153,7 @@ pub(crate) fn render_tab_close_button(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.close_tiling_group").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
                 move |_, window, cx| {
                     close_all.update(cx, |this, cx| {
                         this.close_tiling_group(tiling_id, window, cx);
@@ -187,7 +192,7 @@ pub(crate) fn render_tab_close_button(
                 cx.stop_propagation();
                 this.close_group(group_id, window, cx);
             }))
-            .child(Icon::new(IconName::WindowClose).xsmall())
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).xsmall())
             .into_any_element()
     }
 }

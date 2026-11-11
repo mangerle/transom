@@ -15,7 +15,6 @@
 use super::entity::EditorPanels;
 use super::panel::{EditorPanelState, EditorPhase};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::diff::{Diff, DiffFile, DiffState};
@@ -23,6 +22,9 @@ use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
 use similar::TextDiff;
 use transom_core::{ConnectionId, RemoteTextMeta, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl EditorPanels {
     /// 进入差异预览：按基线与缓冲区现值生成统一 diff 并构建预览实体。
@@ -187,7 +189,7 @@ impl EditorPanels {
                 Button::new("editor-diff-back")
                     .ghost()
                     .compact()
-                    .icon(IconName::Pencil)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDIT)).small())
                     .label(rust_i18n::t!("editor.diff_back").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.close_editor_diff(&back_editor, window, cx);
@@ -197,7 +199,7 @@ impl EditorPanels {
                 Button::new("editor-diff-save")
                     .primary()
                     .compact()
-                    .icon(IconName::Check)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                     .label(rust_i18n::t!("editor.diff_confirm_upload").to_string())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.save_editor_panel(&save_editor, window, cx);

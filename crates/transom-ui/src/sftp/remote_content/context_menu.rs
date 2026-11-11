@@ -11,10 +11,13 @@
 
 use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 判断指定路径是否属于受支持的常见压缩包格式。
 fn is_archive_name(path: &str) -> bool {
@@ -68,7 +71,7 @@ pub(crate) fn build_remote_context_menu(
         return menu
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.menu.go_up").to_string(),
-                IconName::ArrowUp,
+                AppIcon::Ui(UiIcon::UP),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -80,7 +83,7 @@ pub(crate) fn build_remote_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.refresh").to_string(),
-                IconName::RefreshCw,
+                AppIcon::Ui(UiIcon::REFRESH),
                 {
                     let app = app.clone();
                     move |_, _, cx| {
@@ -105,7 +108,7 @@ pub(crate) fn build_remote_context_menu(
 
     let mut m = menu.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.download").to_string(),
-        IconName::Download,
+        AppIcon::Ui(UiIcon::DOWNLOAD),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -120,7 +123,7 @@ pub(crate) fn build_remote_context_menu(
     if !is_dir {
         m = m.item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.builtin_edit").to_string(),
-            IconName::FilePen,
+            AppIcon::Ui(UiIcon::EDIT),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -139,7 +142,7 @@ pub(crate) fn build_remote_context_menu(
         m = m
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.menu.extract_here").to_string(),
-                IconName::Archive,
+                AppIcon::Ui(UiIcon::PATCH),
                 {
                     let app = app.clone();
                     move |_, _, cx| {
@@ -151,7 +154,7 @@ pub(crate) fn build_remote_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.menu.extract_to_new_folder").to_string(),
-                IconName::FolderArchive,
+                AppIcon::Ui(UiIcon::FOLDER),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -179,7 +182,7 @@ pub(crate) fn build_remote_context_menu(
     m = m
         .item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.compress_tar_gz").to_string(),
-            IconName::Archive,
+            AppIcon::Ui(UiIcon::PATCH),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -202,7 +205,7 @@ pub(crate) fn build_remote_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.compress_zip").to_string(),
-            IconName::Archive,
+            AppIcon::Ui(UiIcon::PATCH),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -228,7 +231,7 @@ pub(crate) fn build_remote_context_menu(
         let p_to_main = p_side_copy;
         m = m.item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.copy_to_main_remote").to_string(),
-            IconName::ArrowLeftRight,
+            AppIcon::Domain(DomainIcon::FORWARD),
             {
                 let app = app.clone();
                 move |_, _, cx| {
@@ -242,7 +245,7 @@ pub(crate) fn build_remote_context_menu(
 
     m.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.copy_abs_path").to_string(),
-        IconName::Copy,
+        AppIcon::Ui(UiIcon::COPY),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -260,7 +263,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.create_symlink").to_string(),
-        IconName::Link2,
+        AppIcon::Ui(UiIcon::ADD_LINK),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -273,7 +276,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.properties").to_string(),
-        IconName::Info,
+        AppIcon::Custom(CustomIcon::INFO),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -285,7 +288,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.grant_exec").to_string(),
-        IconName::Terminal,
+        AppIcon::Domain(DomainIcon::TERMINAL),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -298,7 +301,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.chmod").to_string(),
-        IconName::Settings,
+        AppIcon::Ui(UiIcon::SETTINGS),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -311,7 +314,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.new_remote_folder").to_string(),
-        IconName::FolderPlus,
+        AppIcon::Ui(UiIcon::NEW_FOLDER),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -323,7 +326,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.rename").to_string(),
-        IconName::Pencil,
+        AppIcon::Ui(UiIcon::EDIT),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -336,7 +339,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.delete").to_string(),
-        IconName::Trash,
+        AppIcon::Ui(UiIcon::DELETE),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -349,7 +352,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.refresh").to_string(),
-        IconName::RefreshCw,
+        AppIcon::Ui(UiIcon::REFRESH),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -361,7 +364,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.copy_entries").to_string(),
-        IconName::Copy,
+        AppIcon::Ui(UiIcon::COPY),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -374,7 +377,7 @@ pub(crate) fn build_remote_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.paste_here").to_string(),
-        IconName::Clipboard,
+        AppIcon::Ui(UiIcon::PASTE),
         {
             let app = app.clone();
             move |_, _window, cx| {
@@ -410,7 +413,7 @@ pub(crate) fn build_remote_blank_context_menu(
 ) -> PopupMenu {
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.go_up").to_string(),
-        IconName::ArrowUp,
+        AppIcon::Ui(UiIcon::UP),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -422,7 +425,7 @@ pub(crate) fn build_remote_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.refresh").to_string(),
-        IconName::RefreshCw,
+        AppIcon::Ui(UiIcon::REFRESH),
         {
             let app = app.clone();
             move |_, _, cx| {
@@ -434,7 +437,7 @@ pub(crate) fn build_remote_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.new_remote_folder").to_string(),
-        IconName::FolderPlus,
+        AppIcon::Ui(UiIcon::NEW_FOLDER),
         {
             let app = app.clone();
             move |_, window, cx| {
@@ -446,7 +449,7 @@ pub(crate) fn build_remote_blank_context_menu(
     ))
     .item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.paste_here").to_string(),
-        IconName::Clipboard,
+        AppIcon::Ui(UiIcon::PASTE),
         move |_, _window, cx| {
             app.update(cx, |this, cx| {
                 this.activate_pane(target, cx);

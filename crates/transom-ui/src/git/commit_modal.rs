@@ -22,15 +22,17 @@ use crate::app::AppShell;
 use crate::git::ChangeAccent;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{CommitEntry, GitAction, GitProject, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 「修正」目标下拉按钮的渲染参数包。
 pub(crate) struct GitAmendTargetParams<'a> {
@@ -94,7 +96,7 @@ impl AppShell {
                 .rounded(px(3.0))
                 .bg(p.muted)
                 .child(
-                    Icon::new(IconName::GitCommitHorizontal)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 )
@@ -109,7 +111,7 @@ impl AppShell {
         Button::new("git-amend-target")
             .ghost()
             .xsmall()
-            .icon(IconName::GitCommitHorizontal)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT)).small())
             .label(short_oid)
             .tooltip(tooltip)
             .dropdown_menu(move |menu, _window, _cx| {
@@ -122,9 +124,9 @@ impl AppShell {
                     menu = menu.item(menu_item(
                         label,
                         if is_active {
-                            IconName::Check
+                            AppIcon::Ui(UiIcon::CHECK)
                         } else {
-                            IconName::Circle
+                            AppIcon::Ui(UiIcon::SHOW)
                         },
                         move |_menu, window, cx| {
                             let oid = item_oid.clone();
@@ -156,7 +158,7 @@ impl AppShell {
         Button::new("git-grouping")
             .ghost()
             .xsmall()
-            .icon(IconName::Eye)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::SHOW)).small())
             .accessibility_label(rust_i18n::t!("git.group.by").to_string())
             .tooltip(rust_i18n::t!("git.group.by").to_string())
             .dropdown_menu(move |menu, _window, _cx| {
@@ -171,9 +173,9 @@ impl AppShell {
                 menu.item(menu_item(
                     rust_i18n::t!("git.group.flat").to_string(),
                     if by_directory {
-                        IconName::Circle
+                        AppIcon::Ui(UiIcon::SHOW)
                     } else {
-                        IconName::Check
+                        AppIcon::Ui(UiIcon::CHECK)
                     },
                     move |_, _, cx| {
                         if !by_directory {
@@ -188,9 +190,9 @@ impl AppShell {
                 .item(menu_item(
                     rust_i18n::t!("git.group.by_directory").to_string(),
                     if by_directory {
-                        IconName::Check
+                        AppIcon::Ui(UiIcon::CHECK)
                     } else {
-                        IconName::Circle
+                        AppIcon::Ui(UiIcon::SHOW)
                     },
                     move |_, _, cx| {
                         if by_directory {
@@ -205,7 +207,7 @@ impl AppShell {
                 .item(PopupMenuItem::separator())
                 .item(menu_item(
                     rust_i18n::t!("git.group.expand_all").to_string(),
-                    IconName::ChevronDown,
+                    AppIcon::Ui(UiIcon::CHEVRON_DOWN),
                     move |_, _, cx| {
                         let target = expand_project.clone();
                         expand_app.update(cx, |this, cx| {
@@ -215,7 +217,7 @@ impl AppShell {
                 ))
                 .item(menu_item(
                     rust_i18n::t!("git.group.collapse_all").to_string(),
-                    IconName::ChevronRight,
+                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT),
                     move |_, _, cx| {
                         let target = collapse_project.clone();
                         collapse_app.update(cx, |this, cx| {
@@ -327,7 +329,7 @@ pub(crate) fn check_box(checked: bool, p: &Palette) -> AnyElement {
         .bg(if checked { p.primary } else { p.background })
         .when(checked, |el| {
             el.child(
-                Icon::new(IconName::Check)
+                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
                     .xsmall()
                     .text_color(p.sidebar_accent_foreground),
             )

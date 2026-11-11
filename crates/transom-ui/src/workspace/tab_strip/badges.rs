@@ -3,7 +3,6 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::tiling::TiledTabs;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
@@ -11,6 +10,9 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{GroupId, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 窗格列表里的一行预渲染数据。
 ///
@@ -21,7 +23,7 @@ pub(super) struct PaneRow {
     pub(super) ordinal: usize,
     pub(super) title: String,
     pub(super) dot_color: Hsla,
-    pub(super) icon: IconName,
+    pub(super) icon: AppIcon,
     pub(super) active: bool,
 }
 
@@ -31,7 +33,7 @@ pub(super) struct TiledRow {
     pub(super) ordinal: usize,
     pub(super) title: String,
     pub(super) dot_color: Hsla,
-    pub(super) icon: IconName,
+    pub(super) icon: AppIcon,
     pub(super) focused: bool,
 }
 
@@ -74,14 +76,14 @@ pub(super) fn build_tiled_group_badge(
         });
     }
     let layout_icon = match (tiled.rows, tiled.cols) {
-        (1, 2) => IconName::Columns2,
-        (2, 1) => IconName::Rows2,
-        (1, 3) => IconName::Columns3,
-        (3, 1) => IconName::Rows3,
-        (2, 2) => IconName::Grid2x2,
-        (2, 3) | (3, 2) => IconName::Grid3x2,
-        (3, 3) => IconName::Grid3x3,
-        _ => IconName::LayoutGrid,
+        (1, 2) => AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
+        (2, 1) => AppIcon::Ui(UiIcon::EDITOR_ONLY),
+        (1, 3) => AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
+        (3, 1) => AppIcon::Ui(UiIcon::EDITOR_ONLY),
+        (2, 2) => AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
+        (2, 3) | (3, 2) => AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
+        (3, 3) => AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
+        _ => AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
     };
     let count = rows.len();
     let occupied_groups = tiled.occupied_groups();
@@ -110,7 +112,7 @@ pub(super) fn build_tiled_group_badge(
                                 .gap_2()
                                 .items_center()
                                 .child(crate::widgets::status_dot_bare(dot_color))
-                                .child(Icon::new(icon).xsmall().text_color(muted))
+                                .child(AppIconElement::new(icon).xsmall().text_color(muted))
                                 .child(
                                     div()
                                         .text_xs()
@@ -129,7 +131,9 @@ pub(super) fn build_tiled_group_badge(
                                 );
                             if focused {
                                 row = row.child(
-                                    Icon::new(IconName::Check).xsmall().text_color(foreground),
+                                    AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
+                                        .xsmall()
+                                        .text_color(foreground),
                                 );
                             }
                             row
@@ -146,7 +150,7 @@ pub(super) fn build_tiled_group_badge(
                 }
                 menu.item(PopupMenuItem::separator())
                     .submenu_with_icon(
-                        Some(Icon::new(IconName::LayoutGrid)),
+                        Some(Icon::new(AppIcon::Ui(UiIcon::EDITOR_PREVIEW))),
                         rust_i18n::t!("tiling.adjust").to_string(),
                         _window,
                         _cx,
@@ -168,7 +172,7 @@ pub(super) fn build_tiled_group_badge(
                     )
                     .item(crate::widgets::menu_item(
                         rust_i18n::t!("menu.untile").to_string(),
-                        IconName::Minimize2,
+                        AppIcon::Ui(UiIcon::RESTORE),
                         {
                             let app = app_entity.clone();
                             move |_, _window, cx| {

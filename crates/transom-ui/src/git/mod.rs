@@ -49,8 +49,9 @@ pub(crate) use rebase_modal::GitRebaseModal;
 pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};
 pub(crate) use worktree_modal::GitWorktreeModal;
 
-use gpui_kit::assets::IconName;
 use transom_core::{ChangeCode, StatusRecord};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 变更条目在界面里的视觉表达。
 ///
@@ -58,7 +59,7 @@ use transom_core::{ChangeCode, StatusRecord};
 /// 颜色单独不足以区分，故这里同时给出图标与配色键，界面两侧共用一份口径。
 pub(crate) struct ChangeVisual {
     /// 状态图标。
-    pub icon: IconName,
+    pub icon: AppIcon,
     /// 配色分组：列表字母与图标共用一套语义色。
     pub accent: ChangeAccent,
 }
@@ -77,35 +78,35 @@ pub(crate) enum ChangeAccent {
 pub(crate) fn change_visual(code: ChangeCode) -> ChangeVisual {
     match code {
         ChangeCode::Added => ChangeVisual {
-            icon: IconName::CirclePlus,
+            icon: AppIcon::Ui(UiIcon::ADD),
             accent: ChangeAccent::Added,
         },
         ChangeCode::Modified => ChangeVisual {
-            icon: IconName::Pen,
+            icon: AppIcon::Ui(UiIcon::EDIT),
             accent: ChangeAccent::Modified,
         },
         ChangeCode::Deleted => ChangeVisual {
-            icon: IconName::CircleMinus,
+            icon: AppIcon::Ui(UiIcon::REMOVE),
             accent: ChangeAccent::Deleted,
         },
         ChangeCode::Renamed => ChangeVisual {
-            icon: IconName::MoveRight,
+            icon: AppIcon::Ui(UiIcon::RIGHT),
             accent: ChangeAccent::Modified,
         },
         ChangeCode::Copied => ChangeVisual {
-            icon: IconName::Copy,
+            icon: AppIcon::Ui(UiIcon::COPY),
             accent: ChangeAccent::Added,
         },
         ChangeCode::TypeChange | ChangeCode::Unmerged => ChangeVisual {
-            icon: IconName::TriangleAlert,
+            icon: AppIcon::Ui(UiIcon::WARNING),
             accent: ChangeAccent::Conflict,
         },
         ChangeCode::Unmodified => ChangeVisual {
-            icon: IconName::Circle,
+            icon: AppIcon::Ui(UiIcon::SHOW),
             accent: ChangeAccent::Neutral,
         },
         ChangeCode::Unknown(_) => ChangeVisual {
-            icon: IconName::CircleAlert,
+            icon: AppIcon::Ui(UiIcon::ERROR),
             accent: ChangeAccent::Neutral,
         },
     }
@@ -114,7 +115,7 @@ pub(crate) fn change_visual(code: ChangeCode) -> ChangeVisual {
 /// 未跟踪条目的图标（没有状态码可映射）。
 pub(crate) fn untracked_visual() -> ChangeVisual {
     ChangeVisual {
-        icon: IconName::CircleDashed,
+        icon: AppIcon::Ui(UiIcon::REFRESH),
         accent: ChangeAccent::Neutral,
     }
 }
@@ -133,12 +134,12 @@ pub(crate) fn primary_record(record: &StatusRecord) -> ChangeVisual {
             }
         }
         StatusRecord::Conflict => ChangeVisual {
-            icon: IconName::TriangleAlert,
+            icon: AppIcon::Ui(UiIcon::WARNING),
             accent: ChangeAccent::Conflict,
         },
         StatusRecord::Untracked => untracked_visual(),
         StatusRecord::Ignored => ChangeVisual {
-            icon: IconName::EyeOff,
+            icon: AppIcon::Ui(UiIcon::HIDE),
             accent: ChangeAccent::Neutral,
         },
     }

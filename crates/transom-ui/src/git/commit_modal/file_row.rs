@@ -9,15 +9,17 @@ use crate::git::actions::GitDiffRequest;
 use crate::git::{primary_record, untracked_visual};
 use crate::palette::Palette;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GitAction, GitProject, GitSide, StatusEntry};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 某个改动行「看差异」该跟谁比：已暂存看 HEAD→索引，其余看索引→工作区。
 pub(crate) fn worktree_diff_request(group: ChangeGroup, path: String) -> GitDiffRequest {
@@ -121,6 +123,7 @@ impl AppShell {
             row = row.child(check_placeholder());
         }
         row = row
+            .child(render_app_icon(AppIcon::for_file(&path), 16.0))
             .child(
                 div()
                     .text_sm()
@@ -171,7 +174,7 @@ impl AppShell {
                 Button::new(ElementId::Name(diff_id.into()))
                     .ghost()
                     .xsmall()
-                    .icon(IconName::GitCompare)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DIFF)).small())
                     .accessibility_label("Show diff")
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
@@ -225,7 +228,7 @@ fn render_file_menu(
         let stage_path = path.clone();
         menu = menu.item(menu_item(
             rust_i18n::t!("git.menu.stage").to_string(),
-            IconName::CirclePlus,
+            AppIcon::Ui(UiIcon::ADD),
             move |_, _, cx| {
                 run_paths(
                     &app_stage,
@@ -242,7 +245,7 @@ fn render_file_menu(
         let unstage_path = path.clone();
         menu = menu.item(menu_item(
             rust_i18n::t!("git.menu.unstage").to_string(),
-            IconName::CircleMinus,
+            AppIcon::Ui(UiIcon::REMOVE),
             move |_, _, cx| {
                 run_paths(
                     &app_unstage,
@@ -273,7 +276,7 @@ fn render_file_menu(
     let conflict_project = project.clone();
     let mut menu = menu.item(menu_item(
         rust_i18n::t!("git.conflict.resolve_menu").to_string(),
-        IconName::GitMerge,
+        AppIcon::Ui(UiIcon::MERGE),
         move |_, _, cx| {
             let p = conflict_project.clone();
             conflict_app.update(cx, |this, cx| {
@@ -283,7 +286,7 @@ fn render_file_menu(
     ));
     menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.show_diff").to_string(),
-        IconName::GitCompare,
+        AppIcon::Ui(UiIcon::DIFF),
         move |_, _, cx| {
             let project = diff_project.clone();
             let path = diff_path.clone();
@@ -294,7 +297,7 @@ fn render_file_menu(
     ));
     menu = menu.item(menu_item(
         discard_label,
-        IconName::Undo2,
+        AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
             let action = if group == ChangeGroup::Untracked {
                 GitAction::DeleteUntracked
@@ -306,7 +309,7 @@ fn render_file_menu(
     ));
     menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.copy_path").to_string(),
-        IconName::Copy,
+        AppIcon::Ui(UiIcon::COPY),
         move |_, _, cx| {
             copy_app.update(cx, |this, cx| {
                 this.write_clipboard(&copy_path, cx);
@@ -315,7 +318,7 @@ fn render_file_menu(
     ));
     menu.item(menu_item(
         rust_i18n::t!("git.menu.refresh").to_string(),
-        IconName::RotateCw,
+        AppIcon::Ui(UiIcon::REFRESH),
         move |_, _, cx| {
             let project = refresh_project.clone();
             refresh_app.update(cx, |this, cx| {
@@ -358,7 +361,7 @@ pub(crate) fn amend_file_row(file: &transom_core::CommitFile, p: &Palette) -> An
         .overflow_hidden()
         .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx))
         .child(div().w(px(14.0)))
-        .child(Icon::new(visual.icon).xsmall().text_color(accent))
+        .child(render_app_icon(AppIcon::for_file(&file.path), 16.0))
         .child(
             div()
                 .text_sm()

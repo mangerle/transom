@@ -12,12 +12,14 @@ use crate::app::AppShell;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
 use crate::widgets::{IconButton, IconButtonSize};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 渲染顶部差异文件标签栏（一个标签一个名字）。
 pub(crate) fn render_diff_tab_bar(
@@ -74,8 +76,9 @@ pub(crate) fn render_diff_tab_bar(
                     .ghost()
                     .xsmall()
                     .selected(is_active)
-                    .icon(IconName::FileCode)
-                    .label(file_name)
+                    .accessibility_label(file_name.clone())
+                    .child(render_app_icon(AppIcon::for_file(&tab_item.path), 14.0))
+                    .child(file_name)
                     .on_click(move |_, _, cx| {
                         tab_app.update(cx, |this, cx| {
                             this.git_select_diff_tab_by_path(tab_id, &select_path, cx);
@@ -85,7 +88,7 @@ pub(crate) fn render_diff_tab_bar(
                 .child(
                     IconButton::new(
                         ElementId::Name(format!("git-diff-tab-close-{}", tab_item.path).into()),
-                        IconName::X,
+                        UiIcon::CLOSE,
                         "Close diff tab",
                     )
                     .size(IconButtonSize::Compact)
@@ -143,7 +146,7 @@ pub(crate) fn render_diff_columns_header(
                         .items_center()
                         .overflow_hidden()
                         .child(
-                            Icon::new(IconName::GitCommitHorizontal)
+                            AppIconElement::new(UiIcon::VCS)
                                 .xsmall()
                                 .text_color(p.primary),
                         )

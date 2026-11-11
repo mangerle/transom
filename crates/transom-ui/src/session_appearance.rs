@@ -5,15 +5,18 @@
 //! 同一份定义，不会出现"表单里选了数据库、标签栏画成服务器"的分裂。
 
 use crate::app::{AppShell, TerminalTab};
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
-use transom_core::{SessionColor, SessionIcon};
+use transom_core::{ContainerEngineKind, SessionColor, SessionIcon};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 一个会话在界面上的外观：图标与环境色。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -53,16 +56,27 @@ pub(crate) const SESSION_COLOR_CHOICES: [SessionColor; 7] = [
 pub(crate) fn session_icon(icon: SessionIcon) -> Option<AppIcon> {
     match icon {
         SessionIcon::Auto => None,
-        SessionIcon::Server => Some(IconName::Server.into()),
-        SessionIcon::Database => Some(IconName::Database.into()),
-        SessionIcon::Container => Some(IconName::Container.into()),
-        SessionIcon::Cloud => Some(IconName::Cloud.into()),
-        SessionIcon::Terminal => Some(IconName::Terminal.into()),
-        SessionIcon::Globe => Some(IconName::Globe.into()),
-        SessionIcon::Shield => Some(IconName::Shield.into()),
-        SessionIcon::Storage => Some(IconName::HardDrive.into()),
-        SessionIcon::Docker => Some(AppIcon::Docker),
-        SessionIcon::Podman => Some(AppIcon::Podman),
+        SessionIcon::Server => Some(UiIcon::WEB_SERVER.into()),
+        SessionIcon::Database => Some(CustomIcon::DATABASE.into()),
+        SessionIcon::Container => Some(DomainIcon::CONTAINER.into()),
+        SessionIcon::Cloud => Some(CustomIcon::CLOUD.into()),
+        SessionIcon::Terminal => Some(DomainIcon::TERMINAL.into()),
+        SessionIcon::Globe => Some(UiIcon::LANGUAGE.into()),
+        SessionIcon::Shield => Some(UiIcon::LOCKED.into()),
+        SessionIcon::Storage => Some(CustomIcon::DISK.into()),
+        SessionIcon::Docker => Some(CustomIcon::DOCKER.into()),
+        SessionIcon::Podman => Some(CustomIcon::PODMAN.into()),
+    }
+}
+
+/// 容器引擎种类对应的默认单色图标。
+///
+/// 引擎连接没有显式选择图标时，Docker 与 Podman 使用各自轮廓的单色版本，
+/// 既保留品牌辨识度，又避免高饱和品牌色在侧栏、标签栏和选择器中突兀。
+pub(crate) fn container_engine_icon(kind: ContainerEngineKind) -> AppIcon {
+    match kind {
+        ContainerEngineKind::Docker => CustomIcon::DOCKER.into(),
+        ContainerEngineKind::Podman => CustomIcon::PODMAN.into(),
     }
 }
 
@@ -108,7 +122,6 @@ const SWATCH_SIZE: f32 = 18.0;
 /// 图标选择行（通用）。
 pub(crate) fn render_appearance_icon_row<F>(
     id_prefix: &'static str,
-    default_icon: IconName,
     icon: SessionIcon,
     on_icon: F,
     app: &Entity<AppShell>,
@@ -120,10 +133,11 @@ where
     let auto_app = app.clone();
     h_flex()
         .gap_1()
+        .flex_wrap()
         .child(
             Button::new(ElementId::Name(format!("{id_prefix}-icon-auto").into()))
                 .small()
-                .icon(default_icon)
+                .child(AppIconElement::new(UiIcon::REFRESH_AUTO).small())
                 .selected(icon == SessionIcon::Auto)
                 .accessibility_label(rust_i18n::t!("form.icon_auto").to_string())
                 .tooltip(rust_i18n::t!("form.icon_auto").to_string())
@@ -142,8 +156,9 @@ where
                 format!("{id_prefix}-icon-{choice:?}").into(),
             ))
             .small()
-            .icon(name)
+            .child(AppIconElement::new(name).small())
             .accessibility_label(format!("{choice:?}"))
+            .tooltip(format!("{choice:?}"))
             .selected(icon == choice)
             .on_click(move |_, _window, cx| {
                 choice_app.update(cx, |this, cx| {
@@ -220,4 +235,23 @@ where
                 .into_any_element()
         }))
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SESSION_ICON_CHOICES, session_icon};
+
+    #[test]
+    fn session_icon_choices_are_visually_distinct() {
+        let icons: Vec<_> = SESSION_ICON_CHOICES
+            .into_iter()
+            .map(|choice| session_icon(choice).expect("预设图标必须存在"))
+            .collect();
+        for (index, icon) in icons.iter().enumerate() {
+            assert!(
+                !icons[..index].contains(icon),
+                "会话图标选择器存在重复图标: {icon:?}"
+            );
+        }
+    }
 }

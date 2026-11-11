@@ -9,10 +9,11 @@
 
 use crate::app::AppShell;
 use crate::widgets::{MenuItem, menu_item};
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{GitProject, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 变更文件树节点的右键上下文菜单。
 pub(crate) fn render_file_tree_menu(
@@ -57,7 +58,7 @@ pub(crate) fn render_file_tree_menu(
         // 1. 显示差异
         .item(menu_item(
             rust_i18n::t!("git.menu.show_diff").to_string(),
-            IconName::GitCompare,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let path = path_diff.clone();
                 diff_app.update(cx, |this, cx| {
@@ -68,7 +69,7 @@ pub(crate) fn render_file_tree_menu(
         // 2. 在新标签页中显示差异
         .item(menu_item(
             rust_i18n::t!("git.menu.show_diff_in_new_tab").to_string(),
-            IconName::ExternalLink,
+            AppIcon::Ui(UiIcon::EXTERNAL_LINK),
             move |_, _, cx| {
                 let path = path_new_tab.clone();
                 modal_app.update(cx, |this, cx| {
@@ -79,7 +80,7 @@ pub(crate) fn render_file_tree_menu(
         // 3. 与本地比较
         .item(menu_item(
             rust_i18n::t!("git.menu.compare_with_local").to_string(),
-            IconName::GitCompareArrows,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let path = path_compare.clone();
                 compare_app.update(cx, |this, cx| {
@@ -91,7 +92,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.compare_before_with_local").to_string(),
-                IconName::GitCompare,
+                AppIcon::Ui(UiIcon::DIFF),
             )
             .render(move |_, _, cx| {
                 let path = path_before.clone();
@@ -104,7 +105,7 @@ pub(crate) fn render_file_tree_menu(
         // 5. 编辑源
         .item(menu_item(
             rust_i18n::t!("git.menu.edit_source").to_string(),
-            IconName::FileCode,
+            AppIcon::Ui(UiIcon::DIFF),
             {
                 let project = edit_project;
                 move |_, _, cx| {
@@ -120,7 +121,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.open_repo_version").to_string(),
-                IconName::File,
+                AppIcon::Ui(UiIcon::DIFF),
             )
             .render(move |_, _, cx| {
                 let path = path_repo.clone();
@@ -134,7 +135,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.revert_selected_changes").to_string(),
-                IconName::Undo2,
+                AppIcon::Ui(UiIcon::UNDO),
             )
             .render({
                 let project = revert_project;
@@ -151,7 +152,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.cherry_pick_selected_changes").to_string(),
-                IconName::Cherry,
+                AppIcon::Ui(UiIcon::COMMIT),
             )
             .disabled(true)
             .render(|_, _, _| {}),
@@ -160,7 +161,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.extract_to_commit").to_string(),
-                IconName::GitCommitHorizontal,
+                AppIcon::Ui(UiIcon::COMMIT),
             )
             .disabled(true)
             .render(|_, _, _| {}),
@@ -169,7 +170,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.delete_selected_changes").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
             )
             .render({
                 let project = delete_project;
@@ -185,7 +186,7 @@ pub(crate) fn render_file_tree_menu(
         // 11. 创建补丁...
         .item(menu_item(
             rust_i18n::t!("git.menu.create_patch").to_string(),
-            IconName::Download,
+            AppIcon::Ui(UiIcon::DOWNLOAD),
             {
                 let project = patch_project;
                 move |_, _, cx| {
@@ -201,7 +202,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.get_from_revision").to_string(),
-                IconName::ArrowDownToLine,
+                AppIcon::Ui(UiIcon::DOWNLOAD),
             )
             .disabled(true)
             .render(|_, _, _| {}),
@@ -210,7 +211,7 @@ pub(crate) fn render_file_tree_menu(
         // 13. 迄今为止的历史记录
         .item(menu_item(
             rust_i18n::t!("git.menu.history_up_to_here").to_string(),
-            IconName::Clock,
+            AppIcon::Ui(UiIcon::HISTORY),
             move |_, _, cx| {
                 let path = path_history.clone();
                 history_app.update(cx, |this, cx| {
@@ -222,7 +223,7 @@ pub(crate) fn render_file_tree_menu(
         .item(
             MenuItem::new(
                 rust_i18n::t!("git.menu.show_parent_changes").to_string(),
-                IconName::GitCompare,
+                AppIcon::Ui(UiIcon::DIFF),
             )
             .render(move |_, _, cx| {
                 let path = path_parent.clone();
@@ -234,7 +235,7 @@ pub(crate) fn render_file_tree_menu(
         // 15. 添加到智能体上下文
         .item(menu_item(
             rust_i18n::t!("git.menu.add_to_agent_context").to_string(),
-            IconName::Sparkles,
+            AppIcon::Ui(UiIcon::AI_INTENTION),
             move |_, _, cx| {
                 let path = path_ai.clone();
                 ai_app.update(cx, |this, cx| {

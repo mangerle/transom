@@ -7,11 +7,12 @@
 
 use crate::app::AppShell;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitProject, LogScope, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 本地分支菜单目标数据。
 pub(crate) struct LocalBranchMenuTarget {
@@ -73,7 +74,7 @@ pub(crate) fn render_local_branch_menu(
         // 1. 从 '{branch}' 新建分支...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_branch_from_ref", branch = branch.as_str()).to_string(),
-            IconName::GitBranchPlus,
+            AppIcon::Ui(UiIcon::VCS),
             move |_, window, cx| {
                 let start = name_new_branch.clone();
                 let project = project_new_branch.clone();
@@ -85,7 +86,7 @@ pub(crate) fn render_local_branch_menu(
         // 2. 显示与工作树的差异
         .item(menu_item(
             rust_i18n::t!("git.menu.show_diff_with_worktree").to_string(),
-            IconName::GitCompare,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let target = name_diff.clone();
                 app_diff.update(cx, |this, cx| {
@@ -96,7 +97,7 @@ pub(crate) fn render_local_branch_menu(
         // 3. 从 '{branch}' 新建工作树...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_worktree_from_ref", branch = branch.as_str()).to_string(),
-            IconName::FolderGit,
+            AppIcon::Ui(UiIcon::FOLDER),
             move |_, window, cx| {
                 let start = name_worktree.clone();
                 let project = project_worktree.clone();
@@ -109,7 +110,7 @@ pub(crate) fn render_local_branch_menu(
         // 4. 更新
         .item(menu_item(
             rust_i18n::t!("git.menu.update").to_string(),
-            IconName::RotateCw,
+            AppIcon::Ui(UiIcon::REFRESH),
             move |_, _, cx| {
                 let project = project_pull.clone();
                 app_pull.update(cx, |this, cx| {
@@ -120,7 +121,7 @@ pub(crate) fn render_local_branch_menu(
         // 5. 推送...
         .item(menu_item(
             rust_i18n::t!("git.menu.push").to_string(),
-            IconName::ArrowUpFromLine,
+            AppIcon::Ui(UiIcon::UPLOAD),
             move |_, _, cx| {
                 let target = name_push.clone();
                 let project = project_push.clone();
@@ -136,7 +137,7 @@ pub(crate) fn render_local_branch_menu(
                 upstream = upstream_display.as_str()
             )
             .to_string(),
-            IconName::GitBranch,
+            AppIcon::Ui(UiIcon::VCS),
             move |_, _, cx| {
                 let target = upstream_click.clone();
                 app_upstream.update(cx, |this, cx| {
@@ -148,7 +149,7 @@ pub(crate) fn render_local_branch_menu(
         // 7. 重命名...
         .item(menu_item(
             rust_i18n::t!("git.menu.rename_branch").to_string(),
-            IconName::Pencil,
+            AppIcon::Ui(UiIcon::EDIT),
             move |_, window, cx| {
                 let old = name_rename.clone();
                 let project = project_rename.clone();
@@ -167,7 +168,7 @@ pub(crate) fn render_local_branch_menu(
         .when(!is_current, |m| {
             m.item(menu_item(
                 rust_i18n::t!("git.menu.delete_ref").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
                 move |_, _, cx| {
                     let name = name_delete.clone();
                     let project = project_delete.clone();

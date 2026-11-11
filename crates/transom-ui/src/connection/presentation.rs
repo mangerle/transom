@@ -9,11 +9,13 @@
 //! - [`display_with_port`]：带端口的完整目标，供复制地址与命令面板；
 //! - [`describe_target`]：带本地/串口本地化描述，供日志与状态文案。
 //!
-//! 代价与局限：图标依赖 `gpui-kit` 的 `IconName`，因此本模块留在 UI 层；
+//! 代价与局限：图标依赖 `transom-ui-icons` 的 `AppIcon`，因此本模块留在 UI 层；
 //! `transom-core` 只保留连接数据，不感知图标资产。
 
-use gpui_kit::assets::IconName;
 use transom_core::{Connection, Session};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 短标签：不带端口，本地会话回落 shell 名，串口回落端口名。
 pub(crate) fn display_compact(connection: &Connection) -> String {
@@ -54,13 +56,13 @@ pub(crate) fn describe_target(session: &Session) -> String {
 }
 
 /// 连接类型图标：全应用共用一套映射。
-pub(crate) fn icon(connection: &Connection) -> IconName {
+pub(crate) fn icon(connection: &Connection) -> AppIcon {
     match connection {
-        Connection::Local(_) => IconName::Terminal,
-        Connection::Serial(_) => IconName::Cable,
-        Connection::Telnet(_) => IconName::Network,
-        Connection::Mosh(_) => IconName::Radio,
-        Connection::ContainerEngine(_) => IconName::Container,
-        _ => IconName::Server,
+        Connection::Local(_) => AppIcon::Domain(DomainIcon::TERMINAL),
+        Connection::Serial(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
+        Connection::Telnet(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
+        Connection::Mosh(_) => AppIcon::Ui(UiIcon::RUN),
+        Connection::ContainerEngine(_) => AppIcon::Domain(DomainIcon::CONTAINER),
+        _ => AppIcon::Ui(UiIcon::WEB_SERVER),
     }
 }

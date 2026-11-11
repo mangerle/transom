@@ -7,12 +7,13 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{ChangeCode, CommitEntry, CommitFile};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染左栏单条待推送提交。
 pub(super) fn render_commit_row(
@@ -46,7 +47,7 @@ pub(super) fn render_commit_row(
             }
         })
         .child(
-            Icon::new(IconName::GitCommitHorizontal)
+            AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT))
                 .xsmall()
                 .text_color(if is_selected {
                     p.primary
@@ -150,7 +151,7 @@ pub(super) fn render_commit_detail_card(
                         .rounded_sm()
                         .hover(|s| s.bg(p.muted.opacity(0.6)))
                         .child(
-                            Icon::new(IconName::Copy)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::COPY))
                                 .xsmall()
                                 .text_color(p.muted_foreground),
                         )

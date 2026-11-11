@@ -14,13 +14,14 @@ use super::types::GitView;
 use crate::app::AppShell;
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::{GitProject, GitProjectId, TabId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 渲染一个 Git 标签页。
@@ -127,7 +128,7 @@ impl AppShell {
                 Button::new("git-toolbar-refresh")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::RotateCw)
+                    .icon(UiIcon::REFRESH)
                     .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -139,7 +140,7 @@ impl AppShell {
                 Button::new("git-toolbar-fetch")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Download)
+                    .icon(UiIcon::FETCH)
                     .accessibility_label(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -154,7 +155,7 @@ impl AppShell {
                 Button::new("git-toolbar-pull")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::ArrowDownToLine)
+                    .icon(UiIcon::UPDATE)
                     .accessibility_label(rust_i18n::t!("git.toolbar.pull").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.pull").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -169,7 +170,7 @@ impl AppShell {
                 Button::new("git-toolbar-push")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::ArrowUpFromLine)
+                    .icon(UiIcon::PUSH)
                     .accessibility_label(rust_i18n::t!("git.toolbar.push").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.push").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -204,7 +205,7 @@ impl AppShell {
             .rounded(px(3.0))
             .bg(p.muted)
             .child(
-                Icon::new(IconName::GitBranch)
+                AppIconElement::new(UiIcon::VCS)
                     .xsmall()
                     .text_color(p.primary),
             )
@@ -312,7 +313,7 @@ fn render_collapsed_refs_panel(tab_id: TabId, app: Entity<AppShell>) -> AnyEleme
             Button::new("git-refs-toggle-open")
                 .ghost()
                 .xsmall()
-                .icon(IconName::PanelLeftOpen)
+                .icon(UiIcon::CHEVRON_RIGHT)
                 .accessibility_label(rust_i18n::t!("git.refs.panel_toggle").to_string())
                 .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
                 .on_click(move |_, _, cx| {
@@ -363,7 +364,7 @@ pub(crate) fn render_git_not_repo_state(
         .justify_center()
         .gap_2()
         .child(
-            Icon::new(IconName::GitBranch)
+            AppIconElement::new(UiIcon::VCS)
                 .with_size(px(30.0))
                 .text_color(p.muted_foreground),
         )

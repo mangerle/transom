@@ -6,12 +6,11 @@
 
 use super::{format_size, sftp_file_icon};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::format_octal_permissions;
+use transom_ui_icons::{UiIcon, render_app_icon};
 
 /// 虚拟文件项渲染参数配置。
 pub(crate) struct FileRowContentOptions<'a> {
@@ -36,12 +35,9 @@ pub(crate) fn render_file_row_content(options: FileRowContentOptions<'_>) -> imp
         .items_center()
         .overflow_hidden()
         .child(if is_parent {
-            Icon::new(IconName::Folder)
-                .small()
-                .text_color(p.muted_foreground)
-                .into_any_element()
+            render_app_icon(UiIcon::UP.into(), 16.0)
         } else {
-            sftp_file_icon(is_dir, p)
+            sftp_file_icon(name, is_dir, p)
         })
         .child(
             div()

@@ -21,15 +21,18 @@ use crate::app::{AppShell, TabStatus};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{NetworkTraffic, StatusItemId, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 // 数值槽与徽标度量以 rem 表达（标准档 16px 基准），密度切换时随字号等比放大，
 // 大字号下数字不会挤爆固定槽；底栏高度在 theme::tokens::size 集中定义。
@@ -103,14 +106,7 @@ impl AppShell {
             .state
             .workspace
             .active_tab
-            .filter(|tab_id| self.state.git_workspace(*tab_id).is_some())
-            .or_else(|| {
-                self.state
-                    .workspace
-                    .tabs
-                    .iter()
-                    .find_map(|t| if t.is_git() { Some(t.id) } else { None })
-            });
+            .filter(|tab_id| self.state.git_workspace(*tab_id).is_some());
 
         let make_git_log_btn = |id: TabId, app_entity: Entity<AppShell>| {
             let is_open = self
@@ -124,7 +120,7 @@ impl AppShell {
             };
             let mut btn = Button::new("status-bar-git-log")
                 .xsmall()
-                .icon(IconName::GitCommitHorizontal)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT)).small())
                 .accessibility_label(tooltip_text.to_string())
                 .tooltip(tooltip_text.to_string())
                 .on_click(move |_, _, cx| {
@@ -292,15 +288,15 @@ impl AppShell {
     }
 }
 
-pub(crate) fn status_item_icon(id: StatusItemId) -> IconName {
+pub(crate) fn status_item_icon(id: StatusItemId) -> AppIcon {
     match id {
-        StatusItemId::Network => IconName::ArrowUpDown,
-        StatusItemId::Cpu => IconName::Cpu,
-        StatusItemId::Memory => IconName::MemoryStick,
-        StatusItemId::Disk => IconName::HardDrive,
-        StatusItemId::Os => IconName::Monitor,
-        StatusItemId::Uptime => IconName::Clock,
-        StatusItemId::Unknown => IconName::CircleAlert,
+        StatusItemId::Network => AppIcon::Custom(CustomIcon::NETWORK),
+        StatusItemId::Cpu => AppIcon::Custom(CustomIcon::CPU),
+        StatusItemId::Memory => AppIcon::Custom(CustomIcon::MEMORY),
+        StatusItemId::Disk => AppIcon::Custom(CustomIcon::DISK),
+        StatusItemId::Os => AppIcon::Custom(CustomIcon::OS),
+        StatusItemId::Uptime => AppIcon::Ui(UiIcon::HISTORY),
+        StatusItemId::Unknown => AppIcon::Ui(UiIcon::ERROR),
     }
 }
 

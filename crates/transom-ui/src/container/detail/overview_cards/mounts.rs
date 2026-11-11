@@ -2,10 +2,10 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::{Icon, Sizable};
 use transom_core::ContainerMount;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 存储挂载两行式列表。
 ///
@@ -52,7 +52,7 @@ pub(crate) fn render_mounts_card(
                     .gap_1p5()
                     .items_center()
                     .child(
-                        Icon::new(IconName::Folder)
+                        AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
                             .xsmall()
                             .text_color(p.muted_foreground),
                     )

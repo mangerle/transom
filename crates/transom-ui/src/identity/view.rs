@@ -4,12 +4,14 @@ use super::types::{IdentityEditState, describe_auth};
 use crate::palette::Palette;
 use crate::session_form::AuthChoice;
 use crate::settings::SettingsView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     /// 凭据模板设置组渲染。
@@ -41,7 +43,7 @@ impl SettingsView {
                 .items_center()
                 .border_b_1()
                 .border_color(p.stroke.strong)
-                .child(Icon::new(IconName::KeyRound).with_size(px(14.0)))
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).with_size(px(14.0)))
                 .child(div().flex_1().text_sm().child(format!(
                     "{} · {}",
                     identity.name,

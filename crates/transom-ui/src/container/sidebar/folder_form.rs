@@ -1,6 +1,9 @@
 //! 引擎分组新建/重命名表单。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 引擎分组的新建/重命名弹窗体。
 ///
@@ -51,7 +54,7 @@ pub(crate) fn render_engine_folder_form_body(
         .child(
             Button::new("container-engine-folder-save")
                 .primary()
-                .icon(IconName::Check)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                 .label(rust_i18n::t!("common.save").to_string())
                 .on_click(move |_, _, cx| {
                     view_save.update(cx, |sidebar, cx| sidebar.submit_folder_form(cx));

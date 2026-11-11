@@ -1,6 +1,9 @@
 //! SSH 认证方式与凭据字段。
 
 use super::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染 SSH 认证方式对应的密码或私钥输入区与保存开关。
 pub(super) fn render_auth_credential_fields(
@@ -55,7 +58,7 @@ pub(super) fn render_auth_credential_fields(
                             Button::new("browse-key-path")
                                 .ghost()
                                 .small()
-                                .icon(IconName::FolderOpen)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                                 .label(rust_i18n::t!("form.browse").to_string())
                                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                                     this.pick_private_key_path(window, cx);
@@ -75,7 +78,7 @@ pub(super) fn render_auth_credential_fields(
                             Button::new("browse-cert-path")
                                 .ghost()
                                 .small()
-                                .icon(IconName::FolderOpen)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                                 .label(rust_i18n::t!("form.browse").to_string())
                                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                                     this.pick_certificate_path(window, cx);

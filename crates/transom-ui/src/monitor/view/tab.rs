@@ -2,6 +2,10 @@
 
 use super::*;
 use gpui_kit::prelude::FluentBuilder;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl MonitorView {
     /// 渲染全屏监控看板。
@@ -186,7 +190,7 @@ impl MonitorView {
             .child(
                 crate::widgets::IconButton::new(
                     "tab-monitor-refresh",
-                    IconName::RefreshCw,
+                    AppIcon::Ui(UiIcon::REFRESH),
                     rust_i18n::t!("monitor.view.refresh_tooltip").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -200,7 +204,7 @@ impl MonitorView {
                 Button::new("tab-monitor-dock-drawer")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::PanelRightOpen)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::RIGHT)).small())
                     .label(rust_i18n::t!("monitor.view.dock_label").to_string())
                     .tooltip(rust_i18n::t!("monitor.view.dock_tooltip").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -216,7 +220,7 @@ impl MonitorView {
             .child(
                 crate::widgets::IconButton::new(
                     "tab-monitor-close-btn",
-                    IconName::Close,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     rust_i18n::t!("monitor.view.close_tab_tooltip").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -239,7 +243,7 @@ fn tab_title_part(
     let mut title_part = h_flex()
         .gap_2p5()
         .items_center()
-        .child(Icon::new(IconName::Gauge).text_color(p.primary))
+        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR)).text_color(p.primary))
         .child(
             h_flex().gap_2().items_baseline().child(
                 div()

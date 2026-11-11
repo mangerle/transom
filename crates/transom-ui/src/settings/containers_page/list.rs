@@ -7,12 +7,16 @@
 use super::super::SettingsView;
 use crate::app::app_settings;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     /// 渲染仓库列表界面。
@@ -39,7 +43,7 @@ impl SettingsView {
                 Button::new("add-registry-btn")
                     .primary()
                     .small()
-                    .icon(IconName::Plus)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                     .label(rust_i18n::t!("settings.add_registry").to_string())
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.init_registry_edit(None, window, cx);
@@ -94,10 +98,10 @@ impl SettingsView {
                                 .items_center()
                                 .justify_center()
                                 .child(
-                                    Icon::new(if is_docker_hub {
-                                        IconName::Globe
+                                    AppIconElement::new(if is_docker_hub {
+                                        AppIcon::Custom(CustomIcon::DOCKER)
                                     } else {
-                                        IconName::Server
+                                        AppIcon::Domain(DomainIcon::SSH)
                                     })
                                     .with_size(px(18.0))
                                     .text_color(

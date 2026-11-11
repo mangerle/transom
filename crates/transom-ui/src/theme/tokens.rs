@@ -99,6 +99,10 @@ pub(crate) mod typography {
 
 /// 控件尺寸档位：像素语义的点击目标，随密度等比缩放。
 pub(crate) mod control {
+    /// 16px：常规工具图标。
+    pub const ICON: f32 = 1.0;
+    /// 14px：紧凑工具栏图标。
+    pub const COMPACT_ICON: f32 = 0.875;
     /// 26px：侧栏工具按钮。
     pub const ICON_BUTTON: f32 = 1.625;
     /// 22px：标签栏紧凑按钮。

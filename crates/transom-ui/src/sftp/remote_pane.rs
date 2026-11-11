@@ -17,15 +17,17 @@ use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState};
 use crate::widgets::{IconButton, IconButtonSize};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteFile, TabId, TransferDirection};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染一条远端列所需的展示态与目标身份。
 pub(super) struct RemotePaneProps<'a> {
@@ -183,7 +185,7 @@ impl SftpPanelView {
                     .gap_1()
                     .items_center()
                     .child(
-                        Icon::new(IconName::Server)
+                        AppIconElement::new(AppIcon::Domain(DomainIcon::SSH))
                             .small()
                             .text_color(p.muted_foreground),
                     )
@@ -241,7 +243,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let up_btn = IconButton::new(
             format!("remote-up-{key}"),
-            IconName::ArrowUp,
+            AppIcon::Ui(UiIcon::UP),
             rust_i18n::t!("sftp.remote.go_up").to_string(),
         )
         .size(IconButtonSize::Compact)
@@ -252,7 +254,7 @@ impl SftpPanelView {
 
         let refresh_btn = IconButton::new(
             format!("remote-refresh-{key}"),
-            IconName::RefreshCw,
+            AppIcon::Ui(UiIcon::REFRESH),
             rust_i18n::t!("sftp.remote.refresh").to_string(),
         )
         .size(IconButtonSize::Compact)
@@ -261,7 +263,7 @@ impl SftpPanelView {
 
         let enter_btn = IconButton::new(
             format!("remote-enter-{key}"),
-            IconName::ArrowRight,
+            AppIcon::Ui(UiIcon::RIGHT),
             rust_i18n::t!("sftp.remote.enter_path").to_string(),
         )
         .size(IconButtonSize::Compact)
@@ -271,9 +273,9 @@ impl SftpPanelView {
         let collapse_btn = IconButton::new(
             format!("remote-collapse-{key}"),
             if side_index.is_some() {
-                IconName::PanelRightClose
+                AppIcon::Ui(UiIcon::RIGHT)
             } else {
-                IconName::PanelLeftClose
+                AppIcon::Ui(UiIcon::LEFT)
             },
             if side_index.is_some() {
                 rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
@@ -291,7 +293,7 @@ impl SftpPanelView {
         let close_btn = side_index.map(|index| {
             IconButton::new(
                 format!("remote-close-{key}"),
-                IconName::X,
+                AppIcon::Ui(UiIcon::CLOSE),
                 rust_i18n::t!("sftp.sidebar.close_side_remote").to_string(),
             )
             .size(IconButtonSize::Compact)

@@ -4,12 +4,12 @@
 //! 与标签内容渲染耦合度低，混在 `tab_strip.rs` 会让那个文件超出规模约束。
 
 use crate::app::{AppShell, TabGroup};
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::GroupId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 标签拖拽载荷：拖动对象是整个分组，即标签栏上的一个标签。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +43,11 @@ impl Render for TabDragPreview {
             .shadow_md()
             .text_sm()
             .text_color(p.popover_foreground)
-            .child(Icon::new(self.icon).xsmall().text_color(p.muted_foreground))
+            .child(
+                AppIconElement::new(self.icon)
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
             .child(self.title.clone())
     }
 }

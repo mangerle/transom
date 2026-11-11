@@ -4,12 +4,14 @@ use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keys::{KnownHostsEvent, KnownHostsView};
 use crate::palette::{Palette, localized_error};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
@@ -141,7 +143,7 @@ fn known_host_row(
             Button::new(ElementId::Name(format!("del-kh-{index}").into()))
                 .danger()
                 .xsmall()
-                .icon(IconName::Trash)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                 .label(rust_i18n::t!("common.delete").to_string())
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     this.remove(&host, port, cx);

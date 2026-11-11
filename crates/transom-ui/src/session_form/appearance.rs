@@ -7,28 +7,18 @@ use crate::palette::Palette;
 use crate::session_appearance::{
     SESSION_COLOR_CHOICES, SESSION_ICON_CHOICES, session_color, session_icon,
 };
-use crate::session_form::{ConnectionChoice, SessionFormView};
-use gpui_kit::assets::IconName;
+use crate::session_form::SessionFormView;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_core::{SessionColor, SessionIcon};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 色块直径：够点中，又不会让一排七个占满整行。
 const SWATCH_SIZE: f32 = 18.0;
-
-/// 连接类型对应的默认图标：表单里的"跟随连接类型"选项按它显示。
-pub(crate) fn default_icon_for(connection: ConnectionChoice) -> IconName {
-    match connection {
-        ConnectionChoice::Ssh => IconName::Server,
-        ConnectionChoice::Local => IconName::Terminal,
-        ConnectionChoice::Serial => IconName::Cable,
-        ConnectionChoice::Telnet => IconName::Network,
-        ConnectionChoice::Mosh => IconName::Radio,
-    }
-}
 
 impl SessionFormView {
     /// 外观选择行：图标一排、环境色一排。
@@ -37,13 +27,12 @@ impl SessionFormView {
     /// 这样用户在按钮上就能看到最终会画成什么样。
     pub(super) fn render_session_appearance(
         &self,
-        default_icon: IconName,
         icon: SessionIcon,
         color: SessionColor,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let icon_row = self.render_session_icon_row(default_icon, icon, cx);
+        let icon_row = self.render_session_icon_row(icon, cx);
         let color_row = self.render_session_color_row(color, p, cx);
 
         v_flex()
@@ -65,19 +54,15 @@ impl SessionFormView {
             .into_any_element()
     }
 
-    /// 会话图标选择行：自动图标加八个预设图标。
-    fn render_session_icon_row(
-        &self,
-        default_icon: IconName,
-        icon: SessionIcon,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    /// 会话图标选择行：自动图标加十个预设图标。
+    fn render_session_icon_row(&self, icon: SessionIcon, cx: &mut Context<Self>) -> AnyElement {
         let icon_row = h_flex()
             .gap_1()
+            .flex_wrap()
             .child(
                 Button::new("session-icon-auto")
                     .small()
-                    .icon(default_icon)
+                    .child(AppIconElement::new(UiIcon::REFRESH_AUTO).small())
                     .selected(icon == SessionIcon::Auto)
                     .accessibility_label(rust_i18n::t!("form.icon_auto").to_string())
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
@@ -91,8 +76,9 @@ impl SessionFormView {
                 };
                 Button::new(ElementId::Name(format!("session-icon-{choice:?}").into()))
                     .small()
-                    .icon(name)
+                    .child(AppIconElement::new(name).small())
                     .accessibility_label(format!("{choice:?}"))
+                    .tooltip(format!("{choice:?}"))
                     .selected(icon == choice)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.edit(cx, |form| form.icon = choice);

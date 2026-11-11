@@ -6,8 +6,9 @@
 
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 impl SftpPanelView {
     /// 渲染 SFTP 面板顶部通用标题栏，包含标题、扩展按钮插槽与关闭按钮。
@@ -20,7 +21,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let close_btn = crate::widgets::IconButton::new(
             "close-sftp",
-            IconName::X,
+            AppIcon::Ui(UiIcon::CLOSE),
             rust_i18n::t!("sftp.nav.close_panel").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)

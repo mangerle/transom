@@ -13,10 +13,12 @@
 
 use crate::event::HistoryProvider;
 use crate::view::TerminalView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::{ActiveTheme, Icon, Sizable};
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 一次最多展示的候选数：再多就超出"一眼挑中"的意义，也只是浪费绘制。
 const MAX_SUGGESTIONS: usize = 6;
@@ -143,7 +145,7 @@ impl TerminalView {
                     } else {
                         theme.popover
                     })
-                    .child(Icon::new(IconName::Clock).with_size(px(13.0)))
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::HISTORY)).with_size(px(13.0)))
                     .child(
                         div()
                             .text_xs()

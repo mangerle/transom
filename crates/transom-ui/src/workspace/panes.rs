@@ -4,13 +4,16 @@ use crate::app::{AppShell, AppState};
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::pane_tree::LayoutNode;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
 use transom_core::{Connection, SplitAxis, SplitId, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染一帧窗格树时共享的上下文。
 ///
@@ -162,12 +165,12 @@ impl AppShell {
         let (zoom_label, zoom_icon) = if zoomed_here {
             (
                 rust_i18n::t!("menu.restore_panes").to_string(),
-                IconName::Minimize2,
+                AppIcon::Ui(UiIcon::RESTORE),
             )
         } else {
             (
                 rust_i18n::t!("menu.zoom_pane").to_string(),
-                IconName::Maximize2,
+                AppIcon::Ui(UiIcon::MAXIMIZE),
             )
         };
 
@@ -249,7 +252,7 @@ impl AppShell {
                             format!("container-exit-fullscreen-{tab_id}").into(),
                         ))
                         .small()
-                        .icon(IconName::Minimize)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::MINIMIZE)).small())
                         .label(rust_i18n::t!("container.fullscreen_exit").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.state.containers.fullscreen = None;
@@ -317,7 +320,7 @@ fn pane_context_menu(
     menu: gpui_kit::component::menu::PopupMenu,
     tab_id: TabId,
     zoom_label: String,
-    zoom_icon: IconName,
+    zoom_icon: AppIcon,
     app: Entity<AppShell>,
     cx: &mut Context<gpui_kit::component::menu::PopupMenu>,
 ) -> gpui_kit::component::menu::PopupMenu {
@@ -335,7 +338,7 @@ fn pane_context_menu(
     let mut menu = menu
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.split_right").to_string(),
-            IconName::Columns2,
+            AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -348,7 +351,7 @@ fn pane_context_menu(
         ))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.split_down").to_string(),
-            IconName::Rows2,
+            AppIcon::Ui(UiIcon::EDITOR_ONLY),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -371,7 +374,7 @@ fn pane_context_menu(
         }))
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.detach_pane").to_string(),
-            IconName::ArrowUpRight,
+            AppIcon::Ui(UiIcon::UP),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -389,7 +392,7 @@ fn pane_context_menu(
             .item(PopupMenuItem::separator())
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.manage_containers").to_string(),
-                IconName::Boxes,
+                AppIcon::Domain(DomainIcon::CONTAINER),
                 move |_, window, cx| {
                     container_app.update(cx, |this, cx| {
                         this.open_container_workspace_for_session(session_id, window, cx);

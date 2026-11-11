@@ -691,6 +691,181 @@ fn git_log_file_rows_keep_single_click_behavior() {
     );
 }
 
+/// 主要文件列表必须共享统一的文件类型图标解析器，不能继续使用通用 File 图标。
+#[test]
+fn file_lists_use_shared_file_type_icons() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for relative in [
+        "src/git/log_view/files_tree.rs",
+        "src/git/commit_modal/file_row.rs",
+        "src/git/conflict_modal/panels.rs",
+        "src/git/shelf.rs",
+        "src/git/diff_view/tabs.rs",
+        "src/git/log_view/menus/filter_menus.rs",
+        "src/git/dir_browser/pane.rs",
+        "src/sftp/file_row_content.rs",
+        "src/sftp/side_remote/types.rs",
+        "src/sftp/search_modal.rs",
+        "src/sftp/preview_view.rs",
+        "src/editor/list.rs",
+        "src/editor/view.rs",
+        "src/container/detail/files/row.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取文件列表源码失败");
+        assert!(
+            content.contains("AppIcon::for_file") || content.contains("sftp_file_icon("),
+            "{relative} 未使用共享文件类型图标"
+        );
+    }
+}
+
+/// Git 第一阶段的工具条、筛选、差异和文件树必须使用 IntelliJ New UI 图标。
+#[test]
+fn git_first_phase_uses_new_ui_icons() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for relative in [
+        "src/git/bottom_log.rs",
+        "src/git/workspace.rs",
+        "src/git/commit_page.rs",
+        "src/git/commit_box.rs",
+        "src/git/sidebar/mod.rs",
+        "src/git/sidebar/rows.rs",
+        "src/git/log_view.rs",
+        "src/git/log_view/ref_toolbar.rs",
+        "src/git/log_view/log_refs.rs",
+        "src/git/log_view/log_details.rs",
+        "src/git/log_view/files_tree.rs",
+        "src/git/log_view/branch_tree/view.rs",
+        "src/git/log_view/worktrees_group.rs",
+        "src/git/diff_view.rs",
+        "src/git/diff_view/tabs.rs",
+        "src/git/diff_view/menus.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取 Git 图标源码失败");
+        assert!(
+            !content.contains("IconName::"),
+            "{relative} 仍在使用非 New UI 的 IconName 图标"
+        );
+    }
+}
+
+/// UI 与终端源码必须直接选择分类图标，不能重新依赖旧 IconName 兼容层。
+#[test]
+fn ui_sources_have_no_legacy_icon_names() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::with_capacity(256);
+    collect_rust_files(&root.join("src"), &mut files);
+    collect_rust_files(&root.join("../transom-terminal/src"), &mut files);
+    let mut offenders = Vec::with_capacity(files.len());
+    for file in files {
+        let content = std::fs::read_to_string(&file).expect("读取源码失败");
+        if content.contains("IconName") {
+            offenders.push(file.display().to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下源码仍在依赖旧 IconName 兼容层: {offenders:?}"
+    );
+}
+
+/// 应用图标必须走全彩渲染；只有组件库仅接受 `Icon` 的少数菜单/页头接口例外。
+#[test]
+fn app_icons_use_color_pipeline() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::with_capacity(256);
+    collect_rust_files(&root.join("src"), &mut files);
+    collect_rust_files(&root.join("../transom-terminal/src"), &mut files);
+
+    let icon_new_exceptions = [
+        "src/workspace/tab_strip/badges.rs",
+        "src/workspace/tab_strip/menu.rs",
+    ];
+    let icon_method_exceptions = [
+        "../transom-terminal/src/view/menu.rs",
+        "src/command_palette/items.rs",
+        "src/workspace/vertical_tabs/mod.rs",
+        "src/monitor/view/panel.rs",
+    ];
+    let dynamic_icon_method_patterns = [
+        ".icon(icon)",
+        ".icon(default_icon)",
+        ".icon(name)",
+        ".icon(detail_icon(tab))",
+        ".icon(action.icon())",
+        ".icon(if ",
+    ];
+
+    for file in files {
+        let relative = file
+            .strip_prefix(root)
+            .unwrap_or(&file)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let content = std::fs::read_to_string(&file).expect("读取图标源码失败");
+        if content.contains("Icon::new(AppIcon")
+            && !icon_new_exceptions
+                .iter()
+                .any(|allowed| relative.ends_with(allowed))
+        {
+            panic!("{relative} 仍用单色 Icon 渲染应用图标，应改用 AppIconElement");
+        }
+        let has_single_color_method_icon = content.contains(".icon(AppIcon")
+            || dynamic_icon_method_patterns
+                .iter()
+                .any(|pattern| content.contains(pattern));
+        if has_single_color_method_icon
+            && !icon_method_exceptions
+                .iter()
+                .any(|allowed| relative.ends_with(allowed))
+        {
+            panic!("{relative} 的按钮仍用单色 icon() 渲染应用图标，应改用 AppIconElement");
+        }
+    }
+}
+
+/// Git 身份、分支和远端分支必须复用同一个 VCS 图标，不能退回旧分支或服务器图标。
+#[test]
+fn git_identity_uses_one_icon() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for relative in [
+        "src/settings/mod.rs",
+        "src/settings/modal.rs",
+        "src/git/log_view/branch_tree/view.rs",
+        "src/git/log_view.rs",
+        "src/git/workspace.rs",
+        "src/git/sidebar/rows.rs",
+        "src/workspace/tab_presentation.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取 Git 图标源码失败");
+        assert!(
+            !content.contains("UiIcon::BRANCH") && !content.contains("UiIcon::WEB_SERVER"),
+            "{relative} 仍在使用非统一 Git 图标"
+        );
+        assert!(
+            content.contains("UiIcon::VCS"),
+            "{relative} 未使用统一 VCS 图标"
+        );
+    }
+    let branch_tree = std::fs::read_to_string(root.join("src/git/log_view/branch_tree/view.rs"))
+        .expect("读取 Git 分支树失败");
+    assert!(
+        branch_tree.contains("RefNodeKind::RemoteBranch => AppIconElement::new(UiIcon::VCS)"),
+        "远端分支必须使用统一 VCS 图标"
+    );
+}
+
+fn collect_rust_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).expect("读取源码目录失败") {
+        let path = entry.expect("读取源码目录项失败").path();
+        if path.is_dir() {
+            collect_rust_files(&path, files);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            files.push(path);
+        }
+    }
+}
+
 /// 可变列表的元素身份必须使用业务标识，不能使用会漂移的位置索引。
 #[test]
 fn mutable_list_identities_use_business_ids() {

@@ -17,16 +17,17 @@ use super::{TransferStatus, TransferTask};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::status_bar::format_rate;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::time::{Duration, Instant};
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 队列全部结束到浮层自动收起之间的停留时间。
 const OVERLAY_LINGER: Duration = Duration::from_secs(5);
@@ -203,7 +204,7 @@ impl AppShell {
             .items_center()
             .gap_1()
             .child(
-                Icon::new(IconName::Upload)
+                AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD))
                     .xsmall()
                     .text_color(p.sidebar_accent_foreground),
             )
@@ -220,9 +221,9 @@ impl AppShell {
                 crate::widgets::IconButton::new(
                     format!("overlay-toggle-{tab_id}"),
                     if expanded {
-                        IconName::ChevronDown
+                        AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                     } else {
-                        IconName::ChevronRight
+                        AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
                     },
                     rust_i18n::t!("sftp.overlay_expand"),
                 )
@@ -239,7 +240,7 @@ impl AppShell {
             .child(
                 crate::widgets::IconButton::new(
                     format!("overlay-dismiss-{tab_id}"),
-                    IconName::X,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     rust_i18n::t!("sftp.overlay_dismiss"),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -263,7 +264,7 @@ impl AppShell {
             this.child(
                 crate::widgets::IconButton::new(
                     format!("overlay-pause-all-{tab_id}"),
-                    IconName::Pause,
+                    AppIcon::Ui(UiIcon::PAUSE),
                     rust_i18n::t!("sftp.overlay_pause_all"),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -276,7 +277,7 @@ impl AppShell {
             .child(
                 crate::widgets::IconButton::new(
                     format!("overlay-cancel-all-{tab_id}"),
-                    IconName::Ban,
+                    AppIcon::Ui(UiIcon::ABORT),
                     rust_i18n::t!("sftp.overlay_cancel_all"),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -394,12 +395,12 @@ fn overlay_row(
         _ => status_label(&task.status),
     };
     let (icon, icon_color) = match &task.status {
-        TransferStatus::Failed(_) => (IconName::CircleAlert, p.danger),
-        TransferStatus::Cancelled => (IconName::CircleSlash, p.muted_foreground),
-        TransferStatus::Completed => (IconName::Check, p.success),
-        TransferStatus::Paused => (IconName::Pause, p.warning),
-        TransferStatus::Verifying => (IconName::ShieldCheck, p.sidebar_accent_foreground),
-        _ => (IconName::Upload, p.sidebar_accent_foreground),
+        TransferStatus::Failed(_) => (AppIcon::Ui(UiIcon::ERROR), p.danger),
+        TransferStatus::Cancelled => (AppIcon::Ui(UiIcon::ABORT), p.muted_foreground),
+        TransferStatus::Completed => (AppIcon::Ui(UiIcon::CHECK), p.success),
+        TransferStatus::Paused => (AppIcon::Ui(UiIcon::PAUSE), p.warning),
+        TransferStatus::Verifying => (AppIcon::Ui(UiIcon::LOCKED), p.sidebar_accent_foreground),
+        _ => (AppIcon::Ui(UiIcon::UPLOAD), p.sidebar_accent_foreground),
     };
     let bar = match &task.status {
         TransferStatus::Pending
@@ -424,9 +425,9 @@ fn overlay_row(
                     crate::widgets::IconButton::new(
                         format!("overlay-act-{task_id}-toggle"),
                         if paused {
-                            IconName::Play
+                            AppIcon::Ui(UiIcon::RUN)
                         } else {
-                            IconName::Pause
+                            AppIcon::Ui(UiIcon::PAUSE)
                         },
                         rust_i18n::t!(if paused {
                             "sftp.overlay_resume"
@@ -449,7 +450,7 @@ fn overlay_row(
             .child(
                 crate::widgets::IconButton::new(
                     format!("overlay-act-{task_id}-cancel"),
-                    IconName::X,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     rust_i18n::t!("sftp.overlay_cancel"),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -464,7 +465,7 @@ fn overlay_row(
             this.child(
                 crate::widgets::IconButton::new(
                     format!("overlay-act-{task_id}-remove"),
-                    IconName::Trash,
+                    AppIcon::Ui(UiIcon::DELETE),
                     rust_i18n::t!("sftp.overlay_remove"),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -479,7 +480,7 @@ fn overlay_row(
     h_flex()
         .gap_1()
         .items_center()
-        .child(Icon::new(icon).xsmall().text_color(icon_color))
+        .child(AppIconElement::new(icon).xsmall().text_color(icon_color))
         .child(div().min_w_0().flex_1().text_xs().truncate().child(name))
         .child(bar)
         .child(

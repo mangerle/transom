@@ -5,10 +5,11 @@ use crate::palette::Palette;
 use crate::widgets::{
     DialogConfirmKind, dialog_actions, dialog_body, dialog_cancel_button, dialog_confirm_button,
 };
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染容器提交镜像模态弹窗主体。
 ///
@@ -79,7 +80,7 @@ pub(crate) fn render_container_commit_dialog_body(
     let confirm = dialog_confirm_button(
         "confirm-container-commit",
         rust_i18n::t!("common.confirm").to_string(),
-        Some(IconName::Layers),
+        Some(AppIcon::Ui(UiIcon::DEPENDENCIES)),
         DialogConfirmKind::Primary,
         {
             let view = view.clone();

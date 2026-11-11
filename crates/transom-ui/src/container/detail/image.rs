@@ -13,6 +13,10 @@
 use super::image_history::{copy_button, render_image_history};
 use super::*;
 use crate::container::ContainerWorkspace;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 /// 镜像详情渲染参数。
 pub(crate) struct ImageDetailView<'a> {
@@ -171,7 +175,7 @@ fn render_image_overview(
         let raw_btn = Button::new("image-overview-raw-inspect")
             .xsmall()
             .ghost()
-            .icon(IconName::Braces)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
             .label(rust_i18n::t!("container.field.inspect").to_string())
             .on_click(move |_, _, cx| {
                 raw_view.update(cx, |workspace, cx| {
@@ -183,7 +187,7 @@ fn render_image_overview(
 
         let card = super::overview_cards::overview_card(
             rust_i18n::t!("container.detail.category_identity").to_string(),
-            IconName::Layers,
+            AppIcon::Custom(CustomIcon::IMAGE),
             p,
             Some(raw_btn),
             rows,

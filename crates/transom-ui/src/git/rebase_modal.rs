@@ -10,7 +10,6 @@
 //! - 动作按 pick → squash → fixup → drop → reword 循环，与 IDEA 里连点动作格一致。
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
@@ -18,6 +17,9 @@ use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitCommand, GitProject, GitRebaseAction, GitRebaseStep, GitRequestId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 交互式变基模态框状态。
 pub(crate) struct GitRebaseModal {
@@ -331,7 +333,7 @@ impl AppShell {
                 Button::new(ElementId::Name(format!("git-rebase-up-{step_oid}").into()))
                     .ghost()
                     .xsmall()
-                    .icon(IconName::ArrowUp)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::UP)).small())
                     .accessibility_label("Move step up")
                     .disabled(running || index == 0)
                     .on_click({
@@ -349,7 +351,7 @@ impl AppShell {
                 ))
                 .ghost()
                 .xsmall()
-                .icon(IconName::ArrowDown)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
                 .accessibility_label("Move step down")
                 .disabled(running || index + 1 >= total)
                 .on_click({

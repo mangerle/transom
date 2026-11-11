@@ -9,12 +9,14 @@ mod panels;
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::{ConflictSides, GitCommand, GitProject, GitRequestId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 冲突解决模态框状态。
 pub(crate) struct GitConflictModal {
@@ -217,7 +219,11 @@ impl AppShell {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(Icon::new(IconName::GitMerge).small().text_color(p.warning))
+                    .child(
+                        AppIconElement::new(AppIcon::Ui(UiIcon::MERGE))
+                            .small()
+                            .text_color(p.warning),
+                    )
                     .child(
                         div()
                             .text_xs()
@@ -269,7 +275,7 @@ impl AppShell {
                         Button::new("btn-resolve-ours")
                             .outline()
                             .xsmall()
-                            .icon(IconName::ArrowDownLeft)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
                             .label(rust_i18n::t!("git.conflict.accept_ours").to_string())
                             .disabled(is_busy)
                             .on_click(move |_, _, cx| {
@@ -280,7 +286,7 @@ impl AppShell {
                         Button::new("btn-resolve-theirs")
                             .outline()
                             .xsmall()
-                            .icon(IconName::ArrowDownRight)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
                             .label(rust_i18n::t!("git.conflict.accept_theirs").to_string())
                             .disabled(is_busy)
                             .on_click(move |_, _, cx| {
@@ -292,7 +298,7 @@ impl AppShell {
                         Button::new("btn-mark-resolved")
                             .ghost()
                             .xsmall()
-                            .icon(IconName::Check)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                             .label(rust_i18n::t!("git.conflict.mark_resolved").to_string())
                             .disabled(is_busy)
                             .on_click(move |_, _, cx| {

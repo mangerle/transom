@@ -11,13 +11,14 @@ use crate::connection::session_host;
 use crate::palette::Palette;
 
 use crate::workspace::tab_strip::menu::{TabContextMenuParams, build_tab_context_menu};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SplitAxis};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 行槽位高度；与侧栏会话行保持一致（两处需同步）。
 const ROW_HEIGHT: Pixels = px(38.0);
@@ -118,7 +119,7 @@ pub(super) fn render_vertical_tab_row(
     band = band
         .child(crate::widgets::status_dot_bare(dot_color))
         .child(
-            Icon::new(icon)
+            AppIconElement::new(icon)
                 .with_size(ROW_ICON_SIZE)
                 .text_color(icon_color),
         )
@@ -150,9 +151,9 @@ pub(super) fn render_vertical_tab_row(
 
     if pane_count > 1 {
         let split_icon = if pane_axis == SplitAxis::Horizontal {
-            IconName::Columns2
+            AppIcon::Ui(UiIcon::EDITOR_PREVIEW)
         } else {
-            IconName::Rows2
+            AppIcon::Ui(UiIcon::EDITOR_ONLY)
         };
         band = band.child(
             h_flex()
@@ -164,16 +165,20 @@ pub(super) fn render_vertical_tab_row(
                 } else {
                     p.muted_foreground
                 })
-                .child(Icon::new(split_icon).xsmall())
+                .child(AppIconElement::new(split_icon).xsmall())
                 .child(div().text_xs().child(pane_count.to_string())),
         );
     }
     if tiled_badge {
-        band = band.child(Icon::new(IconName::Grid2x2).xsmall().text_color(if active {
-            p.sidebar_accent_foreground
-        } else {
-            p.muted_foreground
-        }));
+        band = band.child(
+            AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_PREVIEW))
+                .xsmall()
+                .text_color(if active {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.muted_foreground
+                }),
+        );
     }
 
     if app_settings(cx).window.show_tab_close_button {

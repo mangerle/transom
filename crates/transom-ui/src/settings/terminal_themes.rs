@@ -8,11 +8,12 @@ use crate::app::update_app_settings;
 use crate::palette::Palette;
 use crate::settings::SettingsEvent;
 use crate::settings::SettingsView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Icon;
 use gpui_kit::*;
 use transom_core::{FOLLOW_UI_THEME, preset_themes};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     /// 终端预设调色板网格：内置配色卡片与跟随界面主题联动开关。
@@ -339,7 +340,7 @@ fn terminal_preview(theme: &transom_core::PresetTheme, p: &Palette) -> AnyElemen
                     h_flex()
                         .gap_1()
                         .child(
-                            Icon::new(IconName::Folder)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
                                 .size_3()
                                 .text_color(Hsla::from(rgb(theme.palette.ansi[4].to_hex()))),
                         )
@@ -354,7 +355,7 @@ fn terminal_preview(theme: &transom_core::PresetTheme, p: &Palette) -> AnyElemen
                     h_flex()
                         .gap_1()
                         .child(
-                            Icon::new(IconName::Folder)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
                                 .size_3()
                                 .text_color(Hsla::from(rgb(theme.palette.ansi[2].to_hex()))),
                         )
@@ -369,7 +370,7 @@ fn terminal_preview(theme: &transom_core::PresetTheme, p: &Palette) -> AnyElemen
                     h_flex()
                         .gap_1()
                         .child(
-                            Icon::new(IconName::File)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::DIFF))
                                 .size_3()
                                 .text_color(Hsla::from(rgb(theme.palette.foreground.to_hex()))),
                         )

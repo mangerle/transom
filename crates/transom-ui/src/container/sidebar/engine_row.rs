@@ -3,6 +3,9 @@
 use super::*;
 use crate::container::types::ContainerWorkspaceStatus;
 use std::collections::HashMap;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染一条引擎连接行。
 ///
@@ -21,7 +24,7 @@ pub(crate) fn render_engine_row(
     let name = profile.display_name();
     let description = profile.engine.describe();
     let icon = crate::session_appearance::session_icon(profile.icon)
-        .unwrap_or(crate::app_assets::AppIcon::Named(IconName::Boxes));
+        .unwrap_or_else(|| crate::session_appearance::container_engine_icon(profile.engine.kind));
     let profile_color = crate::session_appearance::session_color(profile.color);
     let folder_id = profile.folder_id;
     let is_active = active == Some(id);
@@ -87,7 +90,7 @@ pub(crate) fn render_engine_row(
                 let view_open = view.clone();
                 let mut menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.open").to_string(),
-                    IconName::Play,
+                    AppIcon::Ui(UiIcon::RUN),
                     {
                         let profile = profile_for_menu.clone();
                         move |_, _, cx| {
@@ -101,7 +104,7 @@ pub(crate) fn render_engine_row(
                     let view_move = view.clone();
                     menu = menu.item(crate::widgets::menu_item(
                         rust_i18n::t!("container.sidebar.move_to_root").to_string(),
-                        IconName::FolderTree,
+                        AppIcon::Ui(UiIcon::SHOW_AS_TREE),
                         move |_, _, cx| {
                             view_move.update(cx, |sidebar, cx| {
                                 sidebar.request_move_engine_to_root(id, cx);
@@ -112,7 +115,7 @@ pub(crate) fn render_engine_row(
                 let view_edit = view.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("common.edit").to_string(),
-                    IconName::Pen,
+                    AppIcon::Ui(UiIcon::EDIT),
                     {
                         let profile = profile_for_edit.clone();
                         move |_, _, cx| {
@@ -127,7 +130,7 @@ pub(crate) fn render_engine_row(
                 let endpoint = menu_endpoint.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.copy_endpoint").to_string(),
-                    IconName::Copy,
+                    AppIcon::Ui(UiIcon::COPY),
                     move |_, _, cx| {
                         cx.write_to_clipboard(ClipboardItem::new_string(endpoint.clone()));
                         let message = rust_i18n::t!(
@@ -144,7 +147,7 @@ pub(crate) fn render_engine_row(
                 let copied_name = menu_name.clone();
                 menu = menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("container.sidebar.copy_name").to_string(),
-                    IconName::Copy,
+                    AppIcon::Ui(UiIcon::COPY),
                     move |_, _, cx| {
                         cx.write_to_clipboard(ClipboardItem::new_string(copied_name.clone()));
                         let message = rust_i18n::t!(
@@ -161,7 +164,7 @@ pub(crate) fn render_engine_row(
                 menu.item(PopupMenuItem::separator())
                     .item(crate::widgets::menu_item(
                         rust_i18n::t!("common.delete").to_string(),
-                        IconName::Trash,
+                        AppIcon::Ui(UiIcon::DELETE),
                         move |_, _, cx| {
                             view_delete.update(cx, |sidebar, cx| {
                                 sidebar.request_delete_engine(id, cx);
@@ -213,7 +216,7 @@ pub(crate) fn render_engine_row(
     };
     band = band
         .child(
-            Icon::new(icon)
+            AppIconElement::new(icon)
                 .with_size(ROW_ICON_SIZE)
                 .text_color(if is_active {
                     action_color

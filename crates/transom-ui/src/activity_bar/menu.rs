@@ -2,10 +2,11 @@
 
 use crate::app::AppShell;
 use crate::app::app_settings_mut;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::ActivityItemId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 活动栏单个图标项的上下文菜单：固定项仅提示，非固定项可隐藏；底部附带恢复默认动作。
@@ -19,7 +20,7 @@ impl AppShell {
             menu = menu.item(
                 crate::widgets::MenuItem::new(
                     rust_i18n::t!("activity.pinned").to_string(),
-                    IconName::Lock,
+                    AppIcon::Ui(UiIcon::LOCKED),
                 )
                 .disabled(true)
                 .render(|_, _, _| {}),
@@ -28,7 +29,7 @@ impl AppShell {
             let app_hide = app.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("activity.hide_item").to_string(),
-                IconName::EyeOff,
+                AppIcon::Ui(UiIcon::HIDE),
                 move |_, _, cx| {
                     app_hide.update(cx, |this, cx| this.hide_activity_item(id, cx));
                 },
@@ -38,7 +39,7 @@ impl AppShell {
         menu.item(PopupMenuItem::separator())
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("activity.restore_default").to_string(),
-                IconName::RotateCcw,
+                AppIcon::Ui(UiIcon::UNDO),
                 move |_, _, cx| {
                     app_restore.update(cx, |this, cx| this.restore_activity_bar(cx));
                 },
@@ -50,7 +51,7 @@ impl AppShell {
         let app_restore = app.clone();
         menu.item(crate::widgets::menu_item(
             rust_i18n::t!("activity.restore_default").to_string(),
-            IconName::RotateCcw,
+            AppIcon::Ui(UiIcon::UNDO),
             move |_, _, cx| {
                 app_restore.update(cx, |this, cx| this.restore_activity_bar(cx));
             },

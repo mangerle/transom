@@ -4,6 +4,10 @@ use super::metrics::{StatusBarMetricsView, StatusMetricsSnapshot};
 use super::*;
 use crate::status_bar::BADGE_HEIGHT;
 use gpui_kit::base::h_flex;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 const RATE_WIDTH: f32 = 2.5;
 /// CPU 数值槽按最宽的 `100%` 预留，取值跨到三位数时不会把百分号截掉。
@@ -50,12 +54,12 @@ pub(super) fn render_status_item(
                 .gap_2()
                 .items_center()
                 .child(rate_entry(
-                    IconName::ArrowUp,
+                    AppIcon::Ui(UiIcon::UP),
                     format_rate(traffic.upload_bytes_per_sec),
                     p,
                 ))
                 .child(rate_entry(
-                    IconName::ArrowDown,
+                    AppIcon::Ui(UiIcon::DOWN),
                     format_rate(traffic.download_bytes_per_sec),
                     p,
                 ))
@@ -72,7 +76,7 @@ pub(super) fn render_status_item(
                 p.foreground
             };
             let content = icon_value(
-                IconName::Cpu,
+                AppIcon::Custom(CustomIcon::CPU),
                 format!("{:.0}%", stats.cpu_percent),
                 CPU_VALUE_WIDTH,
                 cpu_color,
@@ -92,7 +96,7 @@ pub(super) fn render_status_item(
             let total_gb = stats.mem_total_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
             let mem_pct = (stats.mem_used_bytes as f64 / stats.mem_total_bytes as f64) * 100.0;
             let content = icon_value(
-                IconName::MemoryStick,
+                AppIcon::Custom(CustomIcon::MEMORY),
                 format!(
                     "{}/{} {mem_pct:.0}%",
                     format_compact_size(stats.mem_used_bytes),
@@ -114,7 +118,7 @@ pub(super) fn render_status_item(
             let total_gb = stats.disk_total_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
             let disk_pct = (stats.disk_used_bytes as f64 / stats.disk_total_bytes as f64) * 100.0;
             let content = icon_value(
-                IconName::HardDrive,
+                AppIcon::Custom(CustomIcon::DISK),
                 format!(
                     "{}/{} {disk_pct:.0}%",
                     format_compact_size(stats.disk_used_bytes),
@@ -134,7 +138,7 @@ pub(super) fn render_status_item(
             let stats = data.stats.filter(|stats| !stats.os_name.is_empty())?;
             let os_name = stats.os_name.clone();
             let content = icon_value(
-                IconName::Monitor,
+                AppIcon::Custom(CustomIcon::OS),
                 os_name.clone(),
                 OS_VALUE_WIDTH,
                 p.foreground,
@@ -159,7 +163,7 @@ pub(super) fn render_status_item(
                 "<1m".to_string()
             };
             let content = icon_value(
-                IconName::Clock,
+                AppIcon::Ui(UiIcon::HISTORY),
                 up_text,
                 UPTIME_VALUE_WIDTH,
                 p.foreground,
@@ -200,11 +204,11 @@ fn status_badge(
     drag::attach_status_drag_metrics(badge, id, view, p)
 }
 
-fn rate_entry(icon: IconName, value: String, p: &Palette) -> AnyElement {
+fn rate_entry(icon: AppIcon, value: String, p: &Palette) -> AnyElement {
     h_flex()
         .gap_1()
         .items_center()
-        .child(Icon::new(icon).xsmall().text_color(p.foreground))
+        .child(AppIconElement::new(icon).xsmall().text_color(p.foreground))
         .child(
             div().w(rems(RATE_WIDTH)).flex().child(
                 div()
@@ -225,7 +229,7 @@ fn rate_entry(icon: IconName, value: String, p: &Palette) -> AnyElement {
 /// 不用右对齐：内存、运行时间这类短数值会在图标和数字之间空出一大块，
 /// 看起来像排版断裂。槽宽固定保证徽标整体不抖，左对齐保证数字始终贴着图标。
 fn icon_value(
-    icon: IconName,
+    icon: AppIcon,
     value: String,
     width: f32,
     value_color: Hsla,
@@ -234,7 +238,7 @@ fn icon_value(
     h_flex()
         .gap_1()
         .items_center()
-        .child(Icon::new(icon).xsmall().text_color(icon_color))
+        .child(AppIconElement::new(icon).xsmall().text_color(icon_color))
         .child(
             div().w(rems(width)).flex().child(
                 div()

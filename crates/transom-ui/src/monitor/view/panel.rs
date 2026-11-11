@@ -2,6 +2,9 @@
 
 use super::*;
 use gpui_kit::prelude::FluentBuilder;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl MonitorView {
     /// 渲染右侧监控抽屉。
@@ -60,7 +63,7 @@ impl MonitorView {
         let actions = self.render_header_actions(current_interval, drawer_width, cx);
         let header =
             crate::widgets::PanelHeader::new(rust_i18n::t!("monitor.title").to_string(), p)
-                .icon(IconName::Gauge)
+                .icon(AppIcon::Domain(DomainIcon::MONITOR))
                 .border(p.border)
                 .action(actions)
                 .render(p);
@@ -173,8 +176,8 @@ impl MonitorView {
                 crate::widgets::IconButton::new(
                     "monitor-toggle-chart-type",
                     match self.state.chart_type {
-                        SparklineChartType::Line => IconName::ChartLine,
-                        SparklineChartType::Bar => IconName::ChartBar,
+                        SparklineChartType::Line => AppIcon::Ui(UiIcon::DATAFLOW),
+                        SparklineChartType::Bar => AppIcon::Ui(UiIcon::DATAFLOW),
                     },
                     match self.state.chart_type {
                         SparklineChartType::Line => {
@@ -199,7 +202,7 @@ impl MonitorView {
             .child(
                 crate::widgets::IconButton::new(
                     "monitor-refresh",
-                    IconName::RefreshCw,
+                    AppIcon::Ui(UiIcon::REFRESH),
                     rust_i18n::t!("monitor.view.refresh_tooltip").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -223,9 +226,9 @@ impl MonitorView {
                 crate::widgets::IconButton::new(
                     "monitor-toggle-width",
                     if drawer_width > 480.0 {
-                        IconName::Minimize2
+                        AppIcon::Ui(UiIcon::RESTORE)
                     } else {
-                        IconName::Maximize2
+                        AppIcon::Ui(UiIcon::MAXIMIZE)
                     },
                     if drawer_width > 480.0 {
                         rust_i18n::t!("monitor.view.width_compact_tooltip").to_string()
@@ -252,7 +255,7 @@ impl MonitorView {
             .child(
                 crate::widgets::IconButton::new(
                     "monitor-maximize-to-tab",
-                    IconName::ArrowUpRight,
+                    AppIcon::Ui(UiIcon::UP),
                     rust_i18n::t!("monitor.view.detach_tooltip").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -268,7 +271,7 @@ impl MonitorView {
             .child(
                 crate::widgets::IconButton::new(
                     "monitor-close",
-                    IconName::Close,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     rust_i18n::t!("monitor.view.close_tooltip").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)

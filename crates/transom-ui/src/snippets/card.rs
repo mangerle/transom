@@ -5,7 +5,6 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -14,6 +13,9 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_core::Snippet;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 摘要命令预览：取第一行并限制长度，避免多行脚本撑破卡片。
 pub(crate) fn snippet_preview(command: &str) -> String {
@@ -97,7 +99,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                 .child(
                     crate::widgets::IconButton::new(
                         ElementId::Name(format!("snippet-edit-{}", item.id).into()),
-                        IconName::Pencil,
+                        AppIcon::Ui(UiIcon::EDIT),
                         rust_i18n::t!("common.edit").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -113,7 +115,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                 .child(
                     crate::widgets::IconButton::new(
                         ElementId::Name(format!("snippet-delete-{}", item.id).into()),
-                        IconName::Trash,
+                        AppIcon::Ui(UiIcon::DELETE),
                         rust_i18n::t!("common.delete").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -224,7 +226,7 @@ pub(super) fn render_snippets_card(
                     Button::new("snippets-add")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::Plus)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                         .label(rust_i18n::t!("snippets.add").to_string()),
                     app,
                     None,

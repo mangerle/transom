@@ -6,11 +6,12 @@ use crate::widgets::{
     DialogConfirmKind, dialog_actions, dialog_body, dialog_cancel_button, dialog_confirm_button,
 };
 use gpui_kit::ClipboardItem;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染容器配置反向导出模态弹窗主体。
 ///
@@ -86,7 +87,7 @@ pub(crate) fn render_container_export_config_dialog_body(
     let copy_btn = dialog_confirm_button(
         "copy-container-export",
         rust_i18n::t!("common.copy").to_string(),
-        Some(IconName::Copy),
+        Some(AppIcon::Ui(UiIcon::COPY)),
         DialogConfirmKind::Primary,
         {
             let view = view.clone();

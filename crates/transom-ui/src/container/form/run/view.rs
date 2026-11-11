@@ -10,13 +10,15 @@ use super::ContainerRunFormView;
 use crate::container::form::RUN_RESTART_POLICIES;
 use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::{Icon, Selectable, Sizable};
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::*;
 use transom_core::ContainerImageSummary;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl ContainerRunFormView {
     /// 渲染运行容器表单整体弹窗体；镜像摘要由弹窗宿主在只读外壳里快照注入。
@@ -301,7 +303,7 @@ impl ContainerRunFormView {
         };
         let submit_btn = Button::new("container-run-submit")
             .primary()
-            .icon(IconName::Play)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
             .label(submit_label)
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
             .into_any_element();
@@ -329,7 +331,7 @@ fn run_error_banner(error: String, p: &Palette) -> AnyElement {
         .bg(p.tone.danger_subtle)
         .items_center()
         .child(
-            Icon::new(IconName::CircleAlert)
+            AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                 .with_size(px(14.0))
                 .text_color(p.danger),
         )

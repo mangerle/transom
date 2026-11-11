@@ -7,10 +7,11 @@
 
 use crate::app::AppShell;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
 use transom_core::{GitProject, LogScope, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 标签菜单目标数据。
 pub(crate) struct TagMenuTarget {
@@ -61,7 +62,7 @@ pub(crate) fn render_tag_menu(
         // 1. 签出
         .item(menu_item(
             rust_i18n::t!("git.menu.checkout").to_string(),
-            IconName::ArrowRight,
+            AppIcon::Ui(UiIcon::RIGHT),
             move |_, _, cx| {
                 let name = name_checkout.clone();
                 let project = project_checkout.clone();
@@ -73,7 +74,7 @@ pub(crate) fn render_tag_menu(
         // 2. 从 '{tag}' 新建分支...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_branch_from_ref", branch = tag.as_str()).to_string(),
-            IconName::GitBranchPlus,
+            AppIcon::Ui(UiIcon::VCS),
             move |_, window, cx| {
                 let start = name_new_branch.clone();
                 let project = project_new_branch.clone();
@@ -85,7 +86,7 @@ pub(crate) fn render_tag_menu(
         // 3. 显示与工作树的差异
         .item(menu_item(
             rust_i18n::t!("git.menu.show_diff_with_worktree").to_string(),
-            IconName::GitCompare,
+            AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let target = name_diff.clone();
                 app_diff.update(cx, |this, cx| {
@@ -101,7 +102,7 @@ pub(crate) fn render_tag_menu(
                 branch = cur.as_str()
             )
             .to_string(),
-            IconName::GitMerge,
+            AppIcon::Ui(UiIcon::MERGE),
             move |_, _, cx| {
                 let reference = name_merge.clone();
                 let project = project_merge.clone();
@@ -117,7 +118,7 @@ pub(crate) fn render_tag_menu(
         // 5. 从 '{tag}' 新建工作树...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_worktree_from_ref", branch = tag.as_str()).to_string(),
-            IconName::FolderGit,
+            AppIcon::Ui(UiIcon::FOLDER),
             move |_, window, cx| {
                 let branch = name_worktree.clone();
                 let project = project_worktree.clone();
@@ -129,7 +130,7 @@ pub(crate) fn render_tag_menu(
         // 6. 推送到 origin
         .item(menu_item(
             rust_i18n::t!("git.menu.push_to_remote", remote = "origin").to_string(),
-            IconName::Upload,
+            AppIcon::Ui(UiIcon::UPLOAD),
             move |_, _, cx| {
                 let name = name_push.clone();
                 let project = project_push.clone();
@@ -141,7 +142,7 @@ pub(crate) fn render_tag_menu(
         // 7. 删除
         .item(menu_item(
             rust_i18n::t!("git.menu.delete_ref").to_string(),
-            IconName::Trash,
+            AppIcon::Ui(UiIcon::DELETE),
             move |_, _, cx| {
                 let name = name_delete.clone();
                 let project = project_delete.clone();

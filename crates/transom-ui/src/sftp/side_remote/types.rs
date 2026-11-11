@@ -7,13 +7,13 @@
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneState;
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle};
+use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::BTreeSet;
 use transom_core::{ConnectionId, TabId};
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 跨栏剪贴板数据来源。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +75,7 @@ impl Render for SftpDragPreview {
             .text_color(p.foreground)
             .text_xs()
             .items_center()
-            .child(Icon::new(IconName::File).xsmall())
+            .child(render_app_icon(AppIcon::for_file(&self.name), 16.0))
             .child(self.name.clone())
             .when(self.count > 1, |this| {
                 this.child(

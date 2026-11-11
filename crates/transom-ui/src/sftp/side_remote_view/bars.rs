@@ -10,13 +10,16 @@
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::normalize_remote_cwd;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::{Icon, Selectable, Sizable};
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::*;
 use transom_core::ConnectionId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl SftpPanelView {
     /// 渲染挂载并列远端按钮及其 Popover 菜单。
@@ -38,7 +41,7 @@ impl SftpPanelView {
         let trigger = Button::new(format!("sftp-mount-side-remote-btn-{tab_id}"))
             .ghost()
             .xsmall()
-            .icon(IconName::Plus)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
             .selected(open)
             .accessibility_label(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string())
             .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
@@ -94,7 +97,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let expand_btn = crate::widgets::IconButton::new(
             "expand-sftp-local-btn",
-            IconName::PanelLeftOpen,
+            AppIcon::Ui(UiIcon::LEFT),
             rust_i18n::t!("sftp.sidebar.expand_local").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -112,7 +115,7 @@ impl SftpPanelView {
             .bg(p.sidebar)
             .child(expand_btn)
             .child(
-                Icon::new(IconName::Laptop)
+                AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER))
                     .small()
                     .text_color(p.muted_foreground),
             )
@@ -134,7 +137,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let expand_btn = crate::widgets::IconButton::new(
             "expand-sftp-remote-btn",
-            IconName::PanelLeftOpen,
+            AppIcon::Ui(UiIcon::LEFT),
             rust_i18n::t!("sftp.sidebar.expand_remote").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -152,7 +155,7 @@ impl SftpPanelView {
             .bg(p.sidebar)
             .child(expand_btn)
             .child(
-                Icon::new(IconName::Server)
+                AppIconElement::new(AppIcon::Domain(DomainIcon::SSH))
                     .small()
                     .text_color(p.muted_foreground),
             )
@@ -176,7 +179,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let expand_btn = crate::widgets::IconButton::new(
             format!("expand-side-{side_index}"),
-            IconName::PanelRightOpen,
+            AppIcon::Ui(UiIcon::RIGHT),
             rust_i18n::t!("sftp.sidebar.expand_side_remote").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -187,7 +190,7 @@ impl SftpPanelView {
 
         let close_btn = crate::widgets::IconButton::new(
             format!("close-side-{side_index}"),
-            IconName::X,
+            AppIcon::Ui(UiIcon::CLOSE),
             rust_i18n::t!("sftp.sidebar.close_side_remote").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -206,7 +209,7 @@ impl SftpPanelView {
             .child(expand_btn)
             .child(close_btn)
             .child(
-                Icon::new(IconName::Server)
+                AppIconElement::new(AppIcon::Domain(DomainIcon::SSH))
                     .small()
                     .text_color(p.muted_foreground),
             )
@@ -289,7 +292,7 @@ fn mount_menu(
                         );
                     });
                 })
-                .child(Icon::new(IconName::Server).small())
+                .child(AppIconElement::new(AppIcon::Domain(DomainIcon::SSH)).small())
                 .child(
                     div()
                         .flex_1()

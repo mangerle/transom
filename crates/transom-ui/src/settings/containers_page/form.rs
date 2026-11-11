@@ -7,13 +7,15 @@
 use super::super::SettingsView;
 use super::super::modal_state::RegistryEditState;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     /// 渲染仓库内联编辑/新建表单。
@@ -107,7 +109,7 @@ impl SettingsView {
                         .rounded(p.radius.md)
                         .bg(p.danger.opacity(0.10))
                         .child(
-                            Icon::new(IconName::CircleAlert)
+                            AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
                                 .with_size(px(14.0))
                                 .text_color(p.danger),
                         )

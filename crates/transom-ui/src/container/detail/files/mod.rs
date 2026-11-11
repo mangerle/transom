@@ -12,6 +12,9 @@ use crate::container::ContainerWorkspace;
 use crate::sftp::SftpDragItem;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::gpui::ExternalPaths;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 文件页签的渲染参数：字段多且都是借用，收敛为结构体避免长参数列表。
 pub(crate) struct ContainerFilesView<'a> {
@@ -76,7 +79,7 @@ pub(crate) fn render_files(
         .rounded(p.radius.md)
         .items_center()
         .child(
-            Icon::new(IconName::CornerLeftUp)
+            AppIconElement::new(AppIcon::Ui(UiIcon::UNDO))
                 .small()
                 .text_color(p.muted_foreground),
         )

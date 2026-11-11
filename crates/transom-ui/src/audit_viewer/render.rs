@@ -8,13 +8,15 @@ use super::entity::{AuditViewerEvent, AuditViewerView};
 use super::types::{AuditLogEntry, AuditViewer, format_file_size};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
 use std::path::PathBuf;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AuditViewerView {
     /// 渲染审计日志查看器模态弹窗。
@@ -273,7 +275,7 @@ fn audit_file_row(
         .child(
             crate::widgets::IconButton::new(
                 ElementId::Name(format!("delete-audit-log-{delete_path}").into()),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
                 rust_i18n::t!("common.delete").to_string(),
             )
             .size(crate::widgets::IconButtonSize::Compact)
@@ -302,7 +304,7 @@ fn audit_file_action_buttons(
         buttons.push(
             Button::new("reveal-audit-file")
                 .outline()
-                .icon(IconName::FolderOpen)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                 .label(rust_i18n::t!("audit_viewer.reveal").to_string())
                 .on_click(move |_, _, _| {
                     crate::audit::reveal_in_file_manager(path.clone());
@@ -313,7 +315,7 @@ fn audit_file_action_buttons(
             Button::new("reveal-audit-file")
                 .outline()
                 .disabled(true)
-                .icon(IconName::FolderOpen)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                 .label(rust_i18n::t!("audit_viewer.reveal").to_string()),
         );
     }
@@ -322,7 +324,7 @@ fn audit_file_action_buttons(
         Button::new("delete-current-audit-file")
             .outline()
             .disabled(!has_selected)
-            .icon(IconName::Trash)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
             .label(rust_i18n::t!("audit_viewer.delete_log").to_string())
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 if let Some(path) = delete_path.as_deref() {
@@ -335,7 +337,7 @@ fn audit_file_action_buttons(
         Button::new("copy-audit-content")
             .outline()
             .disabled(!has_selected || content_empty)
-            .icon(IconName::Copy)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
             .label(rust_i18n::t!("audit_viewer.copy_content").to_string())
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.copy_content(cx))),
     );

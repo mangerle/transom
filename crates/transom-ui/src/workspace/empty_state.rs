@@ -12,18 +12,19 @@
 
 use crate::app::AppShell;
 use crate::app::app_settings;
-use crate::app_assets::AppIcon;
 use crate::brand;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Icon;
 use gpui_kit::component::empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_core::Session;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 品牌 Logo 显示边长（rem）。
 const LOGO_SIZE: f32 = 3.5;
@@ -147,7 +148,7 @@ impl AppShell {
 
         empty_card_shell(
             ElementId::Name("empty-quick-local".into()),
-            IconName::Terminal,
+            AppIcon::Domain(DomainIcon::TERMINAL),
             p.primary,
             rust_i18n::t!("app.new_local").to_string(),
             shell_desc,
@@ -172,7 +173,7 @@ impl AppShell {
     fn render_empty_new_session_card(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         empty_card_shell(
             ElementId::Name("empty-quick-new-session".into()),
-            IconName::Plus,
+            AppIcon::Ui(UiIcon::ADD),
             p.primary,
             rust_i18n::t!("app.new_session").to_string(),
             rust_i18n::t!("app.empty_new_session_hint").to_string(),
@@ -192,7 +193,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let session_id = session.id;
-        let default_icon: AppIcon = crate::connection::icon(&session.connection).into();
+        let default_icon: AppIcon = crate::connection::icon(&session.connection);
         let detail_text = crate::connection::display_compact(&session.connection);
 
         let icon = session_icon(session.icon).unwrap_or(default_icon);
@@ -220,7 +221,7 @@ impl AppShell {
             .tooltip(move |window, cx| {
                 Tooltip::new(rust_i18n::t!("app.remove_from_recent").to_string()).build(window, cx)
             })
-            .child(Icon::new(IconName::X).size(px(11.0)))
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).size(px(11.0)))
             .on_click(cx.listener(move |this, _, _window, cx| {
                 cx.stop_propagation();
                 this.remove_recent_session(session_id, cx);
@@ -246,7 +247,7 @@ impl AppShell {
                 let app_remove = app.clone();
                 menu.item(crate::widgets::menu_item(
                     rust_i18n::t!("menu.connect").to_string(),
-                    IconName::Terminal,
+                    AppIcon::Domain(DomainIcon::TERMINAL),
                     move |_, window, cx| {
                         app_connect.update(cx, |this, cx| {
                             this.connect_session(session_id, window, cx);
@@ -256,7 +257,7 @@ impl AppShell {
                 .item(PopupMenuItem::separator())
                 .item(crate::widgets::menu_item(
                     rust_i18n::t!("app.remove_from_recent").to_string(),
-                    IconName::X,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     move |_, _window, cx| {
                         app_remove.update(cx, |this, cx| {
                             this.remove_recent_session(session_id, cx);
@@ -305,7 +306,11 @@ fn empty_card_shell(
                         .items_center()
                         .gap_2()
                         .min_w_0()
-                        .child(Icon::new(icon).size(px(15.0)).text_color(icon_color))
+                        .child(
+                            AppIconElement::new(icon)
+                                .size(px(15.0))
+                                .text_color(icon_color),
+                        )
                         .child(
                             div()
                                 .flex_1()

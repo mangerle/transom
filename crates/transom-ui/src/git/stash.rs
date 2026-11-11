@@ -11,16 +11,18 @@ use super::commit_modal::{accent_color, split_path};
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitAction, GitProject, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 贮藏内联面板：提交页左栏的「贮藏」页签内容。
@@ -57,7 +59,7 @@ impl AppShell {
                 Button::new("git-stash-refresh")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::RotateCw)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                     .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -69,7 +71,7 @@ impl AppShell {
                 Button::new("git-stash-new")
                     .primary()
                     .xsmall()
-                    .icon(IconName::PackagePlus)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::PATCH)).small())
                     .label(rust_i18n::t!("git.stash.create").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         this.git_stash_checked(tab_id, cx);
@@ -145,15 +147,19 @@ impl AppShell {
             .items_center()
             .cursor_pointer()
             .child(
-                Icon::new(if view.expanded {
-                    IconName::ChevronDown
+                AppIconElement::new(if view.expanded {
+                    AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                 } else {
-                    IconName::ChevronRight
+                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
                 })
                 .xsmall()
                 .text_color(p.muted_foreground),
             )
-            .child(Icon::new(IconName::Archive).xsmall().text_color(p.primary))
+            .child(
+                AppIconElement::new(AppIcon::Ui(UiIcon::PATCH))
+                    .xsmall()
+                    .text_color(p.primary),
+            )
             .child(
                 v_flex()
                     .flex_1()
@@ -193,7 +199,7 @@ impl AppShell {
                 ))
                 .ghost()
                 .xsmall()
-                .icon(IconName::Play)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                 .accessibility_label(rust_i18n::t!("git.stash.apply").to_string())
                 .tooltip(rust_i18n::t!("git.stash.apply").to_string())
                 .on_click(cx.listener({
@@ -208,7 +214,7 @@ impl AppShell {
                 Button::new(ElementId::Name(format!("git-stash-pop-{selector}").into()))
                     .ghost()
                     .xsmall()
-                    .icon(IconName::ArrowDownToLine)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                     .accessibility_label(rust_i18n::t!("git.stash.pop").to_string())
                     .tooltip(rust_i18n::t!("git.stash.pop").to_string())
                     .on_click(cx.listener({
@@ -301,7 +307,7 @@ impl AppShell {
             .when(selected, |el| el.bg(p.list_active))
             .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx))
             .child(
-                Icon::new(visual.icon)
+                AppIconElement::new(visual.icon)
                     .xsmall()
                     .text_color(accent_color(visual.accent, p)),
             )
@@ -411,7 +417,7 @@ fn render_stash_menu(
     let drop_selector = selector.clone();
     menu.item(menu_item(
         rust_i18n::t!("git.stash.apply").to_string(),
-        IconName::Play,
+        AppIcon::Ui(UiIcon::RUN),
         {
             let item_app = app.clone();
             let item_project = project.clone();
@@ -427,7 +433,7 @@ fn render_stash_menu(
     ))
     .item(menu_item(
         rust_i18n::t!("git.stash.pop").to_string(),
-        IconName::ArrowDownToLine,
+        AppIcon::Ui(UiIcon::DOWNLOAD),
         {
             let item_app = app.clone();
             let item_project = project.clone();
@@ -443,7 +449,7 @@ fn render_stash_menu(
     .item(PopupMenuItem::separator())
     .item(menu_item(
         rust_i18n::t!("git.stash.drop").to_string(),
-        IconName::Trash,
+        AppIcon::Ui(UiIcon::DELETE),
         move |_, _, cx| {
             let project = drop_project.clone();
             let selector = drop_selector.clone();

@@ -3,6 +3,10 @@
 use super::*;
 use crate::container::types::ContainerDiscovery;
 use transom_core::Connection;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染空列表提示与两个入口按钮。
 pub(crate) fn render_engine_empty(
@@ -33,7 +37,7 @@ pub(crate) fn render_engine_empty(
                     Button::new("container-profile-new-empty")
                         .primary()
                         .small()
-                        .icon(IconName::Plus)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                         .label(rust_i18n::t!("container.sidebar.new").to_string())
                         .on_click(move |_, _, cx| {
                             view_new.update(cx, |sidebar, cx| {
@@ -44,7 +48,7 @@ pub(crate) fn render_engine_empty(
                 .child(
                     Button::new("container-discover-empty")
                         .small()
-                        .icon(IconName::Radar)
+                        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR)).small())
                         .label(rust_i18n::t!("container.sidebar.discover").to_string())
                         .on_click(move |_, _, cx| {
                             view_discover.update(cx, |sidebar, cx| {
@@ -82,7 +86,11 @@ pub(crate) fn render_container_discovery(
                 h_flex()
                     .gap_1()
                     .items_center()
-                    .child(Icon::new(IconName::Radar).xsmall().text_color(p.primary))
+                    .child(
+                        AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR))
+                            .xsmall()
+                            .text_color(p.primary),
+                    )
                     .child(
                         div()
                             .text_xs()
@@ -94,7 +102,7 @@ pub(crate) fn render_container_discovery(
                 Button::new("container-discovery-dismiss")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Close)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                     .accessibility_label("Dismiss container discovery")
                     .on_click(move |_, _, cx| {
                         view_dismiss.update(cx, |sidebar, cx| {
@@ -139,7 +147,7 @@ pub(crate) fn render_container_discovery(
                     ))
                     .primary()
                     .xsmall()
-                    .icon(IconName::Plus)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                     .label(rust_i18n::t!("container.discovery.add").to_string())
                     .on_click(move |_, _, cx| {
                         view_add.update(cx, |sidebar, cx| {
@@ -208,7 +216,7 @@ pub(crate) fn render_container_discovery(
                             format!("container-discovery-ssh-{}", session_id).into(),
                         ))
                         .xsmall()
-                        .icon(IconName::Boxes)
+                        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER)).small())
                         .label(rust_i18n::t!("container.discovery.connect_docker").to_string())
                         .on_click(move |_, _, cx| {
                             view_session.update(cx, |sidebar, cx| {

@@ -7,13 +7,15 @@
 //! 代价与局限：只覆盖视觉映射，标签布局仍各按横向/纵向排版。
 
 use crate::app::{AppShell, TerminalTab};
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
 use crate::workspace::pane_status_indicator;
-use gpui_kit::assets::IconName;
 use gpui_kit::*;
 use transom_core::{Connection, ContainerEngineKind, GitProject};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 标签图标与图标颜色：播放器/监控看板有专属图标，Git 标签跟随仓库项目外观，
 /// 其余按会话外观回落连接类型。
@@ -25,10 +27,10 @@ pub(crate) fn tab_icon(
     cx: &App,
 ) -> (AppIcon, Hsla) {
     if tab.is_player() {
-        return (IconName::Disc.into(), p.muted_foreground);
+        return (AppIcon::Domain(DomainIcon::MONITOR), p.muted_foreground);
     }
     if tab.is_monitor() {
-        return (IconName::Gauge.into(), p.primary);
+        return (AppIcon::Domain(DomainIcon::MONITOR), p.primary);
     }
     if let Some(workspace) = tab.git() {
         let state = &workspace.read(cx).state;
@@ -43,9 +45,9 @@ pub(crate) fn tab_icon(
     if let Connection::ContainerEngine(profile) = &tab.session.connection {
         let icon = session_icon(profile.icon).unwrap_or_else(|| {
             if profile.engine.kind == ContainerEngineKind::Docker {
-                AppIcon::Docker
+                CustomIcon::DOCKER.into()
             } else {
-                IconName::Container.into()
+                AppIcon::Domain(DomainIcon::CONTAINER)
             }
         });
         let color = session_color(profile.color).unwrap_or(if active {
@@ -58,7 +60,7 @@ pub(crate) fn tab_icon(
     let appearance = shell.state.session_appearance(tab);
     let icon = appearance
         .icon
-        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection).into());
+        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
     let color = appearance.color.unwrap_or(if active {
         p.sidebar_accent_foreground
     } else {
@@ -75,9 +77,9 @@ pub(crate) fn tab_accent(shell: &AppShell, tab: &TerminalTab, cx: &App) -> Optio
     shell.state.session_appearance(tab).color
 }
 
-/// Git 标签图标与左侧仓库行保持一致：项目未配置图标时回落到分支图标。
-fn git_project_icon(project: &GitProject) -> AppIcon {
-    session_icon(project.icon).unwrap_or_else(|| IconName::GitBranch.into())
+/// Git 标签图标与左侧仓库行保持一致，统一使用 Git 领域图标。
+fn git_project_icon(_project: &GitProject) -> AppIcon {
+    UiIcon::VCS.into()
 }
 
 /// Git 项目配置的环境色；未配置时不画强调条。
@@ -111,10 +113,10 @@ pub(crate) fn tab_subtitle(tab: &TerminalTab) -> String {
 #[cfg(test)]
 mod tests {
     use super::{git_project_color, git_project_icon};
-    use crate::app_assets::AppIcon;
-    use gpui_kit::assets::IconName;
     use std::path::PathBuf;
     use transom_core::{GitProject, SessionColor, SessionIcon};
+    use transom_ui_icons::AppIcon;
+    use transom_ui_icons::UiIcon;
 
     /// Git 项目未配置专属图标时，标签栏必须使用与仓库行相同的分支图标。
     #[test]
@@ -122,19 +124,19 @@ mod tests {
         let project = GitProject::new(PathBuf::from("/tmp/transom-git-icon"));
         assert!(matches!(
             git_project_icon(&project),
-            AppIcon::Named(IconName::GitBranch)
+            AppIcon::Ui(UiIcon::VCS)
         ));
     }
 
-    /// 用户给仓库配置图标与环境色后，标签栏直接复用同一份外观。
+    /// Git 仓库始终使用统一 Git 图标，环境色仍可单独配置。
     #[test]
-    fn git_project_appearance_is_shared_with_tab() {
+    fn git_project_icon_stays_unified_while_color_is_configurable() {
         let mut project = GitProject::new(PathBuf::from("/tmp/transom-git-icon"));
         project.icon = SessionIcon::Database;
         project.color = SessionColor::Blue;
         assert!(matches!(
             git_project_icon(&project),
-            AppIcon::Named(IconName::Database)
+            AppIcon::Ui(UiIcon::VCS)
         ));
         assert!(git_project_color(&project).is_some());
     }

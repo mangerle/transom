@@ -3,7 +3,6 @@
 use crate::palette::Palette;
 use crate::session_form::{SessionForm, SessionFormView};
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -11,6 +10,10 @@ use gpui_kit::component::input::Textarea;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 pub(crate) fn render_local_fields(
     form: &SessionForm,
@@ -32,7 +35,7 @@ pub(crate) fn render_local_fields(
             Button::new("browse-local-working-dir")
                 .ghost()
                 .small()
-                .icon(IconName::FolderOpen)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
                 .label(rust_i18n::t!("form.browse").to_string())
                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                     this.pick_working_dir(window, cx);
@@ -53,7 +56,7 @@ pub(crate) fn render_local_fields(
         let choose_btn = Button::new("choose-installed-shell")
             .ghost()
             .small()
-            .icon(IconName::Terminal)
+            .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small())
             .label(rust_i18n::t!("form.local.choose_shell").to_string())
             .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _window, _cx| {
                 let mut menu = menu.max_h(px(240.0)).scrollable(true);
@@ -63,7 +66,7 @@ pub(crate) fn render_local_fields(
                     let input = shell_input_handle.clone();
                     menu = menu.item(menu_item(
                         format!("{label} ({prog})"),
-                        IconName::Terminal,
+                        AppIcon::Domain(DomainIcon::TERMINAL),
                         move |_, window, cx| {
                             input.update(cx, |state, cx| state.set_value(&prog, window, cx));
                         },

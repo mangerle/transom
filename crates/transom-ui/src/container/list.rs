@@ -24,17 +24,20 @@ use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::format::format_size;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{
     ComposeProject, ContainerImageSummary, ContainerNetworkSummary, ContainerSummary,
     ContainerVolumeSummary, TabId, short_id,
 };
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 mod filters;
 mod keyboard;
@@ -138,7 +141,7 @@ pub(crate) fn render_container_list(
                 .items_center()
                 .text_xs()
                 .text_color(p.muted_foreground)
-                .child(Icon::new(IconName::Loader).xsmall())
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).xsmall())
                 .child(rust_i18n::t!("container.loading").to_string()),
         );
     }
@@ -167,8 +170,8 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-run")
                 .xsmall()
-                .outline()
-                .icon(IconName::Play)
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                 .accessibility_label(rust_i18n::t!("container.action.run").to_string())
                 .tooltip(rust_i18n::t!("container.action.run").to_string())
                 .on_click(move |_, _, cx| {
@@ -182,8 +185,8 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-explore-hub")
                 .xsmall()
-                .outline()
-                .icon(IconName::Globe)
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Custom(CustomIcon::DOCKER)).small())
                 .accessibility_label(
                     rust_i18n::t!("container.pull_manager.explore_market").to_string(),
                 )
@@ -199,8 +202,8 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-create-volume")
                 .xsmall()
-                .outline()
-                .icon(IconName::Plus)
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                 .accessibility_label(rust_i18n::t!("container.create_dialog.volume").to_string())
                 .tooltip(rust_i18n::t!("container.create_dialog.volume").to_string())
                 .on_click(move |_, _, cx| {
@@ -216,8 +219,8 @@ fn render_list_toolbar(
             let view = view.clone();
             Button::new("container-main-create-network")
                 .xsmall()
-                .outline()
-                .icon(IconName::Plus)
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                 .accessibility_label(rust_i18n::t!("container.create_dialog.network").to_string())
                 .tooltip(rust_i18n::t!("container.create_dialog.network").to_string())
                 .on_click(move |_, _, cx| {
@@ -233,8 +236,8 @@ fn render_list_toolbar(
             let menu_view = view.clone();
             Button::new("container-main-new-compose")
                 .xsmall()
-                .outline()
-                .icon(IconName::FilePlus)
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD_FILE)).small())
                 .accessibility_label(rust_i18n::t!("container.compose.new_yaml").to_string())
                 .tooltip(rust_i18n::t!("container.compose.new_yaml").to_string())
                 .dropdown_menu(move |menu, _, _| {

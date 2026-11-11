@@ -2,6 +2,9 @@
 
 use super::super::*;
 use crate::container::ContainerWorkspace;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 pub(super) fn render_entry_row(
     view: &Entity<ContainerWorkspace>,
@@ -22,15 +25,11 @@ pub(super) fn render_entry_row(
         .rounded(p.radius.md)
         .items_center()
         .hover(|style| style.bg(p.muted.opacity(0.5)))
-        .child(
-            Icon::new(if is_dir {
-                IconName::Folder
-            } else {
-                IconName::File
-            })
-            .small()
-            .text_color(p.muted_foreground),
-        )
+        .child(if is_dir {
+            render_app_icon(UiIcon::FOLDER.into(), 16.0)
+        } else {
+            render_app_icon(AppIcon::for_file(&entry_path), 16.0)
+        })
         .child(div().flex_1().min_w_0().text_sm().truncate().child(name))
         .child(
             div()
@@ -74,7 +73,7 @@ pub(super) fn render_entry_row(
                 ))
                 .ghost()
                 .xsmall()
-                .icon(IconName::Download)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                 .accessibility_label(
                     rust_i18n::t!("container.files.download_directory_tooltip").to_string(),
                 )
@@ -104,7 +103,7 @@ pub(super) fn render_entry_row(
                 ))
                 .ghost()
                 .xsmall()
-                .icon(IconName::Download)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                 .accessibility_label("Download file")
                 .on_click({
                     let view = view.clone();
@@ -124,7 +123,7 @@ pub(super) fn render_entry_row(
             ))
             .ghost()
             .xsmall()
-            .icon(IconName::Pen)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDIT)).small())
             .accessibility_label("Rename file")
             .on_click({
                 let view = view.clone();
@@ -142,7 +141,7 @@ pub(super) fn render_entry_row(
             ))
             .ghost()
             .xsmall()
-            .icon(IconName::Trash)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
             .accessibility_label("Delete file")
             .on_click({
                 let view = view.clone();
@@ -166,7 +165,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.open").to_string(),
-                IconName::FolderOpen,
+                AppIcon::Ui(UiIcon::FOLDER),
                 move |_, _, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.load_container_dir(path.clone(), cx);
@@ -177,7 +176,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.download_directory").to_string(),
-                IconName::Download,
+                AppIcon::Ui(UiIcon::DOWNLOAD),
                 move |_, _, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.download_container_directory(path.clone(), cx);
@@ -188,7 +187,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.copy_to").to_string(),
-                IconName::Copy,
+                AppIcon::Ui(UiIcon::COPY),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_copy(path.clone(), window, cx);
@@ -199,7 +198,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.chmod").to_string(),
-                IconName::Lock,
+                AppIcon::Ui(UiIcon::LOCKED),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_chmod(path.clone(), window, cx);
@@ -210,7 +209,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.chown").to_string(),
-                IconName::KeyRound,
+                AppIcon::Ui(UiIcon::LOCKED),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_chown(path.clone(), window, cx);
@@ -222,7 +221,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.preview").to_string(),
-                IconName::File,
+                AppIcon::Ui(UiIcon::DIFF),
                 move |_, _, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.preview_container_file(path.clone(), cx);
@@ -233,7 +232,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.download").to_string(),
-                IconName::Download,
+                AppIcon::Ui(UiIcon::DOWNLOAD),
                 move |_, _, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.download_container_file(path.clone(), cx);
@@ -244,7 +243,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.copy_to").to_string(),
-                IconName::Copy,
+                AppIcon::Ui(UiIcon::COPY),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_copy(path.clone(), window, cx);
@@ -255,7 +254,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.chmod").to_string(),
-                IconName::Lock,
+                AppIcon::Ui(UiIcon::LOCKED),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_chmod(path.clone(), window, cx);
@@ -266,7 +265,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.chown").to_string(),
-                IconName::KeyRound,
+                AppIcon::Ui(UiIcon::LOCKED),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_chown(path.clone(), window, cx);
@@ -279,7 +278,7 @@ pub(super) fn render_entry_row(
             let path = menu_path.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("container.files.rename").to_string(),
-                IconName::Pen,
+                AppIcon::Ui(UiIcon::EDIT),
                 move |_, window, cx| {
                     view.update(cx, |workspace, cx| {
                         workspace.begin_container_file_rename(path.clone(), window, cx);
@@ -292,7 +291,7 @@ pub(super) fn render_entry_row(
                 .item(PopupMenuItem::separator())
                 .item(crate::widgets::menu_item(
                     rust_i18n::t!("common.delete").to_string(),
-                    IconName::Trash,
+                    AppIcon::Ui(UiIcon::DELETE),
                     move |_, _, cx| {
                         view.update(cx, |workspace, cx| {
                             workspace.request_remove_container_path(path.clone(), is_dir, cx);

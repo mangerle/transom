@@ -7,14 +7,16 @@
 
 use super::card::format_star_count;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ImageSearchResult;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 镜像详情视图的数据参数。
 pub(crate) struct HubImageDetailParams<'a> {
@@ -78,7 +80,7 @@ where
             Button::new("hub-detail-back-btn")
                 .ghost()
                 .small()
-                .icon(IconName::ArrowLeft)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::LEFT)).small())
                 .label(rust_i18n::t!("container.hub.back_to_results").to_string())
                 .on_click(move |_, window, cx| {
                     on_back(window, cx);
@@ -99,11 +101,14 @@ where
                     Button::new("hub-detail-copy-cmd-btn")
                         .ghost()
                         .xsmall()
-                        .icon(if copy_toast {
-                            IconName::Check
-                        } else {
-                            IconName::Copy
-                        })
+                        .child(
+                            AppIconElement::new(if copy_toast {
+                                AppIcon::Ui(UiIcon::CHECK)
+                            } else {
+                                AppIcon::Ui(UiIcon::COPY)
+                            })
+                            .small(),
+                        )
                         .label(if copy_toast {
                             rust_i18n::t!("container.hub.copied").to_string()
                         } else {
@@ -138,10 +143,10 @@ where
                 .items_center()
                 .justify_center()
                 .child(
-                    Icon::new(if is_official {
-                        IconName::ShieldCheck
+                    AppIconElement::new(if is_official {
+                        AppIcon::Ui(UiIcon::LOCKED)
                     } else {
-                        IconName::Layers
+                        AppIcon::Ui(UiIcon::DEPENDENCIES)
                     })
                     .with_size(px(22.0))
                     .text_color(if is_official {
@@ -179,7 +184,7 @@ where
                                     .border_1()
                                     .border_color(p.primary.opacity(0.20))
                                     .child(
-                                        Icon::new(IconName::Check)
+                                        AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
                                             .with_size(px(10.0))
                                             .text_color(p.primary),
                                     )
@@ -215,7 +220,7 @@ where
                                 .rounded(p.radius.full)
                                 .bg(p.warning.opacity(0.08))
                                 .child(
-                                    Icon::new(IconName::Star)
+                                    AppIconElement::new(AppIcon::Ui(UiIcon::STAR))
                                         .with_size(px(11.0))
                                         .text_color(p.warning),
                                 )
@@ -256,7 +261,7 @@ where
                 Button::new("hub-detail-pull-custom-btn")
                     .primary()
                     .small()
-                    .icon(IconName::Download)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                     .label(rust_i18n::t!("container.hub.pull_selected").to_string())
                     .on_click(move |_, window, cx| {
                         let custom_val = input_ent.read(cx).value().trim().to_string();
@@ -318,7 +323,7 @@ where
                 .items_center()
                 .gap_2()
                 .child(
-                    Icon::new(IconName::Loader)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 )
@@ -402,7 +407,7 @@ where
                         Button::new(ElementId::Name(format!("hub-tag-row-pull-{}", tag).into()))
                             .secondary()
                             .xsmall()
-                            .icon(IconName::Download)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                             .label(rust_i18n::t!("container.hub.pull").to_string())
                             .on_click(move |_, window, cx| {
                                 row_pull_fn(&pull_val, window, cx);

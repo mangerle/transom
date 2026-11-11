@@ -2,12 +2,14 @@
 
 use crate::palette::Palette;
 use crate::session_form::{SessionForm, SessionFormEvent, SessionFormView};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::*;
 use transom_core::{SerialDataBits, SerialFlowControl, SerialParity, SerialStopBits};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 pub(crate) fn render_serial_fields(
     form: &SessionForm,
@@ -121,7 +123,7 @@ pub(crate) fn render_serial_fields(
                         .child(
                             Button::new("serial-refresh")
                                 .small()
-                                .icon(IconName::RefreshCw)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                                 .label(rust_i18n::t!("form.serial_refresh").to_string())
                                 .on_click(cx.listener(|_this, _: &ClickEvent, _, cx| {
                                     cx.emit(SessionFormEvent::RefreshSerialPorts);

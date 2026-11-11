@@ -28,17 +28,19 @@ use crate::sidebar::{
     BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
     indent_padding,
 };
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use transom_core::{
     ContainerEngineProfile, DropSide, EngineFolder, EngineProfileId, FolderId, SessionCatalog,
 };
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 侧栏拖动载荷：引擎连接与分组共用一条拖放通道。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +133,27 @@ pub(crate) fn render_container_sidebar(
     let search = state.search.clone();
     let view_for_folder = view.clone();
     let view_for_new = view.clone();
+    let search_for_clear = search.clone();
+    let view_for_clear = view.clone();
+    let clear_search = Button::new("container-engine-search-clear")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).xsmall())
+        .accessibility_label(rust_i18n::t!("container.sidebar.clear_search").to_string())
+        .tooltip(rust_i18n::t!("container.sidebar.clear_search").to_string())
+        .on_click(move |_, window, cx| {
+            search_for_clear.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+                input.focus(window, cx);
+            });
+            view_for_clear.update(cx, |_, cx| cx.notify());
+        });
+    let search_input = Input::new(&search).w_full().cleanable(false);
+    let search_input = if query.is_empty() {
+        search_input
+    } else {
+        search_input.suffix(clear_search)
+    };
     v_flex()
         .size_full()
         .child(
@@ -145,10 +168,10 @@ pub(crate) fn render_container_sidebar(
                         .w_full()
                         .gap_1()
                         .items_center()
-                        .child(div().flex_1().min_w_0().child(Input::new(&search).w_full()))
+                        .child(div().flex_1().min_w_0().child(search_input))
                         .child(engine_sidebar_button(
                             "container-engine-folder-new",
-                            IconName::FolderPlus,
+                            AppIcon::Ui(UiIcon::NEW_FOLDER),
                             rust_i18n::t!("container.sidebar.new_folder").to_string(),
                             move |_, window, cx| {
                                 view_for_folder.update(cx, |sidebar, cx| {
@@ -158,7 +181,7 @@ pub(crate) fn render_container_sidebar(
                         ))
                         .child(engine_sidebar_button(
                             "container-engine-new",
-                            IconName::Plus,
+                            AppIcon::Ui(UiIcon::ADD),
                             rust_i18n::t!("container.sidebar.new").to_string(),
                             move |_, _, cx| {
                                 view_for_new.update(cx, |sidebar, cx| {

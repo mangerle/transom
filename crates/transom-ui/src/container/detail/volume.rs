@@ -2,6 +2,10 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 /// 数据卷详情渲染参数。
 pub(crate) struct ContainerVolumeView<'a> {
@@ -69,7 +73,7 @@ pub(crate) fn render_volume_detail(
         Button::new("browse-volume-files")
             .primary()
             .small()
-            .icon(IconName::FolderOpen)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
             .label(rust_i18n::t!("container.files.browse").to_string())
             .on_click(move |_, _, cx| {
                 browse_view.update(cx, |_, cx| {
@@ -103,7 +107,7 @@ pub(crate) fn render_volume_detail(
     let raw_btn = Button::new("volume-overview-raw-inspect")
         .xsmall()
         .ghost()
-        .icon(IconName::Braces)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
         .label(rust_i18n::t!("container.field.inspect").to_string())
         .on_click(move |_, _, cx| {
             raw_view.update(cx, |workspace, cx| {
@@ -115,7 +119,7 @@ pub(crate) fn render_volume_detail(
 
     let card = super::overview_cards::overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),
-        IconName::HardDrive,
+        AppIcon::Custom(CustomIcon::VOLUME),
         p,
         Some(raw_btn),
         rows,

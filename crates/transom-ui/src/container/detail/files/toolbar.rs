@@ -2,6 +2,9 @@
 
 use super::super::*;
 use crate::container::ContainerWorkspace;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 pub(super) fn render_toolbar(
     view: &Entity<ContainerWorkspace>,
@@ -15,7 +18,7 @@ pub(super) fn render_toolbar(
         Button::new("container-file-up")
             .ghost()
             .xsmall()
-            .icon(IconName::ArrowLeft)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::LEFT)).small())
             .accessibility_label("Open parent folder")
             .on_click(move |_, _, cx| {
                 up_view.update(cx, |workspace, cx| {
@@ -35,7 +38,7 @@ pub(super) fn render_toolbar(
         Button::new("container-file-refresh")
             .ghost()
             .xsmall()
-            .icon(IconName::RefreshCw)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
             .accessibility_label("Refresh container files")
             .on_click(move |_, _, cx| {
                 refresh_view.update(cx, |workspace, cx| {
@@ -49,7 +52,7 @@ pub(super) fn render_toolbar(
             Button::new("container-file-upload")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Upload)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                 .label(rust_i18n::t!("container.files.upload").to_string())
                 .on_click(move |_, _, cx| {
                     upload_view.update(cx, |workspace, cx| {
@@ -62,7 +65,7 @@ pub(super) fn render_toolbar(
             Button::new("container-file-upload-dir")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Upload)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                 .label(rust_i18n::t!("container.files.upload_directory").to_string())
                 .on_click(move |_, _, cx| {
                     upload_dir_view.update(cx, |workspace, cx| {
@@ -75,7 +78,7 @@ pub(super) fn render_toolbar(
             Button::new("container-file-mkdir")
                 .ghost()
                 .xsmall()
-                .icon(IconName::FolderPlus)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::NEW_FOLDER)).small())
                 .label(rust_i18n::t!("container.files.new_dir").to_string())
                 .on_click(move |_, window, cx| {
                     mkdir_view.update(cx, |workspace, cx| {

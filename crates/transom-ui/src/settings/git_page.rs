@@ -11,14 +11,16 @@ use crate::app::{app_settings, update_app_settings};
 use crate::palette::Palette;
 use crate::settings::SettingsView;
 use crate::theme::tokens::{space, typography};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::Input;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl SettingsView {
     /// 执行 Git 可执行程序版本探测（`git --version`）。
@@ -123,12 +125,12 @@ impl SettingsView {
             .when_some(self.state.git_test_result.as_ref(), |this, res| {
                 let (icon, color, text) = match res {
                     Ok(ver) => (
-                        IconName::Check,
+                        AppIcon::Ui(UiIcon::CHECK),
                         p.success,
                         rust_i18n::t!("settings.git_test_success", version = ver).to_string(),
                     ),
                     Err(err) => (
-                        IconName::CircleAlert,
+                        AppIcon::Ui(UiIcon::ERROR),
                         p.danger,
                         rust_i18n::t!("settings.git_test_failed", error = err).to_string(),
                     ),
@@ -137,7 +139,7 @@ impl SettingsView {
                     h_flex()
                         .gap_1()
                         .items_center()
-                        .child(Icon::new(icon).xsmall().text_color(color))
+                        .child(AppIconElement::new(icon).xsmall().text_color(color))
                         .child(
                             div()
                                 .text_size(rems(typography::CAPTION))

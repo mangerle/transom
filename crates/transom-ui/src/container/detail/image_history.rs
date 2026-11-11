@@ -10,6 +10,10 @@
 use super::*;
 use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染镜像构建历史（History）独立页签时间线。
 pub(crate) fn render_image_history(
@@ -197,10 +201,10 @@ pub(crate) fn render_image_history(
                         .bg(bg_color)
                         .items_start()
                         .child(
-                            Icon::new(if adv.is_warning {
-                                IconName::TriangleAlert
+                            AppIconElement::new(if adv.is_warning {
+                                AppIcon::Ui(UiIcon::WARNING)
                             } else {
-                                IconName::Info
+                                AppIcon::Custom(CustomIcon::INFO)
                             })
                             .with_size(px(14.0))
                             .text_color(badge_color),
@@ -334,7 +338,7 @@ pub(crate) fn copy_button(
     Button::new(id)
         .xsmall()
         .ghost()
-        .icon(IconName::Copy)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .on_click(move |_, _, cx| {

@@ -2,6 +2,11 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 网络详情渲染参数。
 pub(crate) struct ContainerNetworkView<'a> {
@@ -123,7 +128,7 @@ pub(crate) fn render_network_detail(
                 .gap_2()
                 .items_center()
                 .child(
-                    Icon::new(IconName::Container)
+                    AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 )
@@ -148,7 +153,7 @@ pub(crate) fn render_network_detail(
                 Button::new(ElementId::Name(format!("network-disconnect-{name}").into()))
                     .ghost()
                     .xsmall()
-                    .icon(IconName::Close)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                     .accessibility_label(
                         rust_i18n::t!("container.action.disconnect_network").to_string(),
                     )
@@ -168,7 +173,7 @@ pub(crate) fn render_network_detail(
     let raw_btn = Button::new("network-overview-raw-inspect")
         .xsmall()
         .ghost()
-        .icon(IconName::Braces)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
         .label(rust_i18n::t!("container.field.inspect").to_string())
         .on_click(move |_, _, cx| {
             raw_view.update(cx, |workspace, cx| {
@@ -180,7 +185,7 @@ pub(crate) fn render_network_detail(
 
     let card = super::overview_cards::overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),
-        IconName::Network,
+        AppIcon::Custom(CustomIcon::NETWORK),
         p,
         Some(raw_btn),
         rows,

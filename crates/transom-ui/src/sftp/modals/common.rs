@@ -9,7 +9,6 @@ pub(super) use crate::sftp::{
     SftpChmodModalState, SftpFilterModalState, SftpInputModalState, SftpPropertiesModalState,
     SftpSyncModalState, format_size, format_unix_time,
 };
-pub(super) use gpui_kit::assets::IconName;
 pub(super) use gpui_kit::base::{h_flex, v_flex};
 pub(super) use gpui_kit::component::Selectable;
 pub(super) use gpui_kit::component::Sizable;

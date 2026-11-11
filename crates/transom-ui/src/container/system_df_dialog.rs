@@ -6,12 +6,14 @@
 use super::*;
 use crate::format::format_size;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl ContainerWorkspace {
     /// 打开全局存储分析与空间体检弹窗。
@@ -253,7 +255,7 @@ pub(crate) fn render_container_system_df_dialog_body(
             Button::new("system-df-refresh")
                 .xsmall()
                 .ghost()
-                .icon(IconName::RefreshCw)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                 .label(rust_i18n::t!("container.system_df.btn_refresh").to_string())
                 .disabled(loading || prune_running)
                 .on_click({
@@ -284,7 +286,7 @@ pub(crate) fn render_container_system_df_dialog_body(
                     Button::new("system-df-submit-prune")
                         .small()
                         .danger()
-                        .icon(IconName::Trash)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                         .label(if prune_running {
                             rust_i18n::t!("container.system_df.pruning").to_string()
                         } else {

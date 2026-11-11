@@ -18,7 +18,6 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -28,6 +27,9 @@ use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{HeadState, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 mod branch_tree;
 mod files_tree;
@@ -141,7 +143,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-scope")
                 .ghost()
                 .xsmall()
-                .icon(IconName::GitBranch)
+                .child(AppIconElement::new(UiIcon::VCS).small())
                 .label(scope_label)
                 .dropdown_menu({
                     let menu_app = app.clone();
@@ -152,7 +154,7 @@ pub(crate) fn render_filter_bar(
                         let mut menu = menu
                             .item(menu_item(
                                 rust_i18n::t!("git.scope.current").to_string(),
-                                IconName::Circle,
+                                UiIcon::VCS,
                                 move |_, _, cx| {
                                     current_app.update(cx, |this, cx| {
                                         this.git_set_log_scope(
@@ -165,7 +167,7 @@ pub(crate) fn render_filter_bar(
                             ))
                             .item(menu_item(
                                 rust_i18n::t!("git.scope.all").to_string(),
-                                IconName::Circle,
+                                UiIcon::VCS,
                                 {
                                     let all_app = menu_app.clone();
                                     move |_, _, cx| {
@@ -182,10 +184,8 @@ pub(crate) fn render_filter_bar(
                             .item(PopupMenuItem::separator());
                         for name in branch_names {
                             let item_app = menu_app.clone();
-                            menu = menu.item(menu_item(
-                                name.clone(),
-                                IconName::GitBranch,
-                                move |_, _, cx| {
+                            menu =
+                                menu.item(menu_item(name.clone(), UiIcon::VCS, move |_, _, cx| {
                                     let name = name.clone();
                                     item_app.update(cx, |this, cx| {
                                         this.git_set_log_scope(
@@ -194,8 +194,7 @@ pub(crate) fn render_filter_bar(
                                             cx,
                                         );
                                     });
-                                },
-                            ));
+                                }));
                         }
                         menu
                     }
@@ -206,7 +205,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-date")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Calendar)
+                .icon(UiIcon::HISTORY)
                 .label(date_label)
                 .dropdown_menu({
                     let date_app = app.clone();
@@ -217,7 +216,13 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-path")
                 .ghost()
                 .xsmall()
-                .icon(IconName::File)
+                .icon(
+                    state
+                        .query
+                        .paths
+                        .first()
+                        .map_or(UiIcon::FILTER.into(), |path| AppIcon::for_file(path)),
+                )
                 .label(path_label)
                 .dropdown_menu({
                     let path_app = app.clone();
@@ -231,7 +236,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-rebase-abort")
                 .ghost()
                 .xsmall()
-                .icon(IconName::CircleSlash)
+                .icon(UiIcon::ABORT)
                 .accessibility_label(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .tooltip(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .on_click({
@@ -250,7 +255,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-apply")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Search)
+                .icon(UiIcon::SEARCH)
                 .accessibility_label("Apply filter")
                 .on_click({
                     let apply_app = app.clone();

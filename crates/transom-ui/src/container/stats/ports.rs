@@ -2,6 +2,10 @@
 
 use super::*;
 use crate::widgets::{status_badge, table_header};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 pub(crate) fn ports_card(
     view: &Entity<ContainerWorkspace>,
@@ -14,7 +18,7 @@ pub(crate) fn ports_card(
     let Some(details) = details else {
         return stat_card(
             "container-stats-card-ports",
-            IconName::Plug,
+            AppIcon::Custom(CustomIcon::PORT),
             rust_i18n::t!("container.stats.ports").to_string(),
             summary_text("—".to_string(), p.muted_foreground),
             div()
@@ -56,16 +60,16 @@ pub(crate) fn ports_card(
                 .gap_1p5()
                 .items_center()
                 .child(
-                    Icon::new(if collapsed {
-                        IconName::ChevronRight
+                    AppIconElement::new(if collapsed {
+                        AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
                     } else {
-                        IconName::ChevronDown
+                        AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                     })
                     .size(px(14.0))
                     .text_color(p.muted_foreground),
                 )
                 .child(
-                    Icon::new(IconName::Plug)
+                    AppIconElement::new(AppIcon::Custom(CustomIcon::PORT))
                         .size(px(14.0))
                         .text_color(p.muted_foreground),
                 )
@@ -141,7 +145,7 @@ pub(crate) fn ports_card(
                             .ghost()
                             .xsmall()
                             .label(public.to_string())
-                            .icon(IconName::ExternalLink)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small())
                             .tooltip(url)
                             .on_click(move |_, _, _| {
                                 if let Err(error) =

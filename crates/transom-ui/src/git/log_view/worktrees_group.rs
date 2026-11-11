@@ -7,12 +7,13 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::widgets::{MenuItem, menu_item};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::render_app_icon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -68,15 +69,14 @@ pub(crate) fn render_worktree_group(
                 .items_center()
                 .cursor_pointer()
                 .hover(|style| style.bg(p.list_hover))
-                .child(
-                    Icon::new(if locked {
-                        IconName::Lock
-                    } else {
-                        IconName::FolderGit
-                    })
-                    .xsmall()
-                    .text_color(if locked { p.warning } else { p.primary }),
-                )
+                .child(if locked {
+                    AppIconElement::new(UiIcon::LOCKED)
+                        .xsmall()
+                        .text_color(p.warning)
+                        .into_any_element()
+                } else {
+                    render_app_icon(UiIcon::FOLDER.into(), 14.0)
+                })
                 .child(
                     v_flex()
                         .flex_1()
@@ -125,7 +125,7 @@ pub(crate) fn render_worktree_group(
                         };
                         menu.item(menu_item(
                             rust_i18n::t!(toggle_key).to_string(),
-                            IconName::Lock,
+                            UiIcon::LOCKED,
                             move |_, _, cx| {
                                 let path = lock_owned.clone();
                                 let project = lock_project.clone();
@@ -140,7 +140,7 @@ pub(crate) fn render_worktree_group(
                         .item(
                             MenuItem::new(
                                 rust_i18n::t!("git.menu.remove_worktree").to_string(),
-                                IconName::Trash,
+                                UiIcon::DELETE,
                             )
                             .disabled(is_main || locked)
                             .render(move |_, _, cx| {

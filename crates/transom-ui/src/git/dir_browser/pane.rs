@@ -11,14 +11,17 @@ use crate::format::format_size;
 use crate::git::dir_browser::DirPicker;
 use crate::palette::Palette;
 use crate::sftp::quick_paths::LocalQuickPaths;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Disableable, Icon, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 每级缩进（逻辑像素）：与会话侧栏同一档。
 const INDENT_STEP: f32 = 16.0;
@@ -99,7 +102,7 @@ fn actions_row(
         .child(quick_path_button(
             "git-browser-home",
             target,
-            IconName::House,
+            AppIcon::Ui(UiIcon::HOME_FOLDER),
             "sftp.home",
             quick_paths.home.clone(),
             app,
@@ -107,7 +110,7 @@ fn actions_row(
         .child(quick_path_button(
             "git-browser-desktop",
             target,
-            IconName::Monitor,
+            AppIcon::Domain(DomainIcon::MONITOR),
             "sftp.desktop",
             quick_paths.desktop.clone(),
             app,
@@ -115,7 +118,7 @@ fn actions_row(
         .child(quick_path_button(
             "git-browser-downloads",
             target,
-            IconName::FolderDown,
+            AppIcon::Ui(UiIcon::DOWNLOAD),
             "sftp.downloads",
             quick_paths.downloads.clone(),
             app,
@@ -124,7 +127,7 @@ fn actions_row(
             Button::new("git-browser-mkdir")
                 .ghost()
                 .xsmall()
-                .icon(IconName::FolderPlus)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::NEW_FOLDER)).small())
                 .accessibility_label(rust_i18n::t!("git.browser.mkdir").to_string())
                 .tooltip(rust_i18n::t!("git.browser.mkdir").to_string())
                 .on_click(move |_, window, cx| {
@@ -137,11 +140,14 @@ fn actions_row(
             Button::new("git-browser-hidden")
                 .ghost()
                 .xsmall()
-                .icon(if picker.browser.show_hidden {
-                    IconName::Eye
-                } else {
-                    IconName::EyeOff
-                })
+                .child(
+                    AppIconElement::new(if picker.browser.show_hidden {
+                        AppIcon::Ui(UiIcon::SHOW)
+                    } else {
+                        AppIcon::Ui(UiIcon::HIDE)
+                    })
+                    .small(),
+                )
                 .selected(picker.browser.show_hidden)
                 .accessibility_label(rust_i18n::t!("sftp.nav.show_dotfiles").to_string())
                 .tooltip(rust_i18n::t!("sftp.nav.show_dotfiles").to_string())
@@ -153,7 +159,7 @@ fn actions_row(
             Button::new("git-browser-refresh")
                 .ghost()
                 .xsmall()
-                .icon(IconName::RefreshCw)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                 .accessibility_label(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
                 .tooltip(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
                 .on_click(move |_, _, cx| {
@@ -167,7 +173,7 @@ fn actions_row(
 fn quick_path_button(
     id: &'static str,
     target: GitHost,
-    icon: IconName,
+    icon: AppIcon,
     tooltip_key: &'static str,
     path: Option<PathBuf>,
     app: &Entity<AppShell>,
@@ -176,7 +182,7 @@ fn quick_path_button(
     Button::new(ElementId::Name(id.into()))
         .ghost()
         .xsmall()
-        .icon(icon)
+        .child(AppIconElement::new(icon).small())
         .disabled(path.is_none())
         .accessibility_label(rust_i18n::t!(tooltip_key).to_string())
         .tooltip(rust_i18n::t!(tooltip_key).to_string())
@@ -272,11 +278,10 @@ fn entry_row(
         // 目录与文件同排显示，但文件行不给任何点击行为：选仓库要的是目录。
         return band
             .child(div().flex_none().size(px(14.0)))
-            .child(
-                Icon::new(IconName::File)
-                    .xsmall()
-                    .text_color(p.muted_foreground),
-            )
+            .child(render_app_icon(
+                AppIcon::for_file(&entry.path.to_string_lossy()),
+                16.0,
+            ))
             .child(
                 div()
                     .flex_1()
@@ -308,13 +313,9 @@ fn entry_row(
         })
         .child(chevron(&path, expanded, target, p, app))
         .child(
-            Icon::new(if expanded {
-                IconName::FolderOpen
-            } else {
-                IconName::Folder
-            })
-            .xsmall()
-            .text_color(p.primary),
+            AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
+                .xsmall()
+                .text_color(p.primary),
         )
         .child(
             div()
@@ -374,7 +375,7 @@ fn draft_row(
         .text_color(p.sidebar_accent_foreground)
         .child(div().flex_none().size(px(14.0)))
         .child(
-            Icon::new(IconName::FolderOpen)
+            AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
                 .xsmall()
                 .text_color(p.sidebar_accent_foreground),
         )
@@ -383,7 +384,7 @@ fn draft_row(
             Button::new("git-draft-ok")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Check)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
                 .accessibility_label(rust_i18n::t!("git.name.confirm").to_string())
                 .tooltip(rust_i18n::t!("git.name.confirm").to_string())
                 .on_click(move |_, window, cx| {
@@ -396,7 +397,7 @@ fn draft_row(
             Button::new("git-draft-cancel")
                 .ghost()
                 .xsmall()
-                .icon(IconName::Close)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                 .accessibility_label(rust_i18n::t!("git.project.cancel").to_string())
                 .tooltip(rust_i18n::t!("git.project.cancel").to_string())
                 .on_click(move |_, _, cx| {
@@ -444,10 +445,10 @@ fn chevron(
         .justify_center()
         .cursor_pointer()
         .child(
-            Icon::new(if expanded {
-                IconName::ChevronDown
+            AppIconElement::new(if expanded {
+                AppIcon::Ui(UiIcon::CHEVRON_DOWN)
             } else {
-                IconName::ChevronRight
+                AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
             })
             .with_size(px(12.0))
             .text_color(p.muted_foreground),

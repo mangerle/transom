@@ -22,13 +22,7 @@ impl SessionFormView {
                     )))
                     .child(div().flex_1().child(self.render_folder_field(form, p, cx))),
             )
-            .child(self.render_session_appearance(
-                default_icon_for(form.connection),
-                form.icon,
-                form.color,
-                p,
-                cx,
-            ))
+            .child(self.render_session_appearance(form.icon, form.color, p, cx))
             .into_any_element()
     }
 
@@ -61,7 +55,7 @@ impl SessionFormView {
             .trigger_style(StyleRefinement::default().w_full())
             .trigger(
                 Input::new(&form.folder_path).w_full().suffix(
-                    Icon::new(IconName::ChevronsUpDown)
+                    AppIconElement::new(AppIcon::Ui(UiIcon::SORT_BY))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 ),
@@ -98,7 +92,7 @@ impl SessionFormView {
             .gap_0p5()
             .child(Self::folder_option_row(
                 "session-folder-root".to_string(),
-                IconName::FolderTree,
+                AppIcon::Ui(UiIcon::SHOW_AS_TREE),
                 rust_i18n::t!("folder.root_level").to_string(),
                 p,
                 move |_: &ClickEvent, window, cx| {
@@ -116,7 +110,7 @@ impl SessionFormView {
             let picked = path.clone();
             list = list.child(Self::folder_option_row(
                 format!("session-folder-{path}"),
-                IconName::Folder,
+                AppIcon::Ui(UiIcon::FOLDER),
                 path.clone(),
                 p,
                 move |_: &ClickEvent, _window, cx| {
@@ -148,7 +142,7 @@ impl SessionFormView {
     /// 文件夹下拉里的一行；点击后的语义（回填或清空）由调用方决定。
     fn folder_option_row(
         id: String,
-        icon: IconName,
+        icon: AppIcon,
         label: String,
         p: &Palette,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -162,7 +156,11 @@ impl SessionFormView {
             .rounded(px(6.0))
             .cursor_pointer()
             .hover(|style| style.bg(p.list_hover))
-            .child(Icon::new(icon).xsmall().text_color(p.muted_foreground))
+            .child(
+                AppIconElement::new(icon)
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
             .child(div().text_sm().text_color(p.foreground).child(label))
             .on_click(on_click)
             .into_any_element()

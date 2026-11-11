@@ -8,17 +8,19 @@ use super::{
     indent_padding,
 };
 use crate::app::AppShell;
-use crate::app_assets::AppIcon;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::{HostAction, SessionId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 会话行主体（图标、名称、详情、选中框与活动条）的渲染参数。
 struct SessionBandParams {
@@ -103,7 +105,7 @@ fn session_band(
     }
     inner
         .child(
-            Icon::new(icon)
+            AppIconElement::new(icon)
                 .with_size(ROW_ICON_SIZE)
                 .text_color(icon_color.unwrap_or(if is_active {
                     p.sidebar_accent_foreground
@@ -154,7 +156,7 @@ fn session_context_menu(
         let app = app_entity.clone();
         let mut menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("menu.connect").to_string(),
-            IconName::Terminal,
+            AppIcon::Domain(DomainIcon::TERMINAL),
             {
                 let app = app.clone();
                 move |_, window, cx| {
@@ -169,7 +171,7 @@ fn session_context_menu(
             let container_app = app.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.manage_containers").to_string(),
-                IconName::Boxes,
+                AppIcon::Domain(DomainIcon::CONTAINER),
                 move |_, window, cx| {
                     container_app.update(cx, |this, cx| {
                         this.open_container_workspace_for_session(session_id, window, cx);
@@ -180,7 +182,7 @@ fn session_context_menu(
         if folder_id.is_some() {
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.move_to_root").to_string(),
-                IconName::FolderTree,
+                AppIcon::Ui(UiIcon::SHOW_AS_TREE),
                 {
                     let app = app.clone();
                     move |_, _, cx| {
@@ -198,7 +200,7 @@ fn session_context_menu(
         menu = menu
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.duplicate").to_string(),
-                IconName::Plus,
+                AppIcon::Ui(UiIcon::ADD),
                 {
                     let app = app.clone();
                     move |_, _, cx| {
@@ -210,7 +212,7 @@ fn session_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.edit").to_string(),
-                IconName::Settings,
+                AppIcon::Ui(UiIcon::SETTINGS),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -222,7 +224,7 @@ fn session_context_menu(
             ))
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("audit_viewer.menu_item").to_string(),
-                IconName::FileText,
+                AppIcon::Ui(UiIcon::DIFF),
                 {
                     let app = app.clone();
                     move |_, window, cx| {
@@ -238,7 +240,7 @@ fn session_context_menu(
             let copy_app = app.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.copy_host").to_string(),
-                IconName::Copy,
+                AppIcon::Ui(UiIcon::COPY),
                 move |_, _, cx| {
                     let text = host.clone();
                     cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
@@ -254,7 +256,7 @@ fn session_context_menu(
         menu.item(PopupMenuItem::separator())
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.delete").to_string(),
-                IconName::Trash,
+                AppIcon::Ui(UiIcon::DELETE),
                 {
                     let app = app.clone();
                     move |_, _, cx| {
@@ -312,7 +314,7 @@ impl AppShell {
             row_action_button(
                 RowActionButtonProps {
                     element_id: format!("session-probe-{session_id}"),
-                    icon: IconName::Radar,
+                    icon: AppIcon::Ui(UiIcon::EXCEPTION_ANALYZER),
                     tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
                     idle_color: if is_active {
                         p.sidebar_accent_foreground
@@ -350,7 +352,7 @@ impl AppShell {
         let detail_text = crate::connection::display_compact(&session.connection);
         // 会话专属图标覆盖连接类型图标；环境色直接染在图标上。
         let icon_color = session_color(session.color);
-        let icon_name = session_icon(session.icon).unwrap_or(icon_name.into());
+        let icon_name = session_icon(session.icon).unwrap_or(icon_name);
         let is_active = active_session == Some(session_id);
         let selection_mode = self.state.sidebar.selection_mode;
         let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);

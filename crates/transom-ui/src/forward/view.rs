@@ -5,13 +5,15 @@ use super::ForwardView;
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_core::{ForwardKind, ForwardState};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl ForwardView {
     pub(crate) fn render_forward_panel(
@@ -47,7 +49,7 @@ impl ForwardView {
     fn render_forward_header(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
         let close = crate::widgets::IconButton::new(
             "close-forward",
-            IconName::X,
+            AppIcon::Ui(UiIcon::CLOSE),
             rust_i18n::t!("forward.close_panel").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -161,7 +163,7 @@ impl ForwardView {
                         Button::new(ElementId::Name(format!("forward-delete-{rule_id}").into()))
                             .ghost()
                             .small()
-                            .icon(IconName::Trash)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                             .label(rust_i18n::t!("forward.delete").to_string())
                             .on_click(cx.listener(move |_this, _, _, cx| {
                                 cx.emit(super::ForwardPanelEvent::DeleteRule { tab_id, rule_id });
@@ -271,7 +273,7 @@ impl ForwardView {
             Button::new("forward-add")
                 .primary()
                 .small()
-                .icon(IconName::Plus)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                 .label(rust_i18n::t!("forward.add").to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     // 表单校验在实体里完成，通过后把规则交给外壳落库并发命令。

@@ -19,7 +19,6 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{TransferStatus, TransferTask};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -28,6 +27,9 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 pub(crate) struct SftpQueuePaneProps<'a> {
     pub(crate) tab_id: TabId,
@@ -281,7 +283,7 @@ impl SftpPanelView {
                     Button::new("retry-all-failed")
                         .ghost()
                         .xsmall()
-                        .icon(IconName::RotateCw)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                         .label(
                             rust_i18n::t!("sftp.queue.retry_failed", count = failed_count)
                                 .to_string(),
@@ -295,7 +297,7 @@ impl SftpPanelView {
             .child(
                 crate::widgets::IconButton::new(
                     "sftp-filter-rules",
-                    IconName::ListFilter,
+                    AppIcon::Ui(UiIcon::FILTER),
                     rust_i18n::t!("sftp.queue.filter_rules_tooltip").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -317,11 +319,14 @@ impl SftpPanelView {
                 Button::new("toggle-queue-exp")
                     .ghost()
                     .xsmall()
-                    .icon(if queue_expanded {
-                        IconName::ChevronDown
-                    } else {
-                        IconName::ChevronUp
-                    })
+                    .child(
+                        AppIconElement::new(if queue_expanded {
+                            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
+                        } else {
+                            AppIcon::Ui(UiIcon::CHEVRON_UP)
+                        })
+                        .small(),
+                    )
                     .accessibility_label(if queue_expanded {
                         rust_i18n::t!("sftp.queue.collapse").to_string()
                     } else {

@@ -3,9 +3,11 @@
 use super::*;
 use crate::container::ContainerWorkspace;
 use gpui_kit::ClipboardItem;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 环境变量列表（支持一键复制全部为 .env）。
 ///
@@ -28,7 +30,7 @@ pub(crate) fn render_env_card(
     let copy_all_btn = Button::new("btn-copy-all-env")
         .ghost()
         .xsmall()
-        .icon(IconName::Copy)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
         .label(rust_i18n::t!("container.detail.copy_env").to_string())
         .on_click({
             let view = view.clone();
@@ -83,7 +85,7 @@ pub(crate) fn render_env_card(
 
     overview_card(
         rust_i18n::t!("container.field.env").to_string(),
-        IconName::FileCode,
+        AppIcon::Ui(UiIcon::DIFF),
         p,
         Some(copy_all_btn.into_any_element()),
         content,

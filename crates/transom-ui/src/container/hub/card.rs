@@ -7,13 +7,15 @@
 
 use super::tags::get_image_tag_presets;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Selectable, Sizable};
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ImageSearchResult;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 格式化星标数字（如 12500 -> "12.5k"）。
 pub(crate) fn format_star_count(stars: u64) -> String {
@@ -123,10 +125,10 @@ where
                         .items_center()
                         .justify_center()
                         .child(
-                            Icon::new(if is_official {
-                                IconName::ShieldCheck
+                            AppIconElement::new(if is_official {
+                                AppIcon::Ui(UiIcon::LOCKED)
                             } else {
-                                IconName::Layers
+                                AppIcon::Ui(UiIcon::DEPENDENCIES)
                             })
                             .with_size(px(18.0))
                             .text_color(if is_official {
@@ -176,7 +178,7 @@ where
                                             .border_1()
                                             .border_color(p.primary.opacity(0.20))
                                             .child(
-                                                Icon::new(IconName::Check)
+                                                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
                                                     .with_size(px(10.0))
                                                     .text_color(p.primary),
                                             )
@@ -216,7 +218,7 @@ where
                                         .rounded(p.radius.full)
                                         .bg(p.warning.opacity(0.08))
                                         .child(
-                                            Icon::new(IconName::Star)
+                                            AppIconElement::new(AppIcon::Ui(UiIcon::STAR))
                                                 .with_size(px(11.0))
                                                 .text_color(p.warning),
                                         )
@@ -264,7 +266,7 @@ where
                     Button::new(ElementId::Name(format!("hub-pull-btn-{}", name).into()))
                         .primary()
                         .small()
-                        .icon(IconName::Download)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                         .label(format!(
                             "{}:{}",
                             rust_i18n::t!("container.hub.pull"),
@@ -279,7 +281,7 @@ where
                     Button::new(ElementId::Name(format!("hub-detail-btn-{}", name).into()))
                         .ghost()
                         .xsmall()
-                        .icon(IconName::ArrowRight)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::RIGHT)).small())
                         .label(rust_i18n::t!("container.hub.view_details").to_string())
                         .on_click(move |_, window, cx| {
                             on_detail_click(window, cx);

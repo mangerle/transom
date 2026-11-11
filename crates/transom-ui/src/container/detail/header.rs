@@ -2,6 +2,11 @@
 
 use super::*;
 use crate::container::{CONTENT_HEADER_HEIGHT, ContainerWorkspace, ContainerWorkspaceEvent};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 详情头部的渲染参数：选中项按分类不同，统一用借用结构体传入。
 pub(crate) struct ContainerHeaderView<'a> {
@@ -95,7 +100,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                     Button::new("volume-backup")
                         .xsmall()
                         .ghost()
-                        .icon(IconName::Download)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                         .accessibility_label(
                             rust_i18n::t!("container.action.backup_volume").to_string(),
                         )
@@ -114,7 +119,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                     Button::new("volume-restore")
                         .xsmall()
                         .ghost()
-                        .icon(IconName::Upload)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                         .accessibility_label(
                             rust_i18n::t!("container.action.restore_volume").to_string(),
                         )
@@ -146,7 +151,11 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
     let left: AnyElement = match section {
         ContainerSection::Containers => {
             let mut title_row = h_flex().gap_2().items_center().min_w_0();
-            title_row = title_row.child(Icon::new(section.icon()).small().text_color(p.primary));
+            title_row = title_row.child(
+                AppIconElement::new(section.icon())
+                    .small()
+                    .text_color(p.primary),
+            );
             title_row = title_row.child(
                 div()
                     .text_size(rems(0.9375))
@@ -202,7 +211,11 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
         _ => {
             let mut row = h_flex().gap_2().items_center().min_w_0();
             row = row
-                .child(Icon::new(section.icon()).small().text_color(p.primary))
+                .child(
+                    AppIconElement::new(section.icon())
+                        .small()
+                        .text_color(p.primary),
+                )
                 .child(
                     div()
                         .text_size(rems(0.9375))
@@ -242,15 +255,15 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
         .into_any_element()
 }
 
-pub(crate) fn detail_icon(tab: ContainerDetailTab) -> IconName {
+pub(crate) fn detail_icon(tab: ContainerDetailTab) -> AppIcon {
     match tab {
-        ContainerDetailTab::Overview => IconName::Info,
-        ContainerDetailTab::Logs => IconName::ScrollText,
-        ContainerDetailTab::Terminal => IconName::Terminal,
-        ContainerDetailTab::Stats => IconName::Gauge,
-        ContainerDetailTab::Files => IconName::FolderOpen,
-        ContainerDetailTab::Changes => IconName::FileDiff,
-        ContainerDetailTab::History => IconName::Clock,
-        ContainerDetailTab::Yaml => IconName::FileText,
+        ContainerDetailTab::Overview => AppIcon::Custom(CustomIcon::INFO),
+        ContainerDetailTab::Logs => AppIcon::Ui(UiIcon::LIST_FILES),
+        ContainerDetailTab::Terminal => AppIcon::Domain(DomainIcon::TERMINAL),
+        ContainerDetailTab::Stats => AppIcon::Custom(CustomIcon::PROCESS),
+        ContainerDetailTab::Files => AppIcon::Ui(UiIcon::FOLDER),
+        ContainerDetailTab::Changes => AppIcon::Ui(UiIcon::DIFF),
+        ContainerDetailTab::History => AppIcon::Ui(UiIcon::HISTORY),
+        ContainerDetailTab::Yaml => AppIcon::Ui(UiIcon::DIFF),
     }
 }

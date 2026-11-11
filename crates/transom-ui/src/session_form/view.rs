@@ -4,7 +4,6 @@
 //! 需要目录或串口数据时通过 [`SessionFormEvent`] 上交意图，实体不在渲染中
 //! 反查外壳。
 
-use super::appearance::default_icon_for;
 use super::entity::SessionFormView;
 use super::local::render_local_fields;
 use super::serial::render_serial_fields;
@@ -12,15 +11,17 @@ use super::ssh::render_ssh_fields;
 use super::telnet::render_telnet_fields;
 use super::types::{ConnectionChoice, SessionForm};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::BlockViewOverride;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 mod basic;
 mod connection;
@@ -39,7 +40,7 @@ impl SessionFormView {
                     Button::new("confirm-delete")
                         .danger()
                         .small()
-                        .icon(IconName::Trash)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                         .label(rust_i18n::t!("common.confirm_delete").to_string())
                         .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.delete(cx))),
                 );
@@ -48,7 +49,7 @@ impl SessionFormView {
                     Button::new("delete-session")
                         .ghost()
                         .small()
-                        .icon(IconName::Trash)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                         .label(rust_i18n::t!("common.delete").to_string())
                         .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.edit(cx, |form| form.confirm_delete = true);
@@ -65,7 +66,7 @@ impl SessionFormView {
             .child(crate::widgets::dialog_confirm_button(
                 "save-session",
                 rust_i18n::t!("common.save").to_string(),
-                Some(IconName::Check),
+                Some(AppIcon::Ui(UiIcon::CHECK)),
                 crate::widgets::DialogConfirmKind::Primary,
                 cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx)),
             ));

@@ -20,7 +20,6 @@ use super::side_remote::SftpDragItem;
 use super::{LocalFileEntry, LocalQuickPaths, SftpTransferRequest};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -29,6 +28,8 @@ use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
 use transom_core::TabId;
 use transom_core::TransferDirection;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 pub(crate) struct SftpLocalPaneProps {
     pub(crate) tab_id: TabId,
@@ -83,7 +84,7 @@ impl SftpPanelView {
         let local_entries = std::rc::Rc::new(entries);
         if local_entries.is_empty() {
             crate::widgets::empty_state(
-                IconName::FolderOpen,
+                AppIcon::Ui(UiIcon::LIST_FILES),
                 rust_i18n::t!("sftp.empty").to_string(),
                 rust_i18n::t!("sftp.empty_hint").to_string(),
                 p,

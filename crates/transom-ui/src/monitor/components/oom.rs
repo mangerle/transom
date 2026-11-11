@@ -6,11 +6,12 @@
 //! 代价与局限：文案固定为“完整 OOM 记录”，不再区分抽屉/看板的简写。
 
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::SystemStats;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 渲染 OOM 横幅；无记录返回 `None`。
 pub(crate) fn oom_banner(stats: &SystemStats, p: &Palette) -> Option<AnyElement> {
@@ -26,7 +27,7 @@ pub(crate) fn oom_banner(stats: &SystemStats, p: &Palette) -> Option<AnyElement>
             .border_color(p.danger.opacity(0.4))
             .items_center()
             .child(
-                Icon::new(IconName::TriangleAlert)
+                AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
                     .small()
                     .text_color(p.danger),
             )

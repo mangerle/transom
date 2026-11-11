@@ -6,13 +6,16 @@
 
 use crate::search::SearchStatus;
 use crate::view::TerminalView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{Selectable, h_flex};
 use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Enter, Escape, Input, InputEvent, InputState};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::FileTypeIcon;
+use transom_ui_icons::UiIcon;
 
 /// 搜索输入框宽度：短到不遮挡正文，长到能看清常见日志关键字。
 const SEARCH_BAR_INPUT_WIDTH: Pixels = px(240.0);
@@ -190,7 +193,7 @@ impl TerminalView {
             .border_1()
             .border_color(border)
             .bg(popover)
-            .child(Icon::new(IconName::Search).small())
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH)).small())
             .child(div().w(SEARCH_BAR_INPUT_WIDTH).child(Input::new(&input)))
             .child(
                 div()
@@ -204,7 +207,7 @@ impl TerminalView {
             )
             .child(search_bar_button(
                 "terminal-search-regex",
-                IconName::Regex,
+                AppIcon::FileType(FileTypeIcon::REGEXP),
                 rust_i18n::t!("terminal.search.regex_tooltip").to_string(),
                 regex_mode,
                 SearchBarButton::Regex,
@@ -212,7 +215,7 @@ impl TerminalView {
             ))
             .child(search_bar_button(
                 "terminal-search-prev",
-                IconName::ChevronUp,
+                AppIcon::Ui(UiIcon::CHEVRON_UP),
                 rust_i18n::t!("terminal.search.prev_tooltip").to_string(),
                 false,
                 SearchBarButton::Prev,
@@ -220,7 +223,7 @@ impl TerminalView {
             ))
             .child(search_bar_button(
                 "terminal-search-next",
-                IconName::ChevronDown,
+                AppIcon::Ui(UiIcon::CHEVRON_DOWN),
                 rust_i18n::t!("terminal.search.next_tooltip").to_string(),
                 false,
                 SearchBarButton::Next,
@@ -228,7 +231,7 @@ impl TerminalView {
             ))
             .child(search_bar_button(
                 "terminal-search-close",
-                IconName::X,
+                AppIcon::Ui(UiIcon::CLOSE),
                 rust_i18n::t!("terminal.search.close_tooltip").to_string(),
                 false,
                 SearchBarButton::Close,
@@ -254,7 +257,7 @@ enum SearchBarButton {
 /// 构造检索栏上的图标按钮；`selected` 只用于正则开关的按压态。
 fn search_bar_button(
     id: &'static str,
-    icon: IconName,
+    icon: AppIcon,
     tooltip: String,
     selected: bool,
     action: SearchBarButton,
@@ -263,7 +266,7 @@ fn search_bar_button(
     Button::new(id)
         .ghost()
         .xsmall()
-        .icon(icon)
+        .child(AppIconElement::new(icon).small())
         .selected(selected)
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)

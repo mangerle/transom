@@ -12,16 +12,18 @@ use super::entity::SftpPanelView;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::sftp::{SftpRemotePaneRef, parent_remote};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Disableable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Disableable, Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteSearchQuery, RemoteSearchResultItem, SftpOperation, TabId};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// SFTP 远程检索模态弹窗状态。
 #[derive(Clone)]
@@ -233,7 +235,7 @@ fn render_search_header(
                 .child(
                     Button::new("btn-trigger-search")
                         .primary()
-                        .icon(IconName::Search)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH)).small())
                         .label(if is_searching {
                             rust_i18n::t!("sftp.search.searching_short").to_string()
                         } else {
@@ -318,11 +320,7 @@ fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
         .rounded_md()
         .hover(|s| s.bg(p.surface.hover))
         .cursor_pointer()
-        .child(
-            Icon::new(IconName::File)
-                .with_size(px(14.0))
-                .text_color(p.muted_foreground),
-        )
+        .child(render_app_icon(AppIcon::for_file(&target_path), 16.0))
         .child(
             div()
                 .text_xs()

@@ -18,12 +18,14 @@ pub use self::state::WorkspaceState;
 use crate::app::app_settings;
 use crate::app::{AppShell, TabStatus};
 use crate::palette::{Palette, localized_error};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_core::{TabId, TabPosition};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     pub(crate) fn render_main(
@@ -143,10 +145,10 @@ impl AppShell {
 ///
 /// 窗格头与标签栏的窗格列表共用同一套映射，避免两处对"什么颜色代表连接失败"
 /// 的理解分叉。
-pub(crate) fn pane_status_indicator(status: &TabStatus, p: &Palette) -> (Hsla, IconName) {
+pub(crate) fn pane_status_indicator(status: &TabStatus, p: &Palette) -> (Hsla, AppIcon) {
     match status {
-        TabStatus::Connecting => (p.muted_foreground, IconName::Loader),
-        TabStatus::Connected => (p.success, IconName::Terminal),
-        TabStatus::Failed(_) | TabStatus::Disconnected => (p.danger, IconName::CircleAlert),
+        TabStatus::Connecting => (p.muted_foreground, AppIcon::Ui(UiIcon::REFRESH)),
+        TabStatus::Connected => (p.success, AppIcon::Domain(DomainIcon::TERMINAL)),
+        TabStatus::Failed(_) | TabStatus::Disconnected => (p.danger, AppIcon::Ui(UiIcon::ERROR)),
     }
 }

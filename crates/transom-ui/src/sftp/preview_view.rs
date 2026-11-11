@@ -9,11 +9,10 @@ use super::preview::{
 };
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Icon;
 use gpui_kit::*;
 use std::sync::Arc;
+use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl AppShell {
     /// 渲染当前活动面板的悬停预览卡片；无预览或仍在延迟期时返回 `None`。
@@ -92,24 +91,14 @@ fn preview_card_position(preview: &SftpPreviewState, window: &Window) -> (f32, f
 }
 
 fn preview_card_header(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
-    let (icon, label) = match preview.kind {
-        PreviewKind::Image => (
-            IconName::FileImage,
-            rust_i18n::t!("sftp.preview.image_label").to_string(),
-        ),
-        PreviewKind::Text => (
-            IconName::FileText,
-            rust_i18n::t!("sftp.preview.text_label").to_string(),
-        ),
+    let label = match preview.kind {
+        PreviewKind::Image => rust_i18n::t!("sftp.preview.image_label").to_string(),
+        PreviewKind::Text => rust_i18n::t!("sftp.preview.text_label").to_string(),
     };
     h_flex()
         .gap_2()
         .items_center()
-        .child(
-            Icon::new(icon)
-                .text_color(p.muted_foreground)
-                .flex_shrink_0(),
-        )
+        .child(render_app_icon(AppIcon::for_file(&preview.name), 16.0))
         .child(
             div()
                 .flex_1()

@@ -11,15 +11,19 @@
 use super::list::dropdown_trigger;
 use super::*;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::PopupMenuItem;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{ContainerCommand, ContainerRegistry, ContainerRequestId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 impl ContainerWorkspace {
     /// 打开推送到远端镜像仓库弹窗。
@@ -178,7 +182,7 @@ pub(crate) fn render_container_push_dialog_body(
     let reg_menu = dropdown_trigger(
         "container-push-registry-select",
         current_registry.name.clone(),
-        IconName::ChevronDown,
+        AppIcon::Ui(UiIcon::CHEVRON_DOWN),
         None,
         move |menu, _, _| {
             let mut menu = menu;
@@ -232,7 +236,11 @@ pub(crate) fn render_container_push_dialog_body(
                         .bg(p.surface.ghost)
                         .border_1()
                         .border_color(p.border.opacity(0.18))
-                        .child(Icon::new(IconName::Box).small().text_color(p.primary))
+                        .child(
+                            AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
+                                .small()
+                                .text_color(p.primary),
+                        )
                         .child(
                             div()
                                 .text_sm()
@@ -285,7 +293,7 @@ pub(crate) fn render_container_push_dialog_body(
                 .rounded(p.radius.md)
                 .bg(p.surface.ghost)
                 .child(
-                    Icon::new(IconName::Info)
+                    AppIconElement::new(AppIcon::Custom(CustomIcon::INFO))
                         .xsmall()
                         .text_color(p.muted_foreground),
                 )
@@ -306,7 +314,7 @@ pub(crate) fn render_container_push_dialog_body(
                     .rounded(p.radius.lg)
                     .bg(p.tone.danger_subtle)
                     .text_color(p.danger)
-                    .child(Icon::new(IconName::TriangleAlert).small())
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).small())
                     .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(err)),
             )
         })
@@ -332,7 +340,7 @@ pub(crate) fn render_container_push_dialog_body(
                     Button::new("container-push-confirm")
                         .primary()
                         .small()
-                        .icon(IconName::Upload)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                         .label(rust_i18n::t!("container.push.submit").to_string())
                         .on_click({
                             let view = view.clone();

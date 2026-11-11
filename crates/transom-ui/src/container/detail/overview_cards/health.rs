@@ -2,10 +2,11 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use transom_core::ContainerHealthDetails;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::DomainIcon;
 
 /// 健康检查时间线。
 ///
@@ -104,7 +105,7 @@ pub(crate) fn render_health_timeline(
             rust_i18n::t!("container.field.health"),
             health.status
         ),
-        IconName::Activity,
+        AppIcon::Domain(DomainIcon::MONITOR),
         p,
         Some(header_extra.into_any_element()),
         v_flex().gap_1().children(timeline_items),

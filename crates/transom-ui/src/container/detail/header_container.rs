@@ -9,9 +9,12 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use transom_core::{ContainerLifecycleAction, ContainerSummary};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 把生命周期动作接到工作区实体：按钮样式在调用点声明，回调只投递命令。
 fn lifecycle_button(
@@ -52,7 +55,7 @@ pub(super) fn container_header_actions(
             Button::new("container-unpause")
                 .xsmall()
                 .primary()
-                .icon(IconName::Play)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                 .label(rust_i18n::t!("container.action.unpause").to_string()),
         ));
         actions.push(lifecycle_button(
@@ -62,7 +65,7 @@ pub(super) fn container_header_actions(
             Button::new("container-stop")
                 .xsmall()
                 .ghost()
-                .icon(IconName::Square)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::STOP)).small())
                 .label(rust_i18n::t!("container.action.stop").to_string()),
         ));
     } else if running {
@@ -73,7 +76,7 @@ pub(super) fn container_header_actions(
             Button::new("container-stop")
                 .xsmall()
                 .ghost()
-                .icon(IconName::Square)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::STOP)).small())
                 .label(rust_i18n::t!("container.action.stop").to_string()),
         ));
         if detail_tab != ContainerDetailTab::Terminal {
@@ -82,7 +85,7 @@ pub(super) fn container_header_actions(
                 Button::new("container-jump-terminal")
                     .xsmall()
                     .ghost()
-                    .icon(IconName::Terminal)
+                    .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small())
                     .label(rust_i18n::t!("container.detail.terminal").to_string())
                     .on_click(move |_, _, cx| {
                         terminal_view.update(cx, |_, cx| {
@@ -102,7 +105,7 @@ pub(super) fn container_header_actions(
             Button::new("container-start")
                 .xsmall()
                 .primary()
-                .icon(IconName::Play)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                 .label(rust_i18n::t!("container.action.start").to_string()),
         ));
     }
@@ -110,7 +113,7 @@ pub(super) fn container_header_actions(
     let more_btn = Button::new("container-detail-more")
         .xsmall()
         .ghost()
-        .icon(IconName::Ellipsis)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::MORE_HORIZONTAL)).small())
         .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu({

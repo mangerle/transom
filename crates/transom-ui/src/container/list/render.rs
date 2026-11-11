@@ -11,6 +11,7 @@ use gpui_kit::base::{ScrollBounce, v_virtual_list};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::scroll::Scrollbar;
 use std::rc::Rc;
+use transom_ui_icons::AppIconElement;
 
 /// 容器列表虚拟渲染参数。
 pub(crate) struct ContainerRowsParams<'a> {
@@ -44,7 +45,7 @@ pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
             .justify_center()
             .p_4()
             .child(crate::widgets::empty_state(
-                IconName::Search,
+                AppIcon::Ui(UiIcon::SEARCH),
                 rust_i18n::t!("container.list.none").to_string(),
                 rust_i18n::t!("container.list.none_hint").to_string(),
                 p,
@@ -170,7 +171,7 @@ pub(crate) fn list_row(
                 ))
                 .ghost()
                 .xsmall()
-                .icon(action.icon())
+                .child(AppIconElement::new(action.icon()).small())
                 .accessibility_label(rust_i18n::t!(action.label_key()).to_string())
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();

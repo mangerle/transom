@@ -3,12 +3,12 @@
 use super::metrics::METRICS;
 use crate::app::AppShell;
 use crate::app::app_settings_mut;
-use crate::app_assets::AppIcon;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::ActivityItemId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
 
 /// 活动栏拖拽载荷：只携带被拖动的条目标识，落点由当前布局解析。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,7 +42,7 @@ impl Render for ActivityDragPreview {
             .border_color(p.border)
             .shadow_md()
             .child(
-                Icon::new(self.icon)
+                AppIconElement::new(self.icon)
                     .with_size(crate::theme::tokens::rem_px(
                         METRICS.icon,
                         window.rem_size(),

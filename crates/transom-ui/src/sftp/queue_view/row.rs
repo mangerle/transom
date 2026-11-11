@@ -8,11 +8,12 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{TransferKind, TransferStatus, TransferTask};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::h_flex;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{TabId, TransferDirection};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 use super::format::{format_eta, format_speed};
 use crate::sftp::format_size;
@@ -49,7 +50,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-pause-{task_id}"),
-                        IconName::Pause,
+                        AppIcon::Ui(UiIcon::PAUSE),
                         rust_i18n::t!("sftp.queue.pause_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -61,7 +62,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-cancel-{task_id}"),
-                        IconName::X,
+                        AppIcon::Ui(UiIcon::CLOSE),
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -76,7 +77,7 @@ pub(super) fn render_queue_task_row(
             actions = actions.child(
                 crate::widgets::IconButton::new(
                     format!("queue-cancel-{task_id}"),
-                    IconName::X,
+                    AppIcon::Ui(UiIcon::CLOSE),
                     rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)
@@ -91,7 +92,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-prioritize-{task_id}"),
-                        IconName::ArrowUpToLine,
+                        AppIcon::Ui(UiIcon::UPLOAD),
                         rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -103,7 +104,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-resume-{task_id}"),
-                        IconName::Play,
+                        AppIcon::Ui(UiIcon::RUN),
                         rust_i18n::t!("sftp.queue.resume_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -115,7 +116,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-cancel-{task_id}"),
-                        IconName::X,
+                        AppIcon::Ui(UiIcon::CLOSE),
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -130,7 +131,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-prioritize-{task_id}"),
-                        IconName::ArrowUpToLine,
+                        AppIcon::Ui(UiIcon::UPLOAD),
                         rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -142,7 +143,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-cancel-{task_id}"),
-                        IconName::X,
+                        AppIcon::Ui(UiIcon::CLOSE),
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -157,7 +158,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-retry-{task_id}"),
-                        IconName::RotateCw,
+                        AppIcon::Ui(UiIcon::REFRESH),
                         rust_i18n::t!("sftp.queue.retry_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -171,7 +172,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-remove-{task_id}"),
-                        IconName::Trash,
+                        AppIcon::Ui(UiIcon::DELETE),
                         rust_i18n::t!("sftp.overlay_remove").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -183,7 +184,7 @@ pub(super) fn render_queue_task_row(
                 .child(
                     crate::widgets::IconButton::new(
                         format!("queue-cancel-{task_id}"),
-                        IconName::X,
+                        AppIcon::Ui(UiIcon::CLOSE),
                         rust_i18n::t!("sftp.queue.cancel_task").to_string(),
                     )
                     .size(crate::widgets::IconButtonSize::Compact)
@@ -197,7 +198,7 @@ pub(super) fn render_queue_task_row(
             actions = actions.child(
                 crate::widgets::IconButton::new(
                     format!("queue-remove-{task_id}"),
-                    IconName::Trash,
+                    AppIcon::Ui(UiIcon::DELETE),
                     rust_i18n::t!("sftp.overlay_remove").to_string(),
                 )
                 .size(crate::widgets::IconButtonSize::Compact)

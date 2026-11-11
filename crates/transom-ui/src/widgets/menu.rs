@@ -1,8 +1,8 @@
 //! 右键菜单项的统一样式入口。
 
-use crate::app_assets::AppIcon;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
 
 /// 菜单项构建参数：图标、文案与可选禁用态。
 ///

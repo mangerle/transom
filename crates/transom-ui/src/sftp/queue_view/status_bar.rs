@@ -9,12 +9,13 @@
 
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 use super::format::format_speed;
 use crate::sftp::format_size;
@@ -82,7 +83,7 @@ impl SftpPanelView {
                     .child(
                         crate::widgets::IconButton::new(
                             "sftp-dismiss-error",
-                            IconName::X,
+                            AppIcon::Ui(UiIcon::CLOSE),
                             rust_i18n::t!("sftp.dismiss_error").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Compact)
@@ -121,7 +122,7 @@ impl SftpPanelView {
                     .child(
                         crate::widgets::IconButton::new(
                             "top-sftp-pause-all",
-                            IconName::Pause,
+                            AppIcon::Ui(UiIcon::PAUSE),
                             rust_i18n::t!("sftp.queue.pause_all").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Compact)
@@ -133,7 +134,7 @@ impl SftpPanelView {
                     .child(
                         crate::widgets::IconButton::new(
                             "top-sftp-cancel-all",
-                            IconName::X,
+                            AppIcon::Ui(UiIcon::CLOSE),
                             rust_i18n::t!("sftp.queue.cancel_all").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Compact)
@@ -152,7 +153,7 @@ impl SftpPanelView {
                     .child(
                         crate::widgets::IconButton::new(
                             "top-sftp-resume-all",
-                            IconName::Play,
+                            AppIcon::Ui(UiIcon::RUN),
                             rust_i18n::t!("sftp.queue.resume_all").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Compact)
@@ -164,7 +165,7 @@ impl SftpPanelView {
                     .child(
                         crate::widgets::IconButton::new(
                             "top-sftp-cancel-paused-all",
-                            IconName::X,
+                            AppIcon::Ui(UiIcon::CLOSE),
                             rust_i18n::t!("sftp.queue.cancel_all").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Compact)

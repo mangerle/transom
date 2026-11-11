@@ -7,12 +7,13 @@
 use super::current_head_name;
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::{BranchEntry, LogScope, RefKind, TabId, TagEntry};
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -69,7 +70,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-collapse-btn",
-                IconName::ChevronLeft,
+                UiIcon::CHEVRON_LEFT,
                 rust_i18n::t!("git.refs.hide").to_string(),
             )
             .on_click(move |_, _, cx| {
@@ -82,7 +83,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-new-branch-btn",
-                IconName::Plus,
+                UiIcon::ADD,
                 rust_i18n::t!("git.refs.new_branch").to_string(),
             )
             .on_click(move |_, window, cx| {
@@ -95,7 +96,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-update-btn",
-                IconName::ArrowDownToLine,
+                UiIcon::UPDATE,
                 rust_i18n::t!("git.refs.update_selected").to_string(),
             )
             .disabled(!can_update)
@@ -112,7 +113,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-delete-btn",
-                IconName::Trash,
+                UiIcon::DELETE,
                 rust_i18n::t!("git.refs.delete_selected").to_string(),
             )
             .disabled(!can_delete)
@@ -128,7 +129,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-fetch-btn",
-                IconName::Download,
+                UiIcon::FETCH,
                 rust_i18n::t!("git.toolbar.fetch").to_string(),
             )
             .on_click(move |_, _, cx| {
@@ -144,7 +145,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-refresh-btn",
-                IconName::RotateCw,
+                UiIcon::REFRESH,
                 rust_i18n::t!("git.menu.refresh").to_string(),
             )
             .on_click(move |_, _, cx| {
@@ -158,7 +159,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-settings-btn",
-                IconName::Settings,
+                UiIcon::SETTINGS,
                 rust_i18n::t!("git.refs.settings").to_string(),
             )
             .on_click(move |_, window, cx| {
@@ -170,7 +171,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-expand-all-btn",
-                IconName::ChevronsUpDown,
+                UiIcon::EXPAND_ALL,
                 rust_i18n::t!("git.group.expand_all").to_string(),
             )
             .on_click(move |_, _, cx| {
@@ -182,7 +183,7 @@ pub(crate) fn render_refs_action_bar(
         .child(
             toolbar_button(
                 "git-refs-collapse-all-btn",
-                IconName::ChevronsDownUp,
+                UiIcon::COLLAPSE_ALL,
                 rust_i18n::t!("git.group.collapse_all").to_string(),
             )
             .on_click(move |_, _, cx| {
@@ -195,11 +196,11 @@ pub(crate) fn render_refs_action_bar(
 }
 
 /// 构造一个 IDEA 风格的图标动作按钮。
-fn toolbar_button(id: &'static str, icon: IconName, tooltip: String) -> Button {
+fn toolbar_button(id: &'static str, icon: UiIcon, tooltip: String) -> Button {
     Button::new(id)
         .ghost()
         .xsmall()
-        .icon(icon)
+        .child(AppIconElement::new(icon).small())
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
 }

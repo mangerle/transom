@@ -1,16 +1,17 @@
 //! 通用可折叠卡片组件（Collapsible Card）。
 
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::collapsible::Collapsible;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 监控板块的可折叠卡片。
 pub(crate) struct CollapsibleCard {
     id: ElementId,
-    icon: IconName,
+    icon: AppIcon,
     title: String,
     collapsed: bool,
     summary: Option<AnyElement>,
@@ -23,7 +24,7 @@ pub(crate) struct CollapsibleCard {
 }
 
 impl CollapsibleCard {
-    pub(crate) fn new(id: impl Into<ElementId>, icon: IconName, title: impl Into<String>) -> Self {
+    pub(crate) fn new(id: impl Into<ElementId>, icon: AppIcon, title: impl Into<String>) -> Self {
         Self {
             id: id.into(),
             icon,
@@ -60,9 +61,9 @@ impl CollapsibleCard {
         F: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     {
         let arrow_icon = if self.collapsed {
-            IconName::ChevronRight
+            AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
         } else {
-            IconName::ChevronDown
+            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
         };
 
         let mut card = v_flex()
@@ -92,7 +93,7 @@ impl CollapsibleCard {
                     .items_center()
                     .min_w_0()
                     .flex_shrink_1()
-                    .child(Icon::new(self.icon).small().text_color(p.primary))
+                    .child(AppIconElement::new(self.icon).small().text_color(p.primary))
                     .child(
                         div()
                             .text_xs()
@@ -110,7 +111,7 @@ impl CollapsibleCard {
             right_side = right_side.child(summary);
         }
         right_side = right_side.child(
-            Icon::new(arrow_icon)
+            AppIconElement::new(arrow_icon)
                 .xsmall()
                 .text_color(p.muted_foreground),
         );

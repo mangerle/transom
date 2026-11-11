@@ -2,11 +2,13 @@
 
 use super::TerminalView;
 use alacritty_terminal::grid::Dimensions;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_core::BlockViewSettings;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl TerminalView {
     /// 应用语义块视图配置；`None` 或 `enabled == false` 时回到经典连续流。
@@ -150,9 +152,9 @@ impl TerminalView {
             .command_block(block_id)
             .is_some_and(|block| block.collapsed);
         let fold_icon = if collapsed {
-            IconName::UnfoldVertical
+            AppIcon::Ui(UiIcon::EXPAND_ALL)
         } else {
-            IconName::FoldVertical
+            AppIcon::Ui(UiIcon::COLLAPSE_ALL)
         };
         let fold_id = ElementId::Name(format!("block-fold-{block_id}").into());
         let copy_id = ElementId::Name(format!("block-copy-{block_id}").into());
@@ -170,7 +172,7 @@ impl TerminalView {
                     Button::new(copy_id)
                         .ghost()
                         .small()
-                        .icon(IconName::Copy)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
                         .accessibility_label("Copy command output")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.copy_block_output(block_id, cx);
@@ -180,7 +182,7 @@ impl TerminalView {
                     Button::new(markdown_id)
                         .ghost()
                         .small()
-                        .icon(IconName::FileText)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::LIST_FILES)).small())
                         .accessibility_label("Copy command output as Markdown")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.copy_block_markdown(block_id, cx);
@@ -190,7 +192,7 @@ impl TerminalView {
                     Button::new(rerun_id)
                         .ghost()
                         .small()
-                        .icon(IconName::Play)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
                         .accessibility_label("Rerun command")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.rerun_block(block_id, cx);

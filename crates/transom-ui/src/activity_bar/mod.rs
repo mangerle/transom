@@ -24,11 +24,11 @@ use drag::{
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use metrics::METRICS;
 use transom_core::AppSettings;
 use transom_core::{ActivityItemId, Connection, TabPosition};
+use transom_ui_icons::AppIconElement;
 
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 
@@ -173,10 +173,12 @@ impl AppShell {
             .items_center()
             .justify_center()
             .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
-            .child(Icon::new(icon).with_size(crate::theme::tokens::rem_px(
-                METRICS.icon,
-                window.rem_size(),
-            )))
+            .child(
+                AppIconElement::new(icon).with_size(crate::theme::tokens::rem_px(
+                    METRICS.icon,
+                    window.rem_size(),
+                )),
+            )
             .child(render_activity_reorder_overlay(&app, id, p));
 
         if selected {
@@ -292,26 +294,28 @@ impl AppShell {
 }
 
 mod labels {
-    use crate::app_assets::AppIcon;
-    use gpui_kit::assets::IconName;
     use transom_core::ActivityItemId;
+    use transom_ui_icons::AppIcon;
+    use transom_ui_icons::CustomIcon;
+    use transom_ui_icons::DomainIcon;
+    use transom_ui_icons::UiIcon;
 
     pub(crate) fn activity_item_icon(id: ActivityItemId) -> AppIcon {
         match id {
-            ActivityItemId::Sessions => IconName::Server.into(),
-            ActivityItemId::Tabs => IconName::Terminal.into(),
-            ActivityItemId::QuickOpen => IconName::Search.into(),
-            ActivityItemId::Forwards => IconName::ArrowLeftRight.into(),
-            ActivityItemId::Sftp => IconName::Folder.into(),
-            ActivityItemId::Monitor => IconName::Activity.into(),
-            ActivityItemId::Containers => AppIcon::Docker,
-            ActivityItemId::Language => IconName::Globe.into(),
-            ActivityItemId::ImportSshConfig => IconName::Download.into(),
-            ActivityItemId::KnownHosts => IconName::ShieldCheck.into(),
-            ActivityItemId::Keys => IconName::KeyRound.into(),
-            ActivityItemId::Settings => IconName::Settings.into(),
-            ActivityItemId::Git => IconName::GitBranch.into(),
-            ActivityItemId::Unknown => IconName::CircleAlert.into(),
+            ActivityItemId::Sessions => UiIcon::PROJECT.into(),
+            ActivityItemId::Tabs => DomainIcon::TERMINAL.into(),
+            ActivityItemId::QuickOpen => UiIcon::SEARCH.into(),
+            ActivityItemId::Forwards => DomainIcon::FORWARD.into(),
+            ActivityItemId::Sftp => UiIcon::LIST_FILES.into(),
+            ActivityItemId::Monitor => DomainIcon::MONITOR.into(),
+            ActivityItemId::Containers => CustomIcon::DOCKER.into(),
+            ActivityItemId::Language => UiIcon::LANGUAGE.into(),
+            ActivityItemId::ImportSshConfig => UiIcon::DOWNLOAD.into(),
+            ActivityItemId::KnownHosts => UiIcon::CHECK.into(),
+            ActivityItemId::Keys => UiIcon::LOCKED.into(),
+            ActivityItemId::Settings => UiIcon::SETTINGS.into(),
+            ActivityItemId::Git => UiIcon::VCS.into(),
+            ActivityItemId::Unknown => UiIcon::ERROR.into(),
         }
     }
 

@@ -18,7 +18,6 @@ use crate::app::AppShell;
 use crate::keys::expand_home;
 use crate::palette::Palette;
 use crate::session_appearance::{render_appearance_color_row, render_appearance_icon_row};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::{Disableable, Sizable};
@@ -162,15 +161,12 @@ impl AppShell {
                 cx,
             ))
             .child(
-                h_flex()
+                v_flex()
                     .w_full()
-                    .h(px(64.0))
-                    .gap_6()
-                    .items_start()
+                    .gap_2()
                     .child(
                         v_flex()
-                            .flex_1()
-                            .min_w_0()
+                            .w_full()
                             .gap_1()
                             .child(
                                 div()
@@ -180,7 +176,6 @@ impl AppShell {
                             )
                             .child(render_appearance_icon_row(
                                 "git-project",
-                                IconName::GitBranch,
                                 icon_choice,
                                 move |this: &mut AppShell, choice, cx| {
                                     if let Some(modal) = this.state.modals.git.project.as_mut() {
@@ -194,8 +189,7 @@ impl AppShell {
                     )
                     .child(
                         v_flex()
-                            .flex_1()
-                            .min_w_0()
+                            .w_full()
                             .gap_1()
                             .child(
                                 div()

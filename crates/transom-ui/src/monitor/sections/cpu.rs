@@ -3,11 +3,12 @@
 use crate::monitor::components::{CollapsibleCard, render_percent_sparkline};
 use crate::monitor::types::{usage_bar, usage_color};
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::SystemStats;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 
 use crate::monitor::MonitorView;
 
@@ -57,7 +58,7 @@ impl MonitorView {
 
         CollapsibleCard::new(
             "card-cpu",
-            IconName::Cpu,
+            AppIcon::Custom(CustomIcon::CPU),
             rust_i18n::t!("monitor.cpu").to_string(),
         )
         .collapsed(collapsed)

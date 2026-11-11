@@ -7,6 +7,10 @@
 use super::*;
 use crate::container::ContainerWorkspace;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 终端页渲染参数：已建立的终端视图句柄与当前用户/Shell 选择。
 pub(crate) struct ContainerTerminalView<'a> {
@@ -27,7 +31,7 @@ fn terminal_menu_item(
     let view = view.clone();
     crate::widgets::menu_item(
         rust_i18n::t!(label_key).to_string(),
-        IconName::Terminal,
+        AppIcon::Domain(DomainIcon::TERMINAL),
         move |_, _, cx| {
             view.update(cx, |workspace, cx| {
                 workspace.open_container_terminal_as(
@@ -122,7 +126,7 @@ pub(crate) fn render_terminal(
                     .items_center()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(Icon::new(IconName::Terminal).xsmall())
+                    .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).xsmall())
                     .child(session_info),
             )
             .child(div().flex_1())
@@ -130,7 +134,7 @@ pub(crate) fn render_terminal(
                 Button::new("container-terminal-switch")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::RotateCw)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                     .label(rust_i18n::t!("container.terminal.switch_user").to_string())
                     .dropdown_menu(move |menu, _, _| {
                         populate_terminal_menu(menu, menu_view.clone())
@@ -174,7 +178,7 @@ pub(crate) fn render_terminal(
                     Button::new("container-terminal-open")
                         .primary()
                         .small()
-                        .icon(IconName::Terminal)
+                        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small())
                         .label(rust_i18n::t!("container.terminal.open").to_string())
                         .on_click(move |_, _, cx| {
                             open_view.update(cx, |workspace, cx| {
@@ -185,7 +189,7 @@ pub(crate) fn render_terminal(
                 .child(
                     Button::new("container-terminal-open-menu")
                         .small()
-                        .icon(IconName::ChevronDown)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
                         .accessibility_label(user_tooltip.clone())
                         .tooltip(user_tooltip)
                         .dropdown_menu(move |menu, _, _| {

@@ -2,7 +2,6 @@
 
 use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Input;
@@ -11,6 +10,8 @@ use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::{PortListeningInfo, SystemStats};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 
 /// 端口列表可视区高度：端口数量中等，留一屏多一点即可，避免挤占上方资源卡片。
 const PORTS_LIST_HEIGHT: f32 = 260.0;
@@ -88,7 +89,7 @@ impl MonitorView {
 
         CollapsibleCard::new(
             "card-ports",
-            IconName::Plug,
+            AppIcon::Custom(CustomIcon::PORT),
             rust_i18n::t!("monitor.ports.title").to_string(),
         )
         .collapsed(collapsed)

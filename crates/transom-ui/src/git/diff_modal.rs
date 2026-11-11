@@ -7,12 +7,14 @@
 
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 打开独立全功能 Diff 对比弹窗（对应双击文件或点击比较差异）。
@@ -78,7 +80,7 @@ impl AppShell {
                     .gap_2()
                     .items_center()
                     .child(
-                        Icon::new(IconName::GitCompare)
+                        AppIconElement::new(AppIcon::Ui(UiIcon::DIFF))
                             .xsmall()
                             .text_color(p.primary),
                     )
@@ -94,7 +96,7 @@ impl AppShell {
                 Button::new("git-diff-modal-close")
                     .ghost()
                     .xsmall()
-                    .icon(IconName::X)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
                     .accessibility_label(rust_i18n::t!("common.close").to_string())
                     .tooltip(rust_i18n::t!("common.close").to_string())
                     .on_click(move |_, _, cx| {

@@ -2,13 +2,16 @@
 
 use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::list::ListItem;
 use gpui_kit::*;
 use transom_core::SystemStats;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
 
 use crate::monitor::MonitorView;
 
@@ -68,7 +71,10 @@ impl MonitorView {
                                 .child(
                                     Button::new(format!("restart-service-{}", service.unit))
                                         .xsmall()
-                                        .icon(IconName::RefreshCw)
+                                        .child(
+                                            AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
+                                                .small(),
+                                        )
                                         .label(
                                             rust_i18n::t!("monitor.services.restart").to_string(),
                                         )
@@ -114,7 +120,7 @@ impl MonitorView {
 
         CollapsibleCard::new(
             "card-services",
-            IconName::ShieldAlert,
+            AppIcon::Custom(CustomIcon::PROCESS),
             rust_i18n::t!("monitor.services.title").to_string(),
         )
         .collapsed(collapsed)

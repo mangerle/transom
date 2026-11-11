@@ -6,9 +6,10 @@ use crate::palette::Palette;
 use crate::widgets::{
     DialogConfirmKind, dialog_actions, dialog_body, dialog_cancel_button, dialog_confirm_button,
 };
-use gpui_kit::assets::IconName;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 /// 渲染容器模块通用删除确认弹窗主体。
 ///
@@ -85,7 +86,7 @@ pub(crate) fn render_container_confirm_dialog_body(
     let confirm_btn = dialog_confirm_button(
         "confirm-container-delete",
         rust_i18n::t!("common.confirm_delete").to_string(),
-        Some(IconName::Trash),
+        Some(AppIcon::Ui(UiIcon::DELETE)),
         DialogConfirmKind::Danger,
         {
             let view = view.clone();

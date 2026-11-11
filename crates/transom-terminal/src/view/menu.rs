@@ -1,10 +1,11 @@
 //! 终端右键菜单与上下文动作。
 
 use super::TerminalView;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::RightClickBehavior;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::UiIcon;
 
 impl TerminalView {
     /// 为终端层挂载上下文菜单（或直接执行粘贴）。
@@ -26,7 +27,7 @@ impl TerminalView {
                         menu = menu
                             .item(
                                 PopupMenuItem::new(rust_i18n::t!("common.paste").to_string())
-                                    .icon(IconName::ClipboardPaste)
+                                    .icon(AppIcon::Ui(UiIcon::PASTE))
                                     .on_click(move |_, _, cx| {
                                         app.update(cx, |view, cx| {
                                             view.paste_from_clipboard(cx);
@@ -44,7 +45,7 @@ impl TerminalView {
                         PopupMenuItem::new(
                             rust_i18n::t!("terminal.menu.previous_prompt").to_string(),
                         )
-                        .icon(IconName::ArrowUp)
+                        .icon(AppIcon::Ui(UiIcon::UP))
                         .on_click(move |_, _, cx| {
                             app_prev.update(cx, |view, cx| {
                                 view.scroll_to_previous_prompt(cx);
@@ -53,7 +54,7 @@ impl TerminalView {
                     )
                     .item(
                         PopupMenuItem::new(rust_i18n::t!("terminal.menu.next_prompt").to_string())
-                            .icon(IconName::ArrowDown)
+                            .icon(AppIcon::Ui(UiIcon::DOWN))
                             .on_click(move |_, _, cx| {
                                 app_next.update(cx, |view, cx| {
                                     view.scroll_to_next_prompt(cx);
@@ -65,7 +66,7 @@ impl TerminalView {
                         PopupMenuItem::new(
                             rust_i18n::t!("terminal.menu.toggle_block_view").to_string(),
                         )
-                        .icon(IconName::ListTree)
+                        .icon(AppIcon::Ui(UiIcon::SHOW_AS_TREE))
                         .on_click(move |_, _, cx| {
                             app.update(cx, |view, cx| {
                                 view.toggle_block_view(cx);

@@ -4,7 +4,6 @@ use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::palette::Palette;
 use crate::settings::{SettingsEvent, SettingsView};
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
@@ -13,6 +12,9 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::AppSettings;
 use transom_core::SyncEndpoint;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 /// 同步页输入行：标签 + 输入框，带分割线。
 ///
@@ -202,7 +204,7 @@ impl SettingsView {
                         .child(
                             Button::new("sync-push-now")
                                 .small()
-                                .icon(IconName::Upload)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                                 .label(rust_i18n::t!("sync.push").to_string())
                                 .on_click(cx.listener(|_this, _, _window, cx| {
                                     cx.emit(SettingsEvent::CloudSyncPush);
@@ -211,7 +213,7 @@ impl SettingsView {
                         .child(
                             Button::new("sync-pull-now")
                                 .small()
-                                .icon(IconName::Download)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                                 .label(rust_i18n::t!("sync.pull").to_string())
                                 .on_click(cx.listener(|_this, _, _window, cx| {
                                     cx.emit(SettingsEvent::CloudSyncPull);
@@ -224,7 +226,7 @@ impl SettingsView {
             content = content.child(crate::widgets::setting_frame(
                 Button::new("sync-git-now")
                     .small()
-                    .icon(IconName::GitBranch)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::VCS)).small())
                     .label(rust_i18n::t!("sync.git_sync_now").to_string())
                     .on_click(cx.listener(|_this, _, _window, cx| {
                         cx.emit(SettingsEvent::GitSyncNow);

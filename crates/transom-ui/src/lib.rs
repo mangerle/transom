@@ -135,6 +135,7 @@ pub fn run(services: UiServices) -> bool {
         cx.set_app_identity(transom_platform::paths::APP_ID, APP_NAME);
         rust_i18n::extend!(gpui_component);
         init(cx);
+        app_assets::install_icon_resolver(cx);
         bundled_fonts::register(cx);
         gpui_component::set_locale(&language);
         // 主题注入必须晚于 init（注册表/全局 Theme 由它建立）、早于 open_window

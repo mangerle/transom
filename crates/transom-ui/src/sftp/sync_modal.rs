@@ -3,7 +3,6 @@
 use super::{format_size, format_unix_time};
 use crate::app::AppShell;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
@@ -13,6 +12,9 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::DirDiffStatus;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     pub(crate) fn render_sftp_sync_body(
@@ -95,7 +97,7 @@ fn sync_status_panel(
                 .child(
                     Button::new("retry-sftp-sync-scan")
                         .ghost()
-                        .icon(IconName::RefreshCw)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                         .label(rust_i18n::t!("sftp.sync.rescan").to_string())
                         .on_click(crate::dialog_host::on_event(
                             app,
@@ -347,7 +349,7 @@ fn sync_footer(
             .child(
                 Button::new("start-sftp-sync")
                     .primary()
-                    .icon(IconName::GitCompareArrows)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DIFF)).small())
                     .label(rust_i18n::t!("sftp.sync.start", count = selected_count).to_string())
                     .on_click(crate::dialog_host::on_event(
                         app,

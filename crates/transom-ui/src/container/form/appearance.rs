@@ -1,6 +1,8 @@
 //! 容器引擎连接表单的图标与环境色选择。
 
 use super::*;
+use crate::session_appearance::container_engine_icon;
+use transom_ui_icons::AppIconElement;
 
 /// 外观色板色块尺寸；与会话表单保持一致。
 const APPEARANCE_SWATCH_SIZE: f32 = 18.0;
@@ -12,7 +14,8 @@ impl ContainerFormView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let default_icon = session_icon(form.icon).unwrap_or(AppIcon::Named(IconName::Boxes));
+        let default_icon =
+            session_icon(form.icon).unwrap_or_else(|| container_engine_icon(form.kind));
 
         // 图标选择行
         let icon_row = h_flex()
@@ -20,7 +23,7 @@ impl ContainerFormView {
             .child(
                 Button::new("container-form-icon-auto")
                     .small()
-                    .icon(default_icon)
+                    .child(AppIconElement::new(default_icon).small())
                     .accessibility_label(rust_i18n::t!("form.icon_auto").to_string())
                     .selected(form.icon == SessionIcon::Auto)
                     .tooltip(rust_i18n::t!("form.icon_auto").to_string())
@@ -36,8 +39,9 @@ impl ContainerFormView {
                     format!("container-form-icon-{choice:?}").into(),
                 ))
                 .small()
-                .icon(name)
+                .child(AppIconElement::new(name).small())
                 .accessibility_label(format!("{choice:?}"))
+                .tooltip(format!("{choice:?}"))
                 .selected(form.icon == choice)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_icon(choice, cx)))
                 .into_any_element()

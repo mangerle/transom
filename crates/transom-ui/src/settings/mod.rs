@@ -45,31 +45,37 @@ pub(crate) const GIT_PAGE_INDEX: usize = 8;
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::palette::Palette;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::slider::SliderValue;
 use gpui_kit::*;
 use transom_terminal::TerminalView;
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::DomainIcon;
+use transom_ui_icons::UiIcon;
 
 /// 设置页目录：顺序必须与 [`SettingsView::build_settings_pages`] 的装配顺序一致。
 ///
 /// 命令面板据此列出可跳转的设置页；标题与图标复用页面自身的定义，避免两处
 /// 各写一份文案。`build_settings_pages` 里用 debug 断言守住顺序，出现漏改时
 /// 在开发期立即暴露，而不是让面板把用户跳到错误的页。
-pub(crate) fn page_entries() -> Vec<(&'static str, IconName)> {
+pub(crate) fn page_entries() -> Vec<(&'static str, AppIcon)> {
     vec![
-        ("settings.tab_appearance", IconName::Palette),
-        ("settings.tab_terminal", IconName::Terminal),
-        ("settings.tab_files", IconName::Folder),
-        ("settings.tab_mouse_clipboard", IconName::ArrowLeftRight),
-        ("settings.tab_shortcuts", IconName::Search),
-        ("settings.tab_window_layout", IconName::PanelLeft),
-        ("settings.tab_general", IconName::Globe),
-        ("settings.tab_monitor", IconName::Gauge),
-        ("settings.tab_git", IconName::GitBranch),
-        ("settings.tab_containers", IconName::Container),
-        ("settings.tab_about", IconName::Info),
+        ("settings.tab_appearance", AppIcon::Ui(UiIcon::LAYOUT)),
+        (
+            "settings.tab_terminal",
+            AppIcon::Domain(DomainIcon::TERMINAL),
+        ),
+        ("settings.tab_files", AppIcon::Ui(UiIcon::EDITOR_ONLY)),
+        ("settings.tab_mouse_clipboard", AppIcon::Ui(UiIcon::PASTE)),
+        ("settings.tab_shortcuts", AppIcon::Ui(UiIcon::KEYBOARD)),
+        ("settings.tab_window_layout", AppIcon::Ui(UiIcon::LAYOUT)),
+        ("settings.tab_general", AppIcon::Ui(UiIcon::SETTINGS)),
+        ("settings.tab_monitor", AppIcon::Custom(CustomIcon::CPU)),
+        ("settings.tab_git", AppIcon::Ui(UiIcon::VCS)),
+        ("settings.tab_containers", AppIcon::Ui(UiIcon::DEPENDENCIES)),
+        ("settings.tab_about", AppIcon::Ui(UiIcon::HELP)),
     ]
 }
 
