@@ -18,7 +18,7 @@ use transom_git::GraphRow;
 
 /// 单列宽度与行高（px），与日志表的行尺寸保持一致。
 pub(crate) const LANE_WIDTH: f32 = 16.0;
-pub(crate) const ROW_HEIGHT: f32 = 22.0;
+pub(crate) const ROW_HEIGHT: f32 = 28.0;
 /// 节点菱形的外接半径（px）。
 const NODE_RADIUS: f32 = 4.5;
 /// 连线粗细（px）。

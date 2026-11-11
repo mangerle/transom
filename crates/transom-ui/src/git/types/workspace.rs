@@ -66,8 +66,14 @@ pub(crate) struct GitWorkspaceState {
     /// 概览里勾选的文件路径（提交面板的待提交集）。
     pub checked: HashSet<String>,
     /// 左栏宽度（引用树）。
+    ///
+    /// 仅作为首次渲染的初始宽度；用户拖动日志三栏分隔条后，实际宽度由
+    /// [`Self::log_split`] 持有。
     pub refs_width: f32,
     /// 右栏宽度（详情 + 差异）。
+    ///
+    /// 仅作为首次渲染的初始宽度；用户拖动日志三栏分隔条后，实际宽度由
+    /// [`Self::log_split`] 持有。
     pub details_width: f32,
     /// 在途请求：视图销毁或仓库切换时统一取消。
     pub pending: Vec<GitRequestId>,
@@ -77,6 +83,11 @@ pub(crate) struct GitWorkspaceState {
     pub group_by_directory: bool,
     /// 按目录模式下被折叠的目录（键为 `组/目录`，避免不同组互相影响）。
     pub collapsed_dirs: HashSet<String>,
+    /// 日志右侧变更文件树里折叠的目录路径。
+    ///
+    /// 与提交页工作区目录使用独立集合：两棵树的数据来源和生命周期不同，
+    /// 共用键会把提交页的折叠状态带进历史提交文件树。
+    pub collapsed_log_dirs: HashSet<String>,
     /// 日志过滤条件草稿：改完点回车或下拉才发请求，避免每敲一个字跑一次子进程。
     pub query: transom_core::LogQuery,
     /// 差异视图的显示选项。
@@ -143,6 +154,8 @@ pub(crate) struct GitWorkspaceState {
     pub refs_search_input: Entity<InputState>,
     /// 右侧详情栏（文件清单与提交详情）上下垂直切分状态。
     pub right_split: Entity<ResizableState>,
+    /// 日志页引用栏、提交表与详情栏的横向切分状态。
+    pub log_split: Entity<ResizableState>,
     /// 是否打开全功能独立 Diff 差异对比弹窗。
     pub diff_modal_open: bool,
 }
@@ -172,6 +185,7 @@ impl GitWorkspaceState {
         let commit_split = cx.new(|_| ResizableState::default());
         let bottom_log_split = cx.new(|_| ResizableState::default());
         let right_split = cx.new(|_| ResizableState::default());
+        let log_split = cx.new(|_| ResizableState::default());
         let git_settings = &crate::app::app_settings(cx).git;
         let mut diff_options = GitDiffOptions::default();
         if git_settings.ignore_whitespace {
@@ -207,6 +221,7 @@ impl GitWorkspaceState {
             collapsed_groups: HashSet::new(),
             group_by_directory: false,
             collapsed_dirs: HashSet::new(),
+            collapsed_log_dirs: HashSet::new(),
             query: transom_core::LogQuery::default(),
             diff_options,
             last_diff: None,
@@ -239,6 +254,7 @@ impl GitWorkspaceState {
             bottom_log_split,
             refs_search_input,
             right_split,
+            log_split,
             diff_modal_open: false,
         }
     }

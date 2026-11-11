@@ -58,14 +58,13 @@ impl AppShell {
                         state.log.request = None;
                         state.log.loading = false;
                         state.log.error = None;
+                        let has_more = page.has_more;
                         if appended {
-                            state.log.entries.extend(page.entries.iter().cloned());
+                            state.log.append_entries(&page.entries);
                         } else {
-                            state.log.entries = page.entries.clone();
+                            state.log.replace_entries(page.entries);
                         }
-                        state.log.rows =
-                            transom_git::assign_lanes(&mut state.log.graph, &state.log.entries);
-                        state.log.has_more = page.has_more;
+                        state.log.has_more = has_more;
                         let jump = state.log.jump.clone();
                         let landed = jump
                             .as_ref()

@@ -51,7 +51,7 @@ pub(crate) fn render_ref_group(
             .gap_1()
             .items_center()
             .cursor_pointer()
-            .text_xs()
+            .text_sm()
             .text_color(p.muted_foreground)
             .child(
                 Icon::new(if expanded {
@@ -141,7 +141,7 @@ fn render_folder_node(
                     .min_w_0()
                     .overflow_hidden()
                     .truncate()
-                    .text_xs()
+                    .text_sm()
                     .text_color(p.muted_foreground)
                     .child(node.label.clone()),
             )
@@ -227,7 +227,7 @@ fn render_branch_node(
                 .min_w_0()
                 .overflow_hidden()
                 .truncate()
-                .text_xs()
+                .text_sm()
                 .font_weight(if node.current || is_selected {
                     FontWeight::BOLD
                 } else {

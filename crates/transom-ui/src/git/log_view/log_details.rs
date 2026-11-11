@@ -7,7 +7,8 @@
 //! - 下半部分为提交说明（标题、换行正文、Hash、作者与邮箱、所属分支）；
 //! - 上下两部分由垂直拖拽切分器（v_resizable）组织，用户可按需自由调整高低比例。
 
-use super::files_tree::{FileTreeNode, render_tree_nodes};
+use super::LOG_TOOLBAR_HEIGHT;
+use super::files_tree::{FileTreeNode, FileTreeRenderParams, render_tree_nodes};
 use super::placeholder;
 use crate::app::AppShell;
 use crate::divider::v_resizable;
@@ -29,7 +30,6 @@ pub(crate) fn render_right_panel(
     state: &State,
     app: Entity<AppShell>,
     tab_id: TabId,
-    width: f32,
     p: &Palette,
 ) -> AnyElement {
     let split = state.right_split.clone();
@@ -37,13 +37,10 @@ pub(crate) fn render_right_panel(
     let details_part = render_details_section(state, p);
 
     v_flex()
-        .w(px(width))
-        .flex_none()
+        .size_full()
+        .min_w_0()
         .min_h_0()
-        .h_full()
         .overflow_hidden()
-        .border_color(p.divider(p.border))
-        .border_l_1()
         .child(
             v_resizable(ElementId::Name(format!("git-right-split-{tab_id}").into()))
                 .with_state(&split)
@@ -86,7 +83,16 @@ fn render_files_section(
         // 构建 IDEA 风格层级目录树并自动压缩单子目录
         let active_path = state.active_diff().map(|d| d.path.as_str());
         let tree = FileTreeNode::build_tree(&state.commit_files);
-        render_tree_nodes(&tree, 0, active_path, &app, &state.project, tab_id, p)
+        render_tree_nodes(FileTreeRenderParams {
+            nodes: &tree,
+            depth: 0,
+            active_path,
+            app: &app,
+            project: &state.project,
+            tab_id,
+            collapsed_dirs: &state.collapsed_log_dirs,
+            palette: p,
+        })
     };
 
     let toolbar_app = app.clone();
@@ -94,7 +100,7 @@ fn render_files_section(
 
     let toolbar = h_flex()
         .w_full()
-        .h(px(24.0))
+        .h(px(LOG_TOOLBAR_HEIGHT))
         .flex_none()
         .px_2()
         .items_center()
@@ -103,7 +109,7 @@ fn render_files_section(
         .border_b_1()
         .child(
             div()
-                .text_xs()
+                .text_sm()
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.muted_foreground)
                 .child(if state.selected_commit.is_some() {
@@ -241,7 +247,7 @@ fn render_details_section(state: &State, p: &Palette) -> AnyElement {
                 .when(!entry.body.is_empty(), |el| {
                     el.child(
                         div()
-                            .text_xs()
+                            .text_sm()
                             .text_color(p.muted_foreground)
                             .child(entry.body.clone()),
                     )
@@ -256,7 +262,7 @@ fn render_details_section(state: &State, p: &Palette) -> AnyElement {
                 .gap_1()
                 .border_color(p.divider(p.border))
                 .border_t_1()
-                .text_xs()
+                .text_sm()
                 .child(
                     h_flex()
                         .gap_2()

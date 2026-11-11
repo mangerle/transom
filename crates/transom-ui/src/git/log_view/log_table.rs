@@ -1,4 +1,4 @@
-//! 日志提交表：表头、列开关、行渲染与泳道自绘入口。
+//! 日志提交表：列开关、行渲染与泳道自绘入口。
 //!
 //! 设计原理（Why）：提交表是日志工作区里唯一逐行渲染的热路径，把它与右键菜单、
 //! 引用栏分开成模块，改列宽/列开关时只碰这一处；行渲染需要的「本行图形态」
@@ -15,6 +15,7 @@ use crate::git::types::{LogColumn, LogColumns};
 use crate::palette::Palette;
 use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::Sizable;
+use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::scroll::Scrollbar;
@@ -22,6 +23,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::{GitProject, TabId};
+use transom_git::GraphRow;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -31,7 +33,7 @@ pub(crate) const ROW_HEIGHT: f32 = graph_paint::ROW_HEIGHT;
 /// 日志列宽：作者与时间。
 const AUTHOR_WIDTH: f32 = 130.0;
 
-const TIME_WIDTH: f32 = 96.0;
+const TIME_WIDTH: f32 = 112.0;
 
 /// 中栏提交表。
 pub(crate) fn render_log_table(
@@ -51,97 +53,38 @@ pub(crate) fn render_log_table(
     if entries_len == 0 {
         return placeholder(rust_i18n::t!("git.log.empty").to_string(), p);
     }
-    let selected = state.selected_commit;
-    let lane_count = state
-        .log
-        .rows
-        .iter()
-        .map(|row| row.lane + 1 + row.parents.len())
-        .max()
-        .unwrap_or(1)
-        .clamp(1, 8);
-    let cur_branch = state.status.as_ref().and_then(|status| match &status.head {
+
+    let lane_count = graph_lane_count(&state.log.rows);
+    let current_branch = state.status.as_ref().and_then(|status| match &status.head {
         transom_core::HeadState::OnBranch(name) => Some(name.clone()),
         _ => None,
     });
-    let on_branch = matches!(
-        state.status.as_ref().map(|status| &status.head),
-        Some(transom_core::HeadState::OnBranch(_))
-    );
-    let has_more = state.log.has_more && !state.log.loading;
-    let scroll = state.log.scroll_handle.clone();
-    let item_count = entries_len + usize::from(has_more);
-    let item_sizes = Rc::new(vec![size(px(0.0), px(ROW_HEIGHT)); item_count]);
+    let list = build_log_list(LogListContext {
+        workspace,
+        app: app.clone(),
+        tab_id,
+        entries_len,
+        lane_count,
+        selected: state.selected_commit,
+        has_more: state.log.has_more && !state.log.loading,
+        on_branch: matches!(
+            state.status.as_ref().map(|status| &status.head),
+            Some(transom_core::HeadState::OnBranch(_))
+        ),
+        current_branch,
+        scroll: state.log.scroll_handle.clone(),
+        palette: p.clone(),
+    });
     let context_columns = state.log.columns;
-    let context_app = app.clone();
-    let p = p.clone();
-    let more_app = app.clone();
-    let rows_app = app.clone();
-    let workspace_for_rows = workspace;
-    let list = v_virtual_list(
-        app.clone(),
-        ElementId::Name("git-log-virtual-list".into()),
-        item_sizes,
-        move |_app, range, _window, cx| {
-            let workspace = workspace_for_rows.clone();
-            let workspace = workspace.read(cx);
-            let state = &workspace.state;
-            range
-                .filter_map(|index| {
-                    if index >= entries_len {
-                        if !has_more {
-                            return None;
-                        }
-                        let app = more_app.clone();
-                        return Some(
-                            h_flex()
-                                .justify_center()
-                                .py_2()
-                                .child(
-                                    Button::new("git-log-more")
-                                        .ghost()
-                                        .xsmall()
-                                        .label(rust_i18n::t!("git.log.load_more").to_string())
-                                        .on_click(move |_, _, cx| {
-                                            app.update(cx, |this, cx| {
-                                                this.git_load_more_log(tab_id, cx);
-                                            });
-                                        }),
-                                )
-                                .into_any_element(),
-                        );
-                    }
-                    let entry = state.log.entries.get(index)?;
-                    let shape = RowShape {
-                        project: state.project.clone(),
-                        cell: GraphCell::at(&state.log.rows, index),
-                        lanes: lane_count,
-                        selected: selected == Some(index),
-                        columns: state.log.columns,
-                        can_fold: index == 0 && entry.parents.len() == 1,
-                        is_tip: index == 0,
-                        on_branch,
-                        current_branch: cur_branch.clone(),
-                    };
-                    Some(render_commit_row(tab_id, entry, &shape, &rows_app, &p))
-                })
-                .collect()
-        },
-    )
-    .track_scroll(&scroll)
-    .w_full()
-    .h_full();
     v_flex()
         .w_full()
         .flex_1()
         .min_w_0()
         .min_h_0()
-        .relative()
-        .child(ScrollBounce::new("git-log-scroll", &scroll, list).enabled(false))
-        .child(Scrollbar::vertical(&scroll).viewport_from_layout())
+        .child(list)
         .context_menu(move |mut menu, _window, _cx| {
             for column in [LogColumn::Author, LogColumn::Time] {
-                let item_app = context_app.clone();
+                let item_app = app.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!(column.i18n_key()).to_string())
                         .checked(column.is_shown(&context_columns))
@@ -155,6 +98,118 @@ pub(crate) fn render_log_table(
             menu
         })
         .into_any_element()
+}
+
+/// 构建一帧虚拟提交列表所需的只读快照。
+///
+/// 虚拟列表回调会晚于表头构建执行，把列宽、选中态和分支状态先收进上下文，既
+/// 避免闭包跨越过长的借用链，也保证每行使用同一套布局参数。
+#[derive(Clone)]
+struct LogListContext {
+    workspace: Entity<GitWorkspace>,
+    app: Entity<AppShell>,
+    tab_id: TabId,
+    entries_len: usize,
+    lane_count: usize,
+    selected: Option<usize>,
+    has_more: bool,
+    on_branch: bool,
+    current_branch: Option<String>,
+    scroll: VirtualListScrollHandle,
+    palette: Palette,
+}
+
+/// 提交表的虚拟滚动容器。
+fn build_log_list(context: LogListContext) -> AnyElement {
+    let item_count = context.entries_len + usize::from(context.has_more);
+    let item_sizes = Rc::new(vec![size(px(0.0), px(ROW_HEIGHT)); item_count]);
+    let scroll = context.scroll.clone();
+    let list = v_virtual_list(
+        context.app.clone(),
+        ElementId::Name("git-log-virtual-list".into()),
+        item_sizes,
+        move |_app, range, _window, cx| {
+            range
+                .filter_map(|index| render_log_list_item(&context, index, cx))
+                .collect()
+        },
+    )
+    .track_scroll(&scroll)
+    .w_full()
+    .h_full();
+    div()
+        .flex_1()
+        .min_h_0()
+        .relative()
+        .child(ScrollBounce::new("git-log-scroll", &scroll, list).enabled(false))
+        .child(Scrollbar::vertical(&scroll).viewport_from_layout())
+        .into_any_element()
+}
+
+/// 渲染虚拟列表中的一个提交行或“加载更多”入口。
+fn render_log_list_item(context: &LogListContext, index: usize, cx: &App) -> Option<AnyElement> {
+    if index >= context.entries_len {
+        if !context.has_more {
+            return None;
+        }
+        let app = context.app.clone();
+        let tab_id = context.tab_id;
+        return Some(
+            h_flex()
+                .justify_center()
+                .py_2()
+                .child(
+                    Button::new("git-log-more")
+                        .ghost()
+                        .xsmall()
+                        .label(rust_i18n::t!("git.log.load_more").to_string())
+                        .on_click(move |_, _, cx| {
+                            app.update(cx, |this, cx| {
+                                this.git_load_more_log(tab_id, cx);
+                            });
+                        }),
+                )
+                .into_any_element(),
+        );
+    }
+
+    let workspace = context.workspace.read(cx);
+    let state = &workspace.state;
+    let entry = state.log.entries.get(index)?;
+    let shape = RowShape {
+        project: state.project.clone(),
+        cell: GraphCell::at(&state.log.rows, index),
+        lanes: context.lane_count,
+        selected: context.selected == Some(index),
+        columns: state.log.columns,
+        can_fold: index == 0 && entry.parents.len() == 1,
+        is_tip: index == 0,
+        on_branch: context.on_branch,
+        current_branch: context.current_branch.clone(),
+    };
+    Some(render_commit_row(
+        context.tab_id,
+        entry,
+        &shape,
+        &context.app,
+        &context.palette,
+    ))
+}
+
+/// 提交图实际占用的列数。
+///
+/// 不能简单用「父提交数量 + 1」：线性历史的父提交也在提交自身所在列，按数量
+/// 相加会无端多留一列，既推远标题，也让图区与表头的分界显得发虚。这里只统计
+/// 真正出现过的列号，并沿用界面最多展示 8 列的上限。
+fn graph_lane_count(rows: &[GraphRow]) -> usize {
+    let mut count = 1;
+    for row in rows {
+        count = count.max(row.lane.saturating_add(1));
+        for lane in row.parents.iter().chain(row.crossing.iter()) {
+            count = count.max(lane.saturating_add(1));
+        }
+    }
+    count.min(8)
 }
 
 /// 一行的图形态：泳道数据 + 本页列数 + 是否选中 + 列开关 + 头指针态。
@@ -199,6 +254,7 @@ fn render_commit_row(
     let current_branch = shape.current_branch.clone();
     h_flex()
         .id(ElementId::Name(format!("git-commit-{oid}").into()))
+        .w_full()
         .h(px(ROW_HEIGHT))
         .items_center()
         .gap_2()
@@ -207,8 +263,8 @@ fn render_commit_row(
         .when(selected, |style| style.bg(p.list_active))
         .when(!selected, |style| style.hover(|el| el.bg(p.list_hover)))
         .child(render_graph_cells(cell, lane_count, p))
-        // 概要列把「标题 + 分支标签」放进同一个弹性单元：标签若自成独立列，
-        // 作者/时间就会与表头错位（表头只有 概要/作者/时间 三列）。
+        // 概要列把「标题 + 分支标签」放进同一个弹性单元，后面的作者与时间
+        // 使用固定列宽，避免长标题或分支标签挤动这两列。
         .child(
             h_flex()
                 .flex_1()
@@ -230,9 +286,11 @@ fn render_commit_row(
             row.child(
                 div()
                     .w(px(AUTHOR_WIDTH))
+                    .flex_none()
+                    .min_w_0()
                     .overflow_hidden()
                     .truncate()
-                    .text_xs()
+                    .text_sm()
                     .text_color(p.muted_foreground)
                     .child(entry.author_name.clone()),
             )
@@ -241,7 +299,11 @@ fn render_commit_row(
             row.child(
                 div()
                     .w(px(TIME_WIDTH))
-                    .text_xs()
+                    .flex_none()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .truncate()
+                    .text_sm()
                     .text_color(p.muted_foreground)
                     .child(relative_time(entry.author_time)),
             )
@@ -288,4 +350,30 @@ fn refs_line(refs: &[transom_core::RefDecor], p: &Palette) -> AnyElement {
 /// 泳道区：交给自绘层画节点与连线。
 fn render_graph_cells(cell: &GraphCell, lanes: usize, p: &Palette) -> AnyElement {
     graph_paint::paint(cell.clone(), lanes, p.primary, p.primary.opacity(0.55))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::graph_lane_count;
+    use transom_git::GraphRow;
+
+    fn row(lane: usize, parents: Vec<usize>, crossing: Vec<usize>) -> GraphRow {
+        GraphRow {
+            lane,
+            parents,
+            crossing,
+        }
+    }
+
+    #[test]
+    fn linear_history_uses_one_graph_lane() {
+        let rows = vec![row(0, vec![0], Vec::new()), row(0, Vec::new(), Vec::new())];
+        assert_eq!(graph_lane_count(&rows), 1);
+    }
+
+    #[test]
+    fn graph_lane_count_includes_crossing_and_parent_lanes() {
+        let rows = vec![row(0, vec![2], Vec::new()), row(1, Vec::new(), vec![3])];
+        assert_eq!(graph_lane_count(&rows), 4);
+    }
 }

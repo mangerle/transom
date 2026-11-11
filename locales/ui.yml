@@ -8371,6 +8371,12 @@ git:
     search_placeholder:
       en: Text or hash
       zh-CN: 文本或哈希
+    regex_tooltip:
+      en: Match with regular expression
+      zh-CN: 使用正则表达式匹配
+    case_tooltip:
+      en: Match case
+      zh-CN: 区分大小写
     branch_scope:
       en: "Branch: %{branch}"
       zh-CN: "分支: %{branch}"

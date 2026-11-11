@@ -230,6 +230,25 @@ impl AppShell {
         cx.notify();
     }
 
+    /// 折叠或展开日志右侧变更文件树中的目录。
+    pub(crate) fn git_toggle_log_file_dir(
+        &mut self,
+        tab_id: TabId,
+        key: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        workspace.update(cx, |workspace, _| {
+            let collapsed_dirs = &mut workspace.state.collapsed_log_dirs;
+            if !collapsed_dirs.insert(key.to_string()) {
+                collapsed_dirs.remove(key);
+            }
+        });
+        cx.notify();
+    }
+
     /// 折叠 / 展开改动树的一个分组。
     pub(crate) fn git_toggle_group(
         &mut self,
@@ -476,6 +495,7 @@ impl AppShell {
         let (project, request_id) = workspace.update(cx, |workspace, _| {
             let state = &mut workspace.state;
             state.selected_commit = Some(index);
+            state.collapsed_log_dirs.clear();
             state.commit_files = Vec::new();
             state.commit_files_loading = true;
             state.diff = None;

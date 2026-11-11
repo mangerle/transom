@@ -48,6 +48,9 @@ pub(crate) use log_table::render_log_table;
 
 type State = crate::git::GitWorkspaceState;
 
+/// 日志页顶部筛选栏与右侧文件工具栏的统一高度。
+pub(crate) const LOG_TOOLBAR_HEIGHT: f32 = 28.0;
+
 /// 日志过滤条：对应 IDEA 日志页顶部那一排（检索框、`.*`/`Cc` 开关、
 /// 分支 / 用户 / 日期 / 路径下拉）。
 pub(crate) fn render_filter_bar(
@@ -80,10 +83,48 @@ pub(crate) fn render_filter_bar(
     };
     let search_state = state.search_input.clone();
     let author_state = state.author_input.clone();
+    let regex_tooltip = rust_i18n::t!("git.filter.regex_tooltip").to_string();
+    let case_tooltip = rust_i18n::t!("git.filter.case_tooltip").to_string();
+    let regex_app = app.clone();
+    let case_app = app.clone();
+    let search_suffix = h_flex()
+        .gap_0p5()
+        .items_center()
+        .child(
+            Button::new("git-filter-regex")
+                .ghost()
+                .xsmall()
+                .compact()
+                .label(".*")
+                .accessibility_label(regex_tooltip.clone())
+                .tooltip(regex_tooltip)
+                .when(state.query.regex, |btn| btn.primary())
+                .on_click(move |_, _, cx| {
+                    regex_app.update(cx, |this, cx| {
+                        this.git_toggle_filter_flag(tab_id, true, cx);
+                    });
+                }),
+        )
+        .child(
+            Button::new("git-filter-case")
+                .ghost()
+                .xsmall()
+                .compact()
+                .label("Cc")
+                .accessibility_label(case_tooltip.clone())
+                .tooltip(case_tooltip)
+                .when(state.query.case_sensitive, |btn| btn.primary())
+                .on_click(move |_, _, cx| {
+                    case_app.update(cx, |this, cx| {
+                        this.git_toggle_filter_flag(tab_id, false, cx);
+                    });
+                }),
+        );
     h_flex()
         .id("git-filter-bar")
+        .h(px(LOG_TOOLBAR_HEIGHT))
         .px_2()
-        .py_1()
+        .py_0()
         .gap_2()
         .items_center()
         .flex_none()
@@ -94,37 +135,7 @@ pub(crate) fn render_filter_bar(
                 .w(px(240.0))
                 .flex_none()
                 .min_w_0()
-                .child(Input::new(&search_state).xsmall()),
-        )
-        .child(
-            Button::new("git-filter-regex")
-                .ghost()
-                .xsmall()
-                .label(".*")
-                .when(state.query.regex, |btn| btn.primary())
-                .on_click({
-                    let click_app = app.clone();
-                    move |_, _, cx| {
-                        click_app.update(cx, |this, cx| {
-                            this.git_toggle_filter_flag(tab_id, true, cx);
-                        });
-                    }
-                }),
-        )
-        .child(
-            Button::new("git-filter-case")
-                .ghost()
-                .xsmall()
-                .label("Cc")
-                .when(state.query.case_sensitive, |btn| btn.primary())
-                .on_click({
-                    let click_app = app.clone();
-                    move |_, _, cx| {
-                        click_app.update(cx, |this, cx| {
-                            this.git_toggle_filter_flag(tab_id, false, cx);
-                        });
-                    }
-                }),
+                .child(Input::new(&search_state).xsmall().suffix(search_suffix)),
         )
         .child(
             Button::new("git-filter-scope")

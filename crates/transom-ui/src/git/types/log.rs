@@ -2,7 +2,7 @@
 
 use gpui_kit::component::VirtualListScrollHandle;
 use transom_core::{CommitEntry, GitRequestId};
-use transom_git::GraphRow;
+use transom_git::{GraphRow, GraphState, assign_lanes};
 
 /// Git 日志面板状态。
 pub(crate) struct GitLogState {
@@ -10,7 +10,7 @@ pub(crate) struct GitLogState {
     /// 与 `entries` 一一对应的图行（列号与连线）。
     pub rows: Vec<GraphRow>,
     /// 泳道分配的跨页状态，翻页时续接列号。
-    pub graph: transom_git::GraphState,
+    pub graph: GraphState,
     pub has_more: bool,
     pub loading: bool,
     pub error: Option<String>,
@@ -69,8 +69,8 @@ impl LogJump {
 
 /// 日志表的列显示开关（信息列恒定）。
 ///
-/// 设计原理（Why）：对齐 IDEA 日志表头的右键勾选。窄窗口下关掉作者或日期
-/// 能把信息列拉宽，因此它是纯视图参数，不影响取数与分页。
+/// 设计原理（Why）：通过列表右键菜单关闭作者或日期列，窄窗口下能把信息列
+/// 拉宽，因此它是纯视图参数，不影响取数与分页。
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogColumns {
     pub author: bool,
@@ -125,7 +125,7 @@ impl Default for GitLogState {
         Self {
             entries: Vec::new(),
             rows: Vec::new(),
-            graph: transom_git::GraphState::default(),
+            graph: GraphState::default(),
             has_more: false,
             loading: false,
             error: None,
@@ -136,6 +136,26 @@ impl Default for GitLogState {
             jump: None,
             jump_pages: 0,
         }
+    }
+}
+
+impl GitLogState {
+    /// 用一页完整历史替换当前记录，并清空旧查询残留的泳道状态。
+    pub(crate) fn replace_entries(&mut self, entries: Vec<CommitEntry>) {
+        self.graph = GraphState::default();
+        self.entries = entries;
+        self.rows = assign_lanes(&mut self.graph, &self.entries);
+    }
+
+    /// 追加一页新提交，只让新增行参与本轮泳道分配。
+    ///
+    /// 设计原理（Why）：前一页结束时 [`Self::graph`] 已保存所有活跃父提交；若把
+    /// 已经算过的旧行再次送入同一状态，首行会被当成新分支额外占一列，界面上就
+    /// 会出现一条没有节点的幽灵竖线。
+    pub(crate) fn append_entries(&mut self, entries: &[CommitEntry]) {
+        let rows = assign_lanes(&mut self.graph, entries);
+        self.entries.extend_from_slice(entries);
+        self.rows.extend(rows);
     }
 }
 
@@ -198,5 +218,33 @@ mod tests {
         assert!(!columns.author && columns.time);
         assert!(!LogColumn::Author.is_shown(&columns));
         assert!(LogColumn::Time.is_shown(&columns));
+    }
+
+    /// 分页追加只能计算新页，不能把旧页再次送入已推进的泳道状态。
+    #[test]
+    fn appending_pages_keeps_linear_history_in_one_lane() {
+        let mut log = GitLogState::default();
+        log.replace_entries(vec![commit("c3", &["c2"])]);
+        log.append_entries(&[commit("c2", &["c1"]), commit("c1", &[])]);
+
+        assert_eq!(log.entries.len(), 3);
+        assert_eq!(log.rows.len(), 3);
+        assert_eq!(
+            log.rows.iter().map(|row| row.lane).collect::<Vec<_>>(),
+            vec![0, 0, 0]
+        );
+    }
+
+    /// 新查询替换历史时必须丢弃上一查询遗留的活跃泳道。
+    #[test]
+    fn replacing_history_resets_stale_graph_state() {
+        let mut log = GitLogState::default();
+        log.replace_entries(vec![commit("m", &["left", "right"])]);
+        log.replace_entries(vec![commit("c2", &["c1"]), commit("c1", &[])]);
+
+        assert_eq!(
+            log.rows.iter().map(|row| row.lane).collect::<Vec<_>>(),
+            vec![0, 0]
+        );
     }
 }

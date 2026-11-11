@@ -12,14 +12,13 @@
 use super::log_view;
 use super::types::GitView;
 use crate::app::AppShell;
-use crate::divider::v_resizable;
+use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::component::{Disableable, Icon, Sizable};
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitProject, GitProjectId, TabId};
 
@@ -260,47 +259,69 @@ impl AppShell {
         let refs_open = state.refs_panel;
         let refs_width = state.refs_width;
         let details_width = state.details_width;
-        let left = refs_open
-            .then(|| log_view::render_refs_panel(state, app.clone(), tab_id, refs_width, p, cx));
+        let log_split = state.log_split.clone();
+        let left = if refs_open {
+            log_view::render_refs_panel(state, app.clone(), tab_id, p, cx)
+        } else {
+            render_collapsed_refs_panel(tab_id, app.clone())
+        };
         let table = log_view::render_log_table(workspace.clone(), state, app.clone(), tab_id, p);
-        let right = log_view::render_right_panel(state, app.clone(), tab_id, details_width, p);
-        let toggle_app = app.clone();
-        h_flex()
+        let right = log_view::render_right_panel(state, app.clone(), tab_id, p);
+        let (left_width, left_min, left_max) = if refs_open {
+            (refs_width, 180.0, 420.0)
+        } else {
+            (32.0, 32.0, 32.0)
+        };
+        // 中间栏：顶部是过滤条（文本/分支/用户/日期等），下方是提交图谱与历史表格。
+        let center = v_flex()
             .size_full()
             .flex_1()
+            .min_w_0()
             .min_h_0()
-            .items_stretch()
             .overflow_hidden()
-            .when(!refs_open, |el| {
-                el.child(
-                    Button::new("git-refs-toggle-open")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::PanelLeftOpen)
-                        .accessibility_label(rust_i18n::t!("git.refs.panel_toggle").to_string())
-                        .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
-                        .on_click(move |_, _, cx| {
-                            toggle_app.update(cx, |this, cx| {
-                                this.git_toggle_refs_panel(tab_id, cx);
-                            });
-                        }),
-                )
-            })
-            .children(left)
+            .child(filter_bar)
+            .child(table);
+        h_resizable(ElementId::Name(format!("git-log-split-{tab_id}").into()))
+            .with_state(&log_split)
             .child(
-                // 中间栏：顶部是过滤条（文本/分支/用户/日期等），下方是提交图谱与历史表格
-                v_flex()
-                    .size_full()
-                    .flex_1()
-                    .min_w_0()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .child(filter_bar)
-                    .child(table),
+                resizable_panel()
+                    .size(px(left_width))
+                    .size_range(px(left_min)..px(left_max))
+                    .fixed()
+                    .child(left),
             )
-            .child(right)
+            .child(resizable_panel().child(center))
+            .child(
+                resizable_panel()
+                    .size(px(details_width))
+                    .size_range(px(320.0)..px(760.0))
+                    .fixed()
+                    .child(right),
+            )
             .into_any_element()
     }
+}
+
+/// 引用栏收起后的窄入口，保证三栏分栏组的首面板索引稳定。
+fn render_collapsed_refs_panel(tab_id: TabId, app: Entity<AppShell>) -> AnyElement {
+    v_flex()
+        .size_full()
+        .items_center()
+        .pt_1()
+        .child(
+            Button::new("git-refs-toggle-open")
+                .ghost()
+                .xsmall()
+                .icon(IconName::PanelLeftOpen)
+                .accessibility_label(rust_i18n::t!("git.refs.panel_toggle").to_string())
+                .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
+                .on_click(move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        this.git_toggle_refs_panel(tab_id, cx);
+                    });
+                }),
+        )
+        .into_any_element()
 }
 
 pub(crate) fn hint(text: String, p: &Palette) -> AnyElement {

@@ -657,6 +657,40 @@ fn large_lists_use_virtualization() {
     );
 }
 
+/// Git 日志三栏必须共用可拖拽分栏，不能退回固定宽度加静态边框。
+#[test]
+fn git_log_panes_are_resizable() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let content = std::fs::read_to_string(root.join("src/git/workspace.rs"))
+        .expect("读取 Git 日志工作区失败");
+    for required in [
+        "git-log-split-{tab_id}",
+        ".with_state(&log_split)",
+        "h_resizable(",
+    ] {
+        assert!(
+            content.contains(required),
+            "Git 日志三栏未接入可拖拽分栏：{required}"
+        );
+    }
+}
+
+/// 日志文件树的双击不得绕过单击路径去打开独立差异弹窗。
+#[test]
+fn git_log_file_rows_keep_single_click_behavior() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let content = std::fs::read_to_string(root.join("src/git/log_view/files_tree.rs"))
+        .expect("读取 Git 日志文件树失败");
+    assert!(
+        !content.contains("git_open_diff_modal"),
+        "日志文件树不得在双击时打开独立差异弹窗"
+    );
+    assert!(
+        content.contains("git_diff_commit_file"),
+        "日志文件树点击必须走右栏差异选择路径"
+    );
+}
+
 /// 可变列表的元素身份必须使用业务标识，不能使用会漂移的位置索引。
 #[test]
 fn mutable_list_identities_use_business_ids() {

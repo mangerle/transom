@@ -4,7 +4,7 @@
 //! - 将冗长的文件路径按目录结构聚合成层级树，公共前缀自动压缩合并（如 `crates/transom-ui/src 9 个文件`）；
 //! - 仅展示纯文件名，彻底解决长路径换行拥挤杂乱的问题，使修改范围一目了然；
 //! - 状态图标采用 IDEA 同款细致微型徽标（修改蓝圈、新增绿加、删除红减），文字按状态语义着色；
-//! - 支持单击选中、双击呼出独立全屏差异比较。
+//! - 目录可折叠；单击与双击文件都只更新右栏差异，不额外弹出对比框。
 
 use crate::app::AppShell;
 use crate::git::{ChangeAccent, change_visual};
@@ -15,19 +15,20 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use transom_core::{ChangeCode, CommitFile, GitProject, TabId};
 
 use super::menus::render_file_tree_menu;
 
-/// 单个树节点行高（紧凑 IDE 规范）。
-const TREE_ROW_HEIGHT: f32 = 22.0;
+/// 单个树节点行高：与 14px 文件名保持足够的垂直呼吸空间。
+const TREE_ROW_HEIGHT: f32 = 24.0;
 
 /// 变更文件树节点定义。
 pub(crate) enum FileTreeNode {
     /// 目录节点（含压缩公共路径与包含的文件总数）。
     Directory {
         name: String,
+        path: String,
         file_count: usize,
         children: Vec<FileTreeNode>,
     },
@@ -48,7 +49,7 @@ impl FileTreeNode {
             let parts: Vec<&str> = file.path.split('/').collect();
             root_dir.insert(&parts, file);
         }
-        root_dir.into_tree_nodes()
+        root_dir.into_tree_nodes("")
     }
 }
 
@@ -80,15 +81,17 @@ impl TempDirNode {
         total
     }
 
-    fn into_tree_nodes(self) -> Vec<FileTreeNode> {
+    fn into_tree_nodes(self, parent_path: &str) -> Vec<FileTreeNode> {
         let mut result = Vec::new();
 
         for (name, sub) in self.subdirs {
             let (compressed_name, final_sub) = sub.compress_single_child(name);
+            let path = join_tree_path(parent_path, &compressed_name);
             let count = final_sub.count_files();
-            let children = final_sub.into_tree_nodes();
+            let children = final_sub.into_tree_nodes(&path);
             result.push(FileTreeNode::Directory {
                 name: compressed_name,
+                path,
                 file_count: count,
                 children,
             });
@@ -125,58 +128,94 @@ impl TempDirNode {
     }
 }
 
+fn join_tree_path(parent: &str, name: &str) -> String {
+    if parent.is_empty() {
+        name.to_string()
+    } else {
+        format!("{parent}/{name}")
+    }
+}
+
+/// 渲染变更树所需的只读参数，避免递归调用继续平铺七个参数。
+#[derive(Clone, Copy)]
+pub(crate) struct FileTreeRenderParams<'a> {
+    pub nodes: &'a [FileTreeNode],
+    pub depth: usize,
+    pub active_path: Option<&'a str>,
+    pub app: &'a Entity<AppShell>,
+    pub project: &'a GitProject,
+    pub tab_id: TabId,
+    pub collapsed_dirs: &'a HashSet<String>,
+    pub palette: &'a Palette,
+}
+
 /// 递归渲染变更树。
-pub(crate) fn render_tree_nodes(
-    nodes: &[FileTreeNode],
-    depth: usize,
-    active_path: Option<&str>,
-    app: &Entity<AppShell>,
-    project: &GitProject,
-    tab_id: TabId,
-    p: &Palette,
-) -> Vec<AnyElement> {
+pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElement> {
     let mut elements = Vec::new();
-    for node in nodes {
+    for node in params.nodes {
         match node {
             FileTreeNode::Directory {
                 name,
+                path,
                 file_count,
                 children,
             } => {
-                let indent = depth as f32 * 14.0 + 4.0;
-                let dir_row =
-                    h_flex()
-                        .w_full()
-                        .h(px(TREE_ROW_HEIGHT))
-                        .items_center()
-                        .pl(px(indent))
-                        .pr_2()
-                        .gap_1()
-                        .text_xs()
-                        .child(
-                            Icon::new(IconName::ChevronDown)
-                                .xsmall()
-                                .text_color(p.muted_foreground),
-                        )
-                        .child(
-                            Icon::new(IconName::Folder)
-                                .xsmall()
-                                .text_color(p.muted_foreground),
-                        )
-                        .child(
-                            div()
-                                .text_color(p.foreground)
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(name.clone()),
-                        )
-                        .child(div().text_color(p.muted_foreground.opacity(0.6)).child(
-                            rust_i18n::t!("git.files.count", count = *file_count).to_string(),
-                        ));
+                let expanded = !params.collapsed_dirs.contains(path);
+                let indent = params.depth as f32 * 14.0 + 4.0;
+                let toggle_app = params.app.clone();
+                let toggle_key = path.clone();
+                let dir_row = h_flex()
+                    .id(ElementId::Name(format!("git-tree-dir-{path}").into()))
+                    .w_full()
+                    .h(px(TREE_ROW_HEIGHT))
+                    .items_center()
+                    .pl(px(indent))
+                    .pr_2()
+                    .gap_1()
+                    .text_sm()
+                    .cursor_pointer()
+                    .rounded(px(2.0))
+                    .hover(|style| style.bg(params.palette.list_hover))
+                    .child(
+                        Icon::new(if expanded {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .xsmall()
+                        .text_color(params.palette.muted_foreground),
+                    )
+                    .child(
+                        Icon::new(IconName::Folder)
+                            .xsmall()
+                            .text_color(params.palette.muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .text_color(params.palette.foreground)
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(name.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_color(params.palette.muted_foreground.opacity(0.6))
+                            .child(
+                                rust_i18n::t!("git.files.count", count = *file_count).to_string(),
+                            ),
+                    )
+                    .on_click(move |_, _, cx| {
+                        toggle_app.update(cx, |this, cx| {
+                            this.git_toggle_log_file_dir(params.tab_id, &toggle_key, cx);
+                        });
+                    });
                 elements.push(dir_row.into_any_element());
-                // 默认展开子节点
-                let child_elements =
-                    render_tree_nodes(children, depth + 1, active_path, app, project, tab_id, p);
-                elements.extend(child_elements);
+                if expanded {
+                    elements.extend(render_tree_nodes(FileTreeRenderParams {
+                        nodes: children,
+                        depth: params.depth + 1,
+                        ..params
+                    }));
+                }
             }
             FileTreeNode::File {
                 name,
@@ -184,16 +223,14 @@ pub(crate) fn render_tree_nodes(
                 change,
                 old_path,
             } => {
-                let indent = depth as f32 * 14.0 + 4.0;
-                let is_selected = active_path == Some(full_path.as_str());
-                let (status_icon, status_color) = change_status_badge(*change, p);
+                let indent = params.depth as f32 * 14.0 + 4.0;
+                let is_selected = params.active_path == Some(full_path.as_str());
+                let (status_icon, status_color) = change_status_badge(*change, params.palette);
 
-                let click_app = app.clone();
-                let dbl_click_app = app.clone();
-                let menu_app = app.clone();
-                let menu_project = project.clone();
+                let click_app = params.app.clone();
+                let menu_app = params.app.clone();
+                let menu_project = params.project.clone();
                 let path_clone = full_path.clone();
-                let dbl_path = full_path.clone();
                 let menu_path = full_path.clone();
 
                 let file_row = h_flex()
@@ -206,9 +243,9 @@ pub(crate) fn render_tree_nodes(
                     .gap_1p5()
                     .cursor_pointer()
                     .rounded(px(2.0))
-                    .when(is_selected, |style| style.bg(p.list_active))
+                    .when(is_selected, |style| style.bg(params.palette.list_active))
                     .when(!is_selected, |style| {
-                        style.hover(|hover| hover.bg(p.list_hover))
+                        style.hover(|hover| hover.bg(params.palette.list_hover))
                     })
                     .child(Icon::new(status_icon).xsmall().text_color(status_color))
                     .child(
@@ -217,14 +254,14 @@ pub(crate) fn render_tree_nodes(
                             .min_w_0()
                             .overflow_hidden()
                             .truncate()
-                            .text_xs()
+                            .text_sm()
                             .font_weight(if is_selected {
                                 FontWeight::BOLD
                             } else {
                                 FontWeight::NORMAL
                             })
                             .text_color(if is_selected {
-                                p.foreground
+                                params.palette.foreground
                             } else {
                                 status_color
                             })
@@ -233,28 +270,26 @@ pub(crate) fn render_tree_nodes(
                     .when_some(old_path.as_ref(), |el, old| {
                         el.child(
                             div()
-                                .text_xs()
-                                .text_color(p.muted_foreground.opacity(0.6))
+                                .text_sm()
+                                .text_color(params.palette.muted_foreground.opacity(0.6))
                                 .child(format!("← {old}")),
                         )
                     })
                     .on_click(move |event, _, cx| {
-                        if event.click_count() >= 2 {
-                            dbl_click_app.update(cx, |this, cx| {
-                                this.git_open_diff_modal(tab_id, &dbl_path, cx);
-                            });
-                        } else {
-                            click_app.update(cx, |this, cx| {
-                                this.git_diff_commit_file(tab_id, &path_clone, cx);
-                            });
+                        // 双击的第一次点击已经完成同一动作；忽略后续点击，避免重复发差异请求。
+                        if event.click_count() > 1 {
+                            return;
                         }
+                        click_app.update(cx, |this, cx| {
+                            this.git_diff_commit_file(params.tab_id, &path_clone, cx);
+                        });
                     })
                     .context_menu(move |menu, _window, _cx| {
                         render_file_tree_menu(
                             menu,
                             menu_app.clone(),
                             menu_project.clone(),
-                            tab_id,
+                            params.tab_id,
                             menu_path.clone(),
                         )
                     });
@@ -277,4 +312,30 @@ fn change_status_badge(change: ChangeCode, p: &Palette) -> (IconName, Hsla) {
         ChangeAccent::Neutral => p.muted_foreground,
     };
     (visual.icon, color)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileTreeNode;
+    use transom_core::{ChangeCode, CommitFile};
+
+    fn file(path: &str) -> CommitFile {
+        CommitFile {
+            path: path.to_string(),
+            old_path: None,
+            change: ChangeCode::Modified,
+        }
+    }
+
+    #[test]
+    fn directory_nodes_keep_full_paths_as_stable_collapse_keys() {
+        let tree = FileTreeNode::build_tree(&[
+            file("crates/transom-ui/src/main.rs"),
+            file("crates/transom-ui/src/lib.rs"),
+        ]);
+        let FileTreeNode::Directory { path, .. } = &tree[0] else {
+            panic!("预期首节点为目录");
+        };
+        assert_eq!(path, "crates/transom-ui/src");
+    }
 }

@@ -24,7 +24,6 @@ pub(crate) fn render_refs_panel(
     state: &State,
     app: Entity<AppShell>,
     tab_id: TabId,
-    width: f32,
     p: &Palette,
     cx: &App,
 ) -> AnyElement {
@@ -99,12 +98,10 @@ pub(crate) fn render_refs_panel(
         );
 
     h_flex()
-        .w(px(width))
-        .flex_none()
+        .size_full()
+        .min_w_0()
         .min_h_0()
-        .h_full()
-        .border_color(p.divider(p.border))
-        .border_r_1()
+        .overflow_hidden()
         .child(action_bar)
         .child(tree_content)
         .into_any_element()
