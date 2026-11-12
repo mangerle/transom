@@ -21,10 +21,13 @@ pub(crate) struct ProcessTarget {
 pub(crate) async fn run_process_sample(target: ProcessTarget) {
     // 不排序、不截断：进程表要完整可搜，排序在界面侧按当前列完成，
     // 远端多排一次全表既浪费又和界面排序口径重复。
+    // TGID 用于把同一进程的线程记录归并成一行；旧版或不支持 TGID 的 ps
+    // 继续回退到原命令，由解析器按 PID 兼容处理。
     let result = match &target.remote {
         Some(remote) => remote_sample_command(
             remote,
-            "ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args",
+            "LC_ALL=C ps -eo pid,tgid,ppid,user,%cpu,%mem,rss,comm,args 2>/dev/null || \
+             LC_ALL=C ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args",
             "进程采样",
         )
         .await
@@ -52,9 +55,13 @@ pub(crate) async fn run_process_sample(target: ProcessTarget) {
 /// 折叠态采样：只取进程总数，用窄列输出把每轮传输量压到数 KB。
 pub(crate) async fn run_process_count(target: ProcessTarget) {
     let result = match &target.remote {
-        Some(remote) => remote_sample_command(remote, "ps -eo pid=", "进程计数采样")
-            .await
-            .map(|output| transom_net::system_stats::parse_process_count(&output)),
+        Some(remote) => remote_sample_command(
+            remote,
+            "LC_ALL=C ps -eo tgid= 2>/dev/null || LC_ALL=C ps -eo pid=",
+            "进程计数采样",
+        )
+        .await
+        .map(|output| transom_net::system_stats::parse_process_count(&output)),
         None => sample_local_processes(&target.local)
             .await
             .map(|processes| u32::try_from(processes.len()).unwrap_or(u32::MAX)),

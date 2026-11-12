@@ -15,7 +15,7 @@ use std::path::Path;
 use std::time::Instant;
 use sysinfo::{
     CpuRefreshKind, Disks, MemoryRefreshKind, Networks, Pid, ProcessRefreshKind, ProcessesToUpdate,
-    RefreshKind, Signal, System, UpdateKind, Users,
+    RefreshKind, Signal, System, ThreadKind, UpdateKind, Users,
 };
 
 /// 单个逻辑核心的使用率。
@@ -232,6 +232,10 @@ impl ProcessSampler {
     }
 
     /// 刷新全部进程并返回结构化快照。
+    ///
+    /// Linux 下 `sysinfo` 可能枚举 `/proc/<pid>/task` 中的用户线程；这里按
+    /// `ThreadKind` 过滤用户线程，避免线程共享的 RSS 被展示成独立进程内存。
+    /// 内核线程仍是独立任务，不在过滤范围内。
     pub fn sample(&mut self) -> Vec<ProcessInfo> {
         self.refresh_round = self.refresh_round.wrapping_add(1);
         if self.refresh_round.is_multiple_of(30) {
@@ -243,6 +247,11 @@ impl ProcessSampler {
         let total_memory = self.system.total_memory();
         let mut processes = Vec::with_capacity(self.system.processes().len());
         for (pid, process) in self.system.processes() {
+            // Linux 的 /proc 任务枚举可能同时返回用户线程；线程与所属进程共享
+            // RSS 和地址空间，不能作为独立进程统计。内核线程是独立任务，保留。
+            if is_userland_thread(process.thread_kind()) {
+                continue;
+            }
             let command = process
                 .cmd()
                 .iter()
@@ -325,6 +334,10 @@ fn process_refresh_kind() -> ProcessRefreshKind {
         .with_cmd(UpdateKind::OnlyIfNotSet)
 }
 
+fn is_userland_thread(thread_kind: Option<ThreadKind>) -> bool {
+    matches!(thread_kind, Some(ThreadKind::Userland))
+}
+
 fn is_loopback_interface(data: &sysinfo::NetworkData) -> bool {
     let networks = data.ip_networks();
     !networks.is_empty() && networks.iter().all(|network| network.addr.is_loopback())
@@ -369,7 +382,15 @@ fn system_disk(filesystems: &[FilesystemUsage]) -> Option<&FilesystemUsage> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HostSampler, ProcessSampler};
+    use super::{HostSampler, ProcessSampler, is_userland_thread};
+    use sysinfo::ThreadKind;
+
+    #[test]
+    fn userland_threads_are_not_processes() {
+        assert!(is_userland_thread(Some(ThreadKind::Userland)));
+        assert!(!is_userland_thread(Some(ThreadKind::Kernel)));
+        assert!(!is_userland_thread(None));
+    }
 
     #[test]
     fn host_snapshot_has_cores_memory_and_system_disk() {
@@ -397,5 +418,36 @@ mod tests {
                 .iter()
                 .any(|process| process.pid == std::process::id())
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn process_snapshot_excludes_userland_threads() {
+        if !sysinfo::IS_SUPPORTED_SYSTEM {
+            return;
+        }
+        let mut sampler = ProcessSampler::new();
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(0);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(0);
+        std::thread::scope(|scope| {
+            std::thread::Builder::new()
+                .name("transom-thread-filter-test".to_string())
+                .spawn_scoped(scope, move || {
+                    started_tx.send(()).expect("线程启动通知应当发送成功");
+                    release_rx.recv().expect("线程释放信号应当接收成功");
+                })
+                .expect("测试线程应当创建成功");
+            started_rx.recv().expect("测试线程启动信号应当接收成功");
+
+            let processes = sampler.sample();
+            assert!(
+                processes
+                    .iter()
+                    .all(|process| !process.cmdline.starts_with("transom-thread")),
+                "用户线程不应作为独立进程返回"
+            );
+
+            release_tx.send(()).expect("测试线程释放信号应当发送成功");
+        });
     }
 }

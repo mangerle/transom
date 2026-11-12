@@ -1,70 +1,138 @@
 //! 进程列表、监听端口、失败服务与 OOM 事件解析。
 
+use std::collections::HashSet;
+
 use transom_core::{FailedServiceInfo, OomAlert, PortListeningInfo, ProcessInfo};
 
-/// 解析 `ps -eo pid,ppid,user,%cpu,%mem,rss,comm,args` 输出。
+/// 解析进程采样输出，并按 TGID 将同一进程的线程归并成一行。
+///
+/// 新格式由 `ps -eo pid,tgid,ppid,user,%cpu,%mem,rss,comm,args` 产生；
+/// 旧格式缺少 TGID 时以 PID 作为进程标识，保持对旧采样命令的兼容。
+/// 同一进程的主线程记录优先作为进程行，避免把线程名和重复 RSS 展示成进程。
 pub fn parse_processes(content: &str) -> Vec<ProcessInfo> {
-    let mut processes = Vec::with_capacity(50);
-    let has_args_header = content.lines().next().is_some_and(|l| l.contains("ARGS"));
+    let header = content.lines().next().unwrap_or_default();
+    let header_columns: Vec<&str> = header.split_whitespace().collect();
+    let has_tgid = header_columns
+        .iter()
+        .any(|column| column.eq_ignore_ascii_case("TGID"));
+    let command_columns = header_columns
+        .iter()
+        .filter(|column| column.eq_ignore_ascii_case("COMMAND"))
+        .count();
+    let has_args = header_columns
+        .iter()
+        .any(|column| column.eq_ignore_ascii_case("ARGS"))
+        || command_columns > 1;
+    let (ppid_idx, user_idx, cpu_idx, mem_idx, rss_idx, command_idx): (
+        usize,
+        usize,
+        usize,
+        usize,
+        usize,
+        usize,
+    ) = if has_tgid {
+        (2, 3, 4, 5, 6, 7)
+    } else {
+        (1, 2, 3, 4, 5, 6)
+    };
+    let args_idx = command_idx.saturating_add(1);
+    let mut rows: Vec<(u32, ProcessInfo)> = Vec::with_capacity(50);
 
     for line in content.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 7 {
+        if parts.len() <= command_idx {
             continue;
         }
         let Ok(pid) = parts[0].parse::<u32>() else {
             continue;
         };
-        let Ok(ppid) = parts[1].parse::<u32>() else {
+        let tgid = if has_tgid {
+            let Ok(tgid) = parts[1].parse::<u32>() else {
+                continue;
+            };
+            tgid
+        } else {
+            pid
+        };
+        let Ok(ppid) = parts[ppid_idx].parse::<u32>() else {
             continue;
         };
-        let Ok(cpu_percent) = parts[3].parse::<f32>() else {
+        let Ok(cpu_percent) = parts[cpu_idx].parse::<f32>() else {
             continue;
         };
-        let Ok(mem_percent) = parts[4].parse::<f32>() else {
+        let Ok(mem_percent) = parts[mem_idx].parse::<f32>() else {
             continue;
         };
-        let Ok(rss_kb) = parts[5].parse::<u64>() else {
+        let Ok(rss_kb) = parts[rss_idx].parse::<u64>() else {
             continue;
         };
 
-        let (cmdline, args) = if has_args_header {
-            let comm = parts[6].to_string();
-            let args = if parts.len() > 7 {
-                Some(parts[7..].join(" "))
+        let (cmdline, args) = if has_args {
+            let cmdline = parts[command_idx].to_string();
+            let args = if parts.len() > args_idx {
+                Some(parts[args_idx..].join(" "))
             } else {
                 None
             };
-            (comm, args)
+            (cmdline, args)
         } else {
-            let full = parts[6..].join(" ");
+            let full = parts[command_idx..].join(" ");
             (full, None)
         };
 
-        processes.push(ProcessInfo {
-            pid,
-            ppid,
-            user: parts[2].to_string(),
-            cpu_percent,
-            mem_percent,
-            rss_bytes: rss_kb.saturating_mul(1024),
-            cmdline,
-            args,
-        });
+        rows.push((
+            tgid,
+            ProcessInfo {
+                pid,
+                ppid,
+                user: parts[user_idx].to_string(),
+                cpu_percent,
+                mem_percent,
+                rss_bytes: rss_kb.saturating_mul(1024),
+                cmdline,
+                args,
+            },
+        ));
+    }
+
+    // ps 的 %CPU 和 RSS 是进程级统计，线程行会重复展示相同数值；因此每组只
+    // 保留主线程行，绝不把线程指标相加，否则会造成 CPU 与内存双重计算。
+    rows.sort_unstable_by(|(left_tgid, left), (right_tgid, right)| {
+        left_tgid.cmp(right_tgid).then_with(|| {
+            let left_is_leader = left.pid == *left_tgid;
+            let right_is_leader = right.pid == *right_tgid;
+            right_is_leader
+                .cmp(&left_is_leader)
+                .then_with(|| left.pid.cmp(&right.pid))
+        })
+    });
+
+    let mut processes = Vec::with_capacity(rows.len());
+    for (tgid, mut process) in rows {
+        if processes
+            .last()
+            .is_some_and(|previous: &ProcessInfo| previous.pid == tgid)
+        {
+            continue;
+        }
+        process.pid = tgid;
+        processes.push(process);
     }
     processes
 }
 
-/// 统计 `ps -eo pid=` 输出的进程行数。
+/// 统计唯一 TGID 数量；旧格式仅含 PID 时同样按唯一值计数。
 ///
 /// 折叠态只需要总数，用仅含 pid 的窄列输出把每轮传输量从全量明细的数十 KB
 /// 压到数 KB，代价是计数与明细采样发生在不同时刻，两者可能相差一两个进程。
 pub fn parse_process_count(content: &str) -> u32 {
-    let lines = content
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .count();
-    u32::try_from(lines).unwrap_or(u32::MAX)
+    let mut process_ids = HashSet::with_capacity(content.lines().count());
+    for line in content.lines() {
+        if let Ok(process_id) = line.trim().parse::<u32>() {
+            process_ids.insert(process_id);
+        }
+    }
+    u32::try_from(process_ids.len()).unwrap_or(u32::MAX)
 }
 
 /// 从 ss -tulpn 或 netstat -tulpn 解析监听端口

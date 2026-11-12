@@ -74,7 +74,7 @@ fn interface_rates_use_previous_snapshot() {
     assert_eq!(rates[1].rx_bytes_per_sec, 0, "首轮无前值应为 0");
 }
 
-/// 进程采样行按 `ps -eo pid,ppid,user,%cpu,%mem,rss,comm` 解析。
+/// 旧版进程采样行按 `ps -eo pid,ppid,user,%cpu,%mem,rss,comm` 解析。
 #[test]
 fn parse_processes_reads_ps_columns() {
     let output = "  PID  PPID USER     %CPU %MEM   RSS COMMAND\n\
@@ -91,12 +91,32 @@ bad line\n";
     assert_eq!(processes[1].cmdline, "cargo build --release");
 }
 
-/// 折叠态的进程总数按 `ps -eo pid=` 的非空行统计。
+/// 同一 TGID 的线程只保留主线程行，进程级 CPU 和 RSS 不重复聚合。
 #[test]
-fn parse_process_count_counts_non_empty_lines() {
+fn parse_processes_groups_threads_by_tgid() {
+    let output = "  PID  TGID  PPID USER     %CPU %MEM   RSS COMMAND         COMMAND\n\
+ 101   100     1 deploy    2.5  1.0  4096 tokio-rt-worker tokio-rt-worker\n\
+ 100   100     1 deploy   12.5  1.0  4096 transom         /usr/bin/transom\n\
+ 102   100     1 deploy    1.0  1.0  4096 tokio-rt-worker tokio-rt-worker\n\
+ 200   200     1 root      3.0  0.2  2048 nginx           nginx: worker\n";
+    let processes = parse_processes(output);
+    assert_eq!(processes.len(), 2);
+    assert_eq!(processes[0].pid, 100);
+    assert_eq!(processes[0].ppid, 1);
+    assert!((processes[0].cpu_percent - 12.5).abs() < f32::EPSILON);
+    assert_eq!(processes[0].rss_bytes, 4096 * 1024);
+    assert_eq!(processes[0].cmdline, "transom");
+    assert_eq!(processes[0].args.as_deref(), Some("/usr/bin/transom"));
+    assert_eq!(processes[1].pid, 200);
+}
+
+/// 折叠态按唯一 TGID 计数，同一进程的多个线程不会重复计入。
+#[test]
+fn parse_process_count_counts_unique_ids() {
     assert_eq!(parse_process_count("1\n2\n3\n"), 3);
     assert_eq!(parse_process_count("  12 \n  34 \n"), 2);
     assert_eq!(parse_process_count("\n\n  56  \n\n"), 1);
+    assert_eq!(parse_process_count("100\n100\n100\n200\n"), 2);
     assert_eq!(parse_process_count(""), 0);
 }
 
