@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use transom_core::TabId;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::CustomIcon;
+#[cfg(unix)]
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 

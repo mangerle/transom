@@ -333,11 +333,7 @@ impl GitWorkspaceState {
     }
 
     /// 按 `request_id` 将失败信息精确落入对应 diff 槽位；命中 diff 请求时返回 `true`。
-    pub(crate) fn apply_diff_failed(
-        &mut self,
-        request_id: GitRequestId,
-        message: &str,
-    ) -> bool {
+    pub(crate) fn apply_diff_failed(&mut self, request_id: GitRequestId, message: &str) -> bool {
         let mut hit = false;
         if let Some(current) = self.diff.as_mut()
             && current.request_id == request_id

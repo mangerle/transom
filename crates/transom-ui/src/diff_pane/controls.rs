@@ -19,7 +19,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::{AppIconElement, UiIcon};
 
-use super::types::{DiffHighlight, DiffViewOptions, IgnoreWhitespace};
+use super::types::{DiffHighlight, DiffUiAction, DiffViewOptions, IgnoreWhitespace};
 use crate::widgets::menu_item;
 
 /// 选项更新回调类型：修改 `DiffViewOptions` 的闭包会被派发到具体宿主的状态更新中。
@@ -86,8 +86,8 @@ pub(crate) fn render_change_nav_buttons(
 pub(crate) fn render_change_nav_with_handlers(
     id_prefix: &'static str,
     disabled: bool,
-    on_prev: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_next: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_prev: DiffUiAction,
+    on_next: DiffUiAction,
 ) -> AnyElement {
     h_flex()
         .gap_0()
@@ -111,7 +111,10 @@ pub(crate) fn render_change_nav_with_handlers(
                 .icon(UiIcon::CHEVRON_DOWN)
                 .disabled(disabled)
                 .accessibility_label(rust_i18n::t!("git.diff.next_difference").to_string())
-                .tooltip(format!("{} (F7)", rust_i18n::t!("git.diff.next_difference")))
+                .tooltip(format!(
+                    "{} (F7)",
+                    rust_i18n::t!("git.diff.next_difference")
+                ))
                 .on_click(move |_, window, cx| on_next(window, cx)),
         )
         .into_any_element()
@@ -137,11 +140,7 @@ pub(crate) fn render_mode_toggle(
                 .accessibility_label(rust_i18n::t!("git.diff.side_by_side").to_string())
                 .when(side_by_side, |btn| btn.primary())
                 .on_click(move |_, window, cx| {
-                    split_cb(
-                        Box::new(|options| options.side_by_side = true),
-                        window,
-                        cx,
-                    );
+                    split_cb(Box::new(|options| options.side_by_side = true), window, cx);
                 }),
         )
         .child(
@@ -153,11 +152,7 @@ pub(crate) fn render_mode_toggle(
                 .accessibility_label(rust_i18n::t!("git.diff.unified").to_string())
                 .when(!side_by_side, |btn| btn.primary())
                 .on_click(move |_, window, cx| {
-                    unified_cb(
-                        Box::new(|options| options.side_by_side = false),
-                        window,
-                        cx,
-                    );
+                    unified_cb(Box::new(|options| options.side_by_side = false), window, cx);
                 }),
         )
         .into_any_element()

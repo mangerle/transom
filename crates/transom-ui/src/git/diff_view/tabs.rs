@@ -88,25 +88,20 @@ pub(crate) fn render_diff_tab_bar(
         .px_1()
         .gap_1()
         .overflow_x_scrollbar()
-        .children(
-            state
-                .diff_tabs
-                .iter()
-                .zip(titles)
-                .enumerate()
-                .map(|(idx, (tab_item, display_title))| {
-                    render_single_diff_tab(
-                        idx,
-                        total_tabs,
-                        state.active_diff_tab == Some(idx),
-                        tab_item,
-                        display_title,
-                        app.clone(),
-                        tab_id,
-                        p,
-                    )
-                }),
-        );
+        .children(state.diff_tabs.iter().zip(titles).enumerate().map(
+            |(idx, (tab_item, display_title))| {
+                render_single_diff_tab(
+                    idx,
+                    total_tabs,
+                    state.active_diff_tab == Some(idx),
+                    tab_item,
+                    display_title,
+                    app.clone(),
+                    tab_id,
+                    p,
+                )
+            },
+        ));
     Some(bar.into_any_element())
 }
 
@@ -243,29 +238,27 @@ fn render_single_diff_tab(
             )
         })
         .child(
-            Button::new(ElementId::Name(
-                format!("git-diff-tab-{request_id}").into(),
-            ))
-            .text()
-            .xsmall()
-            .accessibility_label(display_title.clone())
-            .tooltip(tooltip_text)
-            .child(render_app_icon(AppIcon::for_file(&tab_item.path), 14.0))
-            .child(
-                div()
-                    .text_color(if is_active {
-                        p.tab_active_foreground
-                    } else {
-                        p.tab_foreground
-                    })
-                    .child(display_title),
-            )
-            .on_click(move |_, _, cx| {
-                cx.stop_propagation();
-                tab_app.update(cx, |this, cx| {
-                    this.git_select_diff_tab_by_request(tab_id, request_id, cx);
-                });
-            }),
+            Button::new(ElementId::Name(format!("git-diff-tab-{request_id}").into()))
+                .text()
+                .xsmall()
+                .accessibility_label(display_title.clone())
+                .tooltip(tooltip_text)
+                .child(render_app_icon(AppIcon::for_file(&tab_item.path), 14.0))
+                .child(
+                    div()
+                        .text_color(if is_active {
+                            p.tab_active_foreground
+                        } else {
+                            p.tab_foreground
+                        })
+                        .child(display_title),
+                )
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    tab_app.update(cx, |this, cx| {
+                        this.git_select_diff_tab_by_request(tab_id, request_id, cx);
+                    });
+                }),
         )
         .child(
             IconButton::new(
@@ -314,37 +307,32 @@ pub(crate) fn render_diff_columns_header(
         .border_b_1()
         .text_xs()
         .child(
-            h_flex()
-                .w_1_2()
-                .h_full()
-                .px_2()
-                .items_center()
-                .child(
-                    h_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .gap_1p5()
-                        .items_center()
-                        .overflow_hidden()
-                        .child(
-                            AppIconElement::new(UiIcon::VCS)
-                                .xsmall()
-                                .text_color(p.primary),
-                        )
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(p.foreground)
-                                .child(diff.left_label.clone()),
-                        )
-                        .child(
-                            div()
-                                .truncate()
-                                .text_color(p.muted_foreground.opacity(0.75))
-                                .child(short_path),
-                        ),
-                ),
+            h_flex().w_1_2().h_full().px_2().items_center().child(
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .gap_1p5()
+                    .items_center()
+                    .overflow_hidden()
+                    .child(
+                        AppIconElement::new(UiIcon::VCS)
+                            .xsmall()
+                            .text_color(p.primary),
+                    )
+                    .child(
+                        div()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.foreground)
+                            .child(diff.left_label.clone()),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_color(p.muted_foreground.opacity(0.75))
+                            .child(short_path),
+                    ),
+            ),
         )
         .child(
             h_flex()

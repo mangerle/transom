@@ -22,18 +22,19 @@ impl AppShell {
             None => {
                 let placeholder = rust_i18n::t!("git.diff.search_placeholder").to_string();
                 let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
-                let sub = cx.subscribe_in(&input, window, move |this, input, event, _window, cx| {
-                    match event {
-                        InputEvent::Change => {
-                            let query = input.read(cx).value().to_string();
-                            this.git_update_diff_search_query(tab_id, query, cx);
+                let sub =
+                    cx.subscribe_in(&input, window, move |this, input, event, _window, cx| {
+                        match event {
+                            InputEvent::Change => {
+                                let query = input.read(cx).value().to_string();
+                                this.git_update_diff_search_query(tab_id, query, cx);
+                            }
+                            InputEvent::PressEnter { shift, .. } => {
+                                this.git_step_diff_search(tab_id, !shift, cx);
+                            }
+                            _ => {}
                         }
-                        InputEvent::PressEnter { shift, .. } => {
-                            this.git_step_diff_search(tab_id, !shift, cx);
-                        }
-                        _ => {}
-                    }
-                });
+                    });
                 workspace.update(cx, |workspace, _| {
                     workspace.state.diff_search.input = Some(input.clone());
                     workspace.state.diff_search.subscription = Some(sub);
@@ -145,8 +146,13 @@ pub(super) fn recompute_workspace_diff_search(state: &mut crate::git::types::Git
     }
     let payload = state.active_diff().and_then(|diff| {
         let content = diff.content.as_ref()?;
-        (!content.binary && diff.diff_state.is_some())
-            .then(|| (diff.path.clone(), content.old_text.clone(), content.new_text.clone()))
+        (!content.binary && diff.diff_state.is_some()).then(|| {
+            (
+                diff.path.clone(),
+                content.old_text.clone(),
+                content.new_text.clone(),
+            )
+        })
     });
     if let Some((path, old_text, new_text)) = payload {
         state.diff_search.recompute(&path, &old_text, &new_text);

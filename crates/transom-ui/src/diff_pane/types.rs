@@ -5,8 +5,14 @@
 //!   （并排/统一、忽略空白、高亮粒度、行号、换行、折叠未变更上下文），
 //!   收拢到此共享层后两边行为、菜单与快捷键口径完全一致，杜绝重复定义。
 
+use std::rc::Rc;
+
 use super::hunk::PreparedHunk;
 use gpui_kit::component::diff::DiffFile;
+use gpui_kit::{App, Window};
+
+/// 公共 Diff 面板按钮交互的无状态 UI 回调签名。
+pub(crate) type DiffUiAction = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 
 /// 空白处理档位（对应差异工具条的「忽略差异」）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -123,6 +129,24 @@ impl DiffViewOptions {
     }
 }
 
+/// 后台计算产出的差异文档快照。
+///
+/// 由纯函数在后台线程池构造，再交由 UI 线程装载进 `DiffState`。
+pub(crate) struct PreparedDiffDocument {
+    pub files: Vec<DiffFile>,
+    pub additions: usize,
+    pub deletions: usize,
+    pub hunk_count: usize,
+    pub hunks: Vec<PreparedHunk>,
+}
+
+impl PreparedDiffDocument {
+    /// 当前忽略规则下是否没有任何差异行。
+    pub(crate) fn is_empty(&self) -> bool {
+        self.files.is_empty() || (self.additions == 0 && self.deletions == 0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,23 +167,5 @@ mod tests {
         assert_eq!(restored, original);
         assert!(settings.ignore_whitespace);
         assert_eq!(settings.default_diff_mode, "unified");
-    }
-}
-
-/// 后台计算产出的差异文档快照。
-///
-/// 由纯函数在后台线程池构造，再交由 UI 线程装载进 `DiffState`。
-pub(crate) struct PreparedDiffDocument {
-    pub files: Vec<DiffFile>,
-    pub additions: usize,
-    pub deletions: usize,
-    pub hunk_count: usize,
-    pub hunks: Vec<PreparedHunk>,
-}
-
-impl PreparedDiffDocument {
-    /// 当前忽略规则下是否没有任何差异行。
-    pub(crate) fn is_empty(&self) -> bool {
-        self.files.is_empty() || (self.additions == 0 && self.deletions == 0)
     }
 }

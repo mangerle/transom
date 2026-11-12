@@ -9,9 +9,7 @@ mod hunk;
 mod search;
 mod types;
 
-pub(crate) use compute::{
-    create_diff_state, prepare_diff_document, sync_diff_state_options,
-};
+pub(crate) use compute::{create_diff_state, prepare_diff_document, sync_diff_state_options};
 pub(crate) use controls::{
     OptionsUpdater, render_change_nav_buttons, render_change_nav_with_handlers, render_diff_body,
     render_option_controls,

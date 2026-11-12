@@ -6,8 +6,6 @@
 //! - 每次匹配产出的 `DiffLinePosition` 直接复用 `DiffState::scroll_to_line` 展开折叠行并滚动到位，
 //!   命中高亮通过 `Diff::decorations` 声明式注入，不侵入组件库内部状态。
 
-use std::rc::Rc;
-
 use crate::palette::Palette;
 use gpui_kit::base::{Disableable, h_flex};
 use gpui_kit::component::Sizable;
@@ -16,13 +14,14 @@ use gpui_kit::component::diff::{DiffDecoration, DiffLinePosition, DiffLineRange,
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
-    Subscription, Window, div, px,
+    AnyElement, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
+    Subscription, div, px,
 };
 use similar::{ChangeTag, TextDiff};
 use transom_ui_icons::UiIcon;
 
 use super::compute::{sanitize_diff_path, split_lines_stripped};
+use super::types::DiffUiAction;
 
 /// 差异面板内搜索框与匹配状态（随具体宿主的差异视图存活）。
 #[derive(Default)]
@@ -167,9 +166,9 @@ pub(crate) struct DiffSearchBarProps<'a> {
     pub id_prefix: &'static str,
     pub state: &'a DiffSearchState,
     pub p: &'a Palette,
-    pub on_prev: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    pub on_next: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    pub on_close: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub on_prev: DiffUiAction,
+    pub on_next: DiffUiAction,
+    pub on_close: DiffUiAction,
 }
 
 /// 渲染差异工具条下方紧贴的轻量查找子栏。
@@ -270,9 +269,18 @@ mod tests {
 
         let matches = find_diff_matches("src/lib.rs", old_text, new_text, "TOKEN");
         assert_eq!(matches.len(), 3);
-        assert_eq!(matches[0], DiffLinePosition::new("src/lib.rs", DiffSide::Original, 2));
-        assert_eq!(matches[1], DiffLinePosition::new("src/lib.rs", DiffSide::Modified, 2));
-        assert_eq!(matches[2], DiffLinePosition::new("src/lib.rs", DiffSide::Modified, 3));
+        assert_eq!(
+            matches[0],
+            DiffLinePosition::new("src/lib.rs", DiffSide::Original, 2)
+        );
+        assert_eq!(
+            matches[1],
+            DiffLinePosition::new("src/lib.rs", DiffSide::Modified, 2)
+        );
+        assert_eq!(
+            matches[2],
+            DiffLinePosition::new("src/lib.rs", DiffSide::Modified, 3)
+        );
     }
 
     #[test]
@@ -287,15 +295,24 @@ mod tests {
         assert_eq!(state.current_idx, 0);
 
         let next = state.step(true);
-        assert_eq!(next, Some(DiffLinePosition::new("a.rs", DiffSide::Modified, 2)));
+        assert_eq!(
+            next,
+            Some(DiffLinePosition::new("a.rs", DiffSide::Modified, 2))
+        );
         assert_eq!(state.current_idx, 1);
 
         let wrapped = state.step(true);
-        assert_eq!(wrapped, Some(DiffLinePosition::new("a.rs", DiffSide::Modified, 1)));
+        assert_eq!(
+            wrapped,
+            Some(DiffLinePosition::new("a.rs", DiffSide::Modified, 1))
+        );
         assert_eq!(state.current_idx, 0);
 
         let back_wrapped = state.step(false);
-        assert_eq!(back_wrapped, Some(DiffLinePosition::new("a.rs", DiffSide::Modified, 2)));
+        assert_eq!(
+            back_wrapped,
+            Some(DiffLinePosition::new("a.rs", DiffSide::Modified, 2))
+        );
         assert_eq!(state.current_idx, 1);
     }
 }

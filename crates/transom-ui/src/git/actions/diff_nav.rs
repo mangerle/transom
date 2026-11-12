@@ -265,9 +265,8 @@ impl AppShell {
             if state.diff_tabs.is_empty() {
                 return None;
             }
-            let anchor_idx = anchor_request_id.and_then(|req| {
-                state.diff_tabs.iter().position(|tab| tab.request_id == req)
-            });
+            let anchor_idx = anchor_request_id
+                .and_then(|req| state.diff_tabs.iter().position(|tab| tab.request_id == req));
             if scope != DiffTabCloseScope::All && anchor_idx.is_none() {
                 return None;
             }

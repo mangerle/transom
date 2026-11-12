@@ -125,7 +125,8 @@ impl EditorPanels {
                     item.diff_prepare_task = None;
                     if prepared.is_none() {
                         item.diff_computing = false;
-                        item.diff_error = Some(rust_i18n::t!("git.diff.compute_failed").to_string());
+                        item.diff_error =
+                            Some(rust_i18n::t!("git.diff.compute_failed").to_string());
                         return EditorPlan::Failed;
                     }
                     if item.diff_options.ignore_whitespace != ignore_whitespace {

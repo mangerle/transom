@@ -496,12 +496,16 @@ impl AppShell {
             .min_h_0()
             .size_full()
             .key_context(crate::keymap::GIT_WORKSPACE_CONTEXT)
-            .on_action(cx.listener(move |this, _: &crate::keymap::DiffPrevChange, _, cx| {
-                this.git_step_diff_change(tab_id, false, cx);
-            }))
-            .on_action(cx.listener(move |this, _: &crate::keymap::DiffNextChange, _, cx| {
-                this.git_step_diff_change(tab_id, true, cx);
-            }))
+            .on_action(
+                cx.listener(move |this, _: &crate::keymap::DiffPrevChange, _, cx| {
+                    this.git_step_diff_change(tab_id, false, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(move |this, _: &crate::keymap::DiffNextChange, _, cx| {
+                    this.git_step_diff_change(tab_id, true, cx);
+                }),
+            )
             .child(
                 h_resizable(ElementId::Name(format!("git-commit-split-{tab_id}").into()))
                     .with_state(&split)

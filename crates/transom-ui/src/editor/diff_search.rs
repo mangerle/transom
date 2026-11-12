@@ -40,18 +40,19 @@ impl EditorPanels {
                 let placeholder = rust_i18n::t!("git.diff.search_placeholder").to_string();
                 let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
                 let target_editor = editor.clone();
-                let sub = cx.subscribe_in(&input, window, move |this, input, event, _window, cx| {
-                    match event {
-                        InputEvent::Change => {
-                            let query = input.read(cx).value().to_string();
-                            this.update_editor_diff_search_query(&target_editor, query, cx);
+                let sub =
+                    cx.subscribe_in(&input, window, move |this, input, event, _window, cx| {
+                        match event {
+                            InputEvent::Change => {
+                                let query = input.read(cx).value().to_string();
+                                this.update_editor_diff_search_query(&target_editor, query, cx);
+                            }
+                            InputEvent::PressEnter { shift, .. } => {
+                                this.step_editor_diff_search(&target_editor, !shift, cx);
+                            }
+                            _ => {}
                         }
-                        InputEvent::PressEnter { shift, .. } => {
-                            this.step_editor_diff_search(&target_editor, !shift, cx);
-                        }
-                        _ => {}
-                    }
-                });
+                    });
                 self.update_panel(editor, |item| {
                     item.diff_search.input = Some(input.clone());
                     item.diff_search.subscription = Some(sub);
@@ -88,20 +89,21 @@ impl EditorPanels {
         cx: &mut Context<Self>,
     ) {
         let current = editor.read(cx).value().to_string();
-        let target: Option<(Entity<DiffState>, _)> = self.map_panel(editor, |item| {
-            item.diff_search.query = query;
-            item.diff_search.current_idx = 0;
-            if item.diff.is_some() {
-                item.diff_search
-                    .recompute(&item.remote_path, &item.baseline, &current);
-            } else {
-                item.diff_search.clear_matches();
-            }
-            let pos = item.diff_search.current_position()?;
-            let ds = item.diff.clone()?;
-            Some((ds, pos))
-        })
-        .flatten();
+        let target: Option<(Entity<DiffState>, _)> = self
+            .map_panel(editor, |item| {
+                item.diff_search.query = query;
+                item.diff_search.current_idx = 0;
+                if item.diff.is_some() {
+                    item.diff_search
+                        .recompute(&item.remote_path, &item.baseline, &current);
+                } else {
+                    item.diff_search.clear_matches();
+                }
+                let pos = item.diff_search.current_position()?;
+                let ds = item.diff.clone()?;
+                Some((ds, pos))
+            })
+            .flatten();
         if let Some((ds, pos)) = target {
             ds.update(cx, |state, cx| state.scroll_to_line(pos, cx));
         }
@@ -115,12 +117,13 @@ impl EditorPanels {
         forward: bool,
         cx: &mut Context<Self>,
     ) {
-        let target: Option<(Entity<DiffState>, _)> = self.map_panel(editor, |item| {
-            let pos = item.diff_search.step(forward)?;
-            let ds = item.diff.clone()?;
-            Some((ds, pos))
-        })
-        .flatten();
+        let target: Option<(Entity<DiffState>, _)> = self
+            .map_panel(editor, |item| {
+                let pos = item.diff_search.step(forward)?;
+                let ds = item.diff.clone()?;
+                Some((ds, pos))
+            })
+            .flatten();
         if let Some((ds, pos)) = target {
             ds.update(cx, |state, cx| state.scroll_to_line(pos, cx));
             cx.notify();

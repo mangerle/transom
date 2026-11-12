@@ -898,8 +898,5 @@ async fn apply_hunk_patch_stages_unstages_and_reverts_single_hunk() {
         .await
         .expect("还原工作区第一块失败");
     let working = std::fs::read_to_string(dir.path().join("a.txt")).expect("读取工作区");
-    assert_eq!(
-        working,
-        "h1_a\nh1_b\nc1\nc2\nc3\nc4\nh2_a\nh2_changed\n"
-    );
+    assert_eq!(working, "h1_a\nh1_b\nc1\nc2\nc3\nc4\nh2_a\nh2_changed\n");
 }

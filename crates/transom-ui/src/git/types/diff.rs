@@ -1,7 +1,7 @@
 //! Git 差异视图显示选项与状态模型。
 
-pub(crate) use crate::diff_pane::{DiffViewOptions as GitDiffOptions, IgnoreWhitespace};
 use crate::diff_pane::PreparedHunk;
+pub(crate) use crate::diff_pane::{DiffViewOptions as GitDiffOptions, IgnoreWhitespace};
 use gpui_kit::Entity;
 use gpui_kit::component::diff::DiffState;
 use transom_core::{DiffContent, GitRequestId, GitSide, RepoStatus, StatusRecord};
@@ -69,7 +69,12 @@ impl GitDiffState {
 
     /// 评估当前差异视图是否支持块级动作（暂存块 / 还原块 / 取消暂存块）。
     pub(crate) fn hunk_capability(&self, status: Option<&RepoStatus>) -> HunkActionCapability {
-        if self.hunks.is_empty() || self.content.as_ref().is_none_or(|c| c.truncated || c.binary) {
+        if self.hunks.is_empty()
+            || self
+                .content
+                .as_ref()
+                .is_none_or(|c| c.truncated || c.binary)
+        {
             return HunkActionCapability::None;
         }
         let Some(req) = self.request.as_ref() else {

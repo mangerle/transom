@@ -45,18 +45,20 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
             } else {
                 rust_i18n::t!("git.diff.collapse_unchanged_action").to_string()
             };
-            menu.item(PopupMenuItem::new(collapse_label).on_click(move |_, _, cx| {
-                let next_collapse = !collapse_unchanged;
-                toggle_app.update(cx, |this, cx| {
-                    this.git_update_diff_options(
-                        tab_id,
-                        Box::new(move |opts: &mut DiffViewOptions| {
-                            opts.collapse_unchanged = next_collapse
-                        }),
-                        cx,
-                    );
-                });
-            }))
+            menu.item(
+                PopupMenuItem::new(collapse_label).on_click(move |_, _, cx| {
+                    let next_collapse = !collapse_unchanged;
+                    toggle_app.update(cx, |this, cx| {
+                        this.git_update_diff_options(
+                            tab_id,
+                            Box::new(move |opts: &mut DiffViewOptions| {
+                                opts.collapse_unchanged = next_collapse
+                            }),
+                            cx,
+                        );
+                    });
+                }),
+            )
             .item(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.refresh").to_string()).on_click(
                     move |_, _, cx| {

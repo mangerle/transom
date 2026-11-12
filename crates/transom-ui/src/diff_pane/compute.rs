@@ -339,7 +339,8 @@ mod tests {
 
     #[test]
     fn prepare_builds_valid_diff_for_added_deleted_and_modified_files() {
-        let added = prepare_diff_document("", "line1\nline2\n", "a.rs", "rs", IgnoreWhitespace::None);
+        let added =
+            prepare_diff_document("", "line1\nline2\n", "a.rs", "rs", IgnoreWhitespace::None);
         assert!(!added.is_empty());
         assert_eq!(added.additions, 2);
         assert_eq!(added.deletions, 0);
@@ -359,8 +360,13 @@ mod tests {
 
     #[test]
     fn append_or_delete_trailing_line_does_not_mark_previous_line_changed() {
-        let appended =
-            prepare_diff_document("a\nb\n", "a\nb\nc\n", "a.txt", "txt", IgnoreWhitespace::None);
+        let appended = prepare_diff_document(
+            "a\nb\n",
+            "a\nb\nc\n",
+            "a.txt",
+            "txt",
+            IgnoreWhitespace::None,
+        );
         assert_eq!(appended.additions, 1);
         assert_eq!(appended.deletions, 0);
         assert_eq!(appended.files[0].additions(), 1);
@@ -371,8 +377,13 @@ mod tests {
         assert_eq!(appended_no_eol.additions, 1);
         assert_eq!(appended_no_eol.deletions, 0);
 
-        let removed =
-            prepare_diff_document("a\nb\nc\n", "a\nb\n", "a.txt", "txt", IgnoreWhitespace::None);
+        let removed = prepare_diff_document(
+            "a\nb\nc\n",
+            "a\nb\n",
+            "a.txt",
+            "txt",
+            IgnoreWhitespace::None,
+        );
         assert_eq!(removed.additions, 0);
         assert_eq!(removed.deletions, 1);
     }
@@ -385,8 +396,7 @@ mod tests {
         assert_eq!(modified.deletions, 1);
         assert_eq!(modified.additions, 1);
 
-        let cleared =
-            prepare_diff_document("\n", "", "empty.txt", "txt", IgnoreWhitespace::None);
+        let cleared = prepare_diff_document("\n", "", "empty.txt", "txt", IgnoreWhitespace::None);
         assert_eq!(cleared.files.len(), 1);
         assert_eq!(cleared.deletions, 1);
         assert_eq!(cleared.additions, 0);

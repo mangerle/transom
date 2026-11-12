@@ -180,19 +180,24 @@ impl AppShell {
                     }
                     workspace.diff_tasks.remove(&request_id);
                     if prepared.is_none() {
-                        workspace.state.update_diff_slots(request_id, token, |slot| {
-                            slot.computing = false;
-                            slot.error = Some(rust_i18n::t!("git.diff.compute_failed").to_string());
-                        });
+                        workspace
+                            .state
+                            .update_diff_slots(request_id, token, |slot| {
+                                slot.computing = false;
+                                slot.error =
+                                    Some(rust_i18n::t!("git.diff.compute_failed").to_string());
+                            });
                         return ApplyPlan::Failed;
                     }
                     let options = workspace.state.diff_options;
                     if options.ignore_whitespace != ignore_whitespace {
                         // 后台计算期间切换了标签并修改全局空白选项：必须清除 computing，
                         // 避免下次切回该标签时因 `!computing` 为假而永久卡死。
-                        workspace.state.update_diff_slots(request_id, token, |slot| {
-                            slot.computing = false;
-                        });
+                        workspace
+                            .state
+                            .update_diff_slots(request_id, token, |slot| {
+                                slot.computing = false;
+                            });
                         return ApplyPlan::ResetStale;
                     }
                     ApplyPlan::Ready { options }
@@ -215,29 +220,31 @@ impl AppShell {
                         let prepared_hunks = prepared.hunks;
                         let mut edge_jump: Option<usize> = None;
                         let applied = workspace.update(cx, |workspace, _| {
-                            let ok = workspace.state.update_diff_slots(request_id, token, |slot| {
-                                slot.computing = false;
-                                slot.computed_ignore = Some(ignore_whitespace);
-                                slot.error = None;
-                                slot.summary_additions = additions;
-                                slot.summary_deletions = deletions;
-                                slot.summary_hunks = hunks;
-                                slot.hunks = prepared_hunks.clone();
-                                slot.whitespace_only = diff_entity.is_none()
-                                    && ignore_whitespace != IgnoreWhitespace::None
-                                    && slot
-                                        .content
-                                        .as_ref()
-                                        .is_some_and(|c| !c.binary && c.old_text != c.new_text);
-                                slot.diff_state = diff_entity.clone();
-                                if let Some(from_start) = slot.pending_edge_jump.take()
-                                    && !slot.hunks.is_empty()
-                                {
-                                    let idx = if from_start { 0 } else { slot.hunks.len() - 1 };
-                                    slot.current_hunk = Some(idx);
-                                    edge_jump = Some(idx);
-                                }
-                            });
+                            let ok = workspace
+                                .state
+                                .update_diff_slots(request_id, token, |slot| {
+                                    slot.computing = false;
+                                    slot.computed_ignore = Some(ignore_whitespace);
+                                    slot.error = None;
+                                    slot.summary_additions = additions;
+                                    slot.summary_deletions = deletions;
+                                    slot.summary_hunks = hunks;
+                                    slot.hunks = prepared_hunks.clone();
+                                    slot.whitespace_only = diff_entity.is_none()
+                                        && ignore_whitespace != IgnoreWhitespace::None
+                                        && slot
+                                            .content
+                                            .as_ref()
+                                            .is_some_and(|c| !c.binary && c.old_text != c.new_text);
+                                    slot.diff_state = diff_entity.clone();
+                                    if let Some(from_start) = slot.pending_edge_jump.take()
+                                        && !slot.hunks.is_empty()
+                                    {
+                                        let idx = if from_start { 0 } else { slot.hunks.len() - 1 };
+                                        slot.current_hunk = Some(idx);
+                                        edge_jump = Some(idx);
+                                    }
+                                });
                             if ok
                                 && workspace
                                     .state
@@ -285,7 +292,12 @@ impl AppShell {
                 .filter(|d| !d.loading && d.content.as_ref().is_some_and(|c| !c.binary))
                 .map(|d| d.request_id);
             let active_state = active.and_then(|d| d.diff_state.clone());
-            (state.project.id, state.diff_options, active_req, active_state)
+            (
+                state.project.id,
+                state.diff_options,
+                active_req,
+                active_state,
+            )
         };
 
         if new_options.ignore_whitespace != old_ignore {
@@ -321,12 +333,19 @@ impl AppShell {
             state.active_diff_tab = Some(index);
             let active = state.diff_tabs.get_mut(index)?;
             let maybe_req = diff_tab_needs_recompute(active, options.ignore_whitespace);
-            let cached_ds = maybe_req.is_none().then(|| active.diff_state.clone()).flatten();
+            let cached_ds = maybe_req
+                .is_none()
+                .then(|| active.diff_state.clone())
+                .flatten();
             let edge_pos = if cached_ds.is_some()
                 && let Some(from_start) = active.pending_edge_jump.take()
                 && !active.hunks.is_empty()
             {
-                let hunk_idx = if from_start { 0 } else { active.hunks.len() - 1 };
+                let hunk_idx = if from_start {
+                    0
+                } else {
+                    active.hunks.len() - 1
+                };
                 active.current_hunk = Some(hunk_idx);
                 active.hunks.get(hunk_idx).map(|h| h.gutter_position())
             } else {

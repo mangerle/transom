@@ -33,8 +33,7 @@ pub(super) fn attach_hunk_actions(
     }
 
     let mut markers = Vec::with_capacity(diff.hunks.len());
-    let mut patch_map: HashMap<DiffLinePosition, String> =
-        HashMap::with_capacity(diff.hunks.len());
+    let mut patch_map: HashMap<DiffLinePosition, String> = HashMap::with_capacity(diff.hunks.len());
     let label: SharedString = match capability {
         HunkActionCapability::Unstaged => rust_i18n::t!("git.diff.hunk_actions").into(),
         HunkActionCapability::Staged => rust_i18n::t!("git.diff.unstage_hunk").into(),
@@ -49,9 +48,8 @@ pub(super) fn attach_hunk_actions(
     }
     let patch_map = Rc::new(patch_map);
 
-    diff_widget
-        .gutter_markers(markers)
-        .render_gutter_marker(move |marker, _window, _cx| -> AnyElement {
+    diff_widget.gutter_markers(markers).render_gutter_marker(
+        move |marker, _window, _cx| -> AnyElement {
             let Some(patch) = patch_map.get(marker.position()).cloned() else {
                 return div().into_any_element();
             };
@@ -64,7 +62,8 @@ pub(super) fn attach_hunk_actions(
                 }
                 HunkActionCapability::None => div().into_any_element(),
             }
-        })
+        },
+    )
 }
 
 fn render_unstaged_hunk_button(
@@ -143,14 +142,7 @@ fn render_staged_hunk_button(
         .on_click(move |_, _, cx| {
             let patch = patch.clone();
             app.update(cx, |this, cx| {
-                this.git_apply_hunk_patch(
-                    tab_id,
-                    GitAction::UnstageHunk,
-                    patch,
-                    true,
-                    true,
-                    cx,
-                );
+                this.git_apply_hunk_patch(tab_id, GitAction::UnstageHunk, patch, true, true, cx);
             });
         })
         .into_any_element()
