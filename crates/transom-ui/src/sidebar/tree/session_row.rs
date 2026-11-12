@@ -4,14 +4,14 @@ use super::reorder::{
     RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
 };
 use super::{
-    BAND_HEIGHT_REM, ROW_HEIGHT_REM, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget,
-    indent_padding,
+    ROW_HEIGHT_REM, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, indent_padding,
 };
 use crate::app::AppShell;
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
-use gpui_kit::base::{h_flex, v_flex};
+use crate::widgets::{SidebarRowState, sidebar_row_band};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
@@ -29,18 +29,15 @@ struct SessionBandParams {
     detail: String,
     icon: AppIcon,
     icon_color: Option<Hsla>,
-    is_active: bool,
     selection_mode: bool,
     is_selected: bool,
-    is_selected_row: bool,
-    fill: Hsla,
+    state: SidebarRowState,
 }
 
 /// 渲染会话行主体；行尾动作（拨测、拖拽落点）由调用方追加。
 ///
 /// 拆出来是为了让 `render_session_row` 只负责行级交互与菜单装配，
-/// 视觉结构（选中底、活动条、图标着色、两行文本）集中在一处，
-/// 便于与文件夹行对齐行高与内边距。
+/// 图标着色与两行文本集中在一处，行底色和状态边框交由共享侧栏组件统一决定。
 fn session_band(
     params: SessionBandParams,
     p: &Palette,
@@ -52,44 +49,15 @@ fn session_band(
         detail,
         icon,
         icon_color,
-        is_active,
         selection_mode,
         is_selected,
-        is_selected_row,
-        fill,
+        state,
     } = params;
-    let mut inner = h_flex()
-        .id(ElementId::Name(format!("session-band-{session_id}").into()))
-        .relative()
-        .w_full()
-        .h(rems(BAND_HEIGHT_REM))
-        .px_2()
-        .gap_2()
-        .items_center()
-        .rounded(p.radius.md)
-        .bg(fill)
-        .text_color(if is_active {
-            p.sidebar_accent_foreground
-        } else {
-            p.sidebar_foreground
-        });
-    if is_active {
-        // 当前会话：列表激活底色 + 左侧竖条。竖条绝对定位、不占布局宽度，
-        // 切换活动会话时行内图标不会发生位移。
-        inner = inner.child(
-            div()
-                .absolute()
-                .left_0()
-                .top_0()
-                .bottom_0()
-                .w(px(2.0))
-                .rounded_full()
-                .bg(p.list_active_border),
-        );
-    } else if !is_selected_row {
-        // 悬停只给未选中的行，避免悬浮色把选中态的底色顶掉。
-        inner = inner.hover(|style| style.bg(p.list_hover));
-    }
+    let mut inner = sidebar_row_band(
+        ElementId::Name(format!("session-band-{session_id}").into()),
+        state,
+        p,
+    );
     if selection_mode {
         inner = inner.child(
             Checkbox::new(ElementId::Name(
@@ -107,7 +75,7 @@ fn session_band(
         .child(
             AppIconElement::new(icon)
                 .with_rems(ROW_ICON_SIZE)
-                .text_color(icon_color.unwrap_or(if is_active {
+                .text_color(icon_color.unwrap_or(if state.is_highlighted() {
                     p.sidebar_accent_foreground
                 } else {
                     p.muted_foreground
@@ -276,13 +244,11 @@ struct SessionRowVisuals {
     icon_name: AppIcon,
     detail_text: String,
     icon_color: Option<Hsla>,
-    is_active: bool,
     selection_mode: bool,
     is_selected: bool,
     drag_label: String,
     drag_icon: AppIcon,
-    is_selected_row: bool,
-    fill: Hsla,
+    state: SidebarRowState,
 }
 
 /// 会话行尾的拨测展示部件。
@@ -297,7 +263,7 @@ impl AppShell {
     fn session_probe_parts(
         &self,
         session: &transom_core::Session,
-        is_active: bool,
+        highlighted: bool,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> SessionProbeParts {
@@ -316,7 +282,7 @@ impl AppShell {
                     element_id: format!("session-probe-{session_id}"),
                     icon: AppIcon::Ui(UiIcon::EXCEPTION_ANALYZER),
                     tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
-                    idle_color: if is_active {
+                    idle_color: if highlighted {
                         p.sidebar_accent_foreground
                     } else {
                         p.muted_foreground
@@ -341,7 +307,6 @@ impl AppShell {
         &self,
         row: &SessionRow,
         active_session: Option<SessionId>,
-        p: &Palette,
     ) -> SessionRowVisuals {
         let session = &row.session;
         let session_id = session.id;
@@ -357,12 +322,13 @@ impl AppShell {
         let selection_mode = self.state.sidebar.selection_mode;
         let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);
         let is_marked = self.state.sidebar.tree_selection == Some(session_id);
-        // 行底取主题的列表令牌：常态是列表背景，选中与当前用列表激活色。
-        let is_selected_row = is_marked || (selection_mode && is_selected);
-        let fill = if is_active || is_selected_row {
-            p.list_active
+        let row_selected = is_marked || (selection_mode && is_selected);
+        let state = if is_active {
+            SidebarRowState::Current
+        } else if row_selected {
+            SidebarRowState::Selected
         } else {
-            p.list_background
+            SidebarRowState::Normal
         };
         let is_ssh = matches!(session.connection, transom_core::Connection::Ssh(_));
         SessionRowVisuals {
@@ -371,13 +337,11 @@ impl AppShell {
             icon_name,
             detail_text,
             icon_color,
-            is_active,
             selection_mode,
             is_selected,
             drag_label: session.name.clone(),
             drag_icon: icon_name,
-            is_selected_row,
-            fill,
+            state,
         }
     }
 
@@ -420,14 +384,12 @@ impl AppShell {
             icon_name,
             detail_text,
             icon_color: session_color,
-            is_active,
             selection_mode,
             is_selected,
             drag_label,
             drag_icon,
-            is_selected_row,
-            fill,
-        } = self.session_row_visuals(row, active_session, p);
+            state,
+        } = self.session_row_visuals(row, active_session);
         let element = div()
             .id(ElementId::Name(format!("session-{session_id}").into()))
             .w_full()
@@ -467,9 +429,6 @@ impl AppShell {
                 is_ssh,
                 app_entity.clone(),
             ));
-        // 悬浮样式必须与 `.id()` 落在同一个元素上：GPUI 只给带 id 的元素分配
-        // global_id 与悬浮状态，缺少 id 时鼠标移入不会触发重绘，高亮只能等
-        // 别的事件顺带重绘才补上，看上去就是"悬停不跟手"。
         let inner = session_band(
             SessionBandParams {
                 session_id,
@@ -477,16 +436,14 @@ impl AppShell {
                 detail: detail_text,
                 icon: icon_name,
                 icon_color: session_color,
-                is_active,
                 selection_mode,
                 is_selected,
-                is_selected_row,
-                fill,
+                state,
             },
             p,
             cx,
         );
-        let probe = self.session_probe_parts(session, is_active, p, cx);
+        let probe = self.session_probe_parts(session, state.is_highlighted(), p, cx);
         let anchor = SidebarDrag::Session(session_id);
         // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
         let inner = inner

@@ -10,6 +10,15 @@ use gpui_kit::*;
 use transom_core::{GitFolder, GitFolderId, GitProjectId};
 
 impl AppShell {
+    /// 选中 Git 侧栏项目；双击打开由行点击处理自行完成。
+    pub(crate) fn select_git_project(&mut self, id: GitProjectId, cx: &mut Context<Self>) {
+        if self.state.git.selected_project == Some(id) {
+            return;
+        }
+        self.state.git.selected_project = Some(id);
+        cx.notify();
+    }
+
     /// 新建分组（名字的非空校验在对话框里完成）。
     pub(crate) fn add_git_folder(&mut self, name: String, cx: &mut Context<Self>) {
         self.state.git.folders.push(GitFolder::new(name));

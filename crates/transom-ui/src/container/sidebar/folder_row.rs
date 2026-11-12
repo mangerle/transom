@@ -1,6 +1,7 @@
 //! 引擎分组行：折叠、计数与拖拽落点。
 
 use super::*;
+use crate::widgets::sidebar_group_row_band;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -118,36 +119,23 @@ pub(crate) fn render_engine_folder_row(
         });
 
     let into_bg = p.drop_target;
-    let hover_bg = p.list_head.blend(p.sidebar_border.opacity(0.6));
-    let mut band = h_flex()
-        .id(ElementId::Name(
-            format!("container-engine-folder-band-{folder_id}").into(),
-        ))
-        .relative()
-        .w_full()
-        .h(rems(BAND_HEIGHT_REM))
-        .px_2()
-        .gap_1()
-        .items_center()
-        .rounded(p.radius.md)
-        .bg(p.list_head)
-        .border_b_1()
-        .border_color(p.sidebar_border)
-        .text_color(p.sidebar_foreground)
-        .hover(move |style| style.bg(hover_bg))
-        .drag_over::<ContainerSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
-        .child(AppIconElement::new(chevron).with_rems(ROW_CHEVRON_SIZE))
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).with_rems(ROW_ICON_SIZE))
-        .child(
-            div()
-                .flex_1()
-                .overflow_hidden()
-                .text_sm()
-                .font_weight(FontWeight::SEMIBOLD)
-                .truncate()
-                .child(row.name.clone()),
-        )
-        .child(div().text_xs().child(row.engine_count.to_string()));
+    let mut band = sidebar_group_row_band(
+        ElementId::Name(format!("container-engine-folder-band-{folder_id}").into()),
+        p,
+    )
+    .drag_over::<ContainerSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
+    .child(AppIconElement::new(chevron).with_rems(ROW_CHEVRON_SIZE))
+    .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).with_rems(ROW_ICON_SIZE))
+    .child(
+        div()
+            .flex_1()
+            .overflow_hidden()
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .truncate()
+            .child(row.name.clone()),
+    )
+    .child(div().text_xs().child(row.engine_count.to_string()));
     if row.folder_count > 0 {
         band = band.child(
             div()

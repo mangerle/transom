@@ -21,6 +21,7 @@ pub(crate) struct SidebarButtonProps<F> {
 use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::widgets::sidebar_list_frame;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
@@ -32,8 +33,7 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 pub(crate) use tree::SidebarRow;
 pub(crate) use tree::{
-    BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
-    indent_padding,
+    ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
 };
 use tree::{SidebarDrag, SidebarTarget, build_rows};
 
@@ -120,12 +120,9 @@ impl AppShell {
             .text_color(p.sidebar_foreground)
             .child(header)
             .child(
-                v_flex()
-                    .id("session-list")
+                sidebar_list_frame("session-list")
                     .flex_1()
-                    .w_full()
                     .overflow_hidden()
-                    .p_2()
                     .on_drop(move |drag: &SidebarDrag, window, cx| {
                         let drag = *drag;
                         app_entity.update(cx, |this, cx| {
@@ -190,7 +187,7 @@ impl AppShell {
                         SidebarButtonProps {
                             id: "sidebar-new-folder",
                             icon: AppIcon::Ui(UiIcon::NEW_FOLDER),
-                            tooltip: rust_i18n::t!("folder.new_title").to_string(),
+                            tooltip: rust_i18n::t!("sidebar.new_group").to_string(),
                             active: false,
                             on_click: cx.listener(|this, _, window, cx| {
                                 this.open_new_folder(None, window, cx);

@@ -17,8 +17,6 @@ use transom_core::{CatalogError, DropSide, FolderId, Session, SessionId};
 
 /// 行槽位高度（rem）：虚拟列表按它分配空间，渲染时必须严格一致。
 pub(crate) const ROW_HEIGHT_REM: f32 = size::TREE_ROW_HEIGHT;
-/// 内层高亮条高度（rem）：小于行槽位，留出上下间隙。
-pub(crate) const BAND_HEIGHT_REM: f32 = size::TREE_BAND_HEIGHT;
 /// 缩进基准与每级步长（逻辑像素）。
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;

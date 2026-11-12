@@ -25,10 +25,9 @@ use crate::container::types::{ContainerDiscovery, ContainerWorkspaceStatus};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sidebar::{
-    BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
-    indent_padding,
+    ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
 };
-use crate::widgets::{IconButton, IconButtonSize};
+use crate::widgets::{IconButton, IconButtonSize, sidebar_list_frame};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
@@ -110,7 +109,7 @@ pub(crate) fn render_container_sidebar(
     let selected = state.selected;
     let discovery = state.discovery.clone();
 
-    let mut list = v_flex().gap_0p5().p_2();
+    let mut list = sidebar_list_frame("container-engine-list");
     if let Some(discovery) = discovery {
         list = list.child(empty::render_container_discovery(
             view, state, &discovery, catalog, p,

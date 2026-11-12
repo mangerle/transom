@@ -75,6 +75,8 @@ pub(crate) mod size {
     pub const TREE_ROW_ICON: f32 = 1.125;
     /// 侧栏树折叠箭头边长（标准档 14px）。
     pub const TREE_CHEVRON: f32 = 0.875;
+    /// 侧栏当前行左侧强调条宽度（标准档 2px）。
+    pub const SIDEBAR_SELECTION_RAIL_WIDTH: f32 = 0.125;
     /// 标准文件列表行高（标准档 28px）。
     pub const FILE_ROW_HEIGHT: f32 = 1.75;
     /// 紧凑文件树行高（标准档 24px，用于变更文件树等紧凑清单）。

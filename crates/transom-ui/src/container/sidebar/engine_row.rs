@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::container::types::ContainerWorkspaceStatus;
+use crate::widgets::{SidebarRowState, sidebar_row_band};
 use std::collections::HashMap;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
@@ -29,6 +30,13 @@ pub(crate) fn render_engine_row(
     let folder_id = profile.folder_id;
     let is_active = active == Some(id);
     let is_selected = selected == Some(id);
+    let row_state = if is_active {
+        SidebarRowState::Current
+    } else if is_selected {
+        SidebarRowState::Selected
+    } else {
+        SidebarRowState::Normal
+    };
     let status_color = match states.get(&id) {
         Some(ContainerWorkspaceStatus::Connected) => p.success,
         Some(ContainerWorkspaceStatus::Connecting) => p.warning,
@@ -174,89 +182,58 @@ pub(crate) fn render_engine_row(
             }
         });
 
-    let mut band = h_flex()
-        .id(ElementId::Name(
-            format!("container-engine-band-{id}").into(),
-        ))
-        .relative()
-        .w_full()
-        .h(rems(BAND_HEIGHT_REM))
-        .px_2()
-        .gap_2()
-        .items_center()
-        .rounded(p.radius.md)
-        .bg(if is_active || is_selected {
-            p.list_active
-        } else {
-            p.list_background
-        })
-        .text_color(if is_active {
-            p.sidebar_accent_foreground
-        } else {
-            p.sidebar_foreground
-        });
-    if is_active {
-        band = band.child(
-            div()
-                .absolute()
-                .left_0()
-                .top_0()
-                .bottom_0()
-                .w(px(2.0))
-                .rounded_full()
-                .bg(p.list_active_border),
-        );
-    } else if !is_selected {
-        band = band.hover(|style| style.bg(p.list_hover));
-    }
-    let action_color = if is_active {
+    let action_color = if row_state.is_highlighted() {
         p.sidebar_accent_foreground
     } else {
         p.muted_foreground
     };
-    band = band
-        .child(
-            AppIconElement::new(icon)
-                .with_rems(ROW_ICON_SIZE)
-                .text_color(if is_active {
-                    action_color
-                } else {
-                    profile_color.unwrap_or(p.primary)
-                }),
-        )
-        .child(
-            v_flex()
-                .flex_1()
-                .overflow_hidden()
-                .child(
-                    div()
-                        .text_sm()
-                        .line_height(px(17.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .truncate()
-                        .child(name),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .line_height(px(14.0))
-                        .truncate()
-                        .text_color(p.muted_foreground)
-                        .child(description),
-                ),
-        )
-        .child(
-            div()
-                .size(px(6.0))
-                .flex_none()
-                .rounded_full()
-                .bg(status_color),
-        )
-        .child(engine_reorder_overlay(
-            &view_entity,
-            ContainerSidebarDrag::Engine(id),
-            false,
-            p,
-        ));
+    let band = sidebar_row_band(
+        ElementId::Name(format!("container-engine-band-{id}").into()),
+        row_state,
+        p,
+    )
+    .child(
+        AppIconElement::new(icon)
+            .with_rems(ROW_ICON_SIZE)
+            .text_color(if row_state.is_highlighted() {
+                action_color
+            } else {
+                profile_color.unwrap_or(p.primary)
+            }),
+    )
+    .child(
+        v_flex()
+            .flex_1()
+            .overflow_hidden()
+            .child(
+                div()
+                    .text_sm()
+                    .line_height(px(17.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .truncate()
+                    .child(name),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .line_height(px(14.0))
+                    .truncate()
+                    .text_color(p.muted_foreground)
+                    .child(description),
+            ),
+    )
+    .child(
+        div()
+            .size(px(6.0))
+            .flex_none()
+            .rounded_full()
+            .bg(status_color),
+    )
+    .child(engine_reorder_overlay(
+        &view_entity,
+        ContainerSidebarDrag::Engine(id),
+        false,
+        p,
+    ));
     element.child(band).into_any_element()
 }

@@ -5093,6 +5093,9 @@ keymap:
     en: Key combination %{keys} is already bound (previously to %{previous})
     zh-CN: 按键组合「%{keys}」重复绑定（前一条为「%{previous}」）
 sidebar:
+  new_group:
+    en: New Group
+    zh-CN: 新建分组
   host_copied:
     en: 'Host address copied: %{host}'
     zh-CN: '已复制主机地址: %{host}'

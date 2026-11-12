@@ -341,6 +341,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.state.git.selected_project = Some(project.id);
         if let Some(tab_id) = self.git_tab_for_project(project.id, cx) {
             self.activate_tab(tab_id, window, cx);
             return;
@@ -408,6 +409,9 @@ impl AppShell {
     pub(crate) fn remove_git_project(&mut self, id: GitProjectId, cx: &mut Context<Self>) {
         self.state.git.projects.retain(|project| project.id != id);
         self.state.git.badges.remove(&id);
+        if self.state.git.selected_project == Some(id) {
+            self.state.git.selected_project = None;
+        }
         if let Some(tab_id) = self.git_tab_for_project(id, cx) {
             self.cancel_git_tab(tab_id, cx);
         }

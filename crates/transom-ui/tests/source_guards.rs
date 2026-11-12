@@ -1913,3 +1913,59 @@ fn container_entities_have_no_parent_handle_or_sync_callback() {
         offenders.join("\n")
     );
 }
+
+/// 会话、容器与 Git 的侧栏行必须复用同一套表现状态，列表留白也必须走同一入口。
+#[test]
+fn sidebars_share_row_presentation_and_list_frame() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for relative in [
+        "src/sidebar/tree/session_row.rs",
+        "src/container/sidebar/engine_row.rs",
+        "src/git/sidebar/rows.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取侧栏行失败");
+        assert!(
+            content.contains("sidebar_row_band") && content.contains("SidebarRowState"),
+            "{relative} 必须使用共享 SidebarRowState 与 sidebar_row_band"
+        );
+        assert!(
+            !content.contains("p.list_background"),
+            "{relative} 不得重新维护普通行底色"
+        );
+    }
+    for relative in [
+        "src/sidebar/tree/folder_row.rs",
+        "src/container/sidebar/folder_row.rs",
+        "src/git/sidebar/rows.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取侧栏分组行失败");
+        assert!(
+            content.contains("sidebar_group_row_band"),
+            "{relative} 必须使用共享 sidebar_group_row_band"
+        );
+    }
+    for relative in [
+        "src/sidebar/mod.rs",
+        "src/container/sidebar.rs",
+        "src/git/sidebar/mod.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative)).expect("读取侧栏列表失败");
+        assert!(
+            content.contains("sidebar_list_frame"),
+            "{relative} 必须使用共享 sidebar_list_frame"
+        );
+    }
+}
+
+/// Git 项目行与另外两套侧栏保持一致：单击只选中，双击才打开。
+#[test]
+fn git_sidebar_project_row_selects_then_opens() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/git/sidebar/rows.rs");
+    let content = std::fs::read_to_string(path).expect("读取 Git 侧栏行失败");
+    assert!(
+        content.contains("click_count() >= 2")
+            && content.contains("select_git_project(id, cx)")
+            && content.contains("open_git_tab(project_for_click.clone(), window, cx)"),
+        "Git 项目行必须单击选中、双击打开"
+    );
+}

@@ -18,6 +18,8 @@ pub(crate) struct GitHub {
     /// 为什么单独存：侧栏要在没打开标签页时也显示分支与脏数，而这些值只能
     /// 从子进程取；缓存后刷新才有依据，也避免每帧重算。
     pub badges: HashMap<GitProjectKey, GitBadge>,
+    /// 侧栏当前单击选中的项目；与“当前打开标签页”分开，用于区分选中态和当前态。
+    pub selected_project: Option<transom_core::GitProjectId>,
     /// 在途克隆任务：弹窗关闭后由右下角进度卡接管，跨标签页全局唯一。
     pub clone_task: Option<crate::git::GitCloneTask>,
     /// 在途的新建仓库初始化请求（表单发起）。
@@ -34,6 +36,7 @@ impl GitHub {
             projects,
             folders,
             badges: HashMap::new(),
+            selected_project: None,
             clone_task: None,
             pending_init: None,
             pending_project_init: None,

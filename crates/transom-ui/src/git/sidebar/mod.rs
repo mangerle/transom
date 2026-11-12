@@ -16,7 +16,7 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::types::{GitDropTarget, GitHub, GitSidebarDrag};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
-use crate::widgets::{IconButton, action_button, menu_item};
+use crate::widgets::{IconButton, SidebarRowState, action_button, menu_item, sidebar_list_frame};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
@@ -60,29 +60,36 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
-        let rows = build_git_rows(&self.state.git);
         // 分组列表在渲染期就取好带走：右键菜单闭包运行时再回查 `self.state.git` 的借用不成立。
         let folders = git_folder_options(&self.state.git);
         let active_project = self.active_git_project_id(cx);
-        let mut list = v_flex()
-            .flex_1()
-            .id("git-sidebar-list")
-            .overflow_y_scrollbar();
-        for row in rows {
-            list = match row {
-                GitSidebarRow::Folder(row) => list.child(self.render_git_folder_row(&row, p, cx)),
-                GitSidebarRow::Project(row) => list.child(self.render_git_project_row(
-                    &row,
-                    active_project == Some(row.project.id),
-                    &folders,
-                    p,
-                    cx,
-                )),
+        let selected_project = self.state.git.selected_project;
+        let mut rows = sidebar_list_frame("git-sidebar-rows");
+        for row in build_git_rows(&self.state.git) {
+            rows = match row {
+                GitSidebarRow::Folder(row) => rows.child(self.render_git_folder_row(&row, p, cx)),
+                GitSidebarRow::Project(row) => {
+                    let id = row.project.id;
+                    let state = if active_project == Some(id) {
+                        SidebarRowState::Current
+                    } else if selected_project == Some(id) {
+                        SidebarRowState::Selected
+                    } else {
+                        SidebarRowState::Normal
+                    };
+                    rows.child(self.render_git_project_row(&row, state, &folders, p, cx))
+                }
             };
         }
         if self.state.git.projects.is_empty() {
-            list = list.child(self.render_git_empty(p, cx));
+            rows = rows.child(self.render_git_empty(p, cx));
         }
+
+        let list = v_flex()
+            .flex_1()
+            .id("git-sidebar-list")
+            .overflow_y_scrollbar()
+            .child(rows);
 
         let app = cx.entity().clone();
         v_flex()
@@ -118,7 +125,7 @@ impl AppShell {
             .child(
                 IconButton::new(
                     "git-sidebar-new-folder",
-                    UiIcon::ADD,
+                    UiIcon::NEW_FOLDER,
                     rust_i18n::t!("git.sidebar.new_folder").to_string(),
                 )
                 .render()
