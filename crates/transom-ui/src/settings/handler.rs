@@ -72,6 +72,12 @@ impl AppShell {
             SettingsEvent::OpenAuditViewer => {
                 self.queue_settings_request(SettingsRequest::OpenAuditViewer);
             }
+            SettingsEvent::CloudSyncCheck => {
+                self.queue_settings_request(SettingsRequest::CloudSyncCheck);
+            }
+            SettingsEvent::CloudSyncTest => {
+                self.queue_settings_request(SettingsRequest::CloudSyncTest);
+            }
             SettingsEvent::CloudSyncPush => {
                 self.queue_settings_request(SettingsRequest::CloudSyncPush);
             }
@@ -152,6 +158,8 @@ impl AppShell {
             SettingsRequest::OpenBackupImport => self.open_backup_import(window, cx),
             SettingsRequest::OpenBackupExport => self.open_backup_export(window, cx),
             SettingsRequest::OpenAuditViewer => self.open_audit_viewer(None, window, cx),
+            SettingsRequest::CloudSyncCheck => self.start_cloud_sync_check(window, cx),
+            SettingsRequest::CloudSyncTest => self.start_cloud_sync_test(window, cx),
             SettingsRequest::CloudSyncPush => self.start_cloud_sync_push(window, cx),
             SettingsRequest::CloudSyncPull => self.start_cloud_sync_pull(window, cx),
             SettingsRequest::GitSyncNow => self.start_git_sync(window, cx),

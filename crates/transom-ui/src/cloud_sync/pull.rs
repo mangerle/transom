@@ -1,13 +1,26 @@
-//! 云同步拉取后的合并、安全副本与缺失处理。
+//! 云同步拉取后的合并、安全副本与本地回填。
 
 use super::common::*;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
+use transom_core::{CloudPullMode, SyncPullReport, sync_catalog_hash};
+
+/// 下载完成后交给界面线程的合并参数。
+struct CloudPullApply {
+    remote_catalog: SessionCatalog,
+    secrets: Result<SecretRestoreReport, AppError>,
+    safety_path: Option<PathBuf>,
+    mode: CloudPullMode,
+    remote_hash: String,
+    at: i64,
+}
 
 impl AppShell {
+    /// 处理下载结果：常规模式合并，冲突裁决模式以远端目录整体替换。
     pub(crate) fn finish_cloud_sync_pull(
         &mut self,
-        document: BackupDocument,
+        report: SyncPullReport,
+        mode: CloudPullMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -17,7 +30,15 @@ impl AppShell {
         }
 
         let backup = self.state.services.backup.clone();
-        let (catalog, secrets) = document.into_parts();
+        let SyncPullReport {
+            mut document,
+            remote_version: _,
+            remote_hash,
+            bytes: _,
+            at,
+        } = report;
+        document.normalize();
+        let (remote_catalog, secrets) = document.into_parts();
         let task = cx.spawn_in(window, async move |this, cx| {
             let secrets = cx
                 .background_executor()
@@ -29,7 +50,17 @@ impl AppShell {
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
-                this.apply_cloud_sync_pull(catalog, secrets, safety_path, cx);
+                this.apply_cloud_sync_pull(
+                    CloudPullApply {
+                        remote_catalog,
+                        secrets,
+                        safety_path,
+                        mode,
+                        remote_hash,
+                        at,
+                    },
+                    cx,
+                );
             });
         });
         self.state.tasks.background.sync_pull = Some(task);
@@ -59,34 +90,60 @@ impl AppShell {
         }
     }
 
-    /// 合并远端快照：目录合并、时间戳与状态栏回报一次完成。
-    fn apply_cloud_sync_pull(
-        &mut self,
-        catalog: SessionCatalog,
-        secrets: Result<SecretRestoreReport, AppError>,
-        safety_path: Option<PathBuf>,
-        cx: &mut Context<Self>,
-    ) {
-        let (merged, report) =
-            merge_catalogs(None, &self.state.catalog, &catalog, MergePreference::Remote);
-        self.state.catalog = merged;
+    /// 合并或替换远端快照，并回填同步基线与状态栏提示。
+    fn apply_cloud_sync_pull(&mut self, input: CloudPullApply, cx: &mut Context<Self>) {
+        let CloudPullApply {
+            remote_catalog,
+            secrets,
+            safety_path,
+            mode,
+            remote_hash,
+            at,
+        } = input;
+        let (catalog, report) = match mode {
+            CloudPullMode::Merge => merge_catalogs(
+                None,
+                &self.state.catalog,
+                &remote_catalog,
+                MergePreference::Remote,
+            ),
+            CloudPullMode::ForceRemote => {
+                (remote_catalog, transom_core::SyncMergeReport::default())
+            }
+        };
+        self.state.catalog = catalog;
         let saved = self.state.persist_catalog();
+        self.state
+            .cloud_sync
+            .scheduler
+            .mark_catalog_synced(self.state.catalog_revision);
         self.state.refresh_tab_sessions();
+        let local_hash = sync_catalog_hash(&self.state.catalog).ok();
         update_app_settings(cx, |s| {
-            s.sync.last_pull_at = Some(chrono::Utc::now().timestamp())
+            if let Some(baseline) = s.sync.active_baseline_mut() {
+                baseline.last_pull_at = Some(at);
+                baseline.last_checked_at = Some(at);
+                baseline.last_remote_hash = Some(remote_hash);
+                if let Some(local_hash) = local_hash {
+                    baseline.last_sync_catalog_hash = Some(local_hash);
+                }
+            }
         });
         let settings_snapshot = app_settings(cx).clone();
         if let Err(error) = self.state.persist_settings(&settings_snapshot) {
             self.state.set_error(localized_error(&error));
         }
 
-        let mut message = rust_i18n::t!(
-            "sync.pulled",
-            added = report.sessions_added,
-            updated = report.sessions_updated,
-            folders = report.folders_added
-        )
-        .to_string();
+        let mut message = match mode {
+            CloudPullMode::Merge => rust_i18n::t!(
+                "sync.pulled",
+                added = report.sessions_added,
+                updated = report.sessions_updated,
+                folders = report.folders_added
+            )
+            .to_string(),
+            CloudPullMode::ForceRemote => rust_i18n::t!("sync.pull_force_done").to_string(),
+        };
         if report.conflicts > 0 {
             message.push(' ');
             message
@@ -102,15 +159,13 @@ impl AppShell {
             );
         }
         if saved {
-            self.state.status = Some(message);
+            self.state.status = Some(message.clone());
         }
+        self.state.cloud_sync.active_operation = None;
+        self.state.cloud_sync.active_trigger = None;
+        self.state.cloud_sync.status = super::history::SyncHistoryStatus::Success;
+        self.state.cloud_sync.message = Some(message);
         self.state.tasks.background.sync_pull = None;
-        cx.notify();
-    }
-
-    /// 同步端点上还没有备份：首次拉取属预期状态，按提示而非错误展示。
-    pub(crate) fn handle_cloud_sync_missing(&mut self, cx: &mut Context<Self>) {
-        self.state.status = Some(rust_i18n::t!("sync.missing_remote").to_string());
         cx.notify();
     }
 }

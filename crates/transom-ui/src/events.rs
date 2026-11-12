@@ -234,23 +234,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match event {
-            SyncAppEvent::CloudSyncPushed { result } => {
-                self.handle_cloud_sync_pushed(result, cx);
-            }
-            SyncAppEvent::CloudSyncPulled { result } => match result {
-                Ok(document) => self.finish_cloud_sync_pull(document, window, cx),
-                Err(error) if error.code == transom_core::ErrorCode::CloudSyncMissing => {
-                    self.handle_cloud_sync_missing(cx);
-                }
-                Err(error) => {
-                    self.state.set_error(localized_error(&error));
-                }
-            },
-            SyncAppEvent::GitSynced { result } => {
-                self.handle_git_synced(result, cx);
-            }
-        }
+        self.handle_sync_app_event(event, window, cx);
     }
 
     /// ZMODEM 传输事件分发。

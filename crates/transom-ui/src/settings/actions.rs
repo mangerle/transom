@@ -25,7 +25,7 @@ use crate::palette::localized_error;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::slider::{SliderEvent, SliderValue};
 use gpui_kit::*;
-use transom_core::{GitSyncSettings, SyncEndpoint};
+use transom_core::{GitSyncSettings, SyncChannel};
 
 impl SettingsView {
     /// 订阅弹窗内部的滑块与步进器：外观即时预览属于弹窗自身的行为。
@@ -312,10 +312,10 @@ impl SettingsView {
         }
     }
 
-    /// 切换云同步端点类型，并把对应拓扑回填到输入框。
+    /// 切换云同步通道，并把该通道自己的拓扑回填到输入框。
     ///
-    /// 只改内存态，保存时统一落盘；切换端点会清空另一种方式的残留拓扑，
-    /// 避免“界面显示 WebDAV、文件里还留着 Git 远端”的双配状态。
+    /// WebDAV、S3 与 Git 配置互相独立；选择“关闭”仅停止当前通道，不会删除
+    /// 任何已保存拓扑，切换回来时可继续使用。
     pub(crate) fn switch_sync_endpoint(
         &mut self,
         kind: &'static str,
@@ -326,60 +326,64 @@ impl SettingsView {
             return;
         }
         match kind {
-            "off" => {
-                update_app_settings(cx, |s| s.sync.endpoint = None);
-                update_app_settings(cx, |s| s.sync.git = None);
-                self.state.sync_form.git_remote.update(cx, |input, cx| {
-                    input.set_value(String::new(), window, cx);
-                });
-            }
-            "webdav" => {
-                update_app_settings(cx, |s| s.sync.git = None);
-                self.state.sync_form.git_remote.update(cx, |input, cx| {
-                    input.set_value(String::new(), window, cx);
-                });
-                if !matches!(
-                    app_settings(cx).sync.endpoint,
-                    Some(SyncEndpoint::Webdav { .. })
-                ) {
-                    app_settings_mut(cx).sync.endpoint = Some(SyncEndpoint::Webdav {
-                        url: String::new(),
-                        username: String::new(),
-                        directory: DEFAULT_SYNC_DIRECTORY.to_string(),
-                    });
+            "off" => update_app_settings(cx, |s| s.sync.active_channel = SyncChannel::Off),
+            "webdav" => update_app_settings(cx, |s| {
+                s.sync.active_channel = SyncChannel::Webdav;
+                if s.sync.webdav.directory.is_empty() {
+                    s.sync.webdav.directory = DEFAULT_SYNC_DIRECTORY.to_string();
                 }
-            }
-            "s3" => {
-                update_app_settings(cx, |s| s.sync.git = None);
-                self.state.sync_form.git_remote.update(cx, |input, cx| {
-                    input.set_value(String::new(), window, cx);
-                });
-                if !matches!(
-                    app_settings(cx).sync.endpoint,
-                    Some(SyncEndpoint::S3 { .. })
-                ) {
-                    app_settings_mut(cx).sync.endpoint = Some(SyncEndpoint::S3 {
-                        endpoint: String::new(),
-                        region: String::new(),
-                        bucket: String::new(),
-                        access_key: String::new(),
-                        directory: DEFAULT_SYNC_DIRECTORY.to_string(),
-                    });
+            }),
+            "s3" => update_app_settings(cx, |s| {
+                s.sync.active_channel = SyncChannel::S3;
+                if s.sync.s3.directory.is_empty() {
+                    s.sync.s3.directory = DEFAULT_SYNC_DIRECTORY.to_string();
                 }
-            }
-            "git" => {
-                update_app_settings(cx, |s| s.sync.endpoint = None);
-                if app_settings(cx).sync.git.is_none() {
-                    app_settings_mut(cx).sync.git = Some(GitSyncSettings {
+            }),
+            "git" => update_app_settings(cx, |s| {
+                s.sync.active_channel = SyncChannel::Git;
+                if s.sync.git.is_none() {
+                    s.sync.git = Some(GitSyncSettings {
                         remote: String::new(),
                         branch: "transom-sync".to_string(),
                         interval_minutes: 0,
                     });
                 }
-            }
+            }),
             _ => return,
         }
         self.fill_sync_form(window, cx);
+        cx.notify();
+    }
+
+    /// 启用或暂停同步；暂停只影响动作，不删除端点、凭据或自动策略。
+    pub(crate) fn set_cloud_sync_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        update_app_settings(cx, |settings| settings.sync.enabled = enabled);
+        cx.notify();
+    }
+
+    /// 切换启动时远端检查。
+    pub(crate) fn set_cloud_sync_auto_check(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        update_app_settings(cx, |settings| settings.sync.auto_check_on_startup = enabled);
+        cx.notify();
+    }
+
+    /// 切换本地变化后的自动上传。
+    pub(crate) fn set_cloud_sync_auto_push(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        update_app_settings(cx, |settings| settings.sync.auto_push_on_change = enabled);
+        cx.notify();
+    }
+
+    /// 切换远端领先时的自动下载。
+    pub(crate) fn set_cloud_sync_auto_pull(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        update_app_settings(cx, |settings| {
+            settings.sync.auto_pull_remote_changes = enabled
+        });
+        cx.notify();
+    }
+
+    /// 切换 S3 虚拟主机寻址；下次保存时生效。
+    pub(crate) fn set_s3_virtual_host_style(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        app_settings_mut(cx).sync.s3.virtual_host_style = enabled;
         cx.notify();
     }
 

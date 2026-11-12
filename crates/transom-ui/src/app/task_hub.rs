@@ -21,6 +21,7 @@ pub(crate) struct BackgroundTasks {
     pub(crate) monitor: Option<Task<()>>,
     pub(crate) git_sync: Option<Task<()>>,
     pub(crate) sync_pull: Option<Task<()>>,
+    pub(crate) sync_history_load: Option<Task<()>>,
     /// 首帧稳定后的升级确认任务：延迟执行，避免把"窗口刚创建"误判为健康运行。
     pub(crate) update_confirm: Option<Task<()>>,
     /// Toast 自动关闭任务；有界保留最近任务，窗口关闭时统一取消。
@@ -34,6 +35,7 @@ impl BackgroundTasks {
             monitor: None,
             git_sync: None,
             sync_pull: None,
+            sync_history_load: None,
             update_confirm: None,
             toast_tasks: VecDeque::with_capacity(32),
         }

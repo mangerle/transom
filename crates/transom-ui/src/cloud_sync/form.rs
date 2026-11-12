@@ -16,11 +16,14 @@ pub(crate) struct SyncFormInputs {
     pub(crate) s3_bucket: Entity<InputState>,
     pub(crate) s3_access_key: Entity<InputState>,
     pub(crate) s3_secret: Entity<InputState>,
+    pub(crate) s3_session_token: Entity<InputState>,
     pub(crate) directory: Entity<InputState>,
+    pub(crate) device_name: Entity<InputState>,
     pub(crate) passphrase: Entity<InputState>,
     pub(crate) git_remote: Entity<InputState>,
     pub(crate) git_branch: Entity<InputState>,
     pub(crate) git_interval: Entity<InputState>,
+    pub(crate) auto_pull_debounce: Entity<InputState>,
     pub(crate) git_token: Entity<InputState>,
 }
 
@@ -52,7 +55,13 @@ impl SyncFormInputs {
             s3_bucket: field(window, cx, "transom-vault"),
             s3_access_key: field(window, cx, "AKID..."),
             s3_secret: secret_field(window, cx, rust_i18n::t!("sync.secret_hint").as_ref()),
+            s3_session_token: secret_field(
+                window,
+                cx,
+                rust_i18n::t!("sync.session_token_hint").as_ref(),
+            ),
             directory: field(window, cx, DEFAULT_SYNC_DIRECTORY),
+            device_name: field(window, cx, rust_i18n::t!("sync.device_name_hint").as_ref()),
             passphrase: secret_field(window, cx, rust_i18n::t!("sync.passphrase_hint").as_ref()),
             git_remote: field(window, cx, rust_i18n::t!("sync.git_remote_hint").as_ref()),
             git_branch: field(window, cx, "transom-sync"),
@@ -61,6 +70,13 @@ impl SyncFormInputs {
                     .placeholder("0")
                     .min(0.0)
                     .max(1440.0)
+                    .step(5.0)
+            }),
+            auto_pull_debounce: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("60")
+                    .min(5.0)
+                    .max(3600.0)
                     .step(5.0)
             }),
             git_token: secret_field(window, cx, rust_i18n::t!("sync.git_token_hint").as_ref()),

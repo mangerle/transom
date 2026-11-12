@@ -41,6 +41,8 @@ pub(crate) enum SettingsEvent {
     /// 请求打开审计查看器。
     OpenAuditViewer,
     /// 云端同步动作。
+    CloudSyncCheck,
+    CloudSyncTest,
     CloudSyncPush,
     CloudSyncPull,
     GitSyncNow,
@@ -64,6 +66,8 @@ pub(crate) enum SettingsRequest {
     OpenBackupImport,
     OpenBackupExport,
     OpenAuditViewer,
+    CloudSyncCheck,
+    CloudSyncTest,
     CloudSyncPush,
     CloudSyncPull,
     GitSyncNow,

@@ -17,6 +17,7 @@ ssh-key.workspace = true
 rand.workspace = true
 transom-platform.workspace = true
 tokio = { workspace = true, features = ["sync"] }
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 transom-core.workspace = true

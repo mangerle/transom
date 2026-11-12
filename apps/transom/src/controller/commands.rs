@@ -52,7 +52,7 @@ pub(super) async fn handle_command(
             LoopControl::Continue
         }
         AppCommand::Sync(cmd) => {
-            handle_sync_command(state, ctx, cmd).await;
+            handle_sync_command(state, ctx, *cmd).await;
             LoopControl::Continue
         }
         AppCommand::Zmodem(cmd) => {
@@ -259,30 +259,82 @@ async fn handle_sync_command(
     command: SyncCommand,
 ) {
     match command {
-        SyncCommand::CloudSyncPush { settings, catalog } => {
+        SyncCommand::CloudSyncCheck {
+            settings,
+            catalog,
+            trigger,
+        } => {
             dispatch_cloud_sync(
                 &ctx.cloud_sync,
                 &ctx.event_tx,
                 &mut state.sync_task,
-                CloudSyncJob::Push { settings, catalog },
+                CloudSyncJob::Check {
+                    settings,
+                    catalog,
+                    trigger,
+                },
             )
             .await;
         }
-        SyncCommand::CloudSyncPull { settings } => {
+        SyncCommand::CloudSyncTest { settings, trigger } => {
             dispatch_cloud_sync(
                 &ctx.cloud_sync,
                 &ctx.event_tx,
                 &mut state.sync_task,
-                CloudSyncJob::Pull { settings },
+                CloudSyncJob::Test { settings, trigger },
             )
             .await;
         }
-        SyncCommand::GitSync { settings, catalog } => {
+        SyncCommand::CloudSyncPush {
+            settings,
+            catalog,
+            trigger,
+            mode,
+        } => {
             dispatch_cloud_sync(
                 &ctx.cloud_sync,
                 &ctx.event_tx,
                 &mut state.sync_task,
-                CloudSyncJob::Git { settings, catalog },
+                CloudSyncJob::Push {
+                    settings,
+                    catalog,
+                    trigger,
+                    mode,
+                },
+            )
+            .await;
+        }
+        SyncCommand::CloudSyncPull {
+            settings,
+            trigger,
+            mode,
+        } => {
+            dispatch_cloud_sync(
+                &ctx.cloud_sync,
+                &ctx.event_tx,
+                &mut state.sync_task,
+                CloudSyncJob::Pull {
+                    settings,
+                    trigger,
+                    mode,
+                },
+            )
+            .await;
+        }
+        SyncCommand::GitSync {
+            settings,
+            catalog,
+            trigger,
+        } => {
+            dispatch_cloud_sync(
+                &ctx.cloud_sync,
+                &ctx.event_tx,
+                &mut state.sync_task,
+                CloudSyncJob::Git {
+                    settings,
+                    catalog,
+                    trigger,
+                },
             )
             .await;
         }

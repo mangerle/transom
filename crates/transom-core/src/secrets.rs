@@ -7,11 +7,17 @@ use zeroize::Zeroizing;
 pub enum SecretKind {
     Password,
     KeyPassphrase,
-    /// 云同步端点凭据：WebDAV 应用密码或 S3 Secret Access Key。
+    /// 旧版云同步端点凭据：WebDAV 应用密码或 S3 Secret Access Key。
     ///
-    /// 与会话口令分属不同钥匙串槽位：端点凭据不属于任何会话，也不进入
-    /// 会话备份的口令快照，只服务于云端同步的上传下载认证。
+    /// 保留该槽位用于迁移旧安装；新写入按提供商分开，避免切换端点时覆盖另一
+    /// 提供商的密码。读取方必须先查新槽位，再回退到这里。
     CloudSyncCredential,
+    /// WebDAV 应用密码，按提供商独立保存。
+    CloudSyncWebdavCredential,
+    /// S3 Secret Access Key，按提供商独立保存。
+    CloudSyncS3Credential,
+    /// S3 临时会话令牌；仅使用临时凭据时存在。
+    CloudSyncS3SessionToken,
     /// 云同步口令：加密备份内容的 Argon2id 派生源，跨设备必须一致。
     CloudSyncPassphrase,
     /// 私有 Git 仓库的 HTTPS 访问令牌；SSH 远端不需要。
@@ -69,6 +75,21 @@ impl SecretKey {
         Self::new(Self::nil_session(), SecretKind::CloudSyncCredential)
     }
 
+    /// WebDAV 应用密码的固定槽位。
+    pub fn cloud_sync_webdav_credential() -> Self {
+        Self::new(Self::nil_session(), SecretKind::CloudSyncWebdavCredential)
+    }
+
+    /// S3 Secret Access Key 的固定槽位。
+    pub fn cloud_sync_s3_credential() -> Self {
+        Self::new(Self::nil_session(), SecretKind::CloudSyncS3Credential)
+    }
+
+    /// S3 临时会话令牌的固定槽位。
+    pub fn cloud_sync_s3_session_token() -> Self {
+        Self::new(Self::nil_session(), SecretKind::CloudSyncS3SessionToken)
+    }
+
     /// 云同步口令的固定槽位。
     pub fn cloud_sync_passphrase() -> Self {
         Self::new(Self::nil_session(), SecretKind::CloudSyncPassphrase)
@@ -103,6 +124,15 @@ impl SecretKey {
             // 云同步两类槽位不携带会话语境，账号串用固定名而非 UUID 前缀，
             // 避免在钥匙串里暴露一串无意义的全零 UUID。
             SecretKind::CloudSyncCredential => return "cloud-sync/credential".to_string(),
+            SecretKind::CloudSyncWebdavCredential => {
+                return "cloud-sync/webdav-credential".to_string();
+            }
+            SecretKind::CloudSyncS3Credential => {
+                return "cloud-sync/s3-credential".to_string();
+            }
+            SecretKind::CloudSyncS3SessionToken => {
+                return "cloud-sync/s3-session-token".to_string();
+            }
             SecretKind::CloudSyncPassphrase => return "cloud-sync/passphrase".to_string(),
             SecretKind::GitSyncToken => return "git-sync/token".to_string(),
             SecretKind::RegistryPassword => {

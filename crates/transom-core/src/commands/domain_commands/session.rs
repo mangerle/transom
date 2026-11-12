@@ -97,16 +97,32 @@ pub enum HostCommand {
 
 /// 云备份与 Git 同步命令。
 pub enum SyncCommand {
+    /// 只读取远端并生成本机/远端关系摘要，不落盘目录。
+    CloudSyncCheck {
+        settings: SyncSettings,
+        catalog: crate::model::catalog::SessionCatalog,
+        trigger: crate::protocol::sync::SyncTrigger,
+    },
+    /// 只验证端点、凭据与对象可达性。
+    CloudSyncTest {
+        settings: SyncSettings,
+        trigger: crate::protocol::sync::SyncTrigger,
+    },
     CloudSyncPush {
         settings: SyncSettings,
         catalog: crate::model::catalog::SessionCatalog,
+        trigger: crate::protocol::sync::SyncTrigger,
+        mode: crate::protocol::sync::CloudPushMode,
     },
     CloudSyncPull {
         settings: SyncSettings,
+        trigger: crate::protocol::sync::SyncTrigger,
+        mode: crate::protocol::sync::CloudPullMode,
     },
     GitSync {
         settings: SyncSettings,
         catalog: crate::model::catalog::SessionCatalog,
+        trigger: crate::protocol::sync::SyncTrigger,
     },
 }
 

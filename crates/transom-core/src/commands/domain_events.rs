@@ -24,7 +24,9 @@ use crate::protocol::sftp::{
     RemoteFile, RemoteMetadata, RemoteSearchResultItem, RemoteTextMeta, SudoCapability,
 };
 use crate::protocol::sftp_sync::DirComparison;
-use crate::protocol::sync::{GitSyncResult, SyncPushReport};
+use crate::protocol::sync::{
+    GitSyncResult, SyncCheckReport, SyncEventMeta, SyncPullReport, SyncPushReport, SyncTestReport,
+};
 use crate::protocol::system_stats::ProcessInfo;
 use crate::protocol::traffic::NetworkTraffic;
 use crate::transport::TerminalIo;
@@ -238,14 +240,29 @@ pub enum HostAppEvent {
 }
 
 /// 云端备份与 Git 同步事件。
+///
+/// 每个事件都携带触发来源、开始时间与耗时，UI 无需从全局状态反推历史上下文。
 pub enum SyncAppEvent {
+    CloudSyncChecked {
+        meta: SyncEventMeta,
+        result: Result<SyncCheckReport, AppError>,
+    },
+    CloudSyncTested {
+        meta: SyncEventMeta,
+        result: Result<SyncTestReport, AppError>,
+    },
     CloudSyncPushed {
+        meta: SyncEventMeta,
+        mode: crate::protocol::sync::CloudPushMode,
         result: Result<SyncPushReport, AppError>,
     },
     CloudSyncPulled {
-        result: Result<crate::backup::BackupDocument, AppError>,
+        meta: SyncEventMeta,
+        mode: crate::protocol::sync::CloudPullMode,
+        result: Result<SyncPullReport, AppError>,
     },
     GitSynced {
+        meta: SyncEventMeta,
         result: Result<GitSyncResult, AppError>,
     },
 }

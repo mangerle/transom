@@ -121,17 +121,18 @@ fn move_within_top_only_reorders() {
             ActivityItemId::Monitor,
             ActivityItemId::Containers,
             ActivityItemId::Git,
+            ActivityItemId::CloudSync,
         ]
     );
-    assert_eq!(layout.split_at(), 8);
-    assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[8..].to_vec());
+    assert_eq!(layout.split_at(), 9);
+    assert_eq!(bottom(&layout), ActivityItemId::DEFAULT_ORDER[9..].to_vec());
 }
 
 #[test]
 fn moving_top_to_bottom_start_grows_bottom() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_to_bottom_start(ActivityItemId::Sessions));
-    assert_eq!(layout.split_at(), 7);
+    assert_eq!(layout.split_at(), 8);
     assert_eq!(
         top(&layout),
         vec![
@@ -142,6 +143,7 @@ fn moving_top_to_bottom_start_grows_bottom() {
             ActivityItemId::Monitor,
             ActivityItemId::Containers,
             ActivityItemId::Git,
+            ActivityItemId::CloudSync,
         ]
     );
     assert_eq!(bottom(&layout)[0], ActivityItemId::Sessions);
@@ -151,8 +153,8 @@ fn moving_top_to_bottom_start_grows_bottom() {
 fn moving_bottom_to_top_end_grows_top() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_to_top_end(ActivityItemId::Settings));
-    assert_eq!(layout.split_at(), 9);
-    assert_eq!(top(&layout)[8], ActivityItemId::Settings);
+    assert_eq!(layout.split_at(), 10);
+    assert_eq!(top(&layout)[9], ActivityItemId::Settings);
     assert!(!bottom(&layout).contains(&ActivityItemId::Settings));
 }
 
@@ -160,7 +162,7 @@ fn moving_bottom_to_top_end_grows_top() {
 fn dropping_on_top_anchor_moves_item_into_top() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_relative_to(ActivityItemId::Keys, ActivityItemId::Sessions, true));
-    assert_eq!(layout.split_at(), 9);
+    assert_eq!(layout.split_at(), 10);
     let top = top(&layout);
     assert_eq!(top[0], ActivityItemId::Sessions);
     assert_eq!(top[1], ActivityItemId::Keys);
@@ -171,8 +173,8 @@ fn dropping_on_top_anchor_moves_item_into_top() {
 fn dropping_on_bottom_anchor_moves_item_into_bottom() {
     let mut layout = ActivityBarLayout::default();
     assert!(layout.move_relative_to(ActivityItemId::Sessions, ActivityItemId::Language, true));
-    assert_eq!(layout.split_at(), 7);
-    assert_eq!(top(&layout).len(), 7);
+    assert_eq!(layout.split_at(), 8);
+    assert_eq!(top(&layout).len(), 8);
     let bottom = bottom(&layout);
     assert_eq!(bottom[0], ActivityItemId::Language);
     assert_eq!(bottom[1], ActivityItemId::Sessions);
@@ -181,7 +183,7 @@ fn dropping_on_bottom_anchor_moves_item_into_bottom() {
 #[test]
 fn moving_to_current_boundary_is_a_no_op() {
     let mut layout = ActivityBarLayout::default();
-    assert!(!layout.move_to_top_end(ActivityItemId::Git));
+    assert!(!layout.move_to_top_end(ActivityItemId::CloudSync));
     assert!(!layout.move_to_bottom_start(ActivityItemId::Language));
     assert!(!layout.move_relative_to(ActivityItemId::Sftp, ActivityItemId::Sftp, true));
     assert_eq!(layout, ActivityBarLayout::default());
@@ -195,7 +197,7 @@ fn pinned_item_cannot_be_hidden_but_can_move() {
     assert!(!layout.set_visible(ActivityItemId::Sftp, false));
     assert!(layout.set_visible(ActivityItemId::Sftp, true));
     assert!(layout.move_to_top_end(ActivityItemId::Settings));
-    assert_eq!(top(&layout)[8], ActivityItemId::Settings);
+    assert_eq!(top(&layout)[9], ActivityItemId::Settings);
 }
 
 #[test]

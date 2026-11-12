@@ -83,10 +83,10 @@ pub use model::session_appearance::{SessionColor, SessionIcon};
 pub use model::settings::{
     AppSettings, AppearanceSettings, AuditSettings, BellStyle, BlockViewSettings, BlockViewStyle,
     DividerColor, DividerSettings, DividerWidth, GitSyncSettings, HistorySettings, LogLevel,
-    LogSettings, MonitorSettings, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling,
-    SftpSettings, ShortcutSettings, SidebarStartup, Snippet, SnippetSettings, SplitAxis,
-    StartupTabs, SyncEndpoint, SyncSettings, TabPosition, UiDensity, UiThemeMode,
-    WindowBackgroundMode, WindowSettings,
+    LogSettings, MonitorSettings, PanelSide, S3SyncSettings, SavedLayout, SavedTabGroup,
+    SavedTabTiling, SftpSettings, ShortcutSettings, SidebarStartup, Snippet, SnippetSettings,
+    SplitAxis, StartupTabs, SyncBaseline, SyncChannel, SyncEndpoint, SyncSettings, TabPosition,
+    UiDensity, UiThemeMode, WebdavSyncSettings, WindowBackgroundMode, WindowSettings,
 };
 pub use model::terminal::TerminalHighlight;
 pub use model::terminal::{
@@ -117,8 +117,10 @@ pub use protocol::ssh_url::{
     quick_connect_session,
 };
 pub use protocol::sync::{
-    CloudSyncTarget, GitSyncResult, SYNC_MAX_DOCUMENT_BYTES, SYNC_OBJECT_NAME, SyncPushReport,
-    is_sync_conflict,
+    CloudPullMode, CloudPushMode, CloudSyncTarget, GitSyncResult, SYNC_MAX_DOCUMENT_BYTES,
+    SYNC_OBJECT_NAME, SyncCheckReport, SyncDocumentSummary, SyncEventMeta, SyncOperation,
+    SyncPullReport, SyncPushReport, SyncRelation, SyncTestReport, SyncTrigger, is_sync_conflict,
+    sync_catalog_hash,
 };
 pub use protocol::system_stats::{
     CoreUsage, FailedServiceInfo, FilesystemUsage, InterfaceRate, OomAlert, PortListeningInfo,

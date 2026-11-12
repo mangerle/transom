@@ -173,7 +173,7 @@ impl AppShell {
             .fixed()
             .visible(self.state.sidebar.visible());
         if self.state.sidebar.visible() {
-            // 左侧槽位一次只承载一种内容：容器连接、Git 仓库、纵向标签面板或会话树。
+            // 左侧槽位一次只承载一种内容：容器连接、Git 仓库、云同步、纵向标签或会话树。
             let section = self
                 .state
                 .sidebar
@@ -199,6 +199,7 @@ impl AppShell {
                     )
                 }
                 SidebarSection::Git => self.render_git_sidebar(window, cx, p),
+                SidebarSection::CloudSync => self.render_cloud_sync_sidebar(window, cx, p),
                 SidebarSection::Tabs if self.show_vertical_tabs_panel(app_settings(cx)) => {
                     self.render_vertical_tabs_panel(p, cx)
                 }

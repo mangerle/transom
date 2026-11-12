@@ -9,11 +9,12 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::AppSettings;
-use transom_core::SyncEndpoint;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::UiIcon;
 
 /// 同步页输入行：标签 + 输入框，带分割线。
@@ -33,15 +34,7 @@ fn sync_form_row(label_key: &'static str, input: Entity<InputState>, p: &Palette
 /// 判定顺序固定为 Git 优先：Git 同步没有 `endpoint`，二者不会同时生效；
 /// 写在 `impl` 外供设置实体与页面渲染共用。
 pub(crate) fn sync_endpoint_kind(settings: &AppSettings) -> &'static str {
-    if settings.sync.git.is_some() {
-        "git"
-    } else {
-        match settings.sync.endpoint {
-            Some(SyncEndpoint::Webdav { .. }) => "webdav",
-            Some(SyncEndpoint::S3 { .. }) => "s3",
-            None => "off",
-        }
-    }
+    settings.sync.active_channel.key()
 }
 
 impl SettingsView {
@@ -75,9 +68,31 @@ impl SettingsView {
         let mut content = v_flex()
             .gap_2()
             .child(crate::widgets::setting_row(
+                "sync.enabled",
+                Some("sync.enabled_desc"),
+                Switch::new("toggle-sync-enabled")
+                    .small()
+                    .checked(app_settings(cx).sync.enabled)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.set_cloud_sync_enabled(checked, cx);
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(crate::widgets::setting_row(
                 "sync.endpoint",
                 Some("sync.endpoint_desc"),
                 endpoint_control,
+                p,
+            ))
+            .child(crate::widgets::setting_row(
+                "sync.device_name",
+                Some("sync.device_name_hint"),
+                crate::widgets::form_field(
+                    rust_i18n::t!("sync.device_name").to_string(),
+                    form.device_name.clone(),
+                    p,
+                ),
                 p,
             ))
             .child(
@@ -87,7 +102,7 @@ impl SettingsView {
                     .child(rust_i18n::t!("sync.credential_hint").to_string()),
             );
 
-        content = content.child(self.render_sync_endpoint_fields(current_kind, p));
+        content = content.child(self.render_sync_endpoint_fields(current_kind, p, cx));
 
         // 只要启用了任一同步方式（WebDAV / S3 / Git），就展示同步口令
         if current_kind != "off" {
@@ -102,6 +117,9 @@ impl SettingsView {
             ));
         }
 
+        if current_kind != "off" {
+            content = content.child(self.render_sync_auto_settings(p, cx));
+        }
         if let Some(actions) = self.render_sync_actions(current_kind, p, cx) {
             content = content.child(actions);
         }
@@ -110,7 +128,12 @@ impl SettingsView {
     }
 
     /// 端点类型对应的字段组：关闭提示、WebDAV、S3 或 Git。
-    fn render_sync_endpoint_fields(&self, current_kind: &str, p: &Palette) -> AnyElement {
+    fn render_sync_endpoint_fields(
+        &self,
+        current_kind: &str,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let form = &self.state.sync_form;
         let mut content = v_flex().gap_2();
         match current_kind {
@@ -155,6 +178,23 @@ impl SettingsView {
                         p,
                     ))
                     .child(sync_form_row("sync.secret", form.s3_secret.clone(), p))
+                    .child(sync_form_row(
+                        "sync.session_token",
+                        form.s3_session_token.clone(),
+                        p,
+                    ))
+                    .child(crate::widgets::setting_row(
+                        "sync.virtual_host_style",
+                        Some("sync.virtual_host_style_desc"),
+                        Switch::new("toggle-sync-s3-virtual-host")
+                            .small()
+                            .checked(app_settings(cx).sync.s3.virtual_host_style)
+                            .on_click(cx.listener(|this, &checked, _, cx| {
+                                this.set_s3_virtual_host_style(checked, cx);
+                            }))
+                            .into_any_element(),
+                        p,
+                    ))
                     .child(sync_form_row("sync.directory", form.directory.clone(), p));
             }
             "git" => {
@@ -164,6 +204,75 @@ impl SettingsView {
         }
 
         content.into_any_element()
+    }
+
+    /// 自动同步策略：启动检查、变化上传、远端领先下拉与防抖窗口。
+    fn render_sync_auto_settings(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let sync = &app_settings(cx).sync;
+        let form = &self.state.sync_form;
+        let auto_controls_enabled = sync.enabled;
+        v_flex()
+            .gap_2()
+            .child(crate::widgets::setting_frame(
+                div()
+                    .w_full()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("sync.auto_strategy_hint").to_string())
+                    .into_any_element(),
+                p,
+            ))
+            .child(crate::widgets::setting_row(
+                "sync.auto_check_on_startup",
+                Some("sync.auto_check_on_startup_desc"),
+                Switch::new("toggle-sync-auto-check")
+                    .small()
+                    .checked(sync.auto_check_on_startup)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.set_cloud_sync_auto_check(checked, cx);
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(crate::widgets::setting_row(
+                "sync.auto_push_on_change",
+                Some("sync.auto_push_on_change_desc"),
+                Switch::new("toggle-sync-auto-push")
+                    .small()
+                    .checked(sync.auto_push_on_change)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.set_cloud_sync_auto_push(checked, cx);
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(crate::widgets::setting_row(
+                "sync.auto_pull_remote_changes",
+                Some("sync.auto_pull_remote_changes_desc"),
+                Switch::new("toggle-sync-auto-pull")
+                    .small()
+                    .checked(sync.auto_pull_remote_changes)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        this.set_cloud_sync_auto_pull(checked, cx);
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(crate::widgets::setting_row(
+                "sync.auto_push_debounce",
+                Some("sync.auto_push_debounce_desc"),
+                SettingsView::setting_stepper(&form.auto_pull_debounce, px(110.0)),
+                p,
+            ))
+            .when(!auto_controls_enabled, |this| {
+                this.child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("sync.auto_disabled_hint").to_string()),
+                )
+            })
+            .into_any_element()
     }
 
     /// 包含密钥、状态行与上传/下载/Git 同步动作；关闭端点时返回 `None`。
@@ -201,6 +310,26 @@ impl SettingsView {
                     h_flex()
                         .w_full()
                         .gap_2()
+                        .child(
+                            Button::new("sync-check-now")
+                                .small()
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)))
+                                .label(rust_i18n::t!("sync.check").to_string())
+                                .on_click(cx.listener(|_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::CloudSyncCheck);
+                                })),
+                        )
+                        .child(
+                            Button::new("sync-test-now")
+                                .small()
+                                .child(AppIconElement::new(AppIcon::Custom(
+                                    CustomIcon::CONNECTION_TEST,
+                                )))
+                                .label(rust_i18n::t!("sync.test").to_string())
+                                .on_click(cx.listener(|_this, _, _window, cx| {
+                                    cx.emit(SettingsEvent::CloudSyncTest);
+                                })),
+                        )
                         .child(
                             Button::new("sync-push-now")
                                 .small()
@@ -250,6 +379,7 @@ impl SettingsView {
                 })
                 .unwrap_or_else(|| rust_i18n::t!("sync.never").to_string())
         };
+        let baseline = settings.sync.active_baseline();
         h_flex()
             .gap_4()
             .text_xs()
@@ -257,12 +387,17 @@ impl SettingsView {
             .child(format!(
                 "{}: {}",
                 rust_i18n::t!("sync.last_push"),
-                format(settings.sync.last_push_at)
+                format(baseline.last_push_at)
             ))
             .child(format!(
                 "{}: {}",
                 rust_i18n::t!("sync.last_pull"),
-                format(settings.sync.last_pull_at)
+                format(baseline.last_pull_at)
+            ))
+            .child(format!(
+                "{}: {}",
+                rust_i18n::t!("sync.last_check"),
+                format(baseline.last_checked_at)
             ))
             .into_any_element()
     }

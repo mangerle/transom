@@ -23,7 +23,10 @@ pub use subsystems::{
     AuditSettings, BlockViewSettings, BlockViewStyle, HistorySettings, LogLevel, LogSettings,
     SftpSettings, ShortcutSettings, Snippet, SnippetSettings,
 };
-pub use sync::{GitSyncSettings, SyncEndpoint, SyncSettings};
+pub use sync::{
+    GitSyncSettings, S3SyncSettings, SyncBaseline, SyncChannel, SyncEndpoint, SyncSettings,
+    WebdavSyncSettings,
+};
 pub use window::{
     BellStyle, PanelSide, SavedLayout, SavedTabGroup, SavedTabTiling, SidebarStartup, SplitAxis,
     StartupTabs, TabPosition, WindowBackgroundMode, WindowSettings,

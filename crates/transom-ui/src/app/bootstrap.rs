@@ -5,6 +5,7 @@ use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::audit_viewer::AuditViewerEvent;
 use crate::backup::BackupPromptView;
+use crate::cloud_sync::CloudSyncViewState;
 use crate::keys::{KeyWizardView, KnownHostsEvent, KnownHostsView, default_ssh_dir};
 use crate::record::ReplayEvent;
 use crate::sidebar::SidebarSection;
@@ -18,6 +19,7 @@ impl AppShell {
         mut settings: AppSettings,
         restart_requested: Arc<AtomicBool>,
     ) -> Self {
+        let sync_before_normalize = settings.sync.clone();
         let prepared = prepare_bootstrap(cx, &services, &mut settings);
         let inputs = BootstrapInputs::new(window, cx);
         cx.observe(&inputs.workspace_panels, |_, _, cx| cx.notify())
@@ -83,6 +85,11 @@ impl AppShell {
         );
 
         let mut this = Self { state };
+        if settings.sync != sync_before_normalize
+            && let Err(error) = this.state.persist_settings(&settings)
+        {
+            this.state.set_error(localized_error(&error));
+        }
         // 升级确认放在首帧之后的独立后台任务里：窗口刚创建不代表渲染链路、
         // 资源加载与事件泵都已稳定，过早确认会让崩溃回滚失去观察窗口。
         let executor = cx.background_executor().clone();
@@ -324,16 +331,35 @@ impl AppShell {
         crate::settings::sync_terminal_palette(cx);
         self.restore_startup_tabs(window, cx);
 
+        let history_path = crate::cloud_sync::sync_history_path();
+        self.state.tasks.background.sync_history_load = Some(cx.spawn(async move |this, cx| {
+            let Some(history) =
+                spawn_blocking_local(move || crate::cloud_sync::load_history(&history_path)).await
+            else {
+                return;
+            };
+            let _ = this.update(cx, |this, cx| {
+                this.state.cloud_sync.replace_history(history);
+                cx.notify();
+            });
+        }));
+
         self.state.tasks.background.git_sync = Some(cx.spawn(async move |this, cx| {
+            let mut minute_elapsed = 0u64;
             loop {
                 cx.background_executor()
-                    .timer(std::time::Duration::from_secs(60))
+                    .timer(std::time::Duration::from_secs(1))
                     .await;
+                minute_elapsed = minute_elapsed.saturating_add(1);
                 if this
                     .update(cx, |this, cx| {
-                        this.tick_git_sync(cx);
-                        this.tick_git_auto_fetch(cx);
-                        this.tick_container_cleanup(cx);
+                        this.tick_cloud_sync_auto(cx);
+                        if minute_elapsed >= 60 {
+                            minute_elapsed = 0;
+                            this.tick_git_sync(cx);
+                            this.tick_git_auto_fetch(cx);
+                            this.tick_container_cleanup(cx);
+                        }
                     })
                     .is_err()
                 {
@@ -444,6 +470,10 @@ fn assemble_state(
         ),
         tasks: TaskHub::new(appearance_subscription, event_task),
         git_sync_schedule: GitSyncScheduler::default(),
+        cloud_sync: CloudSyncViewState::new(),
+        sync_history_writer: crate::cloud_sync::SyncHistoryWriter::spawn(
+            crate::cloud_sync::sync_history_path(),
+        ),
         container_auto_prune_last: None,
         history: prepared.history,
         history_provider: prepared.history_provider,
@@ -501,6 +531,7 @@ fn prepare_bootstrap(
 ) -> BootstrapPrepared {
     settings.activity_bar.normalize();
     settings.status_bar.normalize();
+    settings.sync.normalize();
     settings.appearance.normalize();
     settings.window.normalize();
     // 设置与进程同生命周期，装进 Global；外壳不再持字段。

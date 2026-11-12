@@ -61,6 +61,9 @@ impl AppShell {
                 self.state.sidebar.visible() && section == SidebarSection::Containers
             }
             ActivityItemId::Git => self.state.sidebar.visible() && section == SidebarSection::Git,
+            ActivityItemId::CloudSync => {
+                self.state.sidebar.visible() && section == SidebarSection::CloudSync
+            }
             ActivityItemId::Keys => self.state.modals.tools.key_wizard.read(cx).is_open(),
             _ => false,
         }
@@ -255,6 +258,7 @@ impl AppShell {
             ActivityItemId::Keys => self.open_key_wizard(window, cx),
             ActivityItemId::Settings => self.open_settings_modal(None, window, cx),
             ActivityItemId::Git => self.toggle_git_sidebar(cx),
+            ActivityItemId::CloudSync => self.toggle_cloud_sync_sidebar(cx),
             ActivityItemId::Unknown => {}
         }
     }
@@ -315,6 +319,7 @@ mod labels {
             ActivityItemId::Keys => UiIcon::KEY.into(),
             ActivityItemId::Settings => UiIcon::SETTINGS.into(),
             ActivityItemId::Git => UiIcon::VCS.into(),
+            ActivityItemId::CloudSync => CustomIcon::CLOUD.into(),
             ActivityItemId::Unknown => UiIcon::ERROR.into(),
         }
     }
@@ -329,6 +334,7 @@ mod labels {
             ActivityItemId::Monitor => "monitor.title",
             ActivityItemId::Containers => "container.title",
             ActivityItemId::Git => "activity.git",
+            ActivityItemId::CloudSync => "activity.cloud_sync",
             ActivityItemId::Language => "activity.language",
             ActivityItemId::ImportSshConfig => "app.import_ssh_config",
             ActivityItemId::KnownHosts => "known_hosts.title",

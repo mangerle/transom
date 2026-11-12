@@ -1,17 +1,17 @@
-//! 云端同步契约：端点配置模型与远端存储的抽象接口。
+//! 云端同步契约：端点配置模型、运行状态与远端存储抽象接口。
 //!
 //! 设计取舍（Why）：
-//! - 同步走"加密备份上云"而不是增量同步：会话目录体量小（数万条会话也在
-//!   MiB 量级），全量推送简单可靠，增量合并的状态机复杂度不成比例；
-//! - 端点凭据（WebDAV 密码、S3 Secret Key）与同步口令绝不进入设置文件，
-//!   设置里只留非敏感的端点拓扑信息，秘密统一进系统钥匙串；
-//! - 合并策略：会话按 updated_at 较新者胜，无时间戳的文件夹/凭据按操作
-//!   方向裁决；下载合并前由界面在本机留下安全副本兜底。
+//! - 同步主体仍是加密备份对象，但围绕它增加了设备身份、远端检查、自动策略
+//!   与可持久化活动结果；这些信息让侧边栏能展示真实状态，而不是猜测设置值；
+//! - 端点凭据与同步口令绝不进入设置文件，秘密统一进系统钥匙串；
+//! - 常规上传返回合并后的完整目录，避免"远端已合并、本机仍落后"却显示成功；
+//!   显式冲突处理再通过强制本地/强制远端模式绕过自动合并。
 
 use crate::backup::BackupDocument;
 use crate::error::{AppError, ErrorCode};
 use crate::model::catalog::SessionCatalog;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// 远端固定对象名：目录下的唯一备份文件。
 ///
@@ -25,6 +25,193 @@ pub const SYNC_OBJECT_NAME: &str = "catalog.transombak";
 /// 恶意或异常的超大响应，防止把整份内存交给不可信端点。
 pub const SYNC_MAX_DOCUMENT_BYTES: u64 = 16 * 1024 * 1024;
 
+/// 触发一次同步动作的来源。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncTrigger {
+    /// 用户在设置页或同步侧边栏显式触发。
+    Manual,
+    /// 应用启动后的自动检查。
+    Startup,
+    /// 周期检查或由周期检查派生的动作。
+    Periodic,
+    /// 本地目录变化防抖到期。
+    LocalChange,
+    /// 用户在冲突预览中作出的显式选择。
+    ConflictResolution,
+    /// Git 仓库定时同步。
+    GitInterval,
+}
+
+impl SyncTrigger {
+    /// 稳定的活动键，日志与历史共用。
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Manual => "manual",
+            Self::Startup => "startup",
+            Self::Periodic => "periodic",
+            Self::LocalChange => "local_change",
+            Self::ConflictResolution => "conflict_resolution",
+            Self::GitInterval => "git_interval",
+        }
+    }
+}
+
+/// 一次同步动作的类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncOperation {
+    Check,
+    TestConnection,
+    Push,
+    Pull,
+    Git,
+}
+
+impl SyncOperation {
+    /// 稳定的活动键，日志与历史共用。
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Check => "check",
+            Self::TestConnection => "test_connection",
+            Self::Push => "push",
+            Self::Pull => "pull",
+            Self::Git => "git",
+        }
+    }
+}
+
+/// 控制器回传的活动元数据；UI 用同一结构生成历史与耗时。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyncEventMeta {
+    pub trigger: SyncTrigger,
+    pub started_at_ms: i64,
+    pub duration_ms: u64,
+}
+
+/// 目录快照的摘要，不携带任何口令或完整对象路径。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncDocumentSummary {
+    pub sessions: usize,
+    pub folders: usize,
+    pub identities: usize,
+    pub engines: usize,
+    pub engine_folders: usize,
+    pub secrets: usize,
+}
+
+impl SyncDocumentSummary {
+    /// 从目录生成摘要。
+    pub fn from_catalog(catalog: &SessionCatalog) -> Self {
+        Self {
+            sessions: catalog.sessions.len(),
+            folders: catalog.folders.len(),
+            identities: catalog.identities.len(),
+            engines: catalog.engines.len(),
+            engine_folders: catalog.engine_folders.len(),
+            secrets: 0,
+        }
+    }
+
+    /// 从备份文档生成摘要；口令只计数，不保留内容。
+    pub fn from_document(document: &BackupDocument) -> Self {
+        Self {
+            sessions: document.sessions.len(),
+            folders: document.folders.len(),
+            identities: document.identities.len(),
+            engines: document.engines.len(),
+            engine_folders: document.engine_folders.len(),
+            secrets: document.secrets.as_ref().map_or(0, Vec::len),
+        }
+    }
+}
+
+/// 本机与远端的相对变化关系。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncRelation {
+    /// 两端都与最近成功基线一致。
+    UpToDate,
+    /// 只有本机存在未同步修改，或远端没有备份。
+    LocalAhead,
+    /// 只有远端存在新版本。
+    RemoteAhead,
+    /// 两端都偏离基线，必须由用户明确选择。
+    Diverged,
+    /// 基线存在但远端对象被删除。
+    RemoteMissing,
+}
+
+/// 远端检查结果；不携带远端文档内容。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncCheckReport {
+    pub provider: String,
+    pub at: i64,
+    pub duration_ms: u64,
+    pub local_hash: String,
+    pub remote_hash: Option<String>,
+    pub remote_present: bool,
+    pub local_changed: bool,
+    pub remote_changed: bool,
+    pub relation: SyncRelation,
+    pub local_summary: SyncDocumentSummary,
+    pub remote_summary: Option<SyncDocumentSummary>,
+    pub remote_version: Option<String>,
+}
+
+/// 连通性测试结果。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncTestReport {
+    pub provider: String,
+    pub at: i64,
+    pub duration_ms: u64,
+    pub remote_present: bool,
+    pub remote_version: Option<String>,
+}
+
+/// 上传成功后的结果；携带合并目录，界面必须回填到本地状态。
+#[derive(Debug)]
+pub struct SyncPushReport {
+    /// 实际写入远端、并应成为本机新状态的目录。
+    pub catalog: SessionCatalog,
+    pub sessions: usize,
+    pub folders: usize,
+    /// 加密进备份的钥匙串口令数量。
+    pub secrets: usize,
+    /// 加密信封的字节数。
+    pub bytes: u64,
+    /// 完成时刻的 Unix 时间戳（秒），由控制层回填到设置。
+    pub at: i64,
+    /// 本机目录指纹，用于下一次自动同步判断。
+    pub catalog_hash: String,
+    /// 远端加密对象指纹。
+    pub remote_hash: String,
+}
+
+/// 下载成功后的结果；口令随文档交回 UI 恢复流程。
+#[derive(Debug)]
+pub struct SyncPullReport {
+    pub document: BackupDocument,
+    pub remote_version: Option<String>,
+    pub remote_hash: String,
+    pub bytes: u64,
+    pub at: i64,
+}
+
+/// 冲突解决时上传本机版本，还是执行常规双向合并。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloudPushMode {
+    Merge,
+    ForceLocal,
+}
+
+/// 冲突解决时以远端整体替换，还是执行常规合并。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloudPullMode {
+    Merge,
+    ForceRemote,
+}
+
 /// Git 同步完成后回传给界面的结果。
 #[derive(Debug, Clone)]
 pub struct GitSyncResult {
@@ -36,24 +223,10 @@ pub struct GitSyncResult {
     pub at: i64,
 }
 
-/// 上传成功后的统计快照，用于界面回报与时间戳回填。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SyncPushReport {
-    pub sessions: usize,
-    pub folders: usize,
-    /// 加密进备份的钥匙串口令数量。
-    pub secrets: usize,
-    /// 加密信封的字节数。
-    pub bytes: u64,
-    /// 完成时刻的 Unix 时间戳（秒），由控制层回填到设置。
-    pub at: i64,
-}
-
-/// 云端同步的远端存储抽象：上传或下载固定对象。
+/// 云端同步的远端存储抽象：读写固定对象并探测远端状态。
 ///
-/// 为什么只有两个动作：同步协议刻意收敛为"单对象全量推送/拉取"，目录
-/// 列举、删除等能力是备份服务的职责外溢，接口越窄，WebDAV 与 S3 两种
-/// 实现的行为差异面就越小。
+/// 接口刻意不提供目录枚举：同步协议只需要一个对象与它的版本标识，能力越窄，
+/// WebDAV 与 S3 的行为差异面越小，也避免对象存储列出整个桶带来的权限要求。
 #[async_trait::async_trait]
 pub trait CloudSyncTarget: Send + Sync {
     /// 把加密备份上传到远端固定对象，目录不存在时自动逐级创建。
@@ -77,6 +250,16 @@ pub trait CloudSyncTarget: Send + Sync {
         Ok((self.get_document().await?, None))
     }
 
+    /// 只探测对象是否存在并返回版本标识，不下载正文。
+    ///
+    /// 默认实现退回完整下载，仅供不支持 HEAD 的测试目标使用。
+    ///
+    /// # Errors
+    /// 网络失败或认证失败时返回 `AppError`；对象不存在返回 `Ok(None)`。
+    async fn probe_document(&self) -> Result<Option<String>, AppError> {
+        Ok(Some(self.get_document_versioned().await?.1).flatten())
+    }
+
     /// 带前置版本条件上传：远端版本不等于 `version` 时返回"版本冲突"错误。
     ///
     /// 不支持条件写入的实现退回普通上传；调用方仍能拿到加密备份，
@@ -92,6 +275,21 @@ pub trait CloudSyncTarget: Send + Sync {
         let _ = version;
         self.put_document(data).await
     }
+}
+
+/// 计算目录稳定指纹：按领域 JSON 序列化后的 SHA-256。
+///
+/// # Errors
+/// 目录无法序列化时返回 `CloudSyncFailed`；正常情况下该错误不可达，但公开
+/// 契约仍显式返回错误，避免内部实现被误认为数学上的绝对成功。
+pub fn sync_catalog_hash(catalog: &SessionCatalog) -> Result<String, AppError> {
+    let bytes = serde_json::to_vec(catalog).map_err(|error| {
+        AppError::with_detail(
+            ErrorCode::CloudSyncFailed,
+            format!("计算目录指纹失败: {error}"),
+        )
+    })?;
+    Ok(hex::encode(Sha256::digest(bytes)))
 }
 
 /// 判断错误是否为"远端已被其他设备修改"的版本冲突。
@@ -110,9 +308,103 @@ mod tests {
     #[test]
     fn sync_settings_load_from_legacy_config() {
         let settings: AppSettings = serde_json::from_str(r#"{"language":"zh-CN"}"#).unwrap();
-        assert!(settings.sync.endpoint.is_none());
+        assert!(settings.sync.active_endpoint().is_none());
         assert!(settings.sync.include_secrets);
-        assert!(settings.sync.last_push_at.is_none());
+        assert!(settings.sync.active_baseline().last_push_at.is_none());
+        assert!(!settings.sync.enabled);
+        assert!(!settings.sync.auto_push_on_change);
+        assert_eq!(settings.sync.auto_push_debounce_seconds, 60);
+    }
+
+    #[test]
+    fn legacy_single_endpoint_migrates_to_provider_specific_config() {
+        let mut settings: AppSettings = serde_json::from_str(
+            r#"{
+                "sync": {
+                    "enabled": true,
+                    "last_push_at": 123,
+                    "endpoint": {
+                        "kind": "webdav",
+                        "url": "https://dav.example.com",
+                        "username": "user",
+                        "directory": "transom"
+                    },
+                    "git": {
+                        "remote": "git@example.com:repo.git",
+                        "branch": "sync",
+                        "interval_minutes": 5
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        settings.sync.normalize();
+        assert_eq!(settings.sync.active_channel, crate::SyncChannel::Webdav);
+        assert_eq!(settings.sync.webdav.username, "user");
+        assert!(settings.sync.git.is_some());
+        assert!(settings.sync.active_endpoint().is_some());
+        assert!(settings.sync.legacy_endpoint.is_none());
+        assert_eq!(settings.sync.active_baseline().last_push_at, Some(123));
+    }
+
+    #[test]
+    fn legacy_git_only_config_migrates_to_git_channel() {
+        let mut settings: AppSettings = serde_json::from_str(
+            r#"{
+                "sync": {
+                    "git": {
+                        "remote": "git@example.com:repo.git",
+                        "branch": "sync",
+                        "interval_minutes": 5
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        settings.sync.normalize();
+        assert_eq!(settings.sync.active_channel, crate::SyncChannel::Git);
+        assert!(
+            !settings.sync.git_enabled(),
+            "旧配置默认暂停，避免升级后立即联网"
+        );
+        assert_eq!(settings.sync.schema_version, 1);
+    }
+
+    #[test]
+    fn provider_specific_configs_survive_channel_switches() {
+        let mut sync = crate::SyncSettings {
+            active_channel: crate::SyncChannel::Webdav,
+            webdav: crate::WebdavSyncSettings {
+                url: "https://dav.example.com".into(),
+                username: "user".into(),
+                directory: "webdav-root".into(),
+            },
+            s3: crate::S3SyncSettings {
+                endpoint: "https://s3.example.com".into(),
+                region: "us-east-1".into(),
+                bucket: "vault".into(),
+                access_key: "AKID".into(),
+                directory: "s3-root".into(),
+                virtual_host_style: true,
+            },
+            ..Default::default()
+        };
+        sync.normalize();
+        assert!(matches!(
+            sync.active_endpoint(),
+            Some(SyncEndpoint::Webdav { .. })
+        ));
+        sync.active_channel = crate::SyncChannel::S3;
+        assert!(matches!(
+            sync.active_endpoint(),
+            Some(SyncEndpoint::S3 {
+                virtual_host_style: true,
+                ..
+            })
+        ));
+        sync.active_channel = crate::SyncChannel::Webdav;
+        assert_eq!(sync.webdav.directory, "webdav-root");
+        assert_eq!(sync.s3.directory, "s3-root");
     }
 
     #[test]
@@ -160,6 +452,7 @@ mod tests {
             bucket: "  ".into(),
             access_key: "AKID".into(),
             directory: "t".into(),
+            virtual_host_style: false,
         };
         assert!(no_bucket.sanitized().is_none());
     }

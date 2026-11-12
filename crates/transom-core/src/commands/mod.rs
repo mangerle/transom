@@ -23,7 +23,7 @@ pub enum AppCommand {
     Sftp(SftpCommand),
     Forward(ForwardCommand),
     Host(HostCommand),
-    Sync(SyncCommand),
+    Sync(Box<SyncCommand>),
     Zmodem(ZmodemCommand),
     /// 容器命令体量明显大于其它领域，装箱避免整个 AppCommand 被撑大。
     Container(Box<ContainerCommand>),
@@ -56,7 +56,7 @@ impl From<HostCommand> for AppCommand {
 
 impl From<SyncCommand> for AppCommand {
     fn from(cmd: SyncCommand) -> Self {
-        Self::Sync(cmd)
+        Self::Sync(Box::new(cmd))
     }
 }
 

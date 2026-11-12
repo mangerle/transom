@@ -157,6 +157,9 @@ activity:
   git:
     en: Git
     zh-CN: Git
+  cloud_sync:
+    en: Cloud Sync
+    zh-CN: 云同步
 common:
   close:
     en: Close
@@ -4172,6 +4175,218 @@ sync:
   missing_remote:
     en: No backup exists on the endpoint yet. Upload from this or another device first.
     zh-CN: 端点上还没有备份，请先从任一设备上传。
+
+  enabled:
+    en: Enable Cloud Sync
+    zh-CN: 启用云同步
+  enabled_desc:
+    en: Pause or resume sync without deleting any endpoint, credential, or automatic strategy.
+    zh-CN: 暂停或恢复同步，不删除端点、凭据或自动策略。
+  device_name:
+    en: Device Name
+    zh-CN: 设备名称
+  device_name_hint:
+    en: Used in history and conflict summaries to identify this installation.
+    zh-CN: 用于在历史和冲突摘要中识别当前安装实例。
+  device_value:
+    en: 'Device: %{name}'
+    zh-CN: '设备：%{name}'
+  session_token:
+    en: Session Token (optional)
+    zh-CN: 会话令牌（可选）
+  session_token_hint:
+    en: Stored in the system keychain and sent only to the configured S3 endpoint.
+    zh-CN: 保存到系统钥匙串，仅发送给当前配置的 S3 端点。
+  virtual_host_style:
+    en: Virtual Host Style
+    zh-CN: 虚拟主机寻址
+  virtual_host_style_desc:
+    en: Use bucket-name subdomains. Enable only when the provider and certificate support it.
+    zh-CN: 使用存储桶子域名寻址，仅在提供商与证书支持时启用。
+  auto_strategy_hint:
+    en: Automatic checks compare local and remote state before uploading or downloading.
+    zh-CN: 自动检查会先比较本机与远端状态，再决定是否上传或下载。
+  auto_check_on_startup:
+    en: Check on Startup
+    zh-CN: 启动时检查
+  auto_check_on_startup_desc:
+    en: Check the remote endpoint once after the application starts.
+    zh-CN: 应用启动后检查一次远端端点。
+  auto_push_on_change:
+    en: Upload After Local Changes
+    zh-CN: 本地变化后自动上传
+  auto_push_on_change_desc:
+    en: Wait for the debounce window, then check and upload when only local data changed.
+    zh-CN: 等待防抖窗口后检查，仅在只有本机发生变化时上传。
+  auto_pull_remote_changes:
+    en: Download Remote Changes
+    zh-CN: 自动下载远端变化
+  auto_pull_remote_changes_desc:
+    en: Download when only the remote changed and no active terminal or settings dialog would be interrupted.
+    zh-CN: 仅在远端单独变化且不会打断活动终端或设置弹窗时自动下载。
+  auto_push_debounce:
+    en: Auto Upload Debounce (seconds)
+    zh-CN: 自动上传防抖（秒）
+  auto_push_debounce_desc:
+    en: Wait this long after the latest local catalog change.
+    zh-CN: 最近一次本机目录变化后等待这么久再上传。
+  auto_disabled_hint:
+    en: Automatic actions remain configured but do not run while cloud sync is paused.
+    zh-CN: 云同步暂停时自动策略仍会保留，但不会执行。
+  check:
+    en: Check State
+    zh-CN: 检查状态
+  test:
+    en: Test Connection
+    zh-CN: 测试连接
+  checking:
+    en: Checking local and remote state…
+    zh-CN: 正在检查本机与远端状态…
+  testing:
+    en: Testing endpoint connectivity…
+    zh-CN: 正在测试端点连通性…
+  test_remote_present:
+    en: '%{provider} is reachable and a sync object exists.'
+    zh-CN: '%{provider} 可访问，远端同步对象存在。'
+  test_remote_missing:
+    en: '%{provider} is reachable, but no sync object exists yet.'
+    zh-CN: '%{provider} 可访问，但远端还没有同步对象。'
+  disabled_action:
+    en: Enable cloud sync before running this action.
+    zh-CN: 请先启用云同步再执行该操作。
+  enqueue_failed:
+    en: The sync command could not be queued. Try again later.
+    zh-CN: 同步命令未能进入队列，请稍后重试。
+  not_configured:
+    en: Not configured
+    zh-CN: 未配置
+  configure_now:
+    en: Configure Cloud Sync
+    zh-CN: 配置云同步
+  last_check:
+    en: Last check
+    zh-CN: 上次检查
+  last_success:
+    en: 'Last success: %{value}'
+    zh-CN: '上次成功：%{value}'
+  check_up_to_date:
+    en: Local and remote state are aligned.
+    zh-CN: 本机与远端状态已对齐。
+  check_local_ahead:
+    en: 'Local changes are pending upload: %{sessions} sessions.'
+    zh-CN: '本机有尚未上传的变化：%{sessions} 个会话。'
+  check_remote_ahead:
+    en: 'Remote changes are ready to download: %{sessions} sessions.'
+    zh-CN: '远端有可下载的变化：%{sessions} 个会话。'
+  check_diverged:
+    en: 'Both sides changed since the last sync: %{local} local sessions, %{remote} remote sessions.'
+    zh-CN: '双方都在上次同步后发生了变化：本机 %{local} 个会话，远端 %{remote} 个会话。'
+  check_remote_missing:
+    en: The remote sync object was deleted or is no longer readable.
+    zh-CN: 远端同步对象已被删除或无法读取。
+  conflict_diverged:
+    en: Both local and remote changes need review
+    zh-CN: 本机与远端都有变化，需要选择
+  conflict_remote_missing:
+    en: The remote object is missing
+    zh-CN: 远端同步对象缺失
+  conflict_local_summary:
+    en: 'Local: %{sessions} sessions, %{folders} folders'
+    zh-CN: '本机：%{sessions} 个会话，%{folders} 个分组'
+  remote_summary:
+    en: 'Remote: %{sessions} sessions, %{folders} folders'
+    zh-CN: '远端：%{sessions} 个会话，%{folders} 个分组'
+  remote_absent:
+    en: 'Remote: no sync object'
+    zh-CN: '远端：没有同步对象'
+  download_remote_version:
+    en: Download Remote Version
+    zh-CN: 下载远端版本
+  upload_local_version:
+    en: Upload Local Version
+    zh-CN: 上传本地版本
+  pull_downloaded:
+    en: Remote backup downloaded; applying it locally.
+    zh-CN: 已下载远端备份，正在应用到本机。
+  pull_force_downloaded:
+    en: Remote backup downloaded for explicit replacement.
+    zh-CN: 已下载远端备份，准备整体替换本机。
+  pull_force_done:
+    en: Local catalog was replaced with the selected remote version.
+    zh-CN: 本机目录已替换为所选的远端版本。
+  pull_applying:
+    en: Applying remote backup locally…
+    zh-CN: 正在把远端备份应用到本机…
+  history_title:
+    en: Sync History
+    zh-CN: 同步历史
+  history_all:
+    en: All
+    zh-CN: 全部
+  history_success:
+    en: Success
+    zh-CN: 成功
+  history_failed:
+    en: Failed
+    zh-CN: 失败
+  history_conflict:
+    en: Attention
+    zh-CN: 需处理
+  history_empty:
+    en: No sync activity
+    zh-CN: 暂无同步记录
+  history_empty_hint:
+    en: Check the endpoint or run a manual action to create the first record.
+    zh-CN: 检查远端或执行一次手动操作后会生成记录。
+  history_expand:
+    en: Show Details
+    zh-CN: 查看详情
+  history_collapse:
+    en: Hide Details
+    zh-CN: 收起详情
+  history_more:
+    en: Show More
+    zh-CN: 显示更多
+  state_disabled:
+    en: Paused
+    zh-CN: 已暂停
+  state_idle:
+    en: Idle
+    zh-CN: 空闲
+  state_running:
+    en: Syncing
+    zh-CN: 同步中
+  state_success:
+    en: Synced
+    zh-CN: 已同步
+  state_failed:
+    en: Sync Failed
+    zh-CN: 同步失败
+  state_conflict:
+    en: Needs Attention
+    zh-CN: 需要处理
+  operation_check:
+    en: State Check
+    zh-CN: 状态检查
+  operation_test:
+    en: Connection Test
+    zh-CN: 连接测试
+  operation_push:
+    en: Upload
+    zh-CN: 上传
+  operation_pull:
+    en: Download
+    zh-CN: 下载
+  operation_git:
+    en: Git Sync
+    zh-CN: Git 同步
+  auto_pull_sessions_open:
+    en: Remote changes are ready, but automatic download is deferred while terminal sessions are active.
+    zh-CN: 远端已有变化，但存在活动终端会话，自动下载已推迟。
+  auto_pull_settings_open:
+    en: Remote changes are ready, but automatic download is deferred while settings are open.
+    zh-CN: 远端已有变化，但设置弹窗仍打开，自动下载已推迟。
+
   error_no_endpoint:
     en: Pick and configure a sync endpoint first.
     zh-CN: 请先选择并填写同步端点。

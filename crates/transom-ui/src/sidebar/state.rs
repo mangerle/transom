@@ -30,6 +30,8 @@ pub(crate) enum SidebarSection {
     Containers,
     /// Git 项目列表。
     Git,
+    /// 云同步状态、冲突与历史。
+    CloudSync,
 }
 
 impl SidebarSection {
