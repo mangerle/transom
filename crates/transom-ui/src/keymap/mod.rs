@@ -60,7 +60,10 @@ actions!(
         ToggleSftpHidden,
         DeleteSftpSelection,
         SaveEditorFile,
-        GoToEditorLine
+        GoToEditorLine,
+        DiffPrevChange,
+        DiffNextChange,
+        DiffFindInView
     ]
 );
 
@@ -69,6 +72,9 @@ pub const OVERLAY_CONTEXT: &str = "Overlay";
 pub const SFTP_CONTEXT: &str = "SftpPanel";
 /// 内置编辑器悬浮面板的按键上下文。
 pub const EDITOR_PANEL_CONTEXT: &str = "EditorPanel";
+/// Git 工作区与差异视图的按键上下文。
+pub const GIT_WORKSPACE_CONTEXT: &str = "GitWorkspace";
+pub const DIFF_VIEW_CONTEXT: &str = "GitDiffView";
 /// 工作区专属上下文，且要求没有遮罩浮层。
 ///
 /// `!Overlay` 如今只对仍走自绘遮罩的浮层有效（命令面板）：它的输入框焦点在
@@ -497,6 +503,31 @@ pub(crate) fn bindings(custom: &ShortcutSettings, cx: &App) -> Vec<KeyBinding> {
             "delete",
             Box::new(DeleteSftpSelection) as Box<dyn Action>,
             SFTP_ACTION_CONTEXT,
+        ),
+        (
+            "f7",
+            Box::new(DiffNextChange) as Box<dyn Action>,
+            GIT_WORKSPACE_CONTEXT,
+        ),
+        (
+            "shift-f7",
+            Box::new(DiffPrevChange) as Box<dyn Action>,
+            GIT_WORKSPACE_CONTEXT,
+        ),
+        (
+            "f7",
+            Box::new(DiffNextChange) as Box<dyn Action>,
+            DIFF_VIEW_CONTEXT,
+        ),
+        (
+            "shift-f7",
+            Box::new(DiffPrevChange) as Box<dyn Action>,
+            DIFF_VIEW_CONTEXT,
+        ),
+        (
+            "secondary-f",
+            Box::new(DiffFindInView) as Box<dyn Action>,
+            DIFF_VIEW_CONTEXT,
         ),
     ] {
         if let Some(binding) = load_boxed_key_binding(key, action, context, cx) {

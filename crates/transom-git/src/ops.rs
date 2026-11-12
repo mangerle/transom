@@ -14,6 +14,9 @@ use crate::error::GitError;
 use crate::process::{RunOptions, run, run_allow_fail};
 use crate::repo;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static PATCH_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// 暂存指定路径（含删除记录）。
 pub(crate) async fn stage(
@@ -288,25 +291,36 @@ pub(crate) async fn apply_patch(
     config: &GitConfig,
     patch: &str,
 ) -> Result<(), GitError> {
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let temp_path = std::env::temp_dir().join(format!("transom_shelf_{stamp}.patch"));
+    apply_patch_with_options(root, config, patch, false, false).await
+}
+
+/// 应用局部变更块或补丁文本：可按 `cached` 写入暂存区、按 `reverse` 执行反向撤销。
+pub(crate) async fn apply_patch_with_options(
+    root: &Path,
+    config: &GitConfig,
+    patch: &str,
+    cached: bool,
+    reverse: bool,
+) -> Result<(), GitError> {
+    let seq = PATCH_SEQ.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let temp_path = std::env::temp_dir().join(format!("transom_patch_{pid}_{seq}.patch"));
     tokio::fs::write(&temp_path, patch.as_bytes())
         .await
         .map_err(|source| GitError::Spawn {
-            command: "write shelf patch".to_string(),
+            command: "write hunk patch".to_string(),
             source,
         })?;
     let path_str = temp_path.to_string_lossy().to_string();
-    let result = run(
-        root,
-        config,
-        &["apply", "--whitespace=nowarn", &path_str],
-        RunOptions::write(),
-    )
-    .await;
+    let mut args = vec!["apply", "--whitespace=nowarn"];
+    if cached {
+        args.push("--cached");
+    }
+    if reverse {
+        args.push("--reverse");
+    }
+    args.push(&path_str);
+    let result = run(root, config, &args, RunOptions::write()).await;
     let _ = tokio::fs::remove_file(&temp_path).await;
     result.map(|_| ())
 }

@@ -30,6 +30,10 @@ fn default_auto_fetch() -> u32 {
     15
 }
 
+fn default_diff_highlight() -> String {
+    "word".to_string()
+}
+
 /// Git 版本控制偏好设置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitSettings {
@@ -60,6 +64,21 @@ pub struct GitSettings {
     /// 差异对比中默认忽略空白字符改动。
     #[serde(default)]
     pub ignore_whitespace: bool,
+    /// 差异视图精细空白忽略档位（"none" / "trim" / "all" / "blank"）。
+    #[serde(default)]
+    pub diff_ignore_whitespace_level: Option<String>,
+    /// 差异视图显示行号。
+    #[serde(default = "default_true")]
+    pub diff_show_line_numbers: bool,
+    /// 差异视图长行自动换行。
+    #[serde(default = "default_true")]
+    pub diff_wrap_lines: bool,
+    /// 差异高亮粒度（"word" / "line" / "none"）。
+    #[serde(default = "default_diff_highlight")]
+    pub diff_highlight: String,
+    /// 差异视图默认折叠未变更上下文行。
+    #[serde(default = "default_true")]
+    pub diff_collapse_unchanged: bool,
     /// 受保护的分支名（逗号分隔，推送时若涉及此类分支将触发二次防呆警告）。
     #[serde(default = "default_protected_branches")]
     pub protected_branches: String,
@@ -83,6 +102,11 @@ impl Default for GitSettings {
             default_push_tags: default_follow_tags(),
             default_diff_mode: default_diff_mode(),
             ignore_whitespace: false,
+            diff_ignore_whitespace_level: None,
+            diff_show_line_numbers: true,
+            diff_wrap_lines: true,
+            diff_highlight: default_diff_highlight(),
+            diff_collapse_unchanged: true,
             protected_branches: default_protected_branches(),
             author_name: String::new(),
             author_email: String::new(),

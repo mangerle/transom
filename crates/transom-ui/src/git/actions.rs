@@ -27,6 +27,9 @@ use transom_core::{
 };
 
 mod diff_actions;
+mod diff_nav;
+mod diff_search;
+pub(crate) use diff_nav::DiffTabCloseScope;
 mod event_dispatch;
 mod init_event;
 mod log_actions;

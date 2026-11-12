@@ -15,6 +15,7 @@ mod code_link;
 mod code_open;
 mod decorations;
 mod diff;
+mod diff_search;
 mod drag_tracker;
 mod entity;
 mod list;

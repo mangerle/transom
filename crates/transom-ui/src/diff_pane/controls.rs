@@ -66,7 +66,29 @@ pub(crate) fn render_change_nav_buttons(
     let disabled = diff_state.is_none() || !has_changes;
     let prev_state = diff_state.clone();
     let next_state = diff_state;
+    render_change_nav_with_handlers(
+        id_prefix,
+        disabled,
+        Rc::new(move |_window, cx| {
+            if let Some(state) = prev_state.as_ref() {
+                state.update(cx, |s, cx| s.previous_change(cx));
+            }
+        }),
+        Rc::new(move |_window, cx| {
+            if let Some(state) = next_state.as_ref() {
+                state.update(cx, |s, cx| s.next_change(cx));
+            }
+        }),
+    )
+}
 
+/// 可定制点击回调的「上一处/下一处差异」导航按钮（用于跨文件差异推进）。
+pub(crate) fn render_change_nav_with_handlers(
+    id_prefix: &'static str,
+    disabled: bool,
+    on_prev: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_next: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+) -> AnyElement {
     h_flex()
         .gap_0()
         .child(
@@ -76,12 +98,11 @@ pub(crate) fn render_change_nav_buttons(
                 .icon(UiIcon::CHEVRON_UP)
                 .disabled(disabled)
                 .accessibility_label(rust_i18n::t!("git.diff.prev_difference").to_string())
-                .tooltip(rust_i18n::t!("git.diff.prev_difference").to_string())
-                .on_click(move |_, _, cx| {
-                    if let Some(state) = prev_state.as_ref() {
-                        state.update(cx, |s, cx| s.previous_change(cx));
-                    }
-                }),
+                .tooltip(format!(
+                    "{} (Shift+F7)",
+                    rust_i18n::t!("git.diff.prev_difference")
+                ))
+                .on_click(move |_, window, cx| on_prev(window, cx)),
         )
         .child(
             Button::new(format!("{id_prefix}-next-diff"))
@@ -90,12 +111,8 @@ pub(crate) fn render_change_nav_buttons(
                 .icon(UiIcon::CHEVRON_DOWN)
                 .disabled(disabled)
                 .accessibility_label(rust_i18n::t!("git.diff.next_difference").to_string())
-                .tooltip(rust_i18n::t!("git.diff.next_difference").to_string())
-                .on_click(move |_, _, cx| {
-                    if let Some(state) = next_state.as_ref() {
-                        state.update(cx, |s, cx| s.next_change(cx));
-                    }
-                }),
+                .tooltip(format!("{} (F7)", rust_i18n::t!("git.diff.next_difference")))
+                .on_click(move |_, window, cx| on_next(window, cx)),
         )
         .into_any_element()
 }
@@ -146,18 +163,66 @@ pub(crate) fn render_mode_toggle(
         .into_any_element()
 }
 
+fn ignore_level_key(level: IgnoreWhitespace) -> &'static str {
+    match level {
+        IgnoreWhitespace::None => "git.diff.ignore_none",
+        IgnoreWhitespace::Trim => "git.diff.ignore_trim",
+        IgnoreWhitespace::All => "git.diff.ignore_all",
+        IgnoreWhitespace::BlankLines => "git.diff.ignore_blank",
+    }
+}
+
+fn highlight_level_key(level: DiffHighlight) -> &'static str {
+    match level {
+        DiffHighlight::Line => "git.diff.highlight_line",
+        DiffHighlight::Word => "git.diff.highlight_word",
+        DiffHighlight::None => "git.diff.highlight_none",
+    }
+}
+
+fn appearance_tooltip(options: DiffViewOptions) -> String {
+    let mut active = Vec::with_capacity(3);
+    if options.show_line_numbers {
+        active.push(rust_i18n::t!("git.diff.show_line_numbers").to_string());
+    }
+    if options.wrap_lines {
+        active.push(rust_i18n::t!("git.diff.wrap_lines").to_string());
+    }
+    if options.collapse_unchanged {
+        active.push(rust_i18n::t!("git.diff.collapse_unchanged").to_string());
+    }
+    if active.is_empty() {
+        rust_i18n::t!("git.diff.settings").to_string()
+    } else {
+        rust_i18n::t!(
+            "git.diff.control_tooltip_with_value",
+            title = rust_i18n::t!("git.diff.settings").to_string(),
+            value = active.join(", ")
+        )
+        .to_string()
+    }
+}
+
 /// 渲染「忽略空白差异」4 档菜单。
 pub(crate) fn render_ignore_menu(
     id_prefix: &'static str,
     current: IgnoreWhitespace,
     on_update: OptionsUpdater,
 ) -> AnyElement {
+    let is_active = current != IgnoreWhitespace::None;
+    let tooltip = rust_i18n::t!(
+        "git.diff.control_tooltip_with_value",
+        title = rust_i18n::t!("git.diff.ignore_title").to_string(),
+        value = rust_i18n::t!(ignore_level_key(current)).to_string()
+    )
+    .to_string();
     Button::new(format!("{id_prefix}-ignore"))
         .ghost()
         .xsmall()
         .icon(UiIcon::HIDE)
-        .accessibility_label(rust_i18n::t!("git.diff.ignore_title").to_string())
-        .tooltip(rust_i18n::t!("git.diff.ignore_title").to_string())
+        .when(is_active, |btn| btn.secondary())
+        .accessibility_label(tooltip.clone())
+        .tooltip(tooltip)
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
             for (key, level) in [
@@ -193,12 +258,20 @@ pub(crate) fn render_highlight_menu(
     current: DiffHighlight,
     on_update: OptionsUpdater,
 ) -> AnyElement {
+    let is_active = current != DiffHighlight::default();
+    let tooltip = rust_i18n::t!(
+        "git.diff.control_tooltip_with_value",
+        title = rust_i18n::t!("git.diff.highlight_title").to_string(),
+        value = rust_i18n::t!(highlight_level_key(current)).to_string()
+    )
+    .to_string();
     Button::new(format!("{id_prefix}-highlight"))
         .ghost()
         .xsmall()
         .icon(UiIcon::HIGHLIGHT)
-        .accessibility_label(rust_i18n::t!("git.diff.highlight_title").to_string())
-        .tooltip(rust_i18n::t!("git.diff.highlight_title").to_string())
+        .when(is_active, |btn| btn.secondary())
+        .accessibility_label(tooltip.clone())
+        .tooltip(tooltip)
         .dropdown_menu(move |menu, _window, _cx| {
             let mut menu = menu;
             for (key, level) in [
@@ -233,12 +306,18 @@ pub(crate) fn render_appearance_menu(
     options: DiffViewOptions,
     on_update: OptionsUpdater,
 ) -> AnyElement {
+    let defaults = DiffViewOptions::default();
+    let is_custom = options.show_line_numbers != defaults.show_line_numbers
+        || options.wrap_lines != defaults.wrap_lines
+        || options.collapse_unchanged != defaults.collapse_unchanged;
+    let tooltip = appearance_tooltip(options);
     Button::new(format!("{id_prefix}-appearance"))
         .ghost()
         .xsmall()
         .icon(UiIcon::LAYOUT)
-        .accessibility_label(rust_i18n::t!("git.diff.settings").to_string())
-        .tooltip(rust_i18n::t!("git.diff.settings").to_string())
+        .when(is_custom, |btn| btn.secondary())
+        .accessibility_label(tooltip.clone())
+        .tooltip(tooltip)
         .dropdown_menu(move |menu, _window, _cx| {
             let numbers_cb = on_update.clone();
             let wrap_cb = on_update.clone();

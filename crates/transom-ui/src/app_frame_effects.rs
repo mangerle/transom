@@ -98,6 +98,10 @@ impl AppShell {
                 self.open_editor_local_diff(source, cx);
             }
             EditorPanelEvent::ListOpenChanged => cx.notify(),
+            EditorPanelEvent::DiffPreferencesChanged => {
+                let snapshot = crate::app::app_settings(cx).clone();
+                self.state.persist_settings_reported(&snapshot);
+            }
         }
     }
 

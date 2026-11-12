@@ -8363,6 +8363,9 @@ git:
     no_changes:
       en: No differences under current ignore settings
       zh-CN: 当前忽略规则下无差异
+    whitespace_only:
+      en: Only whitespace changes hidden by current ignore setting
+      zh-CN: 仅包含已被当前忽略规则隐藏的空白改动
     computing:
       en: Computing diff…
       zh-CN: 正在计算差异…
@@ -8384,6 +8387,9 @@ git:
     settings:
       en: Appearance
       zh-CN: 外观
+    control_tooltip_with_value:
+      en: "%{title}: %{value}"
+      zh-CN: "%{title}: %{value}"
     none:
       en: "Select a file to compare"
       zh-CN: "选择一个文件查看差异"
@@ -8423,6 +8429,66 @@ git:
     single_file_indicator:
       en: "1 file"
       zh-CN: "1 个文件"
+    hunk_actions:
+      en: "Hunk Actions"
+      zh-CN: "变更块操作"
+    stage_hunk:
+      en: "Stage Hunk"
+      zh-CN: "暂存此变更块"
+    unstage_hunk:
+      en: "Unstage Hunk"
+      zh-CN: "取消暂存此变更块"
+    revert_hunk:
+      en: "Revert Hunk"
+      zh-CN: "还原此变更块"
+    tab_tooltip:
+      en: "%{path} (%{left} / %{right})"
+      zh-CN: "%{path}（%{left} / %{right}）"
+    close_tab:
+      en: Close
+      zh-CN: 关闭
+    close_other_tabs:
+      en: Close Others
+      zh-CN: 关闭其他
+    close_left_tabs:
+      en: Close to the Left
+      zh-CN: 关闭左侧
+    close_right_tabs:
+      en: Close to the Right
+      zh-CN: 关闭右侧
+    close_all_tabs:
+      en: Close All
+      zh-CN: 关闭全部
+    refresh:
+      en: Refresh Diff
+      zh-CN: 刷新差异
+    open_source:
+      en: Open Source File
+      zh-CN: 打开源文件
+    expand_all_unchanged:
+      en: Expand All Unchanged Lines
+      zh-CN: 展开全部未变更行
+    collapse_unchanged_action:
+      en: Collapse Unchanged Lines
+      zh-CN: 收起未变更行
+    search_toggle:
+      en: "Find in Diff"
+      zh-CN: "在差异中查找"
+    search_placeholder:
+      en: "Find in diff…"
+      zh-CN: "在差异中查找…"
+    search_prev:
+      en: "Previous Match"
+      zh-CN: "上一处匹配"
+    search_next:
+      en: "Next Match"
+      zh-CN: "下一处匹配"
+    search_close:
+      en: "Close Search"
+      zh-CN: "关闭查找"
+    search_no_matches:
+      en: "No matches"
+      zh-CN: "无匹配"
     head:
 
 
@@ -8714,15 +8780,24 @@ git:
     stage:
       en: "Staged"
       zh-CN: "已暂存"
+    stage_hunk:
+      en: "Hunk staged"
+      zh-CN: "已暂存变更块"
     stage_all:
       en: "Staged all changes"
       zh-CN: "已暂存全部更改"
     unstage:
       en: "Unstaged"
       zh-CN: "已取消暂存"
+    unstage_hunk:
+      en: "Hunk unstaged"
+      zh-CN: "已取消暂存变更块"
     discard:
       en: "Changes rolled back"
       zh-CN: "已回滚更改"
+    revert_hunk:
+      en: "Hunk reverted"
+      zh-CN: "已还原变更块"
     delete_untracked:
       en: "Unversioned files deleted"
       zh-CN: "已删除未跟踪文件"

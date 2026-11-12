@@ -146,6 +146,8 @@ pub(crate) struct GitWorkspaceState {
     pub diff_tabs: Vec<GitDiffState>,
     /// 当前激活的文件差异标签索引。
     pub active_diff_tab: Option<usize>,
+    /// 差异视图内查找栏状态。
+    pub diff_search: crate::diff_pane::DiffSearchState,
     /// 底部提交记录（Git Log）面板是否展开（对齐 IDEA 底部 Git 抽屉）。
     pub bottom_log_open: bool,
     /// 提交页与底部日志面板垂直分栏的拖拽状态。
@@ -184,16 +186,7 @@ impl GitWorkspaceState {
         let bottom_log_split = cx.new(|_| ResizableState::default());
         let right_split = cx.new(|_| ResizableState::default());
         let log_split = cx.new(|_| ResizableState::default());
-        let git_settings = &crate::app::app_settings(cx).git;
-        let mut diff_options = GitDiffOptions::default();
-        if git_settings.ignore_whitespace {
-            diff_options.ignore_whitespace = super::diff::IgnoreWhitespace::All;
-        }
-        if git_settings.default_diff_mode == "unified" {
-            diff_options.side_by_side = false;
-        } else if git_settings.default_diff_mode == "split" {
-            diff_options.side_by_side = true;
-        }
+        let diff_options = GitDiffOptions::from_git_settings(&crate::app::app_settings(cx).git);
 
         Self {
             project,
@@ -248,6 +241,7 @@ impl GitWorkspaceState {
             push_after_commit: false,
             diff_tabs: Vec::new(),
             active_diff_tab: None,
+            diff_search: crate::diff_pane::DiffSearchState::default(),
             bottom_log_open: false,
             bottom_log_split,
             refs_search_input,
@@ -285,6 +279,9 @@ impl GitWorkspaceState {
             item.summary_hunks = 0;
             item.summary_additions = 0;
             item.summary_deletions = 0;
+            item.whitespace_only = false;
+            item.hunks.clear();
+            item.current_hunk = None;
             item.computing = !binary;
         };
         if let Some(current) = self.diff.as_mut()

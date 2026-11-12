@@ -15,7 +15,7 @@
 //!   再按语法名匹配），只在扩展名确实无法命中的情况下重定向，其余一律原样透传，
 //!   避免维护一张会随语法集版本过期的语言别名表。
 
-use crate::diff_pane::DiffViewOptions;
+use crate::diff_pane::{DiffSearchState, DiffViewOptions};
 use gpui_kit::base::input::{GutterDecorationCollection, OverviewRulerDecorationCollection};
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::component::input::EditorState;
@@ -160,6 +160,8 @@ pub(crate) struct EditorPanelState {
     pub(crate) diff_deletions: usize,
     /// 后台差异准备任务句柄：退出预览、关闭面板或发起新一轮计算时自动取消旧任务。
     pub(crate) diff_prepare_task: Option<Task<()>>,
+    /// 差异预览内查找框与命中状态。
+    pub(crate) diff_search: DiffSearchState,
     /// 回传前的版本指纹比对发现远端已被修改：横幅提供重新载入/强制覆盖/继续
     /// 编辑三个出口。与 `error` 分开表达——普通失败只需就地显示文本，冲突需要
     /// 动作按钮，且"内容被他人改写"与"读写出错"是两类不同事件。
@@ -192,6 +194,8 @@ impl EditorPanelState {
         self.diff_additions = 0;
         self.diff_deletions = 0;
         self.diff_prepare_task = None;
+        self.diff_search.open = false;
+        self.diff_search.clear_matches();
     }
 
     /// 当前实际占用的垂直高度：折叠态只占标题栏。

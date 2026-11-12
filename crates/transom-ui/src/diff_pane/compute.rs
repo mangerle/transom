@@ -16,6 +16,7 @@ use gpui_kit::component::diff::{DiffFile, DiffInlineUnit, DiffMode, DiffState};
 use gpui_kit::{App, AppContext as _, Entity};
 use similar::{ChangeTag, DiffOp, TextDiff};
 
+use super::hunk::{HunkExtractInput, extract_prepared_hunks};
 use super::types::{DiffHighlight, DiffViewOptions, IgnoreWhitespace, PreparedDiffDocument};
 
 /// 默认折叠状态下每个变更块周围保留的上下文行数。
@@ -124,6 +125,7 @@ pub(crate) fn prepare_diff_document(
                 additions: 0,
                 deletions: 0,
                 hunk_count: 0,
+                hunks: Vec::new(),
             };
         }
     }
@@ -157,9 +159,19 @@ pub(crate) fn prepare_diff_document(
             additions: 0,
             deletions: 0,
             hunk_count: 0,
+            hunks: Vec::new(),
         };
     }
 
+    let clean_path = sanitize_diff_path(path);
+    let hunks = extract_prepared_hunks(HunkExtractInput {
+        file_path: &clean_path,
+        old_text: old,
+        new_text: new,
+        old_orig: &old_orig,
+        new_orig: &new_orig,
+        groups: &groups,
+    });
     let patch = build_full_context_patch(path, &old_orig, &new_orig, &diff);
     let parsed = DiffFile::parse(&patch).unwrap_or_else(|error| {
         log::error!("构造内部差异补丁解析失败，路径: {path}，原因: {error:?}");
@@ -175,6 +187,7 @@ pub(crate) fn prepare_diff_document(
         additions,
         deletions,
         hunk_count,
+        hunks,
     }
 }
 

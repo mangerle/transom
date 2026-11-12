@@ -12,9 +12,12 @@ use super::status::ChangeCode;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitAction {
     Stage,
+    StageHunk,
     StageAll,
     Unstage,
+    UnstageHunk,
     Discard,
+    RevertHunk,
     DeleteUntracked,
     Commit,
     Checkout,
@@ -56,9 +59,12 @@ impl GitAction {
     pub fn i18n_key(self) -> &'static str {
         match self {
             Self::Stage => "git.action.stage",
+            Self::StageHunk => "git.action.stage_hunk",
             Self::StageAll => "git.action.stage_all",
             Self::Unstage => "git.action.unstage",
+            Self::UnstageHunk => "git.action.unstage_hunk",
             Self::Discard => "git.action.discard",
+            Self::RevertHunk => "git.action.revert_hunk",
             Self::DeleteUntracked => "git.action.delete_untracked",
             Self::Commit => "git.action.commit",
             Self::Checkout => "git.action.checkout",

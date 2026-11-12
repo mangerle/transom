@@ -5,6 +5,7 @@
 //!   （并排/统一、忽略空白、高亮粒度、行号、换行、折叠未变更上下文），
 //!   收拢到此共享层后两边行为、菜单与快捷键口径完全一致，杜绝重复定义。
 
+use super::hunk::PreparedHunk;
 use gpui_kit::component::diff::DiffFile;
 
 /// 空白处理档位（对应差异工具条的「忽略差异」）。
@@ -65,6 +66,86 @@ impl Default for DiffViewOptions {
     }
 }
 
+impl DiffViewOptions {
+    /// 从持久化 `GitSettings` 构造差异显示选项。
+    pub(crate) fn from_git_settings(git: &transom_core::GitSettings) -> Self {
+        let side_by_side = match git.default_diff_mode.as_str() {
+            "unified" => false,
+            "split" => true,
+            _ => true,
+        };
+        let ignore_whitespace = match git.diff_ignore_whitespace_level.as_deref() {
+            Some("none") => IgnoreWhitespace::None,
+            Some("trim") => IgnoreWhitespace::Trim,
+            Some("all") => IgnoreWhitespace::All,
+            Some("blank") => IgnoreWhitespace::BlankLines,
+            _ if git.ignore_whitespace => IgnoreWhitespace::All,
+            _ => IgnoreWhitespace::None,
+        };
+        let highlight = match git.diff_highlight.as_str() {
+            "line" => DiffHighlight::Line,
+            "none" => DiffHighlight::None,
+            _ => DiffHighlight::Word,
+        };
+        Self {
+            side_by_side,
+            show_line_numbers: git.diff_show_line_numbers,
+            wrap_lines: git.diff_wrap_lines,
+            ignore_whitespace,
+            highlight,
+            collapse_unchanged: git.diff_collapse_unchanged,
+        }
+    }
+
+    /// 将当前差异显示选项回写到持久化 `GitSettings`。
+    pub(crate) fn write_to_git_settings(&self, git: &mut transom_core::GitSettings) {
+        git.default_diff_mode = if self.side_by_side {
+            "split".to_string()
+        } else {
+            "unified".to_string()
+        };
+        let (ignore_flag, level_str) = match self.ignore_whitespace {
+            IgnoreWhitespace::None => (false, "none"),
+            IgnoreWhitespace::Trim => (true, "trim"),
+            IgnoreWhitespace::All => (true, "all"),
+            IgnoreWhitespace::BlankLines => (true, "blank"),
+        };
+        git.ignore_whitespace = ignore_flag;
+        git.diff_ignore_whitespace_level = Some(level_str.to_string());
+        git.diff_show_line_numbers = self.show_line_numbers;
+        git.diff_wrap_lines = self.wrap_lines;
+        git.diff_highlight = match self.highlight {
+            DiffHighlight::Line => "line".to_string(),
+            DiffHighlight::Word => "word".to_string(),
+            DiffHighlight::None => "none".to_string(),
+        };
+        git.diff_collapse_unchanged = self.collapse_unchanged;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diff_view_options_roundtrip_with_git_settings() {
+        let mut settings = transom_core::GitSettings::default();
+        let original = DiffViewOptions {
+            side_by_side: false,
+            show_line_numbers: false,
+            wrap_lines: false,
+            ignore_whitespace: IgnoreWhitespace::BlankLines,
+            highlight: DiffHighlight::Line,
+            collapse_unchanged: false,
+        };
+        original.write_to_git_settings(&mut settings);
+        let restored = DiffViewOptions::from_git_settings(&settings);
+        assert_eq!(restored, original);
+        assert!(settings.ignore_whitespace);
+        assert_eq!(settings.default_diff_mode, "unified");
+    }
+}
+
 /// 后台计算产出的差异文档快照。
 ///
 /// 由纯函数在后台线程池构造，再交由 UI 线程装载进 `DiffState`。
@@ -73,6 +154,7 @@ pub(crate) struct PreparedDiffDocument {
     pub additions: usize,
     pub deletions: usize,
     pub hunk_count: usize,
+    pub hunks: Vec<PreparedHunk>,
 }
 
 impl PreparedDiffDocument {

@@ -246,6 +246,16 @@ impl Repo {
         ops::apply_patch(self.root(), self.config(), patch).await
     }
 
+    /// 对单个变更块应用补丁（支持 `--cached` 暂存与 `--reverse` 还原/取消暂存）。
+    pub async fn apply_hunk_patch(
+        &self,
+        patch: &str,
+        cached: bool,
+        reverse: bool,
+    ) -> Result<(), GitError> {
+        ops::apply_patch_with_options(self.root(), self.config(), patch, cached, reverse).await
+    }
+
     /// 某个贮藏项包含的文件清单（含未跟踪侧标记）。
     pub async fn stash_files(
         &self,

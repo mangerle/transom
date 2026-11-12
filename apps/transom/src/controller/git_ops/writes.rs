@@ -47,6 +47,17 @@ pub(super) fn handle_write_command(
                 move |repo| async move { repo.discard(&paths).await },
             );
         }
+        GitCommand::ApplyHunkPatch {
+            project,
+            action,
+            patch,
+            cached,
+            reverse,
+        } => {
+            spawn_write(state, ctx, project, action, move |repo| async move {
+                repo.apply_hunk_patch(&patch, cached, reverse).await
+            });
+        }
         GitCommand::DeleteUntracked { project, paths } => {
             spawn_write(
                 state,

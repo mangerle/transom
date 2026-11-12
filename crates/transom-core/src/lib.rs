@@ -82,8 +82,8 @@ pub use model::session::{
 pub use model::session_appearance::{SessionColor, SessionIcon};
 pub use model::settings::{
     AppSettings, AppearanceSettings, AuditSettings, BellStyle, BlockViewSettings, BlockViewStyle,
-    DividerColor, DividerSettings, DividerWidth, GitSyncSettings, HistorySettings, LogLevel,
-    LogSettings, MonitorSettings, PanelSide, S3SyncSettings, SavedLayout, SavedTabGroup,
+    DividerColor, DividerSettings, DividerWidth, GitSettings, GitSyncSettings, HistorySettings,
+    LogLevel, LogSettings, MonitorSettings, PanelSide, S3SyncSettings, SavedLayout, SavedTabGroup,
     SavedTabTiling, SftpSettings, ShortcutSettings, SidebarStartup, Snippet, SnippetSettings,
     SplitAxis, StartupTabs, SyncBaseline, SyncChannel, SyncEndpoint, SyncSettings, TabPosition,
     UiDensity, UiThemeMode, WebdavSyncSettings, WindowBackgroundMode, WindowSettings,

@@ -71,6 +71,14 @@ pub enum GitCommand {
         project: GitProject,
         paths: Vec<String>,
     },
+    /// 应用单个变更块补丁（暂存块 / 取消暂存块 / 还原块）。
+    ApplyHunkPatch {
+        project: GitProject,
+        action: GitAction,
+        patch: String,
+        cached: bool,
+        reverse: bool,
+    },
     /// 删除未跟踪文件（不可恢复，界面必须已二次确认）。
     DeleteUntracked {
         project: GitProject,

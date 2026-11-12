@@ -663,6 +663,8 @@ impl AppShell {
                     .cloned()
             {
                 self.git_open_worktree_diff(&project, group, path, cx);
+            } else {
+                self.git_refresh_active_worktree_diff(tab_id, cx);
             }
         }
         cx.notify();

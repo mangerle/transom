@@ -853,3 +853,53 @@ async fn status_expands_untracked_directory_files() {
         "未跟踪目录内的文件应逐个展开，而不是折成一条目录项"
     );
 }
+
+#[tokio::test]
+async fn apply_hunk_patch_stages_unstages_and_reverts_single_hunk() {
+    let dir = repo_with_initial_commit();
+    let base_content = "h1_a\nh1_b\nc1\nc2\nc3\nc4\nh2_a\nh2_b\n";
+    std::fs::write(dir.path().join("a.txt"), base_content).expect("写入基线内容");
+    git(dir.path(), &["add", "a.txt"]);
+    git(dir.path(), &["commit", "-qm", "基线提交"]);
+
+    let modified_content = "h1_changed\nh1_b\nc1\nc2\nc3\nc4\nh2_a\nh2_changed\n";
+    std::fs::write(dir.path().join("a.txt"), modified_content).expect("写入双处改动");
+
+    let hunk1_patch = "\
+--- a/a.txt
++++ b/a.txt
+@@ -1,4 +1,4 @@
+-h1_a
++h1_changed
+ h1_b
+ c1
+ c2
+";
+
+    let repo = Repo::open(dir.path()).await.expect("打开仓库");
+    // 1. 仅暂存第一个变更块
+    repo.apply_hunk_patch(hunk1_patch, true, false)
+        .await
+        .expect("暂存第一块失败");
+    let staged = git(dir.path(), &["show", ":a.txt"]);
+    assert!(staged.contains("h1_changed"));
+    assert!(staged.contains("h2_b"));
+    assert!(!staged.contains("h2_changed"));
+
+    // 2. 取消暂存第一个变更块，索引回到基线
+    repo.apply_hunk_patch(hunk1_patch, true, true)
+        .await
+        .expect("取消暂存第一块失败");
+    let staged_after_unstage = git(dir.path(), &["show", ":a.txt"]);
+    assert_eq!(staged_after_unstage.trim(), base_content.trim());
+
+    // 3. 还原工作区中的第一个变更块，保留第二个变更块
+    repo.apply_hunk_patch(hunk1_patch, false, true)
+        .await
+        .expect("还原工作区第一块失败");
+    let working = std::fs::read_to_string(dir.path().join("a.txt")).expect("读取工作区");
+    assert_eq!(
+        working,
+        "h1_a\nh1_b\nc1\nc2\nc3\nc4\nh2_a\nh2_changed\n"
+    );
+}

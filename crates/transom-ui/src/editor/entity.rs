@@ -39,6 +39,8 @@ pub(crate) enum EditorPanelEvent {
     OpenLocalDiff(EditorDiffSource),
     /// 编辑器列表显隐变化；外壳工具栏选中态需要重绘。
     ListOpenChanged,
+    /// 编辑器内差异视图显示偏好已调整，通知外壳持久化设置。
+    DiffPreferencesChanged,
 }
 
 /// 外壳发起"与本地对比"时需要的远端快照；由实体只读产出。

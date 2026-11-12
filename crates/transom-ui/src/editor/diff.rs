@@ -13,12 +13,15 @@
 
 use std::rc::Rc;
 
-use super::entity::EditorPanels;
+use super::entity::{EditorPanelEvent, EditorPanels};
 use super::panel::{EditorPanelState, EditorPhase};
+use crate::app::update_app_settings;
 use crate::diff_pane::{
-    DiffViewOptions, OptionsUpdater, create_diff_state, prepare_diff_document,
-    render_change_nav_buttons, render_diff_body, render_option_controls, sync_diff_state_options,
+    DiffSearchBarProps, DiffViewOptions, OptionsUpdater, create_diff_state, prepare_diff_document,
+    render_change_nav_buttons, render_diff_body, render_diff_search_bar, render_option_controls,
+    sync_diff_state_options,
 };
+use crate::keymap::{DIFF_VIEW_CONTEXT, DiffFindInView};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -157,6 +160,7 @@ impl EditorPanels {
                             item.diff_deletions = deletions;
                             item.diff = diff_state;
                         });
+                        this.recompute_editor_diff_search(&target_editor, cx);
                         cx.notify();
                     }
                 }
@@ -195,6 +199,8 @@ impl EditorPanels {
         } else if let Some(ds) = diff_state {
             sync_diff_state_options(&ds, new_options, cx);
         }
+        update_app_settings(cx, |s| new_options.write_to_git_settings(&mut s.git));
+        cx.emit(EditorPanelEvent::DiffPreferencesChanged);
         cx.notify();
     }
 
@@ -285,6 +291,11 @@ impl EditorPanels {
         let save_editor = item.editor.clone();
         let back_editor = item.editor.clone();
         let opt_editor = item.editor.clone();
+        let search_toggle_editor = item.editor.clone();
+        let search_prev_editor = item.editor.clone();
+        let search_next_editor = item.editor.clone();
+        let search_close_editor = item.editor.clone();
+        let kbd_find_editor = item.editor.clone();
         let panels = cx.entity();
         let on_update: OptionsUpdater = Rc::new(move |updater, _window, cx| {
             panels.update(cx, |this, cx| {
@@ -331,6 +342,18 @@ impl EditorPanels {
                 item.diff_options,
                 on_update,
             ))
+            .child(
+                Button::new("editor-diff-search-toggle")
+                    .ghost()
+                    .xsmall()
+                    .icon(UiIcon::SEARCH)
+                    .when(item.diff_search.open, |btn| btn.secondary())
+                    .accessibility_label(rust_i18n::t!("git.diff.search_toggle").to_string())
+                    .tooltip(rust_i18n::t!("git.diff.search_toggle").to_string())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.toggle_editor_diff_search(&search_toggle_editor, window, cx);
+                    })),
+            )
             .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
             .child(
                 Button::new("editor-diff-back")
@@ -379,6 +402,7 @@ impl EditorPanels {
         } else {
             match item.diff.as_ref() {
                 Some(state) => render_diff_body(state, item.diff_options)
+                    .decorations(item.diff_search.build_decorations(p))
                     .flex_1()
                     .w_full()
                     .into_any_element(),
@@ -393,10 +417,40 @@ impl EditorPanels {
             }
         };
 
+        let prev_entity = cx.entity();
+        let next_entity = cx.entity();
+        let close_entity = cx.entity();
+        let search_bar = render_diff_search_bar(DiffSearchBarProps {
+            id_prefix: "editor-diff",
+            state: &item.diff_search,
+            p,
+            on_prev: Rc::new(move |_, cx| {
+                prev_entity.update(cx, |this, cx| {
+                    this.step_editor_diff_search(&search_prev_editor, false, cx);
+                });
+            }),
+            on_next: Rc::new(move |_, cx| {
+                next_entity.update(cx, |this, cx| {
+                    this.step_editor_diff_search(&search_next_editor, true, cx);
+                });
+            }),
+            on_close: Rc::new(move |_, cx| {
+                close_entity.update(cx, |this, cx| {
+                    this.close_editor_diff_search(&search_close_editor, cx);
+                });
+            }),
+        });
+
         v_flex()
+            .id("editor-diff-view-pane")
+            .key_context(DIFF_VIEW_CONTEXT)
+            .on_action(cx.listener(move |this, _: &DiffFindInView, window, cx| {
+                this.open_editor_diff_search(&kbd_find_editor, window, cx);
+            }))
             .flex_1()
             .min_h_0()
             .child(toolbar)
+            .children(search_bar)
             .child(body)
             .into_any_element()
     }
