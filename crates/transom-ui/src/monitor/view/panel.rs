@@ -3,6 +3,7 @@
 use super::*;
 use gpui_kit::prelude::FluentBuilder;
 use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -226,9 +227,9 @@ impl MonitorView {
                 crate::widgets::IconButton::new(
                     "monitor-toggle-width",
                     if drawer_width > 480.0 {
-                        AppIcon::Ui(UiIcon::RESTORE)
+                        AppIcon::Custom(CustomIcon::PANEL_NARROW)
                     } else {
-                        AppIcon::Ui(UiIcon::MAXIMIZE)
+                        AppIcon::Custom(CustomIcon::PANEL_WIDEN)
                     },
                     if drawer_width > 480.0 {
                         rust_i18n::t!("monitor.view.width_compact_tooltip").to_string()

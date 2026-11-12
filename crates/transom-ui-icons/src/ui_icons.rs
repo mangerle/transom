@@ -63,6 +63,7 @@ impl UiIcon {
     pub const HOME_FOLDER: Self = Self("homeFolder");
     pub const LIGHTNING: Self = Self("lightning");
     pub const LANGUAGE: Self = Self("language");
+    pub const KEY: Self = Self("greyKey");
     pub const KEYBOARD: Self = Self("keyboard");
     pub const LAYOUT: Self = Self("layout");
     pub const LEFT: Self = Self("left");
@@ -162,6 +163,7 @@ mod tests {
             UiIcon::EXCEPTION_ANALYZER,
             UiIcon::REAL_INTENTION_BULB,
             UiIcon::REFRESH_AUTO,
+            UiIcon::KEY,
         ] {
             let light = icon.light_path();
             assert!(asset_data(light.as_ref()).is_some());

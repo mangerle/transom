@@ -281,7 +281,11 @@ pub(super) fn render_local_toolbar(
                 .child(
                     crate::widgets::IconButton::new(
                         "local-toggle-hidden",
-                        AppIcon::Ui(UiIcon::SHOW),
+                        if show_hidden {
+                            AppIcon::Ui(UiIcon::SHOW)
+                        } else {
+                            AppIcon::Custom(CustomIcon::EYE_OFF)
+                        },
                         if show_hidden {
                             rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
                         } else {

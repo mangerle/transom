@@ -48,6 +48,10 @@ impl CustomIcon {
     pub const PODMAN: Self = Self("podman");
     pub const INFO: Self = Self("info");
     pub const CONNECTION_TEST: Self = Self("connection_test");
+    pub const FINGERPRINT: Self = Self("fingerprint");
+    pub const EYE_OFF: Self = Self("eye_off");
+    pub const PANEL_WIDEN: Self = Self("panel_widen");
+    pub const PANEL_NARROW: Self = Self("panel_narrow");
 
     /// 当前图标的浅色资产路径。
     pub fn light_path(self) -> SharedString {
@@ -111,6 +115,10 @@ mod tests {
             CustomIcon::PODMAN,
             CustomIcon::INFO,
             CustomIcon::CONNECTION_TEST,
+            CustomIcon::FINGERPRINT,
+            CustomIcon::EYE_OFF,
+            CustomIcon::PANEL_WIDEN,
+            CustomIcon::PANEL_NARROW,
         ] {
             let light = icon.light_path();
             assert!(asset_data(light.as_ref()).is_some());

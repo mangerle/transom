@@ -2,12 +2,10 @@
 
 use super::SettingsView;
 use super::search_keywords::GroupSearch;
-use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::setting::{SelectIndex, SettingGroup, SettingItem, SettingPage, Settings};
@@ -292,7 +290,7 @@ impl SettingsView {
         &self,
         app: &Entity<SettingsView>,
         window: &mut Window,
-        cx: &App,
+        _cx: &App,
         p: &Palette,
     ) -> AnyElement {
         let app_entity = app.clone();
@@ -332,7 +330,6 @@ impl SettingsView {
                     .items_center()
                     .border_color(p.divider(p.border))
                     .divider_edge(DividerEdge::Bottom, p.divider_width)
-                    .bg(p.title_bar)
                     .child(
                         h_flex()
                             .gap_2()
@@ -357,7 +354,7 @@ impl SettingsView {
                     .overflow_hidden()
                     .child(settings_component),
             )
-            .child(self.render_settings_footer(app, cx, p));
+            .child(self.render_settings_footer(app, p));
 
         panel.into_any_element()
     }
@@ -390,36 +387,16 @@ impl SettingsView {
             .collect()
     }
 
-    /// 设置弹窗页脚：当前主题提示、取消与保存。
-    fn render_settings_footer(
-        &self,
-        app: &Entity<SettingsView>,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
+    /// 设置弹窗页脚：取消与保存。
+    fn render_settings_footer(&self, app: &Entity<SettingsView>, p: &Palette) -> AnyElement {
         h_flex()
             .w_full()
             .px_5()
             .py_3()
-            .justify_between()
+            .justify_end()
             .items_center()
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Top, p.divider_width)
-            .bg(p.status_bar)
-            .child(
-                h_flex().gap_2().items_center().child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(format!(
-                            "{}: {}　{}: {}",
-                            rust_i18n::t!("settings.current_ui_theme"),
-                            cx.theme().theme_name(),
-                            rust_i18n::t!("settings.current_theme"),
-                            app_settings(cx).terminal_profile.theme_name
-                        )),
-                ),
-            )
             .child(
                 h_flex()
                     .gap_2()

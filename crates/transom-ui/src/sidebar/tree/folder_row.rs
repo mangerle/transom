@@ -14,7 +14,6 @@ use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
-use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
 impl AppShell {
@@ -126,7 +125,7 @@ fn folder_band(
     band = band.child(row_action_button(
         RowActionButtonProps {
             element_id: format!("folder-probe-{folder_id}"),
-            icon: AppIcon::Domain(DomainIcon::MONITOR),
+            icon: AppIcon::Ui(UiIcon::EXCEPTION_ANALYZER),
             tooltip: rust_i18n::t!("probe.folder_tooltip").to_string(),
             idle_color: p.muted_foreground,
             on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {

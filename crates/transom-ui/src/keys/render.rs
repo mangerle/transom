@@ -315,7 +315,7 @@ fn key_row(
             this.select_key(index, cx);
         }))
         .child(
-            AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED))
+            AppIconElement::new(AppIcon::Ui(UiIcon::KEY))
                 .small()
                 .text_color(if is_selected {
                     p.sidebar_accent_foreground
@@ -414,7 +414,7 @@ fn key_generate_fields(
                     Button::new("generate-key-pair")
                         .primary()
                         .small()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).small())
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::KEY)).small())
                         .label(if state.generating {
                             rust_i18n::t!("keys.generating").to_string()
                         } else {

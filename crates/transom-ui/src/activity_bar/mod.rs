@@ -302,17 +302,17 @@ mod labels {
 
     pub(crate) fn activity_item_icon(id: ActivityItemId) -> AppIcon {
         match id {
-            ActivityItemId::Sessions => UiIcon::PROJECT.into(),
+            ActivityItemId::Sessions => UiIcon::WEB_SERVER.into(),
             ActivityItemId::Tabs => DomainIcon::TERMINAL.into(),
             ActivityItemId::QuickOpen => UiIcon::SEARCH.into(),
             ActivityItemId::Forwards => DomainIcon::FORWARD.into(),
-            ActivityItemId::Sftp => UiIcon::LIST_FILES.into(),
+            ActivityItemId::Sftp => UiIcon::PROJECT.into(),
             ActivityItemId::Monitor => DomainIcon::MONITOR.into(),
             ActivityItemId::Containers => CustomIcon::DOCKER.into(),
             ActivityItemId::Language => UiIcon::LANGUAGE.into(),
             ActivityItemId::ImportSshConfig => UiIcon::DOWNLOAD.into(),
-            ActivityItemId::KnownHosts => UiIcon::CHECK.into(),
-            ActivityItemId::Keys => UiIcon::LOCKED.into(),
+            ActivityItemId::KnownHosts => CustomIcon::FINGERPRINT.into(),
+            ActivityItemId::Keys => UiIcon::KEY.into(),
             ActivityItemId::Settings => UiIcon::SETTINGS.into(),
             ActivityItemId::Git => UiIcon::VCS.into(),
             ActivityItemId::Unknown => UiIcon::ERROR.into(),

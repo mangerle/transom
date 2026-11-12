@@ -11,6 +11,7 @@ use gpui_kit::component::separator::Separator;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -251,7 +252,11 @@ impl SftpPanelView {
         } = *props;
         let hidden_btn = IconButton::new(
             format!("remote-toggle-hidden-{key}"),
-            AppIcon::Ui(UiIcon::SHOW),
+            if show_hidden {
+                AppIcon::Ui(UiIcon::SHOW)
+            } else {
+                AppIcon::Custom(CustomIcon::EYE_OFF)
+            },
             if show_hidden {
                 rust_i18n::t!("sftp.remote.hide_dotfiles").to_string()
             } else {

@@ -5,12 +5,10 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::keys::{KnownHostsEvent, KnownHostsView};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 impl AppShell {
@@ -140,14 +138,16 @@ fn known_host_row(
                 ),
         )
         .child(
-            Button::new(ElementId::Name(format!("del-kh-{index}").into()))
-                .danger()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                .label(rust_i18n::t!("common.delete").to_string())
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.remove(&host, port, cx);
-                })),
+            crate::widgets::IconButton::new(
+                ElementId::Name(format!("del-kh-{index}").into()),
+                AppIcon::Ui(UiIcon::DELETE),
+                rust_i18n::t!("common.delete").to_string(),
+            )
+            .size(crate::widgets::IconButtonSize::Regular)
+            .render()
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.remove(&host, port, cx);
+            })),
         )
         .into_any_element()
 }

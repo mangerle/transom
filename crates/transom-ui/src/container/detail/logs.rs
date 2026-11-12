@@ -3,6 +3,7 @@
 use super::*;
 use crate::container::ContainerWorkspace;
 use crate::widgets::status_dot_bare;
+use gpui_kit::component::Side;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
 use transom_ui_icons::AppIcon;
@@ -232,6 +233,7 @@ pub(crate) fn render_logs(
             let export_view = more_view.clone();
             let clear_view = more_view.clone();
 
+            let menu = menu.check_side(Side::Right);
             menu.item(
                 PopupMenuItem::new(rust_i18n::t!("container.logs.timestamps").to_string())
                     .checked(timestamps)

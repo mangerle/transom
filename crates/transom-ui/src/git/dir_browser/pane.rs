@@ -19,7 +19,7 @@ use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
 use transom_ui_icons::AppIconElement;
-use transom_ui_icons::DomainIcon;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::UiIcon;
 use transom_ui_icons::{AppIcon, render_app_icon};
 
@@ -110,7 +110,7 @@ fn actions_row(
         .child(quick_path_button(
             "git-browser-desktop",
             target,
-            AppIcon::Domain(DomainIcon::MONITOR),
+            AppIcon::Ui(UiIcon::DESKTOP),
             "sftp.desktop",
             quick_paths.desktop.clone(),
             app,
@@ -144,13 +144,21 @@ fn actions_row(
                     AppIconElement::new(if picker.browser.show_hidden {
                         AppIcon::Ui(UiIcon::SHOW)
                     } else {
-                        AppIcon::Ui(UiIcon::HIDE)
+                        AppIcon::Custom(CustomIcon::EYE_OFF)
                     })
                     .small(),
                 )
                 .selected(picker.browser.show_hidden)
-                .accessibility_label(rust_i18n::t!("sftp.nav.show_dotfiles").to_string())
-                .tooltip(rust_i18n::t!("sftp.nav.show_dotfiles").to_string())
+                .accessibility_label(if picker.browser.show_hidden {
+                    rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
+                } else {
+                    rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
+                })
+                .tooltip(if picker.browser.show_hidden {
+                    rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
+                } else {
+                    rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
+                })
                 .on_click(move |_, _, cx| {
                     hidden_app.update(cx, |this, cx| this.git_toggle_hidden(target, cx));
                 }),

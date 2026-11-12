@@ -12,3 +12,4 @@
 - `vcs` 是 Git 身份、分支与远端分支的统一图标；`refreshAuto` 作为“自动”选项图标，避免与服务器图标重复。
 - `realIntentionBulb`、`show` 用于 SFTP 编辑与隐藏文件开关。
 - `exceptionAnalyzer` 来自 `ExceptionAnalyzerIcons/expui`，用于会话列表拨测按钮；原文件未内嵌版权头，升级时需复核插件资产许可。
+- `greyKey` 来自 IntelliJ IDEA 2026.3 的 `DatabaseTools` 插件（`intellij.database.jar` 内 `icons/expui/greyKey.svg` 及 `_dark.svg`），原样保留 JetBrains Apache 2.0 声明，用于 `UiIcon::KEY`（密钥生成与管理）。
