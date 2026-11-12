@@ -1,9 +1,11 @@
 use super::palette::palette_rgb;
+use super::pipeline::{CursorVisibility, CursorVisibilityInput, resolve_cursor_visibility};
 use super::scan::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, is_cjk_char};
 use super::{PaletteColors, background_alpha};
 use crate::engine::TerminalEngine;
 use crate::highlight::CompiledHighlight;
 use alacritty_terminal::index::Line;
+use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::{Hsla, px, rgb};
 use transom_core::{TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize};
 
@@ -268,5 +270,125 @@ fn scratch_reuse_does_not_leak_between_rows() {
         scratch.text.trim_end(),
         "second line",
         "行尾补白不该留下上一行痕迹"
+    );
+}
+
+/// 光标闪烁熄灭或输入法组字期间，逻辑激活态 `active` 必须保持为 true，
+/// 防止当前行高亮跟着整行闪灭。
+#[test]
+fn cursor_blink_and_ime_keep_line_highlight_active() {
+    let blink_on = resolve_cursor_visibility(CursorVisibilityInput {
+        vi_mode: false,
+        show_cursor: true,
+        blink_visible: true,
+        shape: CursorShape::Block,
+        in_viewport: true,
+        ime_active: false,
+    });
+    assert_eq!(
+        blink_on,
+        CursorVisibility {
+            active: true,
+            visible: true,
+        }
+    );
+
+    let blink_off = resolve_cursor_visibility(CursorVisibilityInput {
+        vi_mode: false,
+        show_cursor: true,
+        blink_visible: false,
+        shape: CursorShape::Block,
+        in_viewport: true,
+        ime_active: false,
+    });
+    assert_eq!(
+        blink_off,
+        CursorVisibility {
+            active: true,
+            visible: false,
+        },
+        "闪烁熄灭时仅隐藏光标本体，当前行高亮仍需保持激活"
+    );
+
+    let ime_composing = resolve_cursor_visibility(CursorVisibilityInput {
+        vi_mode: false,
+        show_cursor: true,
+        blink_visible: true,
+        shape: CursorShape::Beam,
+        in_viewport: true,
+        ime_active: true,
+    });
+    assert_eq!(
+        ime_composing,
+        CursorVisibility {
+            active: true,
+            visible: false,
+        },
+        "IME 预编辑时抑制光标本体，但当前行高亮保持激活"
+    );
+}
+
+/// TUI 隐藏光标或光标滚出视口时，当前行高亮与光标本体应同时关闭；
+/// 进入 VI 复制模式时即便底层隐藏了光标也应保持可见。
+#[test]
+fn hidden_or_offscreen_cursor_disables_active_while_vi_mode_stays_visible() {
+    assert_eq!(
+        resolve_cursor_visibility(CursorVisibilityInput {
+            vi_mode: false,
+            show_cursor: false,
+            blink_visible: true,
+            shape: CursorShape::Block,
+            in_viewport: true,
+            ime_active: false,
+        }),
+        CursorVisibility {
+            active: false,
+            visible: false,
+        }
+    );
+
+    assert_eq!(
+        resolve_cursor_visibility(CursorVisibilityInput {
+            vi_mode: false,
+            show_cursor: true,
+            blink_visible: true,
+            shape: CursorShape::Hidden,
+            in_viewport: true,
+            ime_active: false,
+        }),
+        CursorVisibility {
+            active: false,
+            visible: false,
+        }
+    );
+
+    assert_eq!(
+        resolve_cursor_visibility(CursorVisibilityInput {
+            vi_mode: false,
+            show_cursor: true,
+            blink_visible: true,
+            shape: CursorShape::Block,
+            in_viewport: false,
+            ime_active: false,
+        }),
+        CursorVisibility {
+            active: false,
+            visible: false,
+        }
+    );
+
+    assert_eq!(
+        resolve_cursor_visibility(CursorVisibilityInput {
+            vi_mode: true,
+            show_cursor: false,
+            blink_visible: false,
+            shape: CursorShape::Block,
+            in_viewport: true,
+            ime_active: false,
+        }),
+        CursorVisibility {
+            active: true,
+            visible: true,
+        }
     );
 }

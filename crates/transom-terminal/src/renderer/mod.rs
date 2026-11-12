@@ -8,7 +8,7 @@ mod scan;
 mod search;
 mod types;
 
-use pipeline::RenderPassContext;
+use pipeline::{CursorVisibilityInput, RenderPassContext, resolve_cursor_visibility};
 pub(crate) use types::{
     DamageInfo, ImePaintInput, PaintRequest, RowVisual, SELECTION_ALPHA, TextVisual,
 };
@@ -226,13 +226,17 @@ impl TerminalRenderer {
         let cursor_style = request.term.cursor_style();
         let cursor_color = self.resolve(Color::Named(NamedColor::Cursor), colors);
         // 复制模式光标常亮：TUI 常常隐藏真实光标或让它闪烁，而浏览历史时
-        // 用户需要随时确认"我当前停在哪一格"。
-        let cursor_visible = (vi_mode
-            || (request.blink_visible && request.term.mode().contains(TermMode::SHOW_CURSOR)))
-            && cursor_style.shape != CursorShape::Hidden
-            && cursor_row.is_some_and(|row| (0..rows as i32).contains(&row))
-            && request.ime.is_none();
-        let block_cursor = cursor_visible && cursor_style.shape == CursorShape::Block;
+        // 用户需要随时确认"我当前停在哪一格"；同时将逻辑激活态与闪烁相位拆开，
+        // 让当前行底色在光标闪烁熄灭或 IME 组字期间保持常亮。
+        let cursor_visibility = resolve_cursor_visibility(CursorVisibilityInput {
+            vi_mode,
+            show_cursor: request.term.mode().contains(TermMode::SHOW_CURSOR),
+            blink_visible: request.blink_visible,
+            shape: cursor_style.shape,
+            in_viewport: cursor_row.is_some_and(|row| (0..rows as i32).contains(&row)),
+            ime_active: request.ime.is_some(),
+        });
+        let block_cursor = cursor_visibility.visible && cursor_style.shape == CursorShape::Block;
         let graphics = request.graphics;
         let bounds = request.bounds;
 
@@ -248,7 +252,8 @@ impl TerminalRenderer {
             cursor_col,
             cursor_color,
             cursor_shape: cursor_style.shape,
-            cursor_visible,
+            cursor_active: cursor_visibility.active,
+            cursor_visible: cursor_visibility.visible,
             block_cursor,
             request,
         };

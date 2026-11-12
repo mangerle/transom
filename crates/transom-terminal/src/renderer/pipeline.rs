@@ -17,6 +17,35 @@ use alacritty_terminal::selection::SelectionRange;
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::*;
 
+/// 判定光标“逻辑激活”与“本帧可见”所需的纯状态输入。
+pub(super) struct CursorVisibilityInput {
+    pub(super) vi_mode: bool,
+    pub(super) show_cursor: bool,
+    pub(super) blink_visible: bool,
+    pub(super) shape: CursorShape,
+    pub(super) in_viewport: bool,
+    pub(super) ime_active: bool,
+}
+
+/// 光标可见性的双层语义。
+///
+/// 将“逻辑光标是否在视口内激活”与“本帧是否绘制光标本体”拆分：当前行底色只需
+/// 跟随逻辑激活态，避免因光标闪烁熄灭或输入法组字导致整行背景跟着闪灭。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct CursorVisibility {
+    pub(super) active: bool,
+    pub(super) visible: bool,
+}
+
+/// 解析光标的双层可见性。
+pub(super) fn resolve_cursor_visibility(input: CursorVisibilityInput) -> CursorVisibility {
+    let active = (input.vi_mode || input.show_cursor)
+        && input.shape != CursorShape::Hidden
+        && input.in_viewport;
+    let visible = active && (input.vi_mode || input.blink_visible) && !input.ime_active;
+    CursorVisibility { active, visible }
+}
+
 /// 终端单帧绘制时的计算上下文。
 pub(super) struct RenderPassContext<'a> {
     pub(super) bounds: Bounds<Pixels>,
@@ -30,6 +59,9 @@ pub(super) struct RenderPassContext<'a> {
     pub(super) cursor_col: usize,
     pub(super) cursor_color: Hsla,
     pub(super) cursor_shape: CursorShape,
+    /// 逻辑光标是否在视口内激活（与闪烁相位及 IME 预编辑解耦）。
+    pub(super) cursor_active: bool,
+    /// 本帧是否实际绘制光标本体。
     pub(super) cursor_visible: bool,
     pub(super) block_cursor: bool,
     pub(super) request: PaintRequest<'a>,
@@ -51,13 +83,15 @@ impl TerminalRenderer {
     ///
     /// 该底色先于单元格背景绘制，显式 ANSI 背景仍保持最高优先级；缩到 0.72
     /// alpha 是为了在浅色和深色主题里都保留正文层次，而不是把整行洗成实色。
+    /// 此处只校验 `cursor_active` 而非 `cursor_visible`，确保光标闪烁或 IME
+    /// 组字期间整行底色保持常亮不闪烁。
     pub(super) fn paint_line_highlight_pass(
         &self,
         ctx: &RenderPassContext<'_>,
         window: &mut Window,
     ) {
         if !ctx.request.highlight_current_line
-            || !ctx.cursor_visible
+            || !ctx.cursor_active
             || !(0..ctx.rows as i32).contains(&ctx.cursor_row_raw)
         {
             return;
