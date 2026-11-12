@@ -62,8 +62,7 @@ impl SftpPanelView {
             .into_any_element()
     }
 
-    /// 文件操作组：下载、新建、搜索、重命名、编辑、权限、删除与上传。
-    /// 下载、新建目录/文件与检索按钮。
+    /// 文件操作组：下载与新建目录/文件按钮。
     fn render_browse_buttons(
         &self,
         props: &RemoteToolbarProps<'_>,
@@ -104,24 +103,12 @@ impl SftpPanelView {
             this.open_editor_new_file_modal_for(target, window, cx);
         }));
 
-        let search_btn = IconButton::new(
-            format!("remote-search-{key}"),
-            AppIcon::Ui(UiIcon::SEARCH),
-            rust_i18n::t!("sftp.remote.search").to_string(),
-        )
-        .size(IconButtonSize::Regular)
-        .render()
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.open_search_modal(target, window, cx);
-        }));
-
         h_flex()
             .gap_1()
             .items_center()
             .child(download_btn)
             .child(mkdir_btn)
             .child(new_file_btn)
-            .child(search_btn)
             .into_any_element()
     }
 
@@ -236,7 +223,7 @@ impl SftpPanelView {
             .into_any_element()
     }
 
-    /// 视图选项组：显隐、同步导航、目录对比与过滤。
+    /// 视图选项组：显隐、同步导航、目录对比与统一搜索入口。
     fn render_view_op_buttons(
         &self,
         props: &RemoteToolbarProps<'_>,
@@ -311,6 +298,7 @@ impl SftpPanelView {
             this.toggle_filter_pane(target, window, cx);
         }));
 
+        // 搜索按钮只保留一个入口：点击展开目录过滤，输入框回车进入远程检索。
         // 编辑列表浮层归面板实体渲染，这里只提供实体句柄与当前标签。
         h_flex()
             .gap_1()

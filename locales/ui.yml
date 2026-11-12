@@ -1678,8 +1678,8 @@ sftp:
       en: Two-pane sync navigation disabled
       zh-CN: 已关闭双栏同步导航联动
     filter:
-      en: Filter within directory (Ctrl+F)
-      zh-CN: 目录内模糊过滤 (Ctrl+F)
+      en: Filter in directory; press Enter to search remotely (Ctrl+F)
+      zh-CN: 目录内过滤，回车远程检索 (Ctrl+F)
   local_async:
     read_dir_failed:
       en: 'Failed to read the local directory: %{error}'

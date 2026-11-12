@@ -48,6 +48,16 @@ impl SftpPanelView {
             },
         );
         side_state.subscriptions.push(enter_sub);
+        let filter_enter_sub = cx.subscribe_in(
+            &side_state.filter_input,
+            window,
+            move |view, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    view.open_search_modal(SftpRemotePaneRef::Side(connection_id), window, cx);
+                }
+            },
+        );
+        side_state.subscriptions.push(filter_enter_sub);
 
         let width_hint = side_column_width_hint(&self.state, cx);
         let mount_plan = plan_side_mount(&self.state, width_hint, cx);

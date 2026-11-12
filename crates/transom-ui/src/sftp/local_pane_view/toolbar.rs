@@ -103,23 +103,8 @@ pub(super) fn render_local_toolbar(
                 .when(remote_available, |this| {
                     this.child(
                         crate::widgets::IconButton::new(
-                            "local-diff-remote",
-                            AppIcon::Ui(UiIcon::DIFF),
-                            rust_i18n::t!("sftp.nav.diff_with_remote").to_string(),
-                        )
-                        .disabled(!diff_ready)
-                        .size(crate::widgets::IconButtonSize::Regular)
-                        .render()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.open_local_diff(cx);
-                        })),
-                    )
-                })
-                .when(remote_available, |this| {
-                    this.child(
-                        crate::widgets::IconButton::new(
                             "local-collapse",
-                            AppIcon::Ui(UiIcon::LEFT),
+                            AppIcon::Custom(CustomIcon::PANEL_NARROW),
                             rust_i18n::t!("sftp.sidebar.collapse_local").to_string(),
                         )
                         .size(crate::widgets::IconButtonSize::Regular)
@@ -175,6 +160,19 @@ pub(super) fn render_local_toolbar(
                         .render()
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.queue_upload(tab_id, cx);
+                        })),
+                    )
+                    .child(
+                        crate::widgets::IconButton::new(
+                            "local-diff-remote",
+                            AppIcon::Ui(UiIcon::DIFF),
+                            rust_i18n::t!("sftp.nav.diff_with_remote").to_string(),
+                        )
+                        .disabled(!diff_ready)
+                        .size(crate::widgets::IconButtonSize::Regular)
+                        .render()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_local_diff(cx);
                         })),
                     )
                 })

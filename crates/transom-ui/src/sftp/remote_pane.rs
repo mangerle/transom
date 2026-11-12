@@ -26,6 +26,7 @@ use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteFile, TabId, TransferDirection};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -272,11 +273,7 @@ impl SftpPanelView {
 
         let collapse_btn = IconButton::new(
             format!("remote-collapse-{key}"),
-            if side_index.is_some() {
-                AppIcon::Ui(UiIcon::RIGHT)
-            } else {
-                AppIcon::Ui(UiIcon::LEFT)
-            },
+            AppIcon::Custom(CustomIcon::PANEL_NARROW),
             if side_index.is_some() {
                 rust_i18n::t!("sftp.sidebar.collapse_side").to_string()
             } else {

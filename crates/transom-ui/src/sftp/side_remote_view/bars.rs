@@ -17,6 +17,7 @@ use gpui_kit::*;
 use transom_core::ConnectionId;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -97,7 +98,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let expand_btn = crate::widgets::IconButton::new(
             "expand-sftp-local-btn",
-            AppIcon::Ui(UiIcon::LEFT),
+            AppIcon::Custom(CustomIcon::PANEL_WIDEN),
             rust_i18n::t!("sftp.sidebar.expand_local").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -112,7 +113,7 @@ impl SftpPanelView {
             .items_center()
             .py_2()
             .gap_2()
-            .bg(p.sidebar)
+            .bg(p.background)
             .child(expand_btn)
             .child(
                 AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER))
@@ -137,7 +138,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let expand_btn = crate::widgets::IconButton::new(
             "expand-sftp-remote-btn",
-            AppIcon::Ui(UiIcon::LEFT),
+            AppIcon::Custom(CustomIcon::PANEL_WIDEN),
             rust_i18n::t!("sftp.sidebar.expand_remote").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -152,7 +153,7 @@ impl SftpPanelView {
             .items_center()
             .py_2()
             .gap_2()
-            .bg(p.sidebar)
+            .bg(p.background)
             .child(expand_btn)
             .child(
                 AppIconElement::new(AppIcon::Domain(DomainIcon::SSH))
@@ -179,7 +180,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let expand_btn = crate::widgets::IconButton::new(
             format!("expand-side-{side_index}"),
-            AppIcon::Ui(UiIcon::RIGHT),
+            AppIcon::Custom(CustomIcon::PANEL_WIDEN),
             rust_i18n::t!("sftp.sidebar.expand_side_remote").to_string(),
         )
         .size(crate::widgets::IconButtonSize::Compact)
@@ -205,7 +206,7 @@ impl SftpPanelView {
             .items_center()
             .py_2()
             .gap_2()
-            .bg(p.sidebar)
+            .bg(p.background)
             .child(expand_btn)
             .child(close_btn)
             .child(

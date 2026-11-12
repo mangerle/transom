@@ -308,6 +308,7 @@ impl AppShell {
             quick_paths,
             remote_enter_sub,
             local_enter_sub,
+            remote_filter_enter_sub,
         } = input;
         SftpPanelState {
             main_connection,
@@ -357,7 +358,7 @@ impl AppShell {
             column_state: cx.new(|_| ResizableState::default()),
             column_widths: ColumnWidthMemory::default(),
             pending_width_adjustment: None,
-            _subscriptions: vec![remote_enter_sub, local_enter_sub],
+            _subscriptions: vec![remote_enter_sub, local_enter_sub, remote_filter_enter_sub],
         }
     }
 
@@ -389,6 +390,15 @@ impl AppShell {
                 }
             },
         );
+        let remote_filter_enter_sub = cx.subscribe_in(
+            &inputs.remote_filter_input,
+            window,
+            move |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.open_sftp_search_pane(tab_id, SftpRemotePaneRef::Main, window, cx);
+                }
+            },
+        );
         // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
         let main_connection = self.state.workspace.tabs[index].connection_id;
         let command_tx = Some(self.state.services.command_tx.clone());
@@ -403,6 +413,7 @@ impl AppShell {
                 quick_paths,
                 remote_enter_sub,
                 local_enter_sub,
+                remote_filter_enter_sub,
             },
             cx,
         );
@@ -437,6 +448,7 @@ struct SftpStateInput {
     quick_paths: LocalQuickPaths,
     remote_enter_sub: Subscription,
     local_enter_sub: Subscription,
+    remote_filter_enter_sub: Subscription,
 }
 
 /// SFTP 面板创建时用到的输入框集合。

@@ -48,7 +48,12 @@ impl SftpPanelView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(root_path) = self.state.remote_pane(target).map(|pane| pane.path.clone()) else {
+        let Some((root_path, initial_query)) = self.state.remote_pane(target).map(|pane| {
+            (
+                pane.path.clone(),
+                pane.filter_input.read(cx).value().trim().to_string(),
+            )
+        }) else {
             return;
         };
         let side_connection = match target {
@@ -57,6 +62,11 @@ impl SftpPanelView {
         };
         let placeholder = rust_i18n::t!("sftp.search.placeholder").to_string();
         let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        // 从内联过滤框按回车升级为远程检索时，保留用户已经输入的关键字，
+        // 避免用户再重复输入一次。
+        if !initial_query.is_empty() {
+            input.update(cx, |state, cx| state.set_value(initial_query, window, cx));
+        }
         input.update(cx, |state, cx| state.focus(window, cx));
         cx.emit(crate::sftp::SftpPanelEvent::OpenSearchModal(Box::new(
             SftpSearchModalState {
@@ -76,6 +86,24 @@ impl SftpPanelView {
 }
 
 impl AppShell {
+    /// 把主远端过滤框的回车动作转发给目标面板实体。
+    ///
+    /// 过滤输入框的订阅创建在外壳上下文，但检索弹窗状态必须由 SFTP 实体
+    /// 依据自身列状态构造；这里只负责定位实体，不复制或回读面板业务数据。
+    pub(crate) fn open_sftp_search_pane(
+        &mut self,
+        tab_id: TabId,
+        target: SftpRemotePaneRef,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(view) = self.state.sftp_view(tab_id) {
+            view.update(cx, |view, cx| {
+                view.open_search_modal(target, window, cx);
+            });
+        }
+    }
+
     /// 触发执行远程搜索请求。
     pub(crate) fn sftp_execute_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(ref mut modal) = self.state.sftp_modals.search else {
