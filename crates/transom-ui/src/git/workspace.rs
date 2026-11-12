@@ -80,9 +80,7 @@ impl AppShell {
         if matches!(view, GitView::Log) {
             root = root.child(self.render_git_toolbar(tab_id, &project, p, cx));
         }
-        root = root.child(body);
-        let diff_modal = self.render_git_diff_modal(tab_id, cx.entity().clone(), p, cx);
-        root.child(diff_modal).into_any_element()
+        root.child(body).into_any_element()
     }
 
     /// 顶部工具条（日志页）：分支角标 + 远程动作。

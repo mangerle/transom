@@ -3,11 +3,11 @@
 //! 设计原理（Why）：
 //! - 将冗长的文件路径按目录结构聚合成层级树，公共前缀自动压缩合并（如 `crates/transom-ui/src 9 个文件`）；
 //! - 仅展示纯文件名，彻底解决长路径换行拥挤杂乱的问题，使修改范围一目了然；
-//! - 状态图标采用 IDEA 同款细致微型徽标（修改蓝圈、新增绿加、删除红减），文字按状态语义着色；
+//! - 状态图标与文字统一采用 `git::change_accent_color` 语义色（修改蓝、新增绿、删除灰、冲突红），对齐 IDEA；
 //! - 目录可折叠；单击与双击文件都只更新右栏差异，不额外弹出对比框。
 
 use crate::app::AppShell;
-use crate::git::{ChangeAccent, change_visual};
+use crate::git::{change_accent_color, change_visual};
 use crate::palette::Palette;
 use crate::theme::tokens::{control, size};
 use gpui_kit::base::h_flex;
@@ -302,14 +302,7 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
 
 /// 文件名的修改状态语义色；类型图标保持 JetBrains 原始配色。
 fn change_color(change: ChangeCode, p: &Palette) -> Hsla {
-    let visual = change_visual(change);
-    match visual.accent {
-        ChangeAccent::Added => p.success,
-        ChangeAccent::Modified => p.primary,
-        ChangeAccent::Deleted => p.danger,
-        ChangeAccent::Conflict => p.warning,
-        ChangeAccent::Neutral => p.muted_foreground,
-    }
+    change_accent_color(change_visual(change).accent, p)
 }
 
 #[cfg(test)]

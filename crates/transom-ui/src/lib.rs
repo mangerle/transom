@@ -17,6 +17,7 @@ mod brand;
 mod bundled_fonts;
 mod cast_player;
 mod cast_player_io;
+mod diff_pane;
 mod divider;
 mod format;
 mod i18n;

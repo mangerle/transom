@@ -830,3 +830,26 @@ async fn init_creates_a_usable_repository() {
     );
     assert!(repo.resolve("HEAD").await.expect("解析 HEAD").is_none());
 }
+
+#[tokio::test]
+async fn status_expands_untracked_directory_files() {
+    let dir = repo_with_initial_commit();
+    let nested = dir.path().join("new_dir/sub");
+    std::fs::create_dir_all(&nested).expect("创建未跟踪多级目录");
+    std::fs::write(nested.join("first.rs"), "pub fn a() {}\n").expect("写入 first.rs");
+    std::fs::write(nested.join("second.rs"), "pub fn b() {}\n").expect("写入 second.rs");
+
+    let repo = Repo::open(dir.path()).await.expect("打开仓库");
+    let status = repo.status(false).await.expect("状态采集成功");
+    let mut untracked_paths: Vec<&str> = status
+        .untracked()
+        .into_iter()
+        .map(|entry| entry.path.as_str())
+        .collect();
+    untracked_paths.sort_unstable();
+    assert_eq!(
+        untracked_paths,
+        vec!["new_dir/sub/first.rs", "new_dir/sub/second.rs"],
+        "未跟踪目录内的文件应逐个展开，而不是折成一条目录项"
+    );
+}

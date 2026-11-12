@@ -294,6 +294,13 @@ impl EditorPanels {
             close_after_write: false,
             diff: None,
             showing_diff: false,
+            diff_options: crate::diff_pane::DiffViewOptions::default(),
+            diff_computing: false,
+            diff_error: None,
+            diff_compute_token: 0,
+            diff_additions: 0,
+            diff_deletions: 0,
+            diff_prepare_task: None,
             conflict: false,
             confirm: None,
             collapsed: false,
@@ -349,8 +356,7 @@ impl EditorPanels {
         item.pending_op = None;
         item.error = None;
         item.conflict = false;
-        item.showing_diff = false;
-        item.diff = None;
+        item.clear_diff_preview();
         // GBK 等转码内容只读预览：转码回写需要反向编码决策，超出内置编辑器
         // 的安全边界；缓冲区不可编辑，dirty 不会置位，保存自然被禁用。
         if meta.transcoded {
@@ -406,8 +412,7 @@ impl EditorPanels {
             item.error = None;
             item.conflict = false;
             // 重新载入会整体替换缓冲区，差异预览展示的旧基线随之失效。
-            item.showing_diff = false;
-            item.diff = None;
+            item.clear_diff_preview();
         });
         let request = RemoteTextReadParams {
             tab_id,

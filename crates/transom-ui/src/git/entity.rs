@@ -9,7 +9,10 @@
 //! 代价与局限：读写都必须携带 GPUI 上下文；渲染期只允许 `read`，写动作必须在
 //! `update` 闭包内完成，且闭包里不能再反查同一实体（会触发双重租借崩溃）。
 
+use std::collections::HashMap;
+
 use super::types::GitWorkspaceState;
+use gpui_kit::Task;
 use transom_core::{AppCommand, GitCommand, GitRequestId, TabId};
 
 /// 日志单页条数：一屏约 40 行，5 页滚动内不必再发请求。
@@ -23,6 +26,8 @@ pub(crate) struct GitWorkspace {
     pub(crate) tab_id: TabId,
     /// 控制器命令投递端：实体自己就能取数据，不需要外壳转手。
     pub(crate) command_tx: flume::Sender<AppCommand>,
+    /// 后台差异准备任务容器：按请求 ID 纳管，替换或关闭标签时自动取消。
+    pub(crate) diff_tasks: HashMap<GitRequestId, Task<()>>,
 }
 
 impl GitWorkspace {
@@ -36,6 +41,7 @@ impl GitWorkspace {
             state,
             tab_id,
             command_tx,
+            diff_tasks: HashMap::new(),
         }
     }
 

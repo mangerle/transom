@@ -2,8 +2,8 @@
 //!
 //! 设计原理（Why）：
 //! - 对齐 IntelliJ IDEA / openIDEA 标准 Git 日志右侧三栏布局；
-//! - 上半部分为变更文件清单（树/列表），支持单选、双击呼出独立全功能 Diff 对比弹窗，
-//!   并在顶部工具栏提供「在标签页打开」和「差异对比」动作；
+//! - 上半部分为变更文件清单（树/列表），点击可在右侧差异标签页查看比对，
+//!   并在顶部工具栏提供「在标签页中打开差异」动作；
 //! - 下半部分为提交说明（标题、换行正文、Hash、作者与邮箱、所属分支）；
 //! - 上下两部分由垂直拖拽切分器（v_resizable）组织，用户可按需自由调整高低比例。
 
@@ -119,49 +119,24 @@ fn render_files_section(
                 }),
         )
         .child(
-            h_flex()
-                .gap_1()
-                .items_center()
-                .child(
-                    Button::new("git-diff-compare-btn")
-                        .ghost()
-                        .xsmall()
-                        .icon(UiIcon::DIFF)
-                        .accessibility_label(rust_i18n::t!("git.details.compare_diff").to_string())
-                        .tooltip(rust_i18n::t!("git.details.compare_diff").to_string())
-                        .on_click({
-                            let toolbar_app = toolbar_app.clone();
-                            let first_path = first_file_path.clone();
-                            move |_, _, cx| {
-                                if let Some(path) = &first_path {
-                                    let path = path.clone();
-                                    toolbar_app.update(cx, |this, cx| {
-                                        this.git_open_diff_modal(tab_id, &path, cx);
-                                    });
-                                }
-                            }
-                        }),
-                )
-                .child(
-                    Button::new("git-diff-tab-btn")
-                        .ghost()
-                        .xsmall()
-                        .icon(UiIcon::EXTERNAL_LINK)
-                        .accessibility_label(rust_i18n::t!("git.details.open_in_tab").to_string())
-                        .tooltip(rust_i18n::t!("git.details.open_in_tab").to_string())
-                        .on_click({
-                            let toolbar_app = toolbar_app.clone();
-                            let first_path = first_file_path.clone();
-                            move |_, _, cx| {
-                                if let Some(path) = &first_path {
-                                    let path = path.clone();
-                                    toolbar_app.update(cx, |this, cx| {
-                                        this.git_diff_commit_file(tab_id, &path, cx);
-                                    });
-                                }
-                            }
-                        }),
-                ),
+            Button::new("git-diff-tab-btn")
+                .ghost()
+                .xsmall()
+                .icon(UiIcon::EXTERNAL_LINK)
+                .accessibility_label(rust_i18n::t!("git.details.open_in_tab").to_string())
+                .tooltip(rust_i18n::t!("git.details.open_in_tab").to_string())
+                .on_click({
+                    let toolbar_app = toolbar_app.clone();
+                    let first_path = first_file_path.clone();
+                    move |_, _, cx| {
+                        if let Some(path) = &first_path {
+                            let path = path.clone();
+                            toolbar_app.update(cx, |this, cx| {
+                                this.git_diff_commit_file(tab_id, &path, cx);
+                            });
+                        }
+                    }
+                }),
         );
 
     v_flex()

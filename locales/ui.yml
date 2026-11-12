@@ -5011,6 +5011,12 @@ editor:
   diff_confirm_upload:
     en: Upload
     zh-CN: 确认回传
+  diff_whitespace_only:
+    en: Only whitespace changes hidden by current ignore setting
+    zh-CN: 仅包含已被当前忽略规则隐藏的空白改动
+  diff_whitespace_upload_hint:
+    en: Upload full buffer including whitespace changes
+    zh-CN: 将回传包含空白改动在内的完整内容
   diff_empty:
     en: Diff not generated yet
     zh-CN: 差异尚未生成
@@ -8305,9 +8311,6 @@ git:
     open_in_tab:
       en: "Open Diff in Tab"
       zh-CN: "在标签页中打开差异"
-    compare_diff:
-      en: "Compare Diff (Double Click)"
-      zh-CN: "查看差异 (双击文件)"
     author_prefix:
       en: "Author"
       zh-CN: "作者"
@@ -8354,6 +8357,18 @@ git:
     wrap_lines:
       en: Wrap Lines
       zh-CN: 自动换行
+    collapse_unchanged:
+      en: Collapse Unchanged Lines
+      zh-CN: 折叠未变更行
+    no_changes:
+      en: No differences under current ignore settings
+      zh-CN: 当前忽略规则下无差异
+    computing:
+      en: Computing diff…
+      zh-CN: 正在计算差异…
+    compute_failed:
+      en: Failed to compute diff
+      zh-CN: 计算差异失败
     align_changes:
       en: Align Changes
       zh-CN: 对齐更改

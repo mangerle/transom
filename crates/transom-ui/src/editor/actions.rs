@@ -173,8 +173,7 @@ impl EditorPanels {
             item.written_size = None;
             item.error = None;
             // 差异预览展示的是"待回传变更"，内容已回到基线，预览随之失效。
-            item.showing_diff = false;
-            item.diff = None;
+            item.clear_diff_preview();
         });
         self.clear_change_decorations(editor, cx);
         self.defer_close_resume(window, cx);

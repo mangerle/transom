@@ -1,23 +1,21 @@
-//! 改动树里的单行文件：勾选、状态、差异入口与文件右键菜单。
+//! 改动树里的单行文件：勾选、图标、语义着色文件名、灰色目录后缀与右键菜单。
 //!
-//! 设计原理（Why）：文件行是提交面板里唯一带三类交互（勾选 / 看差异 / 菜单）的单元，
-//! 与分组层拆开后，可以单独核对「哪种状态允许哪种动作」。
+//! 设计原理（Why）：文件行通过文件名颜色区分变更语义（如新增绿、修改蓝、
+//! 删除灰、未跟踪/冲突红），因此行尾不再重复堆叠状态字母与差异图标按钮；
+//! 单击与双击统一在右侧差异区打开比对，不再弹出独立差异弹窗。
 
-use super::{ChangeGroup, accent_color, check_box, check_placeholder, split_path, visual_letter};
+use super::{ChangeGroup, check_box, check_placeholder, split_path};
 use crate::app::AppShell;
 use crate::git::actions::GitDiffRequest;
-use crate::git::{primary_record, untracked_visual};
+use crate::git::{change_accent_color, primary_record, untracked_visual};
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GitAction, GitProject, GitSide, StatusEntry};
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 use transom_ui_icons::{AppIcon, render_app_icon};
 
@@ -58,7 +56,7 @@ pub(crate) struct GitFileRowProps<'a> {
 }
 
 impl AppShell {
-    /// 一行文件：勾选 + 文件名 + 灰色目录后缀 + 状态字母 + 差异按钮。
+    /// 一行文件：勾选 + 图标 + 语义着色文件名 + 灰色目录后缀。
     pub(crate) fn git_file_row(
         &mut self,
         props: &GitFileRowProps<'_>,
@@ -80,14 +78,11 @@ impl AppShell {
         let is_checked = checked.contains(&path);
         let element_id = format!("git-row-{}-{path}", group.key());
         let check_id = format!("{element_id}-check");
-        let diff_id = format!("git-row-diff-{}-{path}", group.key());
         let old_path = entry.old_path.clone();
         let app: Entity<AppShell> = cx.entity().clone();
 
         let check_project = project.clone();
         let check_path = path.clone();
-        let action_project = project.clone();
-        let action_path = path.clone();
         let menu_path = path.clone();
         let (file_name, dir_prefix) = split_path(&path);
         let tooltip_path = path.clone();
@@ -132,7 +127,7 @@ impl AppShell {
                     .overflow_hidden()
                     .truncate()
                     .text_color(if group.actionable() {
-                        accent_color(visual.accent, p)
+                        change_accent_color(visual.accent, p)
                     } else {
                         p.muted_foreground
                     })
@@ -161,41 +156,13 @@ impl AppShell {
                             .into_any_element()
                     })
                     .unwrap_or_else(|| div().into_any_element()),
-            )
-            .child(
-                div()
-                    .w(px(14.0))
-                    .text_xs()
-                    .text_color(accent_color(visual.accent, p))
-                    .child(visual_letter(visual.accent)),
             );
-        if group.actionable() {
-            row = row.child(
-                Button::new(ElementId::Name(diff_id.into()))
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DIFF)).small())
-                    .accessibility_label("Show diff")
-                    .on_click(cx.listener(move |this, _, _window, cx| {
-                        cx.stop_propagation();
-                        this.git_open_worktree_diff(
-                            &action_project,
-                            group,
-                            action_path.clone(),
-                            cx,
-                        );
-                    })),
-            );
-        }
         if group.actionable() {
             let click_project = project.clone();
             let click_path = path.clone();
-            let dbl_path = path.clone();
             row = row.on_click(cx.listener(move |this, event: &ClickEvent, _window, cx| {
-                if event.click_count() >= 2
-                    && let Some(tab_id) = this.git_tab_for_project(click_project.id, cx)
-                {
-                    this.git_open_diff_modal(tab_id, &dbl_path, cx);
+                // 双击的第一次点击已经完成同一动作；忽略后续点击，避免重复发差异请求。
+                if event.click_count() > 1 {
                     return;
                 }
                 this.git_open_worktree_diff(&click_project, group, click_path.clone(), cx);
@@ -346,7 +313,7 @@ fn run_paths(
 /// 修正目标提交里的一行只读文件：与改动树同一套状态色，没有勾选框与动作。
 pub(crate) fn amend_file_row(file: &transom_core::CommitFile, p: &Palette) -> AnyElement {
     let visual = crate::git::change_visual(file.change);
-    let accent = accent_color(visual.accent, p);
+    let accent = change_accent_color(visual.accent, p);
     let (name, dir) = split_path(&file.path);
     let tooltip_path = file.path.clone();
     h_flex()
@@ -381,13 +348,6 @@ pub(crate) fn amend_file_row(file: &transom_core::CommitFile, p: &Palette) -> An
                 .text_xs()
                 .text_color(p.muted_foreground)
                 .child(dir),
-        )
-        .child(
-            div()
-                .w(px(14.0))
-                .text_xs()
-                .text_color(accent)
-                .child(visual_letter(visual.accent)),
         )
         .into_any_element()
 }

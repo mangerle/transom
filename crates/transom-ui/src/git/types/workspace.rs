@@ -156,8 +156,6 @@ pub(crate) struct GitWorkspaceState {
     pub right_split: Entity<ResizableState>,
     /// 日志页引用栏、提交表与详情栏的横向切分状态。
     pub log_split: Entity<ResizableState>,
-    /// 是否打开全功能独立 Diff 差异对比弹窗。
-    pub diff_modal_open: bool,
 }
 
 impl GitWorkspaceState {
@@ -255,7 +253,6 @@ impl GitWorkspaceState {
             refs_search_input,
             right_split,
             log_split,
-            diff_modal_open: false,
         }
     }
 
@@ -276,20 +273,91 @@ impl GitWorkspaceState {
         self.pending.retain(|item| *item != request_id);
     }
 
-    /// 将读取到的差异内容填入主 diff 与对应多标签项。
+    /// 将读取到的差异内容填入主 diff 与对应多标签项，同时清掉旧的缓存产物。
     pub(crate) fn apply_diff_loaded(&mut self, request_id: GitRequestId, content: DiffContent) {
+        let reset = |item: &mut GitDiffState, content: DiffContent| {
+            let binary = content.binary;
+            item.content = Some(content);
+            item.loading = false;
+            item.error = None;
+            item.diff_state = None;
+            item.computed_ignore = None;
+            item.summary_hunks = 0;
+            item.summary_additions = 0;
+            item.summary_deletions = 0;
+            item.computing = !binary;
+        };
         if let Some(current) = self.diff.as_mut()
             && current.request_id == request_id
         {
-            current.content = Some(content.clone());
-            current.loading = false;
+            reset(current, content.clone());
         }
         for tab in &mut self.diff_tabs {
             if tab.request_id == request_id {
-                tab.content = Some(content);
-                tab.loading = false;
+                reset(tab, content);
                 break;
             }
         }
+    }
+
+    /// 检查主 `diff` 或 `diff_tabs` 中是否存在匹配 `request_id` 与 `token` 的槽位。
+    pub(crate) fn diff_slots_match(&self, request_id: GitRequestId, token: u64) -> bool {
+        self.diff
+            .as_ref()
+            .is_some_and(|d| d.request_id == request_id && d.compute_token == token)
+            || self
+                .diff_tabs
+                .iter()
+                .any(|t| t.request_id == request_id && t.compute_token == token)
+    }
+
+    /// 就地更新匹配 `request_id` 与 `token` 的主 `diff` 与多标签项，返回是否有命中项。
+    pub(crate) fn update_diff_slots(
+        &mut self,
+        request_id: GitRequestId,
+        token: u64,
+        mut update: impl FnMut(&mut GitDiffState),
+    ) -> bool {
+        let mut hit = false;
+        if let Some(current) = self.diff.as_mut()
+            && current.request_id == request_id
+            && current.compute_token == token
+        {
+            update(current);
+            hit = true;
+        }
+        for tab in &mut self.diff_tabs {
+            if tab.request_id == request_id && tab.compute_token == token {
+                update(tab);
+                hit = true;
+            }
+        }
+        hit
+    }
+
+    /// 按 `request_id` 将失败信息精确落入对应 diff 槽位；命中 diff 请求时返回 `true`。
+    pub(crate) fn apply_diff_failed(
+        &mut self,
+        request_id: GitRequestId,
+        message: &str,
+    ) -> bool {
+        let mut hit = false;
+        if let Some(current) = self.diff.as_mut()
+            && current.request_id == request_id
+        {
+            current.loading = false;
+            current.computing = false;
+            current.error = Some(message.to_string());
+            hit = true;
+        }
+        for tab in &mut self.diff_tabs {
+            if tab.request_id == request_id {
+                tab.loading = false;
+                tab.computing = false;
+                tab.error = Some(message.to_string());
+                hit = true;
+            }
+        }
+        hit
     }
 }

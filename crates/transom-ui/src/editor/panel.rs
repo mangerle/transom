@@ -15,6 +15,7 @@
 //!   再按语法名匹配），只在扩展名确实无法命中的情况下重定向，其余一律原样透传，
 //!   避免维护一张会随语法集版本过期的语言别名表。
 
+use crate::diff_pane::DiffViewOptions;
 use gpui_kit::base::input::{GutterDecorationCollection, OverviewRulerDecorationCollection};
 use gpui_kit::component::diff::DiffState;
 use gpui_kit::component::input::EditorState;
@@ -143,10 +144,22 @@ pub(crate) struct EditorPanelState {
     /// 关闭确认横幅选"保存并关闭"时置位：回传成功即关闭面板，
     /// 任何失败路径都会清掉，避免之后的普通保存意外触发关闭。
     pub(crate) close_after_write: bool,
-    /// 保存前差异预览：进入差异视图时按基线与缓冲区现值构建，返回编辑、
-    /// 内容被整体替换（重载/恢复/回传成功）时清空。
+    /// 保存前差异预览：进入差异视图时按基线与缓冲区现值在后台计算并缓存，
+    /// 返回编辑、内容被整体替换（重载/恢复/回传成功）时清空。
     pub(crate) diff: Option<Entity<DiffState>>,
     pub(crate) showing_diff: bool,
+    /// 差异预览显示选项（与 Git Diff 共用同一套 `DiffViewOptions`）。
+    pub(crate) diff_options: DiffViewOptions,
+    /// 差异预览后台计算进行中。
+    pub(crate) diff_computing: bool,
+    /// 差异预览计算失败信息（与 `error` 读写失败正交）。
+    pub(crate) diff_error: Option<String>,
+    /// 差异预览计算代际令牌：丢弃过期线程回传结果。
+    pub(crate) diff_compute_token: u64,
+    pub(crate) diff_additions: usize,
+    pub(crate) diff_deletions: usize,
+    /// 后台差异准备任务句柄：退出预览、关闭面板或发起新一轮计算时自动取消旧任务。
+    pub(crate) diff_prepare_task: Option<Task<()>>,
     /// 回传前的版本指纹比对发现远端已被修改：横幅提供重新载入/强制覆盖/继续
     /// 编辑三个出口。与 `error` 分开表达——普通失败只需就地显示文本，冲突需要
     /// 动作按钮，且"内容被他人改写"与"读写出错"是两类不同事件。
@@ -169,6 +182,18 @@ pub(crate) struct EditorPanelState {
 }
 
 impl EditorPanelState {
+    /// 退出并清理保存前差异预览缓存与计算状态。
+    pub(crate) fn clear_diff_preview(&mut self) {
+        self.showing_diff = false;
+        self.diff = None;
+        self.diff_computing = false;
+        self.diff_error = None;
+        self.diff_compute_token = self.diff_compute_token.wrapping_add(1);
+        self.diff_additions = 0;
+        self.diff_deletions = 0;
+        self.diff_prepare_task = None;
+    }
+
     /// 当前实际占用的垂直高度：折叠态只占标题栏。
     pub(crate) fn current_height(&self) -> f32 {
         if self.collapsed {

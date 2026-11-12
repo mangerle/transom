@@ -68,8 +68,7 @@ impl EditorPanels {
             item.error = None;
             item.conflict = false;
             // 差异预览展示的"待回传变更"已经落盘，回编辑视图展示新基线内容。
-            item.showing_diff = false;
-            item.diff = None;
+            item.clear_diff_preview();
             let close_after = item.close_after_write;
             item.close_after_write = false;
             let was_new_file = item.new_file;

@@ -244,7 +244,7 @@ pub(super) fn render_file_row(
             if let Some(t_id) = tab_id {
                 let p_str = file_path.clone();
                 app_diff.update(cx, |this, cx| {
-                    this.git_open_diff_modal(t_id, &p_str, cx);
+                    this.git_diff_commit_file(t_id, &p_str, cx);
                 });
             }
         })

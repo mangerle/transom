@@ -643,7 +643,10 @@ fn large_lists_use_virtualization() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     for (relative, required) in [
         ("src/git/log_view/log_table.rs", "v_virtual_list"),
-        ("src/git/diff_view.rs", "v_virtual_list"),
+        // Git Diff 与 SFTP 远程编辑器统一委托给基于 gpui_kit 虚拟列表底座的 diff_pane
+        ("src/git/diff_view.rs", "render_diff_body("),
+        ("src/editor/diff.rs", "render_diff_body("),
+        ("src/diff_pane/controls.rs", "Diff::new("),
         ("src/container/list/render.rs", "v_virtual_list"),
     ] {
         let content = std::fs::read_to_string(root.join(relative)).expect("读取列表文件失败");
@@ -688,6 +691,26 @@ fn git_log_file_rows_keep_single_click_behavior() {
     assert!(
         content.contains("git_diff_commit_file"),
         "日志文件树点击必须走右栏差异选择路径"
+    );
+}
+
+/// 提交面板文件行的双击与单击保持一致（均走右侧差异栏，不弹独立差异弹窗），且行尾不重复堆叠状态字母或差异按钮。
+#[test]
+fn git_commit_file_rows_keep_single_click_without_trailing_badges() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let content = std::fs::read_to_string(root.join("src/git/commit_modal/file_row.rs"))
+        .expect("读取 Git 提交文件行失败");
+    assert!(
+        !content.contains("git_open_diff_modal"),
+        "提交面板文件行双击不得打开独立差异弹窗"
+    );
+    assert!(
+        !content.contains("visual_letter"),
+        "提交面板文件行已由颜色区分状态，不得在行尾重复展示状态字母"
+    );
+    assert!(
+        !content.contains("git-row-diff-"),
+        "提交面板文件行点击整行即看差异，不得在行尾重复展示差异图标按钮"
     );
 }
 

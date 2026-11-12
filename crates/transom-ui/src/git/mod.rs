@@ -14,7 +14,6 @@ mod bottom_log;
 mod commit_box;
 mod commit_modal;
 mod commit_page;
-mod diff_modal;
 mod diff_view;
 mod entity;
 mod form;
@@ -49,18 +48,20 @@ pub(crate) use rebase_modal::GitRebaseModal;
 pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};
 pub(crate) use worktree_modal::GitWorktreeModal;
 
+use crate::palette::Palette;
+use gpui_kit::Hsla;
 use transom_core::{ChangeCode, StatusRecord};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
 /// 变更条目在界面里的视觉表达。
 ///
-/// 设计原理（Why）：IDEA 用「字母 + 颜色」双通道标注状态（M 棕、A 绿、D 红…），
-/// 颜色单独不足以区分，故这里同时给出图标与配色键，界面两侧共用一份口径。
+/// 设计原理（Why）：IDEA 用「字母 + 颜色」双通道标注状态（M 蓝、A 绿、D 灰、? 红…），
+/// 颜色单独不足以区分，故这里同时给出图标与配色键，界面各处共用同一套口径。
 pub(crate) struct ChangeVisual {
     /// 状态图标。
     pub icon: AppIcon,
-    /// 配色分组：列表字母与图标共用一套语义色。
+    /// 配色分组：列表文件名、状态字母与图标共用一套语义色。
     pub accent: ChangeAccent,
 }
 
@@ -70,8 +71,21 @@ pub(crate) enum ChangeAccent {
     Added,
     Modified,
     Deleted,
+    Untracked,
     Conflict,
     Neutral,
+}
+
+/// 将变更着色分组映射到调色板语义色（对齐 IntelliJ IDEA Git 文件状态颜色）。
+pub(crate) fn change_accent_color(accent: ChangeAccent, p: &Palette) -> Hsla {
+    match accent {
+        ChangeAccent::Added => p.success,
+        ChangeAccent::Modified => p.primary,
+        ChangeAccent::Deleted => p.muted_foreground,
+        ChangeAccent::Untracked => p.danger,
+        ChangeAccent::Conflict => p.danger,
+        ChangeAccent::Neutral => p.muted_foreground,
+    }
 }
 
 /// 把状态码折算成界面图标与配色分组。
@@ -116,7 +130,7 @@ pub(crate) fn change_visual(code: ChangeCode) -> ChangeVisual {
 pub(crate) fn untracked_visual() -> ChangeVisual {
     ChangeVisual {
         icon: AppIcon::Ui(UiIcon::REFRESH),
-        accent: ChangeAccent::Neutral,
+        accent: ChangeAccent::Untracked,
     }
 }
 

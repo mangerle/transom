@@ -120,7 +120,7 @@ impl AppShell {
         self.git_load_log(tab_id, 0, cx);
     }
 
-    /// 改一个差异显示选项并重算当前差异。
+    /// 改一个差异显示选项并同步/重算当前差异。
     pub(crate) fn git_update_diff_options(
         &mut self,
         tab_id: TabId,
@@ -130,10 +130,12 @@ impl AppShell {
         let Some(workspace) = self.state.git_workspace(tab_id) else {
             return;
         };
-        workspace.update(cx, |workspace, _| {
+        let old_ignore = workspace.update(cx, |workspace, _| {
+            let old_ignore = workspace.state.diff_options.ignore_whitespace;
             update(&mut workspace.state.diff_options);
+            old_ignore
         });
-        cx.notify();
+        self.git_apply_diff_options_change(tab_id, old_ignore, cx);
     }
 
     /// 切换改动树的「平铺 / 按目录」分组依据。

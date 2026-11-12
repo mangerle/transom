@@ -7,8 +7,9 @@
 //!   后者会把栈项从 stash 栈移除——界面必须区分明确；
 //! - 删除走独立确认，不与列表点击混在一起。
 
-use super::commit_modal::{accent_color, split_path};
+use super::commit_modal::split_path;
 use crate::app::AppShell;
+use crate::git::change_accent_color;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::{h_flex, v_flex};
@@ -309,7 +310,7 @@ impl AppShell {
             .child(
                 AppIconElement::new(visual.icon)
                     .xsmall()
-                    .text_color(accent_color(visual.accent, p)),
+                    .text_color(change_accent_color(visual.accent, p)),
             )
             .child(
                 div()

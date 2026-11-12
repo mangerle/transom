@@ -19,7 +19,6 @@ mod group_menu;
 pub(crate) use file_row::{amend_file_row, worktree_diff_request};
 
 use crate::app::AppShell;
-use crate::git::ChangeAccent;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::h_flex;
@@ -340,26 +339,6 @@ pub(crate) fn check_box(checked: bool, p: &Palette) -> AnyElement {
 /// 只读行的勾选位占位：与勾选框同宽，保证忽略组与其它组的列对齐。
 pub(crate) fn check_placeholder() -> AnyElement {
     div().size(px(13.0)).flex_none().into_any_element()
-}
-
-pub(crate) fn visual_letter(accent: ChangeAccent) -> &'static str {
-    match accent {
-        ChangeAccent::Added => "A",
-        ChangeAccent::Modified => "M",
-        ChangeAccent::Deleted => "D",
-        ChangeAccent::Conflict => "!",
-        ChangeAccent::Neutral => "?",
-    }
-}
-
-pub(crate) fn accent_color(accent: ChangeAccent, p: &Palette) -> Hsla {
-    match accent {
-        ChangeAccent::Added => p.success,
-        ChangeAccent::Modified => p.warning,
-        ChangeAccent::Deleted => p.danger,
-        ChangeAccent::Conflict => p.danger,
-        ChangeAccent::Neutral => p.muted_foreground,
-    }
 }
 
 pub(crate) fn hint(text: String, p: &Palette) -> AnyElement {

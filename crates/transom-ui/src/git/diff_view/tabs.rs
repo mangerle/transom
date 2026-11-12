@@ -3,18 +3,19 @@
 //! 设计原理（Why）：
 //! - 将标签栏（Tabs）与列头（Header）逻辑独立提取，保持 `diff_view.rs` 紧凑且单文件不超行；
 //! - 标签栏遵循「一个标签一个名字」原则，提供文件类型图标、路径名与关闭按钮；
-//! - 双栏列头与下方代码行的 `side`（各占 50% 宽度并留出行号槽）严格对齐，标明对比基准与当前版本。
+//! - 双栏列头仅对称展示对比基准与当前版本，不再用固定像素伪对齐动态变化的行号槽，
+//!   避免行号开关或横向滚动时出现错位。
 
 use std::path::Path;
 
-use super::GUTTER_WIDTH;
 use crate::app::AppShell;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
 use crate::widgets::{IconButton, IconButtonSize};
-use gpui_kit::base::{Selectable, h_flex};
+use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
 use transom_ui_icons::AppIconElement;
@@ -49,37 +50,57 @@ pub(crate) fn render_diff_tab_bar(
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| tab_item.path.clone());
             let tab_app = app.clone();
+            let outer_tab_app = app.clone();
             let close_app = app.clone();
             let select_path = tab_item.path.clone();
+            let outer_select_path = tab_item.path.clone();
             let close_path = tab_item.path.clone();
             h_flex()
+                .id(ElementId::Name(
+                    format!("git-diff-tab-item-{}", tab_item.path).into(),
+                ))
+                .h_full()
                 .items_center()
-                .gap_1p5()
-                .px_2()
-                .py_0p5()
-                .rounded(px(2.0))
+                .gap_1()
+                .pl_2()
+                .pr_1()
+                .cursor_pointer()
                 .bg(if is_active {
-                    p.background
+                    p.tab_active
                 } else {
                     gpui::transparent_black()
                 })
+                .when(!is_active, |el| el.hover(|s| s.bg(p.list_hover)))
                 .border_color(if is_active {
                     p.primary
                 } else {
                     gpui::transparent_black()
                 })
                 .border_b_2()
+                .on_click(move |_, _, cx| {
+                    outer_tab_app.update(cx, |this, cx| {
+                        this.git_select_diff_tab_by_path(tab_id, &outer_select_path, cx);
+                    });
+                })
                 .child(
                     Button::new(ElementId::Name(
                         format!("git-diff-tab-{}", tab_item.path).into(),
                     ))
-                    .ghost()
+                    .text()
                     .xsmall()
-                    .selected(is_active)
                     .accessibility_label(file_name.clone())
                     .child(render_app_icon(AppIcon::for_file(&tab_item.path), 14.0))
-                    .child(file_name)
+                    .child(
+                        div()
+                            .text_color(if is_active {
+                                p.tab_active_foreground
+                            } else {
+                                p.tab_foreground
+                            })
+                            .child(file_name),
+                    )
                     .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
                         tab_app.update(cx, |this, cx| {
                             this.git_select_diff_tab_by_path(tab_id, &select_path, cx);
                         });
@@ -94,6 +115,7 @@ pub(crate) fn render_diff_tab_bar(
                     .size(IconButtonSize::Compact)
                     .render()
                     .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
                         close_app.update(cx, |this, cx| {
                             this.git_close_diff_tab_by_path(tab_id, &close_path, cx);
                         });
@@ -135,8 +157,8 @@ pub(crate) fn render_diff_columns_header(
             h_flex()
                 .w_1_2()
                 .h_full()
+                .px_2()
                 .items_center()
-                .child(div().w(px(GUTTER_WIDTH)).flex_none())
                 .child(
                     h_flex()
                         .flex_1()
@@ -158,6 +180,7 @@ pub(crate) fn render_diff_columns_header(
                         )
                         .child(
                             div()
+                                .truncate()
                                 .text_color(p.muted_foreground.opacity(0.75))
                                 .child(short_path),
                         ),
@@ -167,10 +190,10 @@ pub(crate) fn render_diff_columns_header(
             h_flex()
                 .w_1_2()
                 .h_full()
+                .px_2()
                 .items_center()
                 .border_color(p.divider(p.border))
                 .border_l_1()
-                .child(div().w(px(GUTTER_WIDTH)).flex_none())
                 .child(
                     h_flex()
                         .flex_1()

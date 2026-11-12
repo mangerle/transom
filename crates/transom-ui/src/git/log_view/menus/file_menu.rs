@@ -73,7 +73,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_new_tab.clone();
                 modal_app.update(cx, |this, cx| {
-                    this.git_open_diff_modal(tab_id, &path, cx);
+                    this.git_diff_commit_file(tab_id, &path, cx);
                 });
             },
         ))
@@ -84,7 +84,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_compare.clone();
                 compare_app.update(cx, |this, cx| {
-                    this.git_open_diff_modal(tab_id, &path, cx);
+                    this.git_diff_commit_file(tab_id, &path, cx);
                 });
             },
         ))
@@ -97,7 +97,7 @@ pub(crate) fn render_file_tree_menu(
             .render(move |_, _, cx| {
                 let path = path_before.clone();
                 before_app.update(cx, |this, cx| {
-                    this.git_open_diff_modal(tab_id, &path, cx);
+                    this.git_diff_commit_file(tab_id, &path, cx);
                 });
             }),
         )
@@ -126,7 +126,7 @@ pub(crate) fn render_file_tree_menu(
             .render(move |_, _, cx| {
                 let path = path_repo.clone();
                 repo_app.update(cx, |this, cx| {
-                    this.git_open_diff_modal(tab_id, &path, cx);
+                    this.git_diff_commit_file(tab_id, &path, cx);
                 });
             }),
         )

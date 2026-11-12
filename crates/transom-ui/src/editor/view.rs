@@ -329,7 +329,7 @@ impl EditorPanels {
                     )
                     .into_any_element()
             }
-        } else if item.showing_diff && item.diff.is_some() {
+        } else if item.showing_diff {
             // 保存前差异预览：替换编辑器主体，确认回传/返回编辑在预览工具行上。
             self.render_diff_view(item, p, cx)
         } else {

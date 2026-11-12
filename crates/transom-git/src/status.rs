@@ -17,9 +17,11 @@ use std::path::Path;
 
 /// 采集一次工作区状态快照。
 ///
-/// 未跟踪文件用 git 默认的 `normal` 粒度：整目录未被跟踪时只回一条目录项，
-/// 避免 `node_modules` 这类目录把界面刷成上万行；目录项作为路径传给
-/// `git add` 依然正确。
+/// 使用 `--untracked-files=all` 将新建目录内的未跟踪文件逐个展开（与 IDEA 等
+/// IDE 列表一致），避免整目录被折成单条目录项导致无法逐文件勾选、看差异或
+/// 识别文件图标；忽略规则仍由 `.gitignore` 生效，且开启 `include_ignored` 时
+/// `--ignored=matching` 会继续把忽略目录（如 `target/`、`node_modules/`）
+/// 保持在目录级折叠，防止输出大量构建产物条目。
 ///
 /// # Errors
 /// 目录不是仓库、git 不可用或输出格式不认识时返回对应错误。
@@ -28,7 +30,13 @@ pub(crate) async fn current(
     config: &GitConfig,
     include_ignored: bool,
 ) -> Result<RepoStatus, GitError> {
-    let mut args = vec!["status", "--porcelain=v2", "--branch", "-z"];
+    let mut args = vec![
+        "status",
+        "--porcelain=v2",
+        "--branch",
+        "-z",
+        "--untracked-files=all",
+    ];
     if include_ignored {
         args.push("--ignored=matching");
     }

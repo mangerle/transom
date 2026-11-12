@@ -174,6 +174,7 @@ impl AppShell {
                         state.drop_request(request_id);
                         state.apply_diff_loaded(request_id, *diff);
                     });
+                    self.schedule_git_diff_prepare(project_id, request_id, cx);
                 }
 
                 cx.notify();
@@ -192,14 +193,15 @@ impl AppShell {
                 }
                 if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
                     workspace.update(cx, |workspace, _| {
+                        workspace.diff_tasks.remove(&request_id);
                         let state = &mut workspace.state;
                         state.drop_request(request_id);
+                        // 差异请求失败按 request_id 精确落到对应槽位与标签，避免误伤其他标签与日志状态
+                        if state.apply_diff_failed(request_id, &message) {
+                            return;
+                        }
                         state.log.loading = false;
                         state.log.error = Some(message.clone());
-                        if let Some(diff) = state.diff.as_mut() {
-                            diff.loading = false;
-                            diff.error = Some(message.clone());
-                        }
                         state.commit_files_loading = false;
                         if not_repo {
                             // 不是仓库是「可以补初始化」的正常状态，不只是错误：
