@@ -9,7 +9,6 @@ use crate::widgets::{
     DialogConfirmKind, dialog_actions, dialog_body, dialog_cancel_button, dialog_confirm_button,
 };
 use gpui_kit::base::{Disableable, h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
@@ -267,12 +266,15 @@ pub(crate) fn render_container_forward_dialog_body(
         )
         .into_any_element()
     } else {
-        Button::new("confirm-container-forward-disabled")
-            .primary()
-            .disabled(true)
-            .child(AppIconElement::new(AppIcon::Domain(DomainIcon::FORWARD)).small())
-            .label(rust_i18n::t!("container.forward.submit").to_string())
-            .into_any_element()
+        dialog_confirm_button(
+            "confirm-container-forward-disabled",
+            rust_i18n::t!("container.forward.submit").to_string(),
+            Some(AppIcon::Domain(DomainIcon::FORWARD)),
+            DialogConfirmKind::Primary,
+            |_, _, _| {},
+        )
+        .disabled(true)
+        .into_any_element()
     };
 
     let footer = dialog_actions([cancel.into_any_element(), confirm]);

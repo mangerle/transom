@@ -9,13 +9,12 @@
 use super::ContainerRunFormView;
 use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
+use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 impl ContainerRunFormView {
@@ -75,14 +74,19 @@ impl ContainerRunFormView {
                     )
                     .child(
                         // 删除按钮
-                        Button::new(ElementId::Name(format!("del-port-{idx}").into()))
-                            .xsmall()
-                            .ghost()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                            .accessibility_label("Delete port mapping")
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        IconButton::new(
+                            ElementId::Name(format!("del-port-{idx}").into()),
+                            UiIcon::DELETE,
+                            "Delete port mapping",
+                        )
+                        .size(IconButtonSize::RowAction)
+                        .show_tooltip(false)
+                        .render()
+                        .on_click(cx.listener(
+                            move |this, _: &ClickEvent, _, cx| {
                                 this.remove_port(&del_port_id, cx);
-                            })),
+                            },
+                        )),
                     );
 
                 list = list.child(row);
@@ -104,14 +108,17 @@ impl ContainerRunFormView {
                             .child(rust_i18n::t!("container.run.section_ports").to_string()),
                     )
                     .child(
-                        Button::new("add-port-btn")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                            .label(rust_i18n::t!("container.run.add_port").to_string())
-                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                        action_button(
+                            "add-port-btn",
+                            UiIcon::ADD,
+                            rust_i18n::t!("container.run.add_port").to_string(),
+                        )
+                        .ghost()
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, window, cx| {
                                 this.add_port(window, cx);
-                            })),
+                            },
+                        )),
                     ),
             )
             .child(list)
@@ -167,14 +174,19 @@ impl ContainerRunFormView {
                             })),
                     )
                     .child(
-                        Button::new(ElementId::Name(format!("del-vol-{idx}").into()))
-                            .xsmall()
-                            .ghost()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                            .accessibility_label("Delete volume mapping")
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        IconButton::new(
+                            ElementId::Name(format!("del-vol-{idx}").into()),
+                            UiIcon::DELETE,
+                            "Delete volume mapping",
+                        )
+                        .size(IconButtonSize::RowAction)
+                        .show_tooltip(false)
+                        .render()
+                        .on_click(cx.listener(
+                            move |this, _: &ClickEvent, _, cx| {
                                 this.remove_volume(&del_vol_id, cx);
-                            })),
+                            },
+                        )),
                     );
 
                 list = list.child(row);
@@ -196,14 +208,17 @@ impl ContainerRunFormView {
                             .child(rust_i18n::t!("container.run.section_volumes").to_string()),
                     )
                     .child(
-                        Button::new("add-volume-btn")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                            .label(rust_i18n::t!("container.run.add_volume").to_string())
-                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                        action_button(
+                            "add-volume-btn",
+                            UiIcon::ADD,
+                            rust_i18n::t!("container.run.add_volume").to_string(),
+                        )
+                        .ghost()
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, window, cx| {
                                 this.add_volume(window, cx);
-                            })),
+                            },
+                        )),
                     ),
             )
             .child(list)
@@ -246,14 +261,19 @@ impl ContainerRunFormView {
                     )
                     .child(h_flex().flex_1().child(Input::new(&item.value).small()))
                     .child(
-                        Button::new(ElementId::Name(format!("del-env-{idx}").into()))
-                            .xsmall()
-                            .ghost()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                            .accessibility_label("Delete environment variable")
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        IconButton::new(
+                            ElementId::Name(format!("del-env-{idx}").into()),
+                            UiIcon::DELETE,
+                            "Delete environment variable",
+                        )
+                        .size(IconButtonSize::RowAction)
+                        .show_tooltip(false)
+                        .render()
+                        .on_click(cx.listener(
+                            move |this, _: &ClickEvent, _, cx| {
                                 this.remove_env(&env_id, cx);
-                            })),
+                            },
+                        )),
                     );
 
                 list = list.child(row);
@@ -275,14 +295,17 @@ impl ContainerRunFormView {
                             .child(rust_i18n::t!("container.run.section_env").to_string()),
                     )
                     .child(
-                        Button::new("add-env-btn")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                            .label(rust_i18n::t!("container.run.add_env").to_string())
-                            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                        action_button(
+                            "add-env-btn",
+                            UiIcon::ADD,
+                            rust_i18n::t!("container.run.add_env").to_string(),
+                        )
+                        .ghost()
+                        .on_click(cx.listener(
+                            |this, _: &ClickEvent, window, cx| {
                                 this.add_env(window, cx);
-                            })),
+                            },
+                        )),
                     ),
             )
             .child(list)

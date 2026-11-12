@@ -20,6 +20,7 @@ use super::side_remote::SftpDragItem;
 use super::{LocalFileEntry, LocalQuickPaths, SftpTransferRequest};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
+use crate::theme::tokens::{rem_px, size as token_size};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -33,6 +34,7 @@ use transom_ui_icons::UiIcon;
 
 pub(crate) struct SftpLocalPaneProps {
     pub(crate) tab_id: TabId,
+    pub(crate) rem_size: Pixels,
     pub(crate) show_filter: bool,
     pub(crate) show_hidden: bool,
     pub(crate) local_path_input: Entity<InputState>,
@@ -56,6 +58,7 @@ pub(crate) struct SftpLocalPaneProps {
 /// 再复制一遍完整目录内容。
 struct LocalContentInput {
     tab_id: TabId,
+    rem_size: Pixels,
     entries: Vec<LocalFileEntry>,
     selection: std::collections::BTreeSet<std::path::PathBuf>,
     primary: Option<std::path::PathBuf>,
@@ -73,6 +76,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let LocalContentInput {
             tab_id,
+            rem_size,
             entries,
             selection,
             primary,
@@ -90,7 +94,8 @@ impl SftpPanelView {
                 p,
             )
         } else {
-            let local_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); local_entries.len()]);
+            let row_height = rem_px(token_size::FILE_ROW_HEIGHT, rem_size);
+            let local_sizes = std::rc::Rc::new(vec![size(px(0.), row_height); local_entries.len()]);
             let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
                 local_entries
                     .iter()
@@ -164,6 +169,7 @@ impl SftpPanelView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let tab_id = props.tab_id;
+        let rem_size = props.rem_size;
         let show_filter = props.show_filter;
         let show_hidden = props.show_hidden;
         let local_path_input = props.local_path_input;
@@ -179,6 +185,7 @@ impl SftpPanelView {
         let local_content = self.render_local_content(
             LocalContentInput {
                 tab_id,
+                rem_size,
                 entries: local_entries,
                 selection: local_selection,
                 primary: local_primary,

@@ -14,9 +14,9 @@ use crate::container::types::ContainerWorkspaceStatus;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::divider::h_resizable;
 use crate::palette::Palette;
+use crate::widgets::action_button;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
 use header::render_container_header;
@@ -160,17 +160,18 @@ pub(crate) fn render_container_connection_state(
         .child(div().text_xs().text_color(p.muted_foreground).child(detail));
     if retry {
         body = body.child(
-            Button::new("container-retry")
-                .primary()
-                .small()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                .label(rust_i18n::t!("common.retry").to_string())
-                .on_click({
-                    let view = view.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| workspace.reconnect(cx));
-                    }
-                }),
+            action_button(
+                "container-retry",
+                UiIcon::REFRESH,
+                rust_i18n::t!("common.retry").to_string(),
+            )
+            .primary()
+            .on_click({
+                let view = view.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| workspace.reconnect(cx));
+                }
+            }),
         );
     }
     body.into_any_element()

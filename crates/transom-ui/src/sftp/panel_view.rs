@@ -12,12 +12,10 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::theme::tokens::size;
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::v_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 impl AppShell {
@@ -37,12 +35,16 @@ impl SftpPanelView {
     ///
     /// 外层容器由 `impl Render` 统一挂载；跨域数据（设置、标签连接）从外壳
     /// 只读获取，渲染路径不会回读本实体。
-    pub(crate) fn render_panel_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_panel_content(
+        &mut self,
+        rem_size: Pixels,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let p = Palette::from(&*cx);
         let tab_id = self.tab_id;
         let state = &self.state;
         if state.local.only && state.side_remotes.is_empty() {
-            return self.render_local_only_content(cx);
+            return self.render_local_only_content(rem_size, cx);
         }
 
         let is_local_only = state.local.only;
@@ -52,10 +54,10 @@ impl SftpPanelView {
         // 远端列借用 `state`，必须在调用 &mut self 的本地列/队列渲染之前完成。
         // 列按固定次序编排：本地 | 主远端 | 并列远端；折叠列由固定 32px 折叠条
         // 占住自己的位置，所有列始终在同一个可拖拽分栏组里。
-        let remote_columns = self.render_remote_columns(state, &p, cx);
+        let remote_columns = self.render_remote_columns(state, rem_size, &p, cx);
         let side_titles = side_remote_titles(state);
 
-        let local_pane = self.render_local_column(state, tab_id, &p, cx);
+        let local_pane = self.render_local_column(state, tab_id, rem_size, &p, cx);
 
         let (queue_pane, status_bar_element, queue_expanded) =
             self.render_queue_and_status(state, tab_id, &p, cx);
@@ -211,16 +213,17 @@ impl SftpPanelView {
                 .justify_center()
                 .border_color(p.divider(p.sidebar_border))
                 .child(
-                    Button::new("sftp-close-all-collapsed")
-                        .ghost()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                        .accessibility_label(rust_i18n::t!("app.close").to_string())
-                        .tooltip(rust_i18n::t!("app.close").to_string())
-                        .on_click(cx.listener(move |_this, _, _, cx| {
-                            cx.emit(crate::sftp::SftpPanelEvent::ClosePanel { tab_id });
-                            cx.notify();
-                        })),
+                    IconButton::new(
+                        "sftp-close-all-collapsed",
+                        AppIcon::Ui(UiIcon::CLOSE),
+                        rust_i18n::t!("app.close").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(cx.listener(move |_this, _, _, cx| {
+                        cx.emit(crate::sftp::SftpPanelEvent::ClosePanel { tab_id });
+                        cx.notify();
+                    })),
                 )
                 .divider_edge(DividerEdge::Bottom, p.divider_width)
                 .into_any_element()
@@ -240,6 +243,7 @@ impl SftpPanelView {
         &self,
         state: &super::state::SftpPanelState,
         tab_id: transom_core::TabId,
+        rem_size: Pixels,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -263,6 +267,7 @@ impl SftpPanelView {
         self.render_sftp_local_pane(
             SftpLocalPaneProps {
                 tab_id,
+                rem_size,
                 show_filter: state.local.show_filter,
                 show_hidden: state.local.show_hidden,
                 local_path_input: state.local.path_input.clone(),
@@ -287,13 +292,14 @@ impl SftpPanelView {
     fn render_remote_columns(
         &self,
         state: &super::state::SftpPanelState,
+        rem_size: Pixels,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Vec<super::columns::SftpColumn> {
         let tab_id = self.tab_id;
         let mut remote_columns: Vec<SftpColumn> = Vec::new();
         if !state.local.only && state.main_connection.is_some() {
-            let content = self.render_main_remote_content(state, tab_id, p, cx);
+            let content = self.render_main_remote_content(state, tab_id, rem_size, p, cx);
             remote_columns.push(SftpColumn {
                 id: SftpColumnId::Remote,
                 collapsed: state.remote.collapsed,
@@ -301,7 +307,8 @@ impl SftpPanelView {
             });
         }
         for side_index in 0..state.side_remotes.len() {
-            let Some(content) = self.render_side_remote_content(state, side_index, p, cx) else {
+            let Some(content) = self.render_side_remote_content(state, side_index, rem_size, p, cx)
+            else {
                 continue;
             };
             remote_columns.push(SftpColumn {
@@ -318,6 +325,7 @@ impl SftpPanelView {
         &self,
         state: &super::state::SftpPanelState,
         tab_id: transom_core::TabId,
+        rem_size: Pixels,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -345,6 +353,7 @@ impl SftpPanelView {
         self.render_remote_pane(
             RemotePaneProps {
                 tab_id,
+                rem_size,
                 target: SftpRemotePaneRef::Main,
                 side_index: None,
                 title: rust_i18n::t!("sftp.remote_title").to_string(),
@@ -368,6 +377,7 @@ impl SftpPanelView {
         &self,
         state: &super::state::SftpPanelState,
         side_index: usize,
+        rem_size: Pixels,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
@@ -398,6 +408,7 @@ impl SftpPanelView {
         Some(self.render_remote_pane(
             RemotePaneProps {
                 tab_id: self.tab_id,
+                rem_size,
                 target: SftpRemotePaneRef::Side(connection_id),
                 side_index: Some(side_index),
                 title: side.title.clone().unwrap_or_default(),

@@ -335,12 +335,9 @@ pub(crate) fn copy_button(
     tooltip: String,
 ) -> AnyElement {
     let view = view.clone();
-    Button::new(id)
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
-        .accessibility_label(tooltip.clone())
-        .tooltip(tooltip)
+    crate::widgets::IconButton::new(id, UiIcon::COPY, tooltip)
+        .size(crate::widgets::IconButtonSize::RowAction)
+        .render()
         .on_click(move |_, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
             let message = rust_i18n::t!("container.row.copied", value = text).to_string();

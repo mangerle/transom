@@ -2,8 +2,7 @@
 
 use super::super::*;
 use crate::container::ContainerWorkspace;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
+use crate::widgets::{IconButton, action_button};
 use transom_ui_icons::UiIcon;
 
 pub(super) fn render_toolbar(
@@ -15,11 +14,9 @@ pub(super) fn render_toolbar(
     let parent = super::parent_path(current_path);
     let up_view = view.clone();
     let mut crumbs = h_flex().gap_1().items_center().child(
-        Button::new("container-file-up")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::LEFT)).small())
-            .accessibility_label("Open parent folder")
+        IconButton::new("container-file-up", UiIcon::LEFT, "Open parent folder")
+            .show_tooltip(false)
+            .render()
             .on_click(move |_, _, cx| {
                 up_view.update(cx, |workspace, cx| {
                     workspace.load_container_dir(parent.clone(), cx);
@@ -35,56 +32,61 @@ pub(super) fn render_toolbar(
     let refresh_view = view.clone();
     let refresh_path = current_path.to_string();
     crumbs = crumbs.child(div().flex_1()).child(
-        Button::new("container-file-refresh")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-            .accessibility_label("Refresh container files")
-            .on_click(move |_, _, cx| {
-                refresh_view.update(cx, |workspace, cx| {
-                    workspace.load_container_dir(refresh_path.clone(), cx);
-                });
-            }),
+        IconButton::new(
+            "container-file-refresh",
+            UiIcon::REFRESH,
+            "Refresh container files",
+        )
+        .show_tooltip(false)
+        .render()
+        .on_click(move |_, _, cx| {
+            refresh_view.update(cx, |workspace, cx| {
+                workspace.load_container_dir(refresh_path.clone(), cx);
+            });
+        }),
     );
     if !readonly {
         let upload_view = view.clone();
         crumbs = crumbs.child(
-            Button::new("container-file-upload")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
-                .label(rust_i18n::t!("container.files.upload").to_string())
-                .on_click(move |_, _, cx| {
-                    upload_view.update(cx, |workspace, cx| {
-                        workspace.upload_container_file(cx);
-                    });
-                }),
+            action_button(
+                "container-file-upload",
+                UiIcon::UPLOAD,
+                rust_i18n::t!("container.files.upload").to_string(),
+            )
+            .ghost()
+            .on_click(move |_, _, cx| {
+                upload_view.update(cx, |workspace, cx| {
+                    workspace.upload_container_file(cx);
+                });
+            }),
         );
         let upload_dir_view = view.clone();
         crumbs = crumbs.child(
-            Button::new("container-file-upload-dir")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
-                .label(rust_i18n::t!("container.files.upload_directory").to_string())
-                .on_click(move |_, _, cx| {
-                    upload_dir_view.update(cx, |workspace, cx| {
-                        workspace.upload_container_directory(cx);
-                    });
-                }),
+            action_button(
+                "container-file-upload-dir",
+                UiIcon::UPLOAD,
+                rust_i18n::t!("container.files.upload_directory").to_string(),
+            )
+            .ghost()
+            .on_click(move |_, _, cx| {
+                upload_dir_view.update(cx, |workspace, cx| {
+                    workspace.upload_container_directory(cx);
+                });
+            }),
         );
         let mkdir_view = view.clone();
         crumbs = crumbs.child(
-            Button::new("container-file-mkdir")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::NEW_FOLDER)).small())
-                .label(rust_i18n::t!("container.files.new_dir").to_string())
-                .on_click(move |_, window, cx| {
-                    mkdir_view.update(cx, |workspace, cx| {
-                        workspace.toggle_container_mkdir(window, cx);
-                    });
-                }),
+            action_button(
+                "container-file-mkdir",
+                UiIcon::NEW_FOLDER,
+                rust_i18n::t!("container.files.new_dir").to_string(),
+            )
+            .ghost()
+            .on_click(move |_, window, cx| {
+                mkdir_view.update(cx, |workspace, cx| {
+                    workspace.toggle_container_mkdir(window, cx);
+                });
+            }),
         );
     }
     crumbs.into_any_element()

@@ -120,11 +120,15 @@ impl AppShell {
 
 impl SftpPanelView {
     /// 本地终端单栏面板的内容构建；外层容器与监听由实体渲染入口统一挂载。
-    pub(crate) fn render_local_only_content(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_local_only_content(
+        &self,
+        rem_size: Pixels,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let p = Palette::from(&*cx);
         let local_error = self.state.local.error.clone();
         let status = self.state.queue.status.clone();
-        let local_pane = self.render_sftp_local_pane(self.local_only_props(cx), &p, cx);
+        let local_pane = self.render_sftp_local_pane(self.local_only_props(rem_size, cx), &p, cx);
 
         let mount_btn = self.render_side_remote_mount_button(&p, cx);
         let header = self.render_sftp_panel_header(
@@ -191,7 +195,7 @@ impl SftpPanelView {
         panel.into_any_element()
     }
     /// 本地单栏的渲染输入：过滤后的条目、选中集与工具栏开关。
-    fn local_only_props(&self, cx: &mut Context<Self>) -> SftpLocalPaneProps {
+    fn local_only_props(&self, rem_size: Pixels, cx: &mut Context<Self>) -> SftpLocalPaneProps {
         let state = &self.state;
         let local_filter_input = state.local.filter_input.clone();
         let show_hidden = state.local.show_hidden;
@@ -209,6 +213,7 @@ impl SftpPanelView {
         );
         SftpLocalPaneProps {
             tab_id: self.tab_id,
+            rem_size,
             show_filter: state.local.show_filter,
             show_hidden,
             local_path_input: state.local.path_input.clone(),

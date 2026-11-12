@@ -9,6 +9,7 @@ use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::connection::session_host;
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 
 use crate::workspace::tab_strip::menu::{TabContextMenuParams, build_tab_context_menu};
 use gpui_kit::base::{h_flex, v_flex};
@@ -20,12 +21,12 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-/// 行槽位高度；与侧栏会话行保持一致（两处需同步）。
-const ROW_HEIGHT: Pixels = px(38.0);
+/// 行槽位高度；与侧栏会话行保持一致。
+const ROW_HEIGHT: Rems = rems(size::TREE_ROW_HEIGHT);
 /// 内层高亮条高度：留出上下间隙，背景不覆盖整行槽位。
-const ROW_BAND_HEIGHT: Pixels = px(34.0);
-/// 行内图标尺寸：与 34px 内容条匹配。
-const ROW_ICON_SIZE: Pixels = px(18.0);
+const ROW_BAND_HEIGHT: Rems = rems(size::TREE_BAND_HEIGHT);
+/// 行内图标尺寸：与侧栏树行图标一致，随界面密度同步缩放。
+const ROW_ICON_SIZE: Rems = rems(size::TREE_ROW_ICON);
 
 /// 渲染纵向标签面板中的单个标签组行。
 pub(super) fn render_vertical_tab_row(
@@ -120,7 +121,7 @@ pub(super) fn render_vertical_tab_row(
         .child(crate::widgets::status_dot_bare(dot_color))
         .child(
             AppIconElement::new(icon)
-                .with_size(ROW_ICON_SIZE)
+                .with_rems(ROW_ICON_SIZE)
                 .text_color(icon_color),
         )
         .child(

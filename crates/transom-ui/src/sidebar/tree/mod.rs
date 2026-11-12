@@ -11,20 +11,21 @@ mod session_row;
 pub(crate) use rows::build_rows;
 
 use crate::app::AppShell;
+use crate::theme::tokens::size;
 use gpui_kit::*;
 use transom_core::{CatalogError, DropSide, FolderId, Session, SessionId};
 
 /// 行槽位高度（rem）：虚拟列表按它分配空间，渲染时必须严格一致。
-pub(crate) const ROW_HEIGHT_REM: f32 = 2.375;
+pub(crate) const ROW_HEIGHT_REM: f32 = size::TREE_ROW_HEIGHT;
 /// 内层高亮条高度（rem）：小于行槽位，留出上下间隙。
-pub(crate) const BAND_HEIGHT_REM: f32 = 2.125;
+pub(crate) const BAND_HEIGHT_REM: f32 = size::TREE_BAND_HEIGHT;
 /// 缩进基准与每级步长（逻辑像素）。
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;
-/// 行内图标尺寸：与 34px 内容条匹配，默认的 14px 图标在这个高度下显得偏弱。
-pub(crate) const ROW_ICON_SIZE: Pixels = px(18.0);
+/// 行内图标尺寸：与内容条及活动栏图标匹配，随密度等比缩放。
+pub(crate) const ROW_ICON_SIZE: Rems = rems(size::TREE_ROW_ICON);
 /// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
-pub(crate) const ROW_CHEVRON_SIZE: Pixels = px(14.0);
+pub(crate) const ROW_CHEVRON_SIZE: Rems = rems(size::TREE_CHEVRON);
 
 /// 按层级计算行左内边距，文件夹与会话共用，保证同层对齐。
 pub(crate) fn indent_padding(depth: usize) -> Pixels {

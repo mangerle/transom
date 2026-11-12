@@ -2,10 +2,9 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::widgets::{IconButton, action_button};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::input::{Textarea, TextareaState};
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 文件预览渲染参数：预览内容与编辑状态属于同一组视图数据。
@@ -60,62 +59,67 @@ pub(super) fn render_file_preview(
         let save_view = view.clone();
         actions = actions
             .child(
-                Button::new("container-file-save")
-                    .primary()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::SAVE)).small())
-                    .label(rust_i18n::t!("common.save").to_string())
-                    .disabled(preview_saving)
-                    .on_click(move |_, _, cx| {
-                        save_view.update(cx, |workspace, cx| {
-                            workspace.save_edit_container_file(cx);
-                        });
-                    }),
+                action_button(
+                    "container-file-save",
+                    UiIcon::SAVE,
+                    rust_i18n::t!("common.save").to_string(),
+                )
+                .primary()
+                .disabled(preview_saving)
+                .on_click(move |_, _, cx| {
+                    save_view.update(cx, |workspace, cx| {
+                        workspace.save_edit_container_file(cx);
+                    });
+                }),
             )
             .child(
-                Button::new("container-file-cancel-edit")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .disabled(preview_saving)
-                    .on_click({
-                        let cancel_view = view.clone();
-                        move |_, _, cx| {
-                            cancel_view.update(cx, |workspace, cx| {
-                                workspace.cancel_edit_container_file(cx);
-                            });
-                        }
-                    }),
+                action_button(
+                    "container-file-cancel-edit",
+                    UiIcon::CLOSE,
+                    rust_i18n::t!("common.cancel").to_string(),
+                )
+                .ghost()
+                .disabled(preview_saving)
+                .on_click({
+                    let cancel_view = view.clone();
+                    move |_, _, cx| {
+                        cancel_view.update(cx, |workspace, cx| {
+                            workspace.cancel_edit_container_file(cx);
+                        });
+                    }
+                }),
             );
     } else {
         if !readonly && !*truncated && !binary {
             let edit_view = view.clone();
             actions = actions.child(
-                Button::new("container-file-edit")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDIT)).small())
-                    .label(rust_i18n::t!("container.files.edit").to_string())
-                    .on_click(move |_, window, cx| {
-                        edit_view.update(cx, |workspace, cx| {
-                            workspace.begin_edit_container_file(window, cx);
-                        });
-                    }),
+                action_button(
+                    "container-file-edit",
+                    UiIcon::EDIT,
+                    rust_i18n::t!("container.files.edit").to_string(),
+                )
+                .ghost()
+                .on_click(move |_, window, cx| {
+                    edit_view.update(cx, |workspace, cx| {
+                        workspace.begin_edit_container_file(window, cx);
+                    });
+                }),
             );
         }
         let close_view = view.clone();
         actions = actions.child(
-            Button::new("container-file-close-preview")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                .accessibility_label("Close file preview")
-                .on_click(move |_, _, cx| {
-                    close_view.update(cx, |workspace, cx| {
-                        workspace.close_preview_container_file(cx);
-                    });
-                }),
+            IconButton::new(
+                "container-file-close-preview",
+                UiIcon::CLOSE,
+                "Close file preview",
+            )
+            .show_tooltip(false)
+            .render()
+            .on_click(move |_, _, cx| {
+                close_view.update(cx, |workspace, cx| {
+                    workspace.close_preview_container_file(cx);
+                });
+            }),
         );
     }
     header = header.child(actions);

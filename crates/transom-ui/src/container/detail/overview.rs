@@ -2,8 +2,9 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::typography;
+use crate::widgets::action_button;
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -119,21 +120,22 @@ pub(crate) fn render_container_overview(
         ));
     }
 
-    let raw_btn = Button::new("container-overview-raw-inspect")
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
-        .label(rust_i18n::t!("container.field.inspect").to_string())
-        .on_click({
-            let view = view.clone();
-            move |_, _, cx| {
-                view.update(cx, |workspace, cx| {
-                    workspace.state.overview_raw = true;
-                    cx.notify();
-                });
-            }
-        })
-        .into_any_element();
+    let raw_btn = action_button(
+        "container-overview-raw-inspect",
+        UiIcon::EDITOR_ONLY,
+        rust_i18n::t!("container.field.inspect").to_string(),
+    )
+    .ghost()
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.state.overview_raw = true;
+                cx.notify();
+            });
+        }
+    })
+    .into_any_element();
 
     cards = cards.child(overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),
@@ -189,13 +191,16 @@ pub(crate) fn linked_containers(
     items: Vec<(String, String)>,
     p: &Palette,
 ) -> AnyElement {
-    let mut block = v_flex()
-        .gap_0p5()
-        .child(div().text_xs().text_color(p.muted_foreground).child(title));
+    let mut block = v_flex().gap_1().child(
+        div()
+            .text_size(rems(typography::CAPTION))
+            .text_color(p.muted_foreground)
+            .child(title),
+    );
     if items.is_empty() {
         block = block.child(
             div()
-                .text_sm()
+                .text_size(rems(typography::BODY))
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("container.linked.none").to_string()),
         );
@@ -203,27 +208,26 @@ pub(crate) fn linked_containers(
     for (name, hint) in items {
         let reveal_name = name.clone();
         let link_view = view.clone();
-        let mut row = h_flex()
-            .gap_2()
-            .items_center()
-            .child(
-                AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
-                    .xsmall()
-                    .text_color(p.muted_foreground),
+        let mut row = h_flex().gap_2().items_center().child(
+            action_button(
+                ElementId::Name(format!("container-link-{name}").into()),
+                DomainIcon::CONTAINER,
+                name,
             )
-            .child(
-                Button::new(ElementId::Name(format!("container-link-{name}").into()))
-                    .ghost()
-                    .xsmall()
-                    .label(name)
-                    .on_click(move |_, _, cx| {
-                        link_view.update(cx, |workspace, cx| {
-                            workspace.reveal_container(reveal_name.clone(), cx);
-                        });
-                    }),
-            );
+            .ghost()
+            .on_click(move |_, _, cx| {
+                link_view.update(cx, |workspace, cx| {
+                    workspace.reveal_container(reveal_name.clone(), cx);
+                });
+            }),
+        );
         if !hint.is_empty() {
-            row = row.child(div().text_xs().text_color(p.muted_foreground).child(hint));
+            row = row.child(
+                div()
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.muted_foreground)
+                    .child(hint),
+            );
         }
         block = block.child(row);
     }
@@ -245,11 +249,17 @@ pub(crate) fn kv(p: &Palette, key: impl Into<String>, value: impl Into<String>) 
             div()
                 .w(px(110.0))
                 .flex_none()
-                .text_xs()
+                .text_size(rems(typography::CAPTION))
                 .text_color(p.muted_foreground)
                 .child(key),
         )
-        .child(div().flex_1().min_w_0().text_sm().child(value))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_size(rems(typography::BODY))
+                .child(value),
+        )
         .into_any_element()
 }
 

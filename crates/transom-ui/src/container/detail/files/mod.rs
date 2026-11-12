@@ -10,6 +10,7 @@ mod toolbar;
 use super::*;
 use crate::container::ContainerWorkspace;
 use crate::sftp::SftpDragItem;
+use crate::theme::tokens::{control, size};
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::gpui::ExternalPaths;
 use transom_ui_icons::AppIcon;
@@ -73,14 +74,14 @@ pub(crate) fn render_files(
     let at_root = current_path == "/";
     let mut parent_row = h_flex()
         .id("container-file-parent-row")
+        .h(rems(size::FILE_ROW_HEIGHT))
         .gap_2()
         .px_2()
-        .py_1()
         .rounded(p.radius.md)
         .items_center()
         .child(
             AppIconElement::new(AppIcon::Ui(UiIcon::UNDO))
-                .small()
+                .with_rems(rems(control::ICON))
                 .text_color(p.muted_foreground),
         )
         .child(

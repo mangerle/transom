@@ -1,8 +1,8 @@
 //! 容器进程可折叠表格卡片。
 
 use super::*;
-use crate::widgets::table_header;
-use gpui_kit::component::Disableable;
+use crate::theme::tokens::typography;
+use crate::widgets::{IconButton, table_header};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -50,24 +50,24 @@ pub(crate) fn processes_card(
                 }),
         )
         .child(
-            Button::new("container-processes-refresh")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                .disabled(!is_running)
-                .accessibility_label(refresh_tooltip.clone())
-                .tooltip(refresh_tooltip)
-                .on_click({
-                    let view = view.clone();
-                    move |_, _, cx| {
-                        if is_running {
-                            view.update(cx, |workspace, cx| {
-                                workspace.ensure_container_processes();
-                                cx.notify();
-                            });
-                        }
+            IconButton::new(
+                "container-processes-refresh",
+                UiIcon::REFRESH,
+                refresh_tooltip,
+            )
+            .disabled(!is_running)
+            .render()
+            .on_click({
+                let view = view.clone();
+                move |_, _, cx| {
+                    if is_running {
+                        view.update(cx, |workspace, cx| {
+                            workspace.ensure_container_processes();
+                            cx.notify();
+                        });
                     }
-                }),
+                }
+            }),
         );
 
     let header_btn = h_flex()
@@ -108,7 +108,7 @@ pub(crate) fn processes_card(
                 )
                 .child(
                     div()
-                        .text_size(rems(0.6875))
+                        .text_size(rems(typography::CAPTION))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("container.stats.processes").to_string()),

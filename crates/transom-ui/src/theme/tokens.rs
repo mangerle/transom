@@ -67,6 +67,18 @@ pub(crate) mod size {
     pub const SETTINGS_DIALOG_WIDTH: f32 = 56.0;
     /// 设置弹窗高度（标准档 736px）。
     pub const SETTINGS_DIALOG_HEIGHT: f32 = 46.0;
+    /// 侧栏树行槽位高度（标准档 38px）。
+    pub const TREE_ROW_HEIGHT: f32 = 2.375;
+    /// 侧栏树内层高亮条高度（标准档 34px）。
+    pub const TREE_BAND_HEIGHT: f32 = 2.125;
+    /// 侧栏树行内主图标边长（标准档 18px）；与活动栏图标一致。
+    pub const TREE_ROW_ICON: f32 = 1.125;
+    /// 侧栏树折叠箭头边长（标准档 14px）。
+    pub const TREE_CHEVRON: f32 = 0.875;
+    /// 标准文件列表行高（标准档 28px）。
+    pub const FILE_ROW_HEIGHT: f32 = 1.75;
+    /// 紧凑文件树行高（标准档 24px，用于变更文件树等紧凑清单）。
+    pub const COMPACT_TREE_ROW_HEIGHT: f32 = 1.5;
 }
 /// 间距档位：以 rem 表达，供组件层替换 `gap_2` / `py_2` 这类魔法数字。
 ///
@@ -77,6 +89,8 @@ pub(crate) mod space {
     pub const XXS: f32 = 0.125;
     /// 4px：图标与文字、紧凑控件间距。
     pub const XS: f32 = 0.25;
+    /// 6px：带图标按钮内部图标与文案的标准间距。
+    pub const COMPACT: f32 = 0.375;
     /// 8px：表单行内、按钮组默认间距。
     pub const SM: f32 = 0.5;
     /// 12px：卡片内区块间距。

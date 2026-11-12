@@ -2,9 +2,9 @@
 
 use super::super::*;
 use crate::container::ContainerWorkspace;
-use transom_ui_icons::AppIconElement;
-use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use crate::theme::tokens::{control, size};
+use crate::widgets::{IconButton, IconButtonSize};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(super) fn render_entry_row(
     view: &Entity<ContainerWorkspace>,
@@ -19,17 +19,20 @@ pub(super) fn render_entry_row(
         .id(ElementId::Name(
             format!("container-file-row-{entry_path}").into(),
         ))
+        .h(rems(size::FILE_ROW_HEIGHT))
         .gap_2()
         .px_2()
-        .py_1()
         .rounded(p.radius.md)
         .items_center()
         .hover(|style| style.bg(p.muted.opacity(0.5)))
-        .child(if is_dir {
-            render_app_icon(UiIcon::FOLDER.into(), 16.0)
-        } else {
-            render_app_icon(AppIcon::for_file(&entry_path), 16.0)
-        })
+        .child(
+            AppIconElement::new(if is_dir {
+                AppIcon::Ui(UiIcon::FOLDER)
+            } else {
+                AppIcon::for_file(&entry_path)
+            })
+            .with_rems(rems(control::ICON)),
+        )
         .child(div().flex_1().min_w_0().text_sm().truncate().child(name))
         .child(
             div()
@@ -68,16 +71,13 @@ pub(super) fn render_entry_row(
                 });
             })
             .child(
-                Button::new(ElementId::Name(
-                    format!("container-file-download-dir-{entry_path}").into(),
-                ))
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                .accessibility_label(
+                IconButton::new(
+                    ElementId::Name(format!("container-file-download-dir-{entry_path}").into()),
+                    UiIcon::DOWNLOAD,
                     rust_i18n::t!("container.files.download_directory_tooltip").to_string(),
                 )
-                .tooltip(rust_i18n::t!("container.files.download_directory_tooltip").to_string())
+                .size(IconButtonSize::RowAction)
+                .render()
                 .on_click({
                     let view = view.clone();
                     let path = entry_path.clone();
@@ -98,13 +98,14 @@ pub(super) fn render_entry_row(
                 });
             })
             .child(
-                Button::new(ElementId::Name(
-                    format!("container-file-download-{entry_path}").into(),
-                ))
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                .accessibility_label("Download file")
+                IconButton::new(
+                    ElementId::Name(format!("container-file-download-{entry_path}").into()),
+                    UiIcon::DOWNLOAD,
+                    "Download file",
+                )
+                .size(IconButtonSize::RowAction)
+                .show_tooltip(false)
+                .render()
                 .on_click({
                     let view = view.clone();
                     let path = entry_path.clone();
@@ -118,13 +119,14 @@ pub(super) fn render_entry_row(
     }
     if !readonly {
         row = row.child(
-            Button::new(ElementId::Name(
-                format!("container-file-rename-{entry_path}").into(),
-            ))
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDIT)).small())
-            .accessibility_label("Rename file")
+            IconButton::new(
+                ElementId::Name(format!("container-file-rename-{entry_path}").into()),
+                UiIcon::EDIT,
+                "Rename file",
+            )
+            .size(IconButtonSize::RowAction)
+            .show_tooltip(false)
+            .render()
             .on_click({
                 let view = view.clone();
                 let path = entry_path.clone();
@@ -136,13 +138,14 @@ pub(super) fn render_entry_row(
             }),
         );
         row = row.child(
-            Button::new(ElementId::Name(
-                format!("container-file-delete-{entry_path}").into(),
-            ))
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-            .accessibility_label("Delete file")
+            IconButton::new(
+                ElementId::Name(format!("container-file-delete-{entry_path}").into()),
+                UiIcon::DELETE,
+                "Delete file",
+            )
+            .size(IconButtonSize::RowAction)
+            .show_tooltip(false)
+            .render()
             .on_click({
                 let view = view.clone();
                 let path = entry_path.clone();

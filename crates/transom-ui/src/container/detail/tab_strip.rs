@@ -6,7 +6,8 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
-use transom_ui_icons::AppIcon;
+use crate::theme::tokens::control;
+use crate::widgets::action_button;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -53,12 +54,11 @@ pub(super) fn render_detail_tab_buttons(
             .children(tabs.iter().copied().map(|tab| {
                 if tab != ContainerDetailTab::Terminal {
                     let tab_view = view.clone();
-                    return Button::new(ElementId::Name(
-                        format!("container-detail-tab-{}", tab.label_key()).into(),
-                    ))
-                    .xsmall()
-                    .child(AppIconElement::new(detail_icon(tab)).small())
-                    .label(rust_i18n::t!(tab.label_key()).to_string())
+                    return action_button(
+                        ElementId::Name(format!("container-detail-tab-{}", tab.label_key()).into()),
+                        detail_icon(tab),
+                        rust_i18n::t!(tab.label_key()).to_string(),
+                    )
                     .selected(tab == current)
                     .on_click(move |_, _, cx| {
                         tab_view.update(cx, |workspace, cx| {
@@ -80,27 +80,29 @@ pub(super) fn render_detail_tab_buttons(
                     .border_color(p.border)
                     .overflow_hidden()
                     .child(
-                        Button::new("container-detail-tab-terminal")
-                            .xsmall()
-                            .ghost()
-                            .child(
-                                AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small(),
-                            )
-                            .label(rust_i18n::t!("container.detail.terminal").to_string())
-                            .selected(tab == current)
-                            .tooltip(user_tooltip.clone())
-                            .on_click(move |_, _, cx| {
-                                tab_view.update(cx, |workspace, cx| {
-                                    workspace.set_detail_tab(tab, cx);
-                                });
-                            }),
+                        action_button(
+                            "container-detail-tab-terminal",
+                            DomainIcon::TERMINAL,
+                            rust_i18n::t!("container.detail.terminal").to_string(),
+                        )
+                        .ghost()
+                        .selected(tab == current)
+                        .tooltip(user_tooltip.clone())
+                        .on_click(move |_, _, cx| {
+                            tab_view.update(cx, |workspace, cx| {
+                                workspace.set_detail_tab(tab, cx);
+                            });
+                        }),
                     )
                     .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
                     .child(
                         Button::new("container-detail-tab-terminal-menu")
-                            .xsmall()
+                            .small()
                             .ghost()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
+                            .child(
+                                AppIconElement::new(UiIcon::CHEVRON_DOWN)
+                                    .with_rems(rems(control::COMPACT_ICON)),
+                            )
                             .accessibility_label(user_tooltip.clone())
                             .tooltip(user_tooltip.clone())
                             .dropdown_menu(move |menu, _, _| {

@@ -217,7 +217,7 @@ pub(crate) fn render_engine_row(
     band = band
         .child(
             AppIconElement::new(icon)
-                .with_size(ROW_ICON_SIZE)
+                .with_rems(ROW_ICON_SIZE)
                 .text_color(if is_active {
                     action_color
                 } else {

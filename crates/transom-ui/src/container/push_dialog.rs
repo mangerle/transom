@@ -11,9 +11,8 @@
 use super::list::dropdown_trigger;
 use super::*;
 use crate::palette::Palette;
+use crate::widgets::{DialogConfirmKind, dialog_cancel_button, dialog_confirm_button};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
@@ -322,35 +321,32 @@ pub(crate) fn render_container_push_dialog_body(
             h_flex()
                 .justify_end()
                 .gap_2()
-                .child(
-                    Button::new("container-push-cancel")
-                        .ghost()
-                        .small()
-                        .label(rust_i18n::t!("container.push.cancel").to_string())
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.cancel_push_dialog(cx);
-                                });
-                            }
-                        }),
-                )
-                .child(
-                    Button::new("container-push-confirm")
-                        .primary()
-                        .small()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
-                        .label(rust_i18n::t!("container.push.submit").to_string())
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.submit_push_dialog(cx);
-                                });
-                            }
-                        }),
-                ),
+                .child(dialog_cancel_button(
+                    "container-push-cancel",
+                    rust_i18n::t!("container.push.cancel").to_string(),
+                    {
+                        let view = view.clone();
+                        move |_, _, cx| {
+                            view.update(cx, |workspace, cx| {
+                                workspace.cancel_push_dialog(cx);
+                            });
+                        }
+                    },
+                ))
+                .child(dialog_confirm_button(
+                    "container-push-confirm",
+                    rust_i18n::t!("container.push.submit").to_string(),
+                    Some(AppIcon::Ui(UiIcon::UPLOAD)),
+                    DialogConfirmKind::Primary,
+                    {
+                        let view = view.clone();
+                        move |_, _, cx| {
+                            view.update(cx, |workspace, cx| {
+                                workspace.submit_push_dialog(cx);
+                            });
+                        }
+                    },
+                )),
         )
         .into_any_element()
 }

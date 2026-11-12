@@ -9,10 +9,9 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
+use crate::widgets::{IconButton, action_button};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use transom_core::{ContainerLifecycleAction, ContainerSummary};
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -52,49 +51,53 @@ pub(super) fn container_header_actions(
             view,
             &name,
             ContainerLifecycleAction::Unpause,
-            Button::new("container-unpause")
-                .xsmall()
-                .primary()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
-                .label(rust_i18n::t!("container.action.unpause").to_string()),
+            action_button(
+                "container-unpause",
+                UiIcon::RUN,
+                rust_i18n::t!("container.action.unpause").to_string(),
+            )
+            .primary(),
         ));
         actions.push(lifecycle_button(
             view,
             &name,
             ContainerLifecycleAction::Stop,
-            Button::new("container-stop")
-                .xsmall()
-                .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::STOP)).small())
-                .label(rust_i18n::t!("container.action.stop").to_string()),
+            action_button(
+                "container-stop",
+                UiIcon::STOP,
+                rust_i18n::t!("container.action.stop").to_string(),
+            )
+            .ghost(),
         ));
     } else if running {
         actions.push(lifecycle_button(
             view,
             &name,
             ContainerLifecycleAction::Stop,
-            Button::new("container-stop")
-                .xsmall()
-                .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::STOP)).small())
-                .label(rust_i18n::t!("container.action.stop").to_string()),
+            action_button(
+                "container-stop",
+                UiIcon::STOP,
+                rust_i18n::t!("container.action.stop").to_string(),
+            )
+            .ghost(),
         ));
         if detail_tab != ContainerDetailTab::Terminal {
             let terminal_view = view.clone();
             actions.push(
-                Button::new("container-jump-terminal")
-                    .xsmall()
-                    .ghost()
-                    .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small())
-                    .label(rust_i18n::t!("container.detail.terminal").to_string())
-                    .on_click(move |_, _, cx| {
-                        terminal_view.update(cx, |_, cx| {
-                            cx.emit(ContainerWorkspaceEvent::SetDetailTab(
-                                ContainerDetailTab::Terminal,
-                            ));
-                        });
-                    })
-                    .into_any_element(),
+                action_button(
+                    "container-jump-terminal",
+                    DomainIcon::TERMINAL,
+                    rust_i18n::t!("container.detail.terminal").to_string(),
+                )
+                .ghost()
+                .on_click(move |_, _, cx| {
+                    terminal_view.update(cx, |_, cx| {
+                        cx.emit(ContainerWorkspaceEvent::SetDetailTab(
+                            ContainerDetailTab::Terminal,
+                        ));
+                    });
+                })
+                .into_any_element(),
             );
         }
     } else {
@@ -102,20 +105,22 @@ pub(super) fn container_header_actions(
             view,
             &name,
             ContainerLifecycleAction::Start,
-            Button::new("container-start")
-                .xsmall()
-                .primary()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
-                .label(rust_i18n::t!("container.action.start").to_string()),
+            action_button(
+                "container-start",
+                UiIcon::RUN,
+                rust_i18n::t!("container.action.start").to_string(),
+            )
+            .primary(),
         ));
     }
 
-    let more_btn = Button::new("container-detail-more")
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::MORE_HORIZONTAL)).small())
-        .accessibility_label(rust_i18n::t!("common.more").to_string())
-        .tooltip(rust_i18n::t!("common.more").to_string())
+    let more_btn =
+        IconButton::new(
+            "container-detail-more",
+            UiIcon::MORE_HORIZONTAL,
+            rust_i18n::t!("common.more").to_string(),
+        )
+        .render()
         .dropdown_menu({
             let view = view.clone();
             let name = name.clone();

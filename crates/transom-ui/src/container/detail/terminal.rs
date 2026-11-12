@@ -6,6 +6,8 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::control;
+use crate::widgets::action_button;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
@@ -126,19 +128,21 @@ pub(crate) fn render_terminal(
                     .items_center()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).xsmall())
+                    .child(
+                        AppIconElement::new(DomainIcon::TERMINAL)
+                            .with_rems(rems(control::COMPACT_ICON)),
+                    )
                     .child(session_info),
             )
             .child(div().flex_1())
             .child(
-                Button::new("container-terminal-switch")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                    .label(rust_i18n::t!("container.terminal.switch_user").to_string())
-                    .dropdown_menu(move |menu, _, _| {
-                        populate_terminal_menu(menu, menu_view.clone())
-                    }),
+                action_button(
+                    "container-terminal-switch",
+                    UiIcon::REFRESH,
+                    rust_i18n::t!("container.terminal.switch_user").to_string(),
+                )
+                .ghost()
+                .dropdown_menu(move |menu, _, _| populate_terminal_menu(menu, menu_view.clone())),
             );
 
         return v_flex()
@@ -175,21 +179,25 @@ pub(crate) fn render_terminal(
                 .gap_0()
                 .items_center()
                 .child(
-                    Button::new("container-terminal-open")
-                        .primary()
-                        .small()
-                        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small())
-                        .label(rust_i18n::t!("container.terminal.open").to_string())
-                        .on_click(move |_, _, cx| {
-                            open_view.update(cx, |workspace, cx| {
-                                workspace.open_container_terminal_as(None, None, cx);
-                            });
-                        }),
+                    action_button(
+                        "container-terminal-open",
+                        DomainIcon::TERMINAL,
+                        rust_i18n::t!("container.terminal.open").to_string(),
+                    )
+                    .primary()
+                    .on_click(move |_, _, cx| {
+                        open_view.update(cx, |workspace, cx| {
+                            workspace.open_container_terminal_as(None, None, cx);
+                        });
+                    }),
                 )
                 .child(
                     Button::new("container-terminal-open-menu")
                         .small()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
+                        .child(
+                            AppIconElement::new(UiIcon::CHEVRON_DOWN)
+                                .with_rems(rems(control::COMPACT_ICON)),
+                        )
                         .accessibility_label(user_tooltip.clone())
                         .tooltip(user_tooltip)
                         .dropdown_menu(move |menu, _, _| {

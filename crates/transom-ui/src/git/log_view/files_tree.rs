@@ -9,20 +9,19 @@
 use crate::app::AppShell;
 use crate::git::{ChangeAccent, change_visual};
 use crate::palette::Palette;
+use crate::theme::tokens::{control, size};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::{BTreeMap, HashSet};
 use transom_core::{ChangeCode, CommitFile, GitProject, TabId};
-use transom_ui_icons::AppIconElement;
-use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::menus::render_file_tree_menu;
 
-/// 单个树节点行高：与 14px 文件名保持足够的垂直呼吸空间。
-const TREE_ROW_HEIGHT: f32 = 24.0;
+/// 单个树节点行高：通过 Rems 令牌随 UI 密度缩放，与 14px 文件名保持足够的垂直呼吸空间。
+const TREE_ROW_HEIGHT: Rems = rems(size::COMPACT_TREE_ROW_HEIGHT);
 
 /// 变更文件树节点定义。
 pub(crate) enum FileTreeNode {
@@ -168,7 +167,7 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                 let dir_row = h_flex()
                     .id(ElementId::Name(format!("git-tree-dir-{path}").into()))
                     .w_full()
-                    .h(px(TREE_ROW_HEIGHT))
+                    .h(TREE_ROW_HEIGHT)
                     .items_center()
                     .pl(px(indent))
                     .pr_2()
@@ -183,10 +182,10 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                         } else {
                             UiIcon::CHEVRON_RIGHT
                         })
-                        .xsmall()
+                        .with_rems(rems(size::TREE_CHEVRON))
                         .text_color(params.palette.muted_foreground),
                     )
-                    .child(render_app_icon(UiIcon::FOLDER.into(), 14.0))
+                    .child(AppIconElement::new(UiIcon::FOLDER).with_rems(rems(control::ICON)))
                     .child(
                         div()
                             .text_color(params.palette.foreground)
@@ -233,7 +232,7 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                 let file_row = h_flex()
                     .id(ElementId::Name(format!("git-tree-file-{full_path}").into()))
                     .w_full()
-                    .h(px(TREE_ROW_HEIGHT))
+                    .h(TREE_ROW_HEIGHT)
                     .items_center()
                     .pl(px(indent))
                     .pr_2()
@@ -244,7 +243,10 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                     .when(!is_selected, |style| {
                         style.hover(|hover| hover.bg(params.palette.list_hover))
                     })
-                    .child(render_app_icon(AppIcon::for_file(full_path), 16.0))
+                    .child(
+                        AppIconElement::new(AppIcon::for_file(full_path))
+                            .with_rems(rems(control::ICON)),
+                    )
                     .child(
                         div()
                             .flex_1()

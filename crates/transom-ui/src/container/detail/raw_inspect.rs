@@ -6,9 +6,8 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::widgets::action_button;
 use gpui_kit::ClipboardItem;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 原始 inspect 工具栏的搜索输入框与当前关键词快照。
@@ -50,23 +49,24 @@ pub(crate) fn render_raw_inspect(
             .count()
     };
 
-    let copy_btn = Button::new(ElementId::Name("btn-copy-raw-inspect".into()))
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
-        .label(rust_i18n::t!("container.detail.copy_inspect").to_string())
-        .on_click({
-            let view = view.clone();
-            let copy_text = inspect_json.to_string();
-            move |_, _, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
-                let message = rust_i18n::t!("container.detail.copied").to_string();
-                view.update(cx, |workspace, cx| {
-                    workspace.state.notice = Some(message);
-                    cx.notify();
-                });
-            }
-        });
+    let copy_btn = action_button(
+        ElementId::Name("btn-copy-raw-inspect".into()),
+        UiIcon::COPY,
+        rust_i18n::t!("container.detail.copy_inspect").to_string(),
+    )
+    .ghost()
+    .on_click({
+        let view = view.clone();
+        let copy_text = inspect_json.to_string();
+        move |_, _, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+            let message = rust_i18n::t!("container.detail.copied").to_string();
+            view.update(cx, |workspace, cx| {
+                workspace.state.notice = Some(message);
+                cx.notify();
+            });
+        }
+    });
 
     let stats_label = if search_keyword.is_empty() {
         rust_i18n::t!(
@@ -84,20 +84,21 @@ pub(crate) fn render_raw_inspect(
         .to_string()
     };
 
-    let back_btn = Button::new(ElementId::Name("btn-back-overview".into()))
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_PREVIEW)).small())
-        .label(rust_i18n::t!("container.detail.overview").to_string())
-        .on_click({
-            let view = view.clone();
-            move |_, _, cx| {
-                view.update(cx, |workspace, cx| {
-                    workspace.state.overview_raw = false;
-                    cx.notify();
-                });
-            }
-        });
+    let back_btn = action_button(
+        ElementId::Name("btn-back-overview".into()),
+        UiIcon::EDITOR_PREVIEW,
+        rust_i18n::t!("container.detail.overview").to_string(),
+    )
+    .ghost()
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.state.overview_raw = false;
+                cx.notify();
+            });
+        }
+    });
 
     let toolbar = h_flex()
         .justify_between()

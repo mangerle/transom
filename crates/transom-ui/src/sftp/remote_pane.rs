@@ -16,7 +16,7 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState};
-use crate::widgets::{IconButton, IconButtonSize};
+use crate::widgets::IconButton;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::ContextMenuExt;
@@ -32,6 +32,7 @@ use transom_ui_icons::UiIcon;
 /// 渲染一条远端列所需的展示态与目标身份。
 pub(super) struct RemotePaneProps<'a> {
     pub(super) tab_id: TabId,
+    pub(super) rem_size: Pixels,
     pub(super) target: SftpRemotePaneRef,
     /// 并列列在面板中的序号；主远端为 `None`。
     pub(super) side_index: Option<usize>,
@@ -67,6 +68,7 @@ impl SftpPanelView {
     ) -> AnyElement {
         let RemotePaneProps {
             tab_id,
+            rem_size,
             target,
             side_index,
             title,
@@ -112,6 +114,7 @@ impl SftpPanelView {
                 loading,
                 error: pane.error.clone(),
                 tab_id,
+                rem_size,
                 target,
                 connection_id,
                 remote_scroll_handle: scroll_handle.clone(),
@@ -246,7 +249,6 @@ impl SftpPanelView {
             AppIcon::Ui(UiIcon::UP),
             rust_i18n::t!("sftp.remote.go_up").to_string(),
         )
-        .size(IconButtonSize::Compact)
         .render()
         .on_click(
             cx.listener(move |this, _, window, cx| this.go_up_pane(tab_id, target, window, cx)),
@@ -257,7 +259,6 @@ impl SftpPanelView {
             AppIcon::Ui(UiIcon::REFRESH),
             rust_i18n::t!("sftp.remote.refresh").to_string(),
         )
-        .size(IconButtonSize::Compact)
         .render()
         .on_click(cx.listener(move |this, _, _, cx| this.refresh_pane(tab_id, target, cx)));
 
@@ -266,7 +267,6 @@ impl SftpPanelView {
             AppIcon::Ui(UiIcon::RIGHT),
             rust_i18n::t!("sftp.remote.enter_path").to_string(),
         )
-        .size(IconButtonSize::Compact)
         .render()
         .on_click(cx.listener(move |this, _, _, cx| this.enter_path_pane(tab_id, target, cx)));
 
@@ -283,7 +283,6 @@ impl SftpPanelView {
                 rust_i18n::t!("sftp.remote.collapse").to_string()
             },
         )
-        .size(IconButtonSize::Compact)
         .render()
         .on_click(cx.listener(move |this, _, _, cx| match side_index {
             Some(index) => this.toggle_side_remote_collapse(index, cx),
@@ -296,7 +295,6 @@ impl SftpPanelView {
                 AppIcon::Ui(UiIcon::CLOSE),
                 rust_i18n::t!("sftp.sidebar.close_side_remote").to_string(),
             )
-            .size(IconButtonSize::Compact)
             .render()
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.close_side_remote(index, cx);

@@ -75,8 +75,8 @@ impl SftpPanelView {
 /// 渲染期间本实体已被 GPUI 租借，因此外壳拿到的只是 `&mut SftpPanelState`，
 /// 不允许再按句柄回读本实体；状态与交互仍只有一份。
 impl Render for SftpPanelView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let content = self.render_panel_content(cx);
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = self.render_panel_content(window.rem_size(), cx);
 
         // 面板级键盘与鼠标监听挂在实体上：状态变更直接落在本实体，
         // 跨域动作经面板事件交给外壳执行。

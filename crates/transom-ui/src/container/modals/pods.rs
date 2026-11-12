@@ -2,7 +2,7 @@
 
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::palette::Palette;
-use crate::widgets::{dialog_actions, dialog_body, dialog_cancel_button};
+use crate::widgets::{action_button, dialog_actions, dialog_body, dialog_cancel_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Disableable, Sizable};
@@ -99,17 +99,18 @@ pub(crate) fn render_container_pods_dialog_body(
         content = content.child(row);
     }
 
-    let refresh = Button::new("container-pods-refresh")
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-        .label(rust_i18n::t!("common.refresh").to_string())
-        .on_click({
-            let view = view.clone();
-            move |_, _, cx| {
-                view.update(cx, |workspace, cx| workspace.refresh_pods(cx));
-            }
-        });
+    let refresh = action_button(
+        "container-pods-refresh",
+        UiIcon::REFRESH,
+        rust_i18n::t!("common.refresh").to_string(),
+    )
+    .ghost()
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| workspace.refresh_pods(cx));
+        }
+    });
     let close = dialog_cancel_button(
         "container-pods-close",
         rust_i18n::t!("common.close").to_string(),

@@ -11,6 +11,7 @@ use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::palette::Palette;
 use crate::sftp::SftpRemotePaneRef;
 use crate::sftp::entity::SftpPanelView;
+use crate::theme::tokens::{rem_px, size as token_size};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::spinner::Spinner;
@@ -27,6 +28,7 @@ pub(crate) struct RemoteContentProps {
     /// 列级错误：并列远端列的读取/操作错误只落在本列。
     pub(crate) error: Option<String>,
     pub(crate) tab_id: TabId,
+    pub(crate) rem_size: Pixels,
     pub(crate) target: SftpRemotePaneRef,
     pub(crate) connection_id: ConnectionId,
     pub(crate) remote_scroll_handle: VirtualListScrollHandle,
@@ -39,6 +41,7 @@ pub(crate) struct RemoteContentProps {
 struct RemoteListParams {
     remote_entries: Vec<RemoteFile>,
     tab_id: TabId,
+    rem_size: Pixels,
     target: SftpRemotePaneRef,
     connection_id: ConnectionId,
     remote_scroll_handle: VirtualListScrollHandle,
@@ -59,6 +62,7 @@ impl SftpPanelView {
             loading,
             error,
             tab_id,
+            rem_size,
             target,
             connection_id,
             remote_scroll_handle,
@@ -73,6 +77,7 @@ impl SftpPanelView {
                 RemoteListParams {
                     remote_entries: remote_entries.clone(),
                     tab_id,
+                    rem_size,
                     target,
                     connection_id,
                     remote_scroll_handle,
@@ -142,13 +147,15 @@ impl SftpPanelView {
         let RemoteListParams {
             remote_entries,
             tab_id,
+            rem_size,
             target,
             connection_id,
             remote_scroll_handle,
             remote_selection,
             remote_primary,
         } = params;
-        let remote_sizes = std::rc::Rc::new(vec![size(px(0.), px(28.)); remote_entries.len()]);
+        let row_height = rem_px(token_size::FILE_ROW_HEIGHT, rem_size);
+        let remote_sizes = std::rc::Rc::new(vec![size(px(0.), row_height); remote_entries.len()]);
         let visible_paths: std::rc::Rc<Vec<SftpRowPath>> = std::rc::Rc::new(
             remote_entries
                 .iter()

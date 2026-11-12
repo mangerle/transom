@@ -13,10 +13,10 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::{control, typography};
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::ClipboardItem;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -31,7 +31,7 @@ pub(super) use health::render_health_timeline;
 pub(super) use mounts::render_mounts_card;
 pub(super) use ports::render_port_chips;
 
-/// 分组卡片容器：4% 弱底色、圆角、无冗余粗边框、11px 弱色标题。
+/// 分组卡片容器：4% 弱底色、圆角、无冗余粗边框、12px 弱色标题。
 pub(super) fn overview_card(
     title: impl Into<SharedString>,
     icon: AppIcon,
@@ -49,12 +49,12 @@ pub(super) fn overview_card(
                 .items_center()
                 .child(
                     AppIconElement::new(icon)
-                        .xsmall()
+                        .with_rems(rems(control::COMPACT_ICON))
                         .text_color(p.muted_foreground),
                 )
                 .child(
                     div()
-                        .text_size(rems(0.6875))
+                        .text_size(rems(typography::CAPTION))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(p.muted_foreground)
                         .child(title.into()),
@@ -96,7 +96,7 @@ pub(super) fn copyable_field(
     let mut val_el = div()
         .flex_1()
         .min_w_0()
-        .text_size(rems(0.75))
+        .text_size(rems(typography::BODY))
         .truncate()
         .child(display_str);
 
@@ -111,7 +111,7 @@ pub(super) fn copyable_field(
             div()
                 .w(px(96.0))
                 .flex_none()
-                .text_size(rems(0.6875))
+                .text_size(rems(typography::CAPTION))
                 .text_color(p.muted_foreground)
                 .child(label.into()),
         )
@@ -119,14 +119,13 @@ pub(super) fn copyable_field(
 
     if !is_empty {
         let text_to_copy = val_str.clone();
-        let copy_btn = Button::new(ElementId::Name(
-            format!("copy-field-{}", val_str.len()).into(),
-        ))
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
-        .accessibility_label(rust_i18n::t!("common.copy").to_string())
-        .tooltip(rust_i18n::t!("common.copy").to_string())
+        let copy_btn = IconButton::new(
+            ElementId::Name(format!("copy-field-{}", val_str.len()).into()),
+            UiIcon::COPY,
+            rust_i18n::t!("common.copy").to_string(),
+        )
+        .size(IconButtonSize::RowAction)
+        .render()
         .on_click({
             let view = view.clone();
             move |_, _, cx| {

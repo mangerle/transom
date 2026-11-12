@@ -83,7 +83,8 @@ pub(crate) fn render_compose_detail(
 }
 
 use super::compose_yaml::{render_line_numbers, render_path_breadcrumbs, validate_compose_yaml};
-use transom_ui_icons::AppIcon;
+use crate::theme::tokens::{control, typography};
+use crate::widgets::{IconButton, action_button};
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
@@ -129,50 +130,48 @@ fn render_compose_yaml_editor(
                 .gap_1p5()
                 .items_center()
                 .child(
-                    Button::new("compose-yaml-save")
-                        .primary()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::SAVE)).small())
-                        .label(rust_i18n::t!("common.save").to_string())
-                        .disabled(is_saving)
-                        .on_click(move |_, _, cx| {
-                            save_view.update(cx, |workspace, cx| {
-                                workspace.save_compose_yaml(cx);
-                            });
-                        }),
+                    action_button(
+                        "compose-yaml-save",
+                        UiIcon::SAVE,
+                        rust_i18n::t!("common.save").to_string(),
+                    )
+                    .primary()
+                    .disabled(is_saving)
+                    .on_click(move |_, _, cx| {
+                        save_view.update(cx, |workspace, cx| {
+                            workspace.save_compose_yaml(cx);
+                        });
+                    }),
                 )
                 .child(
-                    Button::new("compose-yaml-deploy")
-                        .ghost()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
-                        .label(rust_i18n::t!("container.compose.up_deploy").to_string())
-                        .disabled(is_saving)
-                        .on_click(move |_, _, cx| {
-                            deploy_view.update(cx, |workspace, cx| {
-                                workspace.run_compose(
-                                    project_name_up.clone(),
-                                    ComposeAction::Up,
-                                    cx,
-                                );
-                            });
-                        }),
+                    action_button(
+                        "compose-yaml-deploy",
+                        UiIcon::RUN,
+                        rust_i18n::t!("container.compose.up_deploy").to_string(),
+                    )
+                    .ghost()
+                    .disabled(is_saving)
+                    .on_click(move |_, _, cx| {
+                        deploy_view.update(cx, |workspace, cx| {
+                            workspace.run_compose(project_name_up.clone(), ComposeAction::Up, cx);
+                        });
+                    }),
                 )
                 .child(
-                    Button::new("compose-yaml-reload")
-                        .ghost()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                        .accessibility_label(rust_i18n::t!("common.refresh").to_string())
-                        .tooltip(rust_i18n::t!("common.refresh").to_string())
-                        .disabled(is_saving)
-                        .on_click(move |_, _, cx| {
-                            reload_view.update(cx, |workspace, cx| {
-                                workspace.state.compose_yaml_editor = None;
-                                workspace.ensure_compose_yaml_loaded(cx);
-                                cx.notify();
-                            });
-                        }),
+                    IconButton::new(
+                        "compose-yaml-reload",
+                        UiIcon::REFRESH,
+                        rust_i18n::t!("common.refresh").to_string(),
+                    )
+                    .disabled(is_saving)
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        reload_view.update(cx, |workspace, cx| {
+                            workspace.state.compose_yaml_editor = None;
+                            workspace.ensure_compose_yaml_loaded(cx);
+                            cx.notify();
+                        });
+                    }),
                 ),
         );
 
@@ -186,10 +185,10 @@ fn render_compose_yaml_editor(
             .items_center()
             .bg(p.danger.opacity(0.08))
             .text_color(p.danger)
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).xsmall())
+            .child(AppIconElement::new(UiIcon::WARNING).with_rems(rems(control::COMPACT_ICON)))
             .child(
                 div()
-                    .text_xs()
+                    .text_size(rems(typography::CAPTION))
                     .font_weight(FontWeight::MEDIUM)
                     .child(rust_i18n::t!(
                         "container.compose.yaml_syntax_error",
@@ -206,10 +205,10 @@ fn render_compose_yaml_editor(
             .items_center()
             .bg(p.success.opacity(0.04))
             .text_color(p.success)
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).xsmall())
+            .child(AppIconElement::new(UiIcon::CHECK).with_rems(rems(control::COMPACT_ICON)))
             .child(
                 div()
-                    .text_xs()
+                    .text_size(rems(typography::CAPTION))
                     .font_weight(FontWeight::MEDIUM)
                     .child(rust_i18n::t!("container.compose.yaml_syntax_valid").to_string()),
             )

@@ -1,8 +1,8 @@
 //! 引擎分组新建/重命名表单。
 
 use super::*;
+use crate::widgets::{DialogConfirmKind, dialog_cancel_button, dialog_confirm_button};
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 引擎分组的新建/重命名弹窗体。
@@ -43,23 +43,22 @@ pub(crate) fn render_engine_folder_form_body(
     let footer = h_flex()
         .gap_2()
         .justify_end()
-        .child(
-            Button::new("container-engine-folder-cancel")
-                .ghost()
-                .label(rust_i18n::t!("common.cancel").to_string())
-                .on_click(move |_, _, cx| {
-                    view_cancel.update(cx, |sidebar, cx| sidebar.dismiss_folder_form(cx));
-                }),
-        )
-        .child(
-            Button::new("container-engine-folder-save")
-                .primary()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-                .label(rust_i18n::t!("common.save").to_string())
-                .on_click(move |_, _, cx| {
-                    view_save.update(cx, |sidebar, cx| sidebar.submit_folder_form(cx));
-                }),
-        );
+        .child(dialog_cancel_button(
+            "container-engine-folder-cancel",
+            rust_i18n::t!("common.cancel").to_string(),
+            move |_, _, cx| {
+                view_cancel.update(cx, |sidebar, cx| sidebar.dismiss_folder_form(cx));
+            },
+        ))
+        .child(dialog_confirm_button(
+            "container-engine-folder-save",
+            rust_i18n::t!("common.save").to_string(),
+            Some(AppIcon::Ui(UiIcon::CHECK)),
+            DialogConfirmKind::Primary,
+            move |_, _, cx| {
+                view_save.update(cx, |sidebar, cx| sidebar.submit_folder_form(cx));
+            },
+        ));
     crate::widgets::dialog_body(
         "container-engine-folder-body",
         title,

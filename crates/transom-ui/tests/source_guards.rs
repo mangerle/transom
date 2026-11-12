@@ -969,6 +969,10 @@ fn icon_button_offenders(path: &str, content: &str) -> Vec<String> {
     let mut offset = 0;
     while let Some(relative) = content[offset..].find("Button::new(") {
         let start = offset + relative;
+        if content[..start].ends_with("Icon") {
+            offset = start + "Button::new(".len();
+            continue;
+        }
         let Some(end_relative) = content[start..].find(';') else {
             break;
         };

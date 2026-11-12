@@ -10,10 +10,9 @@
 use crate::palette::Palette;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::normalize_remote_cwd;
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::*;
 use transom_core::ConnectionId;
 use transom_ui_icons::AppIcon;
@@ -38,13 +37,14 @@ impl SftpPanelView {
             .collect();
 
         let app_open = cx.entity().clone();
-        let trigger = Button::new(format!("sftp-mount-side-remote-btn-{tab_id}"))
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-            .selected(open)
-            .accessibility_label(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string())
-            .tooltip(rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string());
+        let trigger = IconButton::new(
+            format!("sftp-mount-side-remote-btn-{tab_id}"),
+            AppIcon::Ui(UiIcon::ADD),
+            rust_i18n::t!("sftp.sidebar.mount_tooltip").to_string(),
+        )
+        .size(IconButtonSize::Compact)
+        .selected(open)
+        .render();
 
         // 候选由外壳在标签变化时推送：渲染期不读工作区。
         let candidates = self.state.mount_candidates.clone();

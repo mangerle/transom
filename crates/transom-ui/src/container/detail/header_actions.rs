@@ -6,6 +6,8 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
+use crate::theme::tokens::{control, space};
+use crate::widgets::action_button;
 use transom_core::{
     ComposeAction, ComposeProject, ContainerImageSummary, ContainerLifecycleAction,
     ContainerNetworkSummary,
@@ -28,21 +30,15 @@ fn compose_lifecycle_button(
     } else {
         "container.action.start_all"
     };
-    let button = Button::new(if stop {
-        "compose-stop-all"
-    } else {
-        "compose-start-all"
-    })
-    .xsmall()
-    .child(
-        AppIconElement::new(if stop {
-            AppIcon::Ui(UiIcon::STOP)
+    let button = action_button(
+        if stop {
+            "compose-stop-all"
         } else {
-            AppIcon::Ui(UiIcon::RUN)
-        })
-        .small(),
+            "compose-start-all"
+        },
+        if stop { UiIcon::STOP } else { UiIcon::RUN },
+        rust_i18n::t!(label_key).to_string(),
     )
-    .label(rust_i18n::t!(label_key).to_string())
     .on_click(move |_, _, cx| {
         let action = if stop {
             ContainerLifecycleAction::Stop
@@ -106,11 +102,21 @@ pub(super) fn compose_header_actions(
     // 2. 「更多」操作下拉菜单：收拢重新部署、重启、构建、拉取与删除
     let more_view = view.clone();
     let compose_name = project.name.clone();
+    let more_label = rust_i18n::t!("common.more").to_string();
     let more_btn = Button::new("compose-more-actions")
-        .xsmall()
+        .small()
         .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small())
-        .label(rust_i18n::t!("common.more").to_string())
+        .accessibility_label(more_label.clone())
+        .child(
+            h_flex()
+                .items_center()
+                .gap(rems(space::COMPACT))
+                .child(more_label)
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN))
+                        .with_rems(rems(control::COMPACT_ICON)),
+                ),
+        )
         .dropdown_menu(move |menu, _, _| {
             let view = more_view.clone();
             let name = compose_name.clone();
@@ -173,39 +179,42 @@ pub(super) fn image_header_actions(
     let save_id = image_id.clone();
 
     vec![
-        Button::new("image-tag")
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::TAG)).small())
-            .label(rust_i18n::t!("container.action.tag").to_string())
-            .on_click(move |_, _, cx| {
-                tag_view.update(cx, |_, cx| {
-                    cx.emit(ContainerWorkspaceEvent::OpenImageTag(tag_id.clone()));
+        action_button(
+            "image-tag",
+            UiIcon::TAG,
+            rust_i18n::t!("container.action.tag").to_string(),
+        )
+        .on_click(move |_, _, cx| {
+            tag_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::OpenImageTag(tag_id.clone()));
+            });
+        })
+        .into_any_element(),
+        action_button(
+            "image-push",
+            UiIcon::UPLOAD,
+            rust_i18n::t!("container.action.push").to_string(),
+        )
+        .on_click(move |_, _, cx| {
+            push_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::OpenImagePush {
+                    id: push_id.clone(),
+                    reference: push_reference.clone(),
                 });
-            })
-            .into_any_element(),
-        Button::new("image-push")
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
-            .label(rust_i18n::t!("container.action.push").to_string())
-            .on_click(move |_, _, cx| {
-                push_view.update(cx, |_, cx| {
-                    cx.emit(ContainerWorkspaceEvent::OpenImagePush {
-                        id: push_id.clone(),
-                        reference: push_reference.clone(),
-                    });
-                });
-            })
-            .into_any_element(),
-        Button::new("image-save")
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-            .label(rust_i18n::t!("container.action.save_image").to_string())
-            .on_click(move |_, _, cx| {
-                save_view.update(cx, |_, cx| {
-                    cx.emit(ContainerWorkspaceEvent::SaveImage(save_id.clone()));
-                });
-            })
-            .into_any_element(),
+            });
+        })
+        .into_any_element(),
+        action_button(
+            "image-save",
+            UiIcon::DOWNLOAD,
+            rust_i18n::t!("container.action.save_image").to_string(),
+        )
+        .on_click(move |_, _, cx| {
+            save_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::SaveImage(save_id.clone()));
+            });
+        })
+        .into_any_element(),
         delete_button(
             view,
             "image-delete",
@@ -221,18 +230,19 @@ pub(super) fn network_header_actions(
     let network_id = network.id.clone();
     let connect_view = view.clone();
     vec![
-        Button::new("network-connect")
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD_LINK)).small())
-            .label(rust_i18n::t!("container.action.connect_network").to_string())
-            .on_click(move |_, _, cx| {
-                connect_view.update(cx, |_, cx| {
-                    cx.emit(ContainerWorkspaceEvent::OpenNetworkConnect(
-                        network_id.clone(),
-                    ));
-                });
-            })
-            .into_any_element(),
+        action_button(
+            "network-connect",
+            UiIcon::ADD_LINK,
+            rust_i18n::t!("container.action.connect_network").to_string(),
+        )
+        .on_click(move |_, _, cx| {
+            connect_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::OpenNetworkConnect(
+                    network_id.clone(),
+                ));
+            });
+        })
+        .into_any_element(),
         delete_button(
             view,
             "network-delete",

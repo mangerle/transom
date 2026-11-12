@@ -7,9 +7,10 @@
 
 use super::card::format_star_count;
 use crate::palette::Palette;
+use crate::widgets::action_button;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Input;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -77,14 +78,15 @@ where
         .border_b_1()
         .border_color(p.stroke.faint)
         .child(
-            Button::new("hub-detail-back-btn")
-                .ghost()
-                .small()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::LEFT)).small())
-                .label(rust_i18n::t!("container.hub.back_to_results").to_string())
-                .on_click(move |_, window, cx| {
-                    on_back(window, cx);
-                }),
+            action_button(
+                "hub-detail-back-btn",
+                UiIcon::LEFT,
+                rust_i18n::t!("container.hub.back_to_results").to_string(),
+            )
+            .ghost()
+            .on_click(move |_, window, cx| {
+                on_back(window, cx);
+            }),
         )
         .child(
             h_flex()
@@ -98,25 +100,23 @@ where
                         .child(cli_cmd),
                 )
                 .child(
-                    Button::new("hub-detail-copy-cmd-btn")
-                        .ghost()
-                        .xsmall()
-                        .child(
-                            AppIconElement::new(if copy_toast {
-                                AppIcon::Ui(UiIcon::CHECK)
-                            } else {
-                                AppIcon::Ui(UiIcon::COPY)
-                            })
-                            .small(),
-                        )
-                        .label(if copy_toast {
+                    action_button(
+                        "hub-detail-copy-cmd-btn",
+                        if copy_toast {
+                            UiIcon::CHECK
+                        } else {
+                            UiIcon::COPY
+                        },
+                        if copy_toast {
                             rust_i18n::t!("container.hub.copied").to_string()
                         } else {
                             rust_i18n::t!("container.hub.copy_cli").to_string()
-                        })
-                        .on_click(move |_, window, cx| {
-                            on_copy(&cmd_for_copy, window, cx);
-                        }),
+                        },
+                    )
+                    .ghost()
+                    .on_click(move |_, window, cx| {
+                        on_copy(&cmd_for_copy, window, cx);
+                    }),
                 ),
         );
 
@@ -258,20 +258,21 @@ where
             )
             .child(h_flex().flex_1().child(Input::new(input).small()))
             .child(
-                Button::new("hub-detail-pull-custom-btn")
-                    .primary()
-                    .small()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                    .label(rust_i18n::t!("container.hub.pull_selected").to_string())
-                    .on_click(move |_, window, cx| {
-                        let custom_val = input_ent.read(cx).value().trim().to_string();
-                        let tag_to_pull = if custom_val.is_empty() {
-                            "latest".to_string()
-                        } else {
-                            custom_val
-                        };
-                        custom_pull_fn(&tag_to_pull, window, cx);
-                    }),
+                action_button(
+                    "hub-detail-pull-custom-btn",
+                    UiIcon::DOWNLOAD,
+                    rust_i18n::t!("container.hub.pull_selected").to_string(),
+                )
+                .primary()
+                .on_click(move |_, window, cx| {
+                    let custom_val = input_ent.read(cx).value().trim().to_string();
+                    let tag_to_pull = if custom_val.is_empty() {
+                        "latest".to_string()
+                    } else {
+                        custom_val
+                    };
+                    custom_pull_fn(&tag_to_pull, window, cx);
+                }),
             )
             .into_any_element()
     } else {
@@ -404,14 +405,15 @@ where
                 )
                 .child(
                     h_flex().w(px(80.0)).justify_end().child(
-                        Button::new(ElementId::Name(format!("hub-tag-row-pull-{}", tag).into()))
-                            .secondary()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                            .label(rust_i18n::t!("container.hub.pull").to_string())
-                            .on_click(move |_, window, cx| {
-                                row_pull_fn(&pull_val, window, cx);
-                            }),
+                        action_button(
+                            ElementId::Name(format!("hub-tag-row-pull-{}", tag).into()),
+                            UiIcon::DOWNLOAD,
+                            rust_i18n::t!("container.hub.pull").to_string(),
+                        )
+                        .secondary()
+                        .on_click(move |_, window, cx| {
+                            row_pull_fn(&pull_val, window, cx);
+                        }),
                     ),
                 );
 

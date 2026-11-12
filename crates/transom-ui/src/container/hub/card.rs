@@ -7,6 +7,7 @@
 
 use super::tags::get_image_tag_presets;
 use crate::palette::Palette;
+use crate::widgets::action_button;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Selectable, Sizable};
@@ -263,29 +264,27 @@ where
                 .gap_1p5()
                 .items_end()
                 .child(
-                    Button::new(ElementId::Name(format!("hub-pull-btn-{}", name).into()))
-                        .primary()
-                        .small()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                        .label(format!(
-                            "{}:{}",
-                            rust_i18n::t!("container.hub.pull"),
-                            pull_tag
-                        ))
-                        .tooltip(format!("docker pull {}:{}", name, pull_tag))
-                        .on_click(move |_, window, cx| {
-                            pull_fn(&pull_tag, window, cx);
-                        }),
+                    action_button(
+                        ElementId::Name(format!("hub-pull-btn-{}", name).into()),
+                        UiIcon::DOWNLOAD,
+                        format!("{}:{}", rust_i18n::t!("container.hub.pull"), pull_tag),
+                    )
+                    .primary()
+                    .tooltip(format!("docker pull {}:{}", name, pull_tag))
+                    .on_click(move |_, window, cx| {
+                        pull_fn(&pull_tag, window, cx);
+                    }),
                 )
                 .child(
-                    Button::new(ElementId::Name(format!("hub-detail-btn-{}", name).into()))
-                        .ghost()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::RIGHT)).small())
-                        .label(rust_i18n::t!("container.hub.view_details").to_string())
-                        .on_click(move |_, window, cx| {
-                            on_detail_click(window, cx);
-                        }),
+                    action_button(
+                        ElementId::Name(format!("hub-detail-btn-{}", name).into()),
+                        UiIcon::RIGHT,
+                        rust_i18n::t!("container.hub.view_details").to_string(),
+                    )
+                    .ghost()
+                    .on_click(move |_, window, cx| {
+                        on_detail_click(window, cx);
+                    }),
                 ),
         )
         .into_any_element()

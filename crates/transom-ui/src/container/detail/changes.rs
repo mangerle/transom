@@ -2,10 +2,9 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::ClipboardItem;
 use transom_core::{ContainerFileSystemChange, ContainerPathChangeKind};
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 变更页渲染参数：容器标识、变更快照、加载态与搜索输入框/关键词快照。
@@ -77,17 +76,18 @@ pub(crate) fn render_container_changes(
     }
 
     let refresh_view = view.clone();
-    let refresh_btn = Button::new(ElementId::Name(format!("btn-refresh-diff-{tab_id}").into()))
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-        .label(rust_i18n::t!("container.changes.refresh").to_string())
-        .on_click(move |_, _, cx| {
-            refresh_view.update(cx, |workspace, cx| {
-                workspace.refresh_container_changes();
-                cx.notify();
-            });
+    let refresh_btn = action_button(
+        ElementId::Name(format!("btn-refresh-diff-{tab_id}").into()),
+        UiIcon::REFRESH,
+        rust_i18n::t!("container.changes.refresh").to_string(),
+    )
+    .ghost()
+    .on_click(move |_, _, cx| {
+        refresh_view.update(cx, |workspace, cx| {
+            workspace.refresh_container_changes();
+            cx.notify();
         });
+    });
 
     let stats_badges = h_flex()
         .gap_1p5()
@@ -195,14 +195,13 @@ pub(crate) fn render_container_changes(
                     ),
             )
             .child(
-                Button::new(ElementId::Name(
-                    format!("btn-copy-diff-path-{}", change.path).into(),
-                ))
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
-                .accessibility_label(rust_i18n::t!("container.detail.copy_path").to_string())
-                .tooltip(rust_i18n::t!("container.detail.copy_path").to_string())
+                IconButton::new(
+                    ElementId::Name(format!("btn-copy-diff-path-{}", change.path).into()),
+                    UiIcon::COPY,
+                    rust_i18n::t!("container.detail.copy_path").to_string(),
+                )
+                .size(IconButtonSize::RowAction)
+                .render()
                 .on_click(move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(copy_path.clone()));
                     let message = rust_i18n::t!("container.detail.copied").to_string();

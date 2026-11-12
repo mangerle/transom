@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::palette::Palette;
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -83,45 +84,41 @@ pub(crate) fn render_pull_drawer(
                 .items_center()
                 .when(has_finished, |this| {
                     this.child(
-                        Button::new("pull-drawer-clear")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                            .accessibility_label(
-                                rust_i18n::t!("container.pull_manager.clear_finished").to_string(),
-                            )
-                            .tooltip(
-                                rust_i18n::t!("container.pull_manager.clear_finished").to_string(),
-                            )
-                            .on_click({
-                                let view = view.clone();
-                                move |_, _, cx| {
-                                    view.update(cx, |workspace, cx| {
-                                        workspace.state.pull_manager.clear_finished();
-                                        cx.notify();
-                                    });
-                                }
-                            }),
-                    )
-                })
-                .child(
-                    Button::new("pull-drawer-close")
-                        .ghost()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                        .accessibility_label(
-                            rust_i18n::t!("container.pull_manager.close_drawer").to_string(),
+                        IconButton::new(
+                            "pull-drawer-clear",
+                            UiIcon::DELETE,
+                            rust_i18n::t!("container.pull_manager.clear_finished").to_string(),
                         )
-                        .tooltip(rust_i18n::t!("container.pull_manager.close_drawer").to_string())
+                        .size(IconButtonSize::Compact)
+                        .render()
                         .on_click({
                             let view = view.clone();
                             move |_, _, cx| {
                                 view.update(cx, |workspace, cx| {
-                                    workspace.state.pull_drawer_open = false;
+                                    workspace.state.pull_manager.clear_finished();
                                     cx.notify();
                                 });
                             }
                         }),
+                    )
+                })
+                .child(
+                    IconButton::new(
+                        "pull-drawer-close",
+                        UiIcon::CLOSE,
+                        rust_i18n::t!("container.pull_manager.close_drawer").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _, cx| {
+                            view.update(cx, |workspace, cx| {
+                                workspace.state.pull_drawer_open = false;
+                                cx.notify();
+                            });
+                        }
+                    }),
                 ),
         );
 
@@ -268,13 +265,16 @@ pub(crate) fn render_pull_drawer(
                                 })
                             } else {
                                 let remove_task_id = task_id.clone();
-                                Button::new(ElementId::Name(
-                                    format!("pull-remove-{}", remove_task_id).into(),
-                                ))
-                                .ghost()
-                                .xsmall()
-                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                                .accessibility_label("Remove pull task")
+                                IconButton::new(
+                                    ElementId::Name(
+                                        format!("pull-remove-{}", remove_task_id).into(),
+                                    ),
+                                    UiIcon::DELETE,
+                                    "Remove pull task",
+                                )
+                                .size(IconButtonSize::RowAction)
+                                .show_tooltip(false)
+                                .render()
                                 .on_click({
                                     let view = view.clone();
                                     let remove_task_id = remove_task_id.clone();

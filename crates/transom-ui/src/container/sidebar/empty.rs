@@ -2,6 +2,8 @@
 
 use super::*;
 use crate::container::types::ContainerDiscovery;
+use crate::widgets::{IconButton, IconButtonSize, action_button};
+use gpui_kit::component::button::ButtonVariants;
 use transom_core::Connection;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
@@ -32,29 +34,31 @@ pub(crate) fn render_engine_empty(
         .child(rust_i18n::t!("container.sidebar.empty").to_string())
         .child(
             h_flex()
-                .gap_1()
+                .gap_2()
                 .child(
-                    Button::new("container-profile-new-empty")
-                        .primary()
-                        .small()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                        .label(rust_i18n::t!("container.sidebar.new").to_string())
-                        .on_click(move |_, _, cx| {
-                            view_new.update(cx, |sidebar, cx| {
-                                sidebar.request_new_engine(None, cx);
-                            });
-                        }),
+                    action_button(
+                        "container-profile-new-empty",
+                        UiIcon::ADD,
+                        rust_i18n::t!("container.sidebar.new").to_string(),
+                    )
+                    .primary()
+                    .on_click(move |_, _, cx| {
+                        view_new.update(cx, |sidebar, cx| {
+                            sidebar.request_new_engine(None, cx);
+                        });
+                    }),
                 )
                 .child(
-                    Button::new("container-discover-empty")
-                        .small()
-                        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR)).small())
-                        .label(rust_i18n::t!("container.sidebar.discover").to_string())
-                        .on_click(move |_, _, cx| {
-                            view_discover.update(cx, |sidebar, cx| {
-                                sidebar.request_discover(cx);
-                            });
-                        }),
+                    action_button(
+                        "container-discover-empty",
+                        DomainIcon::MONITOR,
+                        rust_i18n::t!("container.sidebar.discover").to_string(),
+                    )
+                    .on_click(move |_, _, cx| {
+                        view_discover.update(cx, |sidebar, cx| {
+                            sidebar.request_discover(cx);
+                        });
+                    }),
                 ),
         )
         .into_any_element()
@@ -99,16 +103,19 @@ pub(crate) fn render_container_discovery(
                     ),
             )
             .child(
-                Button::new("container-discovery-dismiss")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                    .accessibility_label("Dismiss container discovery")
-                    .on_click(move |_, _, cx| {
-                        view_dismiss.update(cx, |sidebar, cx| {
-                            sidebar.dismiss_discovery(cx);
-                        });
-                    }),
+                IconButton::new(
+                    "container-discovery-dismiss",
+                    UiIcon::CLOSE,
+                    "Dismiss container discovery",
+                )
+                .size(IconButtonSize::RowAction)
+                .show_tooltip(false)
+                .render()
+                .on_click(move |_, _, cx| {
+                    view_dismiss.update(cx, |sidebar, cx| {
+                        sidebar.dismiss_discovery(cx);
+                    });
+                }),
             ),
     );
     if discovery.candidates.is_empty() {
@@ -142,13 +149,12 @@ pub(crate) fn render_container_discovery(
                         ),
                 )
                 .child(
-                    Button::new(ElementId::Name(
-                        format!("container-discovery-add-{}", candidate.id).into(),
-                    ))
+                    action_button(
+                        ElementId::Name(format!("container-discovery-add-{}", candidate.id).into()),
+                        UiIcon::ADD,
+                        rust_i18n::t!("container.discovery.add").to_string(),
+                    )
                     .primary()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                    .label(rust_i18n::t!("container.discovery.add").to_string())
                     .on_click(move |_, _, cx| {
                         view_add.update(cx, |sidebar, cx| {
                             sidebar.request_add_discovered(candidate_profile.clone(), cx);
@@ -212,12 +218,13 @@ pub(crate) fn render_container_discovery(
                             ),
                     )
                     .child(
-                        Button::new(ElementId::Name(
-                            format!("container-discovery-ssh-{}", session_id).into(),
-                        ))
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER)).small())
-                        .label(rust_i18n::t!("container.discovery.connect_docker").to_string())
+                        action_button(
+                            ElementId::Name(
+                                format!("container-discovery-ssh-{}", session_id).into(),
+                            ),
+                            DomainIcon::CONTAINER,
+                            rust_i18n::t!("container.discovery.connect_docker").to_string(),
+                        )
                         .on_click(move |_, _, cx| {
                             view_session.update(cx, |sidebar, cx| {
                                 sidebar.request_open_session(session_id, cx);

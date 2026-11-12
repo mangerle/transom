@@ -2,11 +2,10 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::typography;
+use crate::widgets::action_button;
 use gpui_kit::ClipboardItem;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 环境变量列表（支持一键复制全部为 .env）。
@@ -20,37 +19,38 @@ pub(crate) fn render_env_card(
 ) -> AnyElement {
     if env.is_empty() {
         return div()
-            .text_size(rems(0.75))
+            .text_size(rems(typography::BODY))
             .text_color(p.muted_foreground)
             .child("—")
             .into_any_element();
     }
 
     let all_env_text = env.join("\n");
-    let copy_all_btn = Button::new("btn-copy-all-env")
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
-        .label(rust_i18n::t!("container.detail.copy_env").to_string())
-        .on_click({
-            let view = view.clone();
-            let copy_env_text = all_env_text.clone();
-            move |_, _, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(copy_env_text.clone()));
-                let message = rust_i18n::t!("container.detail.env_copied").to_string();
-                view.update(cx, |workspace, cx| {
-                    workspace.state.notice = Some(message);
-                    cx.notify();
-                });
-            }
-        });
+    let copy_all_btn = action_button(
+        "btn-copy-all-env",
+        UiIcon::COPY,
+        rust_i18n::t!("container.detail.copy_env").to_string(),
+    )
+    .ghost()
+    .on_click({
+        let view = view.clone();
+        let copy_env_text = all_env_text.clone();
+        move |_, _, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(copy_env_text.clone()));
+            let message = rust_i18n::t!("container.detail.env_copied").to_string();
+            view.update(cx, |workspace, cx| {
+                workspace.state.notice = Some(message);
+                cx.notify();
+            });
+        }
+    });
 
     let items = env.iter().take(12).map(|entry| {
         let (k, v) = entry.split_once('=').unwrap_or((entry.as_str(), ""));
         h_flex()
             .gap_1()
             .items_center()
-            .text_size(rems(0.6875))
+            .text_size(rems(typography::CAPTION))
             .font_family(p.mono_font_family.clone())
             .truncate()
             .child(div().text_color(p.muted_foreground).child(format!("{k}=")))
@@ -62,7 +62,7 @@ pub(crate) fn render_env_card(
         let remaining = env.len() - 12;
         Some(
             div()
-                .text_size(rems(0.6875))
+                .text_size(rems(typography::CAPTION))
                 .text_color(p.muted_foreground)
                 .child(
                     rust_i18n::t!("container.detail.env_more_hint", count = remaining).to_string(),

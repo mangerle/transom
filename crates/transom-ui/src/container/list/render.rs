@@ -6,12 +6,12 @@
 
 use super::*;
 use crate::app::AppShell;
-use crate::widgets::status_dot_bare;
+use crate::theme::tokens::typography;
+use crate::widgets::{IconButton, IconButtonSize, status_dot_bare};
 use gpui_kit::base::{ScrollBounce, v_virtual_list};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::component::scroll::Scrollbar;
 use std::rc::Rc;
-use transom_ui_icons::AppIconElement;
 
 /// 容器列表虚拟渲染参数。
 pub(crate) struct ContainerRowsParams<'a> {
@@ -127,7 +127,7 @@ pub(crate) fn list_row(
     }
 
     let title_el = div()
-        .text_size(rems(0.8125))
+        .text_size(rems(typography::BODY))
         .font_weight(FontWeight::MEDIUM)
         .truncate()
         .child(title);
@@ -138,7 +138,7 @@ pub(crate) fn list_row(
         Some(subtitle) => names
             .child(
                 div()
-                    .text_size(rems(0.6875))
+                    .text_size(rems(typography::CAPTION))
                     .text_color(p.muted_foreground)
                     .font_family(p.mono_font_family.clone())
                     .truncate()
@@ -151,7 +151,7 @@ pub(crate) fn list_row(
     if let Some(badge) = row.badge.clone() {
         element = element.child(
             div()
-                .text_size(rems(0.6875))
+                .text_size(rems(typography::CAPTION))
                 .flex_none()
                 .text_color(p.muted_foreground)
                 .child(badge),
@@ -166,13 +166,13 @@ pub(crate) fn list_row(
             let target = row.target.clone();
             let view = view.clone();
             actions_flex = actions_flex.child(
-                Button::new(ElementId::Name(
-                    format!("{}-action-{:?}", row.key, action).into(),
-                ))
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(action.icon()).small())
-                .accessibility_label(rust_i18n::t!(action.label_key()).to_string())
+                IconButton::new(
+                    ElementId::Name(format!("{}-action-{:?}", row.key, action).into()),
+                    action.icon(),
+                    rust_i18n::t!(action.label_key()).to_string(),
+                )
+                .size(IconButtonSize::RowAction)
+                .render()
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
                     view.update(cx, |workspace, cx| {

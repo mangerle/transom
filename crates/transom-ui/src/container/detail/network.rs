@@ -2,8 +2,9 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::typography;
+use crate::widgets::{IconButton, IconButtonSize, action_button};
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -106,14 +107,14 @@ pub(crate) fn render_network_detail(
     let disconnect_net_id = id.clone();
     let mut connected_block = v_flex().gap_1().child(
         div()
-            .text_xs()
+            .text_size(rems(typography::CAPTION))
             .text_color(p.muted_foreground)
             .child(rust_i18n::t!("container.field.connected").to_string()),
     );
     if connected_items.is_empty() {
         connected_block = connected_block.child(
             div()
-                .text_sm()
+                .text_size(rems(typography::BODY))
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("container.linked.none").to_string()),
         );
@@ -124,64 +125,61 @@ pub(crate) fn render_network_detail(
             let net_id = disconnect_net_id.clone();
             let reveal_view = view.clone();
             let disconnect_view = view.clone();
-            let mut row = h_flex()
-                .gap_2()
-                .items_center()
-                .child(
-                    AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
-                        .xsmall()
-                        .text_color(p.muted_foreground),
+            let mut row = h_flex().gap_2().items_center().child(
+                action_button(
+                    ElementId::Name(format!("network-container-link-{name}").into()),
+                    DomainIcon::CONTAINER,
+                    name.clone(),
                 )
-                .child(
-                    Button::new(ElementId::Name(
-                        format!("network-container-link-{name}").into(),
-                    ))
-                    .ghost()
-                    .xsmall()
-                    .label(name.clone())
-                    .on_click(move |_, _, cx| {
-                        reveal_view.update(cx, |workspace, cx| {
-                            workspace.reveal_container(reveal_name.clone(), cx);
-                        });
-                    }),
-                );
+                .ghost()
+                .on_click(move |_, _, cx| {
+                    reveal_view.update(cx, |workspace, cx| {
+                        workspace.reveal_container(reveal_name.clone(), cx);
+                    });
+                }),
+            );
             if !hint.is_empty() {
-                row = row.child(div().text_xs().text_color(p.muted_foreground).child(hint));
+                row = row.child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.muted_foreground)
+                        .child(hint),
+                );
             }
             row = row.child(div().flex_1());
             row = row.child(
-                Button::new(ElementId::Name(format!("network-disconnect-{name}").into()))
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                    .accessibility_label(
-                        rust_i18n::t!("container.action.disconnect_network").to_string(),
-                    )
-                    .tooltip(rust_i18n::t!("container.action.disconnect_network").to_string())
-                    .on_click(move |_, _, cx| {
-                        disconnect_view.update(cx, |workspace, cx| {
-                            workspace.disconnect_network(net_id.clone(), disconnect_name.clone());
-                            cx.notify();
-                        });
-                    }),
+                IconButton::new(
+                    ElementId::Name(format!("network-disconnect-{name}").into()),
+                    UiIcon::CLOSE,
+                    rust_i18n::t!("container.action.disconnect_network").to_string(),
+                )
+                .size(IconButtonSize::RowAction)
+                .render()
+                .on_click(move |_, _, cx| {
+                    disconnect_view.update(cx, |workspace, cx| {
+                        workspace.disconnect_network(net_id.clone(), disconnect_name.clone());
+                        cx.notify();
+                    });
+                }),
             );
             connected_block = connected_block.child(row);
         }
     }
     rows = rows.child(connected_block);
     let raw_view = view.clone();
-    let raw_btn = Button::new("network-overview-raw-inspect")
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
-        .label(rust_i18n::t!("container.field.inspect").to_string())
-        .on_click(move |_, _, cx| {
-            raw_view.update(cx, |workspace, cx| {
-                workspace.state.overview_raw = true;
-                cx.notify();
-            });
-        })
-        .into_any_element();
+    let raw_btn = action_button(
+        "network-overview-raw-inspect",
+        UiIcon::EDITOR_ONLY,
+        rust_i18n::t!("container.field.inspect").to_string(),
+    )
+    .ghost()
+    .on_click(move |_, _, cx| {
+        raw_view.update(cx, |workspace, cx| {
+            workspace.state.overview_raw = true;
+            cx.notify();
+        });
+    })
+    .into_any_element();
 
     let card = super::overview_cards::overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),

@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
+use crate::widgets::action_button;
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::UiIcon;
 
@@ -70,16 +70,17 @@ pub(crate) fn render_volume_detail(
         .join("\n");
     let browse_view = view.clone();
     let browse_bar = h_flex().pb_1().child(
-        Button::new("browse-volume-files")
-            .primary()
-            .small()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
-            .label(rust_i18n::t!("container.files.browse").to_string())
-            .on_click(move |_, _, cx| {
-                browse_view.update(cx, |_, cx| {
-                    cx.emit(ContainerWorkspaceEvent::OpenVolumeFiles);
-                });
-            }),
+        action_button(
+            "browse-volume-files",
+            UiIcon::FOLDER,
+            rust_i18n::t!("container.files.browse").to_string(),
+        )
+        .primary()
+        .on_click(move |_, _, cx| {
+            browse_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::OpenVolumeFiles);
+            });
+        }),
     );
     let rows = v_flex()
         .gap_1p5()
@@ -104,18 +105,19 @@ pub(crate) fn render_volume_detail(
             p,
         ));
     let raw_view = view.clone();
-    let raw_btn = Button::new("volume-overview-raw-inspect")
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
-        .label(rust_i18n::t!("container.field.inspect").to_string())
-        .on_click(move |_, _, cx| {
-            raw_view.update(cx, |workspace, cx| {
-                workspace.state.overview_raw = true;
-                cx.notify();
-            });
-        })
-        .into_any_element();
+    let raw_btn = action_button(
+        "volume-overview-raw-inspect",
+        UiIcon::EDITOR_ONLY,
+        rust_i18n::t!("container.field.inspect").to_string(),
+    )
+    .ghost()
+    .on_click(move |_, _, cx| {
+        raw_view.update(cx, |workspace, cx| {
+            workspace.state.overview_raw = true;
+            cx.notify();
+        });
+    })
+    .into_any_element();
 
     let card = super::overview_cards::overview_card(
         rust_i18n::t!("container.detail.category_identity").to_string(),

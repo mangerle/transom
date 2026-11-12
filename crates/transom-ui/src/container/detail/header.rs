@@ -2,6 +2,8 @@
 
 use super::*;
 use crate::container::{CONTENT_HEADER_HEIGHT, ContainerWorkspace, ContainerWorkspaceEvent};
+use crate::theme::tokens::{control, typography};
+use crate::widgets::IconButton;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
@@ -97,40 +99,36 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                 let backup_view = view.clone();
                 let vol_name_backup = volume.name.clone();
                 actions = actions.child(
-                    Button::new("volume-backup")
-                        .xsmall()
-                        .ghost()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                        .accessibility_label(
-                            rust_i18n::t!("container.action.backup_volume").to_string(),
-                        )
-                        .tooltip(rust_i18n::t!("container.action.backup_volume").to_string())
-                        .on_click(move |_, _, cx| {
-                            backup_view.update(cx, |_, cx| {
-                                cx.emit(ContainerWorkspaceEvent::BackupVolume(
-                                    vol_name_backup.clone(),
-                                ));
-                            });
-                        }),
+                    IconButton::new(
+                        "volume-backup",
+                        UiIcon::DOWNLOAD,
+                        rust_i18n::t!("container.action.backup_volume").to_string(),
+                    )
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        backup_view.update(cx, |_, cx| {
+                            cx.emit(ContainerWorkspaceEvent::BackupVolume(
+                                vol_name_backup.clone(),
+                            ));
+                        });
+                    }),
                 );
                 let restore_view = view.clone();
                 let vol_name_restore = volume.name.clone();
                 actions = actions.child(
-                    Button::new("volume-restore")
-                        .xsmall()
-                        .ghost()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
-                        .accessibility_label(
-                            rust_i18n::t!("container.action.restore_volume").to_string(),
-                        )
-                        .tooltip(rust_i18n::t!("container.action.restore_volume").to_string())
-                        .on_click(move |_, _, cx| {
-                            restore_view.update(cx, |_, cx| {
-                                cx.emit(ContainerWorkspaceEvent::RestoreVolume(Some(
-                                    vol_name_restore.clone(),
-                                )));
-                            });
-                        }),
+                    IconButton::new(
+                        "volume-restore",
+                        UiIcon::UPLOAD,
+                        rust_i18n::t!("container.action.restore_volume").to_string(),
+                    )
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        restore_view.update(cx, |_, cx| {
+                            cx.emit(ContainerWorkspaceEvent::RestoreVolume(Some(
+                                vol_name_restore.clone(),
+                            )));
+                        });
+                    }),
                 );
                 actions = actions.child(delete_button(
                     view,
@@ -147,18 +145,18 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
         }
     }
 
-    // 头部左侧：根据规范显示「容器名 15px/600 + 状态胶囊 + 健康点」并跟随页签组
+    // 头部左侧：根据规范显示「容器名 16px/600 + 状态胶囊 + 健康点」并跟随页签组
     let left: AnyElement = match section {
         ContainerSection::Containers => {
             let mut title_row = h_flex().gap_2().items_center().min_w_0();
             title_row = title_row.child(
                 AppIconElement::new(section.icon())
-                    .small()
+                    .with_rems(rems(control::ICON))
                     .text_color(p.primary),
             );
             title_row = title_row.child(
                 div()
-                    .text_size(rems(0.9375))
+                    .text_size(rems(typography::TITLE))
                     .font_weight(FontWeight::SEMIBOLD)
                     .max_w(px(220.0))
                     .truncate()
@@ -213,12 +211,12 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
             row = row
                 .child(
                     AppIconElement::new(section.icon())
-                        .small()
+                        .with_rems(rems(control::ICON))
                         .text_color(p.primary),
                 )
                 .child(
                     div()
-                        .text_size(rems(0.9375))
+                        .text_size(rems(typography::TITLE))
                         .font_weight(FontWeight::SEMIBOLD)
                         .max_w(px(260.0))
                         .truncate()

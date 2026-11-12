@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::typography;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
 use transom_core::ContainerHealthDetails;
@@ -35,7 +36,7 @@ pub(crate) fn render_health_timeline(
         ))
         .child(
             div()
-                .text_size(rems(0.6875))
+                .text_size(rems(typography::CAPTION))
                 .text_color(p.muted_foreground)
                 .child(format!(
                     "{}: {}",
@@ -73,7 +74,7 @@ pub(crate) fn render_health_timeline(
                             .items_center()
                             .child(
                                 div()
-                                    .text_size(rems(0.6875))
+                                    .text_size(rems(typography::CAPTION))
                                     .font_family(p.mono_font_family.clone())
                                     .text_color(p.muted_foreground)
                                     .child(item.start.clone()),
@@ -88,7 +89,7 @@ pub(crate) fn render_health_timeline(
                                 .bg(p.background)
                                 .border_1()
                                 .border_color(p.border.opacity(0.2))
-                                .text_size(rems(0.6875))
+                                .text_size(rems(typography::CAPTION))
                                 .font_family(p.mono_font_family.clone())
                                 .text_color(p.foreground.opacity(0.85))
                                 .child(item.output.trim().to_string()),

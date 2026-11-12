@@ -106,7 +106,7 @@ fn session_band(
     inner
         .child(
             AppIconElement::new(icon)
-                .with_size(ROW_ICON_SIZE)
+                .with_rems(ROW_ICON_SIZE)
                 .text_color(icon_color.unwrap_or(if is_active {
                     p.sidebar_accent_foreground
                 } else {

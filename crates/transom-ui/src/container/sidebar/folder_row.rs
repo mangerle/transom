@@ -136,8 +136,8 @@ pub(crate) fn render_engine_folder_row(
         .text_color(p.sidebar_foreground)
         .hover(move |style| style.bg(hover_bg))
         .drag_over::<ContainerSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
-        .child(AppIconElement::new(chevron).with_size(ROW_CHEVRON_SIZE))
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).with_size(ROW_ICON_SIZE))
+        .child(AppIconElement::new(chevron).with_rems(ROW_CHEVRON_SIZE))
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).with_rems(ROW_ICON_SIZE))
         .child(
             div()
                 .flex_1()

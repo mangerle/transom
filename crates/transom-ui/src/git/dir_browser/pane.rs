@@ -11,25 +11,26 @@ use crate::format::format_size;
 use crate::git::dir_browser::DirPicker;
 use crate::palette::Palette;
 use crate::sftp::quick_paths::LocalQuickPaths;
-use gpui_kit::base::{Selectable, h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use crate::theme::tokens::{control, size, typography};
+use crate::widgets::{IconButton, IconButtonSize};
+use gpui_kit::base::h_flex;
+use gpui_kit::base::v_flex;
 use gpui_kit::component::input::Input;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
+use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 每级缩进（逻辑像素）：与会话侧栏同一档。
 const INDENT_STEP: f32 = 16.0;
-/// 一行的固定高度：行高必须由常量给出，不能靠 `py` 撑出来。
+/// 一行的固定高度：通过 `tokens::size::FILE_ROW_HEIGHT` 与 SFTP 列表统一并随密度缩放。
 ///
 /// 为什么：视口高度取行高的整数倍时，停在偏移 0 的列表上下边缘都落在行的边界上；
 /// 行高随字号浮动时，可见区永远切在某一行的中间，看上去就是"上下都被截断"。
-const ROW_HEIGHT: f32 = 28.0;
+const ROW_HEIGHT: f32 = size::FILE_ROW_HEIGHT;
 
 /// 渲染目录树面板。`rows` 是可见行数，由调用方按弹窗高度预算给。
 ///
@@ -124,55 +125,48 @@ fn actions_row(
             app,
         ))
         .child(
-            Button::new("git-browser-mkdir")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::NEW_FOLDER)).small())
-                .accessibility_label(rust_i18n::t!("git.browser.mkdir").to_string())
-                .tooltip(rust_i18n::t!("git.browser.mkdir").to_string())
-                .on_click(move |_, window, cx| {
-                    mkdir_app.update(cx, |this, cx| {
-                        this.git_start_dir_draft(target, window, cx);
-                    });
-                }),
+            IconButton::new(
+                "git-browser-mkdir",
+                UiIcon::NEW_FOLDER,
+                rust_i18n::t!("git.browser.mkdir").to_string(),
+            )
+            .render()
+            .on_click(move |_, window, cx| {
+                mkdir_app.update(cx, |this, cx| {
+                    this.git_start_dir_draft(target, window, cx);
+                });
+            }),
         )
         .child(
-            Button::new("git-browser-hidden")
-                .ghost()
-                .xsmall()
-                .child(
-                    AppIconElement::new(if picker.browser.show_hidden {
-                        AppIcon::Ui(UiIcon::SHOW)
-                    } else {
-                        AppIcon::Custom(CustomIcon::EYE_OFF)
-                    })
-                    .small(),
-                )
-                .selected(picker.browser.show_hidden)
-                .accessibility_label(if picker.browser.show_hidden {
+            IconButton::new(
+                "git-browser-hidden",
+                if picker.browser.show_hidden {
+                    AppIcon::Ui(UiIcon::SHOW)
+                } else {
+                    AppIcon::Custom(CustomIcon::EYE_OFF)
+                },
+                if picker.browser.show_hidden {
                     rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
                 } else {
                     rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
-                })
-                .tooltip(if picker.browser.show_hidden {
-                    rust_i18n::t!("sftp.nav.hide_dotfiles").to_string()
-                } else {
-                    rust_i18n::t!("sftp.nav.show_dotfiles").to_string()
-                })
-                .on_click(move |_, _, cx| {
-                    hidden_app.update(cx, |this, cx| this.git_toggle_hidden(target, cx));
-                }),
+                },
+            )
+            .selected(picker.browser.show_hidden)
+            .render()
+            .on_click(move |_, _, cx| {
+                hidden_app.update(cx, |this, cx| this.git_toggle_hidden(target, cx));
+            }),
         )
         .child(
-            Button::new("git-browser-refresh")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                .accessibility_label(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
-                .tooltip(rust_i18n::t!("sftp.nav.refresh_local_dir").to_string())
-                .on_click(move |_, _, cx| {
-                    refresh_app.update(cx, |this, cx| this.git_refresh_browser(target, cx));
-                }),
+            IconButton::new(
+                "git-browser-refresh",
+                UiIcon::REFRESH,
+                rust_i18n::t!("sftp.nav.refresh_local_dir").to_string(),
+            )
+            .render()
+            .on_click(move |_, _, cx| {
+                refresh_app.update(cx, |this, cx| this.git_refresh_browser(target, cx));
+            }),
         )
         .into_any_element()
 }
@@ -187,19 +181,19 @@ fn quick_path_button(
     app: &Entity<AppShell>,
 ) -> AnyElement {
     let click_app = app.clone();
-    Button::new(ElementId::Name(id.into()))
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(icon).small())
-        .disabled(path.is_none())
-        .accessibility_label(rust_i18n::t!(tooltip_key).to_string())
-        .tooltip(rust_i18n::t!(tooltip_key).to_string())
-        .on_click(move |_, window, cx| {
-            click_app.update(cx, |this, cx| {
-                this.git_browse_quick(target, path.clone(), window, cx);
-            });
-        })
-        .into_any_element()
+    IconButton::new(
+        ElementId::Name(id.into()),
+        icon,
+        rust_i18n::t!(tooltip_key).to_string(),
+    )
+    .disabled(path.is_none())
+    .render()
+    .on_click(move |_, window, cx| {
+        click_app.update(cx, |this, cx| {
+            this.git_browse_quick(target, path.clone(), window, cx);
+        });
+    })
+    .into_any_element()
 }
 
 /// 树本体：把展开中的层级扁平化后逐行画出来；根目录空且已读完时补一句空态。
@@ -212,7 +206,7 @@ fn render_tree(
 ) -> AnyElement {
     let container = v_flex()
         .w_full()
-        .h(px(ROW_HEIGHT * rows as f32))
+        .h(rems(ROW_HEIGHT * rows as f32))
         // 元素 id 带上根路径：gpui 的滚动偏移存在按 id 归位的元素状态里，静态 id 会让
         // 换根后的新列表沿用旧偏移——停在半行上的表现就是"第一行被切掉一截"。
         .id(ElementId::Name(
@@ -276,7 +270,7 @@ fn entry_row(
         .id(ElementId::Name(
             format!("git-tree-{}", entry.path.display()).into(),
         ))
-        .h(px(ROW_HEIGHT))
+        .h(rems(ROW_HEIGHT))
         .pl(indent)
         .pr_2()
         .gap_1()
@@ -285,17 +279,17 @@ fn entry_row(
     if !entry.is_dir {
         // 目录与文件同排显示，但文件行不给任何点击行为：选仓库要的是目录。
         return band
-            .child(div().flex_none().size(px(14.0)))
-            .child(render_app_icon(
-                AppIcon::for_file(&entry.path.to_string_lossy()),
-                16.0,
-            ))
+            .child(div().flex_none().size(rems(size::TREE_CHEVRON)))
+            .child(
+                AppIconElement::new(AppIcon::for_file(&entry.path.to_string_lossy()))
+                    .with_rems(rems(control::ICON)),
+            )
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .text_xs()
+                    .text_size(rems(typography::BODY))
                     .text_color(p.text.subtle)
                     .child(entry.name),
             )
@@ -322,7 +316,7 @@ fn entry_row(
         .child(chevron(&path, expanded, target, p, app))
         .child(
             AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
-                .xsmall()
+                .with_rems(rems(control::ICON))
                 .text_color(p.primary),
         )
         .child(
@@ -330,7 +324,7 @@ fn entry_row(
                 .flex_1()
                 .min_w_0()
                 .truncate()
-                .text_xs()
+                .text_size(rems(typography::BODY))
                 .font_weight(FontWeight::MEDIUM)
                 .child(entry.name),
         )
@@ -381,38 +375,40 @@ fn draft_row(
         .rounded(p.radius.sm)
         .bg(p.list_active)
         .text_color(p.sidebar_accent_foreground)
-        .child(div().flex_none().size(px(14.0)))
+        .child(div().flex_none().size(rems(size::TREE_CHEVRON)))
         .child(
             AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
-                .xsmall()
+                .with_rems(rems(control::ICON))
                 .text_color(p.sidebar_accent_foreground),
         )
         .child(div().flex_1().min_w_0().child(Input::new(&input).w_full()))
         .child(
-            Button::new("git-draft-ok")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-                .accessibility_label(rust_i18n::t!("git.name.confirm").to_string())
-                .tooltip(rust_i18n::t!("git.name.confirm").to_string())
-                .on_click(move |_, window, cx| {
-                    ok_app.update(cx, |this, cx| {
-                        this.git_commit_dir_draft(target, window, cx);
-                    });
-                }),
+            IconButton::new(
+                "git-draft-ok",
+                UiIcon::CHECK,
+                rust_i18n::t!("git.name.confirm").to_string(),
+            )
+            .size(IconButtonSize::RowAction)
+            .render()
+            .on_click(move |_, window, cx| {
+                ok_app.update(cx, |this, cx| {
+                    this.git_commit_dir_draft(target, window, cx);
+                });
+            }),
         )
         .child(
-            Button::new("git-draft-cancel")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                .accessibility_label(rust_i18n::t!("git.project.cancel").to_string())
-                .tooltip(rust_i18n::t!("git.project.cancel").to_string())
-                .on_click(move |_, _, cx| {
-                    cancel_app.update(cx, |this, cx| {
-                        this.git_cancel_dir_draft(target, cx);
-                    });
-                }),
+            IconButton::new(
+                "git-draft-cancel",
+                UiIcon::CLOSE,
+                rust_i18n::t!("git.project.cancel").to_string(),
+            )
+            .size(IconButtonSize::RowAction)
+            .render()
+            .on_click(move |_, _, cx| {
+                cancel_app.update(cx, |this, cx| {
+                    this.git_cancel_dir_draft(target, cx);
+                });
+            }),
         )
         .into_any_element()
 }
@@ -422,11 +418,11 @@ fn draft_row(
 /// 高度与条目行同档：说明行夹在条目之间，两种行高不一致会把整列的网格错开。
 fn indented_note(text: String, depth: usize, p: &Palette) -> AnyElement {
     h_flex()
-        .h(px(ROW_HEIGHT))
+        .h(rems(ROW_HEIGHT))
         .pl(px(4.0 + depth as f32 * INDENT_STEP))
         .pr_2()
         .items_center()
-        .text_xs()
+        .text_size(rems(typography::CAPTION))
         .text_color(p.muted_foreground)
         .child(text)
         .into_any_element()
@@ -447,7 +443,7 @@ fn chevron(
             format!("git-tree-chevron-{}", path.display()).into(),
         ))
         .flex_none()
-        .size(px(14.0))
+        .size(rems(size::TREE_CHEVRON))
         .flex()
         .items_center()
         .justify_center()
@@ -458,7 +454,7 @@ fn chevron(
             } else {
                 AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
             })
-            .with_size(px(12.0))
+            .with_rems(rems(size::TREE_CHEVRON))
             .text_color(p.muted_foreground),
         )
         .on_click(move |_: &ClickEvent, _, cx| {

@@ -1,6 +1,7 @@
 //! 统计页工具栏：采样档位、刷新与错误提示。
 
 use super::*;
+use crate::widgets::{IconButton, action_button};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -57,21 +58,22 @@ pub(crate) fn stats_toolbar(
                         .child(error.to_string()),
                 )
                 .child(
-                    Button::new("container-stats-retry")
-                        .ghost()
-                        .xsmall()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                        .label(rust_i18n::t!("common.retry").to_string())
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.restart_container_stats();
-                                    workspace.ensure_container_processes();
-                                    cx.notify();
-                                });
-                            }
-                        }),
+                    action_button(
+                        "container-stats-retry",
+                        UiIcon::REFRESH,
+                        rust_i18n::t!("common.retry").to_string(),
+                    )
+                    .ghost()
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _, cx| {
+                            view.update(cx, |workspace, cx| {
+                                workspace.restart_container_stats();
+                                workspace.ensure_container_processes();
+                                cx.notify();
+                            });
+                        }
+                    }),
                 )
                 .into_any_element(),
         )
@@ -103,52 +105,41 @@ pub(crate) fn stats_toolbar(
         .child(interval_chips)
         .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
         .child(
-            Button::new("container-stats-chart")
-                .ghost()
-                .xsmall()
-                .icon(match chrome.chart {
-                    SparklineChartType::Line => AppIcon::Ui(UiIcon::DATAFLOW),
-                    SparklineChartType::Bar => AppIcon::Ui(UiIcon::DATAFLOW),
+            IconButton::new(
+                "container-stats-chart",
+                UiIcon::DATAFLOW,
+                rust_i18n::t!(match chrome.chart {
+                    SparklineChartType::Line => "monitor.view.chart_line_tooltip",
+                    SparklineChartType::Bar => "monitor.view.chart_bar_tooltip",
                 })
-                .accessibility_label(
-                    rust_i18n::t!(match chrome.chart {
-                        SparklineChartType::Line => "monitor.view.chart_line_tooltip",
-                        SparklineChartType::Bar => "monitor.view.chart_bar_tooltip",
-                    })
-                    .to_string(),
-                )
-                .tooltip(
-                    rust_i18n::t!(match chrome.chart {
-                        SparklineChartType::Line => "monitor.view.chart_line_tooltip",
-                        SparklineChartType::Bar => "monitor.view.chart_bar_tooltip",
-                    })
-                    .to_string(),
-                )
-                .on_click({
-                    let view = view.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.toggle_container_stats_chart();
-                            cx.notify();
-                        });
-                    }
-                }),
+                .to_string(),
+            )
+            .render()
+            .on_click({
+                let view = view.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.toggle_container_stats_chart();
+                        cx.notify();
+                    });
+                }
+            }),
         )
         .child(
-            Button::new("container-stats-export")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                .accessibility_label(rust_i18n::t!("container.stats.export_csv").to_string())
-                .tooltip(rust_i18n::t!("container.stats.export_csv").to_string())
-                .on_click({
-                    let view = view.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.export_container_stats_csv(cx);
-                        });
-                    }
-                }),
+            IconButton::new(
+                "container-stats-export",
+                UiIcon::DOWNLOAD,
+                rust_i18n::t!("container.stats.export_csv").to_string(),
+            )
+            .render()
+            .on_click({
+                let view = view.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.export_container_stats_csv(cx);
+                    });
+                }
+            }),
         )
         .child(div().flex_1())
         .children(status)

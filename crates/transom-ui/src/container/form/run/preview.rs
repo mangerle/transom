@@ -10,10 +10,11 @@ use super::ContainerRunFormView;
 use crate::container::types::{RunContainerFormState, RunPreset};
 use crate::format::format_size;
 use crate::palette::Palette;
+use crate::widgets::action_button;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::Selectable;
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ContainerImageSummary;
@@ -60,35 +61,32 @@ impl ContainerRunFormView {
                         h_flex()
                             .gap_1p5()
                             .child(
-                                Button::new("preset-daemon-btn")
-                                    .small()
-                                    .ghost()
-                                    .selected(current_preset == RunPreset::Daemon)
-                                    .child(
-                                        AppIconElement::new(AppIcon::Custom(CustomIcon::PROCESS))
-                                            .small(),
-                                    )
-                                    .label(rust_i18n::t!("container.run.preset_daemon").to_string())
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                action_button(
+                                    "preset-daemon-btn",
+                                    CustomIcon::PROCESS,
+                                    rust_i18n::t!("container.run.preset_daemon").to_string(),
+                                )
+                                .ghost()
+                                .selected(current_preset == RunPreset::Daemon)
+                                .on_click(cx.listener(
+                                    |this, _: &ClickEvent, _, cx| {
                                         this.set_preset(RunPreset::Daemon, cx);
-                                    })),
+                                    },
+                                )),
                             )
                             .child(
-                                Button::new("preset-interactive-btn")
-                                    .small()
-                                    .ghost()
-                                    .selected(current_preset == RunPreset::Interactive)
-                                    .child(
-                                        AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL))
-                                            .small(),
-                                    )
-                                    .label(
-                                        rust_i18n::t!("container.run.preset_interactive")
-                                            .to_string(),
-                                    )
-                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                action_button(
+                                    "preset-interactive-btn",
+                                    DomainIcon::TERMINAL,
+                                    rust_i18n::t!("container.run.preset_interactive").to_string(),
+                                )
+                                .ghost()
+                                .selected(current_preset == RunPreset::Interactive)
+                                .on_click(cx.listener(
+                                    |this, _: &ClickEvent, _, cx| {
                                         this.set_preset(RunPreset::Interactive, cx);
-                                    })),
+                                    },
+                                )),
                             ),
                     ),
             )
@@ -193,25 +191,25 @@ impl ContainerRunFormView {
                                     ),
                             )
                             .child(
-                                Button::new("copy-run-cmd-btn")
-                                    .ghost()
-                                    .xsmall()
-                                    .child(
-                                        AppIconElement::new(if copy_toast {
-                                            AppIcon::Ui(UiIcon::CHECK)
-                                        } else {
-                                            AppIcon::Ui(UiIcon::COPY)
-                                        })
-                                        .small(),
-                                    )
-                                    .label(if copy_toast {
+                                action_button(
+                                    "copy-run-cmd-btn",
+                                    if copy_toast {
+                                        UiIcon::CHECK
+                                    } else {
+                                        UiIcon::COPY
+                                    },
+                                    if copy_toast {
                                         rust_i18n::t!("container.run.copied").to_string()
                                     } else {
                                         rust_i18n::t!("container.run.copy_command").to_string()
-                                    })
-                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    },
+                                )
+                                .ghost()
+                                .on_click(cx.listener(
+                                    move |this, _: &ClickEvent, _, cx| {
                                         this.copy_command(&cmd_to_copy, cx);
-                                    })),
+                                    },
+                                )),
                             ),
                     )
                     .child(

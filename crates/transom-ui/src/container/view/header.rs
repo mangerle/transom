@@ -9,9 +9,10 @@ use crate::container::divider_width_px;
 use crate::container::types::ContainerSection;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent, ContainerWorkspaceState};
 use crate::palette::Palette;
+use crate::theme::tokens::{control, typography};
+use crate::widgets::{IconButton, action_button};
 use gpui_kit::base::{Tab, Tabs, h_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
@@ -152,24 +153,24 @@ fn render_container_tab_actions(
         })
         .when(has_tasks || pulling_count > 0, |this| {
             let btn = if pulling_count > 0 {
-                Button::new("container-pull-drawer-btn")
-                    .primary()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                    .label(rust_i18n::t!(
-                        "container.pull_manager.indicator",
-                        count = pulling_count
-                    ))
+                action_button(
+                    "container-pull-drawer-btn",
+                    UiIcon::DOWNLOAD,
+                    rust_i18n::t!("container.pull_manager.indicator", count = pulling_count)
+                        .to_string(),
+                )
+                .primary()
             } else {
-                Button::new("container-pull-drawer-btn")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
-                    .tooltip(if drawer_open {
-                        rust_i18n::t!("container.pull_manager.drawer_collapse")
+                IconButton::new(
+                    "container-pull-drawer-btn",
+                    UiIcon::DOWNLOAD,
+                    if drawer_open {
+                        rust_i18n::t!("container.pull_manager.drawer_collapse").to_string()
                     } else {
-                        rust_i18n::t!("container.pull_manager.drawer_expand")
-                    })
+                        rust_i18n::t!("container.pull_manager.drawer_expand").to_string()
+                    },
+                )
+                .render()
             };
             let view = view.clone();
             this.child(btn.on_click(move |_, _, cx| {
@@ -182,86 +183,87 @@ fn render_container_tab_actions(
         .when(is_podman, |this| {
             let view = view.clone();
             this.child(
-                Button::new("container-pods-btn")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DEPENDENCIES)).small())
-                    .accessibility_label(rust_i18n::t!("container.pods.title").to_string())
-                    .tooltip(rust_i18n::t!("container.pods.title").to_string())
-                    .on_click(move |_, _, cx| {
-                        view.update(cx, |_workspace, cx| {
-                            cx.emit(ContainerWorkspaceEvent::OpenPods);
-                        });
-                    }),
+                IconButton::new(
+                    "container-pods-btn",
+                    UiIcon::DEPENDENCIES,
+                    rust_i18n::t!("container.pods.title").to_string(),
+                )
+                .render()
+                .on_click(move |_, _, cx| {
+                    view.update(cx, |_workspace, cx| {
+                        cx.emit(ContainerWorkspaceEvent::OpenPods);
+                    });
+                }),
             )
         })
         .when(is_podman && is_local_engine, |this| {
             let view = view.clone();
             this.child(
-                Button::new("container-quadlet-btn")
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::SETTINGS)).small())
-                    .accessibility_label(rust_i18n::t!("container.quadlet.title").to_string())
-                    .tooltip(rust_i18n::t!("container.quadlet.title").to_string())
-                    .on_click(move |_, _, cx| {
-                        view.update(cx, |_workspace, cx| {
-                            cx.emit(ContainerWorkspaceEvent::OpenQuadlet);
-                        });
-                    }),
+                IconButton::new(
+                    "container-quadlet-btn",
+                    UiIcon::SETTINGS,
+                    rust_i18n::t!("container.quadlet.title").to_string(),
+                )
+                .render()
+                .on_click(move |_, _, cx| {
+                    view.update(cx, |_workspace, cx| {
+                        cx.emit(ContainerWorkspaceEvent::OpenQuadlet);
+                    });
+                }),
             )
         })
         .child({
             let view = view.clone();
-            Button::new("container-system-df-btn")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Custom(CustomIcon::DISK)).small())
-                .accessibility_label(rust_i18n::t!("container.system_df.title").to_string())
-                .tooltip(rust_i18n::t!("container.system_df.title").to_string())
-                .on_click(move |_, _, cx| {
-                    view.update(cx, |_workspace, cx| {
-                        cx.emit(ContainerWorkspaceEvent::OpenSystemDf);
-                    });
-                })
+            IconButton::new(
+                "container-system-df-btn",
+                CustomIcon::DISK,
+                rust_i18n::t!("container.system_df.title").to_string(),
+            )
+            .render()
+            .on_click(move |_, _, cx| {
+                view.update(cx, |_workspace, cx| {
+                    cx.emit(ContainerWorkspaceEvent::OpenSystemDf);
+                });
+            })
         })
         .child({
             let view = view.clone();
-            Button::new("container-refresh")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                .accessibility_label("Refresh container workspace")
-                .on_click(move |_, _, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.refresh_all();
-                        cx.notify();
-                    });
-                })
+            IconButton::new(
+                "container-refresh",
+                UiIcon::REFRESH,
+                "Refresh container workspace",
+            )
+            .show_tooltip(false)
+            .render()
+            .on_click(move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.refresh_all();
+                    cx.notify();
+                });
+            })
         })
         .child({
             let view = view.clone();
-            Button::new("container-fullscreen")
-                .ghost()
-                .xsmall()
-                .child(
-                    AppIconElement::new(if fullscreen {
-                        AppIcon::Ui(UiIcon::MINIMIZE)
-                    } else {
-                        AppIcon::Ui(UiIcon::EXPAND_ALL)
-                    })
-                    .small(),
-                )
-                .accessibility_label(if fullscreen {
+            IconButton::new(
+                "container-fullscreen",
+                if fullscreen {
+                    UiIcon::MINIMIZE
+                } else {
+                    UiIcon::EXPAND_ALL
+                },
+                if fullscreen {
                     "Exit fullscreen"
                 } else {
                     "Enter fullscreen"
-                })
-                .on_click(move |_, _, cx| {
-                    view.update(cx, |_workspace, cx| {
-                        cx.emit(ContainerWorkspaceEvent::ToggleFullscreen);
-                    });
-                })
+                },
+            )
+            .show_tooltip(false)
+            .render()
+            .on_click(move |_, _, cx| {
+                view.update(cx, |_workspace, cx| {
+                    cx.emit(ContainerWorkspaceEvent::ToggleFullscreen);
+                });
+            })
         })
         .into_any_element()
 }
@@ -323,7 +325,7 @@ fn render_section_tabs(
                     .px_3()
                     .gap_1p5()
                     .items_center()
-                    .text_sm()
+                    .text_size(rems(typography::BODY))
                     .cursor_pointer()
                     .text_color(text_color)
                     .set_position(index + 1, tab_count);
@@ -334,14 +336,14 @@ fn render_section_tabs(
 
                     tab.child(
                         AppIconElement::new(section.icon())
-                            .small()
+                            .with_rems(rems(control::COMPACT_ICON))
                             .text_color(icon_color),
                     )
                     .child(rust_i18n::t!(section.label_key()).to_string())
                     .when(count > 0, |this| {
                         this.child(
                             div()
-                                .text_size(rems(0.6875))
+                                .text_size(rems(typography::CAPTION))
                                 .text_color(p.muted_foreground)
                                 .child(count.to_string()),
                         )

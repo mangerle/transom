@@ -13,8 +13,8 @@ use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::prelude::FluentBuilder;
 
 use super::*;
+use crate::widgets::{IconButton, action_button};
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 统合筛选菜单：状态筛选、快速清理筛选与排序方式收于一处，激活时展示主色指示圆点。
@@ -37,36 +37,35 @@ pub(crate) fn render_unified_filter_menu(
         || current_sort != ContainerSortKey::default_for(section)
         || sort_desc;
 
-    Button::new("container-filter-unified")
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FILTER)).small())
-        .label(rust_i18n::t!("container.filter.title").to_string())
-        .when(is_filtered, |this| this.selected(true))
-        .dropdown_menu(move |menu, _, _| {
-            let mut menu = menu;
+    action_button(
+        "container-filter-unified",
+        UiIcon::FILTER,
+        rust_i18n::t!("container.filter.title").to_string(),
+    )
+    .ghost()
+    .when(is_filtered, |this| this.selected(true))
+    .dropdown_menu(move |menu, _, _| {
+        let mut menu = menu;
 
-            // 1. 容器运行状态筛选与 Compose 容器包含项
-            if section == ContainerSection::Containers {
-                for filter in ContainerStateFilter::ALL {
-                    let view = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!(filter.label_key()).to_string())
-                            .checked(filter == current_state)
-                            .on_click(move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.state.state_filter = filter;
-                                    cx.notify();
-                                });
-                            }),
-                    );
-                }
-                menu = menu.item(PopupMenuItem::separator());
+        // 1. 容器运行状态筛选与 Compose 容器包含项
+        if section == ContainerSection::Containers {
+            for filter in ContainerStateFilter::ALL {
                 let view = view.clone();
                 menu = menu.item(
-                    PopupMenuItem::new(
-                        rust_i18n::t!("container.filter.include_compose").to_string(),
-                    )
+                    PopupMenuItem::new(rust_i18n::t!(filter.label_key()).to_string())
+                        .checked(filter == current_state)
+                        .on_click(move |_, _, cx| {
+                            view.update(cx, |workspace, cx| {
+                                workspace.state.state_filter = filter;
+                                cx.notify();
+                            });
+                        }),
+                );
+            }
+            menu = menu.item(PopupMenuItem::separator());
+            let view = view.clone();
+            menu = menu.item(
+                PopupMenuItem::new(rust_i18n::t!("container.filter.include_compose").to_string())
                     .checked(current_include_compose)
                     .on_click(move |_, _, cx| {
                         view.update(cx, |workspace, cx| {
@@ -74,96 +73,97 @@ pub(crate) fn render_unified_filter_menu(
                             cx.notify();
                         });
                     }),
-                );
-                menu = menu.item(PopupMenuItem::separator());
-            }
+            );
+            menu = menu.item(PopupMenuItem::separator());
+        }
 
-            // 2. 快速清理视角（镜像悬空、未用卷等）
-            let quick_options = ContainerQuickFilter::for_section(section);
-            if quick_options.len() > 1 {
-                for quick in quick_options {
-                    let view = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!(quick.label_key()).to_string())
-                            .checked(*quick == current_quick)
-                            .on_click(move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.state.quick_filter = *quick;
-                                    cx.notify();
-                                });
-                            }),
-                    );
-                }
-                menu = menu.item(PopupMenuItem::separator());
-            }
-
-            // 3. 排序键
-            for key in ContainerSortKey::for_section(section) {
+        // 2. 快速清理视角（镜像悬空、未用卷等）
+        let quick_options = ContainerQuickFilter::for_section(section);
+        if quick_options.len() > 1 {
+            for quick in quick_options {
                 let view = view.clone();
                 menu = menu.item(
-                    PopupMenuItem::new(rust_i18n::t!(key.label_key()).to_string())
-                        .checked(*key == current_sort)
+                    PopupMenuItem::new(rust_i18n::t!(quick.label_key()).to_string())
+                        .checked(*quick == current_quick)
                         .on_click(move |_, _, cx| {
                             view.update(cx, |workspace, cx| {
-                                if active_sort(workspace.state.section, workspace.state.sort_key)
-                                    == *key
-                                {
-                                    workspace.state.sort_desc = !workspace.state.sort_desc;
-                                } else {
-                                    workspace.state.sort_key = *key;
-                                    workspace.state.sort_desc = false;
-                                }
+                                workspace.state.quick_filter = *quick;
                                 cx.notify();
                             });
                         }),
                 );
             }
-
             menu = menu.item(PopupMenuItem::separator());
-            for ascending in [true, false] {
-                let view = view.clone();
-                menu = menu.item(
-                    PopupMenuItem::new(
-                        rust_i18n::t!(if ascending {
-                            "container.sort.ascending"
-                        } else {
-                            "container.sort.descending"
-                        })
-                        .to_string(),
-                    )
-                    .checked(ascending != sort_desc)
+        }
+
+        // 3. 排序键
+        for key in ContainerSortKey::for_section(section) {
+            let view = view.clone();
+            menu = menu.item(
+                PopupMenuItem::new(rust_i18n::t!(key.label_key()).to_string())
+                    .checked(*key == current_sort)
                     .on_click(move |_, _, cx| {
                         view.update(cx, |workspace, cx| {
-                            workspace.state.sort_desc = !ascending;
+                            if active_sort(workspace.state.section, workspace.state.sort_key)
+                                == *key
+                            {
+                                workspace.state.sort_desc = !workspace.state.sort_desc;
+                            } else {
+                                workspace.state.sort_key = *key;
+                                workspace.state.sort_desc = false;
+                            }
                             cx.notify();
                         });
                     }),
-                );
-            }
+            );
+        }
 
-            // 4. 重置筛选
-            if is_filtered {
-                menu = menu.item(PopupMenuItem::separator());
-                let view = view.clone();
-                menu = menu.item(
-                    PopupMenuItem::new(rust_i18n::t!("container.filter.reset").to_string())
-                        .on_click(move |_, _, cx| {
-                            view.update(cx, |workspace, cx| {
-                                workspace.state.state_filter = ContainerStateFilter::All;
-                                workspace.state.include_compose = false;
-                                workspace.state.quick_filter = ContainerQuickFilter::All;
-                                workspace.state.sort_key =
-                                    ContainerSortKey::default_for(workspace.state.section);
-                                workspace.state.sort_desc = false;
-                                cx.notify();
-                            });
-                        }),
-                );
-            }
+        menu = menu.item(PopupMenuItem::separator());
+        for ascending in [true, false] {
+            let view = view.clone();
+            menu = menu.item(
+                PopupMenuItem::new(
+                    rust_i18n::t!(if ascending {
+                        "container.sort.ascending"
+                    } else {
+                        "container.sort.descending"
+                    })
+                    .to_string(),
+                )
+                .checked(ascending != sort_desc)
+                .on_click(move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.state.sort_desc = !ascending;
+                        cx.notify();
+                    });
+                }),
+            );
+        }
 
-            menu
-        })
-        .into_any_element()
+        // 4. 重置筛选
+        if is_filtered {
+            menu = menu.item(PopupMenuItem::separator());
+            let view = view.clone();
+            menu = menu.item(
+                PopupMenuItem::new(rust_i18n::t!("container.filter.reset").to_string()).on_click(
+                    move |_, _, cx| {
+                        view.update(cx, |workspace, cx| {
+                            workspace.state.state_filter = ContainerStateFilter::All;
+                            workspace.state.include_compose = false;
+                            workspace.state.quick_filter = ContainerQuickFilter::All;
+                            workspace.state.sort_key =
+                                ContainerSortKey::default_for(workspace.state.section);
+                            workspace.state.sort_desc = false;
+                            cx.notify();
+                        });
+                    },
+                ),
+            );
+        }
+
+        menu
+    })
+    .into_any_element()
 }
 
 /// 更多操作菜单：收纳导入、导出、构建、探索、恢复及深度清理等低频入口。
@@ -174,124 +174,118 @@ pub(crate) fn render_more_menu(
     let section = params.section;
     let view = view.clone();
 
-    Button::new("container-more-menu")
-        .xsmall()
-        .ghost()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::MORE_HORIZONTAL)).small())
-        .accessibility_label(rust_i18n::t!("common.more").to_string())
-        .tooltip(rust_i18n::t!("common.more").to_string())
-        .dropdown_menu(move |menu, _, _| {
-            let mut menu = menu;
-            match section {
-                ContainerSection::Containers => {
-                    let view = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("container.system_df.title").to_string())
-                            .on_click(move |_, _, cx| {
-                                view.update(cx, |_workspace, cx| {
-                                    cx.emit(ContainerWorkspaceEvent::OpenSystemDf);
-                                });
-                            }),
-                    );
-                }
-                ContainerSection::Images => {
-                    let view_load = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!("container.action.load_image").to_string(),
-                        )
+    IconButton::new(
+        "container-more-menu",
+        UiIcon::MORE_HORIZONTAL,
+        rust_i18n::t!("common.more").to_string(),
+    )
+    .render()
+    .dropdown_menu(move |menu, _, _| {
+        let mut menu = menu;
+        match section {
+            ContainerSection::Containers => {
+                let view = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("container.system_df.title").to_string())
+                        .on_click(move |_, _, cx| {
+                            view.update(cx, |_workspace, cx| {
+                                cx.emit(ContainerWorkspaceEvent::OpenSystemDf);
+                            });
+                        }),
+                );
+            }
+            ContainerSection::Images => {
+                let view_load = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("container.action.load_image").to_string())
                         .on_click(move |_, _, cx| {
                             view_load.update(cx, |_workspace, cx| {
                                 cx.emit(ContainerWorkspaceEvent::LoadImage);
                             });
                         }),
-                    );
-                    let view_build = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(rust_i18n::t!("container.build.title").to_string())
-                            .on_click(move |_, _, cx| {
-                                view_build.update(cx, |_workspace, cx| {
-                                    cx.emit(ContainerWorkspaceEvent::OpenBuildDialog);
-                                });
-                            }),
-                    );
-                    menu = menu.item(PopupMenuItem::separator());
-                    let view_prune = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!(ContainerPruneTarget::Images.button_label_key())
-                                .to_string(),
-                        )
+                );
+                let view_build = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("container.build.title").to_string())
                         .on_click(move |_, _, cx| {
-                            view_prune.update(cx, |_workspace, cx| {
-                                cx.emit(ContainerWorkspaceEvent::PruneTarget(
-                                    ContainerPruneTarget::Images,
-                                ));
+                            view_build.update(cx, |_workspace, cx| {
+                                cx.emit(ContainerWorkspaceEvent::OpenBuildDialog);
                             });
                         }),
-                    );
-                }
-                ContainerSection::Volumes => {
-                    let view_restore = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!("container.action.restore_volume").to_string(),
-                        )
-                        .on_click(move |_, _, cx| {
-                            view_restore.update(cx, |_workspace, cx| {
-                                cx.emit(ContainerWorkspaceEvent::RestoreVolume(None));
-                            });
-                        }),
-                    );
-                    menu = menu.item(PopupMenuItem::separator());
-                    let view_prune = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!(ContainerPruneTarget::Volumes.button_label_key())
-                                .to_string(),
-                        )
-                        .on_click(move |_, _, cx| {
-                            view_prune.update(cx, |_workspace, cx| {
-                                cx.emit(ContainerWorkspaceEvent::PruneTarget(
-                                    ContainerPruneTarget::Volumes,
-                                ));
-                            });
-                        }),
-                    );
-                }
-                ContainerSection::Networks => {
-                    let view_prune = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!(ContainerPruneTarget::Networks.button_label_key())
-                                .to_string(),
-                        )
-                        .on_click(move |_, _, cx| {
-                            view_prune.update(cx, |_workspace, cx| {
-                                cx.emit(ContainerWorkspaceEvent::PruneTarget(
-                                    ContainerPruneTarget::Networks,
-                                ));
-                            });
-                        }),
-                    );
-                }
-                ContainerSection::Compose => {
-                    let view_import = view.clone();
-                    menu = menu.item(
-                        PopupMenuItem::new(
-                            rust_i18n::t!("container.compose.import_yaml").to_string(),
-                        )
+                );
+                menu = menu.item(PopupMenuItem::separator());
+                let view_prune = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(
+                        rust_i18n::t!(ContainerPruneTarget::Images.button_label_key()).to_string(),
+                    )
+                    .on_click(move |_, _, cx| {
+                        view_prune.update(cx, |_workspace, cx| {
+                            cx.emit(ContainerWorkspaceEvent::PruneTarget(
+                                ContainerPruneTarget::Images,
+                            ));
+                        });
+                    }),
+                );
+            }
+            ContainerSection::Volumes => {
+                let view_restore = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(
+                        rust_i18n::t!("container.action.restore_volume").to_string(),
+                    )
+                    .on_click(move |_, _, cx| {
+                        view_restore.update(cx, |_workspace, cx| {
+                            cx.emit(ContainerWorkspaceEvent::RestoreVolume(None));
+                        });
+                    }),
+                );
+                menu = menu.item(PopupMenuItem::separator());
+                let view_prune = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(
+                        rust_i18n::t!(ContainerPruneTarget::Volumes.button_label_key()).to_string(),
+                    )
+                    .on_click(move |_, _, cx| {
+                        view_prune.update(cx, |_workspace, cx| {
+                            cx.emit(ContainerWorkspaceEvent::PruneTarget(
+                                ContainerPruneTarget::Volumes,
+                            ));
+                        });
+                    }),
+                );
+            }
+            ContainerSection::Networks => {
+                let view_prune = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(
+                        rust_i18n::t!(ContainerPruneTarget::Networks.button_label_key())
+                            .to_string(),
+                    )
+                    .on_click(move |_, _, cx| {
+                        view_prune.update(cx, |_workspace, cx| {
+                            cx.emit(ContainerWorkspaceEvent::PruneTarget(
+                                ContainerPruneTarget::Networks,
+                            ));
+                        });
+                    }),
+                );
+            }
+            ContainerSection::Compose => {
+                let view_import = view.clone();
+                menu = menu.item(
+                    PopupMenuItem::new(rust_i18n::t!("container.compose.import_yaml").to_string())
                         .on_click(move |_, _, cx| {
                             view_import.update(cx, |_workspace, cx| {
                                 cx.emit(ContainerWorkspaceEvent::ImportCompose);
                             });
                         }),
-                    );
-                }
+                );
             }
-            menu
-        })
-        .into_any_element()
+        }
+        menu
+    })
+    .into_any_element()
 }
 
 /// 工具条「新增」按钮的文案。
@@ -326,16 +320,10 @@ pub(crate) fn dropdown_trigger(
     tooltip: Option<String>,
     builder: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
 ) -> AnyElement {
-    let button = Button::new(ElementId::Name(id.into()))
-        .xsmall()
-        .ghost()
-        .label(label);
+    let button = action_button(ElementId::Name(id.into()), icon, label).ghost();
     let button = match tooltip {
         Some(tooltip) => button.tooltip(tooltip),
         None => button,
     };
-    button
-        .child(AppIconElement::new(icon).small())
-        .dropdown_menu(builder)
-        .into_any_element()
+    button.dropdown_menu(builder).into_any_element()
 }

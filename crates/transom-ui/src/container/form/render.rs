@@ -1,8 +1,10 @@
 //! 容器引擎连接表单弹窗主体：基础信息卡、分组选择与底部操作区。
 
 use super::*;
+use crate::widgets::{
+    DialogConfirmKind, action_button, dialog_cancel_button, dialog_confirm_button,
+};
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::UiIcon;
 
@@ -125,11 +127,8 @@ impl ContainerFormView {
                     .child(rust_i18n::t!("form.group").to_string()),
             )
             .child(
-                Button::new("container-form-folder")
-                    .small()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).small())
-                    .label(label)
-                    .dropdown_menu(move |menu, _, _| {
+                action_button("container-form-folder", UiIcon::FOLDER, label).dropdown_menu(
+                    move |menu, _, _| {
                         let mut menu = menu;
                         let root_entity = entity.clone();
                         menu = menu.item(
@@ -153,7 +152,8 @@ impl ContainerFormView {
                             );
                         }
                         menu
-                    }),
+                    },
+                ),
             )
             .into_any_element()
     }
@@ -170,39 +170,38 @@ impl ContainerFormView {
 
         if editing {
             footer = footer.child(
-                Button::new("container-form-delete")
-                    .danger()
-                    .small()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                    .label(rust_i18n::t!("common.delete").to_string())
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.delete(cx))),
+                action_button(
+                    "container-form-delete",
+                    UiIcon::DELETE,
+                    rust_i18n::t!("common.delete").to_string(),
+                )
+                .danger()
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.delete(cx))),
             );
         }
 
         footer = footer
             .child(
-                Button::new("container-form-test")
-                    .ghost()
-                    .small()
-                    .child(
-                        AppIconElement::new(AppIcon::Custom(CustomIcon::CONNECTION_TEST)).small(),
-                    )
-                    .label(rust_i18n::t!("container.form.test").to_string())
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.test(cx))),
+                action_button(
+                    "container-form-test",
+                    CustomIcon::CONNECTION_TEST,
+                    rust_i18n::t!("container.form.test").to_string(),
+                )
+                .ghost()
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.test(cx))),
             )
-            .child(
-                Button::new("container-form-cancel")
-                    .ghost()
-                    .label(rust_i18n::t!("common.cancel").to_string())
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx))),
-            )
-            .child(
-                Button::new("container-form-save")
-                    .primary()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-                    .label(rust_i18n::t!("common.save").to_string())
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx))),
-            );
+            .child(dialog_cancel_button(
+                "container-form-cancel",
+                rust_i18n::t!("common.cancel").to_string(),
+                cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx)),
+            ))
+            .child(dialog_confirm_button(
+                "container-form-save",
+                rust_i18n::t!("common.save").to_string(),
+                Some(AppIcon::Ui(UiIcon::CHECK)),
+                DialogConfirmKind::Primary,
+                cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx)),
+            ));
 
         let mut footer_block = v_flex().gap_2().items_end();
         if let Some(error) = &form.test_status

@@ -7,6 +7,7 @@
 
 use super::{FileRowContentOptions, render_file_row_content};
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::base::h_flex;
 use gpui_kit::*;
 use std::path::Path;
@@ -32,8 +33,8 @@ pub(crate) fn file_row(props: FileRowProps<'_>) -> Stateful<Div> {
     let p = props.palette;
     let row = h_flex()
         .id(ElementId::Name(props.id.into()))
+        .h(rems(size::FILE_ROW_HEIGHT))
         .px_2()
-        .py_1()
         .gap_2()
         .items_center()
         .rounded(p.radius.sm)

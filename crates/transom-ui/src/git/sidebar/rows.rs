@@ -1,9 +1,9 @@
 //! 侧栏行控件：分组行与项目行的几何、配色与拖放落点。
 //!
 //! 设计原理（Why）：尺寸与配色令牌整套对齐会话侧栏（见 `sidebar/tree`）——
-//! 38px 行槽位套 34px 圆角内容条、`list_background / list_hover / list_active`
-//! 三段色、活动行左侧一根绝对定位竖条。两个面板是同一个壳里的同类清单，
-//! 用户切换活动栏条目时不该重新学一遍「哪一行是我正在看的」。
+//! 通过 `Rems` 令牌实现（默认密度下为 38px 行槽位套 34px 圆角内容条并随 UI 密度缩放）、
+//! `list_background / list_hover / list_active` 三段色、活动行左侧一根绝对定位竖条。
+//! 两个面板是同一个壳里的同类清单，用户切换活动栏条目时不该重新学一遍「哪一行是我正在看的」。
 //! 行槽位与内容条分离还有第二个理由：槽位负责命中与缩进，内容条负责高亮，
 //! 高亮背景才不会贴到面板边缘、也不会盖住缩进区。
 
@@ -12,22 +12,21 @@ use crate::app::AppShell;
 use crate::git::types::{GitBadge, GitDropTarget, GitSidebarDrag};
 use crate::palette::Palette;
 use crate::session_appearance::session_color;
+use crate::theme::tokens::size;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::*;
 use transom_core::{DropSide, GitFolderId};
-use transom_ui_icons::AppIconElement;
-use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-/// 行槽位高度：与会话侧栏同值，切换面板时行高不会跳。
-const ROW_HEIGHT: Pixels = px(38.0);
+/// 行槽位高度：通过 `tokens::size` 与会话侧栏对齐，切换面板与调整 UI 密度时行高同步缩放。
+const ROW_HEIGHT: Rems = rems(size::TREE_ROW_HEIGHT);
 /// 内层内容条高度：小于行槽位，留出上下间隙，也避免高亮背景贴住面板边缘。
-const BAND_HEIGHT: Pixels = px(34.0);
-/// 行首图标尺寸：与 34px 内容条匹配，默认的 14px 在这个高度下显得偏弱。
-const ROW_ICON_SIZE: Pixels = px(18.0);
+const BAND_HEIGHT: Rems = rems(size::TREE_BAND_HEIGHT);
+/// 行首图标尺寸：与内容条匹配并随 `rem` 缩放。
+const ROW_ICON_SIZE: Rems = rems(size::TREE_ROW_ICON);
 /// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
-const ROW_CHEVRON_SIZE: Pixels = px(14.0);
+const ROW_CHEVRON_SIZE: Rems = rems(size::TREE_CHEVRON);
 /// 缩进基准与每级步长：分组下的项目比根层缩进一级。
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;
@@ -95,9 +94,9 @@ impl AppShell {
                 } else {
                     UiIcon::CHEVRON_DOWN
                 })
-                .with_size(ROW_CHEVRON_SIZE),
+                .with_rems(ROW_CHEVRON_SIZE),
             )
-            .child(render_app_icon(UiIcon::FOLDER.into(), 18.0))
+            .child(AppIconElement::new(UiIcon::FOLDER).with_rems(ROW_ICON_SIZE))
             .child(
                 div()
                     .flex_1()
@@ -208,7 +207,7 @@ impl AppShell {
             })
             .child(
                 AppIconElement::new(icon_name)
-                    .with_size(ROW_ICON_SIZE)
+                    .with_rems(ROW_ICON_SIZE)
                     .text_color(
                         session_color(project.color)
                             .unwrap_or_else(|| state_icon_color(&badge, is_active, p)),

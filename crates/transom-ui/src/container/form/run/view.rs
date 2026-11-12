@@ -10,6 +10,7 @@ use super::ContainerRunFormView;
 use crate::container::form::RUN_RESTART_POLICIES;
 use crate::container::types::RunContainerFormState;
 use crate::palette::Palette;
+use crate::widgets::{DialogConfirmKind, dialog_cancel_button, dialog_confirm_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
@@ -290,23 +291,26 @@ impl ContainerRunFormView {
 
     /// 页脚：取消与提交；重建态使用专用提交文案。
     fn render_footer(&self, is_recreate: bool, cx: &mut Context<Self>) -> AnyElement {
-        let cancel_btn = Button::new("container-run-cancel")
-            .ghost()
-            .label(rust_i18n::t!("common.cancel").to_string())
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx)))
-            .into_any_element();
+        let cancel_btn = dialog_cancel_button(
+            "container-run-cancel",
+            rust_i18n::t!("common.cancel").to_string(),
+            cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx)),
+        )
+        .into_any_element();
 
         let submit_label = if is_recreate {
             rust_i18n::t!("container.run.recreate_submit").to_string()
         } else {
             rust_i18n::t!("container.run.submit").to_string()
         };
-        let submit_btn = Button::new("container-run-submit")
-            .primary()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN)).small())
-            .label(submit_label)
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
-            .into_any_element();
+        let submit_btn = dialog_confirm_button(
+            "container-run-submit",
+            submit_label,
+            Some(AppIcon::Ui(UiIcon::RUN)),
+            DialogConfirmKind::Primary,
+            cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)),
+        )
+        .into_any_element();
 
         crate::widgets::dialog_actions([cancel_btn, submit_btn])
     }

@@ -6,13 +6,12 @@
 use super::*;
 use crate::format::format_size;
 use crate::palette::Palette;
+use crate::widgets::action_button;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::*;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 impl ContainerWorkspace {
@@ -252,18 +251,19 @@ pub(crate) fn render_container_system_df_dialog_body(
         .items_center()
         .pt_2()
         .child(
-            Button::new("system-df-refresh")
-                .xsmall()
-                .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                .label(rust_i18n::t!("container.system_df.btn_refresh").to_string())
-                .disabled(loading || prune_running)
-                .on_click({
-                    let view = view.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| workspace.refresh_system_df(cx));
-                    }
-                }),
+            action_button(
+                "system-df-refresh",
+                UiIcon::REFRESH,
+                rust_i18n::t!("container.system_df.btn_refresh").to_string(),
+            )
+            .ghost()
+            .disabled(loading || prune_running)
+            .on_click({
+                let view = view.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| workspace.refresh_system_df(cx));
+                }
+            }),
         )
         .child(
             h_flex()
@@ -283,26 +283,25 @@ pub(crate) fn render_container_system_df_dialog_body(
                         }),
                 )
                 .child(
-                    Button::new("system-df-submit-prune")
-                        .small()
-                        .danger()
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                        .label(if prune_running {
+                    action_button(
+                        "system-df-submit-prune",
+                        UiIcon::DELETE,
+                        if prune_running {
                             rust_i18n::t!("container.system_df.pruning").to_string()
                         } else {
                             rust_i18n::t!("container.system_df.btn_prune").to_string()
-                        })
-                        .disabled(
-                            loading
-                                || prune_running
-                                || (usage.total_reclaimable == 0 && !prune_all),
-                        )
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| workspace.submit_system_prune(cx));
-                            }
-                        }),
+                        },
+                    )
+                    .danger()
+                    .disabled(
+                        loading || prune_running || (usage.total_reclaimable == 0 && !prune_all),
+                    )
+                    .on_click({
+                        let view = view.clone();
+                        move |_, _, cx| {
+                            view.update(cx, |workspace, cx| workspace.submit_system_prune(cx));
+                        }
+                    }),
                 ),
         );
 

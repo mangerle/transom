@@ -76,10 +76,10 @@ pub(crate) use self::task::{
 };
 pub(crate) use crate::editor::PendingEditorClose;
 use crate::palette::Palette;
+use crate::theme::tokens::control;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
-use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(crate) fn local_home() -> PathBuf {
     std::env::var_os("HOME")
@@ -116,11 +116,14 @@ pub(crate) fn parent_remote(path: &str) -> String {
 pub(crate) use crate::format::format_size;
 
 pub(crate) fn sftp_file_icon(name: &str, is_dir: bool, _p: &Palette) -> AnyElement {
-    if is_dir {
-        render_app_icon(UiIcon::FOLDER.into(), 16.0)
+    let icon = if is_dir {
+        AppIcon::Ui(UiIcon::FOLDER)
     } else {
-        render_app_icon(AppIcon::for_file(name), 16.0)
-    }
+        AppIcon::for_file(name)
+    };
+    AppIconElement::new(icon)
+        .with_rems(rems(control::ICON))
+        .into_any_element()
 }
 
 /// 把 OSC 7 上报的路径规范成 SFTP 远端面板可用的目录。

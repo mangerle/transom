@@ -15,10 +15,10 @@ use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::types::{GitDropTarget, GitHub, GitSidebarDrag};
 use crate::palette::Palette;
-use crate::widgets::menu_item;
+use crate::theme::tokens::{size, space};
+use crate::widgets::{IconButton, action_button, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
@@ -102,9 +102,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         h_flex()
-            .px_2()
-            .py_1p5()
-            .gap_1()
+            .h(rems(size::TAB_BAR_HEIGHT))
+            .px(rems(space::MD))
+            .gap(rems(space::XS))
             .items_center()
             .border_color(p.divider(p.sidebar_border))
             .divider_edge(DividerEdge::Bottom, p.divider_width)
@@ -116,48 +116,48 @@ impl AppShell {
                     .child(rust_i18n::t!("git.sidebar.title").to_string()),
             )
             .child(
-                Button::new("git-sidebar-new-folder")
-                    .ghost()
-                    .xsmall()
-                    .icon(UiIcon::ADD)
-                    .accessibility_label(rust_i18n::t!("git.sidebar.new_folder").to_string())
-                    .tooltip(rust_i18n::t!("git.sidebar.new_folder").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_git_folder_modal(window, cx);
-                    })),
+                IconButton::new(
+                    "git-sidebar-new-folder",
+                    UiIcon::ADD,
+                    rust_i18n::t!("git.sidebar.new_folder").to_string(),
+                )
+                .render()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_git_folder_modal(window, cx);
+                })),
             )
             .child(
-                Button::new("git-sidebar-refresh")
-                    .ghost()
-                    .xsmall()
-                    .icon(UiIcon::REFRESH)
-                    .accessibility_label(rust_i18n::t!("git.sidebar.refresh").to_string())
-                    .tooltip(rust_i18n::t!("git.sidebar.refresh").to_string())
-                    .on_click(cx.listener(|this, _, _window, cx| {
-                        this.refresh_all_git_projects(cx);
-                    })),
+                IconButton::new(
+                    "git-sidebar-refresh",
+                    UiIcon::REFRESH,
+                    rust_i18n::t!("git.sidebar.refresh").to_string(),
+                )
+                .render()
+                .on_click(cx.listener(|this, _, _window, cx| {
+                    this.refresh_all_git_projects(cx);
+                })),
             )
             .child(
-                Button::new("git-sidebar-clone")
-                    .ghost()
-                    .xsmall()
-                    .icon(UiIcon::FETCH)
-                    .accessibility_label(rust_i18n::t!("git.clone.title").to_string())
-                    .tooltip(rust_i18n::t!("git.clone.title").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_git_clone_modal(window, cx);
-                    })),
+                IconButton::new(
+                    "git-sidebar-clone",
+                    UiIcon::FETCH,
+                    rust_i18n::t!("git.clone.title").to_string(),
+                )
+                .render()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_git_clone_modal(window, cx);
+                })),
             )
             .child(
-                Button::new("git-sidebar-add")
-                    .ghost()
-                    .xsmall()
-                    .icon(UiIcon::ADD)
-                    .accessibility_label(rust_i18n::t!("git.sidebar.add").to_string())
-                    .tooltip(rust_i18n::t!("git.sidebar.add").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_git_project_modal(None, window, cx);
-                    })),
+                IconButton::new(
+                    "git-sidebar-add",
+                    UiIcon::ADD,
+                    rust_i18n::t!("git.sidebar.add").to_string(),
+                )
+                .render()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_git_project_modal(None, window, cx);
+                })),
             )
             .into_any_element()
     }
@@ -170,14 +170,15 @@ impl AppShell {
             .text_color(p.muted_foreground)
             .child(rust_i18n::t!("git.sidebar.empty").to_string())
             .child(
-                Button::new("git-sidebar-add-empty")
-                    .primary()
-                    .small()
-                    .icon(UiIcon::ADD)
-                    .label(rust_i18n::t!("git.sidebar.add").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_git_project_modal(None, window, cx);
-                    })),
+                action_button(
+                    "git-sidebar-add-empty",
+                    UiIcon::ADD,
+                    rust_i18n::t!("git.sidebar.add").to_string(),
+                )
+                .primary()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_git_project_modal(None, window, cx);
+                })),
             )
             .into_any_element()
     }

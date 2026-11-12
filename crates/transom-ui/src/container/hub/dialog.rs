@@ -15,9 +15,9 @@ use crate::app::app_settings;
 use crate::container::list::dropdown_trigger;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::palette::Palette;
+use crate::widgets::action_button;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::*;
@@ -166,25 +166,23 @@ pub(crate) fn render_container_hub_dialog_body(
         .child(reg_menu)
         .child(Input::new(&search_input).flex_1().min_w_0())
         .child(
-            Button::new("container-hub-search-btn")
-                .primary()
-                .small()
-                .child(
-                    AppIconElement::new(if searching {
-                        AppIcon::Ui(UiIcon::REFRESH)
-                    } else {
-                        AppIcon::Ui(UiIcon::SEARCH)
-                    })
-                    .small(),
-                )
-                .label(if searching {
+            action_button(
+                "container-hub-search-btn",
+                if searching {
+                    UiIcon::REFRESH
+                } else {
+                    UiIcon::SEARCH
+                },
+                if searching {
                     rust_i18n::t!("container.hub.searching").to_string()
                 } else {
                     rust_i18n::t!("container.hub.search").to_string()
-                })
-                .on_click(move |_, _, cx| {
-                    view_search.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
-                }),
+                },
+            )
+            .primary()
+            .on_click(move |_, _, cx| {
+                view_search.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
+            }),
         );
 
     // 3. 热门推荐芯片。
@@ -258,14 +256,15 @@ pub(crate) fn render_container_hub_dialog_body(
             )
             .child(div().text_sm().text_color(p.danger).child(err))
             .child(
-                Button::new("container-hub-retry-btn")
-                    .secondary()
-                    .small()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH)).small())
-                    .label(rust_i18n::t!("container.hub.search").to_string())
-                    .on_click(move |_, _, cx| {
-                        view_retry.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
-                    }),
+                action_button(
+                    "container-hub-retry-btn",
+                    UiIcon::SEARCH,
+                    rust_i18n::t!("container.hub.search").to_string(),
+                )
+                .secondary()
+                .on_click(move |_, _, cx| {
+                    view_retry.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
+                }),
             )
             .into_any_element()
     } else if results.is_empty() {

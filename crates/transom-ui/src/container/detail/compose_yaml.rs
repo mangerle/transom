@@ -6,6 +6,7 @@
 //! - 行号槽与编辑器等高对齐，语法错误发生时将错误行号标红聚焦，极大提升开发者就地排障效率。
 
 use crate::palette::Palette;
+use crate::theme::tokens::typography;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, px, rems};
 
@@ -113,7 +114,7 @@ pub(crate) fn render_line_numbers(
         gutter = gutter.child(
             div()
                 .h(px(20.0))
-                .text_size(rems(0.6875))
+                .text_size(rems(typography::CAPTION))
                 .font_family(p.mono_font_family.clone())
                 .font_weight(if is_err {
                     FontWeight::BOLD

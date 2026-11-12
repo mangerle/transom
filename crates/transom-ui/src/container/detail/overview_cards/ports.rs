@@ -2,12 +2,10 @@
 
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent};
+use crate::theme::tokens::typography;
+use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::base::h_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use transom_core::ContainerPort;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -25,7 +23,7 @@ pub(crate) fn render_port_chips(
 ) -> AnyElement {
     if ports.is_empty() {
         return div()
-            .text_size(rems(0.75))
+            .text_size(rems(typography::BODY))
             .text_color(p.muted_foreground)
             .child("—")
             .into_any_element();
@@ -42,25 +40,26 @@ pub(crate) fn render_port_chips(
         } else {
             &port.protocol
         };
-        let forward_btn = Button::new(ElementId::Name(format!("chip-fwd-{}", private_port).into()))
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Domain(DomainIcon::FORWARD)).small())
-            .accessibility_label(rust_i18n::t!("container.forward.button_tooltip").to_string())
-            .tooltip(rust_i18n::t!("container.forward.button_tooltip").to_string())
-            .on_click({
-                let view = view.clone();
-                let container_name = container_name.clone();
-                move |_, _, cx| {
-                    view.update(cx, |_workspace, cx| {
-                        cx.emit(ContainerWorkspaceEvent::OpenPortForward {
-                            container: container_name.clone(),
-                            private: private_port,
-                            public: published_port,
-                        });
+        let forward_btn = IconButton::new(
+            ElementId::Name(format!("chip-fwd-{}", private_port).into()),
+            DomainIcon::FORWARD,
+            rust_i18n::t!("container.forward.button_tooltip").to_string(),
+        )
+        .size(IconButtonSize::RowAction)
+        .render()
+        .on_click({
+            let view = view.clone();
+            let container_name = container_name.clone();
+            move |_, _, cx| {
+                view.update(cx, |_workspace, cx| {
+                    cx.emit(ContainerWorkspaceEvent::OpenPortForward {
+                        container: container_name.clone(),
+                        private: private_port,
+                        public: published_port,
                     });
-                }
-            });
+                });
+            }
+        });
 
         match port.public_port {
             Some(public) => {
@@ -77,21 +76,20 @@ pub(crate) fn render_port_chips(
                     .border_1()
                     .border_color(p.stroke.medium)
                     .child(
-                        Button::new(ElementId::Name(format!("chip-open-{public}").into()))
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small())
-                            .label(label)
-                            .tooltip(url)
-                            .on_click(move |_, _, _| {
-                                if let Err(error) =
-                                    transom_platform::opener::open_with_default_app(&open_url)
-                                {
-                                    log::warn!(
-                                        "打开容器概览链接失败，地址: {open_url}，原因: {error}"
-                                    );
-                                }
-                            }),
+                        action_button(
+                            ElementId::Name(format!("chip-open-{public}").into()),
+                            UiIcon::EXTERNAL_LINK,
+                            label,
+                        )
+                        .ghost()
+                        .tooltip(url)
+                        .on_click(move |_, _, _| {
+                            if let Err(error) =
+                                transom_platform::opener::open_with_default_app(&open_url)
+                            {
+                                log::warn!("打开容器概览链接失败，地址: {open_url}，原因: {error}");
+                            }
+                        }),
                     )
                     .child(forward_btn)
                     .into_any_element()
@@ -109,7 +107,7 @@ pub(crate) fn render_port_chips(
                     .border_color(p.stroke.muted)
                     .child(
                         div()
-                            .text_size(rems(0.6875))
+                            .text_size(rems(typography::CAPTION))
                             .font_family(p.mono_font_family.clone())
                             .text_color(p.muted_foreground)
                             .child(label),

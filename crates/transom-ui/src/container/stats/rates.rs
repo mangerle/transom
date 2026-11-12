@@ -1,6 +1,7 @@
 //! 速率换算、趋势窗口与通用卡片辅助。
 
 use super::*;
+use crate::theme::tokens::typography;
 use gpui_kit::prelude::FluentBuilder;
 use transom_ui_icons::AppIconElement;
 
@@ -40,7 +41,7 @@ pub(crate) fn stat_card(
                         )
                         .child(
                             div()
-                                .text_size(rems(0.6875))
+                                .text_size(rems(typography::CAPTION))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.muted_foreground)
                                 .truncate()
@@ -78,7 +79,7 @@ pub(crate) fn hero_stat(value: &str, unit: &str, color: Hsla, p: &Palette) -> An
         .when(!unit.is_empty(), |this| {
             this.child(
                 div()
-                    .text_size(rems(0.75))
+                    .text_size(rems(typography::CAPTION))
                     .font_weight(FontWeight::NORMAL)
                     .line_height(px(14.0))
                     .text_color(p.muted_foreground)

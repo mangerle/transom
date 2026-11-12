@@ -28,9 +28,8 @@ use crate::sidebar::{
     BAND_HEIGHT_REM, ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview,
     indent_padding,
 };
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::*;
@@ -39,7 +38,6 @@ use transom_core::{
     ContainerEngineProfile, DropSide, EngineFolder, EngineProfileId, FolderId, SessionCatalog,
 };
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 侧栏拖动载荷：引擎连接与分组共用一条拖放通道。
@@ -135,19 +133,20 @@ pub(crate) fn render_container_sidebar(
     let view_for_new = view.clone();
     let search_for_clear = search.clone();
     let view_for_clear = view.clone();
-    let clear_search = Button::new("container-engine-search-clear")
-        .ghost()
-        .xsmall()
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).xsmall())
-        .accessibility_label(rust_i18n::t!("container.sidebar.clear_search").to_string())
-        .tooltip(rust_i18n::t!("container.sidebar.clear_search").to_string())
-        .on_click(move |_, window, cx| {
-            search_for_clear.update(cx, |input, cx| {
-                input.set_value("", window, cx);
-                input.focus(window, cx);
-            });
-            view_for_clear.update(cx, |_, cx| cx.notify());
+    let clear_search = IconButton::new(
+        "container-engine-search-clear",
+        AppIcon::Ui(UiIcon::CLOSE),
+        rust_i18n::t!("container.sidebar.clear_search").to_string(),
+    )
+    .size(IconButtonSize::RowAction)
+    .render()
+    .on_click(move |_, window, cx| {
+        search_for_clear.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+            input.focus(window, cx);
         });
+        view_for_clear.update(cx, |_, cx| cx.notify());
+    });
     let search_input = Input::new(&search).w_full().cleanable(false);
     let search_input = if query.is_empty() {
         search_input

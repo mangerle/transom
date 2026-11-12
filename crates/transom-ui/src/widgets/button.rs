@@ -3,7 +3,8 @@
 //! 只统一“长什么样”，不接管“点了做什么”。回调仍由调用方提供，因此同一套
 //! 按钮可以用于页面、工具栏、弹窗与测试，不会把 `AppShell` 的更新逻辑带进来。
 
-use crate::theme::tokens::control;
+use crate::theme::tokens::{control, space};
+use gpui_kit::base::h_flex;
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Selectable;
 use gpui_kit::component::Sizable;
@@ -117,6 +118,43 @@ impl IconButton {
     }
 }
 
+/// 带前置图标的操作按钮：固定“图标在左 + 6px 间距 + 文字在右”与 `.small()`（24px）高度。
+///
+/// 设计原理（Why）：`gpui-component` 的 `Button::label()` 与 `.child()` 同用时，
+/// `label` 固定排在 `children` 前面，且 `.xsmall()`（20px）塞进 16px 图标会紧贴边缘。
+/// 将图标与文案装入 `h_flex` 作为唯一 `child`，即可保证图标在左、14px 图标与 24px
+/// 按钮比例协调，同时保留 `.primary()` / `.ghost()` / `.danger()` / `.dropdown_menu()` 等全部能力。
+pub(crate) fn action_button(
+    id: impl Into<ElementId>,
+    icon: impl Into<AppIcon>,
+    label: impl Into<SharedString>,
+) -> Button {
+    let label = label.into();
+    Button::new(id)
+        .small()
+        .accessibility_label(label.clone())
+        .child(icon_label_content(
+            icon.into(),
+            rems(control::COMPACT_ICON),
+            label,
+        ))
+}
+
+fn icon_label_content(icon: AppIcon, icon_size: Rems, label: SharedString) -> AnyElement {
+    h_flex()
+        .items_center()
+        .gap(rems(space::COMPACT))
+        .child(AppIconElement::new(icon).with_rems(icon_size).flex_none())
+        .child(
+            div()
+                .min_w_0()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .child(label),
+        )
+        .into_any_element()
+}
+
 /// 弹窗取消按钮：统一的 ghost 样式与默认文案。
 pub(crate) fn dialog_cancel_button(
     id: impl Into<ElementId>,
@@ -138,7 +176,7 @@ pub(crate) enum DialogConfirmKind {
     Danger,
 }
 
-/// 弹窗确认按钮：统一主/危险样式与可选图标。
+/// 弹窗确认按钮：统一主/危险样式与可选前置图标。
 pub(crate) fn dialog_confirm_button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
@@ -146,13 +184,16 @@ pub(crate) fn dialog_confirm_button(
     kind: DialogConfirmKind,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
+    let label = label.into();
     let button = match kind {
         DialogConfirmKind::Primary => Button::new(id).primary(),
         DialogConfirmKind::Danger => Button::new(id).danger(),
     };
     let button = match icon {
-        Some(icon) => button.child(AppIconElement::new(icon).with_rems(rems(control::ICON))),
-        None => button,
+        Some(icon) => button
+            .accessibility_label(label.clone())
+            .child(icon_label_content(icon, rems(control::ICON), label)),
+        None => button.label(label),
     };
-    button.label(label.into()).on_click(on_click)
+    button.on_click(on_click)
 }

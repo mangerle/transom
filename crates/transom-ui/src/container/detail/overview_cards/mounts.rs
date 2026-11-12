@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::theme::tokens::{control, typography};
 use gpui_kit::base::{h_flex, v_flex};
 use transom_core::ContainerMount;
 use transom_ui_icons::AppIcon;
@@ -18,7 +19,7 @@ pub(crate) fn render_mounts_card(
 ) -> AnyElement {
     if mounts.is_empty() {
         return div()
-            .text_size(rems(0.75))
+            .text_size(rems(typography::BODY))
             .text_color(p.muted_foreground)
             .child("—")
             .into_any_element();
@@ -53,12 +54,12 @@ pub(crate) fn render_mounts_card(
                     .items_center()
                     .child(
                         AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
-                            .xsmall()
+                            .with_rems(rems(control::COMPACT_ICON))
                             .text_color(p.muted_foreground),
                     )
                     .child(
                         div()
-                            .text_size(rems(0.6875))
+                            .text_size(rems(typography::CAPTION))
                             .font_family(p.mono_font_family.clone())
                             .truncate()
                             .child(
@@ -76,13 +77,13 @@ pub(crate) fn render_mounts_card(
                     .items_center()
                     .child(
                         div()
-                            .text_size(rems(0.6875))
+                            .text_size(rems(typography::CAPTION))
                             .text_color(p.muted_foreground)
                             .child("→"),
                     )
                     .child(
                         div()
-                            .text_size(rems(0.6875))
+                            .text_size(rems(typography::CAPTION))
                             .font_family(p.mono_font_family.clone())
                             .text_color(p.foreground.opacity(0.9))
                             .truncate()

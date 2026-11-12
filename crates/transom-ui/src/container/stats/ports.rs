@@ -1,7 +1,8 @@
 //! 端口映射可折叠表格卡片。
 
 use super::*;
-use crate::widgets::{status_badge, table_header};
+use crate::theme::tokens::typography;
+use crate::widgets::{action_button, status_badge, table_header};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
@@ -75,7 +76,7 @@ pub(crate) fn ports_card(
                 )
                 .child(
                     div()
-                        .text_size(rems(0.6875))
+                        .text_size(rems(typography::CAPTION))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("container.stats.ports").to_string()),
@@ -141,22 +142,21 @@ pub(crate) fn ports_card(
                     Some(public) => {
                         let url = format!("http://{host}:{public}");
                         let open_url = url.clone();
-                        Button::new(format!("btn-stats-open-port-{public}"))
-                            .ghost()
-                            .xsmall()
-                            .label(public.to_string())
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small())
-                            .tooltip(url)
-                            .on_click(move |_, _, _| {
-                                if let Err(error) =
-                                    transom_platform::opener::open_with_default_app(&open_url)
-                                {
-                                    log::warn!(
-                                        "打开容器端口链接失败，地址: {open_url}，原因: {error}"
-                                    );
-                                }
-                            })
-                            .into_any_element()
+                        action_button(
+                            ElementId::Name(format!("btn-stats-open-port-{public}").into()),
+                            UiIcon::EXTERNAL_LINK,
+                            public.to_string(),
+                        )
+                        .ghost()
+                        .tooltip(url)
+                        .on_click(move |_, _, _| {
+                            if let Err(error) =
+                                transom_platform::opener::open_with_default_app(&open_url)
+                            {
+                                log::warn!("打开容器端口链接失败，地址: {open_url}，原因: {error}");
+                            }
+                        })
+                        .into_any_element()
                     }
                     None => div()
                         .text_xs()

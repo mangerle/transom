@@ -13,8 +13,8 @@
 use super::image_history::{copy_button, render_image_history};
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::widgets::action_button;
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::UiIcon;
 
@@ -172,18 +172,19 @@ fn render_image_overview(
         }
 
         let raw_view = view.clone();
-        let raw_btn = Button::new("image-overview-raw-inspect")
-            .xsmall()
-            .ghost()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_ONLY)).small())
-            .label(rust_i18n::t!("container.field.inspect").to_string())
-            .on_click(move |_, _, cx| {
-                raw_view.update(cx, |workspace, cx| {
-                    workspace.state.overview_raw = true;
-                    cx.notify();
-                });
-            })
-            .into_any_element();
+        let raw_btn = action_button(
+            "image-overview-raw-inspect",
+            UiIcon::EDITOR_ONLY,
+            rust_i18n::t!("container.field.inspect").to_string(),
+        )
+        .ghost()
+        .on_click(move |_, _, cx| {
+            raw_view.update(cx, |workspace, cx| {
+                workspace.state.overview_raw = true;
+                cx.notify();
+            });
+        })
+        .into_any_element();
 
         let card = super::overview_cards::overview_card(
             rust_i18n::t!("container.detail.category_identity").to_string(),

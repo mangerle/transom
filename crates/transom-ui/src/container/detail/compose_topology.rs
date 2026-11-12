@@ -9,6 +9,7 @@
 use super::compose_graph::*;
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::prelude::FluentBuilder;
 use std::collections::HashMap;
 use transom_core::{ContainerLifecycleAction, ContainerRequestId};
@@ -324,61 +325,56 @@ fn render_topology_card(
         .gap_1()
         .items_center()
         .child(
-            Button::new(ElementId::Name(format!("toggle-{container_id}").into()))
-                .ghost()
-                .xsmall()
-                .child(
-                    AppIconElement::new(if is_running {
-                        AppIcon::Ui(UiIcon::STOP)
-                    } else {
-                        AppIcon::Ui(UiIcon::RUN)
-                    })
-                    .small(),
-                )
-                .accessibility_label(if is_running {
+            IconButton::new(
+                ElementId::Name(format!("toggle-{container_id}").into()),
+                if is_running {
+                    AppIcon::Ui(UiIcon::STOP)
+                } else {
+                    AppIcon::Ui(UiIcon::RUN)
+                },
+                if is_running {
                     rust_i18n::t!("container.action.stop").to_string()
                 } else {
                     rust_i18n::t!("container.action.start").to_string()
-                })
-                .tooltip(if is_running {
-                    rust_i18n::t!("container.action.stop").to_string()
+                },
+            )
+            .size(IconButtonSize::RowAction)
+            .render()
+            .on_click(move |_, _, cx| {
+                let action = if is_running {
+                    ContainerLifecycleAction::Stop
                 } else {
-                    rust_i18n::t!("container.action.start").to_string()
-                })
-                .on_click(move |_, _, cx| {
-                    let action = if is_running {
-                        ContainerLifecycleAction::Stop
-                    } else {
-                        ContainerLifecycleAction::Start
-                    };
-                    toggle_view.update(cx, |workspace, _| {
-                        let request_id = ContainerRequestId::new();
-                        workspace.send_tracked(
+                    ContainerLifecycleAction::Start
+                };
+                toggle_view.update(cx, |workspace, _| {
+                    let request_id = ContainerRequestId::new();
+                    workspace.send_tracked(
+                        request_id,
+                        transom_core::ContainerCommand::Lifecycle {
+                            tab_id: workspace.tab_id,
                             request_id,
-                            transom_core::ContainerCommand::Lifecycle {
-                                tab_id: workspace.tab_id,
-                                request_id,
-                                container: member_id_toggle.clone(),
-                                action,
-                            },
-                        );
-                    });
-                }),
+                            container: member_id_toggle.clone(),
+                            action,
+                        },
+                    );
+                });
+            }),
         )
         .child(
-            Button::new(ElementId::Name(format!("inspect-{container_id}").into()))
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(AppIcon::Custom(CustomIcon::INFO)).small())
-                .accessibility_label(rust_i18n::t!("container.detail.overview").to_string())
-                .tooltip(rust_i18n::t!("container.detail.overview").to_string())
-                .on_click(move |_, _, cx| {
-                    inspect_view.update(cx, |workspace, cx| {
-                        workspace.select_container_item(member_id_select.clone());
-                        workspace.state.section = ContainerSection::Containers;
-                        cx.notify();
-                    });
-                }),
+            IconButton::new(
+                ElementId::Name(format!("inspect-{container_id}").into()),
+                CustomIcon::INFO,
+                rust_i18n::t!("container.detail.overview").to_string(),
+            )
+            .size(IconButtonSize::RowAction)
+            .render()
+            .on_click(move |_, _, cx| {
+                inspect_view.update(cx, |workspace, cx| {
+                    workspace.select_container_item(member_id_select.clone());
+                    workspace.state.section = ContainerSection::Containers;
+                    cx.notify();
+                });
+            }),
         );
 
     main_row = main_row.child(left_info).child(actions);
