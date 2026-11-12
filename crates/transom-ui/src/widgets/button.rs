@@ -129,6 +129,19 @@ pub(crate) fn action_button(
     icon: impl Into<AppIcon>,
     label: impl Into<SharedString>,
 ) -> Button {
+    action_button_with_icon_tint(id, icon, label, None)
+}
+
+/// 带前置图标的操作按钮，并在需要时强制图标使用指定单色。
+///
+/// 选中页签等强调态需要跨不同图标分类统一着色；普通按钮传入 `None` 时继续保留
+/// IntelliJ 资产原色。
+pub(crate) fn action_button_with_icon_tint(
+    id: impl Into<ElementId>,
+    icon: impl Into<AppIcon>,
+    label: impl Into<SharedString>,
+    icon_tint: Option<Hsla>,
+) -> Button {
     let label = label.into();
     Button::new(id)
         .small()
@@ -137,14 +150,24 @@ pub(crate) fn action_button(
             icon.into(),
             rems(control::COMPACT_ICON),
             label,
+            icon_tint,
         ))
 }
 
-fn icon_label_content(icon: AppIcon, icon_size: Rems, label: SharedString) -> AnyElement {
+fn icon_label_content(
+    icon: AppIcon,
+    icon_size: Rems,
+    label: SharedString,
+    icon_tint: Option<Hsla>,
+) -> AnyElement {
+    let mut icon = AppIconElement::new(icon).with_rems(icon_size).flex_none();
+    if let Some(color) = icon_tint {
+        icon = icon.monochrome(color);
+    }
     h_flex()
         .items_center()
         .gap(rems(space::COMPACT))
-        .child(AppIconElement::new(icon).with_rems(icon_size).flex_none())
+        .child(icon)
         .child(
             div()
                 .min_w_0()
@@ -192,7 +215,7 @@ pub(crate) fn dialog_confirm_button(
     let button = match icon {
         Some(icon) => button
             .accessibility_label(label.clone())
-            .child(icon_label_content(icon, rems(control::ICON), label)),
+            .child(icon_label_content(icon, rems(control::ICON), label, None)),
         None => button.label(label),
     };
     button.on_click(on_click)

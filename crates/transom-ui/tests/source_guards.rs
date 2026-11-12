@@ -1969,3 +1969,16 @@ fn git_sidebar_project_row_selects_then_opens() {
         "Git 项目行必须单击选中、双击打开"
     );
 }
+
+/// 容器详情页签的选中图标必须统一使用强调色，不能因图标分类不同而保持原色。
+#[test]
+fn container_detail_tab_icons_share_selected_tint() {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/container/detail/tab_strip.rs");
+    let content = std::fs::read_to_string(path).expect("读取容器详情页签失败");
+    assert!(
+        content.contains("action_button_with_icon_tint")
+            && content.contains("selected.then_some(p.list_active_border)"),
+        "容器详情页签选中态必须统一传入选中的强调色"
+    );
+}

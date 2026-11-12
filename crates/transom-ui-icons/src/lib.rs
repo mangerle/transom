@@ -80,6 +80,7 @@ pub struct AppIconElement {
     icon: AppIcon,
     size: AppIconSize,
     tint: Option<Hsla>,
+    force_monochrome: bool,
 }
 
 /// 全彩图标的逻辑尺寸单位。
@@ -110,6 +111,7 @@ impl AppIconElement {
             icon: icon.into(),
             size: Rems(1.0).into(),
             tint: None,
+            force_monochrome: false,
         }
     }
 
@@ -167,6 +169,19 @@ impl AppIconElement {
         self.tint = Some(color);
         self
     }
+
+    /// 强制把任意图标按单色蒙版渲染。
+    ///
+    /// 设计原理（Why）：选中页签需要所有图标统一跟随强调色，而 IntelliJ 领域图标
+    /// 默认保留资产原色。该入口只供明确需要单色状态的组件使用，避免全局改变多色
+    /// 文件类型和品牌图标的展示契约。
+    ///
+    /// 代价与局限：多色资产会丢失内部颜色层次，因此普通列表与工具栏不得默认调用。
+    pub fn monochrome(mut self, color: Hsla) -> Self {
+        self.tint = Some(color);
+        self.force_monochrome = true;
+        self
+    }
 }
 
 impl RenderOnce for AppIconElement {
@@ -175,7 +190,7 @@ impl RenderOnce for AppIconElement {
             AppIconSize::Pixels(size) => size,
             AppIconSize::Rems(size) => size.to_pixels(window.rem_size()),
         };
-        if matches!(self.icon, AppIcon::Custom(_))
+        if (self.force_monochrome || matches!(self.icon, AppIcon::Custom(_)))
             && let Some(tint) = self.tint
         {
             return Icon::new(self.icon)

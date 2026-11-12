@@ -31,8 +31,8 @@ mod switch_card;
 mod toolbar;
 
 pub(crate) use button::{
-    DialogConfirmKind, IconButton, IconButtonSize, action_button, dialog_cancel_button,
-    dialog_confirm_button,
+    DialogConfirmKind, IconButton, IconButtonSize, action_button, action_button_with_icon_tint,
+    dialog_cancel_button, dialog_confirm_button,
 };
 pub(crate) use checkbox_row::checkbox_field_row;
 pub(crate) use controls::{dropdown, number_stepper, path_value};

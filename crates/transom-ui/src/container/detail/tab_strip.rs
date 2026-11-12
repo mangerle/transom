@@ -7,7 +7,7 @@
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::theme::tokens::control;
-use crate::widgets::action_button;
+use crate::widgets::action_button_with_icon_tint;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -54,12 +54,14 @@ pub(super) fn render_detail_tab_buttons(
             .children(tabs.iter().copied().map(|tab| {
                 if tab != ContainerDetailTab::Terminal {
                     let tab_view = view.clone();
-                    return action_button(
+                    let selected = tab == current;
+                    return action_button_with_icon_tint(
                         ElementId::Name(format!("container-detail-tab-{}", tab.label_key()).into()),
                         detail_icon(tab),
                         rust_i18n::t!(tab.label_key()).to_string(),
+                        selected.then_some(p.list_active_border),
                     )
-                    .selected(tab == current)
+                    .selected(selected)
                     .on_click(move |_, _, cx| {
                         tab_view.update(cx, |workspace, cx| {
                             workspace.set_detail_tab(tab, cx);
@@ -72,6 +74,7 @@ pub(super) fn render_detail_tab_buttons(
                 // 三角共用一个外框，视觉上是一枚分体按钮而不是两枚。
                 let tab_view = view.clone();
                 let menu_view = view.clone();
+                let selected = tab == current;
                 h_flex()
                     .items_center()
                     .flex_none()
@@ -80,13 +83,14 @@ pub(super) fn render_detail_tab_buttons(
                     .border_color(p.border)
                     .overflow_hidden()
                     .child(
-                        action_button(
+                        action_button_with_icon_tint(
                             "container-detail-tab-terminal",
                             DomainIcon::TERMINAL,
                             rust_i18n::t!("container.detail.terminal").to_string(),
+                            selected.then_some(p.list_active_border),
                         )
                         .ghost()
-                        .selected(tab == current)
+                        .selected(selected)
                         .tooltip(user_tooltip.clone())
                         .on_click(move |_, _, cx| {
                             tab_view.update(cx, |workspace, cx| {
