@@ -19,6 +19,16 @@ pub(super) struct BlockBannerPaintParams<'a> {
     pub(super) cols: usize,
 }
 
+/// 终端光标绘制参数对象。
+pub(super) struct CursorPaintParams {
+    pub(super) origin: Point<Pixels>,
+    pub(super) y: Pixels,
+    pub(super) col: usize,
+    pub(super) width_cells: usize,
+    pub(super) color: Hsla,
+    pub(super) shape: CursorShape,
+}
+
 impl TerminalRenderer {
     /// 自绘文本系统不支持下划线的种类（双线/点线/虚线），按单元格几何绘制。
     ///
@@ -81,16 +91,17 @@ impl TerminalRenderer {
     }
 
     /// 绘制不同造型的终端光标（竖线、下划线、空心块）。
-    pub(crate) fn paint_cursor(
-        &self,
-        origin: Point<Pixels>,
-        y: Pixels,
-        col: usize,
-        color: Hsla,
-        shape: CursorShape,
-        window: &mut Window,
-    ) {
+    pub(super) fn paint_cursor(&self, params: CursorPaintParams, window: &mut Window) {
+        let CursorPaintParams {
+            origin,
+            y,
+            col,
+            width_cells,
+            color,
+            shape,
+        } = params;
         let x = origin.x + self.cell_width * col as f32;
+        let width = self.cell_width * width_cells as f32;
         match shape {
             CursorShape::Block | CursorShape::Hidden => {}
             CursorShape::Beam => {
@@ -113,7 +124,7 @@ impl TerminalRenderer {
                             y: y + self.cell_height - px(2.0),
                         },
                         size: Size {
-                            width: self.cell_width,
+                            width,
                             height: px(2.0),
                         },
                     },
@@ -126,7 +137,7 @@ impl TerminalRenderer {
                     Bounds {
                         origin: Point { x, y },
                         size: Size {
-                            width: self.cell_width,
+                            width,
                             height: thickness,
                         },
                     },
@@ -136,7 +147,7 @@ impl TerminalRenderer {
                             y: y + self.cell_height - thickness,
                         },
                         size: Size {
-                            width: self.cell_width,
+                            width,
                             height: thickness,
                         },
                     },
@@ -149,7 +160,7 @@ impl TerminalRenderer {
                     },
                     Bounds {
                         origin: Point {
-                            x: x + self.cell_width - thickness,
+                            x: x + width - thickness,
                             y,
                         },
                         size: Size {

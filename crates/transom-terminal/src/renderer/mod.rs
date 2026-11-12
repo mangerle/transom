@@ -8,7 +8,9 @@ mod scan;
 mod search;
 mod types;
 
-use pipeline::{CursorVisibilityInput, RenderPassContext, resolve_cursor_visibility};
+use pipeline::{
+    CursorVisibilityInput, RenderPassContext, cursor_cell_span, resolve_cursor_visibility,
+};
 pub(crate) use types::{
     DamageInfo, ImePaintInput, PaintRequest, RowVisual, SELECTION_ALPHA, TextVisual,
 };
@@ -223,6 +225,7 @@ impl TerminalRenderer {
         };
         let cursor_row_raw = cursor_row.unwrap_or(-1);
         let cursor_col = cursor.column.0;
+        let cursor_span = cursor_cell_span(&grid[cursor], cursor_col, cols);
         let cursor_style = request.term.cursor_style();
         let cursor_color = self.resolve(Color::Named(NamedColor::Cursor), colors);
         // 复制模式光标常亮：TUI 常常隐藏真实光标或让它闪烁，而浏览历史时
@@ -250,6 +253,7 @@ impl TerminalRenderer {
             selection,
             cursor_row_raw,
             cursor_col,
+            cursor_span,
             cursor_color,
             cursor_shape: cursor_style.shape,
             cursor_active: cursor_visibility.active,

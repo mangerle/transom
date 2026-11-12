@@ -6,7 +6,7 @@
 //! - 降低主文件复杂度与嵌套深度，使得各阶段的参数与逻辑边界清晰、易于独立扩展与性能分析。
 
 use super::TerminalRenderer;
-use super::decorations::BlockBannerPaintParams;
+use super::decorations::{BlockBannerPaintParams, CursorPaintParams};
 use super::runs::RowScanInput;
 use super::scan::{RowScratch, selection_segment};
 use super::types::{DamageInfo, ImePaintInput, PaintRequest, RowVisual, SELECTION_ALPHA};
@@ -14,8 +14,46 @@ use crate::block::VisualSlot;
 use crate::kitty_graphics::GraphicsPlacement;
 use alacritty_terminal::index::Line;
 use alacritty_terminal::selection::SelectionRange;
+use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::*;
+
+/// 光标覆盖的网格列区间。
+///
+/// 终端网格用相邻两个单元格表示一个双宽字符：前格带 `WIDE_CHAR`，后格是
+/// `WIDE_CHAR_SPACER`。光标底纹与文字反色必须共用这份区间，否则会出现
+/// 块光标只盖住汉字一半、另一半文字却已改变颜色的割裂。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct CursorCellSpan {
+    pub(super) start_col: usize,
+    pub(super) width: usize,
+}
+
+impl CursorCellSpan {
+    /// 判断某一列是否位于光标覆盖区间内。
+    pub(super) fn contains(self, col: usize) -> bool {
+        (self.start_col..self.start_col.saturating_add(self.width)).contains(&col)
+    }
+}
+
+/// 根据光标所在单元格的宽字符标记，计算光标应覆盖的起始列与列数。
+pub(super) fn cursor_cell_span(cell: &Cell, col: usize, cols: usize) -> CursorCellSpan {
+    let start_col = if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+        col.saturating_sub(1)
+    } else {
+        col
+    };
+    let requested_width = if cell
+        .flags
+        .intersects(Flags::WIDE_CHAR | Flags::WIDE_CHAR_SPACER)
+    {
+        2
+    } else {
+        1
+    };
+    let width = requested_width.min(cols.saturating_sub(start_col));
+    CursorCellSpan { start_col, width }
+}
 
 /// 判定光标“逻辑激活”与“本帧可见”所需的纯状态输入。
 pub(super) struct CursorVisibilityInput {
@@ -57,6 +95,8 @@ pub(super) struct RenderPassContext<'a> {
     pub(super) selection: Option<SelectionRange>,
     pub(super) cursor_row_raw: i32,
     pub(super) cursor_col: usize,
+    /// 光标实际覆盖的网格区间；双宽字符会横跨两格。
+    pub(super) cursor_span: CursorCellSpan,
     pub(super) cursor_color: Hsla,
     pub(super) cursor_shape: CursorShape,
     /// 逻辑光标是否在视口内激活（与闪烁相位及 IME 预编辑解耦）。
@@ -180,9 +220,9 @@ impl TerminalRenderer {
             DamageInfo::Rows(list) => {
                 let mut rows_set = Vec::with_capacity(list.len() + 1);
                 rows_set.extend_from_slice(list);
-                if ctx.cursor_visible
-                    && (0..ctx.rows).contains(&(ctx.cursor_row_raw.max(0) as usize))
-                {
+                // 块光标反色会写入行缓存。闪烁熄灭、IME 组字与光标隐藏时也必须
+                // 重建当前行，否则缓存会保留上一帧的反色文字，整字会暂时消失。
+                if (0..ctx.rows).contains(&(ctx.cursor_row_raw.max(0) as usize)) {
                     rows_set.push(ctx.cursor_row_raw as usize);
                 }
                 rows_set
@@ -196,7 +236,7 @@ impl TerminalRenderer {
         let mut scratch = RowScratch::default();
         let cursor_cell = ctx
             .block_cursor
-            .then_some((ctx.cursor_row_raw, ctx.cursor_col));
+            .then_some((ctx.cursor_row_raw, ctx.cursor_span));
 
         for row in damaged_rows {
             if row >= ctx.rows {
@@ -325,11 +365,11 @@ impl TerminalRenderer {
             if ctx.block_cursor && ctx.cursor_row_raw == row as i32 && ctx.cursor_col < ctx.cols {
                 let rect = Bounds {
                     origin: Point {
-                        x: ctx.origin.x + self.cell_width * ctx.cursor_col as f32,
+                        x: ctx.origin.x + self.cell_width * ctx.cursor_span.start_col as f32,
                         y,
                     },
                     size: Size {
-                        width: self.cell_width,
+                        width: self.cell_width * ctx.cursor_span.width as f32,
                         height: self.cell_height,
                     },
                 };
@@ -344,11 +384,14 @@ impl TerminalRenderer {
             // 6. 光标造型（非块光标，如下划线、竖线、空心光标）
             if ctx.cursor_visible && ctx.cursor_row_raw == row as i32 && ctx.cursor_col < ctx.cols {
                 self.paint_cursor(
-                    ctx.origin,
-                    y,
-                    ctx.cursor_col,
-                    ctx.cursor_color,
-                    ctx.cursor_shape,
+                    CursorPaintParams {
+                        origin: ctx.origin,
+                        y,
+                        col: ctx.cursor_span.start_col,
+                        width_cells: ctx.cursor_span.width,
+                        color: ctx.cursor_color,
+                        shape: ctx.cursor_shape,
+                    },
                     window,
                 );
             }

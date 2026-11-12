@@ -1,10 +1,12 @@
 use super::palette::palette_rgb;
-use super::pipeline::{CursorVisibility, CursorVisibilityInput, resolve_cursor_visibility};
+use super::pipeline::{
+    CursorVisibility, CursorVisibilityInput, cursor_cell_span, resolve_cursor_visibility,
+};
 use super::scan::{CJK_PROBE_CHAR, RowScratch, fit_cjk_size, is_cjk_char};
 use super::{PaletteColors, background_alpha};
 use crate::engine::TerminalEngine;
 use crate::highlight::CompiledHighlight;
-use alacritty_terminal::index::Line;
+use alacritty_terminal::index::{Column, Line, Point};
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::{Hsla, px, rgb};
 use transom_core::{TerminalHighlight, TerminalPalette, TerminalProfile, TerminalSize};
@@ -18,6 +20,33 @@ fn background_alpha_maps_transparency_to_opacity() {
     // 越界百分比不能折出负不透明度：那会让整块背景凭空消失。
     assert!(background_alpha(200) >= 0.0);
     assert!((background_alpha(255) - background_alpha(100)).abs() < f32::EPSILON);
+}
+
+/// 双宽字符在网格里占两格：块光标与文字反色必须使用同一跨度。
+#[test]
+fn cursor_span_covers_wide_character_cells() {
+    let (tx, _rx) = flume::bounded(16);
+    let profile = TerminalProfile::default();
+    let mut engine = TerminalEngine::new(TerminalSize::new(10, 2), &profile, tx);
+    engine.process("中a".as_bytes());
+    let grid = engine.grid();
+
+    let wide = cursor_cell_span(&grid[Point::new(Line(0), Column(0))], 0, 10);
+    assert_eq!(wide.start_col, 0);
+    assert_eq!(wide.width, 2, "汉字光标必须覆盖前后两个网格单元");
+    assert!(wide.contains(0));
+    assert!(wide.contains(1));
+    assert!(!wide.contains(2));
+
+    let spacer = cursor_cell_span(&grid[Point::new(Line(0), Column(1))], 1, 10);
+    assert_eq!(spacer, wide, "落在尾格时也必须回到汉字首格并覆盖两格");
+
+    let narrow = cursor_cell_span(&grid[Point::new(Line(0), Column(2))], 2, 10);
+    assert_eq!(narrow.start_col, 2);
+    assert_eq!(narrow.width, 1, "普通字符仍只占一格");
+
+    let clipped = cursor_cell_span(&grid[Point::new(Line(0), Column(0))], 0, 1);
+    assert_eq!(clipped.width, 1, "行尾容纳不下两格时不能越过网格边界");
 }
 
 /// 预计算表与即时换算必须逐位一致：查表是渲染热路径的取色来源，

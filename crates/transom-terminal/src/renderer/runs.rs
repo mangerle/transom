@@ -1,5 +1,6 @@
 //! 文本 run 构造、行视觉产物缓存与整形绘制。
 
+use super::pipeline::CursorCellSpan;
 use super::scan::{
     CustomUnderline, RunStyle, TextRunBuilder, UnderlineKind, cell_text, cell_underline_kind,
 };
@@ -18,7 +19,7 @@ pub(super) struct RowScanInput<'a> {
     pub(super) row: usize,
     pub(super) cols: usize,
     pub(super) colors: &'a Colors,
-    pub(super) cursor_cell: Option<(i32, usize)>,
+    pub(super) cursor_cell: Option<(i32, CursorCellSpan)>,
     /// 每列的关键词高亮覆盖色；`None` 表示该列不上色。
     pub(super) highlights: &'a [Option<Hsla>],
 }
@@ -243,7 +244,7 @@ fn cell_run_style(
     col: usize,
     row: usize,
     highlights: &[Option<Hsla>],
-    cursor_cell: Option<(i32, usize)>,
+    cursor_cell: Option<(i32, CursorCellSpan)>,
 ) -> RunStyle {
     let mut fg = fg;
     // 关键词上色只覆盖"程序自己没着色"的字符：已经是红字的 ERROR 再压一层
@@ -256,9 +257,9 @@ fn cell_run_style(
     // cursor_cell 携带的是屏幕行坐标（cursor.line.0 + display_offset），
     // 必须与同为屏幕坐标的 row 比较；误用网格坐标 line.0 会在上滚查看
     // 历史时把反色字符画到错误行，与光标块分离。
-    if let Some((cursor_row, cursor_col)) = cursor_cell
+    if let Some((cursor_row, cursor_span)) = cursor_cell
         && cursor_row == row as i32
-        && cursor_col == col
+        && cursor_span.contains(col)
     {
         fg = bg;
     }
