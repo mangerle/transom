@@ -93,14 +93,14 @@ chmod 600 ~/keys/transom-next/ed25519.key
 5. 提交并推送 `main`，然后打标签：
 
    ```bash
-   git tag v1.7.1
-   git push origin v1.7.1
+   git tag v1.8.0
+   git push origin v1.8.0
    ```
 
 6. 在 GitHub Actions 查看 `Release` 工作流。流水线依次执行：计算版本、生成 Changelog、三端双架构打包、用 `SHIPUP_PRIVATE_KEY` 签名 `latest.json`、发布 GitHub Release。
 7. 发布完成后确认 Release 附件包含 `latest.json`、六个更新通道产物，以及 AppImage、便携 zip 与 dmg。
 
-手动触发时，在 Actions 的 `Release` 工作流里填写已存在的标签（例如 `v1.7.1`），流水线会检出该标签构建。
+手动触发时，在 Actions 的 `Release` 工作流里填写已存在的标签（例如 `v1.8.0`），流水线会检出该标签构建。
 
 ## 4. 本地打包与验证
 
