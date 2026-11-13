@@ -16,11 +16,12 @@
 use super::commit_box::CommitBoxProps;
 use super::commit_modal::{GroupDisplay, amend_file_row};
 use super::diff_view;
+use super::{DIFF_FOLD_ROW_HEIGHT, GitCommitTab, WORKSPACE_HEADER_HEIGHT};
 use crate::app::AppShell;
 use crate::divider::{h_resizable, v_resizable};
-use crate::git::GitCommitTab;
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use crate::theme::tokens::typography;
+use gpui_kit::base::{Tab, Tabs, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
@@ -152,8 +153,11 @@ impl AppShell {
         } else {
             rust_i18n::t!("git.stash.title").to_string()
         };
-        let tabs = h_flex()
+        let tabs = Tabs::new("git-commit-tabs")
             .w_full()
+            .h(rems(WORKSPACE_HEADER_HEIGHT))
+            .flex_none()
+            .flex()
             .px_2()
             .gap_1()
             .items_center()
@@ -337,8 +341,9 @@ impl AppShell {
                     .child(
                         h_flex()
                             .w_full()
+                            .h(rems(DIFF_FOLD_ROW_HEIGHT))
+                            .flex_none()
                             .px_2()
-                            .py_1()
                             .gap_2()
                             .items_center()
                             .child(
@@ -523,12 +528,11 @@ fn commit_tab_btn(
     active: bool,
     p: &Palette,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
-    div()
-        .id(id)
+) -> Tab {
+    Tab::new(id)
+        .h_full()
         .px_2()
-        .py_1()
-        .text_sm()
+        .text_size(rems(typography::BODY))
         .cursor_pointer()
         .font_weight(if active {
             FontWeight::BOLD

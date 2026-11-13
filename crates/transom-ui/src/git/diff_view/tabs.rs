@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::app::AppShell;
+use crate::git::WORKSPACE_HEADER_HEIGHT;
 use crate::git::actions::DiffTabCloseScope;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
@@ -80,7 +81,7 @@ pub(crate) fn render_diff_tab_bar(
     let bar = h_flex()
         .id("git-diff-tab-bar")
         .w_full()
-        .h(px(26.0))
+        .h(rems(WORKSPACE_HEADER_HEIGHT))
         .flex_none()
         .border_color(p.divider(p.border))
         .border_b_1()

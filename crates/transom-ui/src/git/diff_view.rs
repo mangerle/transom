@@ -19,6 +19,7 @@ use crate::diff_pane::{
     DiffSearchBarProps, OptionsUpdater, render_change_nav_with_handlers, render_diff_body,
     render_diff_search_bar, render_option_controls,
 };
+use crate::git::WORKSPACE_HEADER_HEIGHT;
 use crate::git::types::GitWorkspaceState as State;
 use crate::keymap::{DIFF_VIEW_CONTEXT, DiffFindInView, DiffNextChange, DiffPrevChange};
 use crate::palette::Palette;
@@ -97,7 +98,7 @@ pub(crate) fn render(
     let header = h_flex()
         .id("git-diff-header")
         .w_full()
-        .h(px(26.0))
+        .h(rems(WORKSPACE_HEADER_HEIGHT))
         .flex_none()
         .px_2()
         .gap_1p5()

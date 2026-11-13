@@ -49,10 +49,24 @@ pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};
 pub(crate) use worktree_modal::GitWorktreeModal;
 
 use crate::palette::Palette;
+use crate::theme::tokens::size;
 use gpui_kit::Hsla;
 use transom_core::{ChangeCode, StatusRecord};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
+
+/// Git 工作区并排栏的头部统一高度。
+///
+/// 左右栏分别渲染页签与差异工具条，但二者共用同一横向基线；集中取窗格标题栏
+/// 令牌可让提交页签、提交工具条、diff 页签与 diff 工具条随密度同步缩放。
+pub(crate) const WORKSPACE_HEADER_HEIGHT: f32 = size::PANE_HEADER_HEIGHT;
+
+/// 差异视图中“未变更行”折叠条的高度（标准密度 24px）。
+///
+/// `gpui-component` 的差异组件内部以 `h_6` 渲染折叠条；提交页左侧的改动计数行
+/// 与它并排，必须复用同一高度，才能让底边落在同一像素栅格上。该值属于对第三方
+/// 组件渲染契约的显式镜像，升级差异组件时需要同步复核。
+pub(crate) const DIFF_FOLD_ROW_HEIGHT: f32 = 1.5;
 
 /// 变更条目在界面里的视觉表达。
 ///
