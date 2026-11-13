@@ -91,7 +91,8 @@ impl SettingsView {
             .into_any_element()
     }
 
-    /// 剪贴板组：选中复制、多行粘贴确认、尾随空白清理与拦截误按的 Ctrl+V。
+    /// 剪贴板组：选中复制、OSC 52 默认授权、多行粘贴确认、尾随空白清理
+    /// 与拦截误按的 Ctrl+V。
     pub(crate) fn render_settings_clipboard(
         &mut self,
         p: &Palette,
@@ -108,6 +109,25 @@ impl SettingsView {
                     .on_click(cx.listener(|_this, &checked, _, cx| {
                         update_app_settings(cx, |s| {
                             s.terminal_interaction.copy_on_select = checked
+                        });
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .child(crate::widgets::setting_row(
+                "settings.default_allow_remote_clipboard_write",
+                Some("settings.default_allow_remote_clipboard_write_desc"),
+                Switch::new("toggle-default-allow-remote-clipboard-write")
+                    .small()
+                    .checked(
+                        app_settings(cx)
+                            .terminal_interaction
+                            .default_allow_remote_clipboard_write,
+                    )
+                    .on_click(cx.listener(|_this, &checked, _, cx| {
+                        update_app_settings(cx, |s| {
+                            s.terminal_interaction.default_allow_remote_clipboard_write = checked
                         });
                         cx.notify();
                     }))

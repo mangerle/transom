@@ -85,6 +85,7 @@ impl AppShell {
         let mut profile = settings.terminal_profile.clone();
         profile.background_transparency = settings.window.window_transparency;
         let interaction = settings.terminal_interaction;
+        let remote_clipboard_allowed = interaction.default_allow_remote_clipboard_write;
         let reserved = self.state.shortcut_recording.filter.clone();
         let key_filter: KeyFilter = Arc::new(move |keystroke| {
             reserved
@@ -103,6 +104,7 @@ impl AppShell {
                     key_filter: Some(key_filter),
                     audit_path: None,
                     shell_integration_enabled: false,
+                    remote_clipboard_allowed,
                     clear_on_first_resize: false,
                 },
             )

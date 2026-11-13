@@ -231,6 +231,8 @@ impl GroupSearch {
                 &[
                     "settings.copy_on_select",
                     "settings.copy_on_select_desc",
+                    "settings.default_allow_remote_clipboard_write",
+                    "settings.default_allow_remote_clipboard_write_desc",
                     "settings.multiline_paste",
                     "settings.multiline_paste_desc",
                     "settings.trim_trailing_whitespace",

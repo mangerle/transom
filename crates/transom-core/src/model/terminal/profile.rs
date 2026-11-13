@@ -236,6 +236,14 @@ pub struct TerminalInteraction {
     /// （如 ctrl-q）用自定义按键绑成 `\x16`——自定义映射的优先级始终高于本开关。
     #[serde(default = "default_true")]
     pub suppress_ctrl_v: bool,
+    /// 新终端会话是否默认允许程序通过 OSC 52 写入本地剪贴板。
+    ///
+    /// 设计原理（Why）：默认允许可让 tmux、编辑器与终端内工具直接完成复制，
+    /// 不必每个新会话都重复确认；关闭后恢复按会话询问，适合运行不受信任脚本
+    /// 或远程主机的场景。该值只在创建终端时作为初始授权，不追溯改变已经打开
+    /// 的会话，避免设置切换在运行期静默撤销用户刚刚作出的决定。
+    #[serde(default = "default_true")]
+    pub default_allow_remote_clipboard_write: bool,
 }
 
 impl TerminalInteraction {
@@ -265,6 +273,7 @@ impl Default for TerminalInteraction {
             middle_click_paste: false,
             trim_trailing_whitespace: false,
             suppress_ctrl_v: true,
+            default_allow_remote_clipboard_write: true,
         }
     }
 }

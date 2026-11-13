@@ -82,10 +82,11 @@ pub struct TerminalView {
     command_tracker: CommandTracker,
     /// 运行期标题门控：区分提示符标题与命令/TUI 标题。
     title_gate: TitleGate,
-    /// 本会话是否已被用户授权写入本地剪贴板（OSC 52）。
+    /// 本会话是否允许程序写入本地剪贴板（OSC 52）。
     ///
-    /// 只活在视图里，不落盘：断开重连会创建新视图，授权随之失效，避免一次
-    /// 批准变成永久放行。默认拒绝，远端请求必须先经过宿主的确认弹窗。
+    /// 初始值由应用设置随视图创建参数下发；未获授权时，远端请求必须先经过
+    /// 宿主的确认弹窗。字段只活在当前视图里，断开重连会重新读取设置，避免
+    /// 单次会话内的批准演变成不可配置的永久放行。
     remote_clipboard_allowed: bool,
     /// 键盘复制模式的选区锚点：按 `v`/`V` 时的光标位置。
     ///
@@ -143,6 +144,11 @@ pub struct TerminalViewParams {
     /// 随会话创建参数带入，而不是让视图回头去读设置：视图诞生时必须已经知道
     /// 要不要集成，否则会先发一次探针再被设置关掉，探针本身是可见的。
     pub shell_integration_enabled: bool,
+    /// 新会话是否默认允许 OSC 52 写入本地剪贴板。
+    ///
+    /// 由应用层把设置固化为创建时快照；终端组件不依赖 UI 设置 Global，录像
+    /// 回放等非交互场景也可以明确强制为拒绝。
+    pub remote_clipboard_allowed: bool,
     /// 首帧尺寸下发后清屏一次：容器内的 `sh` 收到 SIGWINCH 会把提示符重新
     /// 打印到新行（真机复现：每次 resize 多一行 `#`）。控制台会话没有登录欢迎
     /// 信息，清掉这些重复提示符即可；普通终端标签保持原样，不能抹掉 banner。
@@ -158,6 +164,7 @@ impl TerminalView {
             key_filter,
             audit_path,
             shell_integration_enabled,
+            remote_clipboard_allowed,
             clear_on_first_resize,
         } = params;
         let focus_handle = cx.focus_handle().tab_stop(false);
@@ -254,7 +261,7 @@ impl TerminalView {
             scroll_pixel_remainder: 0.0,
             command_tracker: CommandTracker::default(),
             title_gate: TitleGate::default(),
-            remote_clipboard_allowed: false,
+            remote_clipboard_allowed,
             copy_anchor: None,
             shell_integration,
             user_typed: false,

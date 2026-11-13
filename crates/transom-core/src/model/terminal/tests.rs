@@ -52,6 +52,30 @@ fn ctrl_v_is_suppressed_by_default_and_respects_explicit_off() {
     assert!(!restored.suppress_ctrl_v);
 }
 
+/// OSC 52 默认允许写入，并保留用户显式关闭的决定。
+///
+/// 老配置没有该字段时必须继续按新的默认值加载；否则升级后所有会话都会退回
+/// 逐次确认，与新版本的默认行为不一致。
+#[test]
+fn remote_clipboard_write_defaults_allow_and_respects_explicit_off() {
+    assert!(
+        TerminalInteraction::default().default_allow_remote_clipboard_write,
+        "新安装默认应允许终端程序写入剪贴板"
+    );
+
+    let legacy: TerminalInteraction = serde_json::from_str(
+        r#"{"copy_on_select":true,"right_click_paste":true,"multiline_paste_confirm":false}"#,
+    )
+    .unwrap();
+    assert!(legacy.default_allow_remote_clipboard_write);
+
+    let mut off = legacy;
+    off.default_allow_remote_clipboard_write = false;
+    let json = serde_json::to_string(&off).unwrap();
+    let restored: TerminalInteraction = serde_json::from_str(&json).unwrap();
+    assert!(!restored.default_allow_remote_clipboard_write);
+}
+
 /// 转义序列解码覆盖终端最常用的几种写法。
 #[test]
 fn key_binding_decodes_escape_sequences() {

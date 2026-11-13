@@ -458,6 +458,9 @@ fn create_playback_terminal(
                 audit_path: None,
                 // 回放是既成事实的录像，不再向会话注入集成脚本。
                 shell_integration_enabled: false,
+                // 录像中的 OSC 52 不是用户当前会话发起的实时请求，不能被设置
+                // 中的默认允许策略放行，否则打开审计文件就可能静默覆盖剪贴板。
+                remote_clipboard_allowed: false,
                 clear_on_first_resize: false,
             },
         )

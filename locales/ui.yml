@@ -2058,7 +2058,7 @@ clipboard_consent:
     zh-CN: 远端请求写入剪贴板
   subtitle:
     en: OSC 52 is denied unless you allow it for this session.
-    zh-CN: OSC 52 默认拒绝，只有本会话明确允许后才会生效。
+    zh-CN: OSC 52 写入当前未获授权，只有本会话明确允许后才会生效。
   hint:
     en: A program in session "%{session}" wants to replace your local clipboard.
     zh-CN: 会话「%{session}」中的程序请求覆盖本地剪贴板。
@@ -2941,6 +2941,9 @@ settings:
   copy_on_select_desc:
     en: Copy selected text to the clipboard immediately upon selection.
     zh-CN: 选中文字立即复制到剪贴板，无需再按快捷键。
+  default_allow_remote_clipboard_write_desc:
+    en: New terminal sessions accept OSC 52 clipboard writes without confirmation. Turn this off to require approval on the first request. Changes apply only to newly created sessions.
+    zh-CN: 新建终端会话会自动接受 OSC 52 写入，不再逐次确认。关闭后，程序必须在首次请求时获得本会话授权。修改只影响新建会话。
   multiline_paste_desc:
     en: Ask for confirmation before pasting multi-line text.
     zh-CN: 粘贴多行文本前弹出确认，防止误粘贴整段命令。
@@ -3568,6 +3571,9 @@ settings:
   copy_on_select:
     en: Copy on Select
     zh-CN: 划词选中自动复制
+  default_allow_remote_clipboard_write:
+    en: Allow Terminal Programs to Write the Clipboard
+    zh-CN: 默认允许终端程序写入剪贴板
   right_click_paste:
     en: Right Click to Paste
     zh-CN: 鼠标右键快速粘贴

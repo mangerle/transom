@@ -281,6 +281,9 @@ impl AppShell {
             shell_integration_enabled,
             session_id,
         } = spawn;
+        let remote_clipboard_allowed = app_settings(cx)
+            .terminal_interaction
+            .default_allow_remote_clipboard_write;
         let terminal = cx.new(|cx| {
             TerminalView::new(
                 window,
@@ -292,6 +295,7 @@ impl AppShell {
                     key_filter: Some(key_filter),
                     audit_path,
                     shell_integration_enabled,
+                    remote_clipboard_allowed,
                     clear_on_first_resize: false,
                 },
             )

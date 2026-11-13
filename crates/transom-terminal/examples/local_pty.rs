@@ -76,6 +76,8 @@ impl Demo {
                     key_filter: None,
                     audit_path: None,
                     shell_integration_enabled: false,
+                    // 示例不读取应用设置，保持显式拒绝以演示授权弹窗链路。
+                    remote_clipboard_allowed: false,
                     clear_on_first_resize: false,
                 },
             )
