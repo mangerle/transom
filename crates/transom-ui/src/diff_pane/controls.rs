@@ -41,7 +41,7 @@ pub(crate) fn render_diff_body(state: &Entity<DiffState>, options: DiffViewOptio
             DiffChangeIndicator::None
         })
         .hover_highlight(DiffHoverHighlight::Both)
-        .hunk_separator(DiffHunkSeparator::Metadata)
+        .hunk_separator(DiffHunkSeparator::LineInfo)
 }
 
 /// 选择型菜单项：选中项使用勾选图标。
@@ -138,7 +138,7 @@ pub(crate) fn render_mode_toggle(
                 .child(AppIconElement::new(UiIcon::EDITOR_PREVIEW).small())
                 .tooltip(rust_i18n::t!("git.diff.side_by_side").to_string())
                 .accessibility_label(rust_i18n::t!("git.diff.side_by_side").to_string())
-                .when(side_by_side, |btn| btn.primary())
+                .when(side_by_side, |btn| btn.secondary())
                 .on_click(move |_, window, cx| {
                     split_cb(Box::new(|options| options.side_by_side = true), window, cx);
                 }),
@@ -150,7 +150,7 @@ pub(crate) fn render_mode_toggle(
                 .child(AppIconElement::new(UiIcon::EDITOR_ONLY).small())
                 .tooltip(rust_i18n::t!("git.diff.unified").to_string())
                 .accessibility_label(rust_i18n::t!("git.diff.unified").to_string())
-                .when(!side_by_side, |btn| btn.primary())
+                .when(!side_by_side, |btn| btn.secondary())
                 .on_click(move |_, window, cx| {
                     unified_cb(Box::new(|options| options.side_by_side = false), window, cx);
                 }),
