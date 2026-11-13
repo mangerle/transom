@@ -3,7 +3,9 @@
 //! Telnet 无内建认证，字段只有主机、端口、字符编码与连接选项；编码按钮组
 //! 与串口的选项行共用同一布局基元，保持表单视觉一致。
 
+use super::proxy::render_proxy_section;
 use super::serial::serial_option_row;
+use super::ssh::{number_form_field, required_form_field};
 use crate::palette::Palette;
 use crate::session_form::{SessionForm, SessionFormView};
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -13,7 +15,8 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 use transom_core::TextEncoding;
 
-pub(crate) fn render_telnet_fields(
+/// 渲染 Telnet 的“基本信息”区（主机、端口、字符编码与说明）。
+pub(crate) fn render_telnet_basic_fields(
     form: &SessionForm,
     cx: &mut Context<SessionFormView>,
     p: &Palette,
@@ -42,13 +45,14 @@ pub(crate) fn render_telnet_fields(
             h_flex()
                 .gap_3()
                 .items_end()
-                .child(div().flex_1().child(crate::widgets::form_field(
+                .child(div().flex_1().child(required_form_field(
                     rust_i18n::t!("form.host").to_string(),
                     form.host.clone(),
                     p,
                 )))
-                .child(div().w(px(110.0)).child(crate::widgets::form_field(
+                .child(div().w(rems(8.5)).child(number_form_field(
                     rust_i18n::t!("form.port").to_string(),
+                    true,
                     form.port.clone(),
                     p,
                 ))),
@@ -58,6 +62,41 @@ pub(crate) fn render_telnet_fields(
             encoding_buttons,
             p,
         ))
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("form.telnet_hint").to_string()),
+        )
+        .into_any_element()
+}
+
+/// 渲染 Telnet 的“网络与代理”区（出站代理、超时保活与自动重连）。
+pub(crate) fn render_telnet_network_fields(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_3()
+        .child(render_proxy_section(form, cx, p))
+        .child(
+            h_flex()
+                .gap_3()
+                .items_end()
+                .child(div().flex_1().child(number_form_field(
+                    rust_i18n::t!("form.connect_timeout").to_string(),
+                    false,
+                    form.connect_timeout.clone(),
+                    p,
+                )))
+                .child(div().flex_1().child(number_form_field(
+                    rust_i18n::t!("form.keepalive").to_string(),
+                    false,
+                    form.keepalive.clone(),
+                    p,
+                ))),
+        )
         .child(
             h_flex()
                 .justify_between()
@@ -76,27 +115,6 @@ pub(crate) fn render_telnet_fields(
                             this.edit(cx, |form| form.auto_reconnect = *checked);
                         })),
                 ),
-        )
-        .child(
-            h_flex()
-                .gap_3()
-                .items_end()
-                .child(div().flex_1().child(crate::widgets::form_field(
-                    rust_i18n::t!("form.connect_timeout").to_string(),
-                    form.connect_timeout.clone(),
-                    p,
-                )))
-                .child(div().flex_1().child(crate::widgets::form_field(
-                    rust_i18n::t!("form.keepalive").to_string(),
-                    form.keepalive.clone(),
-                    p,
-                ))),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("form.telnet_hint").to_string()),
         )
         .into_any_element()
 }

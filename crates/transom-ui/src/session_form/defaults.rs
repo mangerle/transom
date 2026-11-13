@@ -105,6 +105,10 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         .as_ref()
         .map(|session| session.startup.to_multiline())
         .unwrap_or_default();
+    let forwards = base
+        .as_ref()
+        .map(|session| session.forwards.clone())
+        .unwrap_or_default();
     let (connect_timeout, keepalive) = base
         .as_ref()
         .and_then(|session| match &session.connection {
@@ -172,6 +176,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         local_env,
         available_shells,
         identities,
+        forwards,
         jump_options,
         folder_options,
         global_proxy,
@@ -217,7 +222,7 @@ fn target_defaults(
     let username = ssh
         .map(|ssh| ssh.username.clone())
         .or_else(|| mosh.map(|mosh| mosh.username.clone()))
-        .unwrap_or_else(default_username);
+        .unwrap_or_default();
     // Self 字面量会移走 base，需要读的字段先取出来。
     let identity_choice = base.as_ref().and_then(|session| session.identity_id);
     let jump_choice = ssh
@@ -309,10 +314,4 @@ fn proxy_defaults(
                 .map_or_else(String::new, |a| a.password.clone()),
         ),
     }
-}
-
-pub(super) fn default_username() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_default()
 }

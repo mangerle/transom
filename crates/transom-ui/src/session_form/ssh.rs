@@ -1,22 +1,71 @@
-//! 会话表单中 SSH 连接参数、跳板机与认证凭据渲染模块。
+//! 会话表单中 SSH / Mosh 基本信息与网络代理参数渲染模块。
 
 use super::SessionFormView;
 use super::proxy::render_proxy_section;
-use super::types::{AuthChoice, SessionForm};
+use super::types::{AuthChoice, ConnectionChoice, SessionForm};
 use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
+use gpui_kit::component::input::{Input, InputState, NumberInput};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
 mod auth;
 mod jump;
 
-use self::auth::render_auth_credential_fields;
+use self::auth::{render_account_section, render_auth_credential_fields};
 use self::jump::render_jump_section;
 
-pub(crate) fn render_ssh_fields(
+/// 带红色必填星号标记的文本输入字段。
+pub(super) fn required_form_field(
+    label: String,
+    input: Entity<InputState>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(
+            h_flex()
+                .gap_0p5()
+                .items_center()
+                .child(div().text_xs().text_color(p.muted_foreground).child(label))
+                .child(div().text_xs().text_color(p.danger).child("*")),
+        )
+        .child(Input::new(&input).w_full())
+        .into_any_element()
+}
+
+/// 使用 `NumberInput`（带加减步进按钮）的数字输入字段。
+pub(super) fn number_form_field(
+    label: String,
+    required: bool,
+    input: Entity<InputState>,
+    p: &Palette,
+) -> AnyElement {
+    let header = if required {
+        h_flex()
+            .gap_0p5()
+            .items_center()
+            .child(div().text_xs().text_color(p.muted_foreground).child(label))
+            .child(div().text_xs().text_color(p.danger).child("*"))
+            .into_any_element()
+    } else {
+        div()
+            .text_xs()
+            .text_color(p.muted_foreground)
+            .child(label)
+            .into_any_element()
+    };
+    v_flex()
+        .gap_1()
+        .child(header)
+        .child(NumberInput::new(&input).w_full())
+        .into_any_element()
+}
+
+/// 渲染 SSH / Mosh 的“基本信息”区（主机、端口、账户、用户名与认证方式）。
+pub(crate) fn render_ssh_basic_fields(
     form: &SessionForm,
     cx: &mut Context<SessionFormView>,
     p: &Palette,
@@ -53,76 +102,35 @@ pub(crate) fn render_ssh_fields(
             }
         }));
 
-    let mut fields = v_flex().gap_3();
-
-    fields = fields.child(
+    let mut fields = v_flex().gap_3().child(
         h_flex()
             .gap_3()
             .items_end()
-            .child(div().flex_1().child(crate::widgets::form_field(
+            .child(div().flex_1().child(required_form_field(
                 rust_i18n::t!("form.host").to_string(),
                 form.host.clone(),
                 p,
             )))
-            .child(div().w(px(110.0)).child(crate::widgets::form_field(
+            .child(div().w(rems(8.5)).child(number_form_field(
                 rust_i18n::t!("form.port").to_string(),
+                true,
                 form.port.clone(),
                 p,
             ))),
     );
 
-    fields = fields.child(render_jump_section(form, cx, p));
-    fields = fields.child(render_proxy_section(form, cx, p));
-
-    if !form.identities.is_empty() {
-        fields = fields.child(
-            v_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("form.identity").to_string()),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Button::new("identity-none")
-                                .small()
-                                .label(rust_i18n::t!("form.identity_none").to_string())
-                                .selected(form.identity_choice.is_none())
-                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                    this.edit(cx, |form| form.identity_choice = None);
-                                })),
-                        )
-                        .children(form.identities.iter().enumerate().map(|(index, option)| {
-                            let identity_id = option.id;
-                            let selected = form.identity_choice == Some(identity_id);
-                            Button::new(ElementId::Name(format!("identity-{index}").into()))
-                                .small()
-                                .label(option.name.clone())
-                                .selected(selected)
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    this.edit(cx, |form| {
-                                        form.identity_choice = Some(identity_id);
-                                    });
-                                }))
-                        })),
-                ),
-        );
-    }
+    fields = render_account_section(fields, form, cx, p);
 
     if form.identity_choice.is_none() {
         fields = fields
-            .child(crate::widgets::form_field(
+            .child(required_form_field(
                 rust_i18n::t!("form.username").to_string(),
                 form.username.clone(),
                 p,
             ))
             .child(
                 v_flex()
-                    .gap_2()
+                    .gap_1()
                     .child(
                         div()
                             .text_xs()
@@ -131,9 +139,42 @@ pub(crate) fn render_ssh_fields(
                     )
                     .child(auth_selector),
             );
+        fields = render_auth_credential_fields(fields, form, cx, p);
     }
 
+    fields.into_any_element()
+}
+
+/// 渲染 SSH / Mosh 的“网络与代理”区（跳板机、出站代理、超时保活、重连与高级网络项）。
+pub(crate) fn render_ssh_network_fields(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
+    let mut fields = v_flex().gap_3();
+
+    if form.connection == ConnectionChoice::Ssh {
+        fields = fields.child(render_jump_section(form, cx, p));
+    }
+    fields = fields.child(render_proxy_section(form, cx, p));
+
     fields = fields
+        .child(
+            h_flex()
+                .gap_3()
+                .child(div().flex_1().child(number_form_field(
+                    rust_i18n::t!("form.connect_timeout").to_string(),
+                    false,
+                    form.connect_timeout.clone(),
+                    p,
+                )))
+                .child(div().flex_1().child(number_form_field(
+                    rust_i18n::t!("form.keepalive").to_string(),
+                    false,
+                    form.keepalive.clone(),
+                    p,
+                ))),
+        )
         .child(
             h_flex()
                 .justify_between()
@@ -173,24 +214,35 @@ pub(crate) fn render_ssh_fields(
                 ),
         );
 
-    fields = fields
-        .child(crate::widgets::form_field(
-            rust_i18n::t!("form.connect_timeout").to_string(),
-            form.connect_timeout.clone(),
-            p,
-        ))
-        .child(crate::widgets::form_field(
-            rust_i18n::t!("form.keepalive").to_string(),
-            form.keepalive.clone(),
-            p,
-        ))
-        .child(crate::widgets::form_field(
+    if form.connection == ConnectionChoice::Ssh {
+        fields = fields.child(crate::widgets::form_field(
             rust_i18n::t!("form.wol_mac").to_string(),
             form.wol_mac.clone(),
             p,
         ));
-
-    fields = render_auth_credential_fields(fields, form, cx, p);
+    } else if form.connection == ConnectionChoice::Mosh {
+        fields = fields
+            .child(
+                h_flex()
+                    .gap_3()
+                    .child(div().flex_1().child(crate::widgets::form_field(
+                        rust_i18n::t!("form.mosh.server_path").to_string(),
+                        form.mosh_server_path.clone(),
+                        p,
+                    )))
+                    .child(div().w(rems(10.0)).child(crate::widgets::form_field(
+                        rust_i18n::t!("form.mosh.server_port").to_string(),
+                        form.mosh_server_port.clone(),
+                        p,
+                    ))),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("form.mosh.hint").to_string()),
+            );
+    }
 
     fields.into_any_element()
 }

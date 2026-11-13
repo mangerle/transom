@@ -137,3 +137,29 @@ fn tilde_in_key_path_is_expanded_to_home() {
         _ => panic!("应为私钥认证"),
     }
 }
+
+/// 会话表单内联账户编辑器的新语义：保存开关由“口令框是否非空”推导，
+/// 非空即写入钥匙串。
+#[test]
+fn inline_editor_saves_non_empty_password() {
+    let password = "p@ss";
+    let built = form(AuthChoice::Password, !password.is_empty(), password, "");
+    assert!(matches!(
+        built.identity.auth,
+        AuthMethod::Password { save: true }
+    ));
+    assert_eq!(built.writes.len(), 1);
+    assert_eq!(built.writes[0].1.as_deref(), Some("p@ss"));
+}
+
+/// 口令框留空：模板标记为不保存，并产出删除指令清掉旧口令，连接时再询问。
+#[test]
+fn inline_editor_blank_password_deletes_secret() {
+    let built = form(AuthChoice::Password, false, "", "");
+    assert!(matches!(
+        built.identity.auth,
+        AuthMethod::Password { save: false }
+    ));
+    assert_eq!(built.writes.len(), 1);
+    assert!(built.writes[0].1.is_none());
+}

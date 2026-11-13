@@ -1,6 +1,7 @@
 //! 会话表单中出站代理（Direct, SOCKS5, HTTP, FollowGlobal）配置渲染模块。
 
 use super::SessionFormView;
+use super::ssh::number_form_field;
 use super::types::{ProxyChoice, SessionForm};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
@@ -70,8 +71,9 @@ pub(crate) fn render_proxy_section(
                         proxy_host,
                         p,
                     )))
-                    .child(div().w(px(110.0)).child(crate::widgets::form_field(
+                    .child(div().w(rems(8.5)).child(number_form_field(
                         rust_i18n::t!("form.proxy_port").to_string(),
+                        false,
                         proxy_port,
                         p,
                     ))),

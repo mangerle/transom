@@ -7,9 +7,9 @@
 use super::entity::SessionFormView;
 use super::local::render_local_fields;
 use super::serial::render_serial_fields;
-use super::ssh::render_ssh_fields;
-use super::telnet::render_telnet_fields;
-use super::types::{ConnectionChoice, SessionForm};
+use super::ssh::{render_ssh_basic_fields, render_ssh_network_fields};
+use super::telnet::{render_telnet_basic_fields, render_telnet_network_fields};
+use super::types::{ConnectionChoice, SessionForm, SessionFormSection};
 use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -26,6 +26,7 @@ use transom_ui_icons::UiIcon;
 mod basic;
 mod connection;
 mod files;
+mod forward;
 mod terminal;
 
 impl SessionFormView {
@@ -81,7 +82,51 @@ impl SessionFormView {
         footer_block.into_any_element()
     }
 
-    /// 弹窗主体：基本信息、连接类型与按连接类型展开的字段。
+    /// 渲染当前选中的右侧分组内容。
+    fn render_section_content(
+        &self,
+        form: &SessionForm,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> AnyElement {
+        match form.section {
+            SessionFormSection::Basic => {
+                let header_row = self.render_session_basic_header_row(form, p, cx);
+                let protocol_fields = match form.connection {
+                    ConnectionChoice::Ssh | ConnectionChoice::Mosh => {
+                        render_ssh_basic_fields(form, cx, p)
+                    }
+                    ConnectionChoice::Local => render_local_fields(form, cx, p),
+                    ConnectionChoice::Serial => render_serial_fields(form, cx, p),
+                    ConnectionChoice::Telnet => render_telnet_basic_fields(form, cx, p),
+                };
+                v_flex()
+                    .gap_3()
+                    .child(header_row)
+                    .child(protocol_fields)
+                    .into_any_element()
+            }
+            SessionFormSection::Network => match form.connection {
+                ConnectionChoice::Ssh | ConnectionChoice::Mosh => {
+                    render_ssh_network_fields(form, cx, p)
+                }
+                ConnectionChoice::Telnet => render_telnet_network_fields(form, cx, p),
+                ConnectionChoice::Local | ConnectionChoice::Serial => div()
+                    .p_3()
+                    .rounded(p.radius.md)
+                    .bg(p.muted)
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("form.network_not_applicable").to_string())
+                    .into_any_element(),
+            },
+            SessionFormSection::Terminal => self.render_session_terminal_section(form, p, cx),
+            SessionFormSection::Forward => self.render_session_forward_section(form, p, cx),
+            SessionFormSection::Startup => self.render_session_startup_section(form, p),
+        }
+    }
+
+    /// 弹窗主体：顶部全宽协议栏 + 下方左右双栏（左侧分组导航、右侧对应表单区）。
     pub(crate) fn render_body(
         &self,
         _window: &mut Window,
@@ -97,38 +142,42 @@ impl SessionFormView {
             rust_i18n::t!("form.new_title").to_string()
         };
 
-        let basic_card = self.render_session_basic_card(form, p, cx);
-        let connection_type_card = self.render_session_connection_type_card(form, p, cx);
+        let protocol_bar = self.render_session_connection_type_bar(form, p, cx);
+        let sidebar = self.render_session_sidebar(form, p, cx);
+        let section_title = rust_i18n::t!(form.section.title_key()).to_string();
+        let section_body = self.render_section_content(form, cx, p);
 
-        let mut content = v_flex()
+        let right_pane = v_flex()
             .id(ElementId::Name("session-form-body".into()))
-            .max_h(px(460.0))
+            .flex_1()
+            .min_w_0()
+            .h_full()
             .overflow_y_scroll()
+            .pr_1()
             .gap_3()
-            .child(basic_card)
-            .child(connection_type_card);
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.foreground)
+                    .child(section_title),
+            )
+            .child(section_body);
 
-        match form.connection {
-            ConnectionChoice::Ssh => {
-                content = content.child(render_ssh_fields(form, cx, p));
-            }
-            ConnectionChoice::Local => {
-                content = content.child(render_local_fields(form, cx, p));
-            }
-            ConnectionChoice::Mosh => {
-                content = content
-                    .child(render_ssh_fields(form, cx, p))
-                    .child(self.render_mosh_specific_card(form, p));
-            }
-            ConnectionChoice::Serial => {
-                content = content.child(render_serial_fields(form, cx, p));
-            }
-            ConnectionChoice::Telnet => {
-                content = content.child(render_telnet_fields(form, cx, p));
-            }
-        }
-
-        content = content.child(self.render_session_terminal_attributes_card(form, p, cx));
+        let content = v_flex()
+            .w_full()
+            .gap_4()
+            .child(protocol_bar)
+            .child(
+                h_flex()
+                    .w_full()
+                    .h(rems(27.5))
+                    .gap_4()
+                    .items_start()
+                    .child(sidebar)
+                    .child(right_pane),
+            )
+            .into_any_element();
 
         let footer = self.render_footer(form, cx, p);
 

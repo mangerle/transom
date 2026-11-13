@@ -137,7 +137,7 @@ pub(crate) mod dialog {
     pub const FILTER: f32 = 35.0;
     pub const SEARCH: f32 = 35.0;
     pub const EDITOR: f32 = 26.25;
-    pub const SESSION_FORM: f32 = 38.75;
+    pub const SESSION_FORM: f32 = 47.5;
     pub const FOLDER_FORM: f32 = 30.0;
     pub const BATCH_EDIT: f32 = 35.0;
     pub const SNIPPET_FORM: f32 = 26.25;

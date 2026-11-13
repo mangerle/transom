@@ -71,6 +71,10 @@ impl SessionForm {
         session.icon = self.icon;
         session.color = self.color;
         session.block_view = self.block_view;
+        session.forwards = match self.connection {
+            ConnectionChoice::Ssh => self.forwards.clone(),
+            _ => Vec::new(),
+        };
         // 表单保存是一次明确的用户修改：刷新时间戳供多端合并裁决。
         session.touch();
         if self.base.is_none() {
@@ -274,7 +278,7 @@ impl SessionForm {
             .to_string();
         let auth = match self.auth {
             AuthChoice::Password => AuthMethod::Password {
-                save: self.save_password,
+                save: !self.password.read(cx).value().is_empty(),
             },
             AuthChoice::PrivateKey => AuthMethod::PrivateKey {
                 path: PathBuf::from(&key_path),
@@ -285,7 +289,7 @@ impl SessionForm {
                         PathBuf::from(crate::keys::expand_home(&raw).to_string_lossy().to_string())
                     })
                 },
-                save_passphrase: self.save_passphrase,
+                save_passphrase: !self.passphrase.read(cx).value().is_empty(),
             },
             AuthChoice::Agent => AuthMethod::Agent,
         };
@@ -462,12 +466,12 @@ impl SessionForm {
 
         let auth = match self.auth {
             AuthChoice::Password => AuthMethod::Password {
-                save: self.save_password,
+                save: !self.password.read(cx).value().is_empty(),
             },
             AuthChoice::PrivateKey => AuthMethod::PrivateKey {
                 path: PathBuf::from(&key_path),
                 cert_path: None,
-                save_passphrase: self.save_passphrase,
+                save_passphrase: !self.passphrase.read(cx).value().is_empty(),
             },
             AuthChoice::Agent => AuthMethod::Agent,
         };

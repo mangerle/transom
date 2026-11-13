@@ -6,7 +6,8 @@ use crate::palette::localized_error;
 use crate::session_form::SessionFormView;
 use gpui_kit::*;
 use transom_core::{
-    AppError, Connection, ErrorCode, SecretKey, SecretKind, SecretStore, Session, SessionId,
+    AppError, Connection, ErrorCode, SecretKey, SecretKind, SecretOwner, SecretStore, Session,
+    SessionId,
 };
 use zeroize::Zeroizing;
 
@@ -19,6 +20,7 @@ impl AppState {
                 id: identity.id,
                 name: identity.name.clone(),
                 username: identity.username.clone(),
+                auth: identity.auth.clone(),
             })
             .collect()
     }
@@ -240,7 +242,69 @@ impl AppShell {
             crate::session_form::SessionFormEvent::RefreshSerialPorts => {
                 self.refresh_serial_ports(window, cx);
             }
+            crate::session_form::SessionFormEvent::SaveIdentity { built } => {
+                self.apply_session_form_save_identity(built, cx);
+            }
+            crate::session_form::SessionFormEvent::PrefillIdentitySecrets { id, fields } => {
+                crate::app::prefill_secret_fields(
+                    SecretOwner::Identity(*id),
+                    fields.clone(),
+                    self.state.services.secret_store.clone(),
+                    window,
+                    cx,
+                );
+            }
         }
+    }
+
+    /// 保存会话表单内联新建或编辑的账户模板，落盘并后台写入钥匙串。
+    fn apply_session_form_save_identity(
+        &mut self,
+        built: &crate::identity::BuiltIdentity,
+        cx: &mut Context<Self>,
+    ) {
+        let identity = built.identity.clone();
+        let identity_id = identity.id;
+        if let Some(existing) = self
+            .state
+            .catalog
+            .identities
+            .iter_mut()
+            .find(|item| item.id == identity_id)
+        {
+            *existing = identity;
+        } else {
+            self.state.catalog.identities.push(identity);
+        }
+        self.state.persist_catalog();
+
+        let secret_writes: Vec<SecretWrite> = built
+            .writes
+            .iter()
+            .map(|(key, value)| match value {
+                Some(secret) => SecretWrite::Set(key.clone(), Zeroizing::new(secret.clone())),
+                None => SecretWrite::Delete(key.clone()),
+            })
+            .collect();
+        if !secret_writes.is_empty() {
+            let secret_store = self.state.services.secret_store.clone();
+            cx.spawn(async move |this, cx| {
+                let error = cx
+                    .background_executor()
+                    .spawn(
+                        async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) },
+                    )
+                    .await;
+                let _ = this.update(cx, |this, cx| {
+                    if let Some(error) = error {
+                        this.state.set_error(localized_error(&error));
+                        cx.notify();
+                    }
+                });
+            })
+            .detach();
+        }
+        cx.notify();
     }
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。

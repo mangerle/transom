@@ -14,11 +14,19 @@
 //! 事件只携带结果，外壳不能回读实体补数据；保存成功即关闭，失败则保留
 //! 弹窗并由实体自己写错误文案，两条路径必须各自保持一致。
 
-use super::types::{BuiltSession, ConnectionChoice, SessionForm, SessionFormInit};
+use super::init::text_input;
+use super::types::{
+    AuthChoice, BuiltSession, ConnectionChoice, IdentityOption, SessionForm, SessionFormInit,
+    SessionFormSection,
+};
+use crate::identity::{BuiltIdentity, IdentityEditState, build_identity_from_edit};
 use crate::palette::localized_error;
-use gpui_kit::component::input::InputEvent;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
-use transom_core::{AppError, FolderInheritedDefaults, SerialPortDescriptor, SessionId};
+use transom_core::{
+    AppError, AuthMethod, FolderInheritedDefaults, IdentityId, SecretKind, SerialPortDescriptor,
+    SessionId,
+};
 
 /// 会话表单交给外壳处理的意图。
 ///
@@ -38,6 +46,13 @@ pub(crate) enum SessionFormEvent {
     SelectFolder { path: String },
     /// 重新枚举系统串口；数据由外壳注入，实体不直接访问系统。
     RefreshSerialPorts,
+    /// 内联新建或编辑账户（凭据模板）完成；由外壳写入目录与钥匙串。
+    SaveIdentity { built: Box<BuiltIdentity> },
+    /// 打开内联账户编辑时请求外壳后台回填已保存的凭据口令。
+    PrefillIdentitySecrets {
+        id: IdentityId,
+        fields: Vec<(SecretKind, Entity<InputState>)>,
+    },
 }
 
 impl EventEmitter<SessionFormEvent> for SessionFormView {}
@@ -89,9 +104,98 @@ impl SessionFormView {
         }
     }
 
+    /// 供同模块子视图读写表单状态（转发规则编辑需要同时访问窗口与上下文）。
+    pub(super) fn state_mut(&mut self) -> Option<&mut SessionForm> {
+        self.state.as_mut()
+    }
+
     /// 回写文件夹候选弹层的展开状态。
     pub(crate) fn set_folder_open(&mut self, open: bool, cx: &mut Context<Self>) {
         self.edit(cx, |form| form.folder_open = open);
+    }
+
+    /// 回写图标与颜色选择弹层的展开状态。
+    pub(crate) fn set_icon_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.icon_open = open);
+    }
+
+    /// 切换左侧配置分组。
+    pub(crate) fn set_section(&mut self, section: SessionFormSection, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.section = section);
+    }
+
+    /// 打开内联账户（凭据模板）编辑器。
+    pub(crate) fn open_identity_editor(
+        &mut self,
+        id: Option<IdentityId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(form) = self.state.as_mut() else {
+            return;
+        };
+        let existing = id.and_then(|target| {
+            form.identities
+                .iter()
+                .find(|option| option.id == target)
+                .cloned()
+        });
+        let edit = new_identity_edit_state(existing.as_ref(), window, cx);
+        let edit_id = edit.base;
+        let fields = vec![
+            (SecretKind::Password, edit.password.clone()),
+            (SecretKind::KeyPassphrase, edit.passphrase.clone()),
+        ];
+        form.identity_edit = Some(edit);
+        if let Some(id) = edit_id {
+            cx.emit(SessionFormEvent::PrefillIdentitySecrets { id, fields });
+        }
+        cx.notify();
+    }
+
+    /// 取消内联账户编辑器。
+    pub(crate) fn cancel_identity_editor(&mut self, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.identity_edit = None);
+    }
+
+    /// 校验并提交内联账户编辑器。
+    pub(crate) fn save_identity_editor(&mut self, cx: &mut Context<Self>) {
+        let Some(form) = self.state.as_mut() else {
+            return;
+        };
+        let Some(edit) = form.identity_edit.as_mut() else {
+            return;
+        };
+        edit.save_password = !edit.password.read(cx).value().is_empty();
+        edit.save_passphrase = !edit.passphrase.read(cx).value().is_empty();
+        match build_identity_from_edit(edit, cx) {
+            Ok(built) => {
+                let option = IdentityOption {
+                    id: built.identity.id,
+                    name: built.identity.name.clone(),
+                    username: built.identity.username.clone(),
+                    auth: built.identity.auth.clone(),
+                };
+                if let Some(existing) = form.identities.iter_mut().find(|item| item.id == option.id)
+                {
+                    *existing = option;
+                } else {
+                    form.identities.push(option);
+                }
+                form.identity_choice = Some(built.identity.id);
+                form.identity_edit = None;
+                cx.emit(SessionFormEvent::SaveIdentity {
+                    built: Box::new(built),
+                });
+                cx.notify();
+            }
+            Err(error) => {
+                if let Some(edit) = form.identity_edit.as_mut() {
+                    edit.error = Some(error);
+                }
+                cx.notify();
+            }
+        }
     }
 
     /// 切换连接类型；切到串口且尚无设备清单时请求外壳重新枚举。
@@ -147,8 +251,8 @@ impl SessionFormView {
     fn build(&mut self, cx: &mut Context<Self>) -> Option<(BuiltSession, bool, bool)> {
         let (built, save_password, save_passphrase) = {
             let form = self.state.as_mut()?;
-            let save_password = form.save_password;
-            let save_passphrase = form.save_passphrase;
+            let save_password = !form.password.read(cx).value().is_empty();
+            let save_passphrase = !form.passphrase.read(cx).value().is_empty();
             match form.build_session(cx) {
                 Ok(built) => (built, save_password, save_passphrase),
                 Err(error) => {
@@ -250,5 +354,60 @@ impl SessionFormView {
         .detach();
         self.state = Some(form);
         cx.notify();
+    }
+}
+
+/// 根据已有账户候选（或空模板）初始化内联账户编辑器状态。
+fn new_identity_edit_state(
+    existing: Option<&IdentityOption>,
+    window: &mut Window,
+    cx: &mut Context<SessionFormView>,
+) -> IdentityEditState {
+    let (auth, key_path, save_password, save_passphrase) = match existing.map(|item| &item.auth) {
+        Some(AuthMethod::PrivateKey {
+            path,
+            save_passphrase,
+            ..
+        }) => (
+            AuthChoice::PrivateKey,
+            path.display().to_string(),
+            false,
+            *save_passphrase,
+        ),
+        Some(AuthMethod::Password { save }) => (AuthChoice::Password, String::new(), *save, false),
+        Some(AuthMethod::Agent) => (AuthChoice::Agent, String::new(), false, false),
+        _ => (AuthChoice::Password, String::new(), true, false),
+    };
+    IdentityEditState {
+        base: existing.map(|item| item.id),
+        name: text_input(
+            window,
+            cx,
+            existing.map(|item| item.name.as_str()).unwrap_or(""),
+            "",
+        ),
+        username: text_input(
+            window,
+            cx,
+            existing.map(|item| item.username.as_str()).unwrap_or(""),
+            "root",
+        ),
+        auth,
+        key_path: text_input(window, cx, &key_path, "~/.ssh/id_ed25519"),
+        password: text_input(
+            window,
+            cx,
+            "",
+            &rust_i18n::t!("form.password_optional_placeholder"),
+        ),
+        passphrase: text_input(
+            window,
+            cx,
+            "",
+            &rust_i18n::t!("form.passphrase_optional_placeholder"),
+        ),
+        save_password,
+        save_passphrase,
+        error: None,
     }
 }

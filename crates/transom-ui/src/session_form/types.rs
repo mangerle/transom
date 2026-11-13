@@ -4,11 +4,72 @@ use gpui_kit::App;
 use gpui_kit::Entity;
 use gpui_kit::component::input::{InputState, TextareaState};
 use transom_core::{
-    BlockViewOverride, Connection, IdentityId, OutboundProxy, SerialDataBits, SerialFlowControl,
-    SerialParity, SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon,
-    SessionId, TextEncoding,
+    AuthMethod, BlockViewOverride, Connection, ForwardRule, IdentityId, OutboundProxy,
+    SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor, SerialStopBits, Session,
+    SessionColor, SessionIcon, SessionId, TextEncoding,
 };
 use zeroize::Zeroizing;
+
+/// 会话表单左侧分类导航页签。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum SessionFormSection {
+    #[default]
+    Basic,
+    Network,
+    Terminal,
+    Forward,
+    Startup,
+}
+
+impl SessionFormSection {
+    pub(crate) const ALL: [Self; 5] = [
+        Self::Basic,
+        Self::Network,
+        Self::Terminal,
+        Self::Forward,
+        Self::Startup,
+    ];
+
+    pub(crate) const fn title_key(self) -> &'static str {
+        match self {
+            Self::Basic => "form.section_basic",
+            Self::Network => "form.section_network",
+            Self::Terminal => "form.section_terminal",
+            Self::Forward => "form.section_forward",
+            Self::Startup => "form.section_startup",
+        }
+    }
+
+    pub(crate) const fn slug(self) -> &'static str {
+        match self {
+            Self::Basic => "basic",
+            Self::Network => "network",
+            Self::Terminal => "terminal",
+            Self::Forward => "forward",
+            Self::Startup => "startup",
+        }
+    }
+}
+
+/// 会话表单内新建转发规则的模式选项。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum SessionForwardKind {
+    #[default]
+    Local,
+    Remote,
+    Dynamic,
+}
+
+/// 会话表单内端口转发页签的新增规则草稿。
+pub(crate) struct SessionForwardDraft {
+    pub kind: SessionForwardKind,
+    pub name: Entity<InputState>,
+    pub bind_host: Entity<InputState>,
+    pub bind_port: Entity<InputState>,
+    pub target_host: Entity<InputState>,
+    pub target_port: Entity<InputState>,
+    pub error: Option<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AuthChoice {
@@ -54,12 +115,16 @@ pub(crate) struct SessionFormInit {
 
 pub(crate) struct SessionForm {
     pub base: Option<Session>,
+    /// 当前选中的左侧分类导航页签。
+    pub section: SessionFormSection,
     pub name: Entity<InputState>,
     /// 以 `/` 分隔的文件夹路径，保存时解析为稳定的文件夹节点。
     pub folder_path: Entity<InputState>,
     /// 文件夹候选下拉的展开状态，由 Popover 的受控开关回写；开始键入
     /// 路径时收起（见 `install_session_form`）。
     pub folder_open: bool,
+    /// 图标与颜色选择弹层的展开状态。
+    pub icon_open: bool,
     /// 可选的文件夹路径清单，供下拉快速选择；不随输入过滤。
     pub folder_options: Vec<String>,
     pub connection: ConnectionChoice,
@@ -117,6 +182,12 @@ pub(crate) struct SessionForm {
     pub identities: Vec<IdentityOption>,
     /// 当前选用的凭据模板；`None` 表示用本会话自己的用户名与认证方式。
     pub identity_choice: Option<IdentityId>,
+    /// 表单内联添加或编辑账户模板的状态。
+    pub identity_edit: Option<crate::identity::IdentityEditState>,
+    /// 会话关联的端口转发规则列表。
+    pub forwards: Vec<ForwardRule>,
+    /// 端口转发页签内的新增规则草稿。
+    pub forward_draft: SessionForwardDraft,
     /// 可选的跳板机会话清单（仅 SSH，已排除自身与会成环的候选）。
     pub jump_options: Vec<JumpOption>,
     /// 当前选用的跳板机；`None` 表示直连。
@@ -182,12 +253,14 @@ impl SessionForm {
 
 /// 会话表单里的一个凭据模板选项。
 ///
-/// 带上用户名是因为选中模板后要用它填进连接参数：表单无法访问目录，
-/// 让调用方把需要的两个字段一起给全，比在表单里再查一次目录更直接。
+/// 带上用户名与认证方式是因为选中模板后要用它填进连接参数或打开内联编辑：
+/// 表单无法访问目录，让调用方把需要的字段一起给全，比在表单里再查一次目录更直接。
+#[derive(Clone)]
 pub(crate) struct IdentityOption {
     pub id: IdentityId,
     pub name: String,
     pub username: String,
+    pub auth: AuthMethod,
 }
 
 /// 会话表单里的一个跳板机选项。
@@ -270,6 +343,8 @@ pub(crate) struct SessionFormSeed {
     pub available_shells: Vec<transom_platform::shell::ShellOption>,
     /// 可选凭据模板清单；表单只认这份快照，不回查目录。
     pub identities: Vec<IdentityOption>,
+    /// 会话既有端口转发规则。
+    pub forwards: Vec<ForwardRule>,
     /// 可选跳板机清单；同样只认快照。
     pub jump_options: Vec<JumpOption>,
     pub folder_options: Vec<String>,

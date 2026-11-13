@@ -1,8 +1,9 @@
 //! 会话表单初始状态配置、跳板链路拓扑计算与文件夹默认值应用。
 
-use super::defaults::{default_username, seed_from_init};
+use super::defaults::seed_from_init;
 use super::types::{
-    AuthChoice, SessionForm, SessionFormInit, SessionFormSeed, SessionTargetDefaults,
+    AuthChoice, SessionForm, SessionFormInit, SessionFormSection, SessionFormSeed,
+    SessionForwardDraft, SessionForwardKind, SessionTargetDefaults,
 };
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::{AppContext, Context, Entity, Window};
@@ -36,6 +37,7 @@ pub(super) struct SessionFormInputs {
     proxy_port: Entity<InputState>,
     proxy_username: Entity<InputState>,
     proxy_password: Entity<InputState>,
+    forward_draft: SessionForwardDraft,
 }
 
 impl SessionFormInputs {
@@ -45,6 +47,20 @@ impl SessionFormInputs {
         seed: &SessionFormSeed,
     ) -> Self {
         let target = &seed.target;
+        let forward_draft = SessionForwardDraft {
+            kind: SessionForwardKind::Local,
+            name: text_input(window, cx, "", &rust_i18n::t!("forward.name")),
+            bind_host: text_input(window, cx, "127.0.0.1", &rust_i18n::t!("forward.bind_host")),
+            bind_port: number_input(window, cx, "", "8080", (1.0, 65535.0, 1.0)),
+            target_host: text_input(
+                window,
+                cx,
+                "127.0.0.1",
+                &rust_i18n::t!("forward.target_host"),
+            ),
+            target_port: number_input(window, cx, "", "80", (1.0, 65535.0, 1.0)),
+            error: None,
+        };
         Self {
             name: text_input(
                 window,
@@ -56,22 +72,21 @@ impl SessionFormInputs {
                 window,
                 cx,
                 &seed.folder_path,
-                &rust_i18n::t!("form.folder_placeholder"),
+                &rust_i18n::t!("form.group_none"),
             ),
-            host: text_input(
-                window,
-                cx,
-                &target.host,
-                &rust_i18n::t!("form.host_placeholder"),
-            ),
-            port: text_input(window, cx, &target.port, ""),
+            host: text_input(window, cx, &target.host, "192.168.1.100"),
+            port: number_input(window, cx, &target.port, "22", (1.0, 65535.0, 1.0)),
             username: text_input(
                 window,
                 cx,
                 &target.username,
                 &rust_i18n::t!("form.username_placeholder"),
             ),
-            password: password_input(window, cx, &rust_i18n::t!("form.password_placeholder")),
+            password: password_input(
+                window,
+                cx,
+                &rust_i18n::t!("form.password_optional_placeholder"),
+            ),
             key_path: text_input(
                 window,
                 cx,
@@ -84,7 +99,11 @@ impl SessionFormInputs {
                 &seed.cert_path,
                 &rust_i18n::t!("form.cert_placeholder"),
             ),
-            passphrase: password_input(window, cx, &rust_i18n::t!("form.passphrase_placeholder")),
+            passphrase: password_input(
+                window,
+                cx,
+                &rust_i18n::t!("form.passphrase_optional_placeholder"),
+            ),
             serial_port: text_input(
                 window,
                 cx,
@@ -121,8 +140,14 @@ impl SessionFormInputs {
             ),
             local_env: cx
                 .new(|cx| TextareaState::new(window, cx).default_value(seed.local_env.clone())),
-            connect_timeout: text_input(window, cx, &seed.connect_timeout, "15"),
-            keepalive: text_input(window, cx, &seed.keepalive, "30"),
+            connect_timeout: number_input(
+                window,
+                cx,
+                &seed.connect_timeout,
+                "15",
+                (1.0, 120.0, 1.0),
+            ),
+            keepalive: number_input(window, cx, &seed.keepalive, "30", (0.0, 3600.0, 5.0)),
             mosh_server_path: text_input(window, cx, &target.mosh_server_path, "mosh-server"),
             mosh_server_port: text_input(
                 window,
@@ -137,7 +162,7 @@ impl SessionFormInputs {
                 &rust_i18n::t!("form.wol_mac_placeholder"),
             ),
             proxy_host: text_input(window, cx, &target.proxy_host, "127.0.0.1"),
-            proxy_port: text_input(window, cx, &target.proxy_port, "1080"),
+            proxy_port: number_input(window, cx, &target.proxy_port, "1080", (1.0, 65535.0, 1.0)),
             proxy_username: text_input(
                 window,
                 cx,
@@ -150,6 +175,7 @@ impl SessionFormInputs {
                 &target.proxy_password,
                 &rust_i18n::t!("form.proxy_password_placeholder"),
             ),
+            forward_draft,
         }
     }
 }
@@ -208,7 +234,7 @@ impl SessionForm {
         }
         if let Some(username) = &defaults.username {
             let current = self.username.read(cx).value();
-            if current.is_empty() || current == default_username() {
+            if current.is_empty() {
                 self.username
                     .update(cx, |state, cx| state.set_value(username, window, cx));
             }
@@ -255,6 +281,7 @@ impl SessionForm {
             local_env: _,
             available_shells,
             identities,
+            forwards,
             jump_options,
             folder_options,
             global_proxy,
@@ -272,9 +299,11 @@ impl SessionForm {
         } = target;
         Self {
             base,
+            section: SessionFormSection::Basic,
             name: inputs.name,
             folder_path: inputs.folder_path,
             folder_open: false,
+            icon_open: false,
             folder_options,
             connection,
             host: inputs.host,
@@ -313,6 +342,9 @@ impl SessionForm {
             wol_mac: inputs.wol_mac,
             identities,
             identity_choice,
+            identity_edit: None,
+            forwards,
+            forward_draft: inputs.forward_draft,
             jump_options,
             jump_choice,
             proxy_choice,
@@ -340,6 +372,25 @@ pub(crate) fn text_input(
     let placeholder = placeholder.to_string();
     cx.new(|cx| {
         InputState::new(window, cx)
+            .default_value(value)
+            .placeholder(placeholder)
+    })
+}
+
+fn number_input(
+    window: &mut Window,
+    cx: &mut Context<impl Sized>,
+    value: &str,
+    placeholder: &str,
+    (min, max, step): (f64, f64, f64),
+) -> Entity<InputState> {
+    let value = value.to_string();
+    let placeholder = placeholder.to_string();
+    cx.new(|cx| {
+        InputState::new(window, cx)
+            .min(min)
+            .max(max)
+            .step(step)
             .default_value(value)
             .placeholder(placeholder)
     })

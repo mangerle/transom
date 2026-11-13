@@ -251,7 +251,7 @@ impl SettingsView {
 }
 
 /// 从编辑态读取字段并执行校验，返回可写入目录的模板。
-fn build_identity_from_edit(
+pub(crate) fn build_identity_from_edit(
     edit: &crate::identity::IdentityEditState,
     cx: &gpui_kit::App,
 ) -> Result<super::types::BuiltIdentity, String> {

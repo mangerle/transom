@@ -6,4 +6,5 @@ mod tests;
 mod types;
 mod view;
 
-pub(crate) use types::IdentityEditState;
+pub(crate) use ops::build_identity_from_edit;
+pub(crate) use types::{BuiltIdentity, IdentityEditState};

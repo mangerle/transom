@@ -309,6 +309,69 @@ form:
   edit_title:
     en: Edit Session
     zh-CN: 编辑会话
+  section_basic:
+    en: Basic Info
+    zh-CN: 基本信息
+  section_network:
+    en: Network & Proxy
+    zh-CN: 网络与代理
+  section_terminal:
+    en: Terminal Settings
+    zh-CN: 终端设置
+  section_forward:
+    en: Port Forwarding
+    zh-CN: 转发
+  section_startup:
+    en: Post-login Commands
+    zh-CN: 登录后命令
+  connection_name:
+    en: Connection Name
+    zh-CN: 连接名称
+  group_none:
+    en: None
+    zh-CN: 无
+  account:
+    en: Account
+    zh-CN: 账户
+  account_manual:
+    en: Manual input
+    zh-CN: 手动填写
+  account_add:
+    en: Add Account
+    zh-CN: 添加账户
+  account_new_title:
+    en: Add Account
+    zh-CN: 添加账户
+  account_edit_title:
+    en: Edit Account
+    zh-CN: 编辑账户
+  account_using_hint:
+    en: 'Using credential template "%{name}" (username: %{username})'
+    zh-CN: '当前使用凭据模板「%{name}」（用户名：%{username}）'
+  password_optional:
+    en: Password (optional)
+    zh-CN: 密码（可选）
+  password_optional_placeholder:
+    en: Enter password, or leave blank to ask on connect
+    zh-CN: 输入密码，留空则连接时询问
+  passphrase_optional:
+    en: Key passphrase (optional)
+    zh-CN: 私钥口令（可选）
+  passphrase_optional_placeholder:
+    en: Enter passphrase, or leave blank to ask on connect
+    zh-CN: 输入口令，留空则连接时询问
+  agent_hint:
+    en: Authenticate through the local SSH agent without storing private keys or passwords in this session.
+    zh-CN: 通过本机 SSH Agent 完成认证，本会话无需单独指定私钥或密码。
+  network_not_applicable:
+    en: Network and proxy settings do not apply to the current connection type.
+    zh-CN: 当前连接类型无需配置网络与代理参数。
+  forward_ssh_only:
+    en: Port forwarding rules are only supported for SSH connections.
+    zh-CN: 端口转发规则仅在 SSH 连接方式下可用。
+  forward_auto_start:
+    en: Auto start on connect
+    zh-CN: 连接时自动启动
   name:
     en: Name
     zh-CN: 名称

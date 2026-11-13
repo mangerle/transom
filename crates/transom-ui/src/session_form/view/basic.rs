@@ -4,25 +4,27 @@ use super::*;
 use crate::session_form::SessionFormEvent;
 
 impl SessionFormView {
-    pub(super) fn render_session_basic_card(
+    /// “基本信息”顶行：左侧紧凑“图标”选择按钮 + 中间“连接名称”输入框 + 右侧“分组”下拉。
+    pub(super) fn render_session_basic_header_row(
         &self,
         form: &SessionForm,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        v_flex()
-            .gap_3()
+        h_flex()
+            .gap_2p5()
+            .items_end()
+            .child(self.render_session_icon_picker_button(form, p, cx))
+            .child(div().flex_1().child(crate::widgets::form_field(
+                rust_i18n::t!("form.connection_name").to_string(),
+                form.name.clone(),
+                p,
+            )))
             .child(
-                h_flex()
-                    .gap_3()
-                    .child(div().flex_1().child(crate::widgets::form_field(
-                        rust_i18n::t!("form.name").to_string(),
-                        form.name.clone(),
-                        p,
-                    )))
-                    .child(div().flex_1().child(self.render_folder_field(form, p, cx))),
+                div()
+                    .w(rems(12.5))
+                    .child(self.render_folder_field(form, p, cx)),
             )
-            .child(self.render_session_appearance(form.icon, form.color, p, cx))
             .into_any_element()
     }
 
