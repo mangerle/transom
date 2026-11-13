@@ -131,9 +131,11 @@ pub fn encrypt_document(
         .map_err(|detail| AppError::with_detail(ErrorCode::Configuration, detail))?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
         .map_err(|_| AppError::with_detail(ErrorCode::Configuration, "初始化备份加密器失败"))?;
+    let nonce_value = XNonce::try_from(nonce.as_slice())
+        .map_err(|_| AppError::with_detail(ErrorCode::Configuration, "备份随机数长度异常"))?;
     let ciphertext = cipher
         .encrypt(
-            XNonce::from_slice(&nonce),
+            &nonce_value,
             Payload {
                 msg: &plaintext,
                 aad: AAD,
@@ -182,10 +184,11 @@ pub fn decrypt_document(bytes: &[u8], passphrase: &str) -> Result<BackupDocument
     let key = crate::kdf::derive_key(passphrase, &salt)
         .map_err(|detail| AppError::with_detail(ErrorCode::Configuration, detail))?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..]).map_err(|_| invalid_backup())?;
+    let nonce_value = XNonce::try_from(nonce.as_slice()).map_err(|_| invalid_backup())?;
     let plaintext = Zeroizing::new(
         cipher
             .decrypt(
-                XNonce::from_slice(&nonce),
+                &nonce_value,
                 Payload {
                     msg: &ciphertext,
                     aad: AAD,

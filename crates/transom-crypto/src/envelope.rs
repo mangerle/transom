@@ -45,10 +45,14 @@ pub fn seal(plaintext: &[u8], passphrase: &str) -> Result<Vec<u8>, AppError> {
     let key = crate::kdf::derive_key(passphrase, &salt)
         .map_err(|detail| AppError::with_detail(ErrorCode::CloudSyncFailed, detail))?;
     let nonce_bytes = random_bytes::<NONCE_LEN>()?;
-    let cipher = XChaCha20Poly1305::new(key.as_ref().into());
+    let cipher = XChaCha20Poly1305::new_from_slice(key.as_ref()).map_err(|_| {
+        AppError::with_detail(ErrorCode::CloudSyncFailed, "初始化同步信封加密器失败")
+    })?;
+    let nonce = XNonce::try_from(nonce_bytes.as_slice())
+        .map_err(|_| AppError::with_detail(ErrorCode::CloudSyncFailed, "同步信封随机数长度异常"))?;
     let ciphertext = cipher
         .encrypt(
-            XNonce::from_slice(&nonce_bytes),
+            &nonce,
             Payload {
                 msg: plaintext,
                 aad: AAD,
@@ -93,10 +97,14 @@ pub fn open(envelope: &[u8], passphrase: &str) -> Result<Zeroizing<Vec<u8>>, App
     let ciphertext = &envelope[ENVELOPE_HEADER_LEN..];
     let key = crate::kdf::derive_key(passphrase, salt)
         .map_err(|detail| AppError::with_detail(ErrorCode::CloudSyncFailed, detail))?;
-    let cipher = XChaCha20Poly1305::new(key.as_ref().into());
+    let cipher = XChaCha20Poly1305::new_from_slice(key.as_ref()).map_err(|_| {
+        AppError::with_detail(ErrorCode::CloudSyncFailed, "初始化同步信封解密器失败")
+    })?;
+    let nonce = XNonce::try_from(nonce)
+        .map_err(|_| AppError::with_detail(ErrorCode::CloudSyncFailed, "同步信封随机数长度异常"))?;
     let plaintext = cipher
         .decrypt(
-            XNonce::from_slice(nonce),
+            &nonce,
             Payload {
                 msg: ciphertext,
                 aad: AAD,

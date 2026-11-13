@@ -54,14 +54,14 @@ uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
 anyhow = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "fs", "sync", "time", "macros", "process"] }
-russh = "0.64"
+russh = "0.65"
 russh-sftp = "3.0"
 alacritty_terminal = "0.26"
 portable-pty = "0.9"
 flume = "0.12"
 directories = "6"
 keyring = "4.2"
-parking_lot = "0.12"
+parking_lot = "0.13.0"
 regex = "1"
 # 日志统一走 log 门面：gpui/russh 等上游依赖本身就调用 log，接上门面后它们的内部
 # 日志也会落进同一份文件，排查时不必再猜是应用没打还是上游没打。
@@ -73,7 +73,7 @@ futures = "0.3"
 zeroize = "1"
 async-trait = "0.1"
 rust-i18n = "4.2"
-rfd = "0.15"
+rfd = "0.18.0"
 open = { version = "5.4", features = ["shellexecute-on-windows"] }
 notify-rust = "4"
 # 同步子进程的跨平台进程组/Job Object 管理：Unix 使用进程组，Windows
@@ -81,7 +81,7 @@ notify-rust = "4"
 command-group = { version = "5.0", features = ["with-tokio"] }
 # 宿主资源与进程信息：跨 Linux/macOS/Windows 统一采集 CPU、内存、
 # 磁盘、网络与进程，避免在业务层解析 /proc 或调用平台 shell。
-sysinfo = { version = "0.31", default-features = false, features = [
+sysinfo = { version = "0.40.3", default-features = false, features = [
     "system",
     "disk",
     "network",
@@ -93,7 +93,7 @@ windows = { version = "0.62", default-features = false }
 chrono = "0.4"
 globset = "0.4"
 # 文件行差异：Myers 算法实现，core 产出 hunk 契约，UI 复用同一结果渲染。
-similar = "2.7"
+similar = "3.2.1"
 # 只启用缩略图解码需要的格式，与 gpui 已启用的图片能力保持一致；
 # 不引入 AVIF 等额外编解码器，避免为悬停预览扩大编译与二进制体积。
 image = { version = "0.25", default-features = false, features = [
@@ -105,19 +105,19 @@ image = { version = "0.25", default-features = false, features = [
     "tiff",
     "webp",
 ] }
-sha2 = "0.10"
-md-5 = "0.10"
+sha2 = "0.11"
+md-5 = "0.11"
 # 云同步的 HTTPS 传输：关闭默认特性避免引入 native-tls，统一走 rustls；
 # 连接池由 Client 内建，全局单例长生命周期复用。
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
-# S3 SigV4 签名：与 sha2 同属 RustCrypto 家族的轻量 HMAC 封装，树内已有 0.12。
-hmac = "0.12"
+reqwest = { version = "0.13", default-features = false, features = ["query", "rustls", "stream"] }
+# S3 SigV4 签名：与 sha2 同属 RustCrypto 家族的轻量 HMAC 封装，树内统一使用 0.13。
+hmac = "0.13.0"
 hex = "0.4"
 serialport = { version = "4.10", default-features = false }
-argon2 = "0.5"
-chacha20poly1305 = "0.10"
-base64 = "0.22"
-getrandom = "0.3"
+argon2 = "0.6.0"
+chacha20poly1305 = "0.11.0"
+base64 = "0.23.1"
+getrandom = "0.4.3"
 serde_yaml_ng = "0.10"
 ssh-key = { version = "=0.7.0-rc.11", features = ["ed25519", "rsa", "encryption"] }
 rand = "0.10"

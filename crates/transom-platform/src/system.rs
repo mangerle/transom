@@ -84,9 +84,9 @@ pub struct NetworkTotals {
 /// 网络采样可独立按秒调用；系统采样复用最近一次网卡速率，避免同一采集
 /// 窗口重复刷新网络表。
 pub struct HostSampler {
-    system: System,
-    disks: Disks,
-    networks: Networks,
+    system: Option<System>,
+    disks: Option<Disks>,
+    networks: Option<Networks>,
     previous_interfaces: HashMap<String, (u64, u64)>,
     previous_network_at: Option<Instant>,
     latest_interfaces: Vec<InterfaceRate>,
@@ -97,15 +97,35 @@ pub struct HostSampler {
 impl HostSampler {
     /// 创建采样器；首次 CPU 使用率需要下一轮刷新才有有效差值。
     pub fn new() -> Self {
-        let system = System::new_with_specifics(
-            RefreshKind::new()
+        let system = match System::new_with_specifics(
+            RefreshKind::nothing()
                 .with_cpu(CpuRefreshKind::everything())
                 .with_memory(MemoryRefreshKind::everything()),
-        );
+        ) {
+            Ok(system) => Some(system),
+            Err(error) => {
+                log::warn!("初始化宿主系统采样器失败，系统统计将降级: {error}");
+                None
+            }
+        };
+        let disks = match Disks::new_with_refreshed_list() {
+            Ok(disks) => Some(disks),
+            Err(error) => {
+                log::warn!("初始化宿主磁盘采样器失败，磁盘统计将降级: {error}");
+                None
+            }
+        };
+        let networks = match Networks::new_with_refreshed_list() {
+            Ok(networks) => Some(networks),
+            Err(error) => {
+                log::warn!("初始化宿主网络采样器失败，网络统计将降级: {error}");
+                None
+            }
+        };
         Self {
             system,
-            disks: Disks::new_with_refreshed_list(),
-            networks: Networks::new_with_refreshed_list(),
+            disks,
+            networks,
             previous_interfaces: HashMap::new(),
             previous_network_at: None,
             latest_interfaces: Vec::new(),
@@ -116,23 +136,27 @@ impl HostSampler {
 
     /// 刷新网络并返回机器级累计计数器与逐网卡速率。
     pub fn sample_network(&mut self) -> NetworkTotals {
-        self.networks.refresh();
+        let Some(networks) = self.networks.as_mut() else {
+            return NetworkTotals::default();
+        };
+        networks.refresh(true);
         let now = Instant::now();
         let elapsed = self
             .previous_network_at
             .map_or(0.0, |previous| now.duration_since(previous).as_secs_f64());
-        let mut current = HashMap::with_capacity(self.networks.list().len());
-        let mut interfaces = Vec::with_capacity(self.networks.list().len());
+        let mut current = HashMap::with_capacity(networks.len());
+        let mut interfaces = Vec::with_capacity(networks.len());
         let mut totals = NetworkTotals::default();
-        for (name, data) in self.networks.list() {
+        for (name, data) in networks.iter() {
             if is_loopback_interface(data) {
                 continue;
             }
+            let name = name.to_string_lossy().into_owned();
             let received = data.total_received();
             let transmitted = data.total_transmitted();
             totals.received_bytes = totals.received_bytes.saturating_add(received);
             totals.transmitted_bytes = totals.transmitted_bytes.saturating_add(transmitted);
-            let (rx_rate, tx_rate) = self.previous_interfaces.get(name).map_or((0, 0), |last| {
+            let (rx_rate, tx_rate) = self.previous_interfaces.get(&name).map_or((0, 0), |last| {
                 (
                     rate(last.0, received, elapsed),
                     rate(last.1, transmitted, elapsed),
@@ -154,17 +178,28 @@ impl HostSampler {
 
     /// 刷新 CPU、内存与磁盘，返回统一系统快照。
     pub fn sample_system(&mut self) -> SystemSnapshot {
-        self.system.refresh_cpu_all();
-        self.system.refresh_memory();
+        let Some(system) = self.system.as_mut() else {
+            return SystemSnapshot {
+                os_name: self.os_name.clone(),
+                load_avg: load_average(),
+                interfaces: self.latest_interfaces.clone(),
+                ..SystemSnapshot::default()
+            };
+        };
+        system.refresh_cpu_all();
+        system.refresh_memory();
         self.disk_refresh_round = self.disk_refresh_round.wrapping_add(1);
-        if self.disk_refresh_round.is_multiple_of(10) {
-            self.disks.refresh_list();
-        } else {
-            self.disks.refresh();
+        if let Some(disks) = self.disks.as_mut() {
+            if self.disk_refresh_round.is_multiple_of(10) {
+                disks.refresh(true);
+            } else {
+                disks.refresh(false);
+            }
         }
 
-        let mut filesystems = Vec::with_capacity(self.disks.list().len());
-        for disk in self.disks.list() {
+        let disks = self.disks.as_ref();
+        let mut filesystems = Vec::with_capacity(disks.map_or(0, |disks| disks.len()));
+        for disk in disks.into_iter().flat_map(|disks| disks.iter()) {
             let total = disk.total_space();
             if total == 0 {
                 continue;
@@ -177,28 +212,27 @@ impl HostSampler {
         }
         filesystems.sort_by(|left, right| left.mount.cmp(&right.mount));
         let root = system_disk(&filesystems);
-        let load = System::load_average();
-        let cpu_cores = self
-            .system
+        let load = load_average();
+        let cpu_cores = system
             .cpus()
             .iter()
             .enumerate()
             .map(|(index, cpu)| CoreUsage {
                 index,
-                percent: cpu.cpu_usage(),
+                percent: cpu.usage(),
             })
             .collect();
         SystemSnapshot {
-            cpu_percent: self.system.global_cpu_usage(),
-            mem_used_bytes: self.system.used_memory(),
-            mem_total_bytes: self.system.total_memory(),
+            cpu_percent: system.global_cpu_usage(),
+            mem_used_bytes: system.used_memory(),
+            mem_total_bytes: system.total_memory(),
             disk_used_bytes: root.map_or(0, |disk| disk.used_bytes),
             disk_total_bytes: root.map_or(0, |disk| disk.total_bytes),
-            uptime_secs: System::uptime(),
+            uptime_secs: System::uptime().unwrap_or_default(),
             os_name: self.os_name.clone(),
-            load_avg: (load.one as f32, load.five as f32, load.fifteen as f32),
-            swap_used_bytes: self.system.used_swap(),
-            swap_total_bytes: self.system.total_swap(),
+            load_avg: load,
+            swap_used_bytes: system.used_swap(),
+            swap_total_bytes: system.total_swap(),
             cpu_cores,
             filesystems,
             interfaces: self.latest_interfaces.clone(),
@@ -214,19 +248,32 @@ impl Default for HostSampler {
 
 /// 持久进程采样器：保留上一轮进程表，才能计算 CPU 使用率差值。
 pub struct ProcessSampler {
-    system: System,
-    users: Users,
+    system: Option<System>,
+    users: Option<Users>,
     refresh_round: u64,
 }
 
 impl ProcessSampler {
     pub fn new() -> Self {
-        let system = System::new_with_specifics(
-            RefreshKind::new().with_memory(MemoryRefreshKind::everything()),
-        );
+        let system = match System::new_with_specifics(
+            RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+        ) {
+            Ok(system) => Some(system),
+            Err(error) => {
+                log::warn!("初始化本地进程采样器失败，进程统计将降级: {error}");
+                None
+            }
+        };
+        let users = match Users::new_with_refreshed_list() {
+            Ok(users) => Some(users),
+            Err(error) => {
+                log::warn!("初始化本地用户采样器失败，进程用户信息将降级: {error}");
+                None
+            }
+        };
         Self {
             system,
-            users: Users::new_with_refreshed_list(),
+            users,
             refresh_round: 0,
         }
     }
@@ -237,16 +284,21 @@ impl ProcessSampler {
     /// `ThreadKind` 过滤用户线程，避免线程共享的 RSS 被展示成独立进程内存。
     /// 内核线程仍是独立任务，不在过滤范围内。
     pub fn sample(&mut self) -> Vec<ProcessInfo> {
+        let Some(system) = self.system.as_mut() else {
+            return Vec::new();
+        };
         self.refresh_round = self.refresh_round.wrapping_add(1);
-        if self.refresh_round.is_multiple_of(30) {
-            self.users.refresh_list();
+        if self.refresh_round.is_multiple_of(30)
+            && let Some(users) = self.users.as_mut()
+        {
+            users.refresh();
         }
-        self.system
-            .refresh_processes_specifics(ProcessesToUpdate::All, process_refresh_kind());
-        self.system.refresh_memory();
-        let total_memory = self.system.total_memory();
-        let mut processes = Vec::with_capacity(self.system.processes().len());
-        for (pid, process) in self.system.processes() {
+        system.refresh_processes_specifics(ProcessesToUpdate::All, true, process_refresh_kind());
+        system.refresh_memory();
+        let total_memory = system.total_memory();
+        let mut processes = Vec::with_capacity(system.processes().len());
+        let users = self.users.as_ref();
+        for (pid, process) in system.processes() {
             // Linux 的 /proc 任务枚举可能同时返回用户线程；线程与所属进程共享
             // RSS 和地址空间，不能作为独立进程统计。内核线程是独立任务，保留。
             if is_userland_thread(process.thread_kind()) {
@@ -264,7 +316,7 @@ impl ProcessSampler {
                 ppid: process.parent().map_or(0, Pid::as_u32),
                 user: process
                     .user_id()
-                    .and_then(|id| self.users.get_user_by_id(id))
+                    .and_then(|id| users.and_then(|users| users.get_user_by_id(id)))
                     .map_or_else(|| "-".to_string(), |user| user.name().to_string()),
                 cpu_percent: process.cpu_usage(),
                 mem_percent: if total_memory == 0 {
@@ -285,11 +337,12 @@ impl ProcessSampler {
     ///
     /// Windows 没有可供 `sysinfo` 表达的可移植软终止信号，统一走系统终止 API。
     pub fn kill(&mut self, pid: u32, force: bool) -> Result<(), String> {
+        let Some(system) = self.system.as_mut() else {
+            return Err("本地进程采样器不可用，无法终止进程".to_string());
+        };
         let pid = Pid::from_u32(pid);
-        self.system
-            .refresh_processes(ProcessesToUpdate::Some(&[pid]));
-        let process = self
-            .system
+        system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+        let process = system
             .process(pid)
             .ok_or_else(|| format!("本地进程不存在或已经退出，PID: {}", pid.as_u32()))?;
         let killed = if force {
@@ -315,19 +368,24 @@ impl Default for ProcessSampler {
 
 /// 当前宿主平均负载；供容器本机引擎展示宿主负载。
 pub fn load_average() -> (f32, f32, f32) {
-    let load = System::load_average();
-    (load.one as f32, load.five as f32, load.fifteen as f32)
+    System::load_average()
+        .map(|load| (load.one as f32, load.five as f32, load.fifteen as f32))
+        .unwrap_or_default()
 }
 
 /// 当前操作系统的可读名称；平台 API 不提供时退回 Rust 的 OS 标识。
 pub fn os_name() -> String {
-    System::long_os_version()
-        .or_else(System::name)
-        .unwrap_or_else(|| std::env::consts::OS.to_string())
+    if let Ok(name) = System::long_os_version() {
+        return name;
+    }
+    if let Ok(name) = System::name() {
+        return name;
+    }
+    std::env::consts::OS.to_string()
 }
 
 fn process_refresh_kind() -> ProcessRefreshKind {
-    ProcessRefreshKind::new()
+    ProcessRefreshKind::nothing()
         .with_cpu()
         .with_memory()
         .with_user(UpdateKind::OnlyIfNotSet)
@@ -383,7 +441,7 @@ fn system_disk(filesystems: &[FilesystemUsage]) -> Option<&FilesystemUsage> {
 #[cfg(test)]
 mod tests {
     use super::{HostSampler, ProcessSampler, is_userland_thread};
-    use sysinfo::ThreadKind;
+    use sysinfo::{System, ThreadKind};
 
     #[test]
     fn userland_threads_are_not_processes() {
@@ -394,7 +452,7 @@ mod tests {
 
     #[test]
     fn host_snapshot_has_cores_memory_and_system_disk() {
-        if !sysinfo::IS_SUPPORTED_SYSTEM {
+        if System::new().is_err() {
             return;
         }
         let mut sampler = HostSampler::new();
@@ -408,7 +466,7 @@ mod tests {
 
     #[test]
     fn process_snapshot_contains_current_process() {
-        if !sysinfo::IS_SUPPORTED_SYSTEM {
+        if System::new().is_err() {
             return;
         }
         let mut sampler = ProcessSampler::new();
@@ -423,7 +481,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn process_snapshot_excludes_userland_threads() {
-        if !sysinfo::IS_SUPPORTED_SYSTEM {
+        if System::new().is_err() {
             return;
         }
         let mut sampler = ProcessSampler::new();

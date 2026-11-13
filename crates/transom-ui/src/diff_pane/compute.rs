@@ -192,11 +192,11 @@ pub(crate) fn prepare_diff_document(
 }
 
 /// 生成包含完整文件行上下文的 unified patch，确保 `DiffState` 可自行折叠与局部展开。
-fn build_full_context_patch<'a>(
+fn build_full_context_patch(
     path: &str,
     old_orig: &[&str],
     new_orig: &[&str],
-    diff: &TextDiff<'a, 'a, 'a, str>,
+    diff: &TextDiff<'_, '_, str>,
 ) -> String {
     let clean_path = sanitize_diff_path(path);
     let old_count = old_orig.len();

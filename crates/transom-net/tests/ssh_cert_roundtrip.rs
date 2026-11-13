@@ -6,8 +6,8 @@
 
 use parking_lot::Mutex;
 use russh::keys::key::safe_rng;
-use russh::keys::{Algorithm, Certificate, PrivateKey, PublicKey};
-use russh::server::{self, Auth, Msg};
+use russh::keys::{Algorithm, Certificate, PrivateKey};
+use russh::server::{self, Auth, Msg, VerifiedPublicKey};
 use russh::{Channel, ChannelId};
 use ssh_key::LineEnding;
 use ssh_key::certificate::{Builder, CertType};
@@ -67,7 +67,11 @@ impl server::Handler for CertServer {
     }
 
     /// `keyuser` 代表没配 CA 但仍认这把私钥的服务器：只接受裸公钥。
-    async fn auth_publickey(&mut self, user: &str, _key: &PublicKey) -> Result<Auth, Self::Error> {
+    async fn auth_publickey(
+        &mut self,
+        user: &str,
+        _key: VerifiedPublicKey<'_>,
+    ) -> Result<Auth, Self::Error> {
         self.observed.record(&format!("pubkey:{user}"));
         Ok(if user == "keyuser" {
             Auth::Accept

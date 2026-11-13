@@ -10,7 +10,7 @@
 //! 不需要）。
 
 use chrono::Utc;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
@@ -112,6 +112,7 @@ pub fn uri_encode(value: &str, encode_slash: bool) -> String {
 /// SigV4 派生链：date -> region -> service -> signing key -> 签名。
 fn hmac_chain(secret_key: &str, date_scope: &str, region: &str, string_to_sign: &str) -> [u8; 32] {
     fn hmac(key: &[u8], data: &str) -> [u8; 32] {
+        // HMAC 的 KeyInit 接受任意长度密钥，此转换不会因密钥长度失败。
         let mut mac = HmacSha256::new_from_slice(key).expect("HMAC 接受任意长度密钥");
         mac.update(data.as_bytes());
         mac.finalize().into_bytes().into()
