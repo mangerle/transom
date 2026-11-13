@@ -17,6 +17,70 @@ const REMOTE_CHOICES: &[EndpointChoice] = &[
 ];
 
 impl ContainerFormView {
+    /// 顶部整行分段栏：引擎种类 Docker 与 Podman，与会话表单的协议栏同一风格。
+    pub(super) fn render_kind_bar(
+        &self,
+        form: &ContainerFormState,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .w_full()
+            .p_1()
+            .gap_1()
+            .rounded(p.radius.md)
+            .bg(p.muted)
+            .children(
+                [
+                    (
+                        "container-kind-docker",
+                        ContainerEngineKind::Docker,
+                        "Docker",
+                    ),
+                    (
+                        "container-kind-podman",
+                        ContainerEngineKind::Podman,
+                        "Podman",
+                    ),
+                ]
+                .into_iter()
+                .map(|(id, kind, label)| {
+                    let active = form.kind == kind;
+                    div()
+                        .id(id)
+                        .flex_1()
+                        .py_1()
+                        .px_2()
+                        .rounded(p.radius.sm)
+                        .cursor_pointer()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(if active {
+                            p.background
+                        } else {
+                            transparent_black()
+                        })
+                        .text_sm()
+                        .font_weight(if active {
+                            FontWeight::MEDIUM
+                        } else {
+                            FontWeight::NORMAL
+                        })
+                        .text_color(if active {
+                            p.foreground
+                        } else {
+                            p.muted_foreground
+                        })
+                        .child(label)
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.set_kind(kind, cx);
+                        }))
+                }),
+            )
+            .into_any_element()
+    }
+
     pub(super) fn render_connection_card(
         &self,
         form: &ContainerFormState,
@@ -24,28 +88,6 @@ impl ContainerFormView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let available = EndpointChoice::available();
-
-        // 引擎种类行
-        let kind_row = h_flex()
-            .gap_2()
-            .child(
-                Button::new("container-kind-docker")
-                    .small()
-                    .label("Docker")
-                    .selected(form.kind == ContainerEngineKind::Docker)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.set_kind(ContainerEngineKind::Docker, cx)
-                    })),
-            )
-            .child(
-                Button::new("container-kind-podman")
-                    .small()
-                    .label("Podman")
-                    .selected(form.kind == ContainerEngineKind::Podman)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.set_kind(ContainerEngineKind::Podman, cx)
-                    })),
-            );
 
         // 本地端点选项按钮
         let local_buttons = h_flex().gap_1p5().flex_wrap().children(
@@ -71,18 +113,6 @@ impl ContainerFormView {
 
         v_flex()
             .gap_3()
-            // 引擎种类
-            .child(
-                v_flex()
-                    .gap_1p5()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("container.form.kind").to_string()),
-                    )
-                    .child(kind_row),
-            )
             // 本地连接
             .child(
                 v_flex()
@@ -244,60 +274,66 @@ impl ContainerFormView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let use_sudo = form.ssh.use_sudo;
-        let mut fields = v_flex()
-            .gap_3()
-            // 主机（单独一行，最常填的字段）
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("container.form.endpoint_ssh_host").to_string(),
-                form.endpoint_value.clone(),
-                p,
-            ))
-            // 端口 + 用户（同排，各占一半）
-            .child(
-                h_flex()
-                    .gap_3()
-                    .child(div().flex_1().child(crate::widgets::form_field(
-                        rust_i18n::t!("container.form.ssh_port").to_string(),
-                        form.ssh.port.clone(),
-                        p,
-                    )))
-                    .child(div().flex_1().child(crate::widgets::form_field(
-                        rust_i18n::t!("container.form.ssh_user").to_string(),
-                        form.ssh.user.clone(),
-                        p,
-                    ))),
-            )
-            // 登录密码（单独一行）
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("container.form.ssh_password").to_string(),
-                form.ssh.password.clone(),
-                p,
-            ))
-            // 私钥文件（单独一行）
-            .child(crate::widgets::form_field(
-                rust_i18n::t!("container.form.ssh_identity").to_string(),
-                form.ssh.identity_file.clone(),
-                p,
-            ))
-            // sudo 提权开关
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        Checkbox::new("container-form-ssh-sudo")
-                            .small()
-                            .checked(use_sudo)
-                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                                this.set_ssh_sudo(*checked, cx);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(rust_i18n::t!("container.form.ssh_use_sudo").to_string()),
-                    ),
-            );
+        let mut fields =
+            v_flex()
+                .gap_3()
+                // 主机（单独一行，最常填的字段）
+                .child(crate::widgets::form_field(
+                    rust_i18n::t!("container.form.endpoint_ssh_host").to_string(),
+                    form.endpoint_value.clone(),
+                    p,
+                ))
+                // 端口 + 用户（同排，各占一半）
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .child(
+                            div().flex_1().child(
+                                v_flex()
+                                    .gap_1()
+                                    .child(div().text_xs().text_color(p.muted_foreground).child(
+                                        rust_i18n::t!("container.form.ssh_port").to_string(),
+                                    ))
+                                    .child(NumberInput::new(&form.ssh.port).w_full()),
+                            ),
+                        )
+                        .child(div().flex_1().child(crate::widgets::form_field(
+                            rust_i18n::t!("container.form.ssh_user").to_string(),
+                            form.ssh.user.clone(),
+                            p,
+                        ))),
+                )
+                // 登录密码（单独一行）
+                .child(crate::widgets::form_field(
+                    rust_i18n::t!("container.form.ssh_password").to_string(),
+                    form.ssh.password.clone(),
+                    p,
+                ))
+                // 私钥文件（单独一行）
+                .child(crate::widgets::form_field(
+                    rust_i18n::t!("container.form.ssh_identity").to_string(),
+                    form.ssh.identity_file.clone(),
+                    p,
+                ))
+                // sudo 提权开关
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            Checkbox::new("container-form-ssh-sudo")
+                                .small()
+                                .checked(use_sudo)
+                                .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                    this.set_ssh_sudo(*checked, cx);
+                                })),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(rust_i18n::t!("container.form.ssh_use_sudo").to_string()),
+                        ),
+                );
 
         if use_sudo {
             fields = fields.child(crate::widgets::form_field(

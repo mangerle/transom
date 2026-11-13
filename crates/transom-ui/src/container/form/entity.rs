@@ -208,6 +208,11 @@ impl ContainerFormView {
         self.edit(cx, |form| form.icon = icon);
     }
 
+    /// 回写图标与颜色选择弹层的展开状态。
+    pub(super) fn set_icon_open(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.edit(cx, |form| form.icon_open = open);
+    }
+
     /// 选择环境色；`None` 表示不染色。
     pub(super) fn set_color(&mut self, color: SessionColor, cx: &mut Context<Self>) {
         self.edit(cx, |form| form.color = color);

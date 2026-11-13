@@ -5,11 +5,11 @@
 //! 一次打开期的状态、输入控件、动作与渲染都归 [`ContainerFormView`]，
 //! 外壳只保留打开入口、分组快照注入与保存/删除落目录。
 //!
-//! 布局参考新建会话表单（session_form），分层卡片式结构：
-//! - 基本信息卡：名称、分组（同排）
-//! - 外观卡：图标、环境色
-//! - 连接类型卡：引擎种类（Docker/Podman）+ 端点分组（本地/远端）
-//! - 动态扩展字段卡：根据端点档位追加 SSH / TLS / CLI 参数字段
+//! 布局参考新建会话表单（session_form），自上而下：
+//! - 引擎种类分段栏：Docker、Podman
+//! - 基本信息顶行：图标按钮（弹层选图标与环境色）、名称、分组
+//! - 连接类型：端点分组（本地/远端）
+//! - 动态扩展字段：根据端点档位追加 SSH / TLS / CLI 参数字段
 
 use crate::app::AppShell;
 use crate::container::types::{ContainerFormState, ContainerSection, EndpointChoice};
@@ -21,6 +21,7 @@ use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::input::NumberInput;
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;

@@ -43,6 +43,8 @@ pub(crate) struct ContainerFormState {
     pub(crate) kind: ContainerEngineKind,
     pub(crate) icon: SessionIcon,
     pub(crate) color: SessionColor,
+    /// 图标与环境色选择弹层是否展开。
+    pub(crate) icon_open: bool,
     pub(crate) endpoint_choice: EndpointChoice,
     /// 主输入框：根据 endpoint_choice 承载不同含义（socket 路径、URL、SSH host 等）。
     pub(crate) endpoint_value: Entity<InputState>,
@@ -197,6 +199,9 @@ impl ContainerFormState {
         });
         let ssh_port_input = cx.new(|cx| {
             InputState::new(window, cx)
+                .min(1.0)
+                .max(65535.0)
+                .step(1.0)
                 .default_value(ssh_port)
                 .placeholder("22".to_string())
         });
@@ -253,6 +258,7 @@ impl ContainerFormState {
             color: profile
                 .map(|profile| profile.color)
                 .unwrap_or(SessionColor::None),
+            icon_open: false,
             endpoint_choice,
             endpoint_value: endpoint,
             cli_args,

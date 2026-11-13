@@ -18,7 +18,7 @@ pub(crate) struct ContainerFormFolders {
 }
 
 impl ContainerFormView {
-    /// 弹窗主体：基本信息、外观、连接类型与按档位展开的字段。
+    /// 弹窗主体：引擎种类分段栏、基本信息顶行、连接类型与按档位展开的字段。
     pub(crate) fn render_body(
         &self,
         folders: &ContainerFormFolders,
@@ -34,11 +34,11 @@ impl ContainerFormView {
             rust_i18n::t!("container.form.new_title").to_string()
         };
 
-        // 基本信息卡：名称 + 分组（同排）
+        // 顶部整行分段栏：引擎种类（Docker/Podman）
+        let kind_bar = self.render_kind_bar(form, p, cx);
+        // 顶行：图标按钮 + 名称 + 分组
         let basic_card = self.render_basic_card(form, folders, p, cx);
-        // 外观卡：图标 + 环境色
-        let appearance_card = self.render_appearance_card(form, p, cx);
-        // 连接类型卡：引擎种类 + 端点分组
+        // 连接类型卡：端点分组
         let connection_card = self.render_connection_card(form, p, cx);
 
         let mut content = v_flex()
@@ -46,8 +46,8 @@ impl ContainerFormView {
             .max_h(px(520.0))
             .overflow_y_scroll()
             .gap_3()
+            .child(kind_bar)
             .child(basic_card)
-            .child(appearance_card)
             .child(connection_card);
 
         // 动态扩展字段：根据端点档位追加
@@ -71,7 +71,7 @@ impl ContainerFormView {
         crate::widgets::dialog_body("container-form-body", title, None, content, Some(footer))
     }
 
-    /// 基本信息卡：名称输入框与分组下拉同排。
+    /// 基本信息顶行：图标按钮、名称输入框与分组下拉同排。
     fn render_basic_card(
         &self,
         form: &ContainerFormState,
@@ -80,7 +80,9 @@ impl ContainerFormView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         h_flex()
-            .gap_3()
+            .gap_2p5()
+            .items_end()
+            .child(self.render_icon_picker_button(form, p, cx))
             .child(div().flex_1().child(crate::widgets::form_field(
                 rust_i18n::t!("container.form.name").to_string(),
                 form.name.clone(),
@@ -88,7 +90,7 @@ impl ContainerFormView {
             )))
             .child(
                 div()
-                    .flex_1()
+                    .w(rems(12.5))
                     .child(self.render_folder_field(form, folders, p, cx)),
             )
             .into_any_element()
