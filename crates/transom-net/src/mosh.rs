@@ -179,19 +179,18 @@ fn find_in_path(program: &str) -> Option<PathBuf> {
 }
 
 fn is_executable(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
+        path.is_file()
+            && path
+                .metadata()
+                .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
     }
     #[cfg(not(unix))]
     {
-        true
+        path.is_file()
     }
 }
 

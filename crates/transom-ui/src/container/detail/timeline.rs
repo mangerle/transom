@@ -340,11 +340,11 @@ mod tests {
         // 最近这 1 小时是运行中
         assert_eq!(timeline.buckets[23], HourlyStatus::Running);
         // 1 小时前至 24 小时前，容器尚未创建，必须为 Unknown（无记录），绝对不能显示为运行中
-        for i in 0..23 {
+        for (hour, status) in timeline.buckets.iter().enumerate().take(23) {
             assert_eq!(
-                timeline.buckets[i],
+                *status,
                 HourlyStatus::Unknown,
-                "第 {i} 小时槽应当为 Unknown，但被误判"
+                "第 {hour} 小时槽应当为 Unknown，但被误判"
             );
         }
     }
@@ -389,8 +389,8 @@ mod tests {
 
         let timeline = StatusTimeline::infer_at(Some(&details), ContainerState::Running, now);
         // 过去 24 小时全程处于稳定运行中，24 格全部为 Running
-        for i in 0..24 {
-            assert_eq!(timeline.buckets[i], HourlyStatus::Running);
+        for status in &timeline.buckets {
+            assert_eq!(*status, HourlyStatus::Running);
         }
     }
 
@@ -446,8 +446,8 @@ mod tests {
         // 当前时刻已停止，最右侧槽位（第 23 格）必须为 Exited，杜绝显示为 Running
         assert_eq!(timeline.buckets[23], HourlyStatus::Exited);
         // 1 小时前容器尚未创建，必须为 Unknown
-        for i in 0..23 {
-            assert_eq!(timeline.buckets[i], HourlyStatus::Unknown);
+        for status in timeline.buckets.iter().take(23) {
+            assert_eq!(*status, HourlyStatus::Unknown);
         }
     }
 
@@ -496,11 +496,11 @@ mod tests {
         // 当前时刻已退出
         assert_eq!(timeline.buckets[23], HourlyStatus::Exited);
         // 1~4 小时前的槽位全程在运行，必须为 Running
-        for i in 19..23 {
+        for (hour, status) in timeline.buckets.iter().enumerate().skip(19).take(4) {
             assert_eq!(
-                timeline.buckets[i],
+                *status,
                 HourlyStatus::Running,
-                "第 {i} 小时槽应当为 Running"
+                "第 {hour} 小时槽应当为 Running"
             );
         }
     }
