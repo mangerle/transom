@@ -274,10 +274,10 @@ impl AppShell {
                 self.sftp_sync_with_terminal_cwd(tab_id, path, window, cx);
             }
             TerminalEvent::Bell => {
-                self.state.status = Some(rust_i18n::t!("status.bell").to_string());
+                self.set_transient_status(rust_i18n::t!("status.bell"), cx);
             }
             TerminalEvent::ClipboardStored => {
-                self.state.status = Some(rust_i18n::t!("status.copied").to_string());
+                self.set_transient_status(rust_i18n::t!("status.copied"), cx);
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
                 self.request_clipboard_permission(tab_id, text.clone(), cx);

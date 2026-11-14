@@ -104,7 +104,7 @@ impl AppShell {
             self.state
                 .set_error(rust_i18n::t!("snippets.send_failed").to_string());
         } else if !execute {
-            self.state.status = Some(rust_i18n::t!("snippets.filled").to_string());
+            self.set_transient_status(rust_i18n::t!("snippets.filled"), cx);
         }
         cx.notify();
     }
@@ -202,7 +202,7 @@ impl AppShell {
             return;
         }
         self.state.modals.tools.snippet_panel.form = None;
-        self.state.status = Some(rust_i18n::t!("snippets.saved").to_string());
+        self.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
         cx.notify();
     }
 

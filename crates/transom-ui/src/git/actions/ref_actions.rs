@@ -346,7 +346,7 @@ impl AppShell {
                 _ => None,
             });
         let Some(branch) = branch else {
-            self.state.status = Some(rust_i18n::t!("git.push.no_branch").to_string());
+            self.set_transient_status(rust_i18n::t!("git.push.no_branch"), cx);
             cx.notify();
             return;
         };

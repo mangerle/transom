@@ -26,6 +26,8 @@ pub(crate) struct BackgroundTasks {
     pub(crate) update_confirm: Option<Task<()>>,
     /// Toast 自动关闭任务；有界保留最近任务，窗口关闭时统一取消。
     pub(crate) toast_tasks: VecDeque<(u64, Task<()>)>,
+    /// 底栏一次性状态提示自动清空任务；新提示会替换旧任务从而取消旧定时。
+    pub(crate) status_clear: Option<Task<()>>,
 }
 
 impl BackgroundTasks {
@@ -38,6 +40,7 @@ impl BackgroundTasks {
             sync_history_load: None,
             update_confirm: None,
             toast_tasks: VecDeque::with_capacity(32),
+            status_clear: None,
         }
     }
 }

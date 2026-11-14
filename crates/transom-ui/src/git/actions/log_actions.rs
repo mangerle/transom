@@ -461,7 +461,7 @@ impl AppShell {
             self.git_load_more_log(tab_id, cx);
             return;
         }
-        self.state.status = Some(rust_i18n::t!("git.log.jump_missing").to_string());
+        self.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);
         cx.notify();
     }
 

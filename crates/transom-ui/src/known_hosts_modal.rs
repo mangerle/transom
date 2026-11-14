@@ -19,7 +19,7 @@ impl AppShell {
                 self.state.set_error(localized_error(error))
             }
             KnownHostsEvent::Removed { error: None } => {
-                self.state.status = Some(rust_i18n::t!("known_hosts.deleted").to_string());
+                self.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
             }
         }
         cx.notify();

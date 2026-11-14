@@ -90,6 +90,8 @@ pub(crate) struct AppState {
     pub(in crate::app) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(in crate::app) status: Option<String>,
+    /// 底栏一次性提示的自增序号：定时器到期时只清除与自身匹配的那一条。
+    pub(in crate::app) status_seq: u64,
     /// 会话目录与设置的覆盖式异步写盘通道。
     pub(in crate::app) persistence: Persistence,
     /// 应用级错误通知的待发队列：写入与渲染解耦，逐帧统一投递。

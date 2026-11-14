@@ -267,6 +267,37 @@ impl AppShell {
         self.state.set_error(message);
     }
 
+    /// 设置会在 4 秒后自动清除的底栏操作完成提示。
+    ///
+    /// 设计原理（Why）：Git 操作、复制等一次性反馈若长期驻留在状态栏，会让人误以为
+    /// 当前仍处于某种操作状态；通过序列号与文案双重比对加上可替换定时器，在 4 秒后
+    /// 仅当期间未被新提示或持续状态覆盖时才清空并恢复版本号兜底。
+    pub(crate) fn set_transient_status(
+        &mut self,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let text = message.into();
+        self.state.status = Some(text.clone());
+        self.state.status_seq = self.state.status_seq.wrapping_add(1);
+        let seq = self.state.status_seq;
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(4))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.state.status_seq == seq
+                    && this.state.status.as_deref() == Some(text.as_str())
+                {
+                    this.state.status = None;
+                    this.refresh_status_metrics(cx);
+                    cx.notify();
+                }
+            });
+        });
+        self.state.tasks.background.status_clear = Some(task);
+    }
+
     /// 打开偏好设置弹窗；`page` 为 `Some` 时直接定位到指定页。
     ///
     /// 回填与预览快照都归设置实体，外壳只负责把目录快照推进去并请求打开；

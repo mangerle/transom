@@ -55,7 +55,7 @@ impl AppShell {
             )
             .as_ref(),
         );
-        self.state.status = Some(rust_i18n::t!("notify.command_done_status").to_string());
+        self.set_transient_status(rust_i18n::t!("notify.command_done_status"), cx);
         cx.notify();
     }
 
@@ -76,7 +76,7 @@ impl AppShell {
             format!("Transom · {title}")
         };
         send_desktop_notification(&summary, body);
-        self.state.status = Some(rust_i18n::t!("notify.desktop_sent").to_string());
+        self.set_transient_status(rust_i18n::t!("notify.desktop_sent"), cx);
         cx.notify();
     }
 }

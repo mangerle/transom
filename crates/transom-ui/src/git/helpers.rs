@@ -184,7 +184,7 @@ impl AppShell {
     /// 把文本写入系统剪贴板。
     pub(crate) fn write_clipboard(&mut self, text: &str, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-        self.state.status = Some(rust_i18n::t!("git.menu.copied").to_string());
+        self.set_transient_status(rust_i18n::t!("git.menu.copied"), cx);
         cx.notify();
     }
 }

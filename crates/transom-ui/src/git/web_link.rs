@@ -49,7 +49,7 @@ impl AppShell {
             }
             None => {
                 log::warn!("无法确定提交的网页地址，提交: {oid}");
-                self.state.status = Some(rust_i18n::t!("git.browse.no_link").to_string());
+                self.set_transient_status(rust_i18n::t!("git.browse.no_link"), cx);
             }
         }
         cx.notify();

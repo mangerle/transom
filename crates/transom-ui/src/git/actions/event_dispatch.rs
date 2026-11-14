@@ -94,7 +94,7 @@ impl AppShell {
                     self.git_load_more_log(tab_id, cx);
                 } else if let Some(target) = jump {
                     log::info!("Git 提交跳转未落地即停止，目标: {target:?}");
-                    self.state.status = Some(rust_i18n::t!("git.log.jump_missing").to_string());
+                    self.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);
                     cx.notify();
                 }
             }
@@ -238,8 +238,9 @@ impl AppShell {
                     None => {
                         // 补丁动作要报出落盘路径，其余动作沿用动作名文案。
                         let saved = self.git_patch_done_status(project_id, cx);
-                        self.state.status = Some(
+                        self.set_transient_status(
                             saved.unwrap_or_else(|| rust_i18n::t!(action.i18n_key()).to_string()),
+                            cx,
                         );
                     }
                 }
@@ -476,7 +477,7 @@ impl AppShell {
                                 state.project.clone()
                             })
                         });
-                self.state.status = Some(rust_i18n::t!("git.shelf.create").to_string());
+                self.set_transient_status(rust_i18n::t!("git.shelf.create"), cx);
                 if let Some(project) = project {
                     self.git_refresh(&project, cx);
                 }
@@ -512,7 +513,7 @@ impl AppShell {
                 } else {
                     "git.shelf.apply"
                 };
-                self.state.status = Some(rust_i18n::t!(key).to_string());
+                self.set_transient_status(rust_i18n::t!(key), cx);
                 if let Some(error) = cleanup_error {
                     let message = localized_error(&error);
                     log::warn!(
@@ -539,7 +540,7 @@ impl AppShell {
                         }
                     });
                 }
-                self.state.status = Some(rust_i18n::t!("git.shelf.drop").to_string());
+                self.set_transient_status(rust_i18n::t!("git.shelf.drop"), cx);
                 cx.notify();
             }
             GitAppEvent::ShelfFailed {

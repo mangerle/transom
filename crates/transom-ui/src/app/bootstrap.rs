@@ -501,6 +501,7 @@ fn assemble_state(
             targets_scope: Vec::new(),
         },
         status: None,
+        status_seq: 0,
         persistence,
         pending_notices: prepared.pending_notices,
         immersive: false,
