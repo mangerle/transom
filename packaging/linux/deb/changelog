@@ -1,3 +1,15 @@
+transom (1.8.1) unstable; urgency=medium
+
+  * 优化 Git 提交文件树为多级压缩目录、独立折叠及 IDEA 风格三态勾选。
+  * 将容器日志操作迁至右侧竖向工具栏，新增自动换行与顶底跳转，并统一
+    Diff、回滚、上级目录与权限图标为 IDEA 风格图标。
+  * 统一图标尺寸分档、分割线样式、侧边栏背景与中性灰选中态；为底栏
+    一次性操作完成提示增加 4 秒自动清除机制。
+  * 为 SSH 拨测增加协议 Banner 校验，避免透明代理假握手误报。
+  * 修复容器页签强调色、旧图标兼容层及组件设计令牌守卫问题。
+
+ -- wangle <wangle@agree.com.cn>  Sat, 14 Nov 2026 16:58:00 +0800
+
 transom (1.8.0) unstable; urgency=medium
 
   * 升级 gpui-kit 并全量迁移 IntelliJ New UI 图标体系，统一侧边栏、
