@@ -29,17 +29,15 @@ pub(crate) fn list_limit_reached(collected: usize) -> bool {
 
 /// 跨并发任务共享的进度通知：任一任务推进都汇报当前全局累计字节。
 pub(crate) fn notify_shared_progress<F>(
-    progress: &Arc<std::sync::Mutex<F>>,
+    progress: &Arc<parking_lot::Mutex<F>>,
     transferred: u64,
     total: Option<u64>,
 ) where
     F: FnMut(u64, Option<u64>) + Send,
 {
-    // 回调内部只做同步 try_send，持锁不跨 await；锁中毒（回调 panic）
-    // 时放弃该次通知即可，传输本身不受影响。
-    if let Ok(mut callback) = progress.lock() {
-        callback(transferred, total);
-    }
+    // 回调内部只做同步 try_send，持锁不跨 await。
+    let mut callback = progress.lock();
+    callback(transferred, total);
 }
 
 /// 构造 SFTP 会话配置。

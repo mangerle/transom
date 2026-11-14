@@ -26,20 +26,19 @@ pub(crate) struct CommitBoxProps<'a> {
     pub(crate) submitting: bool,
 }
 
-impl AppShell {
-    /// 渲染提交说明与动作面板（可作为上下切分的下半部分）。
-    pub(crate) fn render_commit_box(
-        &mut self,
-        props: CommitBoxProps<'_>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let tab_id = props.tab_id;
-        let submitting = props.submitting;
+/// 渲染提交说明与动作面板（可作为上下切分的下半部分）。
+pub(super) fn render_commit_box(
+    shell: &mut AppShell,
+    props: CommitBoxProps<'_>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let tab_id = props.tab_id;
+    let submitting = props.submitting;
 
-        let history: Vec<String> = self
-            .state
-            .git_workspace(tab_id)
+    let history: Vec<String> = shell
+        .state
+        .git_workspace(tab_id)
             .map(|workspace| {
                 let state = &workspace.read(cx).state;
                 state
@@ -134,7 +133,7 @@ impl AppShell {
                             .label(rust_i18n::t!("git.commit.submit").to_string())
                             .disabled(submitting)
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.submit_git_commit(tab_id, false, cx);
+                                crate::git::actions::submit_git_commit(this, tab_id, false, cx);
                             })),
                     )
                     .child(
@@ -145,7 +144,7 @@ impl AppShell {
                             .label(rust_i18n::t!("git.commit.and_push").to_string())
                             .disabled(submitting)
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.submit_git_commit(tab_id, true, cx);
+                                crate::git::actions::submit_git_commit(this, tab_id, true, cx);
                             })),
                     )
                     .child(div().flex_1())
@@ -157,10 +156,9 @@ impl AppShell {
                             .accessibility_label(rust_i18n::t!("git.commit.settings").to_string())
                             .tooltip(rust_i18n::t!("git.commit.settings").to_string())
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_git_settings(window, cx);
+                                crate::git::actions::open_git_settings(this, window, cx);
                             })),
                     ),
             )
             .into_any_element()
-    }
 }

@@ -17,47 +17,45 @@ use gpui_kit::*;
 /// 再大就会贴上下边框，24px 留 6px 上下呼吸位。
 const LOGO_SIZE: f32 = 1.5;
 
-impl AppShell {
-    pub(crate) fn render_top_bar(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let app_entity = cx.entity().clone();
+pub(crate) fn render_top_bar(
+    _shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let app_entity = cx.entity().clone();
 
-        let title_bar_border = cx.theme().title_bar_border;
-        TitleBar::new()
-            .h(rems(size::TOP_BAR_HEIGHT))
-            .bg(p.title_bar)
-            .border_color(p.divider(title_bar_border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .pl_2()
-            .on_close_window(move |_, window, cx| {
-                app_entity.update(cx, |this, cx| {
-                    this.close_app(window, cx);
-                });
-            })
-            .child(
-                h_flex()
-                    .w_full()
-                    .h_full()
-                    .items_center()
-                    .pl_0()
-                    .pr_2()
-                    .child(
-                        h_flex()
-                            .items_center()
-                            .gap_2()
-                            .child(brand::logo_mark(LOGO_SIZE, window, cx))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::BOLD)
-                                    .child(rust_i18n::t!("app.name").to_string()),
-                            ),
-                    ),
-            )
-            .into_any_element()
-    }
+    let title_bar_border = cx.theme().title_bar_border;
+    TitleBar::new()
+        .h(rems(size::TOP_BAR_HEIGHT))
+        .bg(p.title_bar)
+        .border_color(p.divider(title_bar_border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .pl_2()
+        .on_close_window(move |_, window, cx| {
+            app_entity.update(cx, |this, cx| {
+                crate::app::window_state::close_app(this, window, cx);
+            });
+        })
+        .child(
+            h_flex()
+                .w_full()
+                .h_full()
+                .items_center()
+                .pl_0()
+                .pr_2()
+                .child(
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .child(brand::logo_mark(LOGO_SIZE, window, cx))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::BOLD)
+                                .child(rust_i18n::t!("app.name").to_string()),
+                        ),
+                ),
+        )
+        .into_any_element()
 }

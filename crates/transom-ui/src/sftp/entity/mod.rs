@@ -96,66 +96,64 @@ impl Render for SftpPanelView {
     }
 }
 
-impl AppShell {
-    /// 按窗格只读面板状态。
-    ///
-    /// 与旧 `tab.sftp()` 的差别：状态存放在实体里，读取需要 `cx`；
-    /// 返回值借用 `cx`，调用方必须在借用结束后再修改外壳。
-    pub(crate) fn sftp_state<'a>(&self, tab_id: TabId, cx: &'a App) -> Option<&'a SftpPanelState> {
-        let view = self.state.sftp_view(tab_id)?;
-        Some(view.read(cx).state())
-    }
+/// 按窗格只读面板状态。
+///
+/// 与旧 `tab.sftp()` 的差别：状态存放在实体里，读取需要 `cx`；
+/// 返回值借用 `cx`，调用方必须在借用结束后再修改外壳。
+pub(crate) fn sftp_state<'a>(shell: &AppShell, tab_id: TabId, cx: &'a App) -> Option<&'a SftpPanelState> {
+    let view = shell.state.sftp_view(tab_id)?;
+    Some(view.read(cx).state())
+}
 
-    /// 按窗格独占借用实体（含状态与实体方法）。
-    ///
-    /// 借用结束（`GpuiBorrow` 析构）时自动通知实体重绘；调用期间 `cx` 被
-    /// 独占，必须先结束借用再调用其它 `&mut Context<Self>` 方法。
-    pub(crate) fn sftp_view_mut<'a>(
-        &self,
-        tab_id: TabId,
-        cx: &'a mut Context<Self>,
-    ) -> Option<GpuiBorrow<'a, SftpPanelView>> {
-        let view = self.state.sftp_view(tab_id)?;
-        Some(view.as_mut(cx))
-    }
+/// 按窗格独占借用实体（含状态与实体方法）。
+///
+/// 借用结束（`GpuiBorrow` 析构）时自动通知实体重绘；调用期间 `cx` 被
+/// 独占，必须先结束借用再调用其它 `&mut Context<AppShell>` 方法。
+pub(crate) fn sftp_view_mut<'a>(
+    shell: &AppShell,
+    tab_id: TabId,
+    cx: &'a mut Context<AppShell>,
+) -> Option<GpuiBorrow<'a, SftpPanelView>> {
+    let view = shell.state.sftp_view(tab_id)?;
+    Some(view.as_mut(cx))
+}
 
-    /// 按窗格与连接只读面板状态；连接不属于该窗格时返回 `None`。
-    pub(crate) fn sftp_state_for_connection<'a>(
-        &self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        cx: &'a App,
-    ) -> Option<&'a SftpPanelState> {
-        let view = self.state.sftp_view(tab_id)?;
-        let view_ref = view.read(cx);
-        if !self
-            .state
-            .sftp_connection_matches(tab_id, connection_id, view_ref)
-        {
-            return None;
-        }
-        Some(&view_ref.state)
+/// 按窗格与连接只读面板状态；连接不属于该窗格时返回 `None`。
+pub(crate) fn sftp_state_for_connection<'a>(
+    shell: &AppShell,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    cx: &'a App,
+) -> Option<&'a SftpPanelState> {
+    let view = shell.state.sftp_view(tab_id)?;
+    let view_ref = view.read(cx);
+    if !shell
+        .state
+        .sftp_connection_matches(tab_id, connection_id, view_ref)
+    {
+        return None;
     }
+    Some(&view_ref.state)
+}
 
-    /// 按窗格与连接独占借用实体；连接必须是该窗格主连接或已挂载的并列列。
-    ///
-    /// 事件回传只携带连接号：连接不属于该窗格时视为迟到事件，返回 `None`
-    /// 而不是静默改到别的列上。
-    pub(crate) fn sftp_view_mut_for_connection<'a>(
-        &self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        cx: &'a mut Context<Self>,
-    ) -> Option<GpuiBorrow<'a, SftpPanelView>> {
-        let view = self.state.sftp_view(tab_id)?;
-        if !self
-            .state
-            .sftp_connection_matches(tab_id, connection_id, view.read(cx))
-        {
-            return None;
-        }
-        Some(view.as_mut(cx))
+/// 按窗格与连接独占借用实体；连接必须是该窗格主连接或已挂载的并列列。
+///
+/// 事件回传只携带连接号：连接不属于该窗格时视为迟到事件，返回 `None`
+/// 而不是静默改到别的列上。
+pub(crate) fn sftp_view_mut_for_connection<'a>(
+    shell: &AppShell,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    cx: &'a mut Context<AppShell>,
+) -> Option<GpuiBorrow<'a, SftpPanelView>> {
+    let view = shell.state.sftp_view(tab_id)?;
+    if !shell
+        .state
+        .sftp_connection_matches(tab_id, connection_id, view.read(cx))
+    {
+        return None;
     }
+    Some(view.as_mut(cx))
 }
 
 impl SftpPanelView {

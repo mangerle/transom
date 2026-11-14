@@ -44,129 +44,127 @@ pub(crate) fn apply_editor_goto(
     });
 }
 
-impl AppShell {
-    /// 打开行号输入模态，目标编辑器由实体在快捷键触发时捕获。
-    ///
-    /// 模态在打开瞬间捕获目标编辑器实体，而不是确认时再找焦点面板：模态输入框
-    /// 会抢走焦点，届时"焦点所在面板"已经不再是用户想跳转的那个。
-    pub(crate) fn open_editor_goto_line(
-        &mut self,
-        editor: Entity<EditorState>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.goto_placeholder"));
-        input.update(cx, |state, cx| state.focus(window, cx));
-        // 输入框内按回车直接确认：订阅句柄随模态存亡，关闭模态即退订。
-        let enter_sub =
-            cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
-                if matches!(event, InputEvent::PressEnter { .. }) {
-                    this.commit_editor_goto_line(window, cx);
-                }
-            });
-        self.state.sftp_modals.goto_line = Some(EditorGotoLineModalState {
-            editor,
-            input,
-            error: None,
-            _enter_sub: enter_sub,
+/// 打开行号输入模态，目标编辑器由实体在快捷键触发时捕获。
+///
+/// 模态在打开瞬间捕获目标编辑器实体，而不是确认时再找焦点面板：模态输入框
+/// 会抢走焦点，届时"焦点所在面板"已经不再是用户想跳转的那个。
+pub(crate) fn open_editor_goto_line(
+    shell: &mut AppShell,
+    editor: Entity<EditorState>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.goto_placeholder"));
+    input.update(cx, |state, cx| state.focus(window, cx));
+    // 输入框内按回车直接确认：订阅句柄随模态存亡，关闭模态即退订。
+    let enter_sub =
+        cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
+            if matches!(event, InputEvent::PressEnter { .. }) {
+                crate::editor::commit_editor_goto_line(this, window, cx);
+            }
         });
-        cx.notify();
-    }
+    shell.state.sftp_modals.goto_line = Some(EditorGotoLineModalState {
+        editor,
+        input,
+        error: None,
+        _enter_sub: enter_sub,
+    });
+    cx.notify();
+}
 
-    /// 关闭跳转模态并把焦点还给编辑器。
-    pub(crate) fn cancel_editor_goto_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let editor = self
-            .state
-            .sftp_modals
-            .goto_line
-            .take()
-            .map(|modal| modal.editor);
-        if let Some(editor) = editor {
-            editor.update(cx, |state, cx| state.focus(window, cx));
+/// 关闭跳转模态并把焦点还给编辑器。
+pub(crate) fn cancel_editor_goto_line(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    let editor = shell
+        .state
+        .sftp_modals
+        .goto_line
+        .take()
+        .map(|modal| modal.editor);
+    if let Some(editor) = editor {
+        editor.update(cx, |state, cx| state.focus(window, cx));
+    }
+    cx.notify();
+}
+
+/// 确认跳转：解析行号，越界收敛到 [1, 总行数]，展开遮挡折叠后移动光标。
+pub(crate) fn commit_editor_goto_line(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.sftp_modals.goto_line.as_ref() else {
+        return;
+    };
+    let editor = modal.editor.clone();
+    let raw = modal.input.read(cx).value().trim().to_string();
+    let Some(line) = raw.parse::<usize>().ok().filter(|line| *line >= 1) else {
+        if let Some(modal) = shell.state.sftp_modals.goto_line.as_mut() {
+            modal.error = Some(rust_i18n::t!("editor.goto_error").to_string());
         }
         cx.notify();
-    }
+        return;
+    };
+    apply_editor_goto(&editor, line as u32, None, window, cx);
+    shell.state.sftp_modals.goto_line = None;
+    cx.notify();
+}
 
-    /// 确认跳转：解析行号，越界收敛到 [1, 总行数]，展开遮挡折叠后移动光标。
-    pub(crate) fn commit_editor_goto_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.sftp_modals.goto_line.as_ref() else {
-            return;
-        };
-        let editor = modal.editor.clone();
-        let raw = modal.input.read(cx).value().trim().to_string();
-        let Some(line) = raw.parse::<usize>().ok().filter(|line| *line >= 1) else {
-            if let Some(modal) = self.state.sftp_modals.goto_line.as_mut() {
-                modal.error = Some(rust_i18n::t!("editor.goto_error").to_string());
-            }
-            cx.notify();
-            return;
-        };
-        apply_editor_goto(&editor, line as u32, None, window, cx);
-        self.state.sftp_modals.goto_line = None;
-        cx.notify();
-    }
+/// 渲染"跳转到行"输入模态：单行输入 + 取消/跳转，错误就地显示。
+pub(crate) fn render_editor_goto_line_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.goto_line.as_ref() else {
+        return div().into_any_element();
+    };
+    let editor = modal.editor.clone();
+    let input = modal.input.clone();
+    let error = modal.error.clone();
+    let total = editor.read(cx).text().lines_len();
 
-    /// 渲染"跳转到行"输入模态：单行输入 + 取消/跳转，错误就地显示。
-    pub(crate) fn render_editor_goto_line_body(
-        &self,
-        app: &Entity<AppShell>,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.goto_line.as_ref() else {
-            return div().into_any_element();
-        };
-        let editor = modal.editor.clone();
-        let input = modal.input.clone();
-        let error = modal.error.clone();
-        let total = editor.read(cx).text().lines_len();
-
-        let content = v_flex()
-            .gap_3()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("editor.goto_hint", total = total).to_string()),
-            )
-            .child(Input::new(&input).w_full())
-            .when_some(error, |this, err| {
-                this.child(
-                    h_flex()
-                        .items_center()
-                        .gap_1()
-                        .text_xs()
-                        .text_color(p.danger)
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ERROR)).xsmall())
-                        .child(err),
-                )
-            });
-
-        let footer = h_flex()
-            .gap_2()
-            .child(crate::widgets::dialog_cancel_button(
-                "editor-goto-cancel",
-                rust_i18n::t!("common.cancel").to_string(),
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.cancel_editor_goto_line(window, cx);
-                }),
-            ))
-            .child(crate::widgets::dialog_confirm_button(
-                "editor-goto-confirm",
-                rust_i18n::t!("editor.goto_action").to_string(),
-                Some(AppIcon::Ui(UiIcon::CHECK)),
-                crate::widgets::DialogConfirmKind::Primary,
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.commit_editor_goto_line(window, cx);
-                }),
-            ));
-
-        crate::widgets::dialog_body(
-            "editor-goto-line-modal",
-            rust_i18n::t!("editor.goto_title").to_string(),
-            None,
-            content,
-            Some(footer),
+    let content = v_flex()
+        .gap_3()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("editor.goto_hint", total = total).to_string()),
         )
-    }
+        .child(Input::new(&input).w_full())
+        .when_some(error, |this, err| {
+            this.child(
+                h_flex()
+                    .items_center()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(p.danger)
+                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ERROR)).xsmall())
+                    .child(err),
+            )
+        });
+
+    let footer = h_flex()
+        .gap_2()
+        .child(crate::widgets::dialog_cancel_button(
+            "editor-goto-cancel",
+            rust_i18n::t!("common.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                crate::editor::cancel_editor_goto_line(this, window, cx);
+            }),
+        ))
+        .child(crate::widgets::dialog_confirm_button(
+            "editor-goto-confirm",
+            rust_i18n::t!("editor.goto_action").to_string(),
+            Some(AppIcon::Ui(UiIcon::CHECK)),
+            crate::widgets::DialogConfirmKind::Primary,
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                crate::editor::commit_editor_goto_line(this, window, cx);
+            }),
+        ));
+
+    crate::widgets::dialog_body(
+        "editor-goto-line-modal",
+        rust_i18n::t!("editor.goto_title").to_string(),
+        None,
+        content,
+        Some(footer),
+    )
 }

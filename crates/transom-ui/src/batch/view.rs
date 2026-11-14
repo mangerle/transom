@@ -2,215 +2,213 @@
 
 use super::common::*;
 
-impl AppShell {
-    pub(crate) fn render_batch_edit_body(
-        &self,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(form) = self.state.modals.session.batch_edit.as_ref() else {
-            return div().into_any_element();
-        };
-        let selected_count = form.selected_count;
-        let change_port = form.change_port;
-        let change_username = form.change_username;
-        let error = form.error.clone();
+pub(crate) fn render_batch_edit_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _window: &mut Window,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(form) = shell.state.modals.session.batch_edit.as_ref() else {
+        return div().into_any_element();
+    };
+    let selected_count = form.selected_count;
+    let change_port = form.change_port;
+    let change_username = form.change_username;
+    let error = form.error.clone();
 
-        let port_row = crate::widgets::checkbox_field_row(
-            "batch-change-port",
-            change_port,
-            rust_i18n::t!("form.port").to_string(),
-            Input::new(&form.port).into_any_element(),
-            crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
-                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                    form.change_port = *checked;
-                }
-                cx.notify();
-            }),
-            p,
-        );
-
-        let username_row = crate::widgets::checkbox_field_row(
-            "batch-change-username",
-            change_username,
-            rust_i18n::t!("form.username").to_string(),
-            Input::new(&form.username).into_any_element(),
-            crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
-                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                    form.change_username = *checked;
-                }
-                cx.notify();
-            }),
-            p,
-        );
-
-        let auth_section = self.render_batch_auth_section(form, app, p);
-
-        let mut content = v_flex()
-            .gap_3()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("batch.hint", count = selected_count).to_string()),
-            )
-            .child(port_row)
-            .child(username_row)
-            .child(auth_section);
-        if let Some(error) = error {
-            content = content.child(div().text_sm().text_color(p.danger).child(error));
-        }
-
-        let footer = h_flex()
-            .gap_2()
-            .child(crate::widgets::dialog_cancel_button(
-                "cancel-batch-edit",
-                rust_i18n::t!("common.cancel").to_string(),
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.state.modals.session.batch_edit = None;
-                    cx.notify();
-                }),
-            ))
-            .child(crate::widgets::dialog_confirm_button(
-                "apply-batch-edit",
-                rust_i18n::t!("batch.apply").to_string(),
-                None,
-                crate::widgets::DialogConfirmKind::Primary,
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.save_batch_edit(cx);
-                }),
-            ));
-
-        crate::widgets::dialog_body(
-            "batch-edit-modal",
-            rust_i18n::t!("batch.title").to_string(),
-            Some(rust_i18n::t!("batch.apply_hint").to_string()),
-            content,
-            Some(footer),
-        )
-    }
-
-    /// 认证切换区：密码/私钥/Agent 选择与对应补充字段。
-    /// 批量认证方式三选一：口令、私钥、Agent。
-    fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyElement {
-        let auth_buttons = h_flex()
-            .gap_2()
-            .child(
-                Button::new("batch-auth-password")
-                    .small()
-                    .label(rust_i18n::t!("form.auth_password").to_string())
-                    .selected(auth == AuthChoice::Password)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                                form.auth = AuthChoice::Password;
-                            }
-                            cx.notify();
-                        },
-                    )),
-            )
-            .child(
-                Button::new("batch-auth-key")
-                    .small()
-                    .label(rust_i18n::t!("form.auth_key").to_string())
-                    .selected(auth == AuthChoice::PrivateKey)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                                form.auth = AuthChoice::PrivateKey;
-                            }
-                            cx.notify();
-                        },
-                    )),
-            )
-            .child(
-                Button::new("batch-auth-agent")
-                    .small()
-                    .label(rust_i18n::t!("form.auth_agent").to_string())
-                    .selected(auth == AuthChoice::Agent)
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                                form.auth = AuthChoice::Agent;
-                            }
-                            cx.notify();
-                        },
-                    )),
-            );
-
-        auth_buttons.into_any_element()
-    }
-
-    fn render_batch_auth_section(
-        &self,
-        form: &super::state::BatchEditForm,
-        app: &Entity<AppShell>,
-        p: &Palette,
-    ) -> AnyElement {
-        let change_auth = form.change_auth;
-        let auth = form.auth;
-        let save_passphrase = form.save_passphrase;
-        let auth_buttons = Self::render_batch_auth_buttons(auth, app);
-        let mut auth_section = v_flex().gap_2().child(crate::widgets::checkbox_field_row(
-            "batch-change-auth",
-            change_auth,
-            rust_i18n::t!("form.auth").to_string(),
-            auth_buttons.into_any_element(),
-            crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
-                if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
-                    form.change_auth = *checked;
-                }
-                cx.notify();
-            }),
-            p,
-        ));
-        if change_auth {
-            match auth {
-                AuthChoice::Password => {
-                    auth_section = auth_section.child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("batch.password_hint").to_string()),
-                    );
-                }
-                AuthChoice::PrivateKey => {
-                    auth_section = auth_section.child(Input::new(&form.key_path)).child(
-                        h_flex()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .child(rust_i18n::t!("form.save_passphrase").to_string()),
-                            )
-                            .child(
-                                Switch::new("batch-save-passphrase")
-                                    .small()
-                                    .checked(save_passphrase)
-                                    .on_click(crate::dialog_host::on_event(
-                                        app,
-                                        |this, checked: &bool, _, cx| {
-                                            if let Some(form) =
-                                                this.state.modals.session.batch_edit.as_mut()
-                                            {
-                                                form.save_passphrase = *checked;
-                                            }
-                                            cx.notify();
-                                        },
-                                    )),
-                            ),
-                    );
-                }
-                AuthChoice::Agent => {}
+    let port_row = crate::widgets::checkbox_field_row(
+        "batch-change-port",
+        change_port,
+        rust_i18n::t!("form.port").to_string(),
+        Input::new(&form.port).into_any_element(),
+        crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
+            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                form.change_port = *checked;
             }
-        }
+            cx.notify();
+        }),
+        p,
+    );
 
-        auth_section.into_any_element()
+    let username_row = crate::widgets::checkbox_field_row(
+        "batch-change-username",
+        change_username,
+        rust_i18n::t!("form.username").to_string(),
+        Input::new(&form.username).into_any_element(),
+        crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
+            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                form.change_username = *checked;
+            }
+            cx.notify();
+        }),
+        p,
+    );
+
+    let auth_section = render_batch_auth_section(shell, form, app, p);
+
+    let mut content = v_flex()
+        .gap_3()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("batch.hint", count = selected_count).to_string()),
+        )
+        .child(port_row)
+        .child(username_row)
+        .child(auth_section);
+    if let Some(error) = error {
+        content = content.child(div().text_sm().text_color(p.danger).child(error));
     }
+
+    let footer = h_flex()
+        .gap_2()
+        .child(crate::widgets::dialog_cancel_button(
+            "cancel-batch-edit",
+            rust_i18n::t!("common.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                this.state.modals.session.batch_edit = None;
+                cx.notify();
+            }),
+        ))
+        .child(crate::widgets::dialog_confirm_button(
+            "apply-batch-edit",
+            rust_i18n::t!("batch.apply").to_string(),
+            None,
+            crate::widgets::DialogConfirmKind::Primary,
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                crate::app::batch::save_batch_edit(this, cx);
+            }),
+        ));
+
+    crate::widgets::dialog_body(
+        "batch-edit-modal",
+        rust_i18n::t!("batch.title").to_string(),
+        Some(rust_i18n::t!("batch.apply_hint").to_string()),
+        content,
+        Some(footer),
+    )
+}
+
+/// 认证切换区：密码/私钥/Agent 选择与对应补充字段。
+/// 批量认证方式三选一：口令、私钥、Agent。
+fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyElement {
+    let auth_buttons = h_flex()
+        .gap_2()
+        .child(
+            Button::new("batch-auth-password")
+                .small()
+                .label(rust_i18n::t!("form.auth_password").to_string())
+                .selected(auth == AuthChoice::Password)
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                            form.auth = AuthChoice::Password;
+                        }
+                        cx.notify();
+                    },
+                )),
+        )
+        .child(
+            Button::new("batch-auth-key")
+                .small()
+                .label(rust_i18n::t!("form.auth_key").to_string())
+                .selected(auth == AuthChoice::PrivateKey)
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                            form.auth = AuthChoice::PrivateKey;
+                        }
+                        cx.notify();
+                    },
+                )),
+        )
+        .child(
+            Button::new("batch-auth-agent")
+                .small()
+                .label(rust_i18n::t!("form.auth_agent").to_string())
+                .selected(auth == AuthChoice::Agent)
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, _, cx| {
+                        if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                            form.auth = AuthChoice::Agent;
+                        }
+                        cx.notify();
+                    },
+                )),
+        );
+
+    auth_buttons.into_any_element()
+}
+
+fn render_batch_auth_section(
+    _shell: &AppShell,
+    form: &super::state::BatchEditForm,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let change_auth = form.change_auth;
+    let auth = form.auth;
+    let save_passphrase = form.save_passphrase;
+    let auth_buttons = render_batch_auth_buttons(auth, app);
+    let mut auth_section = v_flex().gap_2().child(crate::widgets::checkbox_field_row(
+        "batch-change-auth",
+        change_auth,
+        rust_i18n::t!("form.auth").to_string(),
+        auth_buttons.into_any_element(),
+        crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
+            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                form.change_auth = *checked;
+            }
+            cx.notify();
+        }),
+        p,
+    ));
+    if change_auth {
+        match auth {
+            AuthChoice::Password => {
+                auth_section = auth_section.child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("batch.password_hint").to_string()),
+                );
+            }
+            AuthChoice::PrivateKey => {
+                auth_section = auth_section.child(Input::new(&form.key_path)).child(
+                    h_flex()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(rust_i18n::t!("form.save_passphrase").to_string()),
+                        )
+                        .child(
+                            Switch::new("batch-save-passphrase")
+                                .small()
+                                .checked(save_passphrase)
+                                .on_click(crate::dialog_host::on_event(
+                                    app,
+                                    |this, checked: &bool, _, cx| {
+                                        if let Some(form) =
+                                            this.state.modals.session.batch_edit.as_mut()
+                                        {
+                                            form.save_passphrase = *checked;
+                                        }
+                                        cx.notify();
+                                    },
+                                )),
+                        ),
+                );
+            }
+            AuthChoice::Agent => {}
+        }
+    }
+
+    auth_section.into_any_element()
 }

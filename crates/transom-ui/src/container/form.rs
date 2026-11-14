@@ -37,23 +37,24 @@ mod run;
 
 pub(crate) use entity::{ContainerFormEvent, ContainerFormView};
 pub(crate) use render::ContainerFormFolders;
-pub(crate) use run::{ContainerRunFormEvent, ContainerRunFormView};
+pub(crate) use run::{
+    ContainerRunFormEvent, ContainerRunFormView, clone_container, on_container_run_form_event,
+    open_container_run_form, recreate_container,
+};
 
 /// 重启策略档位：与引擎允许集合保持一致，留空表示 `no`。
 const RUN_RESTART_POLICIES: [&str; 4] = ["no", "on-failure", "always", "unless-stopped"];
 
-impl AppShell {
-    /// 打开新建/编辑容器连接表单。
-    pub(crate) fn open_container_form(
-        &mut self,
-        profile: Option<ContainerEngineProfile>,
-        folder: Option<FolderId>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let view = self.state.modals.tools.container_form.clone();
-        view.update(cx, |view, cx| view.open(profile, folder, window, cx));
-        // 弹窗栈在外壳渲染里对账，实体变脏不会自动跑外壳的 reconcile。
-        cx.notify();
-    }
+/// 打开新建/编辑容器连接表单。
+pub(crate) fn open_container_form(
+    shell: &mut AppShell,
+    profile: Option<ContainerEngineProfile>,
+    folder: Option<FolderId>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let view = shell.state.modals.tools.container_form.clone();
+    view.update(cx, |view, cx| view.open(profile, folder, window, cx));
+    // 弹窗栈在外壳渲染里对账，实体变脏不会自动跑外壳的 reconcile。
+    cx.notify();
 }

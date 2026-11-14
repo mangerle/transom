@@ -12,9 +12,9 @@
 //!   回来不丢；
 //! - 勾选集合存在标签页状态里而不是模态框里：关掉模态框再打开，勾选不该丢。
 
-mod change_tree;
+pub(super) mod change_tree;
 pub(crate) mod dir_tree;
-mod file_row;
+pub(super) mod file_row;
 mod group_menu;
 
 pub(crate) use file_row::{amend_file_row, worktree_diff_request};
@@ -42,22 +42,21 @@ pub(crate) struct GitAmendTargetParams<'a> {
     pub(crate) palette: &'a Palette,
 }
 
-impl AppShell {
-    /// 「修正」旁边的目标提交展示与选择：
-    /// 只显示哈希，悬停显示完整说明，小倒三角点击下拉选择未推送到远端的本地提交。
-    pub(crate) fn git_amend_target_button(
-        &mut self,
-        params: GitAmendTargetParams<'_>,
-        cx: &App,
-    ) -> AnyElement {
-        let GitAmendTargetParams {
-            app,
-            tab_id,
-            project,
-            palette: p,
-        } = params;
-        let (candidates, selected) =
-            if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+/// 「修正」旁边的目标提交展示与选择：
+/// 只显示哈希，悬停显示完整说明，小倒三角点击下拉选择未推送到远端的本地提交。
+pub(crate) fn git_amend_target_button(
+    shell: &mut AppShell,
+    params: GitAmendTargetParams<'_>,
+    cx: &App,
+) -> AnyElement {
+    let GitAmendTargetParams {
+        app,
+        tab_id,
+        project,
+        palette: p,
+    } = params;
+    let (candidates, selected) =
+        if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
                 let state = &workspace.read(cx).state;
                 let ahead = state.status.as_ref().map(|s| s.ahead as usize).unwrap_or(0);
                 let has_upstream = state
@@ -131,7 +130,7 @@ impl AppShell {
                         move |_menu, window, cx| {
                             let oid = item_oid.clone();
                             item_app.update(cx, |this, cx| {
-                                this.git_select_amend_target(tab_id, oid, window, cx);
+                                crate::git::actions::git_select_amend_target(this, tab_id, oid, window, cx);
                             });
                         },
                     ));
@@ -141,113 +140,110 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 「分组依据」菜单：平铺 / 按目录。
-    ///
-    /// 菜单回调只拿得到 `&mut App`，因此这里显式带上 `Entity<AppShell>`：
-    /// 与 `log_view` 的引用栏同一套写法，避免在渲染期持有可变借用。
-    pub(crate) fn git_grouping_menu(
-        &mut self,
-        app: Entity<AppShell>,
-        project: GitProject,
-        by_directory: bool,
-    ) -> AnyElement {
-        let expand_app = app.clone();
-        let expand_project = project.clone();
-        let collapse_app = app.clone();
-        let collapse_project = project.clone();
-        Button::new("git-grouping")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(UiIcon::SHOW))
-            .accessibility_label(rust_i18n::t!("git.group.by").to_string())
-            .tooltip(rust_i18n::t!("git.group.by").to_string())
-            .dropdown_menu(move |menu, _window, _cx| {
-                let flat_app = app.clone();
-                let flat_project = project.clone();
-                let dir_app = app.clone();
-                let dir_project = project.clone();
-                let expand_app = expand_app.clone();
-                let expand_project = expand_project.clone();
-                let collapse_app = collapse_app.clone();
-                let collapse_project = collapse_project.clone();
-                menu.item(menu_item(
-                    rust_i18n::t!("git.group.flat").to_string(),
+/// 「分组依据」菜单：平铺 / 按目录。
+///
+/// 菜单回调只拿得到 `&mut App`，因此这里显式带上 `Entity<AppShell>`：
+/// 与 `log_view` 的引用栏同一套写法，避免在渲染期持有可变借用。
+pub(crate) fn git_grouping_menu(
+    app: Entity<AppShell>,
+    project: GitProject,
+    by_directory: bool,
+) -> AnyElement {
+    let expand_app = app.clone();
+    let expand_project = project.clone();
+    let collapse_app = app.clone();
+    let collapse_project = project.clone();
+    Button::new("git-grouping")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(UiIcon::SHOW))
+        .accessibility_label(rust_i18n::t!("git.group.by").to_string())
+        .tooltip(rust_i18n::t!("git.group.by").to_string())
+        .dropdown_menu(move |menu, _window, _cx| {
+            let flat_app = app.clone();
+            let flat_project = project.clone();
+            let dir_app = app.clone();
+            let dir_project = project.clone();
+            let expand_app = expand_app.clone();
+            let expand_project = expand_project.clone();
+            let collapse_app = collapse_app.clone();
+            let collapse_project = collapse_project.clone();
+            menu.item(menu_item(
+                rust_i18n::t!("git.group.flat").to_string(),
+                if by_directory {
+                    AppIcon::Ui(UiIcon::SHOW)
+                } else {
+                    AppIcon::Ui(UiIcon::CHECK)
+                },
+                move |_, _, cx| {
+                    if !by_directory {
+                        return;
+                    }
+                    let target = flat_project.clone();
+                    flat_app.update(cx, |this, cx| {
+                        crate::git::actions::git_toggle_group_by_directory(this, &target, cx);
+                    });
+                },
+            ))
+            .item(menu_item(
+                rust_i18n::t!("git.group.by_directory").to_string(),
+                if by_directory {
+                    AppIcon::Ui(UiIcon::CHECK)
+                } else {
+                    AppIcon::Ui(UiIcon::SHOW)
+                },
+                move |_, _, cx| {
                     if by_directory {
-                        AppIcon::Ui(UiIcon::SHOW)
-                    } else {
-                        AppIcon::Ui(UiIcon::CHECK)
-                    },
-                    move |_, _, cx| {
-                        if !by_directory {
-                            return;
-                        }
-                        let target = flat_project.clone();
-                        flat_app.update(cx, |this, cx| {
-                            this.git_toggle_group_by_directory(&target, cx);
-                        });
-                    },
-                ))
-                .item(menu_item(
-                    rust_i18n::t!("git.group.by_directory").to_string(),
-                    if by_directory {
-                        AppIcon::Ui(UiIcon::CHECK)
-                    } else {
-                        AppIcon::Ui(UiIcon::SHOW)
-                    },
-                    move |_, _, cx| {
-                        if by_directory {
-                            return;
-                        }
-                        let target = dir_project.clone();
-                        dir_app.update(cx, |this, cx| {
-                            this.git_toggle_group_by_directory(&target, cx);
-                        });
-                    },
-                ))
-                .item(PopupMenuItem::separator())
-                .item(menu_item(
-                    rust_i18n::t!("git.group.expand_all").to_string(),
-                    AppIcon::Ui(UiIcon::CHEVRON_DOWN),
-                    move |_, _, cx| {
-                        let target = expand_project.clone();
-                        expand_app.update(cx, |this, cx| {
-                            this.git_expand_all_groups(&target, cx);
-                        });
-                    },
-                ))
-                .item(menu_item(
-                    rust_i18n::t!("git.group.collapse_all").to_string(),
-                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT),
-                    move |_, _, cx| {
-                        let target = collapse_project.clone();
-                        collapse_app.update(cx, |this, cx| {
-                            this.git_collapse_all_groups(&target, cx);
-                        });
-                    },
-                ))
-            })
-            .into_any_element()
-    }
+                        return;
+                    }
+                    let target = dir_project.clone();
+                    dir_app.update(cx, |this, cx| {
+                        crate::git::actions::git_toggle_group_by_directory(this, &target, cx);
+                    });
+                },
+            ))
+            .item(PopupMenuItem::separator())
+            .item(menu_item(
+                rust_i18n::t!("git.group.expand_all").to_string(),
+                AppIcon::Ui(UiIcon::CHEVRON_DOWN),
+                move |_, _, cx| {
+                    let target = expand_project.clone();
+                    expand_app.update(cx, |this, cx| {
+                        crate::git::actions::git_expand_all_groups(this, &target, cx);
+                    });
+                },
+            ))
+            .item(menu_item(
+                rust_i18n::t!("git.group.collapse_all").to_string(),
+                AppIcon::Ui(UiIcon::CHEVRON_RIGHT),
+                move |_, _, cx| {
+                    let target = collapse_project.clone();
+                    collapse_app.update(cx, |this, cx| {
+                        crate::git::actions::git_collapse_all_groups(this, &target, cx);
+                    });
+                },
+            ))
+        })
+        .into_any_element()
+}
 
-    /// 一个带勾选框的行内开关（修正 / 提交后推送）。
-    pub(crate) fn git_check_toggle(
-        &mut self,
-        id: &'static str,
-        label: String,
-        checked: bool,
-        p: &Palette,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> AnyElement {
-        h_flex()
-            .id(ElementId::Name(id.into()))
-            .gap_1()
-            .items_center()
-            .cursor_pointer()
-            .child(check_box(checked, p))
-            .child(div().text_xs().text_color(p.muted_foreground).child(label))
-            .on_click(handler)
-            .into_any_element()
-    }
+/// 一个带勾选框的行内开关（修正 / 提交后推送）。
+pub(crate) fn git_check_toggle(
+    id: &'static str,
+    label: String,
+    checked: bool,
+    p: &Palette,
+    handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    h_flex()
+        .id(ElementId::Name(id.into()))
+        .gap_1()
+        .items_center()
+        .cursor_pointer()
+        .child(check_box(checked, p))
+        .child(div().text_xs().text_color(p.muted_foreground).child(label))
+        .on_click(handler)
+        .into_any_element()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

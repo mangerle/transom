@@ -4,7 +4,7 @@ use super::iac::{IacParser, escape_iac};
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard};
 use std::time::Duration;
 use transom_core::{TerminalIo, TextEncoding};
 
@@ -30,12 +30,8 @@ impl TelnetWire {
         self.lock().write_all(bytes)
     }
 
-    /// 统一处理锁中毒：数据本体是 TCP 流，panic 不会破坏其内部一致性，
-    /// 直接取回内部值继续使用，不向调用方扩散毒化错误。
     fn lock(&self) -> MutexGuard<'_, Box<dyn Write + Send>> {
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.inner.lock()
     }
 }
 

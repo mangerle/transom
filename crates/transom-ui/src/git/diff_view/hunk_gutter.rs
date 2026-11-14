@@ -93,7 +93,8 @@ fn render_unstaged_hunk_button(
                     move |_, _, cx| {
                         let patch = s_patch.clone();
                         s_app.update(cx, |this, cx| {
-                            this.git_apply_hunk_patch(
+                            crate::git::actions::git_apply_hunk_patch(
+                                this,
                                 tab_id,
                                 GitAction::StageHunk,
                                 patch,
@@ -110,7 +111,8 @@ fn render_unstaged_hunk_button(
                     move |_, _, cx| {
                         let patch = r_patch.clone();
                         r_app.update(cx, |this, cx| {
-                            this.git_apply_hunk_patch(
+                            crate::git::actions::git_apply_hunk_patch(
+                                this,
                                 tab_id,
                                 GitAction::RevertHunk,
                                 patch,
@@ -142,7 +144,15 @@ fn render_staged_hunk_button(
         .on_click(move |_, _, cx| {
             let patch = patch.clone();
             app.update(cx, |this, cx| {
-                this.git_apply_hunk_patch(tab_id, GitAction::UnstageHunk, patch, true, true, cx);
+                crate::git::actions::git_apply_hunk_patch(
+                    this,
+                    tab_id,
+                    GitAction::UnstageHunk,
+                    patch,
+                    true,
+                    true,
+                    cx,
+                );
             });
         })
         .into_any_element()

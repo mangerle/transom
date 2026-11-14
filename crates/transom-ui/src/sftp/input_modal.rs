@@ -23,25 +23,23 @@ pub(crate) struct SftpInputModalParams {
     pub(crate) target: SftpInputTarget,
 }
 
-impl AppShell {
-    /// 装配并打开一个 SFTP 输入弹窗。
-    pub(crate) fn open_sftp_input_modal(
-        &mut self,
-        params: SftpInputModalParams,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let input = sftp_text_input(window, cx, &params.value, &params.placeholder);
-        input.update(cx, |state, cx| state.focus(window, cx));
-        self.state.sftp_modals.input = Some(SftpInputModalState {
-            tab_id: params.tab_id,
-            connection_id: params.connection_id,
-            title: params.title,
-            prompt: params.prompt,
-            input,
-            target: params.target,
-            error: None,
-        });
-        cx.notify();
-    }
+/// 装配并打开一个 SFTP 输入弹窗。
+pub(crate) fn open_sftp_input_modal(
+    shell: &mut AppShell,
+    params: SftpInputModalParams,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let input = sftp_text_input(window, cx, &params.value, &params.placeholder);
+    input.update(cx, |state, cx| state.focus(window, cx));
+    shell.state.sftp_modals.input = Some(SftpInputModalState {
+        tab_id: params.tab_id,
+        connection_id: params.connection_id,
+        title: params.title,
+        prompt: params.prompt,
+        input,
+        target: params.target,
+        error: None,
+    });
+    cx.notify();
 }

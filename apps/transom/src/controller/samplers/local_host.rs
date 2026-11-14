@@ -18,7 +18,7 @@ use transom_core::{
 use transom_platform::system::{HostSampler, NetworkTotals, SystemSnapshot};
 
 /// 本地宿主采样订阅表。
-pub(crate) type LocalHostTabs = Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>;
+pub(crate) type LocalHostTabs = Arc<parking_lot::Mutex<Vec<(TabId, ConnectionId)>>>;
 
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 const SYSTEM_EVERY_N_ROUNDS: u64 = 3;
@@ -39,10 +39,12 @@ pub(crate) async fn run_local_host_sampler(
     let mut round = 0u64;
     loop {
         interval.tick().await;
-        let subscribers = match tabs.lock() {
-            Ok(tabs) if tabs.is_empty() => break,
-            Ok(tabs) => tabs.clone(),
-            Err(_) => break,
+        let subscribers = {
+            let tabs = tabs.lock();
+            if tabs.is_empty() {
+                break;
+            }
+            tabs.clone()
         };
         if previous.is_none()
             && !broadcast_traffic(&event_tx, &subscribers, NetworkTraffic::default())

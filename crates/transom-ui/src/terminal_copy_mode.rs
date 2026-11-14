@@ -9,23 +9,21 @@ use crate::app::AppShell;
 use crate::keymap;
 use gpui_kit::*;
 
-impl AppShell {
-    pub(crate) fn on_toggle_copy_mode(
-        &mut self,
-        _: &keymap::ToggleCopyMode,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
-            return;
-        };
-        // 先把焦点交给终端：从侧栏/面板触发时焦点还在输入框里，模式虽然
-        // 打开了，后续按键却继续落进那个输入框，像"按了没反应"。
-        let focus_handle = terminal.read(cx).focus_handle().clone();
-        window.focus(&focus_handle, cx);
-        terminal.update(cx, |view, cx| {
-            view.toggle_copy_mode(cx);
-        });
-        cx.notify();
-    }
+pub(crate) fn on_toggle_copy_mode(
+    shell: &mut AppShell,
+    _: &keymap::ToggleCopyMode,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
+        return;
+    };
+    // 先把焦点交给终端：从侧栏/面板触发时焦点还在输入框里，模式虽然
+    // 打开了，后续按键却继续落进那个输入框，像"按了没反应"。
+    let focus_handle = terminal.read(cx).focus_handle().clone();
+    window.focus(&focus_handle, cx);
+    terminal.update(cx, |view, cx| {
+        view.toggle_copy_mode(cx);
+    });
+    cx.notify();
 }

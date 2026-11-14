@@ -26,40 +26,38 @@ pub(crate) struct ClipboardWritePrompt {
     pub(crate) text: String,
 }
 
-impl AppShell {
-    /// 登记一次远端剪贴板写入请求。
-    ///
-    /// 已有待裁决请求时静默丢弃后来的（无论来自哪个窗格）：弹窗只有一份，
-    /// 覆盖会让前一个请求凭空消失；而程序往往在每次复制时连发，排队弹窗
-    /// 也只会把界面淹没，用户的一次决定足以覆盖这段连续请求。
-    pub(crate) fn request_clipboard_permission(
-        &mut self,
-        tab_id: TabId,
-        text: String,
-        cx: &mut Context<Self>,
-    ) {
-        let prompts = self.state.modals.connection.prompts.clone();
-        if let Some(pending) = prompts.read(cx).clipboard() {
-            log::debug!(
-                "已有待裁决的远端剪贴板请求，本次请求被忽略，窗格: {tab_id}，待裁决窗格: {}",
-                pending.tab_id
-            );
-            return;
-        }
-        let Some(tab) = self.state.workspace.tab(tab_id) else {
-            return;
-        };
-        let session_name = tab.session.name.clone();
-        prompts.update(cx, |view, cx| {
-            view.open_clipboard(
-                ClipboardWritePrompt {
-                    tab_id,
-                    session_name,
-                    text,
-                },
-                cx,
-            );
-        });
-        cx.notify();
+/// 登记一次远端剪贴板写入请求。
+///
+/// 已有待裁决请求时静默丢弃后来的（无论来自哪个窗格）：弹窗只有一份，
+/// 覆盖会让前一个请求凭空消失；而程序往往在每次复制时连发，排队弹窗
+/// 也只会把界面淹没，用户的一次决定足以覆盖这段连续请求。
+pub(crate) fn request_clipboard_permission(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    text: String,
+    cx: &mut Context<AppShell>,
+) {
+    let prompts = shell.state.modals.connection.prompts.clone();
+    if let Some(pending) = prompts.read(cx).clipboard() {
+        log::debug!(
+            "已有待裁决的远端剪贴板请求，本次请求被忽略，窗格: {tab_id}，待裁决窗格: {}",
+            pending.tab_id
+        );
+        return;
     }
+    let Some(tab) = shell.state.workspace.tab(tab_id) else {
+        return;
+    };
+    let session_name = tab.session.name.clone();
+    prompts.update(cx, |view, cx| {
+        view.open_clipboard(
+            ClipboardWritePrompt {
+                tab_id,
+                session_name,
+                text,
+            },
+            cx,
+        );
+    });
+    cx.notify();
 }

@@ -26,9 +26,9 @@ fn volume_name_from_path(path: &Path) -> String {
     }
 }
 
-impl AppShell {
+impl ContainerWorkspace {
     /// 备份指定数据卷为本地 Tar 压缩包。
-    pub(crate) fn backup_volume(&mut self, tab_id: TabId, volume: String, cx: &mut Context<Self>) {
+    pub(crate) fn backup_volume(&mut self, volume: String, cx: &mut Context<Self>) {
         let default_name = format!("{}.tar", volume.replace(['/', ':'], "_"));
         let Some(local_path) = rfd::FileDialog::new()
             .set_file_name(&default_name)
@@ -39,32 +39,22 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.notice =
-                    Some(rust_i18n::t!("container.transfer.start").to_string());
-            });
-        }
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::BackupVolume {
-                        tab_id,
-                        request_id,
-                        volume,
-                        local_path,
-                    },
-                );
-            });
-        }
+        self.state.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            request_id,
+            ContainerCommand::BackupVolume {
+                tab_id: self.tab_id,
+                request_id,
+                volume,
+                local_path,
+            },
+        );
         cx.notify();
     }
 
     /// 从本地 Tar 压缩包还原到数据卷中（若目标卷未指定，默认采用文件名作为卷名）。
     pub(crate) fn restore_volume(
         &mut self,
-        tab_id: TabId,
         target_volume: Option<String>,
         cx: &mut Context<Self>,
     ) {
@@ -77,25 +67,16 @@ impl AppShell {
 
         let volume = target_volume.unwrap_or_else(|| volume_name_from_path(&local_path));
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.notice =
-                    Some(rust_i18n::t!("container.transfer.start").to_string());
-            });
-        }
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::RestoreVolume {
-                        tab_id,
-                        request_id,
-                        volume,
-                        local_path,
-                    },
-                );
-            });
-        }
+        self.state.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            request_id,
+            ContainerCommand::RestoreVolume {
+                tab_id: self.tab_id,
+                request_id,
+                volume,
+                local_path,
+            },
+        );
         cx.notify();
     }
 }

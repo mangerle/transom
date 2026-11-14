@@ -135,58 +135,61 @@ pub(crate) fn find_folder_by_name(
         .map(|folder| folder.id)
 }
 
-impl AppShell {
-    /// 当前活动标签页对应的 Git 项目 id：侧栏据此给行上激活底色与左竖条。
-    pub(crate) fn active_git_project_id(&self, cx: &App) -> Option<GitProjectId> {
-        let tab_id = self.state.workspace.active_tab?;
-        self.state
-            .git_workspace(tab_id)
-            .map(|workspace| workspace.read(cx).state.project.id)
-    }
+/// 当前活动标签页对应的 Git 项目 id：侧栏据此给行上激活底色与左竖条。
+pub(crate) fn active_git_project_id(shell: &AppShell, cx: &App) -> Option<GitProjectId> {
+    let tab_id = shell.state.workspace.active_tab?;
+    shell
+        .state
+        .git_workspace(tab_id)
+        .map(|workspace| workspace.read(cx).state.project.id)
+}
 
-    /// 取"当前上下文项目"：`Some(tab_id)` 时按标签定位，否则取第一个 Git 标签。
-    ///
-    /// 右键菜单只带得动项目 id 之外的信息，这里退回"最近一个 Git 标签"，
-    /// 与 IDEA 在工具窗口里对当前仓库执行动作的语义一致。
-    pub(crate) fn git_project_of_tab(&self, tab_id: Option<TabId>, cx: &App) -> Option<GitProject> {
-        let workspace = match tab_id {
-            Some(tab_id) => self.state.git_workspace(tab_id)?,
-            None => self
-                .state
-                .workspace
-                .tabs
-                .iter()
-                .rev()
-                .find_map(|tab| tab.git())?,
-        };
-        Some(workspace.read(cx).state.project.clone())
-    }
+/// 取"当前上下文项目"：`Some(tab_id)` 时按标签定位，否则取第一个 Git 标签。
+///
+/// 右键菜单只带得动项目 id 之外的信息，这里退回"最近一个 Git 标签"，
+/// 与 IDEA 在工具窗口里对当前仓库执行动作的语义一致。
+pub(crate) fn git_project_of_tab(
+    shell: &AppShell,
+    tab_id: Option<TabId>,
+    cx: &App,
+) -> Option<GitProject> {
+    let workspace = match tab_id {
+        Some(tab_id) => shell.state.git_workspace(tab_id)?,
+        None => shell
+            .state
+            .workspace
+            .tabs
+            .iter()
+            .rev()
+            .find_map(|tab| tab.git())?,
+    };
+    Some(workspace.read(cx).state.project.clone())
+}
 
-    /// 切换一个文件的勾选态（提交面板的待提交集）。
-    pub(crate) fn toggle_git_checked(
-        &mut self,
-        project: &GitProject,
-        path: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) else {
-            return;
-        };
-        workspace.update(cx, |workspace, _| {
-            let checked = &mut workspace.state.checked;
-            if !checked.remove(path) {
-                checked.insert(path.to_string());
-            }
-        });
-        cx.notify();
-    }
+/// 切换一个文件的勾选态（提交面板的待提交集）。
+pub(crate) fn toggle_git_checked(
+    shell: &mut AppShell,
+    project: &GitProject,
+    path: &str,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
+        return;
+    };
+    workspace.update(cx, |workspace, _| {
+        let checked = &mut workspace.state.checked;
+        if !checked.remove(path) {
+            checked.insert(path.to_string());
+        }
+    });
+    cx.notify();
+}
 
-    /// 把文本写入系统剪贴板。
-    pub(crate) fn write_clipboard(&mut self, text: &str, cx: &mut Context<Self>) {
-        cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-        self.set_transient_status(rust_i18n::t!("git.menu.copied"), cx);
-        cx.notify();
-    }
+/// 把文本写入系统剪贴板。
+pub(crate) fn write_clipboard(shell: &mut AppShell, text: &str, cx: &mut Context<AppShell>) {
+    cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+    shell.set_transient_status(rust_i18n::t!("git.menu.copied"), cx);
+    cx.notify();
 }
 
 #[cfg(test)]

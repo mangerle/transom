@@ -74,288 +74,294 @@ impl GitPushModal {
     }
 }
 
-impl AppShell {
-    /// 判断目标分支是否属于受保护分支（禁止直接无条件强推）。
-    pub(crate) fn is_git_branch_protected(&self, branch: &str, cx: &App) -> bool {
-        let target = branch.trim().to_lowercase();
-        let settings = crate::app::app_settings(cx);
-        let raw = settings.git.protected_branches.trim();
-        let patterns: Vec<&str> = if raw.is_empty() {
-            vec!["main", "master", "release", "prod"]
-        } else {
-            raw.split([',', '，', ';', ' '])
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .collect()
-        };
-        patterns.iter().any(|pat| {
-            let p = pat.to_lowercase();
-            !p.is_empty() && (target == p || target.starts_with(&format!("{p}/")))
+/// 判断目标分支是否属于受保护分支（禁止直接无条件强推）。
+pub(super) fn is_git_branch_protected(branch: &str, cx: &App) -> bool {
+    let target = branch.trim().to_lowercase();
+    let settings = crate::app::app_settings(cx);
+    let raw = settings.git.protected_branches.trim();
+    let patterns: Vec<&str> = if raw.is_empty() {
+        vec!["main", "master", "release", "prod"]
+    } else {
+        raw.split([',', '，', ';', ' '])
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    patterns.iter().any(|pat| {
+        let p = pat.to_lowercase();
+        !p.is_empty() && (target == p || target.starts_with(&format!("{p}/")))
+    })
+}
+
+/// 唤起 Git 推送模态弹窗并异步加载真实的待推送提交。
+pub(crate) fn open_git_push_modal(
+    shell: &mut AppShell,
+    project: &GitProject,
+    target_branch: Option<String>,
+    cx: &mut Context<AppShell>,
+) {
+    let (branch_name, upstream_name) = shell
+        .state
+        .git_workspace_of_project(project.id, cx)
+        .map(|workspace| {
+            let state = &workspace.read(cx).state;
+            let head_branch = state
+                .status
+                .as_ref()
+                .and_then(|s| match &s.head {
+                    HeadState::OnBranch(name) => Some(name.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| "HEAD".to_string());
+            let branch = target_branch.unwrap_or(head_branch);
+            let upstream = state.status.as_ref().and_then(|s| s.upstream.clone());
+            (branch, upstream)
         })
-    }
+        .unwrap_or_else(|| ("HEAD".to_string(), None));
 
-    /// 唤起 Git 推送模态弹窗并异步加载真实的待推送提交。
-    pub(crate) fn open_git_push_modal(
-        &mut self,
-        project: &GitProject,
-        target_branch: Option<String>,
-        cx: &mut Context<Self>,
-    ) {
-        let (branch_name, upstream_name) = self
-            .state
-            .git_workspace_of_project(project.id, cx)
-            .map(|workspace| {
-                let state = &workspace.read(cx).state;
-                let head_branch = state
-                    .status
-                    .as_ref()
-                    .and_then(|s| match &s.head {
-                        HeadState::OnBranch(name) => Some(name.clone()),
-                        _ => None,
-                    })
-                    .unwrap_or_else(|| "HEAD".to_string());
-                let branch = target_branch.unwrap_or(head_branch);
-                let upstream = state.status.as_ref().and_then(|s| s.upstream.clone());
-                (branch, upstream)
-            })
-            .unwrap_or_else(|| ("HEAD".to_string(), None));
-
-        let (remote, remote_branch) = if let Some(ref up) = upstream_name {
-            if let Some((r, b)) = up.split_once('/') {
-                (r.to_string(), b.to_string())
-            } else {
-                ("origin".to_string(), up.clone())
-            }
+    let (remote, remote_branch) = if let Some(ref up) = upstream_name {
+        if let Some((r, b)) = up.split_once('/') {
+            (r.to_string(), b.to_string())
         } else {
-            ("origin".to_string(), branch_name.clone())
-        };
-
-        let modal = GitPushModal::new(
-            project.clone(),
-            branch_name.clone(),
-            remote.clone(),
-            remote_branch.clone(),
-        );
-
-        // 派发 LoadOutgoingCommits 查询真实的待推送提交历史
-        let request_id = GitRequestId::new();
-        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.pending.push(request_id);
-            });
+            ("origin".to_string(), up.clone())
         }
-        self.send_command(GitCommand::LoadOutgoingCommits {
-            project: project.clone(),
-            request_id,
-            branch: branch_name,
-            remote: Some(remote),
-            remote_branch: Some(remote_branch),
+    } else {
+        ("origin".to_string(), branch_name.clone())
+    };
+
+    let modal = GitPushModal::new(
+        project.clone(),
+        branch_name.clone(),
+        remote.clone(),
+        remote_branch.clone(),
+    );
+
+    // 派发 LoadOutgoingCommits 查询真实的待推送提交历史
+    let request_id = GitRequestId::new();
+    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
+        workspace.update(cx, |workspace, _| {
+            workspace.state.pending.push(request_id);
         });
-
-        self.state.modals.git.push = Some(modal);
-        cx.notify();
     }
+    shell.send_command(GitCommand::LoadOutgoingCommits {
+        project: project.clone(),
+        request_id,
+        branch: branch_name,
+        remote: Some(remote),
+        remote_branch: Some(remote_branch),
+    });
 
-    /// 待推送提交列表加载完成落地。
-    pub(crate) fn git_apply_outgoing_commits(
-        &mut self,
-        project_id: GitProjectId,
-        branch: &str,
-        remote_branch: &str,
-        commits: Vec<CommitEntry>,
-        cx: &mut Context<Self>,
-    ) {
-        let (project, first_oid) = {
-            let Some(modal) = self.state.modals.git.push.as_mut() else {
-                return;
-            };
-            if modal.project.id != project_id
-                || modal.branch != branch
-                || modal.remote_branch != remote_branch
-            {
-                return;
-            }
+    shell.state.modals.git.push = Some(modal);
+    cx.notify();
+}
 
-            modal.commits_loading = false;
-            modal.selected_oid = commits.first().map(|c| c.oid.clone());
-            let first_oid = modal.selected_oid.clone();
-            modal.commits = commits;
-            modal.files_loading = first_oid.is_some();
-            (modal.project.clone(), first_oid)
-        };
-
-        if let Some(oid) = first_oid {
-            let request_id = GitRequestId::new();
-            if let Some(workspace) = self.state.git_workspace_of_project(project_id, cx) {
-                workspace.update(cx, |workspace, _| {
-                    workspace.state.pending.push(request_id);
-                });
-            }
-            self.send_command(GitCommand::LoadCommitFiles {
-                project,
-                request_id,
-                oid,
-            });
-        }
-        cx.notify();
-    }
-
-    /// 关闭推送模态弹窗。
-    pub(crate) fn close_git_push_modal(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.git.push = None;
-        cx.notify();
-    }
-
-    /// 切换当前选中的待推送提交，并拉取该提交的改动文件清单。
-    pub(crate) fn git_select_push_commit(&mut self, oid: String, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.push.as_mut() else {
+/// 待推送提交列表加载完成落地。
+pub(crate) fn git_apply_outgoing_commits(
+    shell: &mut AppShell,
+    project_id: GitProjectId,
+    branch: &str,
+    remote_branch: &str,
+    commits: Vec<CommitEntry>,
+    cx: &mut Context<AppShell>,
+) {
+    let (project, first_oid) = {
+        let Some(modal) = shell.state.modals.git.push.as_mut() else {
             return;
         };
-        if modal.selected_oid.as_deref() == Some(&oid) {
+        if modal.project.id != project_id
+            || modal.branch != branch
+            || modal.remote_branch != remote_branch
+        {
             return;
         }
-        modal.selected_oid = Some(oid.clone());
-        modal.commit_files.clear();
-        modal.files_loading = true;
 
-        let project = modal.project.clone();
+        modal.commits_loading = false;
+        modal.selected_oid = commits.first().map(|c| c.oid.clone());
+        let first_oid = modal.selected_oid.clone();
+        modal.commits = commits;
+        modal.files_loading = first_oid.is_some();
+        (modal.project.clone(), first_oid)
+    };
+
+    if let Some(oid) = first_oid {
         let request_id = GitRequestId::new();
-        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+        if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
             workspace.update(cx, |workspace, _| {
                 workspace.state.pending.push(request_id);
             });
         }
-        self.send_command(GitCommand::LoadCommitFiles {
+        shell.send_command(GitCommand::LoadCommitFiles {
             project,
             request_id,
             oid,
         });
+    }
+    cx.notify();
+}
+
+/// 关闭推送模态弹窗。
+pub(crate) fn close_git_push_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    shell.state.modals.git.push = None;
+    cx.notify();
+}
+
+/// 切换当前选中的待推送提交，并拉取该提交的改动文件清单。
+pub(super) fn git_select_push_commit(
+    shell: &mut AppShell,
+    oid: String,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(modal) = shell.state.modals.git.push.as_mut() else {
+        return;
+    };
+    if modal.selected_oid.as_deref() == Some(&oid) {
+        return;
+    }
+    modal.selected_oid = Some(oid.clone());
+    modal.commit_files.clear();
+    modal.files_loading = true;
+
+    let project = modal.project.clone();
+    let request_id = GitRequestId::new();
+    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
+        workspace.update(cx, |workspace, _| {
+            workspace.state.pending.push(request_id);
+        });
+    }
+    shell.send_command(GitCommand::LoadCommitFiles {
+        project,
+        request_id,
+        oid,
+    });
+    cx.notify();
+}
+
+/// 提交的文件清单加载完成落地。
+pub(crate) fn git_apply_push_commit_files(
+    shell: &mut AppShell,
+    oid: &str,
+    files: Vec<CommitFile>,
+) {
+    let Some(modal) = shell.state.modals.git.push.as_mut() else {
+        return;
+    };
+    if modal.selected_oid.as_deref() == Some(oid) {
+        modal.commit_files = files;
+        modal.files_loading = false;
+    }
+}
+
+/// 循环切换推送标签模式（None -> FollowTags -> AllTags -> None）。
+pub(super) fn git_cycle_push_tags_mode(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    if let Some(modal) = shell.state.modals.git.push.as_mut() {
+        modal.tags_mode = match modal.tags_mode {
+            PushTagsMode::None => PushTagsMode::FollowTags,
+            PushTagsMode::FollowTags => PushTagsMode::AllTags,
+            PushTagsMode::AllTags => PushTagsMode::None,
+        };
         cx.notify();
     }
+}
 
-    /// 提交的文件清单加载完成落地。
-    pub(crate) fn git_apply_push_commit_files(&mut self, oid: &str, files: Vec<CommitFile>) {
-        let Some(modal) = self.state.modals.git.push.as_mut() else {
-            return;
-        };
-        if modal.selected_oid.as_deref() == Some(oid) {
-            modal.commit_files = files;
-            modal.files_loading = false;
-        }
+/// 切换强制推送选项（受保护分支禁止开启）。
+pub(super) fn git_toggle_push_force(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let is_protected = shell
+        .state
+        .modals
+        .git
+        .push
+        .as_ref()
+        .map(|m| is_git_branch_protected(&m.remote_branch, cx))
+        .unwrap_or(false);
+    if is_protected {
+        return;
     }
-
-    /// 循环切换推送标签模式（None -> FollowTags -> AllTags -> None）。
-    pub(crate) fn git_cycle_push_tags_mode(&mut self, cx: &mut Context<Self>) {
-        if let Some(modal) = self.state.modals.git.push.as_mut() {
-            modal.tags_mode = match modal.tags_mode {
-                PushTagsMode::None => PushTagsMode::FollowTags,
-                PushTagsMode::FollowTags => PushTagsMode::AllTags,
-                PushTagsMode::AllTags => PushTagsMode::None,
-            };
-            cx.notify();
-        }
-    }
-
-    /// 切换强制推送选项（受保护分支禁止开启）。
-    pub(crate) fn git_toggle_push_force(&mut self, cx: &mut Context<Self>) {
-        let is_protected = self
-            .state
-            .modals
-            .git
-            .push
-            .as_ref()
-            .map(|m| self.is_git_branch_protected(&m.remote_branch, cx))
-            .unwrap_or(false);
-        if is_protected {
-            return;
-        }
-        if let Some(modal) = self.state.modals.git.push.as_mut() {
-            modal.force = !modal.force;
-            cx.notify();
-        }
-    }
-
-    /// 切换跳过预推送 Git 钩子选项。
-    pub(crate) fn git_toggle_push_no_verify(&mut self, cx: &mut Context<Self>) {
-        if let Some(modal) = self.state.modals.git.push.as_mut() {
-            modal.no_verify = !modal.no_verify;
-            cx.notify();
-        }
-    }
-
-    /// 执行推送动作。
-    pub(crate) fn submit_git_push_modal(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.push.as_ref() else {
-            return;
-        };
-        if modal.running {
-            return;
-        }
-        let force = modal.force;
-        let remote_branch = modal.remote_branch.clone();
-        if force && self.is_git_branch_protected(&remote_branch, cx) {
-            if let Some(m) = self.state.modals.git.push.as_mut() {
-                m.error = Some(rust_i18n::t!("git.push.protected_branch_warning").to_string());
-            }
-            cx.notify();
-            return;
-        }
-
-        let Some(modal) = self.state.modals.git.push.as_mut() else {
-            return;
-        };
-        modal.running = true;
-        modal.error = None;
-        let project = modal.project.clone();
-        let options = GitPushOptions {
-            remote: Some(modal.remote.clone()),
-            branch: Some(modal.branch.clone()),
-            remote_branch: Some(modal.remote_branch.clone()),
-            force_with_lease: modal.force,
-            tags: modal.tags_mode,
-            no_verify: modal.no_verify,
-        };
-
-        self.send_command(GitCommand::Push { project, options });
+    if let Some(modal) = shell.state.modals.git.push.as_mut() {
+        modal.force = !modal.force;
         cx.notify();
     }
+}
 
-    /// 处理推送结果（由 ActionDone 统一收口回调）。
-    pub(crate) fn git_handle_push_result(
-        &mut self,
-        project_id: GitProjectId,
-        error: Option<String>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(modal) = self.state.modals.git.push.as_mut() else {
-            return;
-        };
-        if modal.project.id != project_id {
-            return;
-        }
+/// 切换跳过预推送 Git 钩子选项。
+pub(super) fn git_toggle_push_no_verify(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    if let Some(modal) = shell.state.modals.git.push.as_mut() {
+        modal.no_verify = !modal.no_verify;
+        cx.notify();
+    }
+}
 
-        match error {
-            None => {
-                // 推送成功，关闭模态弹窗并给出成功提示
-                self.close_git_push_modal(cx);
-            }
-            Some(err) => {
-                // 推送失败，保留现场并将错误回显在顶部错误横幅
-                modal.running = false;
-                modal.error = Some(err);
-                cx.notify();
-            }
+/// 执行推送动作。
+pub(crate) fn submit_git_push_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.push.as_ref() else {
+        return;
+    };
+    if modal.running {
+        return;
+    }
+    let force = modal.force;
+    let remote_branch = modal.remote_branch.clone();
+    if force && is_git_branch_protected(&remote_branch, cx) {
+        if let Some(m) = shell.state.modals.git.push.as_mut() {
+            m.error = Some(rust_i18n::t!("git.push.protected_branch_warning").to_string());
         }
+        cx.notify();
+        return;
     }
 
-    /// 渲染推送模态弹窗主体（双栏结构）。
-    pub(crate) fn render_git_push_dialog_body(
-        &self,
-        app: &Entity<AppShell>,
-        window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        render::render_push_dialog(self, app, window, cx, p)
+    let Some(modal) = shell.state.modals.git.push.as_mut() else {
+        return;
+    };
+    modal.running = true;
+    modal.error = None;
+    let project = modal.project.clone();
+    let options = GitPushOptions {
+        remote: Some(modal.remote.clone()),
+        branch: Some(modal.branch.clone()),
+        remote_branch: Some(modal.remote_branch.clone()),
+        force_with_lease: modal.force,
+        tags: modal.tags_mode,
+        no_verify: modal.no_verify,
+    };
+
+    shell.send_command(GitCommand::Push { project, options });
+    cx.notify();
+}
+
+/// 处理推送结果（由 ActionDone 统一收口回调）。
+pub(crate) fn git_handle_push_result(
+    shell: &mut AppShell,
+    project_id: GitProjectId,
+    error: Option<String>,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(modal) = shell.state.modals.git.push.as_mut() else {
+        return;
+    };
+    if modal.project.id != project_id {
+        return;
     }
+
+    match error {
+        None => {
+            // 推送成功，关闭模态弹窗并给出成功提示
+            close_git_push_modal(shell, cx);
+        }
+        Some(err) => {
+            // 推送失败，保留现场并将错误回显在顶部错误横幅
+            modal.running = false;
+            modal.error = Some(err);
+            cx.notify();
+        }
+    }
+}
+
+/// 渲染推送模态弹窗主体（双栏结构）。
+pub(crate) fn render_git_push_dialog_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    window: &mut Window,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    render::render_push_dialog(shell, app, window, cx, p)
 }

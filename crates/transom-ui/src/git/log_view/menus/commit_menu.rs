@@ -71,7 +71,7 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let oid = copy_oid.clone();
                     copy_app.update(cx, |this, cx| {
-                        this.write_clipboard(&oid, cx);
+                        crate::git::helpers::write_clipboard(this, &oid, cx);
                     });
                 }
             },
@@ -85,7 +85,7 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let oid = ai_oid.clone();
                     ai_app.update(cx, |this, cx| {
-                        this.write_clipboard(&format!("commit {oid}"), cx);
+                        crate::git::helpers::write_clipboard(this, &format!("commit {oid}"), cx);
                     });
                 }
             },
@@ -101,7 +101,7 @@ pub(crate) fn render_commit_menu(
                     let oid = patch_oid.clone();
                     let project = patch_project.clone();
                     patch_app.update(cx, |this, cx| {
-                        this.git_create_patch(&project, &oid, cx);
+                        crate::git::patch::git_create_patch(this, &project, &oid, cx);
                     });
                 }
             },
@@ -117,7 +117,8 @@ pub(crate) fn render_commit_menu(
                     let oid = pick_oid.clone();
                     let project = pick_project.clone();
                     pick_app.update(cx, |this, cx| {
-                        this.git_history_on_project(
+                        crate::git::actions::git_history_on_project(
+                            this,
                             &project,
                             crate::git::actions::GitHistoryAction::CherryPick(oid),
                             cx,
@@ -138,7 +139,7 @@ pub(crate) fn render_commit_menu(
                     let oid = checkout_oid.clone();
                     let project = checkout_project.clone();
                     checkout_app.update(cx, |this, cx| {
-                        this.git_checkout_project_ref(&project, &oid, cx);
+                        crate::git::actions::git_checkout_project_ref(this, &project, &oid, cx);
                     });
                 }
             },
@@ -155,7 +156,7 @@ pub(crate) fn render_commit_menu(
                     let oid = browse_oid.clone();
                     let project = browse_project.clone();
                     browse_app.update(cx, |this, cx| {
-                        this.git_browse_commit(&project, &oid, cx);
+                        crate::git::web_link::git_browse_commit(this, &project, &oid, cx);
                     });
                 }
             },
@@ -169,7 +170,7 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let oid = compare_oid.clone();
                     compare_app.update(cx, |this, cx| {
-                        this.git_diff_commit_file(tab_id, &oid, cx);
+                        crate::git::actions::git_diff_commit_file(this, tab_id, &oid, cx);
                     });
                 }
             },
@@ -187,7 +188,8 @@ pub(crate) fn render_commit_menu(
                     let target = target.clone();
                     let project = reset_project.clone();
                     reset_app.update(cx, |this, cx| {
-                        this.git_history_on_project(
+                        crate::git::actions::git_history_on_project(
+                            this,
                             &project,
                             crate::git::actions::GitHistoryAction::Reset {
                                 target,
@@ -210,7 +212,8 @@ pub(crate) fn render_commit_menu(
                     let oid = revert_oid.clone();
                     let project = revert_project.clone();
                     revert_app.update(cx, |this, cx| {
-                        this.git_history_on_project(
+                        crate::git::actions::git_history_on_project(
+                            this,
                             &project,
                             crate::git::actions::GitHistoryAction::Revert(oid),
                             cx,
@@ -234,7 +237,8 @@ pub(crate) fn render_commit_menu(
                     let target = undo_oid.clone();
                     let project = undo_project.clone();
                     undo_app.update(cx, |this, cx| {
-                        this.git_history_on_project(
+                        crate::git::actions::git_history_on_project(
+                            this,
                             &project,
                             crate::git::actions::GitHistoryAction::Reset {
                                 target,
@@ -258,7 +262,7 @@ pub(crate) fn render_commit_menu(
                 let edit_app = app.clone();
                 move |_, window, cx| {
                     edit_app.update(cx, |this, cx| {
-                        this.git_toggle_commit_amend(tab_id, window, cx);
+                        crate::git::actions::git_toggle_commit_amend(this, tab_id, window, cx);
                     });
                 }
             }),
@@ -276,7 +280,7 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let project = fold_project.clone();
                     fold_app.update(cx, |this, cx| {
-                        this.git_fold_tip_into_parent(&project, false, cx);
+                        crate::git::actions::git_fold_tip_into_parent(this, &project, false, cx);
                     });
                 }
             }),
@@ -294,7 +298,7 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let project = fold_project.clone();
                     fold_app.update(cx, |this, cx| {
-                        this.git_fold_tip_into_parent(&project, true, cx);
+                        crate::git::actions::git_fold_tip_into_parent(this, &project, true, cx);
                     });
                 }
             }),
@@ -312,7 +316,8 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let project = drop_project.clone();
                     drop_app.update(cx, |this, cx| {
-                        this.git_history_on_project(
+                        crate::git::actions::git_history_on_project(
+                            this,
                             &project,
                             crate::git::actions::GitHistoryAction::Reset {
                                 target: "HEAD~1".to_string(),
@@ -339,7 +344,7 @@ pub(crate) fn render_commit_menu(
                     let project = rebase_project.clone();
                     let oid = rebase_oid.clone();
                     rebase_app.update(cx, |this, cx| {
-                        this.git_open_rebase_modal(&project, &oid, cx);
+                        crate::git::rebase_modal::git_open_rebase_modal(this, &project, &oid, cx);
                     });
                 }
             }),
@@ -359,7 +364,7 @@ pub(crate) fn render_commit_menu(
                     let project = push_project.clone();
                     let oid = push_oid.clone();
                     push_app.update(cx, |this, cx| {
-                        this.git_push_up_to(&project, &oid, cx);
+                        crate::git::actions::git_push_up_to(this, &project, &oid, cx);
                     });
                 }
             }),
@@ -380,7 +385,8 @@ pub(crate) fn render_commit_menu(
                     let project = rebase_project.clone();
                     let upstream = rebase_onto_oid.clone();
                     rebase_app.update(cx, |this, cx| {
-                        this.git_history_on_project(
+                        crate::git::actions::git_history_on_project(
+                            this,
                             &project,
                             crate::git::actions::GitHistoryAction::Rebase(upstream),
                             cx,
@@ -400,7 +406,9 @@ pub(crate) fn render_commit_menu(
                     let project = branch_project.clone();
                     let oid = branch_oid.clone();
                     branch_app.update(cx, |this, cx| {
-                        this.git_create_project_branch_from(&project, &oid, window, cx);
+                        crate::git::actions::git_create_project_branch_from(
+                            this, &project, &oid, window, cx,
+                        );
                     });
                 }
             },
@@ -416,7 +424,9 @@ pub(crate) fn render_commit_menu(
                     let project = tag_project.clone();
                     let oid = tag_oid.clone();
                     tag_app.update(cx, |this, cx| {
-                        this.git_create_project_tag_from(&project, &oid, window, cx);
+                        crate::git::actions::git_create_project_tag_from(
+                            this, &project, &oid, window, cx,
+                        );
                     });
                 }
             },
@@ -432,7 +442,7 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let target = target.clone();
                     jump_app.update(cx, |this, cx| {
-                        this.git_jump_commit(tab_id, LogJump::Child(target), cx);
+                        crate::git::actions::git_jump_commit(this, tab_id, LogJump::Child(target), cx);
                     });
                 }
             },
@@ -450,7 +460,12 @@ pub(crate) fn render_commit_menu(
                 move |_, _, cx| {
                     let target = target.clone();
                     jump_app.update(cx, |this, cx| {
-                        this.git_jump_commit(tab_id, LogJump::Parent(target), cx);
+                        crate::git::actions::git_jump_commit(
+                            this,
+                            tab_id,
+                            LogJump::Parent(target),
+                            cx,
+                        );
                     });
                 }
             }),

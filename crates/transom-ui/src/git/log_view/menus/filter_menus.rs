@@ -23,7 +23,7 @@ pub(crate) fn render_date_menu(menu: PopupMenu, app: Entity<AppShell>, tab_id: T
             move |_, _, cx| {
                 let since = owned.clone();
                 item_app.update(cx, |this, cx| {
-                    this.git_set_log_dates(tab_id, since, cx);
+                    crate::git::actions::git_set_log_dates(this, tab_id, since, cx);
                 });
             },
         ));
@@ -42,7 +42,9 @@ pub(crate) fn render_path_menu(
     let menu = menu.item(
         PopupMenuItem::new(rust_i18n::t!("git.filter.path_all").to_string()).on_click(
             move |_, _, cx| {
-                all_app.update(cx, |this, cx| this.git_set_log_path(tab_id, None, cx));
+                all_app.update(cx, |this, cx| {
+                    crate::git::actions::git_set_log_path(this, tab_id, None, cx)
+                });
             },
         ),
     );
@@ -61,7 +63,7 @@ pub(crate) fn render_path_menu(
             move |_, _, cx| {
                 let path = path.clone();
                 item_app.update(cx, |this, cx| {
-                    this.git_set_log_path(tab_id, Some(path), cx);
+                    crate::git::actions::git_set_log_path(this, tab_id, Some(path), cx);
                 });
             },
         ));

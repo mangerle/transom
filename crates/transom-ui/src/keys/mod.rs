@@ -6,6 +6,7 @@ mod known_hosts_view;
 mod paths;
 mod render;
 mod shell;
+pub(crate) use shell::{handle_public_key_deployed, on_key_wizard_event, open_key_wizard};
 mod state;
 
 pub(crate) use entity::{KeyWizardEvent, KeyWizardView};

@@ -5,7 +5,12 @@ mod common;
 mod state;
 mod view;
 
+pub(crate) use actions::{
+    open_batch_edit, save_batch_edit, select_all_sessions, toggle_selection_mode,
+    toggle_session_selection,
+};
 pub(crate) use state::BatchEditForm;
+pub(crate) use view::render_batch_edit_body;
 
 #[cfg(test)]
 mod tests {

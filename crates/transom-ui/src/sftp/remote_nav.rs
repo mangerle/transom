@@ -4,7 +4,6 @@
 //! 文件都能保持在工程规范的体量内，导航改动不需要穿越一长串弹窗动作。
 
 use super::entity::SftpPanelView;
-use crate::app::AppShell;
 use crate::sftp::{SFTP_DIR_CACHE_TTL, SftpActivePane, SftpRemotePaneRef, parent_remote};
 use gpui_kit::*;
 use transom_core::TabId;
@@ -244,19 +243,6 @@ impl SftpPanelView {
             Some(target) => self.toggle_filter_pane(target, window, cx),
             // 活动栏是本地时聚焦本地过滤框。
             None => self.toggle_filter_local(window, cx),
-        }
-    }
-}
-
-impl AppShell {
-    pub(crate) fn sftp_enter_path_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.enter_path_pane(tab_id, target, cx));
         }
     }
 }

@@ -2,149 +2,147 @@
 
 use super::*;
 
-impl AppShell {
-    /// 消费拉取/新建弹窗实体上交的提交意图。
-    ///
-    /// 主输入仍归各标签工作区，实体读不到，因此事件只携带附加字段：外壳先读
-    /// `create_input` 做空值校验，失败时写回实体错误并保持弹窗，成功投递命令后
-    /// 才关闭实体。事件自带目标标签与分类，处理时禁止回读实体。
-    pub(crate) fn on_container_create_event(
-        &mut self,
-        event: &ContainerCreateDialogEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let ContainerCreateDialogEvent::Submit {
-            tab_id,
-            section,
-            driver,
-            subnet,
-            gateway,
-            dockerfile,
-            tag,
-            internal,
-        } = event;
-        let Some(workspace) = self.state.container_workspace(*tab_id) else {
-            self.close_container_create_dialog(cx);
-            return;
-        };
-        let (value, create_input) = {
-            let state = &workspace.read(cx).state;
-            (
-                state.create_input.read(cx).value().trim().to_string(),
-                state.create_input.clone(),
+/// 消费拉取/新建弹窗实体上交的提交意图。
+///
+/// 主输入仍归各标签工作区，实体读不到，因此事件只携带附加字段：外壳先读
+/// `create_input` 做空值校验，失败时写回实体错误并保持弹窗，成功投递命令后
+/// 才关闭实体。事件自带目标标签与分类，处理时禁止回读实体。
+pub(crate) fn on_container_create_event(
+    shell: &mut AppShell,
+    event: &ContainerCreateDialogEvent,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let ContainerCreateDialogEvent::Submit {
+        tab_id,
+        section,
+        driver,
+        subnet,
+        gateway,
+        dockerfile,
+        tag,
+        internal,
+    } = event;
+    let Some(workspace) = shell.state.container_workspace(*tab_id) else {
+        close_container_create_dialog(shell, cx);
+        return;
+    };
+    let (value, create_input) = {
+        let state = &workspace.read(cx).state;
+        (
+            state.create_input.read(cx).value().trim().to_string(),
+            state.create_input.clone(),
+        )
+    };
+    if value.is_empty() {
+        let view = shell.state.modals.tools.create_dialog.clone();
+        view.update(cx, |view, cx| {
+            view.set_error(
+                rust_i18n::t!("container.create_dialog.name_required").to_string(),
+                cx,
             )
-        };
-        if value.is_empty() {
-            let view = self.state.modals.tools.create_dialog.clone();
-            view.update(cx, |view, cx| {
-                view.set_error(
-                    rust_i18n::t!("container.create_dialog.name_required").to_string(),
-                    cx,
-                )
-            });
-            cx.notify();
-            return;
-        }
-        let request_id = ContainerRequestId::new();
-        let command = match section {
-            ContainerSection::Images => {
-                let tags = tag.clone().map(|t| vec![t]).unwrap_or_default();
-                ContainerCommand::BuildImage {
-                    tab_id: *tab_id,
-                    request_id,
-                    spec: transom_core::ContainerBuildSpec {
-                        context_path: value,
-                        dockerfile: dockerfile.clone(),
-                        tags,
-                        no_cache: false,
-                        ..Default::default()
-                    },
-                }
-            }
-            ContainerSection::Volumes => ContainerCommand::CreateVolume {
+        });
+        cx.notify();
+        return;
+    }
+    let request_id = ContainerRequestId::new();
+    let command = match section {
+        ContainerSection::Images => {
+            let tags = tag.clone().map(|t| vec![t]).unwrap_or_default();
+            ContainerCommand::BuildImage {
                 tab_id: *tab_id,
                 request_id,
+                spec: transom_core::ContainerBuildSpec {
+                    context_path: value,
+                    dockerfile: dockerfile.clone(),
+                    tags,
+                    no_cache: false,
+                    ..Default::default()
+                },
+            }
+        }
+        ContainerSection::Volumes => ContainerCommand::CreateVolume {
+            tab_id: *tab_id,
+            request_id,
+            name: value,
+            driver: driver.clone(),
+        },
+        ContainerSection::Networks => {
+            // 子网/网关/仅内部访问由领域层校验，界面只负责把错误说清楚。
+            let mut spec = ContainerNetworkSpec {
                 name: value,
                 driver: driver.clone(),
-            },
-            ContainerSection::Networks => {
-                // 子网/网关/仅内部访问由领域层校验，界面只负责把错误说清楚。
-                let mut spec = ContainerNetworkSpec {
-                    name: value,
-                    driver: driver.clone(),
-                    subnet: subnet.clone(),
-                    gateway: gateway.clone(),
-                    internal: *internal,
-                };
-                if let Err(error) = spec.validate() {
-                    self.show_toast(error, false, window, cx);
-                    return;
-                }
-                ContainerCommand::CreateNetwork {
-                    tab_id: *tab_id,
-                    request_id,
-                    spec,
-                }
+                subnet: subnet.clone(),
+                gateway: gateway.clone(),
+                internal: *internal,
+            };
+            if let Err(error) = spec.validate() {
+                shell.show_toast(error, false, window, cx);
+                return;
             }
-            _ => return,
-        };
+            ContainerCommand::CreateNetwork {
+                tab_id: *tab_id,
+                request_id,
+                spec,
+            }
+        }
+        _ => return,
+    };
+    workspace.update(cx, |workspace, _| {
+        workspace.state.busy = true;
+        workspace.send_tracked(request_id, command);
+    });
+    create_input.update(cx, |input, cx| input.set_value("", window, cx));
+    close_container_create_dialog(shell, cx);
+}
+
+/// 关闭拉取/新建弹窗：实体丢弃本次打开期的附加输入。
+fn close_container_create_dialog(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let view = shell.state.modals.tools.create_dialog.clone();
+    view.update(cx, |view, cx| view.close(cx));
+    cx.notify();
+}
+
+/// 清理未使用卷或悬空镜像：删除不可恢复，因此第一下只待确认，第二下才下发。
+///
+/// 两个目标的确认状态共用 `prune_armed` 一个槽位：同一时刻只会有一个待确认
+/// 动作，分开存反而可能出现两条按钮同时武装。
+pub(crate) fn prune_container_target(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    target: ContainerPruneTarget,
+    armed: bool,
+    cx: &mut Context<AppShell>,
+) {
+    if !armed {
+        if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            workspace.update(cx, |workspace, cx| {
+                workspace.state.prune_armed = Some(target);
+                cx.notify();
+            });
+        }
+        return;
+    }
+    if let Some(workspace) = shell.state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| {
+            workspace.state.prune_armed = None;
             workspace.state.busy = true;
+        });
+    }
+    let request_id = ContainerRequestId::new();
+    let command = match target {
+        ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
+        ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
+        ContainerPruneTarget::Networks => {
+            ContainerCommand::PruneNetworks { tab_id, request_id }
+        }
+    };
+    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+        workspace.update(cx, |workspace, _| {
             workspace.send_tracked(request_id, command);
         });
-        create_input.update(cx, |input, cx| input.set_value("", window, cx));
-        self.close_container_create_dialog(cx);
     }
-
-    /// 关闭拉取/新建弹窗：实体丢弃本次打开期的附加输入。
-    fn close_container_create_dialog(&mut self, cx: &mut Context<Self>) {
-        let view = self.state.modals.tools.create_dialog.clone();
-        view.update(cx, |view, cx| view.close(cx));
-        cx.notify();
-    }
-
-    /// 清理未使用卷或悬空镜像：删除不可恢复，因此第一下只待确认，第二下才下发。
-    ///
-    /// 两个目标的确认状态共用 `prune_armed` 一个槽位：同一时刻只会有一个待确认
-    /// 动作，分开存反而可能出现两条按钮同时武装。
-    pub(crate) fn prune_container_target(
-        &mut self,
-        tab_id: TabId,
-        target: ContainerPruneTarget,
-        armed: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if !armed {
-            if let Some(workspace) = self.state.container_workspace(tab_id) {
-                workspace.update(cx, |workspace, cx| {
-                    workspace.state.prune_armed = Some(target);
-                    cx.notify();
-                });
-            }
-            return;
-        }
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.prune_armed = None;
-                workspace.state.busy = true;
-            });
-        }
-        let request_id = ContainerRequestId::new();
-        let command = match target {
-            ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
-            ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
-            ContainerPruneTarget::Networks => {
-                ContainerCommand::PruneNetworks { tab_id, request_id }
-            }
-        };
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(request_id, command);
-            });
-        }
-        cx.notify();
-    }
+    cx.notify();
 }
 
 impl ContainerWorkspace {

@@ -398,28 +398,25 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    pub(crate) fn dismiss_sftp_hover_preview(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
-        }
+pub(crate) fn dismiss_sftp_hover_preview(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
     }
+}
 
-    pub(crate) fn handle_sftp_preview(
-        &mut self,
-        response: SftpPreviewResponse,
-        cx: &mut Context<Self>,
-    ) {
-        let tab_id = response.tab_id;
-        let connection_id = response.connection_id;
-        if self
-            .sftp_state_for_connection(tab_id, connection_id, cx)
-            .is_none()
-        {
-            return;
-        }
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.handle_preview(response, cx));
-        }
+pub(crate) fn handle_sftp_preview(
+    shell: &mut AppShell,
+    response: SftpPreviewResponse,
+    cx: &mut Context<AppShell>,
+) {
+    let tab_id = response.tab_id;
+    let connection_id = response.connection_id;
+    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx)
+        .is_none()
+    {
+        return;
+    }
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.handle_preview(response, cx));
     }
 }

@@ -67,7 +67,7 @@ fn session_band(
             .checked(is_selected)
             .on_click(cx.listener(move |this, &checked, _, cx| {
                 cx.stop_propagation();
-                this.toggle_session_selection(session_id, checked, cx);
+                crate::app::batch::toggle_session_selection(this, session_id, checked, cx);
             })),
         );
     }
@@ -129,7 +129,7 @@ fn session_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.connect_session(session_id, window, cx);
+                        crate::connection::connect_session(this, session_id, window, cx);
                         this.reveal_vertical_tabs_panel(cx);
                     });
                 }
@@ -142,7 +142,7 @@ fn session_context_menu(
                 AppIcon::Domain(DomainIcon::CONTAINER),
                 move |_, window, cx| {
                     container_app.update(cx, |this, cx| {
-                        this.open_container_workspace_for_session(session_id, window, cx);
+                        crate::container::open_container_workspace_for_session(this, session_id, window, cx);
                     });
                 },
             ));
@@ -155,7 +155,7 @@ fn session_context_menu(
                     let app = app.clone();
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
-                            this.handle_sidebar_drop(
+                            crate::sidebar::handle_sidebar_drop(this, 
                                 SidebarDrag::Session(session_id),
                                 SidebarTarget::Root,
                                 cx,
@@ -197,7 +197,7 @@ fn session_context_menu(
                     let app = app.clone();
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            this.open_audit_viewer_for_session(session_id, window, cx);
+                            crate::app::audit_viewer::open_audit_viewer_for_session(this, session_id, window, cx);
                         });
                     }
                 },
@@ -257,199 +257,197 @@ struct SessionProbeParts {
     button: Option<AnyElement>,
 }
 
-impl AppShell {
-    /// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
-    /// 行尾拨测状态点与按钮；无网络地址的会话两者都不出现。
-    fn session_probe_parts(
-        &self,
-        session: &transom_core::Session,
-        highlighted: bool,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> SessionProbeParts {
-        let session_id = session.id;
-        // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
-        let probe_badge = self
-            .state
-            .probe_badges
-            .get(&session_id)
-            .map(|badge| AppShell::render_probe_badge(session_id, badge, p));
-        // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
-        // "没有可拨测主机"，不如根本不给出这个动作。
-        let probe_button = HostAction::probe_for(session).map(|_| {
-            row_action_button(
-                RowActionButtonProps {
-                    element_id: format!("session-probe-{session_id}"),
-                    icon: AppIcon::Ui(UiIcon::EXCEPTION_ANALYZER),
-                    tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
-                    idle_color: if highlighted {
-                        p.sidebar_accent_foreground
-                    } else {
-                        p.muted_foreground
-                    },
-                    on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                        // 拨测这一台不该同时选中这一行，更不该触发双击连接。
-                        cx.stop_propagation();
-                        this.probe_session(session_id, cx);
-                    }),
+/// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
+/// 行尾拨测状态点与按钮；无网络地址的会话两者都不出现。
+fn session_probe_parts(
+    shell: &AppShell,
+    session: &transom_core::Session,
+    highlighted: bool,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> SessionProbeParts {
+    let session_id = session.id;
+    // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
+    let probe_badge = shell
+        .state
+        .probe_badges
+        .get(&session_id)
+        .map(|badge| crate::app::probe::render_probe_badge(session_id, badge, p));
+    // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
+    // "没有可拨测主机"，不如根本不给出这个动作。
+    let probe_button = HostAction::probe_for(session).map(|_| {
+        row_action_button(
+            RowActionButtonProps {
+                element_id: format!("session-probe-{session_id}"),
+                icon: AppIcon::Ui(UiIcon::EXCEPTION_ANALYZER),
+                tooltip: rust_i18n::t!("probe.session_tooltip").to_string(),
+                idle_color: if highlighted {
+                    p.sidebar_accent_foreground
+                } else {
+                    p.muted_foreground
                 },
-                p,
-            )
-        });
-        SessionProbeParts {
-            badge: probe_badge,
-            button: probe_button.map(IntoElement::into_any_element),
-        }
+                on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
+                    // 拨测这一台不该同时选中这一行，更不该触发双击连接。
+                    cx.stop_propagation();
+                    crate::app::probe::probe_session(this, session_id, cx);
+                }),
+            },
+            p,
+        )
+    });
+    SessionProbeParts {
+        badge: probe_badge,
+        button: probe_button.map(IntoElement::into_any_element),
     }
+}
 
-    /// 会话行的展示快照：图标/颜色、详情、选中态与拖拽标签。
-    fn session_row_visuals(
-        &self,
-        row: &SessionRow,
-        active_session: Option<SessionId>,
-    ) -> SessionRowVisuals {
-        let session = &row.session;
-        let session_id = session.id;
-        // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
-        // 届时再回查 row 的借用不成立。
-        let menu_host = session_host(session).map(str::to_string);
-        let icon_name = crate::connection::icon(&session.connection);
-        let detail_text = crate::connection::display_compact(&session.connection);
-        // 会话专属图标覆盖连接类型图标；环境色直接染在图标上。
-        let icon_color = session_color(session.color);
-        let icon_name = session_icon(session.icon).unwrap_or(icon_name);
-        let is_active = active_session == Some(session_id);
-        let selection_mode = self.state.sidebar.selection_mode;
-        let is_selected = self.state.sidebar.selected_sessions.contains(&session_id);
-        let is_marked = self.state.sidebar.tree_selection == Some(session_id);
-        let row_selected = is_marked || (selection_mode && is_selected);
-        let state = if is_active {
-            SidebarRowState::Current
-        } else if row_selected {
-            SidebarRowState::Selected
-        } else {
-            SidebarRowState::Normal
-        };
-        let is_ssh = matches!(session.connection, transom_core::Connection::Ssh(_));
-        SessionRowVisuals {
-            is_ssh,
+/// 会话行的展示快照：图标/颜色、详情、选中态与拖拽标签。
+fn session_row_visuals(
+    shell: &AppShell,
+    row: &SessionRow,
+    active_session: Option<SessionId>,
+) -> SessionRowVisuals {
+    let session = &row.session;
+    let session_id = session.id;
+    // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
+    // 届时再回查 row 的借用不成立。
+    let menu_host = session_host(session).map(str::to_string);
+    let icon_name = crate::connection::icon(&session.connection);
+    let detail_text = crate::connection::display_compact(&session.connection);
+    // 会话专属图标覆盖连接类型图标；环境色直接染在图标上。
+    let icon_color = session_color(session.color);
+    let icon_name = session_icon(session.icon).unwrap_or(icon_name);
+    let is_active = active_session == Some(session_id);
+    let selection_mode = shell.state.sidebar.selection_mode;
+    let is_selected = shell.state.sidebar.selected_sessions.contains(&session_id);
+    let is_marked = shell.state.sidebar.tree_selection == Some(session_id);
+    let row_selected = is_marked || (selection_mode && is_selected);
+    let state = if is_active {
+        SidebarRowState::Current
+    } else if row_selected {
+        SidebarRowState::Selected
+    } else {
+        SidebarRowState::Normal
+    };
+    let is_ssh = matches!(session.connection, transom_core::Connection::Ssh(_));
+    SessionRowVisuals {
+        is_ssh,
+        menu_host,
+        icon_name,
+        detail_text,
+        icon_color,
+        selection_mode,
+        is_selected,
+        drag_label: session.name.clone(),
+        drag_icon: icon_name,
+        state,
+    }
+}
+
+/// 会话行单击：选择模式下切换多选，双击连接，普通单击只标记。
+fn session_row_click(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    event: &ClickEvent,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if shell.state.sidebar.selection_mode {
+        let selected = shell.state.sidebar.selected_sessions.contains(&session_id);
+        crate::app::batch::toggle_session_selection(shell, session_id, !selected, cx);
+    } else if event.click_count() >= 2 {
+        crate::connection::connect_session(shell, session_id, window, cx);
+        // 连接入口在会话树，连接完成后用户要看的是终端列表：
+        // 左侧标签模式自动把槽位切到标签面板。
+        shell.reveal_vertical_tabs_panel(cx);
+    } else {
+        shell.state.sidebar.tree_selection = Some(session_id);
+        cx.notify();
+    }
+}
+
+pub(crate) fn render_session_row(
+    shell: &mut AppShell,
+    row: &SessionRow,
+    active_session: Option<SessionId>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let session = &row.session;
+    let session_id = session.id;
+    let folder_id = session.folder_id;
+    let app_entity = cx.entity().clone();
+    let SessionRowVisuals {
+        is_ssh,
+        menu_host,
+        icon_name,
+        detail_text,
+        icon_color: session_color,
+        selection_mode,
+        is_selected,
+        drag_label,
+        drag_icon,
+        state,
+    } = session_row_visuals(shell, row, active_session);
+    let element = div()
+        .id(ElementId::Name(format!("session-{session_id}").into()))
+        .w_full()
+        .h(rems(ROW_HEIGHT_REM))
+        .pl(indent_padding(row.depth))
+        .pr(px(4.0))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
+        // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
+        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+            session_row_click(this, session_id, event, window, cx);
+        }))
+        .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
+            cx.new(|_| SidebarDragPreview::new(drag_label.clone(), drag_icon))
+        })
+        .on_drop({
+            let app = app_entity.clone();
+            move |drag: &SidebarDrag, window, cx| {
+                let drag = *drag;
+                // 落在会话行中部：放进该会话所在层级末尾（根层级会话则回到根）。
+                let target = match folder_id {
+                    Some(folder_id) => SidebarTarget::Folder(folder_id),
+                    None => SidebarTarget::Root,
+                };
+                app.update(cx, |this, cx| {
+                    crate::sidebar::handle_sidebar_drop(this, drag, target, cx);
+                    window.refresh();
+                });
+            }
+        })
+        .context_menu(session_context_menu(
+            session_id,
+            folder_id,
             menu_host,
-            icon_name,
-            detail_text,
-            icon_color,
-            selection_mode,
-            is_selected,
-            drag_label: session.name.clone(),
-            drag_icon: icon_name,
-            state,
-        }
-    }
-
-    /// 会话行单击：选择模式下切换多选，双击连接，普通单击只标记。
-    fn session_row_click(
-        &mut self,
-        session_id: SessionId,
-        event: &ClickEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.state.sidebar.selection_mode {
-            let selected = self.state.sidebar.selected_sessions.contains(&session_id);
-            self.toggle_session_selection(session_id, !selected, cx);
-        } else if event.click_count() >= 2 {
-            self.connect_session(session_id, window, cx);
-            // 连接入口在会话树，连接完成后用户要看的是终端列表：
-            // 左侧标签模式自动把槽位切到标签面板。
-            self.reveal_vertical_tabs_panel(cx);
-        } else {
-            self.state.sidebar.tree_selection = Some(session_id);
-            cx.notify();
-        }
-    }
-
-    pub(crate) fn render_session_row(
-        &mut self,
-        row: &SessionRow,
-        active_session: Option<SessionId>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let session = &row.session;
-        let session_id = session.id;
-        let folder_id = session.folder_id;
-        let app_entity = cx.entity().clone();
-        let SessionRowVisuals {
             is_ssh,
-            menu_host,
-            icon_name,
-            detail_text,
+            app_entity.clone(),
+        ));
+    let inner = session_band(
+        SessionBandParams {
+            session_id,
+            title: session.name.clone(),
+            detail: detail_text,
+            icon: icon_name,
             icon_color: session_color,
             selection_mode,
             is_selected,
-            drag_label,
-            drag_icon,
             state,
-        } = self.session_row_visuals(row, active_session);
-        let element = div()
-            .id(ElementId::Name(format!("session-{session_id}").into()))
-            .w_full()
-            .h(rems(ROW_HEIGHT_REM))
-            .pl(indent_padding(row.depth))
-            .pr(px(4.0))
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
-            // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                this.session_row_click(session_id, event, window, cx);
-            }))
-            .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
-                cx.new(|_| SidebarDragPreview::new(drag_label.clone(), drag_icon))
-            })
-            .on_drop({
-                let app = app_entity.clone();
-                move |drag: &SidebarDrag, window, cx| {
-                    let drag = *drag;
-                    // 落在会话行中部：放进该会话所在层级末尾（根层级会话则回到根）。
-                    let target = match folder_id {
-                        Some(folder_id) => SidebarTarget::Folder(folder_id),
-                        None => SidebarTarget::Root,
-                    };
-                    app.update(cx, |this, cx| {
-                        this.handle_sidebar_drop(drag, target, cx);
-                        window.refresh();
-                    });
-                }
-            })
-            .context_menu(session_context_menu(
-                session_id,
-                folder_id,
-                menu_host,
-                is_ssh,
-                app_entity.clone(),
-            ));
-        let inner = session_band(
-            SessionBandParams {
-                session_id,
-                title: session.name.clone(),
-                detail: detail_text,
-                icon: icon_name,
-                icon_color: session_color,
-                selection_mode,
-                is_selected,
-                state,
-            },
-            p,
-            cx,
-        );
-        let probe = self.session_probe_parts(session, state.is_highlighted(), p, cx);
-        let anchor = SidebarDrag::Session(session_id);
-        // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
-        let inner = inner
-            .children(probe.badge)
-            .children(probe.button)
-            .child(reorder_overlay(&app_entity, anchor, false, p));
-        element.child(inner).into_any_element()
-    }
+        },
+        p,
+        cx,
+    );
+    let probe = session_probe_parts(shell, session, state.is_highlighted(), p, cx);
+    let anchor = SidebarDrag::Session(session_id);
+    // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
+    let inner = inner
+        .children(probe.badge)
+        .children(probe.button)
+        .child(reorder_overlay(&app_entity, anchor, false, p));
+    element.child(inner).into_any_element()
 }

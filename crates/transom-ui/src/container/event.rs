@@ -159,121 +159,131 @@ pub(crate) enum ContainerWorkspaceEvent {
 
 impl EventEmitter<ContainerWorkspaceEvent> for ContainerWorkspace {}
 
-impl AppShell {
-    /// 处理容器工作区发来的动作意图。
-    ///
-    /// 设计原理（Why）：`tab_id` 由订阅创建时捕获传入，事件本身只表达动作；
-    /// 处理函数不反查容器实体来确定归属，也不读它的状态。不需要窗口且只改外壳
-    /// 状态的动作直接调用既有外壳方法；需要窗口（输入表单、弹窗）或必须在实体
-    /// 派发结束之后才能读写的动作推进 `window_requests`，由渲染期统一执行。
-    pub(crate) fn on_container_workspace_event(
-        &mut self,
-        tab_id: TabId,
-        event: &ContainerWorkspaceEvent,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            ContainerWorkspaceEvent::ToggleFullscreen => {
-                self.state.containers.fullscreen =
-                    if self.state.containers.fullscreen == Some(tab_id) {
-                        None
-                    } else {
-                        Some(tab_id)
-                    };
-                cx.notify();
+/// 处理容器工作区发来的动作意图。
+///
+/// 设计原理（Why）：`tab_id` 由订阅创建时捕获传入，事件本身只表达动作；
+/// 处理函数不反查容器实体来确定归属，也不读它的状态。不需要窗口且只改外壳
+/// 状态的动作直接调用既有外壳方法；需要窗口（输入表单、弹窗）或必须在实体
+/// 派发结束之后才能读写的动作推进 `window_requests`，由渲染期统一执行。
+pub(crate) fn on_container_workspace_event(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    event: &ContainerWorkspaceEvent,
+    cx: &mut Context<AppShell>,
+) {
+    match event {
+        ContainerWorkspaceEvent::ToggleFullscreen => {
+            shell.state.containers.fullscreen =
+                if shell.state.containers.fullscreen == Some(tab_id) {
+                    None
+                } else {
+                    Some(tab_id)
+                };
+            cx.notify();
+        }
+        ContainerWorkspaceEvent::OpenSystemDf => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| workspace.open_system_df_dialog(cx));
             }
-            ContainerWorkspaceEvent::OpenSystemDf => {
-                if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    workspace.update(cx, |workspace, cx| workspace.open_system_df_dialog(cx));
-                }
+        }
+        ContainerWorkspaceEvent::OpenPods => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| workspace.open_pods_dialog(cx));
             }
-            ContainerWorkspaceEvent::OpenPods => {
-                if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    workspace.update(cx, |workspace, cx| workspace.open_pods_dialog(cx));
-                }
+        }
+        ContainerWorkspaceEvent::OpenQuadlet => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| workspace.open_quadlets_dialog(cx));
             }
-            ContainerWorkspaceEvent::OpenQuadlet => {
-                if let Some(workspace) = self.state.container_workspace(tab_id) {
-                    workspace.update(cx, |workspace, cx| workspace.open_quadlets_dialog(cx));
-                }
+        }
+        ContainerWorkspaceEvent::CreateComposeFromTemplate(content) => {
+            crate::container::create_local_compose_with_content(shell, tab_id, content.clone(), cx);
+        }
+        ContainerWorkspaceEvent::ImportCompose => {
+            crate::container::import_local_compose(shell, tab_id, cx);
+        }
+        ContainerWorkspaceEvent::LoadImage => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| workspace.load_image(cx));
             }
-            ContainerWorkspaceEvent::CreateComposeFromTemplate(content) => {
-                self.create_local_compose_with_content(tab_id, content.clone(), cx);
-            }
-            ContainerWorkspaceEvent::ImportCompose => {
-                self.import_local_compose(tab_id, cx);
-            }
-            ContainerWorkspaceEvent::LoadImage => {
-                self.load_image(tab_id, cx);
-            }
-            ContainerWorkspaceEvent::PruneTarget(target) => {
-                self.prune_container_target(tab_id, *target, true, cx);
-            }
-            ContainerWorkspaceEvent::BackupVolume(volume) => {
-                self.backup_volume(tab_id, volume.clone(), cx);
-            }
-            ContainerWorkspaceEvent::RestoreVolume(volume) => {
-                self.restore_volume(tab_id, volume.clone(), cx);
-            }
-            ContainerWorkspaceEvent::SaveImage(image) => {
-                self.save_image(tab_id, image.clone(), cx);
-            }
-            ContainerWorkspaceEvent::StartPortForward {
-                ssh_tab_id,
-                connection_id,
-                rule_name,
-                bind_port,
-                target_host,
-                target_port,
-            } => {
-                let rule = ForwardRule::new(
-                    rule_name.clone(),
-                    ForwardKind::Local {
-                        bind: BindAddress {
-                            host: "127.0.0.1".into(),
-                            port: *bind_port,
-                        },
-                        target: TargetAddress {
-                            host: target_host.clone(),
-                            port: *target_port,
-                        },
-                    },
-                );
-                self.state
-                    .set_forward_status(*ssh_tab_id, rule.id, ForwardState::Starting, None);
-                self.state.send_command(ForwardCommand::ForwardStart {
-                    tab_id: *ssh_tab_id,
-                    connection_id: *connection_id,
-                    rule,
+        }
+        ContainerWorkspaceEvent::PruneTarget(target) => {
+            crate::container::prune_container_target(shell, tab_id, *target, true, cx);
+        }
+        ContainerWorkspaceEvent::BackupVolume(volume) => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| {
+                    workspace.backup_volume(volume.clone(), cx);
                 });
-                cx.notify();
             }
-            // 打开输入表单与弹窗需要 `Window`，事件派发阶段拿不到；行动作里的
-            // 详情页切换、复制与生命周期也统一交给渲染期执行，避免两套分发逻辑。
-            ContainerWorkspaceEvent::OpenRunForm(_)
-            | ContainerWorkspaceEvent::OpenImageHub
-            | ContainerWorkspaceEvent::OpenCreateDialog(_)
-            | ContainerWorkspaceEvent::OpenBuildDialog
-            | ContainerWorkspaceEvent::ComposeYamlLoaded { .. }
-            | ContainerWorkspaceEvent::ComposeYamlReadFailed(_)
-            | ContainerWorkspaceEvent::OpenPortForward { .. }
-            | ContainerWorkspaceEvent::OpenVolumeFiles
-            | ContainerWorkspaceEvent::OpenContainerUpdate(_)
-            | ContainerWorkspaceEvent::OpenContainerExport(_)
-            | ContainerWorkspaceEvent::OpenContainerCommit(_)
-            | ContainerWorkspaceEvent::OpenImageTag(_)
-            | ContainerWorkspaceEvent::OpenImagePush { .. }
-            | ContainerWorkspaceEvent::OpenNetworkConnect(_)
-            | ContainerWorkspaceEvent::CloneContainer { .. }
-            | ContainerWorkspaceEvent::RecreateContainer { .. }
-            | ContainerWorkspaceEvent::SetDetailTab(_)
-            | ContainerWorkspaceEvent::ShowToast { .. }
-            | ContainerWorkspaceEvent::RunRowAction { .. } => {
-                self.state
-                    .window_requests
-                    .push_container(tab_id, event.clone());
-                cx.notify();
+        }
+        ContainerWorkspaceEvent::RestoreVolume(volume) => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| {
+                    workspace.restore_volume(volume.clone(), cx);
+                });
             }
+        }
+        ContainerWorkspaceEvent::SaveImage(image) => {
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| workspace.save_image(image.clone(), cx));
+            }
+        }
+        ContainerWorkspaceEvent::StartPortForward {
+            ssh_tab_id,
+            connection_id,
+            rule_name,
+            bind_port,
+            target_host,
+            target_port,
+        } => {
+            let rule = ForwardRule::new(
+                rule_name.clone(),
+                ForwardKind::Local {
+                    bind: BindAddress {
+                        host: "127.0.0.1".into(),
+                        port: *bind_port,
+                    },
+                    target: TargetAddress {
+                        host: target_host.clone(),
+                        port: *target_port,
+                    },
+                },
+            );
+            shell.state
+                .set_forward_status(*ssh_tab_id, rule.id, ForwardState::Starting, None);
+            shell.state.send_command(ForwardCommand::ForwardStart {
+                tab_id: *ssh_tab_id,
+                connection_id: *connection_id,
+                rule,
+            });
+            cx.notify();
+        }
+        // 打开输入表单与弹窗需要 `Window`，事件派发阶段拿不到；行动作里的
+        // 详情页切换、复制与生命周期也统一交给渲染期执行，避免两套分发逻辑。
+        ContainerWorkspaceEvent::OpenRunForm(_)
+        | ContainerWorkspaceEvent::OpenImageHub
+        | ContainerWorkspaceEvent::OpenCreateDialog(_)
+        | ContainerWorkspaceEvent::OpenBuildDialog
+        | ContainerWorkspaceEvent::ComposeYamlLoaded { .. }
+        | ContainerWorkspaceEvent::ComposeYamlReadFailed(_)
+        | ContainerWorkspaceEvent::OpenPortForward { .. }
+        | ContainerWorkspaceEvent::OpenVolumeFiles
+        | ContainerWorkspaceEvent::OpenContainerUpdate(_)
+        | ContainerWorkspaceEvent::OpenContainerExport(_)
+        | ContainerWorkspaceEvent::OpenContainerCommit(_)
+        | ContainerWorkspaceEvent::OpenImageTag(_)
+        | ContainerWorkspaceEvent::OpenImagePush { .. }
+        | ContainerWorkspaceEvent::OpenNetworkConnect(_)
+        | ContainerWorkspaceEvent::CloneContainer { .. }
+        | ContainerWorkspaceEvent::RecreateContainer { .. }
+        | ContainerWorkspaceEvent::SetDetailTab(_)
+        | ContainerWorkspaceEvent::ShowToast { .. }
+        | ContainerWorkspaceEvent::RunRowAction { .. } => {
+            shell.state
+                .window_requests
+                .push_container(tab_id, event.clone());
+            cx.notify();
         }
     }
 }

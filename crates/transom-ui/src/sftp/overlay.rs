@@ -91,284 +91,282 @@ struct OverlayHeader {
     counters: String,
 }
 
-impl AppShell {
-    /// 拖入即显示：展开明细并撤掉待收起定时器。
-    pub(crate) fn show_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(mut panel) = self.sftp_view_mut(tab_id, cx) else {
-            return;
-        };
-        // 面板已经展开时不弹浮层：它的队列区就在旁边，两处同时刷进度是纯重复。
-        if panel.state.open {
-            return;
-        }
-        panel.state.queue.drop_overlay.visible = true;
-        panel.state.queue.drop_overlay.expanded = true;
-        panel.state.queue.drop_overlay.settle_task = None;
-        drop(panel);
-        cx.notify();
+/// 拖入即显示：展开明细并撤掉待收起定时器。
+pub(crate) fn show_drop_overlay(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) else {
+        return;
+    };
+    // 面板已经展开时不弹浮层：它的队列区就在旁边，两处同时刷进度是纯重复。
+    if panel.state.open {
+        return;
     }
+    panel.state.queue.drop_overlay.visible = true;
+    panel.state.queue.drop_overlay.expanded = true;
+    panel.state.queue.drop_overlay.settle_task = None;
+    drop(panel);
+    cx.notify();
+}
 
-    /// 队列状态变化后同步浮层：面板展开即退出，繁忙则常驻，排空则起停留定时器。
-    pub(crate) fn sync_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some((open, busy, visible, has_settle_task)) =
-            self.sftp_state(tab_id, cx).map(|panel| {
-                (
-                    panel.open,
-                    panel.queue.tasks.iter().any(is_busy),
-                    panel.queue.drop_overlay.visible,
-                    panel.queue.drop_overlay.settle_task.is_some(),
-                )
-            })
-        else {
-            return;
-        };
-        // 面板展开时由面板的队列区呈现进度，浮层不再重复。
-        if open {
-            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                panel.state.queue.drop_overlay.visible = false;
-                panel.state.queue.drop_overlay.settle_task = None;
-            }
-            return;
-        }
-        if busy {
-            if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-                panel.state.queue.drop_overlay.visible = true;
-                panel.state.queue.drop_overlay.settle_task = None;
-            }
-            return;
-        }
-        if !visible || has_settle_task {
-            return;
-        }
-        let task = cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(OVERLAY_LINGER).await;
-            let _ = this.update(cx, |this, cx| {
-                let Some(mut panel) = this.sftp_view_mut(tab_id, cx) else {
-                    return;
-                };
-                // 停留期间若又忙起来，`sync_drop_overlay` 已把本句柄换成 None；
-                // 能走到这里说明任务未被取消，直接收起。
-                panel.state.queue.drop_overlay.visible = false;
-                panel.state.queue.drop_overlay.expanded = true;
-                panel.state.queue.drop_overlay.settle_task = None;
-            });
-        });
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.state.queue.drop_overlay.reset_rate();
-            panel.state.queue.drop_overlay.settle_task = Some(task);
-        }
-    }
-
-    /// 进度事件驱动的刷新：更新速率，并且只在窗格正被渲染时触发重绘。
-    ///
-    /// 进度事件是高频信号，后台标签的浮层不值得整帧重绘外壳。
-    pub(crate) fn note_drop_overlay_progress(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx)
-            && !panel.state.open
-            && panel.state.queue.drop_overlay.visible
-        {
-            let done_bytes = panel.state.queue.progress.map_or(0, |(done, _)| done);
-            panel.state.queue.drop_overlay.sample_rate(done_bytes);
-        }
-        if self.state.is_rendered_pane(tab_id) {
-            cx.notify();
-        }
-    }
-
-    /// 用户点关闭：撤下浮层与定时器，下次拖入会重新出现。
-    fn dismiss_drop_overlay(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
+/// 队列状态变化后同步浮层：面板展开即退出，繁忙则常驻，排空则起停留定时器。
+pub(crate) fn sync_drop_overlay(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    let Some((open, busy, visible, has_settle_task)) =
+        crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| {
+            (
+                panel.open,
+                panel.queue.tasks.iter().any(is_busy),
+                panel.queue.drop_overlay.visible,
+                panel.queue.drop_overlay.settle_task.is_some(),
+            )
+        })
+    else {
+        return;
+    };
+    // 面板展开时由面板的队列区呈现进度，浮层不再重复。
+    if open {
+        if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
             panel.state.queue.drop_overlay.visible = false;
             panel.state.queue.drop_overlay.settle_task = None;
-            panel.state.queue.drop_overlay.reset_rate();
         }
+        return;
+    }
+    if busy {
+        if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+            panel.state.queue.drop_overlay.visible = true;
+            panel.state.queue.drop_overlay.settle_task = None;
+        }
+        return;
+    }
+    if !visible || has_settle_task {
+        return;
+    }
+    let task = cx.spawn(async move |this, cx| {
+        cx.background_executor().timer(OVERLAY_LINGER).await;
+        let _ = this.update(cx, |this, cx| {
+            let Some(mut panel) = crate::sftp::sftp_view_mut(this, tab_id, cx) else {
+                return;
+            };
+            // 停留期间若又忙起来，`sync_drop_overlay` 已把本句柄换成 None；
+            // 能走到这里说明任务未被取消，直接收起。
+            panel.state.queue.drop_overlay.visible = false;
+            panel.state.queue.drop_overlay.expanded = true;
+            panel.state.queue.drop_overlay.settle_task = None;
+        });
+    });
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+        panel.state.queue.drop_overlay.reset_rate();
+        panel.state.queue.drop_overlay.settle_task = Some(task);
+    }
+}
+
+/// 进度事件驱动的刷新：更新速率，并且只在窗格正被渲染时触发重绘。
+///
+/// 进度事件是高频信号，后台标签的浮层不值得整帧重绘外壳。
+pub(crate) fn note_drop_overlay_progress(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx)
+        && !panel.state.open
+        && panel.state.queue.drop_overlay.visible
+    {
+        let done_bytes = panel.state.queue.progress.map_or(0, |(done, _)| done);
+        panel.state.queue.drop_overlay.sample_rate(done_bytes);
+    }
+    if shell.state.is_rendered_pane(tab_id) {
         cx.notify();
     }
+}
 
-    /// 渲染窗格终端区右下角的上传浮层；不该显示时返回 `None`。
-    /// 浮层标题：上传图标、汇总/计数器、展开与关闭。
-    fn render_overlay_header(
-        &self,
-        header_input: OverlayHeader,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let OverlayHeader {
+/// 用户点关闭：撤下浮层与定时器，下次拖入会重新出现。
+fn dismiss_drop_overlay(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+        panel.state.queue.drop_overlay.visible = false;
+        panel.state.queue.drop_overlay.settle_task = None;
+        panel.state.queue.drop_overlay.reset_rate();
+    }
+    cx.notify();
+}
+
+/// 渲染窗格终端区右下角的上传浮层；不该显示时返回 `None`。
+/// 浮层标题：上传图标、汇总/计数器、展开与关闭。
+fn render_overlay_header(
+    _shell: &AppShell,
+    header_input: OverlayHeader,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let OverlayHeader {
+        tab_id,
+        expanded,
+        summary,
+        counters,
+    } = header_input;
+    let header = h_flex()
+        .w_full()
+        .items_center()
+        .gap_1()
+        .child(
+            AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD))
+                .xsmall()
+                .text_color(p.sidebar_accent_foreground),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .truncate()
+                .child(format!("{summary}{counters}")),
+        )
+        .child(
+            crate::widgets::IconButton::new(
+                format!("overlay-toggle-{tab_id}"),
+                if expanded {
+                    AppIcon::Ui(UiIcon::CHEVRON_DOWN)
+                } else {
+                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
+                },
+                rust_i18n::t!("sftp.overlay_expand"),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(mut panel) = crate::sftp::sftp_view_mut(this, tab_id, cx) {
+                    panel.state.queue.drop_overlay.expanded =
+                        !panel.state.queue.drop_overlay.expanded;
+                }
+                cx.notify();
+            })),
+        )
+        .child(
+            crate::widgets::IconButton::new(
+                format!("overlay-dismiss-{tab_id}"),
+                AppIcon::Ui(UiIcon::CLOSE),
+                rust_i18n::t!("sftp.overlay_dismiss"),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                dismiss_drop_overlay(this, tab_id, cx);
+            })),
+        );
+
+    header.into_any_element()
+}
+
+/// 浮层批量动作：有活动任务时暂停/取消全部。
+fn render_overlay_bulk_actions(
+    _shell: &AppShell,
+    tab_id: TabId,
+    busy: usize,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let bulk_actions = h_flex().gap_0p5().when(busy > 0, |this| {
+        this.child(
+            crate::widgets::IconButton::new(
+                format!("overlay-pause-all-{tab_id}"),
+                AppIcon::Ui(UiIcon::PAUSE),
+                rust_i18n::t!("sftp.overlay_pause_all"),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                crate::sftp::sftp_pause_all(this, tab_id, cx);
+                crate::sftp::sync_drop_overlay(this, tab_id, cx);
+            })),
+        )
+        .child(
+            crate::widgets::IconButton::new(
+                format!("overlay-cancel-all-{tab_id}"),
+                AppIcon::Ui(UiIcon::ABORT),
+                rust_i18n::t!("sftp.overlay_cancel_all"),
+            )
+            .size(crate::widgets::IconButtonSize::Compact)
+            .render()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                crate::sftp::sftp_cancel_all(this, tab_id, cx);
+                crate::sftp::sync_drop_overlay(this, tab_id, cx);
+            })),
+        )
+    });
+
+    bulk_actions.into_any_element()
+}
+
+pub(crate) fn render_drop_overlay(
+    shell: &AppShell,
+    tab_id: TabId,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> Option<AnyElement> {
+    let panel = crate::sftp::sftp_state(shell, tab_id, cx)?;
+    if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
+        return None;
+    }
+    let expanded = panel.queue.drop_overlay.expanded;
+    let tasks = panel.queue.tasks.clone();
+    let total = tasks.len();
+    let busy = tasks.iter().filter(|task| is_busy(task)).count();
+    let speed = panel.queue.drop_overlay.rate_bytes_per_sec;
+    let (done_bytes, total_bytes) = panel.queue.progress.unwrap_or((0, None));
+    // 目标目录挂在 tooltip 上：浮层面积有限，但"传到哪儿"必须能查到。
+    let target_tip = format!(
+        "{} · {}",
+        rust_i18n::t!("sftp.overlay_target"),
+        panel.remote.path
+    );
+    let summary = rust_i18n::t!("sftp.overlay_summary", busy = busy, total = total).to_string();
+    let counters = match total_bytes {
+        Some(bytes) => format!(
+            " · {}/{} · {}",
+            format_size(done_bytes),
+            format_size(bytes),
+            format_rate(speed)
+        ),
+        // 目录树任务拿不到总大小，只报已传字节与速率。
+        None => format!(" · {} · {}", format_size(done_bytes), format_rate(speed)),
+    };
+
+    let header = render_overlay_header(shell, 
+        OverlayHeader {
             tab_id,
             expanded,
             summary,
             counters,
-        } = header_input;
-        let header = h_flex()
-            .w_full()
-            .items_center()
-            .gap_1()
-            .child(
-                AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD))
-                    .xsmall()
-                    .text_color(p.sidebar_accent_foreground),
-            )
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .text_xs()
-                    .font_weight(FontWeight::MEDIUM)
-                    .truncate()
-                    .child(format!("{summary}{counters}")),
-            )
-            .child(
-                crate::widgets::IconButton::new(
-                    format!("overlay-toggle-{tab_id}"),
-                    if expanded {
-                        AppIcon::Ui(UiIcon::CHEVRON_DOWN)
-                    } else {
-                        AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
-                    },
-                    rust_i18n::t!("sftp.overlay_expand"),
-                )
-                .size(crate::widgets::IconButtonSize::Compact)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(mut panel) = this.sftp_view_mut(tab_id, cx) {
-                        panel.state.queue.drop_overlay.expanded =
-                            !panel.state.queue.drop_overlay.expanded;
-                    }
-                    cx.notify();
-                })),
-            )
-            .child(
-                crate::widgets::IconButton::new(
-                    format!("overlay-dismiss-{tab_id}"),
-                    AppIcon::Ui(UiIcon::CLOSE),
-                    rust_i18n::t!("sftp.overlay_dismiss"),
-                )
-                .size(crate::widgets::IconButtonSize::Compact)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.dismiss_drop_overlay(tab_id, cx);
-                })),
-            );
+        },
+        p,
+        cx,
+    );
+    let bulk_actions = render_overlay_bulk_actions(shell, tab_id, busy, cx);
 
-        header.into_any_element()
-    }
-
-    /// 浮层批量动作：有活动任务时暂停/取消全部。
-    fn render_overlay_bulk_actions(
-        &self,
-        tab_id: TabId,
-        busy: usize,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let bulk_actions = h_flex().gap_0p5().when(busy > 0, |this| {
-            this.child(
-                crate::widgets::IconButton::new(
-                    format!("overlay-pause-all-{tab_id}"),
-                    AppIcon::Ui(UiIcon::PAUSE),
-                    rust_i18n::t!("sftp.overlay_pause_all"),
-                )
-                .size(crate::widgets::IconButtonSize::Compact)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_pause_all(tab_id, cx);
-                    this.sync_drop_overlay(tab_id, cx);
-                })),
-            )
-            .child(
-                crate::widgets::IconButton::new(
-                    format!("overlay-cancel-all-{tab_id}"),
-                    AppIcon::Ui(UiIcon::ABORT),
-                    rust_i18n::t!("sftp.overlay_cancel_all"),
-                )
-                .size(crate::widgets::IconButtonSize::Compact)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_cancel_all(tab_id, cx);
-                    this.sync_drop_overlay(tab_id, cx);
-                })),
-            )
+    let detail = v_flex()
+        .gap_1()
+        .max_h(OVERLAY_MAX_HEIGHT)
+        .overflow_y_scrollbar()
+        .when(expanded, |this| {
+            this.children(tasks.iter().map(|task| overlay_row(tab_id, task, p, cx)))
         });
 
-        bulk_actions.into_any_element()
-    }
-
-    pub(crate) fn render_drop_overlay(
-        &self,
-        tab_id: TabId,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let panel = self.sftp_state(tab_id, cx)?;
-        if panel.open || !panel.queue.drop_overlay.visible || panel.queue.tasks.is_empty() {
-            return None;
-        }
-        let expanded = panel.queue.drop_overlay.expanded;
-        let tasks = panel.queue.tasks.clone();
-        let total = tasks.len();
-        let busy = tasks.iter().filter(|task| is_busy(task)).count();
-        let speed = panel.queue.drop_overlay.rate_bytes_per_sec;
-        let (done_bytes, total_bytes) = panel.queue.progress.unwrap_or((0, None));
-        // 目标目录挂在 tooltip 上：浮层面积有限，但"传到哪儿"必须能查到。
-        let target_tip = format!(
-            "{} · {}",
-            rust_i18n::t!("sftp.overlay_target"),
-            panel.remote.path
-        );
-        let summary = rust_i18n::t!("sftp.overlay_summary", busy = busy, total = total).to_string();
-        let counters = match total_bytes {
-            Some(bytes) => format!(
-                " · {}/{} · {}",
-                format_size(done_bytes),
-                format_size(bytes),
-                format_rate(speed)
-            ),
-            // 目录树任务拿不到总大小，只报已传字节与速率。
-            None => format!(" · {} · {}", format_size(done_bytes), format_rate(speed)),
-        };
-
-        let header = self.render_overlay_header(
-            OverlayHeader {
-                tab_id,
-                expanded,
-                summary,
-                counters,
-            },
-            p,
-            cx,
-        );
-        let bulk_actions = self.render_overlay_bulk_actions(tab_id, busy, cx);
-
-        let detail = v_flex()
+    // 绝对定位挂在窗格的终端容器上（见 workspace/panes.rs 的 .relative()），
+    // 因此 bottom/right 直接对齐终端区右下角，不受侧栏与面板列宽度影响。
+    Some(
+        v_flex()
+            .id(ElementId::Name(format!("drop-overlay-{tab_id}").into()))
+            .absolute()
+            .bottom(OVERLAY_INSET)
+            .right(OVERLAY_INSET)
+            .w(rems(22.0))
             .gap_1()
-            .max_h(OVERLAY_MAX_HEIGHT)
-            .overflow_y_scrollbar()
-            .when(expanded, |this| {
-                this.children(tasks.iter().map(|task| overlay_row(tab_id, task, p, cx)))
-            });
-
-        // 绝对定位挂在窗格的终端容器上（见 workspace/panes.rs 的 .relative()），
-        // 因此 bottom/right 直接对齐终端区右下角，不受侧栏与面板列宽度影响。
-        Some(
-            v_flex()
-                .id(ElementId::Name(format!("drop-overlay-{tab_id}").into()))
-                .absolute()
-                .bottom(OVERLAY_INSET)
-                .right(OVERLAY_INSET)
-                .w(rems(22.0))
-                .gap_1()
-                .p_2()
-                .rounded(p.radius.none)
-                .bg(p.popover)
-                .border_1()
-                .border_color(p.border)
-                .shadow_lg()
-                .tooltip(move |_window, cx| Tooltip::new(target_tip.clone()).build(_window, cx))
-                .child(header)
-                .child(bulk_actions)
-                .child(detail)
-                .into_any_element(),
-        )
-    }
+            .p_2()
+            .rounded(p.radius.none)
+            .bg(p.popover)
+            .border_1()
+            .border_color(p.border)
+            .shadow_lg()
+            .tooltip(move |_window, cx| Tooltip::new(target_tip.clone()).build(_window, cx))
+            .child(header)
+            .child(bulk_actions)
+            .child(detail)
+            .into_any_element(),
+    )
 }
 
 /// 一行的明细：文件名 + 进度条 + 状态文案 + 与该状态相称的动作。
@@ -439,11 +437,11 @@ fn overlay_row(
                     .render()
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if paused {
-                            this.sftp_resume_task(tab_id, task_id, cx);
+                            crate::sftp::sftp_resume_task(this, tab_id, task_id, cx);
                         } else {
-                            this.sftp_pause_task(tab_id, task_id, cx);
+                            crate::sftp::sftp_pause_task(this, tab_id, task_id, cx);
                         }
-                        this.sync_drop_overlay(tab_id, cx);
+                        crate::sftp::sync_drop_overlay(this, tab_id, cx);
                     })),
                 )
             })
@@ -456,8 +454,8 @@ fn overlay_row(
                 .size(crate::widgets::IconButtonSize::Compact)
                 .render()
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_cancel_task(tab_id, task_id, cx);
-                    this.sync_drop_overlay(tab_id, cx);
+                    crate::sftp::sftp_cancel_task(this, tab_id, task_id, cx);
+                    crate::sftp::sync_drop_overlay(this, tab_id, cx);
                 })),
             )
         })
@@ -471,8 +469,8 @@ fn overlay_row(
                 .size(crate::widgets::IconButtonSize::Compact)
                 .render()
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.sftp_remove_task(tab_id, task_id, cx);
-                    this.sync_drop_overlay(tab_id, cx);
+                    crate::sftp::sftp_remove_task(this, tab_id, task_id, cx);
+                    crate::sftp::sync_drop_overlay(this, tab_id, cx);
                 })),
             )
         });

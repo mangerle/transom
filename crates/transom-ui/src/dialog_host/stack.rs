@@ -73,206 +73,200 @@ impl OpenModals {
     }
 }
 
-impl AppShell {
-    /// 当前应当打开的弹窗栈，按层序由下到上。
-    fn desired_modal_stack(&self, cx: &App) -> Vec<ModalKind> {
-        super::registry::ordered_kinds()
-            .filter(|kind| kind.is_open(self, cx))
-            .collect()
+/// 当前应当打开的弹窗栈，按层序由下到上。
+fn desired_modal_stack(shell: &AppShell, cx: &App) -> Vec<ModalKind> {
+    super::registry::ordered_kinds()
+        .filter(|kind| kind.is_open(shell, cx))
+        .collect()
+}
+
+/// 把容器弹窗栈对账到期望栈。
+///
+/// 为什么放在渲染里而不是各个开关点：状态变更入口分散在菜单、快捷键、
+/// 拖放与异步回调等二十多处，逐个补开关必然漏；渲染是唯一的汇聚点。
+/// 为什么要 `defer`：`open_dialog` 会移交焦点并通知组件层，在渲染过程中
+/// 改这些状态会踩借用与重入，延到绘制之后再执行。
+pub(crate) fn reconcile_dialogs(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    let desired = desired_modal_stack(shell, cx);
+    let actual: Vec<ModalKind> = shell
+        .state
+        .open_modals
+        .layers
+        .iter()
+        .map(|layer| layer.kind)
+        .collect();
+    if desired == actual {
+        return;
     }
 
-    /// 把容器弹窗栈对账到期望栈。
-    ///
-    /// 为什么放在渲染里而不是各个开关点：状态变更入口分散在菜单、快捷键、
-    /// 拖放与异步回调等二十多处，逐个补开关必然漏；渲染是唯一的汇聚点。
-    /// 为什么要 `defer`：`open_dialog` 会移交焦点并通知组件层，在渲染过程中
-    /// 改这些状态会踩借用与重入，延到绘制之后再执行。
-    pub(crate) fn reconcile_dialogs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let desired = self.desired_modal_stack(cx);
-        let actual: Vec<ModalKind> = self
-            .state
-            .open_modals
-            .layers
-            .iter()
-            .map(|layer| layer.kind)
-            .collect();
-        if desired == actual {
-            return;
+    // 公共前缀原地保留；一旦中间层被移除或需要在中间插入，只能整栈
+    // 关掉再按期望顺序重开——这是容器栈的真实代价。
+    let common = desired
+        .iter()
+        .zip(actual.iter())
+        .take_while(|(want, have)| want == have)
+        .count();
+    let extra = actual.len() - common;
+    let missing = desired[common..].to_vec();
+
+    let app = cx.entity().clone();
+    let deferred_app = app.clone();
+    let deferred_missing = missing.clone();
+    window.defer(cx, move |window, cx| {
+        for _ in 0..extra {
+            window.close_dialog(cx);
         }
-
-        // 公共前缀原地保留；一旦中间层被移除或需要在中间插入，只能整栈
-        // 关掉再按期望顺序重开——这是容器栈的真实代价。
-        let common = desired
-            .iter()
-            .zip(actual.iter())
-            .take_while(|(want, have)| want == have)
-            .count();
-        let extra = actual.len() - common;
-        let missing = desired[common..].to_vec();
-
-        let app = cx.entity().clone();
-        let deferred_app = app.clone();
-        let deferred_missing = missing.clone();
-        window.defer(cx, move |window, cx| {
-            for _ in 0..extra {
-                window.close_dialog(cx);
-            }
-            for kind in deferred_missing {
-                deferred_app.update(cx, |shell, cx| shell.push_dialog(kind, window, cx));
+        for kind in deferred_missing {
+            deferred_app.update(cx, |shell, cx| push_dialog(shell, kind, window, cx));
+        }
+    });
+    // 影子栈先按期望落定：延后执行的那批开关完成后即与之一致。
+    shell.state.open_modals.layers.truncate(common);
+    for kind in missing {
+        // 基线在开弹窗这一刻取：此后任何文本变化都算未提交内容。
+        let baseline = kind.field_values(shell, cx);
+        let body_app = app.clone();
+        let body = cx.new(move |cx| {
+            let observe = cx.observe(&body_app, move |_, _, cx| cx.notify());
+            ModalBody {
+                kind,
+                app: body_app,
+                pending_focus: true,
+                _observe: observe,
             }
         });
-        // 影子栈先按期望落定：延后执行的那批开关完成后即与之一致。
-        self.state.open_modals.layers.truncate(common);
-        for kind in missing {
-            // 基线在开弹窗这一刻取：此后任何文本变化都算未提交内容。
-            let baseline = kind.field_values(self, cx);
-            let body_app = app.clone();
-            let body = cx.new(move |cx| {
-                let observe = cx.observe(&body_app, move |_, _, cx| cx.notify());
-                ModalBody {
-                    kind,
-                    app: body_app,
-                    pending_focus: true,
-                    _observe: observe,
-                }
-            });
-            self.state.open_modals.layers.push(ModalLayer {
-                kind,
-                body,
-                baseline,
-            });
-        }
+        shell.state.open_modals.layers.push(ModalLayer {
+            kind,
+            body,
+            baseline,
+        });
     }
+}
 
-    /// 压入一层弹窗：外壳只负责容器属性，内容交给弹窗体。
-    fn push_dialog(&mut self, kind: ModalKind, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(body) = self
-            .state
-            .open_modals
-            .layers
-            .iter()
-            .find(|layer| layer.kind == kind)
-            .map(|layer| layer.body.clone())
-        else {
-            log::error!("弹窗对账失序：种类 {:?} 缺少弹窗体实体，跳过这一层", kind);
-            return;
-        };
-        let app = cx.entity().clone();
-        let width = kind.spec(window).width;
-        if kind.uses_alert_dialog() {
-            window.open_alert_dialog(cx, move |alert, _window, _cx| {
-                let cancel_app = app.clone();
-                let commit_app = app.clone();
+/// 压入一层弹窗：外壳只负责容器属性，内容交给弹窗体。
+fn push_dialog(shell: &mut AppShell, kind: ModalKind, window: &mut Window, cx: &mut Context<AppShell>) {
+    let Some(body) = shell
+        .state
+        .open_modals
+        .layers
+        .iter()
+        .find(|layer| layer.kind == kind)
+        .map(|layer| layer.body.clone())
+    else {
+        log::error!("弹窗对账失序：种类 {:?} 缺少弹窗体实体，跳过这一层", kind);
+        return;
+    };
+    let app = cx.entity().clone();
+    let width = kind.spec(window).width;
+    if kind.uses_alert_dialog() {
+        window.open_alert_dialog(cx, move |alert, _window, _cx| {
+            let cancel_app = app.clone();
+            let commit_app = app.clone();
 
-                alert
-                    .width(width)
-                    .entrance(DialogEntrance::None)
-                    // 各领域已经渲染了带具体动作文案的页脚；空 footer 只用于
-                    // 关闭 AlertDialog 的默认 OK 页脚，避免出现第二组按钮。
-                    .footer(div())
-                    .child(body.clone())
-                    .on_cancel(move |_, window, cx| {
-                        let closed = cancel_modal(&cancel_app, kind, window, cx);
-                        if closed {
-                            close_layer(&cancel_app, kind, cx);
-                        }
-                        closed
-                    })
-                    .on_ok(move |_, window, cx| {
-                        let closed = commit_modal(&commit_app, kind, window, cx);
-                        if closed {
-                            close_layer(&commit_app, kind, cx);
-                        }
-                        closed
-                    })
-            });
-        } else {
-            window.open_dialog(cx, move |dialog, _window, _cx| {
-                let cancel_app = app.clone();
-                let commit_app = app.clone();
+            alert
+                .width(width)
+                .entrance(DialogEntrance::None)
+                // 各领域已经渲染了带具体动作文案的页脚；空 footer 只用于
+                // 关闭 AlertDialog 的默认 OK 页脚，避免出现第二组按钮。
+                .footer(div())
+                .child(body.clone())
+                .on_cancel(move |_, window, cx| {
+                    let closed = cancel_modal(&cancel_app, kind, window, cx);
+                    if closed {
+                        close_layer(&cancel_app, kind, cx);
+                    }
+                    closed
+                })
+                .on_ok(move |_, window, cx| {
+                    let closed = commit_modal(&commit_app, kind, window, cx);
+                    if closed {
+                        close_layer(&commit_app, kind, cx);
+                    }
+                    closed
+                })
+        });
+    } else {
+        window.open_dialog(cx, move |dialog, _window, _cx| {
+            let cancel_app = app.clone();
+            let commit_app = app.clone();
 
-                let dialog = dialog.w(width).max_w(width);
-                // 差异查看器占视口高度的大部分，垂直居中比固定顶部偏移更稳定；
-                // 短表单仍沿用组件库的默认上沿位置，避免视觉重心整体下坠。
-                let dialog = if kind == ModalKind::DiffViewer {
-                    dialog.centered()
-                } else {
-                    dialog
-                };
+            let dialog = dialog.w(width).max_w(width);
+            // 差异查看器占视口高度的大部分，垂直居中比固定顶部偏移更稳定；
+            // 短表单仍沿用组件库的默认上沿位置，避免视觉重心整体下坠。
+            let dialog = if kind == ModalKind::DiffViewer {
+                dialog.centered()
+            } else {
                 dialog
-                    // 普通表单弹窗保留可见关闭件；危险决策走上面的 AlertDialog。
-                    .close_button(true)
-                    // 容器遮罩按 `window_paddings` 内缩定位：客户端装饰下实测内缩
-                    // 20px，会把压暗层上沿留在自绘顶栏中部。压暗改由宿主画满窗面，
-                    // 见 `AppShell::dialog_dim`。
-                    .overlay(false)
-                    .overlay_closable(false)
-                    .entrance(DialogEntrance::None)
-                    .child(body.clone())
-                    .on_cancel(move |_, window, cx| {
-                        let closed = cancel_modal(&cancel_app, kind, window, cx);
-                        if closed {
-                            close_layer(&cancel_app, kind, cx);
-                        }
-                        closed
-                    })
-                    .on_ok(move |_, window, cx| {
-                        let closed = commit_modal(&commit_app, kind, window, cx);
-                        if closed {
-                            close_layer(&commit_app, kind, cx);
-                        }
-                        closed
-                    })
-            });
-        }
+            };
+            dialog
+                // 普通表单弹窗保留可见关闭件；危险决策走上面的 AlertDialog。
+                .close_button(true)
+                // 容器遮罩按 `window_paddings` 内缩定位：客户端装饰下实测内缩
+                // 20px，会把压暗层上沿留在自绘顶栏中部。压暗改由宿主画满窗面，
+                // 见 `crate::app::dialog_host::dialog_dim`。
+                .overlay(false)
+                .overlay_closable(false)
+                .entrance(DialogEntrance::None)
+                .child(body.clone())
+                .on_cancel(move |_, window, cx| {
+                    let closed = cancel_modal(&cancel_app, kind, window, cx);
+                    if closed {
+                        close_layer(&cancel_app, kind, cx);
+                    }
+                    closed
+                })
+                .on_ok(move |_, window, cx| {
+                    let closed = commit_modal(&commit_app, kind, window, cx);
+                    if closed {
+                        close_layer(&commit_app, kind, cx);
+                    }
+                    closed
+                })
+        });
     }
 }
 
-impl AppShell {
-    /// 弹窗栈的压暗层：只负责视觉压暗与命中阻断，不承载弹窗本体。
-    ///
-    /// 为什么要在宿主这一侧画：弹窗层由组件库在窗口根上渲染，其遮罩按窗口
-    /// 内缩定位，客户端装饰下实测四周各留 20px；而应用顶栏从窗面 y=0 起画，
-    /// 于是压暗层上沿正好卡在顶栏中间。宿主元素铺满整个窗面，层序在编辑面板
-    /// 之上、弹窗层之下，与迁移前的自绘遮罩一致。
-    pub(crate) fn dialog_dim(&self, p: &Palette) -> Option<AnyElement> {
-        if self.state.open_modals.layers.is_empty() {
-            return None;
-        }
-        Some(
-            div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full()
-                .bg(p.overlay)
-                // 与迁移前一致：阻断下层命中测试，否则点弹窗会同时触发终端与
-                // 文件列表的鼠标处理并抢走焦点。点遮罩本身不做关闭动作（已拍板）。
-                .occlude()
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-                .into_any_element(),
-        )
+/// 弹窗栈的压暗层：只负责视觉压暗与命中阻断，不承载弹窗本体。
+///
+/// 为什么要在宿主这一侧画：弹窗层由组件库在窗口根上渲染，其遮罩按窗口
+/// 内缩定位，客户端装饰下实测四周各留 20px；而应用顶栏从窗面 y=0 起画，
+/// 于是压暗层上沿正好卡在顶栏中间。宿主元素铺满整个窗面，层序在编辑面板
+/// 之上、弹窗层之下，与迁移前的自绘遮罩一致。
+pub(crate) fn dialog_dim(shell: &AppShell, p: &Palette) -> Option<AnyElement> {
+    if shell.state.open_modals.layers.is_empty() {
+        return None;
     }
+    Some(
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .bg(p.overlay)
+            // 与迁移前一致：阻断下层命中测试，否则点弹窗会同时触发终端与
+            // 文件列表的鼠标处理并抢走焦点。点遮罩本身不做关闭动作（已拍板）。
+            .occlude()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .into_any_element(),
+    )
 }
 
-impl AppShell {
-    /// 关闭一个 SFTP 弹窗：清状态并把焦点还给活动面板。
-    ///
-    /// 七个 SFTP 弹窗的取消动作只差"清哪个字段"，用闭包参数而不是七个
-    /// 同形方法，避免复制七遍同样的焦点与重绘逻辑。
-    pub(crate) fn close_sftp_modal<F>(
-        &mut self,
-        clear: F,
-        window: &mut Window,
-        cx: &mut Context<AppShell>,
-    ) -> bool
-    where
-        F: FnOnce(&mut crate::sftp::SftpModals),
-    {
-        clear(&mut self.state.sftp_modals);
-        self.focus_active_sftp_panel(window, cx);
-        cx.notify();
-        true
-    }
+/// 关闭一个 SFTP 弹窗：清状态并把焦点还给活动面板。
+///
+/// 七个 SFTP 弹窗的取消动作只差"清哪个字段"，用闭包参数而不是七个
+/// 同形方法，避免复制七遍同样的焦点与重绘逻辑。
+pub(crate) fn close_sftp_modal<F>(
+    shell: &mut AppShell,
+    clear: F,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) -> bool
+where
+    F: FnOnce(&mut crate::sftp::SftpModals),
+{
+    clear(&mut shell.state.sftp_modals);
+    crate::sftp::focus_active_sftp_panel(shell, window, cx);
+    cx.notify();
+    true
 }

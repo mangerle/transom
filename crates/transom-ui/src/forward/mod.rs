@@ -5,8 +5,14 @@ mod entity;
 mod panel_event;
 mod view;
 
+pub(crate) use actions::{
+    auto_start_forwards, cancel_forward_confirm, confirm_forward_start, delete_forward_rule,
+    on_toggle_forward, start_forward_rule, stop_forward_rule, submit_forward_rule,
+    toggle_forward_panel,
+};
 pub(crate) use entity::ForwardView;
 pub(crate) use panel_event::ForwardPanelEvent;
+pub(crate) use view::render_forward_confirm_body;
 
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;

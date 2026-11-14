@@ -108,369 +108,367 @@ impl AppState {
     }
 }
 
-impl AppShell {
-    pub(crate) fn toggle_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.state.broadcast.open {
-            self.close_broadcast_bar(window, cx);
-        } else {
-            self.open_broadcast_bar(window, cx);
-        }
+pub(crate) fn toggle_broadcast_bar(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    if shell.state.broadcast.open {
+        close_broadcast_bar(shell, window, cx);
+    } else {
+        open_broadcast_bar(shell, window, cx);
     }
+}
 
-    fn open_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.broadcast.open = true;
-        self.state.broadcast.multiline = false;
-        self.state.broadcast.targets_open = false;
-        let scope = self.state.current_visual_groups();
-        self.state.broadcast.targets = self.state.default_broadcast_targets_for(&scope);
-        self.state.broadcast.targets_scope = scope;
-        self.state.broadcast.input.update(cx, |state, cx| {
-            state.set_value("", window, cx);
+fn open_broadcast_bar(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    shell.state.broadcast.open = true;
+    shell.state.broadcast.multiline = false;
+    shell.state.broadcast.targets_open = false;
+    let scope = shell.state.current_visual_groups();
+    shell.state.broadcast.targets = shell.state.default_broadcast_targets_for(&scope);
+    shell.state.broadcast.targets_scope = scope;
+    shell.state.broadcast.input.update(cx, |state, cx| {
+        state.set_value("", window, cx);
+        state.focus(window, cx);
+    });
+    shell.state
+        .broadcast
+        .textarea
+        .update(cx, |state, cx| state.set_value("", window, cx));
+    cx.notify();
+}
+
+fn close_broadcast_bar(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    shell.state.broadcast.open = false;
+    shell.state.broadcast.targets_open = false;
+    if let Some(active) = shell.state.workspace.active_tab {
+        shell.activate_tab(active, window, cx);
+    } else {
+        cx.notify();
+    }
+}
+
+/// 单行与多行互切，文本随模式带过去，焦点落到新输入框。
+pub(crate) fn toggle_broadcast_multiline(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if !shell.state.broadcast.open {
+        return;
+    }
+    let text = if shell.state.broadcast.multiline {
+        shell.state.broadcast.textarea.read(cx).value().to_string()
+    } else {
+        shell.state.broadcast.input.read(cx).value().to_string()
+    };
+    shell.state.broadcast.multiline = !shell.state.broadcast.multiline;
+    if shell.state.broadcast.multiline {
+        shell.state.broadcast.textarea.update(cx, |state, cx| {
+            state.set_value(&text, window, cx);
             state.focus(window, cx);
         });
-        self.state
+    } else {
+        // 单行输入框不能承载换行；收起来时把换行折成空格，保留可编辑内容。
+        let single = text.replace("\r\n", "\n").replace('\n', " ");
+        shell.state.broadcast.input.update(cx, |state, cx| {
+            state.set_value(&single, window, cx);
+            state.focus(window, cx);
+        });
+    }
+    cx.notify();
+}
+
+/// 把当前输入发送到所有已选目标；单行补回车，多行按粘贴语义整段发送。
+/// 读取广播文本并收敛目标集；空文本或无有效目标时返回 None。
+fn prepare_broadcast(shell: &mut AppShell, cx: &mut Context<AppShell>) -> Option<(String, Vec<TabId>)> {
+    let raw = if shell.state.broadcast.multiline {
+        shell.state.broadcast.textarea.read(cx).value().to_string()
+    } else {
+        shell.state.broadcast.input.read(cx).value().to_string()
+    };
+    let text = raw.trim_end_matches(['\r', '\n']).to_string();
+    if text.trim().is_empty() {
+        return None;
+    }
+    // 目标集合必须仍然落在当前视觉标签内：标签切换或窗格关闭后，残留的
+    // 旧目标不能继续收到命令。
+    let allowed: HashSet<TabId> = shell
+        .state
+        .current_visual_groups()
+        .into_iter()
+        .filter_map(|group_id| shell.state.workspace.group(group_id))
+        .flat_map(|group| group.pane_ids())
+        .collect();
+    shell.state
+        .broadcast
+        .targets
+        .retain(|id| allowed.contains(id));
+    let targets: Vec<TabId> = shell.state.broadcast.targets.iter().copied().collect();
+    if targets.is_empty() {
+        shell.state.status = Some(rust_i18n::t!("broadcast.no_targets").to_string());
+        cx.notify();
+        return None;
+    }
+
+    Some((text, targets))
+}
+
+pub(crate) fn broadcast_send(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    if !shell.state.broadcast.open {
+        return;
+    }
+    let Some((text, targets)) = prepare_broadcast(shell, cx) else {
+        return;
+    };
+    let multiline = shell.state.broadcast.multiline;
+    let mut failed = 0usize;
+    for tab_id in &targets {
+        let Some(tab) = shell.state.workspace.tab(*tab_id) else {
+            failed += 1;
+            continue;
+        };
+        let Some(terminal) = tab.terminal() else {
+            failed += 1;
+            continue;
+        };
+        let sent = terminal.update(cx, |view, cx| {
+            if multiline {
+                view.send_paste(&text, true, cx)
+            } else {
+                view.send_text(&format!("{text}\r"), cx)
+            }
+        });
+        if !sent {
+            failed += 1;
+        }
+    }
+    if failed > 0 {
+        shell.state
+            .set_error(rust_i18n::t!("broadcast.send_failed").to_string());
+    }
+    // 命令内容可能含敏感信息，只记录目标数量与失败数，绝不落盘正文。
+    log::info!(
+        "广播命令已发送，目标窗格数: {}，失败数: {}",
+        targets.len(),
+        failed
+    );
+
+    shell.state
+        .broadcast
+        .input
+        .update(cx, |state, cx| state.set_value("", window, cx));
+    shell.state
+        .broadcast
+        .textarea
+        .update(cx, |state, cx| state.set_value("", window, cx));
+    if multiline {
+        shell.state
             .broadcast
             .textarea
-            .update(cx, |state, cx| state.set_value("", window, cx));
-        cx.notify();
-    }
-
-    fn close_broadcast_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.broadcast.open = false;
-        self.state.broadcast.targets_open = false;
-        if let Some(active) = self.state.workspace.active_tab {
-            self.activate_tab(active, window, cx);
-        } else {
-            cx.notify();
-        }
-    }
-
-    /// 单行与多行互切，文本随模式带过去，焦点落到新输入框。
-    pub(crate) fn toggle_broadcast_multiline(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if !self.state.broadcast.open {
-            return;
-        }
-        let text = if self.state.broadcast.multiline {
-            self.state.broadcast.textarea.read(cx).value().to_string()
-        } else {
-            self.state.broadcast.input.read(cx).value().to_string()
-        };
-        self.state.broadcast.multiline = !self.state.broadcast.multiline;
-        if self.state.broadcast.multiline {
-            self.state.broadcast.textarea.update(cx, |state, cx| {
-                state.set_value(&text, window, cx);
-                state.focus(window, cx);
-            });
-        } else {
-            // 单行输入框不能承载换行；收起来时把换行折成空格，保留可编辑内容。
-            let single = text.replace("\r\n", "\n").replace('\n', " ");
-            self.state.broadcast.input.update(cx, |state, cx| {
-                state.set_value(&single, window, cx);
-                state.focus(window, cx);
-            });
-        }
-        cx.notify();
-    }
-
-    /// 把当前输入发送到所有已选目标；单行补回车，多行按粘贴语义整段发送。
-    /// 读取广播文本并收敛目标集；空文本或无有效目标时返回 None。
-    fn prepare_broadcast(&mut self, cx: &mut Context<Self>) -> Option<(String, Vec<TabId>)> {
-        let raw = if self.state.broadcast.multiline {
-            self.state.broadcast.textarea.read(cx).value().to_string()
-        } else {
-            self.state.broadcast.input.read(cx).value().to_string()
-        };
-        let text = raw.trim_end_matches(['\r', '\n']).to_string();
-        if text.trim().is_empty() {
-            return None;
-        }
-        // 目标集合必须仍然落在当前视觉标签内：标签切换或窗格关闭后，残留的
-        // 旧目标不能继续收到命令。
-        let allowed: HashSet<TabId> = self
-            .state
-            .current_visual_groups()
-            .into_iter()
-            .filter_map(|group_id| self.state.workspace.group(group_id))
-            .flat_map(|group| group.pane_ids())
-            .collect();
-        self.state
-            .broadcast
-            .targets
-            .retain(|id| allowed.contains(id));
-        let targets: Vec<TabId> = self.state.broadcast.targets.iter().copied().collect();
-        if targets.is_empty() {
-            self.state.status = Some(rust_i18n::t!("broadcast.no_targets").to_string());
-            cx.notify();
-            return None;
-        }
-
-        Some((text, targets))
-    }
-
-    pub(crate) fn broadcast_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.state.broadcast.open {
-            return;
-        }
-        let Some((text, targets)) = self.prepare_broadcast(cx) else {
-            return;
-        };
-        let multiline = self.state.broadcast.multiline;
-        let mut failed = 0usize;
-        for tab_id in &targets {
-            let Some(tab) = self.state.workspace.tab(*tab_id) else {
-                failed += 1;
-                continue;
-            };
-            let Some(terminal) = tab.terminal() else {
-                failed += 1;
-                continue;
-            };
-            let sent = terminal.update(cx, |view, cx| {
-                if multiline {
-                    view.send_paste(&text, true, cx)
-                } else {
-                    view.send_text(&format!("{text}\r"), cx)
-                }
-            });
-            if !sent {
-                failed += 1;
-            }
-        }
-        if failed > 0 {
-            self.state
-                .set_error(rust_i18n::t!("broadcast.send_failed").to_string());
-        }
-        // 命令内容可能含敏感信息，只记录目标数量与失败数，绝不落盘正文。
-        log::info!(
-            "广播命令已发送，目标窗格数: {}，失败数: {}",
-            targets.len(),
-            failed
-        );
-
-        self.state
+            .update(cx, |state, cx| state.focus(window, cx));
+    } else {
+        shell.state
             .broadcast
             .input
-            .update(cx, |state, cx| state.set_value("", window, cx));
-        self.state
-            .broadcast
-            .textarea
-            .update(cx, |state, cx| state.set_value("", window, cx));
-        if multiline {
-            self.state
-                .broadcast
-                .textarea
-                .update(cx, |state, cx| state.focus(window, cx));
-        } else {
-            self.state
-                .broadcast
-                .input
-                .update(cx, |state, cx| state.focus(window, cx));
-        }
-        cx.notify();
+            .update(cx, |state, cx| state.focus(window, cx));
     }
+    cx.notify();
+}
 
-    pub(crate) fn set_broadcast_target(
-        &mut self,
-        tab_id: TabId,
-        selected: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if selected {
-            self.state.broadcast.targets.insert(tab_id);
-        } else {
-            self.state.broadcast.targets.remove(&tab_id);
-        }
-        cx.notify();
+pub(crate) fn set_broadcast_target(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    selected: bool,
+    cx: &mut Context<AppShell>,
+) {
+    if selected {
+        shell.state.broadcast.targets.insert(tab_id);
+    } else {
+        shell.state.broadcast.targets.remove(&tab_id);
     }
+    cx.notify();
+}
 
-    /// 目标选择列表：只列当前视觉标签内的窗格，不跨标签。
-    fn broadcast_target_rows(&self, p: &Palette) -> Vec<BroadcastTargetRow> {
-        let groups = self.state.current_visual_groups();
-        let mut rows = Vec::with_capacity(self.state.workspace.tabs.len());
-        for group_id in groups {
-            let Some(group) = self.state.workspace.group(group_id) else {
+/// 目标选择列表：只列当前视觉标签内的窗格，不跨标签。
+fn broadcast_target_rows(shell: &AppShell, p: &Palette) -> Vec<BroadcastTargetRow> {
+    let groups = shell.state.current_visual_groups();
+    let mut rows = Vec::with_capacity(shell.state.workspace.tabs.len());
+    for group_id in groups {
+        let Some(group) = shell.state.workspace.group(group_id) else {
+            continue;
+        };
+        let pane_ids = group.pane_ids();
+        let multi = pane_ids.len() > 1;
+        for (position, pane_id) in pane_ids.iter().enumerate() {
+            let Some(tab) = shell
+                .state
+                .workspace
+                .tabs
+                .iter()
+                .find(|tab| tab.id == *pane_id && tab.terminal().is_some())
+            else {
                 continue;
             };
-            let pane_ids = group.pane_ids();
-            let multi = pane_ids.len() > 1;
-            for (position, pane_id) in pane_ids.iter().enumerate() {
-                let Some(tab) = self
-                    .state
-                    .workspace
-                    .tabs
-                    .iter()
-                    .find(|tab| tab.id == *pane_id && tab.terminal().is_some())
-                else {
-                    continue;
-                };
-                let (dot_color, _) = pane_status_indicator(&tab.status, p);
-                let mut title = tab.display_name();
-                if group.serial > 0 {
-                    title = format!("{title} #{}", group.serial);
-                }
-                if multi {
-                    let suffix =
-                        rust_i18n::t!("broadcast.pane_suffix", index = position + 1).to_string();
-                    title = format!("{title} · {suffix}");
-                }
-                rows.push(BroadcastTargetRow {
-                    tab_id: *pane_id,
-                    title,
-                    dot_color,
-                    icon: crate::connection::icon(&tab.session.connection),
-                    selected: self.state.broadcast.targets.contains(pane_id),
-                });
+            let (dot_color, _) = pane_status_indicator(&tab.status, p);
+            let mut title = tab.display_name();
+            if group.serial > 0 {
+                title = format!("{title} #{}", group.serial);
             }
+            if multi {
+                let suffix =
+                    rust_i18n::t!("broadcast.pane_suffix", index = position + 1).to_string();
+                title = format!("{title} · {suffix}");
+            }
+            rows.push(BroadcastTargetRow {
+                tab_id: *pane_id,
+                title,
+                dot_color,
+                icon: crate::connection::icon(&tab.session.connection),
+                selected: shell.state.broadcast.targets.contains(pane_id),
+            });
         }
-        rows
     }
+    rows
+}
 
-    /// 状态栏快捷命令旁的广播入口。
-    pub(crate) fn render_broadcast_trigger(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        Button::new("broadcast-trigger")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Custom(CustomIcon::BROADCAST)).small())
-            .selected(self.state.broadcast.open)
-            .accessibility_label(rust_i18n::t!("broadcast.title").to_string())
-            .tooltip(rust_i18n::t!("broadcast.title").to_string())
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.toggle_broadcast_bar(window, cx);
-            }))
-            .into_any_element()
-    }
-
-    /// 广播目标选择浮层：触发按钮与目标行列表。
-    fn render_broadcast_targets(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
-        let target_trigger = Button::new("broadcast-targets-trigger")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-            .label(rust_i18n::t!("broadcast.targets").to_string())
-            .selected(self.state.broadcast.targets_open)
-            .tooltip(rust_i18n::t!("broadcast.targets").to_string());
-        let app = cx.entity().clone();
-        let app_open = app.clone();
-        let content_app = app.clone();
-        let content_palette = p.clone();
-        Popover::new("broadcast-targets-popover")
-            .anchor(Anchor::BottomLeft)
-            .offset(px(-1.0))
-            .trigger_style(StyleRefinement::default().flex_none().flex().items_center())
-            .open(self.state.broadcast.targets_open)
-            .on_open_change(move |open, _window, cx| {
-                let open = *open;
-                app_open.update(cx, |this, cx| {
-                    if this.state.broadcast.targets_open != open {
-                        this.state.broadcast.targets_open = open;
-                        cx.notify();
-                    }
-                });
-            })
-            .trigger(target_trigger)
-            .content(move |_, _, cx| {
-                let rows = content_app.read(cx).broadcast_target_rows(&content_palette);
-                render_target_rows(&content_app, rows, &content_palette)
-            })
-            .into_any_element()
-    }
-
-    pub(crate) fn render_broadcast_bar(
-        &mut self,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let multiline = self.state.broadcast.multiline;
-        let targets_popover = self.render_broadcast_targets(cx, p);
-
-        let close = crate::widgets::IconButton::new(
-            "broadcast-close",
-            AppIcon::Ui(UiIcon::CLOSE),
-            rust_i18n::t!("app.close").to_string(),
-        )
-        .size(crate::widgets::IconButtonSize::Compact)
-        .render()
+/// 状态栏快捷命令旁的广播入口。
+pub(crate) fn render_broadcast_trigger(shell: &mut AppShell, cx: &mut Context<AppShell>) -> AnyElement {
+    Button::new("broadcast-trigger")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(AppIcon::Custom(CustomIcon::BROADCAST)).small())
+        .selected(shell.state.broadcast.open)
+        .accessibility_label(rust_i18n::t!("broadcast.title").to_string())
+        .tooltip(rust_i18n::t!("broadcast.title").to_string())
         .on_click(cx.listener(|this, _, window, cx| {
-            this.close_broadcast_bar(window, cx);
-        }));
-        let toggle = Button::new("broadcast-mode-toggle")
-            .ghost()
-            .xsmall()
-            .child(
-                AppIconElement::new(if multiline {
-                    AppIcon::Ui(UiIcon::DOWN)
-                } else {
-                    AppIcon::Ui(UiIcon::UP)
-                })
-                .small(),
-            )
-            .accessibility_label(if multiline {
-                rust_i18n::t!("broadcast.collapse").to_string()
-            } else {
-                rust_i18n::t!("broadcast.expand").to_string()
-            })
-            .tooltip(if multiline {
-                rust_i18n::t!("broadcast.collapse").to_string()
-            } else {
-                rust_i18n::t!("broadcast.expand").to_string()
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.toggle_broadcast_multiline(window, cx);
-            }));
+            crate::app::broadcast::toggle_broadcast_bar(this, window, cx);
+        }))
+        .into_any_element()
+}
 
-        if multiline {
-            v_flex()
-                .w_full()
-                .bg(p.tab_bar)
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Top, p.divider_width)
-                .child(
-                    h_flex()
-                        .px_2()
-                        .py_1()
-                        .gap_2()
-                        .items_center()
-                        .child(targets_popover)
-                        .child(div().flex_1())
-                        .child(close)
-                        .child(toggle),
-                )
-                .child(
-                    div().px_2().pb_2().w_full().child(
-                        Textarea::new(&self.state.broadcast.textarea)
-                            .appearance(false)
-                            .bordered(false)
-                            .h(rems(7.0))
-                            .w_full(),
-                    ),
-                )
-                .into_any_element()
+/// 广播目标选择浮层：触发按钮与目标行列表。
+fn render_broadcast_targets(shell: &AppShell, cx: &mut Context<AppShell>, p: &Palette) -> AnyElement {
+    let target_trigger = Button::new("broadcast-targets-trigger")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
+        .label(rust_i18n::t!("broadcast.targets").to_string())
+        .selected(shell.state.broadcast.targets_open)
+        .tooltip(rust_i18n::t!("broadcast.targets").to_string());
+    let app = cx.entity().clone();
+    let app_open = app.clone();
+    let content_app = app.clone();
+    let content_palette = p.clone();
+    Popover::new("broadcast-targets-popover")
+        .anchor(Anchor::BottomLeft)
+        .offset(px(-1.0))
+        .trigger_style(StyleRefinement::default().flex_none().flex().items_center())
+        .open(shell.state.broadcast.targets_open)
+        .on_open_change(move |open, _window, cx| {
+            let open = *open;
+            app_open.update(cx, |this, cx| {
+                if this.state.broadcast.targets_open != open {
+                    this.state.broadcast.targets_open = open;
+                    cx.notify();
+                }
+            });
+        })
+        .trigger(target_trigger)
+        .content(move |_, _, cx| {
+            let rows = broadcast_target_rows(content_app.read(cx), &content_palette);
+            render_target_rows(&content_app, rows, &content_palette)
+        })
+        .into_any_element()
+}
+
+pub(crate) fn render_broadcast_bar(
+    shell: &mut AppShell,
+    cx: &mut Context<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let multiline = shell.state.broadcast.multiline;
+    let targets_popover = render_broadcast_targets(shell, cx, p);
+
+    let close = crate::widgets::IconButton::new(
+        "broadcast-close",
+        AppIcon::Ui(UiIcon::CLOSE),
+        rust_i18n::t!("app.close").to_string(),
+    )
+    .size(crate::widgets::IconButtonSize::Compact)
+    .render()
+    .on_click(cx.listener(|this, _, window, cx| {
+        close_broadcast_bar(this, window, cx);
+    }));
+    let toggle = Button::new("broadcast-mode-toggle")
+        .ghost()
+        .xsmall()
+        .child(
+            AppIconElement::new(if multiline {
+                AppIcon::Ui(UiIcon::DOWN)
+            } else {
+                AppIcon::Ui(UiIcon::UP)
+            })
+            .small(),
+        )
+        .accessibility_label(if multiline {
+            rust_i18n::t!("broadcast.collapse").to_string()
         } else {
-            h_flex()
-                .w_full()
-                .h(rems(2.5))
-                .px_2()
-                .gap_2()
-                .items_center()
-                .bg(p.tab_bar)
-                .border_color(p.divider(p.border))
-                .divider_edge(DividerEdge::Top, p.divider_width)
-                .child(targets_popover)
-                .child(
-                    div().flex_1().min_w_0().child(
-                        Input::new(&self.state.broadcast.input)
-                            .appearance(false)
-                            .bordered(false)
-                            .w_full(),
-                    ),
-                )
-                .child(close)
-                .child(toggle)
-                .into_any_element()
-        }
+            rust_i18n::t!("broadcast.expand").to_string()
+        })
+        .tooltip(if multiline {
+            rust_i18n::t!("broadcast.collapse").to_string()
+        } else {
+            rust_i18n::t!("broadcast.expand").to_string()
+        })
+        .on_click(cx.listener(|this, _, window, cx| {
+            crate::app::broadcast::toggle_broadcast_multiline(this, window, cx);
+        }));
+
+    if multiline {
+        v_flex()
+            .w_full()
+            .bg(p.tab_bar)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
+            .child(
+                h_flex()
+                    .px_2()
+                    .py_1()
+                    .gap_2()
+                    .items_center()
+                    .child(targets_popover)
+                    .child(div().flex_1())
+                    .child(close)
+                    .child(toggle),
+            )
+            .child(
+                div().px_2().pb_2().w_full().child(
+                    Textarea::new(&shell.state.broadcast.textarea)
+                        .appearance(false)
+                        .bordered(false)
+                        .h(rems(7.0))
+                        .w_full(),
+                ),
+            )
+            .into_any_element()
+    } else {
+        h_flex()
+            .w_full()
+            .h(rems(2.5))
+            .px_2()
+            .gap_2()
+            .items_center()
+            .bg(p.tab_bar)
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
+            .child(targets_popover)
+            .child(
+                div().flex_1().min_w_0().child(
+                    Input::new(&shell.state.broadcast.input)
+                        .appearance(false)
+                        .bordered(false)
+                        .w_full(),
+                ),
+            )
+            .child(close)
+            .child(toggle)
+            .into_any_element()
     }
 }

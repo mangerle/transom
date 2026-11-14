@@ -9037,6 +9037,7 @@ dependencies = [
  "transom-store",
  "transom-terminal",
  "transom-ui-icons",
+ "transom-ui-kit",
  "transom-updater",
  "zeroize",
 ]
@@ -9049,6 +9050,15 @@ dependencies = [
  "log",
  "parking_lot 0.13.0",
  "rust-embed",
+]
+
+[[package]]
+name = "transom-ui-kit"
+version = "1.8.1"
+dependencies = [
+ "gpui-kit",
+ "transom-core",
+ "transom-ui-icons",
 ]
 
 [[package]]
@@ -9067,6 +9077,7 @@ version = "1.8.1"
 dependencies = [
  "flume",
  "log",
+ "parking_lot 0.13.0",
  "portable-pty",
  "tempfile",
  "transom-core",

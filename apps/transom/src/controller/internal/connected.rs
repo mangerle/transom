@@ -344,7 +344,8 @@ fn register_local_shared_samplers(
     tab_id: TabId,
     connection_id: ConnectionId,
 ) {
-    if let Ok(mut tabs) = state.local_host_tabs.lock() {
+    {
+        let mut tabs = state.local_host_tabs.lock();
         tabs.retain(|(tab, _)| *tab != tab_id);
         tabs.push((tab_id, connection_id));
     }

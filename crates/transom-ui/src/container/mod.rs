@@ -41,14 +41,28 @@ mod types;
 mod update;
 mod view;
 
+pub(crate) use actions::ShellRowAction;
 pub(crate) use build_dialog::render_container_build_dialog_body;
 pub(crate) use create_dialog_view::{ContainerCreateDialogEvent, ContainerCreateDialogView};
+pub(crate) use events::dispatch_container_event;
+pub(crate) use list::handle_container_list_key;
+pub(crate) use port_forward::open_container_port_forward;
+pub(crate) use compose::{
+    create_local_compose_with_content, edit_compose_yaml, import_local_compose,
+};
+pub(crate) use engines::{
+    delete_container_profile, on_container_form_event, open_container_workspace_for_session,
+    open_engine_workspace, open_new_container_in_folder,
+};
 pub(crate) use entity::ContainerWorkspace;
-pub(crate) use event::ContainerWorkspaceEvent;
+pub(crate) use event::{ContainerWorkspaceEvent, on_container_workspace_event};
 pub(crate) use form::{
     ContainerFormEvent, ContainerFormFolders, ContainerFormView, ContainerRunFormEvent,
-    ContainerRunFormView,
+    ContainerRunFormView, clone_container, on_container_run_form_event, open_container_form,
+    open_container_run_form, recreate_container,
 };
+pub(crate) use lifecycle::{on_container_create_event, prune_container_target};
+pub(crate) use sidebar_events::on_container_sidebar_event;
 pub(crate) use hub::render_container_hub_dialog_body;
 pub(crate) use modals::{
     render_container_commit_dialog_body, render_container_confirm_dialog_body,
@@ -145,37 +159,62 @@ impl AppState {
     }
 }
 
-impl AppShell {
-    /// 寻找当前需要响应容器弹窗的工作区（优先当前活动标签，回退至首个包含
-    /// 该弹窗状态的标签）。
-    ///
-    /// 返回实体句柄而不是引用：谓词在 `read` 守卫内执行，返回前即释放，
-    /// 调用方随后自行 `update`，不会在写闭包里再反查同一实体。
-    pub(crate) fn find_container_modal_tab<F>(
-        &self,
-        cx: &App,
-        predicate: F,
-    ) -> Option<(TabId, Entity<ContainerWorkspace>)>
-    where
-        F: Fn(&ContainerWorkspaceState) -> bool,
+/// 寻找当前需要响应容器弹窗的工作区（优先当前活动标签，回退至首个包含
+/// 该弹窗状态的标签）。
+///
+/// 返回实体句柄而不是引用：谓词在 `read` 守卫内执行，返回前即释放，
+/// 调用方随后自行 `update`，不会在写闭包里再反查同一实体。
+pub(crate) fn find_container_modal_tab<F>(
+    shell: &AppShell,
+    cx: &App,
+    predicate: F,
+) -> Option<(TabId, Entity<ContainerWorkspace>)>
+where
+    F: Fn(&ContainerWorkspaceState) -> bool,
+{
+    let search = |tab_id: TabId, workspace: Entity<ContainerWorkspace>| {
+        predicate(&workspace.read(cx).state).then_some((tab_id, workspace))
+    };
+    if let Some(tab_id) = shell.state.workspace.active_tab
+        && let Some(workspace) = shell.state.container_workspace(tab_id)
+        && let Some(found) = search(tab_id, workspace)
     {
-        let search = |tab_id: TabId, workspace: Entity<ContainerWorkspace>| {
-            predicate(&workspace.read(cx).state).then_some((tab_id, workspace))
+        return Some(found);
+    }
+    for tab in shell.state.workspace.tabs.iter() {
+        let Some(workspace) = tab.containers() else {
+            continue;
         };
-        if let Some(tab_id) = self.state.workspace.active_tab
-            && let Some(workspace) = self.state.container_workspace(tab_id)
-            && let Some(found) = search(tab_id, workspace)
-        {
+        if let Some(found) = search(tab.id, workspace) {
             return Some(found);
         }
-        for tab in self.state.workspace.tabs.iter() {
-            let Some(workspace) = tab.containers() else {
-                continue;
-            };
-            if let Some(found) = search(tab.id, workspace) {
-                return Some(found);
-            }
-        }
-        None
     }
+    None
+}
+
+/// Esc 关闭容器侧的全屏浮层（终端页签放行）。
+pub(crate) fn on_container_overlay_key(
+    shell: &mut AppShell,
+    event: &KeyDownEvent,
+    fullscreen_tab: Option<TabId>,
+    cx: &mut Context<AppShell>,
+) {
+    if !event.keystroke.key.eq_ignore_ascii_case("escape") {
+        return;
+    }
+    let Some(tab) = fullscreen_tab.filter(|tab| shell.state.containers.fullscreen == Some(*tab))
+    else {
+        return;
+    };
+    let in_terminal = shell
+        .state
+        .container_workspace(tab)
+        .is_some_and(|workspace| {
+            workspace.read(cx).state.detail_tab == ContainerDetailTab::Terminal
+        });
+    if in_terminal {
+        return;
+    }
+    shell.state.containers.fullscreen = None;
+    cx.notify();
 }

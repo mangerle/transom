@@ -7,21 +7,16 @@
 
 use super::*;
 
-impl AppShell {
+impl ContainerWorkspace {
     /// 导出指定镜像为本地 Tar 归档文件（Save）。
-    pub(crate) fn save_image(&mut self, tab_id: TabId, id: String, cx: &mut Context<Self>) {
+    pub(crate) fn save_image(&mut self, id: String, cx: &mut Context<Self>) {
         let reference = self
             .state
-            .container_workspace(tab_id)
-            .and_then(|workspace| {
-                let state = &workspace.read(cx).state;
-                state
-                    .images
-                    .iter()
-                    .find(|item| item.id == id)
-                    .map(|item| item.display_name())
-            })
-            .unwrap_or_else(|| id.clone());
+            .images
+            .iter()
+            .find(|item| item.id == id)
+            .map(|item| item.display_name())
+            .unwrap_or(id);
 
         let default_name = format!("{}.tar", reference.replace(['/', ':'], "_"));
         let Some(local_path) = rfd::FileDialog::new()
@@ -33,30 +28,21 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.notice =
-                    Some(rust_i18n::t!("container.transfer.start").to_string());
-            });
-        }
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::SaveImage {
-                        tab_id,
-                        request_id,
-                        image: reference,
-                        local_path,
-                    },
-                );
-            });
-        }
+        self.state.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            request_id,
+            ContainerCommand::SaveImage {
+                tab_id: self.tab_id,
+                request_id,
+                image: reference,
+                local_path,
+            },
+        );
         cx.notify();
     }
 
     /// 从本地 Tar 归档文件导入镜像（Load）。
-    pub(crate) fn load_image(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn load_image(&mut self, cx: &mut Context<Self>) {
         let Some(local_path) = rfd::FileDialog::new()
             .add_filter("Docker Image", &["tar", "tar.gz", "tgz"])
             .pick_file()
@@ -65,24 +51,15 @@ impl AppShell {
         };
 
         let request_id = ContainerRequestId::new();
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.notice =
-                    Some(rust_i18n::t!("container.transfer.start").to_string());
-            });
-        }
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, _| {
-                workspace.send_tracked(
-                    request_id,
-                    ContainerCommand::LoadImage {
-                        tab_id,
-                        request_id,
-                        local_path,
-                    },
-                );
-            });
-        }
+        self.state.notice = Some(rust_i18n::t!("container.transfer.start").to_string());
+        self.send_tracked(
+            request_id,
+            ContainerCommand::LoadImage {
+                tab_id: self.tab_id,
+                request_id,
+                local_path,
+            },
+        );
         cx.notify();
     }
 }

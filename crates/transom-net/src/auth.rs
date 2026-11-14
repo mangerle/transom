@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use transom_core::{
     AppError, ErrorCode, HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, PromptInfo,
     PromptKind,
@@ -20,7 +20,7 @@ impl AutoTrustKnownHosts {
 
 impl KnownHostsStore for AutoTrustKnownHosts {
     fn check(&self, host: &str, port: u16, info: &HostKeyInfo) -> Result<HostKeyStatus, AppError> {
-        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        let entries = self.entries.lock();
         if let Some((_, _, fp)) = entries.iter().find(|(h, p, _)| h == host && *p == port) {
             if fp == &info.fingerprint {
                 Ok(HostKeyStatus::Match)
@@ -35,14 +35,14 @@ impl KnownHostsStore for AutoTrustKnownHosts {
     }
 
     fn record(&self, host: &str, port: u16, info: &HostKeyInfo) -> Result<(), AppError> {
-        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        let mut entries = self.entries.lock();
         entries.retain(|(h, p, _)| !(h == host && *p == port));
         entries.push((host.to_string(), port, info.fingerprint.clone()));
         Ok(())
     }
 
     fn remove(&self, host: &str, port: u16) -> Result<(), AppError> {
-        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        let mut entries = self.entries.lock();
         entries.retain(|(h, p, _)| !(h == host && *p == port));
         Ok(())
     }

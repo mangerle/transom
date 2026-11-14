@@ -2,86 +2,89 @@
 
 use super::super::*;
 
-impl AppShell {
-    pub(super) fn handle_operations_event(
-        &mut self,
-        event: ContainerAppEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            ContainerAppEvent::VolumesPruned { request_id, report } => {
-                self.handle_prune_report(
-                    request_id,
-                    report.deleted.len(),
-                    ContainerPruneTarget::Volumes,
-                    window,
-                    cx,
-                );
-            }
-            ContainerAppEvent::ImagesPruned { request_id, report } => {
-                self.handle_prune_report(
-                    request_id,
-                    report.deleted.len(),
-                    ContainerPruneTarget::Images,
-                    window,
-                    cx,
-                );
-            }
-            ContainerAppEvent::NetworksPruned { request_id, report } => {
-                self.handle_prune_report(
-                    request_id,
-                    report.deleted.len(),
-                    ContainerPruneTarget::Networks,
-                    window,
-                    cx,
-                );
-            }
-            ContainerAppEvent::ActionFinished { request_id, error } => {
-                self.on_container_action_finished(request_id, error, window, cx);
-            }
-            ContainerAppEvent::TransferFinished { request_id, error } => {
-                self.on_container_transfer_finished(request_id, error, window, cx);
-            }
-            ContainerAppEvent::Failed { request_id, error } => {
-                self.on_container_failed(request_id, error, window, cx);
-            }
-            ContainerAppEvent::ImagesSearched {
+pub(super) fn handle_operations_event(
+    shell: &mut AppShell,
+    event: ContainerAppEvent,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    match event {
+        ContainerAppEvent::VolumesPruned { request_id, report } => {
+            super::result::handle_prune_report(
+                shell,
                 request_id,
-                results,
-            } => {
-                self.on_container_images_searched(request_id, results, window, cx);
-            }
-            ContainerAppEvent::ImageTagsListed { request_id, tags } => {
-                self.on_container_image_tags_listed(request_id, tags, cx);
-            }
-            ContainerAppEvent::PullTaskProgress {
-                task_id,
-                status,
-                layers,
-            } => {
-                self.on_container_pull_task_progress(task_id, status, layers, window, cx);
-            }
-            ContainerAppEvent::PullTaskFinished { task_id, error } => {
-                self.on_container_pull_task_finished(task_id, error, window, cx);
-            }
-            ContainerAppEvent::ContainerDiffed {
-                request_id,
-                container,
-                changes,
-            } => {
-                self.on_container_diffed(request_id, container, changes, cx);
-            }
-            ContainerAppEvent::SystemDfLoaded { request_id, usage } => {
-                self.on_container_system_df_loaded(request_id, usage, cx);
-            }
-            ContainerAppEvent::SystemPruned { request_id, report } => {
-                self.on_container_system_pruned(request_id, report, window, cx);
-            }
-            ContainerAppEvent::EngineEventReceived { tab_id, event } => {
-                self.on_container_engine_event_received(tab_id, event, window, cx);
-            }
-            _ => {}
+                report.deleted.len(),
+                ContainerPruneTarget::Volumes,
+                window,
+                cx,
+            );
         }
+        ContainerAppEvent::ImagesPruned { request_id, report } => {
+            super::result::handle_prune_report(
+                shell,
+                request_id,
+                report.deleted.len(),
+                ContainerPruneTarget::Images,
+                window,
+                cx,
+            );
+        }
+        ContainerAppEvent::NetworksPruned { request_id, report } => {
+            super::result::handle_prune_report(
+                shell,
+                request_id,
+                report.deleted.len(),
+                ContainerPruneTarget::Networks,
+                window,
+                cx,
+            );
+        }
+        ContainerAppEvent::ActionFinished { request_id, error } => {
+            super::result::on_container_action_finished(shell, request_id, error, window, cx);
+        }
+        ContainerAppEvent::TransferFinished { request_id, error } => {
+            super::result::on_container_transfer_finished(shell, request_id, error, window, cx);
+        }
+        ContainerAppEvent::Failed { request_id, error } => {
+            super::result::on_container_failed(shell, request_id, error, window, cx);
+        }
+        ContainerAppEvent::ImagesSearched {
+            request_id,
+            results,
+        } => {
+            super::pull::on_container_images_searched(shell, request_id, results, window, cx);
+        }
+        ContainerAppEvent::ImageTagsListed { request_id, tags } => {
+            super::pull::on_container_image_tags_listed(shell, request_id, tags, cx);
+        }
+        ContainerAppEvent::PullTaskProgress {
+            task_id,
+            status,
+            layers,
+        } => {
+            super::pull::on_container_pull_task_progress(
+                shell, task_id, status, layers, window, cx,
+            );
+        }
+        ContainerAppEvent::PullTaskFinished { task_id, error } => {
+            super::pull::on_container_pull_task_finished(shell, task_id, error, window, cx);
+        }
+        ContainerAppEvent::ContainerDiffed {
+            request_id,
+            container,
+            changes,
+        } => {
+            super::system::on_container_diffed(shell, request_id, container, changes, cx);
+        }
+        ContainerAppEvent::SystemDfLoaded { request_id, usage } => {
+            super::system::on_container_system_df_loaded(shell, request_id, usage, cx);
+        }
+        ContainerAppEvent::SystemPruned { request_id, report } => {
+            super::system::on_container_system_pruned(shell, request_id, report, window, cx);
+        }
+        ContainerAppEvent::EngineEventReceived { tab_id, event } => {
+            super::system::on_container_engine_event_received(shell, tab_id, event, window, cx);
+        }
+        _ => {}
     }
 }

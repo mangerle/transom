@@ -79,7 +79,9 @@ pub(crate) fn render_local_branch_menu(
                 let start = name_new_branch.clone();
                 let project = project_new_branch.clone();
                 app_new_branch.update(cx, |this, cx| {
-                    this.git_create_project_branch_from(&project, &start, window, cx);
+                    crate::git::actions::git_create_project_branch_from(
+                        this, &project, &start, window, cx,
+                    );
                 });
             },
         ))
@@ -90,7 +92,7 @@ pub(crate) fn render_local_branch_menu(
             move |_, _, cx| {
                 let target = name_diff.clone();
                 app_diff.update(cx, |this, cx| {
-                    this.git_set_log_scope(tab_id, LogScope::Ref(target), cx);
+                    crate::git::actions::git_set_log_scope(this, tab_id, LogScope::Ref(target), cx);
                 });
             },
         ))
@@ -102,7 +104,9 @@ pub(crate) fn render_local_branch_menu(
                 let start = name_worktree.clone();
                 let project = project_worktree.clone();
                 app_worktree.update(cx, |this, cx| {
-                    this.open_git_worktree_modal(project, &start, window, cx);
+                    crate::git::worktree_modal::open_git_worktree_modal(
+                        this, project, &start, window, cx,
+                    );
                 });
             },
         ))
@@ -114,7 +118,7 @@ pub(crate) fn render_local_branch_menu(
             move |_, _, cx| {
                 let project = project_pull.clone();
                 app_pull.update(cx, |this, cx| {
-                    this.git_pull_project(&project, false, cx);
+                    crate::git::actions::git_pull_project(this, &project, false, cx);
                 });
             },
         ))
@@ -126,7 +130,7 @@ pub(crate) fn render_local_branch_menu(
                 let target = name_push.clone();
                 let project = project_push.clone();
                 app_push.update(cx, |this, cx| {
-                    this.git_push_project(&project, Some(target), cx);
+                    crate::git::actions::git_push_project(this, &project, Some(target), cx);
                 });
             },
         ))
@@ -141,7 +145,7 @@ pub(crate) fn render_local_branch_menu(
             move |_, _, cx| {
                 let target = upstream_click.clone();
                 app_upstream.update(cx, |this, cx| {
-                    this.git_set_log_scope(tab_id, LogScope::Ref(target), cx);
+                    crate::git::actions::git_set_log_scope(this, tab_id, LogScope::Ref(target), cx);
                 });
             },
         ))
@@ -154,7 +158,8 @@ pub(crate) fn render_local_branch_menu(
                 let old = name_rename.clone();
                 let project = project_rename.clone();
                 app_rename.update(cx, |this, cx| {
-                    this.open_git_name_modal(
+                    crate::git::name_modal::open_git_name_modal(
+                        this,
                         &project,
                         crate::git::GitNamePurpose::RenameBranch { old: old.clone() },
                         old,
@@ -173,7 +178,7 @@ pub(crate) fn render_local_branch_menu(
                     let name = name_delete.clone();
                     let project = project_delete.clone();
                     app_delete.update(cx, |this, cx| {
-                        this.git_delete_project_ref(&project, &name, cx);
+                        crate::git::actions::git_delete_project_ref(this, &project, &name, cx);
                     });
                 },
             ))

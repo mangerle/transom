@@ -23,98 +23,102 @@ use transom_core::{GitProject, GitProjectId, TabId};
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 渲染一个 Git 标签页。
-    pub(crate) fn render_git_tab(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return div().into_any_element();
-        };
-        let (view, project, bottom_log_open, bottom_log_split) = {
-            let state = &workspace.read(cx).state;
-            (
-                state.view,
-                state.project.clone(),
-                state.bottom_log_open,
-                state.bottom_log_split.clone(),
-            )
-        };
-        let body = match view {
-            GitView::Log => self.render_git_log_body(tab_id, p, cx),
-            GitView::Overview => {
-                let commit_page = self.render_git_commit_page(tab_id, window, cx, p);
-                if bottom_log_open {
-                    let bottom_panel =
-                        self.render_git_bottom_log_panel(tab_id, cx.entity().clone(), p, cx);
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .size_full()
+/// 渲染一个 Git 标签页。
+pub(crate) fn render_git_tab(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return div().into_any_element();
+    };
+    let (view, project, bottom_log_open, bottom_log_split) = {
+        let state = &workspace.read(cx).state;
+        (
+            state.view,
+            state.project.clone(),
+            state.bottom_log_open,
+            state.bottom_log_split.clone(),
+        )
+    };
+    let body = match view {
+        GitView::Log => render_git_log_body(shell, tab_id, p, cx),
+        GitView::Overview => {
+            let commit_page =
+                super::commit_page::render_git_commit_page(shell, tab_id, window, cx, p);
+            if bottom_log_open {
+                let bottom_panel = super::bottom_log::render_git_bottom_log_panel(
+                    shell,
+                    tab_id,
+                    cx.entity().clone(),
+                    p,
+                    cx,
+                );
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .size_full()
+                    .child(
+                        v_resizable(ElementId::Name(
+                            format!("git-bottom-log-split-{tab_id}").into(),
+                        ))
+                        .with_state(&bottom_log_split)
+                        .child(resizable_panel().child(commit_page))
                         .child(
-                            v_resizable(ElementId::Name(
-                                format!("git-bottom-log-split-{tab_id}").into(),
-                            ))
-                            .with_state(&bottom_log_split)
-                            .child(resizable_panel().child(commit_page))
-                            .child(
-                                resizable_panel()
-                                    .size(px(320.0))
-                                    .size_range(px(180.0)..px(600.0))
-                                    .fixed()
-                                    .child(bottom_panel),
-                            ),
-                        )
-                        .into_any_element()
-                } else {
-                    commit_page
-                }
+                            resizable_panel()
+                                .size(px(320.0))
+                                .size_range(px(180.0)..px(600.0))
+                                .fixed()
+                                .child(bottom_panel),
+                        ),
+                    )
+                    .into_any_element()
+            } else {
+                commit_page
             }
-        };
-        let mut root = v_flex().size_full().bg(p.background).relative();
-        // 提交页自带页签与工具条；只有日志页还用这条顶部工具条。
-        if matches!(view, GitView::Log) {
-            root = root.child(self.render_git_toolbar(tab_id, &project, p, cx));
         }
-        root.child(body).into_any_element()
+    };
+    let mut root = v_flex().size_full().bg(p.background).relative();
+    // 提交页自带页签与工具条；只有日志页还用这条顶部工具条。
+    if matches!(view, GitView::Log) {
+        root = root.child(render_git_toolbar(shell, tab_id, &project, p, cx));
     }
+    root.child(body).into_any_element()
+}
 
-    /// 顶部工具条（日志页）：分支角标 + 远程动作。
-    fn render_git_toolbar(
-        &mut self,
-        tab_id: TabId,
-        project: &GitProject,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let project_id = project.id;
-        h_flex()
-            .id("git-toolbar")
-            .px_2()
-            .py_1()
-            .gap_2()
-            .items_center()
-            .flex_none()
-            .border_color(p.divider(p.border))
-            .border_b_1()
-            .bg(p.background)
-            .child(div().flex_1())
-            .child(self.render_git_branch_chip(project_id, p))
-            .child(self.render_git_remote_actions(tab_id, project, cx))
-            .into_any_element()
-    }
+/// 顶部工具条（日志页）：分支角标 + 远程动作。
+fn render_git_toolbar(
+    shell: &AppShell,
+    tab_id: TabId,
+    project: &GitProject,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let project_id = project.id;
+    h_flex()
+        .id("git-toolbar")
+        .px_2()
+        .py_1()
+        .gap_2()
+        .items_center()
+        .flex_none()
+        .border_color(p.divider(p.border))
+        .border_b_1()
+        .bg(p.background)
+        .child(div().flex_1())
+        .child(render_git_branch_chip(shell, project_id, p))
+        .child(render_git_remote_actions(tab_id, project, cx))
+        .into_any_element()
+}
 
-    /// 远程动作按钮组：提交页与日志页共用。
-    pub(crate) fn render_git_remote_actions(
-        &mut self,
-        tab_id: TabId,
-        project: &GitProject,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+/// 远程动作按钮组：提交页与日志页共用。
+fn render_git_remote_actions(
+    tab_id: TabId,
+    project: &GitProject,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
         let refresh_project = project.clone();
         let fetch_project = project.clone();
         let push_project = project.clone();
@@ -130,8 +134,8 @@ impl AppShell {
                     .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.git_refresh(&refresh_project, cx);
-                        this.git_load_log(tab_id, 0, cx);
+                        crate::git::actions::git_refresh(this, &refresh_project, cx);
+                        crate::git::actions::git_load_log(this, tab_id, 0, cx);
                     })),
             )
             .child(
@@ -142,7 +146,8 @@ impl AppShell {
                     .accessibility_label(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.git_remote_action(
+                        crate::git::actions::git_remote_action(
+                            this,
                             &fetch_project,
                             crate::git::actions::GitRemoteAction::Fetch,
                             cx,
@@ -157,7 +162,8 @@ impl AppShell {
                     .accessibility_label(rust_i18n::t!("git.toolbar.pull").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.pull").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.git_remote_action(
+                        crate::git::actions::git_remote_action(
+                            this,
                             &pull_project,
                             crate::git::actions::GitRemoteAction::Pull { rebase: false },
                             cx,
@@ -172,7 +178,8 @@ impl AppShell {
                     .accessibility_label(rust_i18n::t!("git.toolbar.push").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.push").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.git_remote_action(
+                        crate::git::actions::git_remote_action(
+                            this,
                             &push_project,
                             crate::git::actions::GitRemoteAction::Push,
                             cx,
@@ -182,19 +189,15 @@ impl AppShell {
             .into_any_element()
     }
 
-    /// 当前分支 + 领先/落后角标。
-    pub(crate) fn render_git_branch_chip(
-        &self,
-        project_id: GitProjectId,
-        p: &Palette,
-    ) -> AnyElement {
-        let badge = self
-            .state
-            .git
-            .badges
-            .get(&project_id)
-            .cloned()
-            .unwrap_or_default();
+/// 当前分支 + 领先/落后角标。
+fn render_git_branch_chip(shell: &AppShell, project_id: GitProjectId, p: &Palette) -> AnyElement {
+    let badge = shell
+        .state
+        .git
+        .badges
+        .get(&project_id)
+        .cloned()
+        .unwrap_or_default();
         h_flex()
             .gap_1()
             .items_center()
@@ -222,26 +225,26 @@ impl AppShell {
             .into_any_element()
     }
 
-    fn render_git_log_body(
-        &mut self,
-        tab_id: TabId,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        self.render_git_log_view(tab_id, cx.entity().clone(), p, cx)
-    }
+fn render_git_log_body(
+    shell: &AppShell,
+    tab_id: TabId,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    render_git_log_view(shell, tab_id, cx.entity().clone(), p, cx)
+}
 
-    /// 日志工作区三栏主体视图。
-    pub(crate) fn render_git_log_view(
-        &self,
-        tab_id: TabId,
-        app: Entity<Self>,
-        p: &Palette,
-        cx: &App,
-    ) -> AnyElement {
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return div().into_any_element();
-        };
+/// 日志工作区三栏主体视图。
+pub(crate) fn render_git_log_view(
+    shell: &AppShell,
+    tab_id: TabId,
+    app: Entity<AppShell>,
+    p: &Palette,
+    cx: &App,
+) -> AnyElement {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return div().into_any_element();
+    };
         let state = &workspace.read(cx).state;
 
         if state.not_repo {
@@ -298,7 +301,6 @@ impl AppShell {
                     .child(right),
             )
             .into_any_element()
-    }
 }
 
 /// 引用栏收起后的窄入口，保证三栏分栏组的首面板索引稳定。
@@ -316,7 +318,7 @@ fn render_collapsed_refs_panel(tab_id: TabId, app: Entity<AppShell>) -> AnyEleme
                 .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
                 .on_click(move |_, _, cx| {
                     app.update(cx, |this, cx| {
-                        this.git_toggle_refs_panel(tab_id, cx);
+                        crate::git::actions::git_toggle_refs_panel(this, tab_id, cx);
                     });
                 }),
         )
@@ -380,7 +382,7 @@ pub(crate) fn render_git_not_repo_state(
                 .label(label)
                 .disabled(init_running)
                 .on_click(move |_, _, cx| {
-                    app.update(cx, |this, cx| this.git_init_project(tab_id, cx));
+                    app.update(cx, |this, cx| crate::git::actions::git_init_project(this, tab_id, cx));
                 }),
         )
         .into_any_element()

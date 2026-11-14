@@ -64,7 +64,12 @@ pub(crate) fn render_ref_group(
             .child(div().child(title))
             .on_click(move |_, _, cx| {
                 header_app.update(cx, |this, cx| {
-                    this.toggle_git_refs_group(header_key, default_expanded, cx);
+                    crate::git::actions::toggle_git_refs_group(
+                        this,
+                        header_key,
+                        default_expanded,
+                        cx,
+                    );
                 });
             }),
     );
@@ -147,7 +152,12 @@ fn render_folder_node(
             )
             .on_click(move |_, _, cx| {
                 toggle_app.update(cx, |this, cx| {
-                    this.toggle_git_refs_group(&toggle_key, default_expanded, cx);
+                    crate::git::actions::toggle_git_refs_group(
+                        this,
+                        &toggle_key,
+                        default_expanded,
+                        cx,
+                    );
                 });
             }),
     );
@@ -254,7 +264,7 @@ fn render_branch_node(
         .on_click(move |_, _, cx| {
             let scope = target_scope.clone();
             click_app.update(cx, |this, cx| {
-                this.git_set_log_scope(tab_id, scope, cx);
+                crate::git::actions::git_set_log_scope(this, tab_id, scope, cx);
             });
         })
         .context_menu(move |menu, _window, _cx| match menu_kind {

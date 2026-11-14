@@ -62,7 +62,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_diff.clone();
                 diff_app.update(cx, |this, cx| {
-                    this.git_diff_commit_file(tab_id, &path, cx);
+                    crate::git::actions::git_diff_commit_file(this, tab_id, &path, cx);
                 });
             },
         ))
@@ -73,7 +73,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_new_tab.clone();
                 modal_app.update(cx, |this, cx| {
-                    this.git_diff_commit_file(tab_id, &path, cx);
+                    crate::git::actions::git_diff_commit_file(this, tab_id, &path, cx);
                 });
             },
         ))
@@ -84,7 +84,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_compare.clone();
                 compare_app.update(cx, |this, cx| {
-                    this.git_diff_commit_file(tab_id, &path, cx);
+                    crate::git::actions::git_diff_commit_file(this, tab_id, &path, cx);
                 });
             },
         ))
@@ -97,7 +97,7 @@ pub(crate) fn render_file_tree_menu(
             .render(move |_, _, cx| {
                 let path = path_before.clone();
                 before_app.update(cx, |this, cx| {
-                    this.git_diff_commit_file(tab_id, &path, cx);
+                    crate::git::actions::git_diff_commit_file(this, tab_id, &path, cx);
                 });
             }),
         )
@@ -112,7 +112,11 @@ pub(crate) fn render_file_tree_menu(
                     let path = path_edit.clone();
                     let full_file_path = project.path.join(&path);
                     edit_app.update(cx, |this, cx| {
-                        this.write_clipboard(&full_file_path.to_string_lossy(), cx);
+                        crate::git::helpers::write_clipboard(
+                            this,
+                            &full_file_path.to_string_lossy(),
+                            cx,
+                        );
                     });
                 }
             },
@@ -126,7 +130,7 @@ pub(crate) fn render_file_tree_menu(
             .render(move |_, _, cx| {
                 let path = path_repo.clone();
                 repo_app.update(cx, |this, cx| {
-                    this.git_diff_commit_file(tab_id, &path, cx);
+                    crate::git::actions::git_diff_commit_file(this, tab_id, &path, cx);
                 });
             }),
         )
@@ -143,7 +147,7 @@ pub(crate) fn render_file_tree_menu(
                     let path = path_revert.clone();
                     let project = project.clone();
                     revert_app.update(cx, |this, cx| {
-                        this.git_rollback_single_path(&project, &path, cx);
+                        crate::git::actions::git_rollback_single_path(this, &project, &path, cx);
                     });
                 }
             }),
@@ -178,7 +182,7 @@ pub(crate) fn render_file_tree_menu(
                     let path = path_delete.clone();
                     let project = project.clone();
                     delete_app.update(cx, |this, cx| {
-                        this.git_rollback_single_path(&project, &path, cx);
+                        crate::git::actions::git_rollback_single_path(this, &project, &path, cx);
                     });
                 }
             }),
@@ -193,7 +197,7 @@ pub(crate) fn render_file_tree_menu(
                     let path = path_patch.clone();
                     let project = project.clone();
                     patch_app.update(cx, |this, cx| {
-                        this.git_create_patch(&project, &path, cx);
+                        crate::git::patch::git_create_patch(this, &project, &path, cx);
                     });
                 }
             },
@@ -215,7 +219,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_history.clone();
                 history_app.update(cx, |this, cx| {
-                    this.git_set_log_path(tab_id, Some(path), cx);
+                    crate::git::actions::git_set_log_path(this, tab_id, Some(path), cx);
                 });
             },
         ))
@@ -228,7 +232,7 @@ pub(crate) fn render_file_tree_menu(
             .render(move |_, _, cx| {
                 let path = path_parent.clone();
                 parent_app.update(cx, |this, cx| {
-                    this.git_diff_commit_file(tab_id, &path, cx);
+                    crate::git::actions::git_diff_commit_file(this, tab_id, &path, cx);
                 });
             }),
         )
@@ -239,7 +243,7 @@ pub(crate) fn render_file_tree_menu(
             move |_, _, cx| {
                 let path = path_ai.clone();
                 ai_app.update(cx, |this, cx| {
-                    this.write_clipboard(&format!("@{path}"), cx);
+                    crate::git::helpers::write_clipboard(this, &format!("@{path}"), cx);
                 });
             },
         ))

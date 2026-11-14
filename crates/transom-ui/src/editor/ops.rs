@@ -26,7 +26,12 @@ use transom_core::{
 };
 
 mod result;
+pub(crate) use result::{
+    editor_reject, fail_editor_panel_by_op, note_editor_text_conflict, note_editor_text_failed,
+    on_editor_text_written, on_sudo_probed,
+};
 mod save;
+pub(crate) use save::submit_sudo_editor_write;
 
 /// 把提权不可用原因翻译成用户能读懂、可据以采取行动的说明。
 fn sudo_unavailable_text(reason: SudoUnavailable) -> String {

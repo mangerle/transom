@@ -5,16 +5,15 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    pub(crate) fn render_sftp_properties_body(
-        &self,
-        app: &Entity<AppShell>,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.properties.as_ref() else {
-            return div().into_any_element();
-        };
+pub(crate) fn render_sftp_properties_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.properties.as_ref() else {
+        return div().into_any_element();
+    };
         let scope = modal.scope.clone();
         let properties = modal.properties.clone();
         let name = properties.name.clone();
@@ -32,7 +31,7 @@ impl AppShell {
                     app,
                     |this, _: &ClickEvent, window, cx| {
                         this.state.sftp_modals.properties = None;
-                        this.focus_active_sftp_panel(window, cx);
+                        crate::sftp::focus_active_sftp_panel(this, window, cx);
                         cx.notify();
                     },
                 )),
@@ -58,7 +57,6 @@ impl AppShell {
             content,
             Some(footer),
         )
-    }
 }
 
 /// 属性弹窗的全部字段行：名称、类型与可选的尺寸/权限/时间信息。

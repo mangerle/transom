@@ -11,8 +11,6 @@
 pub(crate) mod activity_bar;
 #[path = "../audit_viewer/mod.rs"]
 pub(crate) mod audit_viewer;
-#[path = "../backup/mod.rs"]
-pub(crate) mod backup;
 #[path = "../batch/mod.rs"]
 pub(crate) mod batch;
 #[path = "../broadcast/mod.rs"]
@@ -35,16 +33,8 @@ pub(crate) mod dialog_host;
 pub(crate) mod diff_viewer;
 #[path = "../editor/mod.rs"]
 pub(crate) mod editor;
-#[path = "../event_handlers.rs"]
-pub(crate) mod event_handlers;
-#[path = "../event_terminal_ready.rs"]
-mod event_terminal_ready;
-#[path = "../events.rs"]
-pub(crate) mod events;
 #[path = "../forward/mod.rs"]
 pub(crate) mod forward;
-#[path = "../app_frame_effects.rs"]
-mod frame_effects;
 #[path = "../git/mod.rs"]
 pub(crate) mod git;
 #[path = "../identity/mod.rs"]
@@ -61,8 +51,6 @@ pub(crate) mod notify;
 pub(crate) mod probe;
 #[path = "../record/mod.rs"]
 pub(crate) mod record;
-#[path = "../app_render.rs"]
-mod render;
 #[path = "../session_appearance.rs"]
 pub(crate) mod session_appearance;
 #[path = "../session_form/mod.rs"]
@@ -73,10 +61,6 @@ pub(crate) mod session_serial;
 pub(crate) mod settings;
 #[path = "../sftp/mod.rs"]
 pub(crate) mod sftp;
-#[path = "../sftp_events.rs"]
-mod sftp_events;
-#[path = "../sftp_handlers.rs"]
-pub(crate) mod sftp_handlers;
 #[path = "../shortcuts.rs"]
 pub(crate) mod shortcuts;
 #[path = "../sidebar/mod.rs"]
@@ -101,16 +85,19 @@ pub(crate) mod trigger_panel;
 pub(crate) mod window_state;
 #[path = "../workspace/mod.rs"]
 pub(crate) mod workspace;
-#[path = "../workspace_render.rs"]
-mod workspace_render;
 #[path = "../zmodem.rs"]
 pub(crate) mod zmodem;
 
 mod backup_prompt;
 mod bootstrap;
+pub(crate) mod event_handlers;
+mod event_terminal_ready;
+pub(crate) mod events;
+mod frame_effects;
 mod modal_hub;
 mod overlays;
 mod persistence;
+mod render;
 mod runtime;
 mod settings_global;
 
@@ -290,7 +277,7 @@ impl AppShell {
                     && this.state.status.as_deref() == Some(text.as_str())
                 {
                     this.state.status = None;
-                    this.refresh_status_metrics(cx);
+                    crate::status_bar::refresh_status_metrics(this, cx);
                     cx.notify();
                 }
             });
@@ -384,7 +371,7 @@ impl AppShell {
                     let session_keys = app_settings(cx).window.previous_tab_sessions.clone();
                     for key in session_keys {
                         if key == "local" {
-                            self.open_local_terminal(window, cx);
+                            crate::connection::open_local_terminal(self, window, cx);
                         } else if let Some(session) = self
                             .state
                             .catalog
@@ -393,13 +380,13 @@ impl AppShell {
                             .find(|s| s.id.to_string() == key)
                             .cloned()
                         {
-                            self.connect_session(session.id, window, cx);
+                            crate::connection::connect_session(self, session.id, window, cx);
                         }
                     }
                 }
             }
             StartupTabs::EmptyWorkspace => {}
-            StartupTabs::NewLocalTerminal => self.open_local_terminal(window, cx),
+            StartupTabs::NewLocalTerminal => crate::connection::open_local_terminal(self, window, cx),
         }
     }
 
@@ -448,7 +435,7 @@ impl AppShell {
             .as_ref()
             .map_or(0, |git| git.interval_minutes);
         if self.state.git_sync_schedule.tick(interval) {
-            self.start_git_sync_scheduled(cx);
+            crate::cloud_sync::start_git_sync_scheduled(self, cx);
         }
     }
 

@@ -77,49 +77,47 @@ impl AppState {
     }
 }
 
-impl AppShell {
-    /// 连接成功建立后，把用户勾选保存的凭据写入钥匙串。
-    pub(crate) fn flush_pending_credential(
-        &mut self,
-        session_id: SessionId,
-        connection_id: ConnectionId,
-        cx: &mut Context<Self>,
-    ) {
-        let matched = self
-            .state
-            .modals
-            .connection
-            .pending_credential
-            .as_ref()
-            .is_some_and(|pending| {
-                pending.session_id == session_id && pending.connection_id == connection_id
-            });
-        if !matched {
-            return;
-        }
-        let Some(pending) = self.state.modals.connection.pending_credential.take() else {
-            return;
-        };
-        let key = SecretKey::new(pending.owner.clone(), pending.kind);
-        self.state.mark_credential_saved(pending.owner.clone());
-        let secret_store = self.state.services.secret_store.clone();
-        cx.spawn(async move |this, cx| {
-            let error = cx
-                .background_executor()
-                .spawn(async move {
-                    secret_store
-                        .set(&key, pending.value.as_str())
-                        .err()
-                        .filter(|error| error.code != ErrorCode::SecretStoreUnavailable)
-                })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                if let Some(error) = error {
-                    this.state.set_error(localized_error(&error));
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+/// 连接成功建立后，把用户勾选保存的凭据写入钥匙串。
+pub(crate) fn flush_pending_credential(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    connection_id: ConnectionId,
+    cx: &mut Context<AppShell>,
+) {
+    let matched = shell
+        .state
+        .modals
+        .connection
+        .pending_credential
+        .as_ref()
+        .is_some_and(|pending| {
+            pending.session_id == session_id && pending.connection_id == connection_id
+        });
+    if !matched {
+        return;
     }
+    let Some(pending) = shell.state.modals.connection.pending_credential.take() else {
+        return;
+    };
+    let key = SecretKey::new(pending.owner.clone(), pending.kind);
+    shell.state.mark_credential_saved(pending.owner.clone());
+    let secret_store = shell.state.services.secret_store.clone();
+    cx.spawn(async move |this, cx| {
+        let error = cx
+            .background_executor()
+            .spawn(async move {
+                secret_store
+                    .set(&key, pending.value.as_str())
+                    .err()
+                    .filter(|error| error.code != ErrorCode::SecretStoreUnavailable)
+            })
+            .await;
+        let _ = this.update(cx, |this, cx| {
+            if let Some(error) = error {
+                this.state.set_error(localized_error(&error));
+            }
+            cx.notify();
+        });
+    })
+    .detach();
 }

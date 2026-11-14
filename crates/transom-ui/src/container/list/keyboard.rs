@@ -49,6 +49,25 @@ pub(crate) fn find_selected_row<'a>(
     rows.iter().find(|r| row_key(&r.target) == key)
 }
 
+/// 键盘事件到来时按当前状态重算行集合，再交给列表键盘导航处理。
+pub(crate) fn handle_container_list_key(
+    app: &mut AppShell,
+    tab_id: TabId,
+    event: &KeyDownEvent,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(view) = app.state.container_workspace(tab_id) else {
+        return;
+    };
+    let rows = {
+        let workspace = view.read(cx);
+        let query = workspace.state.query(cx);
+        super::list_rows(&workspace.state, &query)
+    };
+    handle_list_key_down(app, tab_id, &rows, event, window, cx);
+}
+
 /// 处理列表键盘事件。
 pub(crate) fn handle_list_key_down(
     app: &mut AppShell,

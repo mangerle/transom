@@ -16,55 +16,53 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 渲染分栏对比对话框；没有面板时返回空元素。
-    /// 分栏对比弹窗的弹窗体。
-    ///
-    /// 外壳交给 Dialog 容器：宽度按视口 94%、高度按 88% 折算成像素传入，
-    /// 与迁移前 `relative(0.94)/relative(0.88)` 的观感一致；标题行原先自带
-    /// 一个关闭 X，与容器右上角的关闭件重复，删掉统一走 `close_diff_viewer`。
-    pub(crate) fn render_diff_viewer_body(
-        &self,
-        app: &Entity<AppShell>,
-        window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(view) = self.state.diff_viewer.as_ref() else {
-            return div().into_any_element();
-        };
-        let viewer = &view.read(cx).state;
-        let title = rust_i18n::t!(
-            "diff.title",
-            local = viewer.local_path.display().to_string(),
-            remote = viewer.remote_path.as_str()
+/// 渲染分栏对比对话框；没有面板时返回空元素。
+/// 分栏对比弹窗的弹窗体。
+///
+/// 外壳交给 Dialog 容器：宽度按视口 94%、高度按 88% 折算成像素传入，
+/// 与迁移前 `relative(0.94)/relative(0.88)` 的观感一致；标题行原先自带
+/// 一个关闭 X，与容器右上角的关闭件重复，删掉统一走 `close_diff_viewer`。
+pub(crate) fn render_diff_viewer_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    window: &mut Window,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(view) = shell.state.diff_viewer.as_ref() else {
+        return div().into_any_element();
+    };
+    let viewer = &view.read(cx).state;
+    let title = rust_i18n::t!(
+        "diff.title",
+        local = viewer.local_path.display().to_string(),
+        remote = viewer.remote_path.as_str()
+    )
+    .to_string();
+    let body = render_body(viewer, app, p);
+    let toolbar = render_toolbar(viewer, app, p);
+    let footer = render_footer(viewer, app, p);
+    let dialog = v_flex()
+        .id("diff-viewer-dialog")
+        .w_full()
+        .h(window.viewport_size().height * 0.88)
+        .gap_2()
+        .overflow_hidden()
+        .child(
+            h_flex().items_center().gap_2().child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(title),
+            ),
         )
-        .to_string();
-        let body = render_body(viewer, app, p);
-        let toolbar = render_toolbar(viewer, app, p);
-        let footer = render_footer(viewer, app, p);
-        let dialog = v_flex()
-            .id("diff-viewer-dialog")
-            .w_full()
-            .h(window.viewport_size().height * 0.88)
-            .gap_2()
-            .overflow_hidden()
-            .child(
-                h_flex().items_center().gap_2().child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(title),
-                ),
-            )
-            .child(toolbar)
-            .child(body)
-            .child(footer);
-        dialog.into_any_element()
-    }
+        .child(toolbar)
+        .child(body)
+        .child(footer);
+    dialog.into_any_element()
 }
 
 pub(crate) fn render_body(
@@ -166,7 +164,7 @@ fn render_ready_diff(
                 .tooltip(label.clone())
                 .accessibility_label(label)
                 .on_click(move |_, _, cx| {
-                    next_app.update(cx, |shell, cx| shell.step_diff_hunk(true, cx));
+                    next_app.update(cx, |shell, cx| crate::diff_viewer::step_diff_hunk(shell, true, cx));
                 })
         })
         .flex_1()
@@ -217,7 +215,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.step_diff_hunk(false, cx);
+                            crate::diff_viewer::step_diff_hunk(this, false, cx);
                         },
                     )),
             )
@@ -231,7 +229,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.step_diff_hunk(true, cx);
+                            crate::diff_viewer::step_diff_hunk(this, true, cx);
                         },
                     )),
             );
@@ -248,7 +246,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        this.request_diff_merge(MergeDirection::RightToLeft, cx);
+                        crate::diff_viewer::request_diff_merge(this, MergeDirection::RightToLeft, cx);
                     },
                 )),
         )
@@ -267,7 +265,7 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        this.request_diff_merge(MergeDirection::LeftToRight, cx);
+                        crate::diff_viewer::request_diff_merge(this, MergeDirection::LeftToRight, cx);
                     },
                 )),
         )
@@ -316,7 +314,7 @@ fn render_footer(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) 
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.cancel_diff_merge(cx);
+                            crate::diff_viewer::cancel_diff_merge(this, cx);
                         },
                     )),
             )
@@ -329,7 +327,7 @@ fn render_footer(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) 
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.confirm_diff_merge(cx);
+                            crate::diff_viewer::confirm_diff_merge(this, cx);
                         },
                     )),
             );
@@ -350,7 +348,7 @@ fn render_footer(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) 
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.close_diff_viewer(cx);
+                            crate::diff_viewer::close_diff_viewer(this, cx);
                         },
                     )),
             );
@@ -392,7 +390,7 @@ fn render_footer(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette) 
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.close_diff_viewer(cx);
+                            crate::diff_viewer::close_diff_viewer(this, cx);
                         },
                     )),
             );

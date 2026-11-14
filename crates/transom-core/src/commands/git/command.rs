@@ -1,0 +1,369 @@
+//! Git 领域命令定义。
+
+use std::path::PathBuf;
+
+use crate::ids::GitRequestId;
+use crate::model::git::{
+    GitAction, GitCheckout, GitFoldMode, GitProject, GitPushOptions, GitRebaseStep, GitResetKind,
+    GitSide, LogQuery,
+};
+
+
+/// Git 领域命令：全部发往控制器派发的后台任务。
+pub enum GitCommand {
+    /// 更新控制平面使用的 Git 可执行文件与提交作者配置。
+    ///
+    /// 设计原理（Why）：这两个值是进程级配置，读取方是每次 git 子进程调用。
+    /// 让界面直接写全局静态会让「谁有权改」不可追踪，也让测试之间互相污染；
+    /// 改为命令后，控制平面是唯一写入方，界面只表达意图。
+    Configure {
+        program: String,
+        author_name: String,
+        author_email: String,
+    },
+    /// 刷新仓库状态（porcelain status + 领先/落后 + HEAD）。
+    ///
+    /// `git status` 默认不列忽略项。引擎仍保留读取忽略清单的能力，只是
+    /// 界面不再另外造一套 git 里没有的视图。
+    Refresh {
+        project: GitProject,
+    },
+    /// 分页查询提交历史。
+    LoadLog {
+        project: GitProject,
+        request_id: GitRequestId,
+        query: LogQuery,
+    },
+    /// 单个提交改动的文件清单。
+    LoadCommitFiles {
+        project: GitProject,
+        request_id: GitRequestId,
+        oid: String,
+    },
+    /// 分支与标签列表。
+    LoadRefs {
+        project: GitProject,
+    },
+    /// 读取某文件两侧的文本内容。
+    LoadDiff {
+        project: GitProject,
+        request_id: GitRequestId,
+        path: String,
+        old: GitSide,
+        new: GitSide,
+    },
+    Stage {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    StageAll {
+        project: GitProject,
+    },
+    Unstage {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 丢弃已跟踪文件的工作区改动。
+    Discard {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 应用单个变更块补丁（暂存块 / 取消暂存块 / 还原块）。
+    ApplyHunkPatch {
+        project: GitProject,
+        action: GitAction,
+        patch: String,
+        cached: bool,
+        reverse: bool,
+    },
+    /// 删除未跟踪文件（不可恢复，界面必须已二次确认）。
+    DeleteUntracked {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    Commit {
+        project: GitProject,
+        message: String,
+        amend: bool,
+        fixup_target: Option<String>,
+    },
+
+    Checkout {
+        project: GitProject,
+        target: GitCheckout,
+    },
+    CreateBranch {
+        project: GitProject,
+        name: String,
+        start: Option<String>,
+        switch_to: bool,
+    },
+    /// 重命名分支：`git branch -m`，保留上游配置与引用日志。
+    RenameBranch {
+        project: GitProject,
+        old: String,
+        new: String,
+    },
+    DeleteBranch {
+        project: GitProject,
+        name: String,
+        force: bool,
+    },
+    CreateTag {
+        project: GitProject,
+        name: String,
+        target: String,
+        message: Option<String>,
+    },
+    DeleteTag {
+        project: GitProject,
+        name: String,
+    },
+    /// `git worktree add`：从指定起点建新工作树并建分支。
+    AddWorktree {
+        project: GitProject,
+        path: String,
+        branch: String,
+        start: Option<String>,
+    },
+    Fetch {
+        project: GitProject,
+    },
+    Push {
+        project: GitProject,
+        /// 推送详细选项。
+        options: GitPushOptions,
+    },
+    /// 查询待推送到目标分支的提交列表（Outgoing Commits）。
+    LoadOutgoingCommits {
+        project: GitProject,
+        request_id: GitRequestId,
+        branch: String,
+        remote: Option<String>,
+        remote_branch: Option<String>,
+    },
+    Pull {
+        project: GitProject,
+        rebase: bool,
+    },
+    /// 把「到此提交为止」的历史推到分支的上游远端（IDEA 的「推送此前所有提交」）。
+    PushUpTo {
+        project: GitProject,
+        oid: String,
+        branch: String,
+    },
+    /// 添加项目时对目录做一次仓库探测（含子进程，不能卡在 UI 线程）。
+    Probe {
+        request_id: GitRequestId,
+        path: PathBuf,
+    },
+    /// 对一个已有目录执行 `git init`。
+    Init {
+        request_id: GitRequestId,
+        path: PathBuf,
+    },
+    /// 将当前分支重置到指定修订。
+    ResetTo {
+        project: GitProject,
+        target: String,
+        kind: GitResetKind,
+    },
+    /// 撤销指定提交（生成反向提交）。
+    Revert {
+        project: GitProject,
+        oid: String,
+    },
+    /// 拣选指定提交。
+    CherryPick {
+        project: GitProject,
+        oid: String,
+    },
+    /// 合并指定引用到当前分支。
+    Merge {
+        project: GitProject,
+        reference: String,
+    },
+    /// 将当前分支变基到指定上游。
+    RebaseOnto {
+        project: GitProject,
+        upstream: String,
+    },
+    /// 中止进行中的变基。
+    RebaseAbort {
+        project: GitProject,
+    },
+    /// 列出工作树。
+    ListWorktrees {
+        project: GitProject,
+        request_id: GitRequestId,
+    },
+    /// 删除工作树。
+    RemoveWorktree {
+        project: GitProject,
+        path: String,
+        force: bool,
+    },
+    /// 取 `<base>..HEAD` 的交互式变基待办清单（旧→新）。
+    RebaseTodo {
+        project: GitProject,
+        request_id: GitRequestId,
+        base: String,
+    },
+    /// 按用户编辑后的清单执行交互式变基。
+    ///
+    /// 设计原理（Why）：清单由界面回传而不是引擎重算——用户可能已经改过动作
+    /// 与顺序，重算会把编辑丢掉；提交号在引擎侧再校验一次十六进制，
+    /// 不让界面文本变成 git 参数。
+    RebaseRun {
+        project: GitProject,
+        base: String,
+        steps: Vec<GitRebaseStep>,
+    },
+    /// 把分支头提交压进它的父提交（IDEA 的「压缩到／优选到」单提交形态）。
+    FoldTipIntoParent {
+        project: GitProject,
+        mode: GitFoldMode,
+    },
+    /// 锁定工作树：IDEA 的「锁定」用于让临时工作树不被 prune 掉。
+    LockWorktree {
+        project: GitProject,
+        path: String,
+        reason: Option<String>,
+    },
+    /// 解锁工作树。
+    UnlockWorktree {
+        project: GitProject,
+        path: String,
+    },
+    /// 列出搁置项。
+    ListStashes {
+        project: GitProject,
+        request_id: GitRequestId,
+    },
+    /// 列出某个搁置项包含的文件。
+    ///
+    /// 为什么不跟列表一起返回：一个仓库可能有几十条搁置，每条都要一次
+    /// `stash show` 加一次 `ls-tree`；IDEA 也是展开时才取清单，
+    /// 折叠的行不值得为它起子进程。
+    ListStashFiles {
+        project: GitProject,
+        request_id: GitRequestId,
+        selector: String,
+    },
+    /// 新建搁置项。
+    StashSave {
+        project: GitProject,
+        message: String,
+        include_untracked: bool,
+    },
+    /// 应用搁置项（保留栈项）。
+    StashApply {
+        project: GitProject,
+        selector: String,
+    },
+    /// 应用并弹出搁置项。
+    StashPop {
+        project: GitProject,
+        selector: String,
+    },
+    /// 丢弃搁置项（不可恢复）。
+    StashDrop {
+        project: GitProject,
+        selector: String,
+    },
+    /// 读取项目的离线搁置项（Shelf）列表。
+    ///
+    /// 设计原理（Why）：搁置项存放在应用数据目录的 JSON 里而不是 git 仓库内，
+    /// 读取是阻塞文件 IO。走命令总线是为了让界面不直接依赖 `transom-store`，
+    /// 由控制器把读盘调度到阻塞线程池；`request_id` 用于丢弃关闭标签后迟到的结果。
+    LoadShelves {
+        project: GitProject,
+        request_id: GitRequestId,
+    },
+    /// 把勾选的改动导出为离线搁置项，并从工作区抽离这些改动。
+    ///
+    /// `name` 与 `branch` 由界面传入：名称含本地化文案，分支取自界面当前
+    /// 状态快照；控制器只负责补丁导出、工作区丢弃与落盘，不重新推断这两个字段。
+    Shelve {
+        project: GitProject,
+        request_id: GitRequestId,
+        name: String,
+        branch: String,
+        files: Vec<String>,
+    },
+    /// 应用一条离线搁置项的补丁；`pop` 为真时应用成功后删除该条目。
+    ///
+    /// 补丁文本随命令携带而不是让控制器按 id 回读：界面手里已有补丁，
+    /// 多一次读盘只会让「应用」与「条目被并发删除」之间的竞态更难解释。
+    ApplyShelf {
+        project: GitProject,
+        request_id: GitRequestId,
+        shelf_id: String,
+        patch: String,
+        pop: bool,
+    },
+    /// 删除一条离线搁置项（不可恢复）。
+    DropShelf {
+        project: GitProject,
+        request_id: GitRequestId,
+        shelf_id: String,
+    },
+    /// 取一条提交在远端托管服务上的网页地址。
+    ///
+    /// 设计原理（Why）：地址要读 `git remote get-url`（子进程），不能在渲染线程里
+    /// 现取，所以走命令总线；结果可能为空（无远端或形态不认识），由界面提示，
+    /// 而不是打开一个拼出来的假地址。
+    ResolveCommitUrl {
+        project: GitProject,
+        request_id: GitRequestId,
+        oid: String,
+    },
+    /// 把一条提交打成补丁并写到用户选定的路径。
+    ///
+    /// 设计原理（Why）：落盘路径来自界面里的系统保存对话框，是用户明示意图，
+    /// 因此命令直接带路径，控制器不必把十几 MB 的补丁文本经事件总线回传；
+    /// 失败按普通写动作经 `ActionDone` 回报。
+    CreatePatch {
+        project: GitProject,
+        oid: String,
+        path: PathBuf,
+    },
+    /// 从远端克隆仓库到本机目录。
+    ///
+    /// 设计原理（Why）：克隆不属于任何「已登记项目」——仓库还不存在，所以这条命令
+    /// 不带 `project`，只带请求号、地址与目标目录；进度由
+    /// [`GitAppEvent::CloneProgress`] 多次回报，结束由
+    /// [`GitAppEvent::CloneDone`] 收口，界面按请求号落到对应的克隆标签页。
+    Clone {
+        request_id: GitRequestId,
+        url: String,
+        dest: PathBuf,
+        /// 浅克隆深度；`None` 表示拉完整历史。
+        depth: Option<u32>,
+    },
+    /// 解决冲突：采用本地/当前版本。
+    ResolveConflictOurs {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 解决冲突：采用传入版本。
+    ResolveConflictTheirs {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 标记冲突文件已手动解决。
+    ResolveConflictMark {
+        project: GitProject,
+        paths: Vec<String>,
+    },
+    /// 读取冲突文件的三方内容视图。
+    LoadConflictSides {
+        project: GitProject,
+        request_id: GitRequestId,
+        path: String,
+    },
+    /// 中止在途读请求（视图关闭时）。
+    Cancel {
+        request_id: GitRequestId,
+    },
+}

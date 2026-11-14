@@ -35,51 +35,49 @@ fn drop_rejection(session: &Session, status: &TabStatus) -> Option<&'static str>
     }
 }
 
-impl AppShell {
-    /// 外部文件松手（终端网格或 SFTP 远程列）：为该标签复用（或补建）SFTP 面板并把文件排进上传队列。
-    pub(crate) fn handle_dropped_files(
-        &mut self,
-        tab_id: TabId,
-        paths: &[PathBuf],
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if paths.is_empty() {
-            return;
-        }
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
-            return;
-        };
-        if let Some(key) = drop_rejection(
-            &self.state.workspace.tabs[index].session,
-            &self.state.workspace.tabs[index].status,
-        ) {
-            let message = rust_i18n::t!(key).to_string();
-            log::warn!(
-                "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
-                paths.len()
-            );
-            self.state.status = Some(message);
-            cx.notify();
-            return;
-        }
-
-        // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；不存在则
-        // 建一份隐藏状态：队列、续传与校验都照旧，只是进度改由终端右下角浮层呈现，
-        // 不再为了传一个文件而弹开一整列文件管理器。
-        if self.state.sftp_view(tab_id).is_none() {
-            self.build_sftp_panel(tab_id, index, false, window, cx);
-        }
-        if let Err(message) = self.enqueue_uploads(tab_id, paths, cx) {
-            self.state.set_error(message);
-            cx.notify();
-            return;
-        }
-        log::info!(
-            "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
-            paths.len(),
-            crate::connection::describe_target(&self.state.workspace.tabs[index].session)
-        );
-        self.show_drop_overlay(tab_id, cx);
+/// 外部文件松手（终端网格或 SFTP 远程列）：为该标签复用（或补建）SFTP 面板并把文件排进上传队列。
+pub(crate) fn handle_dropped_files(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    paths: &[PathBuf],
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if paths.is_empty() {
+        return;
     }
+    let Some(index) = shell.state.workspace.tab_index(tab_id) else {
+        return;
+    };
+    if let Some(key) = drop_rejection(
+        &shell.state.workspace.tabs[index].session,
+        &shell.state.workspace.tabs[index].status,
+    ) {
+        let message = rust_i18n::t!(key).to_string();
+        log::warn!(
+            "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
+            paths.len()
+        );
+        shell.state.status = Some(message);
+        cx.notify();
+        return;
+    }
+
+    // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；不存在则
+    // 建一份隐藏状态：队列、续传与校验都照旧，只是进度改由终端右下角浮层呈现，
+    // 不再为了传一个文件而弹开一整列文件管理器。
+    if shell.state.sftp_view(tab_id).is_none() {
+        crate::sftp::build_sftp_panel(shell, tab_id, index, false, window, cx);
+    }
+    if let Err(message) = crate::sftp::enqueue_uploads(shell, tab_id, paths, cx) {
+        shell.state.set_error(message);
+        cx.notify();
+        return;
+    }
+    log::info!(
+        "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
+        paths.len(),
+        crate::connection::describe_target(&shell.state.workspace.tabs[index].session)
+    );
+    crate::sftp::show_drop_overlay(shell, tab_id, cx);
 }

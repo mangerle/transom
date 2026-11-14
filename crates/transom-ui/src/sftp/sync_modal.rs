@@ -16,16 +16,15 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    pub(crate) fn render_sftp_sync_body(
-        &self,
-        app: &Entity<AppShell>,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.sync.as_ref() else {
-            return div().into_any_element();
-        };
+pub(crate) fn render_sftp_sync_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.sync.as_ref() else {
+        return div().into_any_element();
+    };
         let scanning = modal.scanning;
         let error = modal.error.clone();
         let local_root = modal.local_root.display().to_string();
@@ -59,7 +58,6 @@ impl AppShell {
             content,
             Some(footer),
         )
-    }
 }
 
 /// 扫描中/错误/无差异三种状态；返回 `None` 表示应渲染差异列表。
@@ -102,7 +100,7 @@ fn sync_status_panel(
                         .on_click(crate::dialog_host::on_event(
                             app,
                             move |this, _: &ClickEvent, _, cx| {
-                                this.sftp_open_sync_modal(tab_id, cx);
+                                crate::sftp::sftp_open_sync_modal(this, tab_id, cx);
                             },
                         )),
                 )
@@ -204,7 +202,7 @@ fn sync_diff_list(
                                 .on_change(crate::dialog_host::on_event(
                                     &list_app,
                                     move |this, checked: &bool, _, cx| {
-                                        this.sftp_toggle_sync_entry(index, *checked, cx);
+                                        crate::sftp::sftp_toggle_sync_entry(this, index, *checked, cx);
                                     },
                                 )),
                         );
@@ -317,7 +315,7 @@ fn sync_footer(
             rust_i18n::t!("common.cancel").to_string(),
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
                 this.state.sftp_modals.sync = None;
-                this.focus_active_sftp_panel(window, cx);
+                crate::sftp::focus_active_sftp_panel(this, window, cx);
                 cx.notify();
             }),
         ))
@@ -330,7 +328,7 @@ fn sync_footer(
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.sftp_select_all_sync(true, cx);
+                            crate::sftp::sftp_select_all_sync(this, true, cx);
                         },
                     )),
             )
@@ -342,7 +340,7 @@ fn sync_footer(
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, _, cx| {
-                            this.sftp_select_all_sync(false, cx);
+                            crate::sftp::sftp_select_all_sync(this, false, cx);
                         },
                     )),
             )
@@ -354,7 +352,7 @@ fn sync_footer(
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, window, cx| {
-                            this.start_sftp_sync(window, cx);
+                            crate::sftp::start_sftp_sync(this, window, cx);
                         },
                     )),
             )

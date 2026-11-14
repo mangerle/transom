@@ -15,7 +15,7 @@
 
     impl Write for SharedSink {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().expect("测试桩不中毒").extend_from_slice(buf);
+            self.0.lock().extend_from_slice(buf);
             Ok(buf.len())
         }
         fn flush(&mut self) -> io::Result<()> {
@@ -104,7 +104,7 @@
         }
 
         fn wire(&mut self) -> Vec<u8> {
-            std::mem::take(&mut *self.written.lock().expect("测试桩不中毒"))
+            std::mem::take(&mut *self.written.lock())
         }
 
         fn collect_events(&mut self) -> Vec<ZmodemEvent> {

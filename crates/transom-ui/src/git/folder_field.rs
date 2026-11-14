@@ -54,7 +54,7 @@ pub(crate) fn render_git_folder_field(
         .on_open_change(move |open, _window, cx| {
             let open = *open;
             toggle_app.update(cx, |this, cx| {
-                this.git_folder_set_open(host, open, cx);
+                git_folder_set_open(this, host, open, cx);
             });
         })
         .trigger_style(trigger_style)
@@ -99,7 +99,7 @@ fn render_folder_options(
             let app = root_app.clone();
             move |window, cx| {
                 app.update(cx, |this, cx| {
-                    this.git_folder_pick(host, String::new(), window, cx);
+                    git_folder_pick(this, host, String::new(), window, cx);
                 });
             }
         },
@@ -117,7 +117,7 @@ fn render_folder_options(
             p,
             move |window, cx| {
                 pick_app.update(cx, |this, cx| {
-                    this.git_folder_pick(host, picked.clone(), window, cx);
+                    git_folder_pick(this, host, picked.clone(), window, cx);
                 });
             },
         ));
@@ -162,89 +162,83 @@ fn folder_option_row(
         .into_any_element()
 }
 
-impl AppShell {
-    /// 按宿主取到分组字段（可变）。
-    pub(crate) fn folder_field_mut(&mut self, host: GitHost) -> Option<&mut GitFolderField> {
-        match host {
-            GitHost::Modal => self
-                .state
-                .modals
-                .git
-                .project
-                .as_mut()
-                .map(|modal| &mut modal.folder),
-            GitHost::Clone => self
-                .state
-                .modals
-                .git
-                .clone
-                .as_mut()
-                .map(|modal| &mut modal.folder),
-        }
+/// 按宿主取到分组字段（可变）。
+fn folder_field_mut(shell: &mut AppShell, host: GitHost) -> Option<&mut GitFolderField> {
+    match host {
+        GitHost::Modal => shell
+            .state
+            .modals
+            .git
+            .project
+            .as_mut()
+            .map(|modal| &mut modal.folder),
+        GitHost::Clone => shell
+            .state
+            .modals
+            .git
+            .clone
+            .as_mut()
+            .map(|modal| &mut modal.folder),
     }
+}
 
-    /// 展开或收起分组候选。
-    pub(crate) fn git_folder_set_open(
-        &mut self,
-        host: GitHost,
-        open: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(field) = self.folder_field_mut(host) else {
-            return;
-        };
-        if field.open != open {
-            field.open = open;
-            cx.notify();
-        }
-    }
-
-    /// 选中一个分组（空串表示不归组）：写回输入框并收起候选。
-    pub(crate) fn git_folder_pick(
-        &mut self,
-        host: GitHost,
-        name: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(field) = self.folder_field_mut(host) else {
-            return;
-        };
-        field.open = false;
-        field.name.update(cx, |state, cx| {
-            state.set_value(name, window, cx);
-        });
+/// 展开或收起分组候选。
+fn git_folder_set_open(shell: &mut AppShell, host: GitHost, open: bool, cx: &mut Context<AppShell>) {
+    let Some(field) = folder_field_mut(shell, host) else {
+        return;
+    };
+    if field.open != open {
+        field.open = open;
         cx.notify();
     }
+}
 
-    /// 分组候选：既有分组的名字。
-    pub(crate) fn git_folder_names(&self) -> Vec<String> {
-        self.state
-            .git
-            .folders
-            .iter()
-            .map(|folder| folder.name.clone())
-            .collect()
-    }
+/// 选中一个分组（空串表示不归组）：写回输入框并收起候选。
+pub(crate) fn git_folder_pick(
+    shell: &mut AppShell,
+    host: GitHost,
+    name: String,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(field) = folder_field_mut(shell, host) else {
+        return;
+    };
+    field.open = false;
+    field.name.update(cx, |state, cx| {
+        state.set_value(name, window, cx);
+    });
+    cx.notify();
+}
 
-    /// 把输入框里的组名落成真实分组：空 → 不归组；已有同名 → 用它；
-    /// 新名字 → 现在就建组（确认时才建，打字过程中不落盘）。
-    pub(crate) fn git_folder_id_for_name(
-        &mut self,
-        name: &str,
-        cx: &mut Context<Self>,
-    ) -> Option<transom_core::GitFolderId> {
-        let name = name.trim();
-        if name.is_empty() {
-            return None;
-        }
-        if let Some(existing) = super::helpers::find_folder_by_name(&self.state.git.folders, name) {
-            return Some(existing);
-        }
-        log::info!("按表单输入新建 Git 分组: {name}");
-        self.state.git.folders.push(GitFolder::new(name));
-        let created = self.state.git.folders.last().map(|folder| folder.id);
-        self.persist_git_projects(cx);
-        created
+/// 分组候选：既有分组的名字。
+pub(crate) fn git_folder_names(shell: &AppShell) -> Vec<String> {
+    shell
+        .state
+        .git
+        .folders
+        .iter()
+        .map(|folder| folder.name.clone())
+        .collect()
+}
+
+/// 把输入框里的组名落成真实分组：空 → 不归组；已有同名 → 用它；
+/// 新名字 → 现在就建组（确认时才建，打字过程中不落盘）。
+pub(crate) fn git_folder_id_for_name(
+    shell: &mut AppShell,
+    name: &str,
+    cx: &mut Context<AppShell>,
+) -> Option<transom_core::GitFolderId> {
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
     }
+    if let Some(existing) = super::helpers::find_folder_by_name(&shell.state.git.folders, name) {
+        return Some(existing);
+    }
+    log::info!("按表单输入新建 Git 分组: {name}");
+    shell.state.git.folders.push(GitFolder::new(name));
+    let created = shell.state.git.folders.last().map(|folder| folder.id);
+    crate::git::actions::persist_git_projects(shell, cx);
+    created
 }

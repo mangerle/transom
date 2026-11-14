@@ -14,69 +14,67 @@ use crate::container::types::{ContainerForwardDialog, ContainerForwardOpenParams
 use gpui_kit::component::input::InputState;
 use transom_core::{Connection, ConnectionId, TabId};
 
-impl AppShell {
-    /// 打开为指定容器内端口建立 SSH 本地端口转发的弹窗。
-    ///
-    /// 为什么留在外壳：目标候选来自全部标签页的活跃 SSH 连接，属于跨领域快照；
-    /// 外壳把快照与输入控件一次性注入工作区实体，实体渲染时不反查外壳。
-    pub(crate) fn open_container_port_forward(
-        &mut self,
-        tab_id: TabId,
-        container_name: &str,
-        private_port: u16,
-        published_port: Option<u16>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // 收集所有处于活跃连接态的 SSH 会话（排除本地会话）。
-        let ssh_sessions: Vec<(String, TabId, ConnectionId)> = self
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .filter_map(|tab| {
-                let connection_id = tab.connection_id?;
-                if matches!(&tab.session.connection, Connection::Local(_)) {
-                    return None;
-                }
-                let name = if tab.session.name.trim().is_empty() {
-                    tab.title.clone()
-                } else {
-                    tab.session.name.clone()
-                };
-                Some((name, tab.id, connection_id))
-            })
-            .collect();
+/// 打开为指定容器内端口建立 SSH 本地端口转发的弹窗。
+///
+/// 为什么留在外壳桥接：目标候选来自全部标签页的活跃 SSH 连接，属于跨领域快照；
+/// 把快照与输入控件一次性注入工作区实体，实体渲染时不反查外壳。
+pub(crate) fn open_container_port_forward(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    container_name: &str,
+    private_port: u16,
+    published_port: Option<u16>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    // 收集所有处于活跃连接态的 SSH 会话（排除本地会话）。
+    let ssh_sessions: Vec<(String, TabId, ConnectionId)> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .filter_map(|tab| {
+            let connection_id = tab.connection_id?;
+            if matches!(&tab.session.connection, Connection::Local(_)) {
+                return None;
+            }
+            let name = if tab.session.name.trim().is_empty() {
+                tab.title.clone()
+            } else {
+                tab.session.name.clone()
+            };
+            Some((name, tab.id, connection_id))
+        })
+        .collect();
 
-        let local_port_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(published_port.unwrap_or(private_port).to_string())
-                .placeholder(rust_i18n::t!("container.forward.local_port_placeholder").to_string())
-        });
+    let local_port_input = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(published_port.unwrap_or(private_port).to_string())
+            .placeholder(rust_i18n::t!("container.forward.local_port_placeholder").to_string())
+    });
 
-        let target_host_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value("127.0.0.1".to_string())
-                .placeholder(rust_i18n::t!("container.forward.target_host_placeholder").to_string())
-        });
+    let target_host_input = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value("127.0.0.1".to_string())
+            .placeholder(rust_i18n::t!("container.forward.target_host_placeholder").to_string())
+    });
 
-        let Some(workspace) = self.state.container_workspace(tab_id) else {
-            return;
-        };
-        workspace.update(cx, |workspace, cx| {
-            workspace.open_forward_dialog(
-                ContainerForwardOpenParams {
-                    container_name: container_name.to_string(),
-                    private_port,
-                    published_port,
-                    local_port_input,
-                    target_host_input,
-                    ssh_sessions,
-                },
-                cx,
-            );
-        });
-    }
+    let Some(workspace) = shell.state.container_workspace(tab_id) else {
+        return;
+    };
+    workspace.update(cx, |workspace, cx| {
+        workspace.open_forward_dialog(
+            ContainerForwardOpenParams {
+                container_name: container_name.to_string(),
+                private_port,
+                published_port,
+                local_port_input,
+                target_host_input,
+                ssh_sessions,
+            },
+            cx,
+        );
+    });
 }
 
 impl ContainerWorkspace {

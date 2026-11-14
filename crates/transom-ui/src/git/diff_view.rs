@@ -66,7 +66,7 @@ pub(crate) fn render(
     let kbd_find_app = app.clone();
     let on_update: OptionsUpdater = Rc::new(move |updater, _window, cx| {
         opt_app.update(cx, |this, cx| {
-            this.git_update_diff_options(tab_id, updater, cx);
+            crate::git::actions::git_update_diff_options(this, tab_id, updater, cx);
         });
     });
 
@@ -114,12 +114,12 @@ pub(crate) fn render(
             nav_disabled,
             Rc::new(move |_, cx| {
                 prev_change_app.update(cx, |this, cx| {
-                    this.git_step_diff_change(tab_id, false, cx);
+                    crate::git::actions::git_step_diff_change(this, tab_id, false, cx);
                 });
             }),
             Rc::new(move |_, cx| {
                 next_change_app.update(cx, |this, cx| {
-                    this.git_step_diff_change(tab_id, true, cx);
+                    crate::git::actions::git_step_diff_change(this, tab_id, true, cx);
                 });
             }),
         ))
@@ -135,7 +135,12 @@ pub(crate) fn render(
                 .on_click(move |_, _, cx| {
                     if current_tab_idx > 0 {
                         prev_app.update(cx, |this, cx| {
-                            this.git_select_diff_tab(tab_id, current_tab_idx - 1, cx);
+                            crate::git::actions::git_select_diff_tab(
+                                this,
+                                tab_id,
+                                current_tab_idx - 1,
+                                cx,
+                            );
                         });
                     }
                 }),
@@ -157,7 +162,12 @@ pub(crate) fn render(
                 .on_click(move |_, _, cx| {
                     if current_tab_idx + 1 < total_tabs {
                         next_app.update(cx, |this, cx| {
-                            this.git_select_diff_tab(tab_id, current_tab_idx + 1, cx);
+                            crate::git::actions::git_select_diff_tab(
+                                this,
+                                tab_id,
+                                current_tab_idx + 1,
+                                cx,
+                            );
                         });
                     }
                 }),
@@ -177,7 +187,7 @@ pub(crate) fn render(
                 .tooltip(rust_i18n::t!("git.diff.search_toggle").to_string())
                 .on_click(move |_, window, cx| {
                     search_toggle_app.update(cx, |this, cx| {
-                        this.git_toggle_diff_search(tab_id, window, cx);
+                        crate::git::actions::git_toggle_diff_search(this, tab_id, window, cx);
                     });
                 }),
         )
@@ -190,7 +200,7 @@ pub(crate) fn render(
                 .tooltip(rust_i18n::t!("git.diff.refresh").to_string())
                 .on_click(move |_, _, cx| {
                     refresh_app.update(cx, |this, cx| {
-                        this.git_refresh_active_diff(tab_id, cx);
+                        crate::git::actions::git_refresh_active_diff(this, tab_id, cx);
                     });
                 }),
         )
@@ -203,7 +213,7 @@ pub(crate) fn render(
                 .tooltip(rust_i18n::t!("git.diff.open_source").to_string())
                 .on_click(move |_, _, cx| {
                     open_app.update(cx, |this, cx| {
-                        this.git_open_diff_source(tab_id, cx);
+                        crate::git::actions::git_open_diff_source(this, tab_id, cx);
                     });
                 }),
         )
@@ -282,17 +292,17 @@ pub(crate) fn render(
         p,
         on_prev: Rc::new(move |_, cx| {
             search_prev_app.update(cx, |this, cx| {
-                this.git_step_diff_search(tab_id, false, cx);
+                crate::git::actions::git_step_diff_search(this, tab_id, false, cx);
             });
         }),
         on_next: Rc::new(move |_, cx| {
             search_next_app.update(cx, |this, cx| {
-                this.git_step_diff_search(tab_id, true, cx);
+                crate::git::actions::git_step_diff_search(this, tab_id, true, cx);
             });
         }),
         on_close: Rc::new(move |_, cx| {
             search_close_app.update(cx, |this, cx| {
-                this.git_close_diff_search(tab_id, cx);
+                crate::git::actions::git_close_diff_search(this, tab_id, cx);
             });
         }),
     });
@@ -302,17 +312,17 @@ pub(crate) fn render(
         .key_context(DIFF_VIEW_CONTEXT)
         .on_action(move |_: &DiffPrevChange, _, cx| {
             kbd_prev_app.update(cx, |this, cx| {
-                this.git_step_diff_change(tab_id, false, cx);
+                crate::git::actions::git_step_diff_change(this, tab_id, false, cx);
             });
         })
         .on_action(move |_: &DiffNextChange, _, cx| {
             kbd_next_app.update(cx, |this, cx| {
-                this.git_step_diff_change(tab_id, true, cx);
+                crate::git::actions::git_step_diff_change(this, tab_id, true, cx);
             });
         })
         .on_action(move |_: &DiffFindInView, window, cx| {
             kbd_find_app.update(cx, |this, cx| {
-                this.git_open_diff_search(tab_id, window, cx);
+                crate::git::actions::git_open_diff_search(this, tab_id, window, cx);
             });
         })
         .flex_1()

@@ -15,6 +15,7 @@ members = [
     "crates/transom-updater",
     "crates/transom-ui",
     "crates/transom-ui-icons",
+    "crates/transom-ui-kit",
 ]
 resolver = "3"
 
@@ -147,6 +148,7 @@ transom-zmodem = { path = "crates/transom-zmodem" }
 transom-updater = { path = "crates/transom-updater" }
 transom-ui = { path = "crates/transom-ui" }
 transom-ui-icons = { path = "crates/transom-ui-icons" }
+transom-ui-kit = { path = "crates/transom-ui-kit" }
 
 [profile.dev.package]
 gpui-pre = { opt-level = 3 }

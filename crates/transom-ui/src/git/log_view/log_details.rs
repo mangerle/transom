@@ -132,7 +132,9 @@ fn render_files_section(
                         if let Some(path) = &first_path {
                             let path = path.clone();
                             toolbar_app.update(cx, |this, cx| {
-                                this.git_diff_commit_file(tab_id, &path, cx);
+                                crate::git::actions::git_diff_commit_file(
+                                    this, tab_id, &path, cx,
+                                );
                             });
                         }
                     }

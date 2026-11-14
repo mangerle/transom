@@ -67,7 +67,7 @@ pub(crate) fn render_tag_menu(
                 let name = name_checkout.clone();
                 let project = project_checkout.clone();
                 app_checkout.update(cx, |this, cx| {
-                    this.git_checkout_project_ref(&project, &name, cx);
+                    crate::git::actions::git_checkout_project_ref(this, &project, &name, cx);
                 });
             },
         ))
@@ -79,7 +79,9 @@ pub(crate) fn render_tag_menu(
                 let start = name_new_branch.clone();
                 let project = project_new_branch.clone();
                 app_new_branch.update(cx, |this, cx| {
-                    this.git_create_project_branch_from(&project, &start, window, cx);
+                    crate::git::actions::git_create_project_branch_from(
+                        this, &project, &start, window, cx,
+                    );
                 });
             },
         ))
@@ -90,7 +92,7 @@ pub(crate) fn render_tag_menu(
             move |_, _, cx| {
                 let target = name_diff.clone();
                 app_diff.update(cx, |this, cx| {
-                    this.git_set_log_scope(tab_id, LogScope::Ref(target), cx);
+                    crate::git::actions::git_set_log_scope(this, tab_id, LogScope::Ref(target), cx);
                 });
             },
         ))
@@ -107,7 +109,8 @@ pub(crate) fn render_tag_menu(
                 let reference = name_merge.clone();
                 let project = project_merge.clone();
                 app_merge.update(cx, |this, cx| {
-                    this.git_history_on_project(
+                    crate::git::actions::git_history_on_project(
+                        this,
                         &project,
                         crate::git::actions::GitHistoryAction::Merge(reference),
                         cx,
@@ -123,7 +126,9 @@ pub(crate) fn render_tag_menu(
                 let branch = name_worktree.clone();
                 let project = project_worktree.clone();
                 app_worktree.update(cx, |this, cx| {
-                    this.open_git_worktree_modal(project, &branch, window, cx);
+                    crate::git::worktree_modal::open_git_worktree_modal(
+                        this, project, &branch, window, cx,
+                    );
                 });
             },
         ))
@@ -135,7 +140,12 @@ pub(crate) fn render_tag_menu(
                 let name = name_push.clone();
                 let project = project_push.clone();
                 app_push.update(cx, |this, cx| {
-                    this.git_push_project(&project, Some(format!("refs/tags/{}", name)), cx);
+                    crate::git::actions::git_push_project(
+                        this,
+                        &project,
+                        Some(format!("refs/tags/{}", name)),
+                        cx,
+                    );
                 });
             },
         ))
@@ -147,7 +157,7 @@ pub(crate) fn render_tag_menu(
                 let name = name_delete.clone();
                 let project = project_delete.clone();
                 app_delete.update(cx, |this, cx| {
-                    this.git_delete_project_ref(&project, &name, cx);
+                    crate::git::actions::git_delete_project_ref(this, &project, &name, cx);
                 });
             },
         ))

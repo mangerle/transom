@@ -6,6 +6,7 @@
 mod entity;
 mod render;
 mod shell;
+pub(crate) use shell::{on_audit_viewer_event, open_audit_viewer, open_audit_viewer_for_session, open_audit_viewer_for_tab};
 mod types;
 
 #[cfg(test)]

@@ -49,26 +49,24 @@ pub(crate) fn side_column_width_hint(panel: &SftpPanelState, cx: &App) -> f32 {
     }
 }
 
-impl AppShell {
-    /// 辅助方法：直接按 tab_id 获取 sftp 面板可变借用。
-    /// 请求特定连接的远端目录列表（用于并列远端）。
-    ///
-    /// 连接归属主远端时按主列处理，否则按并列列处理；加载态与错误清理统一
-    /// 走 `request_sftp_list_pane`，不再有第二套发送逻辑。
-    pub(crate) fn request_sftp_list_for_connection(
-        &mut self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        path: String,
-        cx: &mut Context<Self>,
-    ) {
-        let target = self.state.workspace.tab(tab_id).and_then(|tab| {
-            self.sftp_state(tab_id, cx)
-                .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
-        });
-        let Some(target) = target else {
-            return;
-        };
-        self.request_sftp_list_pane(tab_id, target, path, cx);
-    }
+/// 辅助方法：直接按 tab_id 获取 sftp 面板可变借用。
+/// 请求特定连接的远端目录列表（用于并列远端）。
+///
+/// 连接归属主远端时按主列处理，否则按并列列处理；加载态与错误清理统一
+/// 走 `request_sftp_list_pane`，不再有第二套发送逻辑。
+pub(crate) fn request_sftp_list_for_connection(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    path: String,
+    cx: &mut Context<AppShell>,
+) {
+    let target = shell.state.workspace.tab(tab_id).and_then(|tab| {
+        crate::sftp::sftp_state(shell, tab_id, cx)
+            .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
+    });
+    let Some(target) = target else {
+        return;
+    };
+    crate::sftp::request_sftp_list_pane(shell, tab_id, target, path, cx);
 }

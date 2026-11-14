@@ -4,16 +4,15 @@ use super::common::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    pub(crate) fn render_sftp_input_body(
-        &self,
-        app: &Entity<AppShell>,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.input.as_ref() else {
-            return div().into_any_element();
-        };
+pub(crate) fn render_sftp_input_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.input.as_ref() else {
+        return div().into_any_element();
+    };
         let title = modal.title.clone();
         let prompt = modal.prompt.clone();
         let input = modal.input.clone();
@@ -33,7 +32,7 @@ impl AppShell {
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
                     this.state.sftp_modals.input = None;
-                    this.focus_active_sftp_panel(window, cx);
+                    crate::sftp::focus_active_sftp_panel(this, window, cx);
                     cx.notify();
                 }),
             ))
@@ -43,7 +42,7 @@ impl AppShell {
                 Some(AppIcon::Ui(UiIcon::CHECK)),
                 crate::widgets::DialogConfirmKind::Primary,
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.commit_sftp_input_modal(window, cx);
+                    crate::sftp::commit_sftp_input_modal(this, window, cx);
                 }),
             ));
 
@@ -54,5 +53,4 @@ impl AppShell {
             content,
             Some(footer),
         )
-    }
 }

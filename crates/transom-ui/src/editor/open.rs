@@ -31,7 +31,9 @@ use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, Tab
 
 mod panel;
 
-pub(crate) use self::panel::RemoteEditorOpen;
+pub(crate) use self::panel::{
+    RemoteEditorOpen, open_remote_editor_panel, sftp_edit_remote_file_on, spawn_new_editor_panel,
+};
 
 /// 编辑入口的准入判定结果。
 ///

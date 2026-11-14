@@ -4,10 +4,9 @@
 
 mod file_io;
 
+use parking_lot::Mutex;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
 
 use transom_core::{ZmodemDirection, ZmodemEvent, ZmodemFinished};
@@ -308,7 +307,7 @@ impl Fsm {
     }
 
     fn write_wire(&mut self, wire: &[u8]) {
-        let mut guard = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut guard = self.writer.lock();
         if let Err(error) = guard.write_all(wire) {
             drop(guard);
             log::error!("ZMODEM 线路写入失败，传输中止: {error}");

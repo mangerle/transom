@@ -144,7 +144,7 @@ impl AppShell {
             return;
         };
         let panes = self.state.workspace.groups[index].pane_ids();
-        if self.block_close_for_dirty_editors(&panes, PendingEditorClose::Group(group_id), cx) {
+        if crate::editor::block_close_for_dirty_editors(self, &panes, PendingEditorClose::Group(group_id), cx) {
             return;
         }
         let tiled_focus = self
@@ -160,7 +160,7 @@ impl AppShell {
             .workspace
             .tabs
             .retain(|tab| !panes.contains(&tab.id));
-        self.prune_tab_overlays(cx);
+        crate::editor::prune_tab_overlays(self, cx);
         self.state.prune_tilings();
 
         let active_removed = self
@@ -193,7 +193,7 @@ impl AppShell {
         if self.state.workspace.groups.is_empty()
             && app_settings(cx).window.close_window_on_all_tabs_closed
         {
-            self.close_app(window, cx);
+            crate::app::window_state::close_app(self, window, cx);
             return;
         }
         cx.notify();
@@ -214,7 +214,7 @@ impl AppShell {
             self.close_group(group_id, window, cx);
             return;
         }
-        if self.block_close_for_dirty_editors(
+        if crate::editor::block_close_for_dirty_editors(self, 
             std::slice::from_ref(&tab_id),
             PendingEditorClose::Pane(tab_id),
             cx,
@@ -225,7 +225,7 @@ impl AppShell {
         self.state
             .send_command(TerminalCommand::CloseTab { tab_id });
         self.state.workspace.tabs.retain(|tab| tab.id != tab_id);
-        self.prune_tab_overlays(cx);
+        crate::editor::prune_tab_overlays(self, cx);
         let replacement = self.state.detach_pane_from_group(tab_id);
         self.state.prune_tilings();
         if let Some(next) = replacement {
@@ -263,7 +263,7 @@ impl AppShell {
                 .and_then(|tiled| tiled.focused_group()),
         };
         if let Some(group) = target {
-            self.activate_group(group, window, cx);
+            crate::app::tiling::activate_group(self, group, window, cx);
         }
     }
 

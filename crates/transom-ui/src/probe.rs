@@ -88,159 +88,157 @@ impl AppState {
     }
 }
 
-impl AppShell {
-    /// 会话行按钮入口：只拨测这一台。
-    pub(crate) fn probe_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        self.dispatch_probes(&[session_id], cx);
-    }
+/// 会话行按钮入口：只拨测这一台。
+pub(crate) fn probe_session(shell: &mut AppShell, session_id: SessionId, cx: &mut Context<AppShell>) {
+    dispatch_probes(shell, &[session_id], cx);
+}
 
-    /// 分组表头按钮入口：对整个文件夹（含子文件夹）发起拨测。
-    ///
-    /// 口径含子树：一个分组几百台机器时分片挂子文件夹很常见，只测直接子级会让人
-    /// 误判"整组都通了"。
-    pub(crate) fn probe_folder(&mut self, folder_id: FolderId, cx: &mut Context<Self>) {
-        let targets = self
-            .state
-            .catalog
-            .sessions
-            .iter()
-            .filter(|session| session_in_folder(&self.state.catalog, session, folder_id))
-            .map(|session| session.id)
-            .collect::<Vec<_>>();
-        self.dispatch_probes(&targets, cx);
-    }
+/// 分组表头按钮入口：对整个文件夹（含子文件夹）发起拨测。
+///
+/// 口径含子树：一个分组几百台机器时分片挂子文件夹很常见，只测直接子级会让人
+/// 误判"整组都通了"。
+pub(crate) fn probe_folder(shell: &mut AppShell, folder_id: FolderId, cx: &mut Context<AppShell>) {
+    let targets = shell
+        .state
+        .catalog
+        .sessions
+        .iter()
+        .filter(|session| session_in_folder(&shell.state.catalog, session, folder_id))
+        .map(|session| session.id)
+        .collect::<Vec<_>>();
+    dispatch_probes(shell, &targets, cx);
+}
 
-    /// 派生动作并点亮在途状态点；没有可拨测主机时只给一次提示。
-    ///
-    /// `targets` 传会话 id 而不是会话本体：调用方要先从目录里挑目标，
-    /// 借用的目录不能横跨本方法的可变借用。
-    fn dispatch_probes(&mut self, targets: &[SessionId], cx: &mut Context<Self>) {
-        let requested: HashSet<SessionId> = targets.iter().copied().collect();
-        // 本地 Shell 与串口没有网络地址，派生即落空，静默跳过。
-        let probeable: Vec<HostAction> = self
-            .state
-            .catalog
-            .sessions
-            .iter()
-            .filter(|session| requested.contains(&session.id))
-            .filter_map(HostAction::probe_for)
-            .collect();
-        if probeable.is_empty() {
-            log::warn!(
-                "批量拨测没有可探测的网络主机，请求会话数: {}",
-                requested.len()
-            );
-            self.state
-                .set_error(rust_i18n::t!("probe.no_target").to_string());
-            cx.notify();
-            return;
-        }
-        // 已在途的会话不再重复派发：控制器还没回报就再发一次，只会多占并发额度。
-        let fresh: Vec<HostAction> = probeable
-            .into_iter()
-            .filter(|action| !self.state.is_probe_pending(action.session_id()))
-            .collect();
-        if fresh.is_empty() {
-            return;
-        }
-        let dispatched: Vec<SessionId> = fresh.iter().map(HostAction::session_id).collect();
-        log::info!("派发批量拨测，目标数: {}", dispatched.len());
-        if !self
-            .state
-            .send_command(HostCommand::RunHostActions { actions: fresh })
-        {
-            // 命令通道已关闭：不点亮状态点，否则在途态永远等不到回报。
-            return;
-        }
-        for session_id in dispatched {
-            self.set_probe_badge(session_id, ProbeBadge::Pending, None, cx);
-        }
-    }
-
-    /// 控制器回报的单条结果：换成带停留时间的结果点，并挂上到期清理任务。
-    pub(crate) fn handle_probe_result(
-        &mut self,
-        session_id: SessionId,
-        outcome: HostOutcome,
-        cx: &mut Context<Self>,
-    ) {
-        // tooltip 里带上目标地址：列表里同名会话不少，光说"可达"定位不到是哪台。
-        let target = self.state.session_target(session_id);
-        let label = self.state.session_label(session_id);
-        let (badge, ttl) = match outcome {
-            HostOutcome::Reachable { latency_ms } => {
-                // 可达按 `debug` 记：一次分组拨测上百台，逐条 info 会把有意义
-                // 的生命周期日志冲走；不通的那条才值得 warn。
-                log::debug!("拨测可达，会话: {label}，目标: {target}，耗时 {latency_ms} 毫秒");
-                (
-                    ProbeBadge::Reachable {
-                        tooltip: format!(
-                            "{target} · {}",
-                            rust_i18n::t!("probe.latency", ms = latency_ms)
-                        )
-                        .into(),
-                    },
-                    REACHABLE_TTL,
-                )
-            }
-            HostOutcome::Unreachable { error } => {
-                let reason = localized_error(&error);
-                log::warn!("拨测不可达，会话: {label}，目标: {target}，原因: {reason}");
-                (
-                    ProbeBadge::Unreachable {
-                        tooltip: format!("{target} · {reason}").into(),
-                    },
-                    UNREACHABLE_TTL,
-                )
-            }
-        };
-        self.set_probe_badge(session_id, badge, Some(ttl), cx);
-    }
-
-    /// 会话名（日志定位用）；查不到时退回 id，保证每条日志都能追到一行记录。
-    /// 写入状态点，并按需挂到期任务；`ttl` 为 `None` 表示在途态，不自动消失。
-    fn set_probe_badge(
-        &mut self,
-        session_id: SessionId,
-        badge: ProbeBadge,
-        ttl: Option<Duration>,
-        cx: &mut Context<Self>,
-    ) {
-        // 先摘掉旧的到期句柄：dropping `Task` 即取消任务，新一批结果必须活满
-        // 自己的 TTL，不能被上一批的定时器抹掉。
-        self.state.tasks.background.probe_expiry.remove(&session_id);
-        self.state.probe_badges.insert(session_id, badge);
-        if let Some(ttl) = ttl {
-            let task = cx.spawn(async move |this, cx| {
-                cx.background_executor().timer(ttl).await;
-                let _ = this.update(cx, |this, cx| {
-                    this.state.probe_badges.remove(&session_id);
-                    this.state.tasks.background.probe_expiry.remove(&session_id);
-                    cx.notify();
-                });
-            });
-            self.state
-                .tasks
-                .background
-                .probe_expiry
-                .insert(session_id, task);
-        }
+/// 派生动作并点亮在途状态点；没有可拨测主机时只给一次提示。
+///
+/// `targets` 传会话 id 而不是会话本体：调用方要先从目录里挑目标，
+/// 借用的目录不能横跨本方法的可变借用。
+fn dispatch_probes(shell: &mut AppShell, targets: &[SessionId], cx: &mut Context<AppShell>) {
+    let requested: HashSet<SessionId> = targets.iter().copied().collect();
+    // 本地 Shell 与串口没有网络地址，派生即落空，静默跳过。
+    let probeable: Vec<HostAction> = shell
+        .state
+        .catalog
+        .sessions
+        .iter()
+        .filter(|session| requested.contains(&session.id))
+        .filter_map(HostAction::probe_for)
+        .collect();
+    if probeable.is_empty() {
+        log::warn!(
+            "批量拨测没有可探测的网络主机，请求会话数: {}",
+            requested.len()
+        );
+        shell.state
+            .set_error(rust_i18n::t!("probe.no_target").to_string());
         cx.notify();
+        return;
     }
+    // 已在途的会话不再重复派发：控制器还没回报就再发一次，只会多占并发额度。
+    let fresh: Vec<HostAction> = probeable
+        .into_iter()
+        .filter(|action| !shell.state.is_probe_pending(action.session_id()))
+        .collect();
+    if fresh.is_empty() {
+        return;
+    }
+    let dispatched: Vec<SessionId> = fresh.iter().map(HostAction::session_id).collect();
+    log::info!("派发批量拨测，目标数: {}", dispatched.len());
+    if !shell
+        .state
+        .send_command(HostCommand::RunHostActions { actions: fresh })
+    {
+        // 命令通道已关闭：不点亮状态点，否则在途态永远等不到回报。
+        return;
+    }
+    for session_id in dispatched {
+        set_probe_badge(shell, session_id, ProbeBadge::Pending, None, cx);
+    }
+}
 
-    /// 渲染会话行尾的状态点；调用方已确认该会话有状态点。
-    pub(crate) fn render_probe_badge(
-        session_id: SessionId,
-        badge: &ProbeBadge,
-        p: &Palette,
-    ) -> AnyElement {
-        // 悬浮样式必须落在带 id 的元素上，否则 GPUI 不分配悬浮状态、悬停不重绘。
-        crate::widgets::status_dot(
-            ElementId::Name(format!("probe-badge-{session_id}").into()),
-            badge.color(p),
-            badge.tooltip(),
-        )
+/// 控制器回报的单条结果：换成带停留时间的结果点，并挂上到期清理任务。
+pub(crate) fn handle_probe_result(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    outcome: HostOutcome,
+    cx: &mut Context<AppShell>,
+) {
+    // tooltip 里带上目标地址：列表里同名会话不少，光说"可达"定位不到是哪台。
+    let target = shell.state.session_target(session_id);
+    let label = shell.state.session_label(session_id);
+    let (badge, ttl) = match outcome {
+        HostOutcome::Reachable { latency_ms } => {
+            // 可达按 `debug` 记：一次分组拨测上百台，逐条 info 会把有意义
+            // 的生命周期日志冲走；不通的那条才值得 warn。
+            log::debug!("拨测可达，会话: {label}，目标: {target}，耗时 {latency_ms} 毫秒");
+            (
+                ProbeBadge::Reachable {
+                    tooltip: format!(
+                        "{target} · {}",
+                        rust_i18n::t!("probe.latency", ms = latency_ms)
+                    )
+                    .into(),
+                },
+                REACHABLE_TTL,
+            )
+        }
+        HostOutcome::Unreachable { error } => {
+            let reason = localized_error(&error);
+            log::warn!("拨测不可达，会话: {label}，目标: {target}，原因: {reason}");
+            (
+                ProbeBadge::Unreachable {
+                    tooltip: format!("{target} · {reason}").into(),
+                },
+                UNREACHABLE_TTL,
+            )
+        }
+    };
+    set_probe_badge(shell, session_id, badge, Some(ttl), cx);
+}
+
+/// 会话名（日志定位用）；查不到时退回 id，保证每条日志都能追到一行记录。
+/// 写入状态点，并按需挂到期任务；`ttl` 为 `None` 表示在途态，不自动消失。
+fn set_probe_badge(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    badge: ProbeBadge,
+    ttl: Option<Duration>,
+    cx: &mut Context<AppShell>,
+) {
+    // 先摘掉旧的到期句柄：dropping `Task` 即取消任务，新一批结果必须活满
+    // 自己的 TTL，不能被上一批的定时器抹掉。
+    shell.state.tasks.background.probe_expiry.remove(&session_id);
+    shell.state.probe_badges.insert(session_id, badge);
+    if let Some(ttl) = ttl {
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(ttl).await;
+            let _ = this.update(cx, |this, cx| {
+                this.state.probe_badges.remove(&session_id);
+                this.state.tasks.background.probe_expiry.remove(&session_id);
+                cx.notify();
+            });
+        });
+        shell.state
+            .tasks
+            .background
+            .probe_expiry
+            .insert(session_id, task);
     }
+    cx.notify();
+}
+
+/// 渲染会话行尾的状态点；调用方已确认该会话有状态点。
+pub(crate) fn render_probe_badge(
+    session_id: SessionId,
+    badge: &ProbeBadge,
+    p: &Palette,
+) -> AnyElement {
+    // 悬浮样式必须落在带 id 的元素上，否则 GPUI 不分配悬浮状态、悬停不重绘。
+    crate::widgets::status_dot(
+        ElementId::Name(format!("probe-badge-{session_id}").into()),
+        badge.color(p),
+        badge.tooltip(),
+    )
 }
 
 /// 会话是否落在指定文件夹（含其所有子文件夹）内。

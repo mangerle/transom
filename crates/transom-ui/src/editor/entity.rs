@@ -251,16 +251,14 @@ impl EditorPanels {
     }
 }
 
-impl AppShell {
-    /// 处理编辑面板发来的意图。
-    ///
-    /// 需要窗口的动作排到渲染期执行：事件派发阶段没有 `Window`。
-    pub(crate) fn on_editor_panel_event(
-        &mut self,
-        event: &EditorPanelEvent,
-        cx: &mut Context<Self>,
-    ) {
-        self.state.window_requests.push_editor(event.clone());
-        cx.notify();
-    }
+/// 处理编辑面板发来的意图。
+///
+/// 需要窗口的动作排到渲染期执行：事件派发阶段没有 `Window`。
+pub(crate) fn on_editor_panel_event(
+    shell: &mut AppShell,
+    event: &EditorPanelEvent,
+    cx: &mut Context<AppShell>,
+) {
+    shell.state.window_requests.push_editor(event.clone());
+    cx.notify();
 }

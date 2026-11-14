@@ -155,7 +155,7 @@ impl AppShell {
             p,
         )
         .on_click(cx.listener(|this, _, window, cx| {
-            this.open_local_terminal(window, cx);
+            crate::connection::open_local_terminal(this, window, cx);
         }))
         .context_menu(move |menu, window, cx| {
             crate::connection::build_local_terminal_menu(
@@ -227,7 +227,7 @@ impl AppShell {
             )
             .on_click(cx.listener(move |this, _, _window, cx| {
                 cx.stop_propagation();
-                this.remove_recent_session(session_id, cx);
+                crate::connection::remove_recent_session(this, session_id, cx);
             }));
 
         let card = empty_card_shell(
@@ -241,7 +241,7 @@ impl AppShell {
         .group("recent-session-card")
         .child(remove_button)
         .on_click(cx.listener(move |this, _, window, cx| {
-            this.connect_session(session_id, window, cx);
+            crate::connection::connect_session(this, session_id, window, cx);
         }))
         .context_menu({
             let app = app_entity.clone();
@@ -253,7 +253,7 @@ impl AppShell {
                     AppIcon::Domain(DomainIcon::TERMINAL),
                     move |_, window, cx| {
                         app_connect.update(cx, |this, cx| {
-                            this.connect_session(session_id, window, cx);
+                            crate::connection::connect_session(this, session_id, window, cx);
                         });
                     },
                 ))
@@ -263,7 +263,7 @@ impl AppShell {
                     AppIcon::Ui(UiIcon::CLOSE),
                     move |_, _window, cx| {
                         app_remove.update(cx, |this, cx| {
-                            this.remove_recent_session(session_id, cx);
+                            crate::connection::remove_recent_session(this, session_id, cx);
                         });
                     },
                 ))

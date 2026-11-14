@@ -10,7 +10,7 @@
 //!   `request_id` 丢弃迟到的结果，避免快速切换仓库时旧数据覆盖新视图。
 
 pub(crate) mod actions;
-mod bottom_log;
+pub(crate) mod bottom_log;
 mod commit_box;
 mod commit_modal;
 mod commit_page;
@@ -19,24 +19,24 @@ mod entity;
 mod form;
 pub(crate) mod graph_paint;
 pub(crate) mod log_view;
-mod name_modal;
-mod project_modal;
+pub(crate) mod name_modal;
+pub(crate) mod project_modal;
 pub(crate) mod push_modal;
-mod rebase_modal;
-mod shelf;
-mod sidebar;
-mod stash;
+pub(crate) mod rebase_modal;
+pub(crate) mod shelf;
+pub(crate) mod sidebar;
+pub(crate) mod stash;
 pub(crate) mod types;
-mod workspace;
+pub(crate) mod workspace;
 pub(crate) mod worktree_modal;
 
-mod clone_modal;
-mod conflict_modal;
+pub(crate) mod clone_modal;
+pub(crate) mod conflict_modal;
 mod dir_browser;
-mod folder_field;
-mod helpers;
-mod patch;
-mod web_link;
+pub(crate) mod folder_field;
+pub(crate) mod helpers;
+pub(crate) mod patch;
+pub(crate) mod web_link;
 
 pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
 pub(crate) use conflict_modal::GitConflictModal;

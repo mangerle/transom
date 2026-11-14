@@ -85,87 +85,74 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    /// 把主远端过滤框的回车动作转发给目标面板实体。
-    ///
-    /// 过滤输入框的订阅创建在外壳上下文，但检索弹窗状态必须由 SFTP 实体
-    /// 依据自身列状态构造；这里只负责定位实体，不复制或回读面板业务数据。
-    pub(crate) fn open_sftp_search_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.open_search_modal(target, window, cx);
-            });
-        }
-    }
-
-    /// 触发执行远程搜索请求。
-    pub(crate) fn sftp_execute_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(ref mut modal) = self.state.sftp_modals.search else {
-            return;
-        };
-        let pattern = modal.input.read(cx).value().trim().to_string();
-        let input = modal.input.clone();
-        if pattern.is_empty() {
-            modal.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
-            input.update(cx, |state, cx| state.focus(window, cx));
-            cx.notify();
-            return;
-        }
-
-        modal.error = None;
-        modal.is_searching = true;
-        modal.results.clear();
-
-        let tab_id = modal.tab_id;
-        let target_connection = modal.connection_id;
-        let query = RemoteSearchQuery {
-            path: modal.root_path.clone(),
-            pattern,
-            is_content: modal.is_content,
-            case_sensitive: modal.case_sensitive,
-            max_depth: Some(10),
-            max_results: 200,
-        };
-
-        log::info!(
-            "发起远程检索请求，路径: {}，模式: {}，是否内容: {}",
-            query.path,
-            query.pattern,
-            query.is_content
-        );
-        let Some(connection_id) = target_connection.or_else(|| {
-            self.state
-                .workspace
-                .tab(tab_id)
-                .and_then(|tab| tab.connection_id)
-        }) else {
-            return;
-        };
-        self.send_sftp_op_for_connection(
-            tab_id,
-            connection_id,
-            SftpOperation::Search { query },
-            cx,
-        );
+/// 触发执行远程搜索请求。
+pub(crate) fn sftp_execute_search(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(ref mut modal) = shell.state.sftp_modals.search else {
+        return;
+    };
+    let pattern = modal.input.read(cx).value().trim().to_string();
+    let input = modal.input.clone();
+    if pattern.is_empty() {
+        modal.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
+        input.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
+        return;
     }
 
-    /// 渲染远程搜索弹窗视图。
-    pub(crate) fn render_sftp_search_body(
-        &self,
-        app: &Entity<AppShell>,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.search.as_ref() else {
-            return div().into_any_element();
-        };
+    modal.error = None;
+    modal.is_searching = true;
+    modal.results.clear();
+
+    let tab_id = modal.tab_id;
+    let target_connection = modal.connection_id;
+    let query = RemoteSearchQuery {
+        path: modal.root_path.clone(),
+        pattern,
+        is_content: modal.is_content,
+        case_sensitive: modal.case_sensitive,
+        max_depth: Some(10),
+        max_results: 200,
+    };
+
+    log::info!(
+        "发起远程检索请求，路径: {}，模式: {}，是否内容: {}",
+        query.path,
+        query.pattern,
+        query.is_content
+    );
+    let Some(connection_id) = target_connection.or_else(|| {
+        shell
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id)
+    }) else {
+        return;
+    };
+    super::remote_actions::send_sftp_op_for_connection(
+        shell,
+        tab_id,
+        connection_id,
+        SftpOperation::Search { query },
+        cx,
+    );
+    cx.notify();
+}
+
+/// 渲染远程搜索弹窗视图。
+pub(crate) fn render_sftp_search_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.search.as_ref() else {
+        return div().into_any_element();
+    };
 
         let is_searching = modal.is_searching;
         let results = modal.results.clone();
@@ -219,7 +206,7 @@ impl AppShell {
                     app,
                     |this, _: &ClickEvent, window, cx| {
                         this.state.sftp_modals.search = None;
-                        this.focus_active_sftp_panel(window, cx);
+                        crate::sftp::focus_active_sftp_panel(this, window, cx);
                         cx.notify();
                     },
                 )),
@@ -232,7 +219,6 @@ impl AppShell {
             content,
             Some(footer),
         )
-    }
 }
 
 /// 检索弹窗头部：根路径、输入框、检索按钮、模式开关与错误提示。
@@ -273,7 +259,7 @@ fn render_search_header(
                         .on_click(crate::dialog_host::on_event(
                             app,
                             |this, _: &ClickEvent, window, cx| {
-                                this.sftp_execute_search(window, cx);
+                                sftp_execute_search(this, window, cx);
                             },
                         )),
                 ),
@@ -385,11 +371,11 @@ fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
                 this.state.sftp_modals.search = None;
                 let dir = parent_remote(&target_path);
                 if let Some(connection_id) = connection_id {
-                    this.request_sftp_list_for_connection(tab_id, connection_id, dir, cx);
+                    crate::sftp::request_sftp_list_for_connection(this, tab_id, connection_id, dir, cx);
                 } else {
-                    this.request_sftp_list(tab_id, dir, cx);
+                    crate::sftp::request_sftp_list(this, tab_id, dir, cx);
                 }
-                this.focus_active_sftp_panel(window, cx);
+                crate::sftp::focus_active_sftp_panel(this, window, cx);
                 cx.notify();
             },
         ));

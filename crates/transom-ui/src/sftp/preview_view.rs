@@ -14,49 +14,47 @@ use gpui_kit::*;
 use std::sync::Arc;
 use transom_ui_icons::{AppIcon, AppIconElement};
 
-impl AppShell {
-    /// 渲染当前活动面板的悬停预览卡片；无预览或仍在延迟期时返回 `None`。
-    pub(crate) fn render_sftp_hover_preview(
-        &self,
-        window: &Window,
-        p: &Palette,
-        cx: &App,
-    ) -> Option<AnyElement> {
-        let tab_id = self.state.workspace.active_tab?;
-        let preview = self.sftp_state(tab_id, cx)?.hover_preview.as_ref()?;
-        if matches!(preview.content, PreviewContent::Pending) {
-            return None;
-        }
-        Some(Self::render_sftp_preview_card(preview, window, p))
+/// 渲染当前活动面板的悬停预览卡片；无预览或仍在延迟期时返回 `None`。
+pub(crate) fn render_sftp_hover_preview(
+    shell: &AppShell,
+    window: &Window,
+    p: &Palette,
+    cx: &App,
+) -> Option<AnyElement> {
+    let tab_id = shell.state.workspace.active_tab?;
+    let preview = crate::sftp::sftp_state(shell, tab_id, cx)?.hover_preview.as_ref()?;
+    if matches!(preview.content, PreviewContent::Pending) {
+        return None;
     }
+    Some(render_sftp_preview_card(preview, window, p))
+}
 
-    fn render_sftp_preview_card(
-        preview: &SftpPreviewState,
-        window: &Window,
-        p: &Palette,
-    ) -> AnyElement {
-        let (left, top) = preview_card_position(preview, window);
-        let header = preview_card_header(preview, p);
-        let body = preview_card_body(preview, p);
+fn render_sftp_preview_card(
+    preview: &SftpPreviewState,
+    window: &Window,
+    p: &Palette,
+) -> AnyElement {
+    let (left, top) = preview_card_position(preview, window);
+    let header = preview_card_header(preview, p);
+    let body = preview_card_body(preview, p);
 
-        v_flex()
-            .absolute()
-            .left(px(left))
-            .top(px(top))
-            .w(px(PREVIEW_CARD_WIDTH))
-            .gap_2()
-            .p_3()
-            .rounded(p.radius.none)
-            .border_1()
-            .border_color(p.border)
-            .bg(p.popover)
-            .text_color(p.popover_foreground)
-            .shadow_2xl()
-            .overflow_hidden()
-            .child(header)
-            .child(body)
-            .into_any_element()
-    }
+    v_flex()
+        .absolute()
+        .left(px(left))
+        .top(px(top))
+        .w(px(PREVIEW_CARD_WIDTH))
+        .gap_2()
+        .p_3()
+        .rounded(p.radius.none)
+        .border_1()
+        .border_color(p.border)
+        .bg(p.popover)
+        .text_color(p.popover_foreground)
+        .shadow_2xl()
+        .overflow_hidden()
+        .child(header)
+        .child(body)
+        .into_any_element()
 }
 
 /// 计算卡片左上角坐标：默认落在鼠标右下方，靠近窗口边缘时翻转到另一侧。

@@ -5,7 +5,11 @@
 //! - 核心优势：集中封装向底层通信通道投递 SftpOperation 的接口，保障状态同步一致性。
 
 mod init;
+pub(crate) use init::{
+    attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp, toggle_sftp,
+};
 mod local_nav;
+pub(crate) use local_nav::{sftp_local_enter_path, sftp_local_refresh};
 
 use super::entity::SftpPanelView;
 use super::{SftpRemotePaneRef, normalize_local_cwd, normalize_remote_cwd};
@@ -146,85 +150,83 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    pub(crate) fn request_sftp_list_pane(
-        &mut self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        path: String,
-        cx: &mut Context<Self>,
-    ) {
-        // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
-        let Some(main_connection) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id)
-        else {
-            return;
-        };
-        let Some(view) = self.state.sftp_view(tab_id) else {
-            return;
-        };
-        let Some(connection_id) = view.update(cx, |view, _| {
-            view.prepare_remote_list(target, main_connection)
-        }) else {
-            return;
-        };
-        self.dismiss_sftp_hover_preview(tab_id, cx);
-        self.state.send_command(SftpCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id: TransferId::new(),
-            op: SftpOperation::List { path },
-        });
-        cx.notify();
-    }
+pub(crate) fn request_sftp_list_pane(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    target: SftpRemotePaneRef,
+    path: String,
+    cx: &mut Context<AppShell>,
+) {
+    // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
+    let Some(main_connection) = shell
+        .state
+        .workspace
+        .tab(tab_id)
+        .and_then(|tab| tab.connection_id)
+    else {
+        return;
+    };
+    let Some(view) = shell.state.sftp_view(tab_id) else {
+        return;
+    };
+    let Some(connection_id) = view.update(cx, |view, _| {
+        view.prepare_remote_list(target, main_connection)
+    }) else {
+        return;
+    };
+    crate::sftp::dismiss_sftp_hover_preview(shell, tab_id, cx);
+    shell.state.send_command(SftpCommand::Sftp {
+        tab_id,
+        connection_id,
+        op_id: TransferId::new(),
+        op: SftpOperation::List { path },
+    });
+    cx.notify();
+}
 
-    pub(crate) fn request_sftp_list(
-        &mut self,
-        tab_id: TabId,
-        path: String,
-        cx: &mut Context<Self>,
-    ) {
-        // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
-        let Some(main_connection) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id)
-        else {
-            return;
-        };
-        let Some(view) = self.state.sftp_view(tab_id) else {
-            return;
-        };
-        let Some(connection_id) = view.update(cx, |view, _| {
-            view.prepare_remote_list(SftpRemotePaneRef::Main, main_connection)
-        }) else {
-            return;
-        };
-        self.dismiss_sftp_hover_preview(tab_id, cx);
-        self.state.send_command(SftpCommand::Sftp {
-            tab_id,
-            connection_id,
-            op_id: TransferId::new(),
-            op: SftpOperation::List { path },
-        });
-        cx.notify();
-    }
+pub(crate) fn request_sftp_list(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    path: String,
+    cx: &mut Context<AppShell>,
+) {
+    // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
+    let Some(main_connection) = shell
+        .state
+        .workspace
+        .tab(tab_id)
+        .and_then(|tab| tab.connection_id)
+    else {
+        return;
+    };
+    let Some(view) = shell.state.sftp_view(tab_id) else {
+        return;
+    };
+    let Some(connection_id) = view.update(cx, |view, _| {
+        view.prepare_remote_list(SftpRemotePaneRef::Main, main_connection)
+    }) else {
+        return;
+    };
+    crate::sftp::dismiss_sftp_hover_preview(shell, tab_id, cx);
+    shell.state.send_command(SftpCommand::Sftp {
+        tab_id,
+        connection_id,
+        op_id: TransferId::new(),
+        op: SftpOperation::List { path },
+    });
+    cx.notify();
+}
 
-    pub(crate) fn sftp_sync_with_terminal_cwd(
-        &mut self,
-        tab_id: TabId,
-        cwd: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.sync_with_terminal_cwd(tab_id, cwd, window, cx)
-            });
-        }
+pub(crate) fn sftp_sync_with_terminal_cwd(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    cwd: &str,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| {
+            view.sync_with_terminal_cwd(tab_id, cwd, window, cx)
+        });
     }
 }

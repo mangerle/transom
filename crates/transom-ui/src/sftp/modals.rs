@@ -11,4 +11,9 @@ mod input;
 mod properties;
 mod state;
 
+pub(crate) use chmod::render_sftp_chmod_body;
+pub(crate) use confirm::render_sftp_confirm_body;
+pub(crate) use filter::render_sftp_filter_body;
+pub(crate) use input::render_sftp_input_body;
+pub(crate) use properties::render_sftp_properties_body;
 pub(crate) use state::*;

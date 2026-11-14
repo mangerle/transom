@@ -68,113 +68,111 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    pub(crate) fn sftp_open_sync_modal(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.open_sync_modal(cx));
-        }
+pub(crate) fn sftp_open_sync_modal(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.open_sync_modal(cx));
     }
+}
 
-    pub(crate) fn sftp_toggle_sync_entry(
-        &mut self,
-        index: usize,
-        checked: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(modal) = self.state.sftp_modals.sync.as_mut() else {
-            return;
-        };
-        let Some(entry) = modal.entries.get(index) else {
-            return;
-        };
-        if checked && entry.sync_item().is_none() {
-            return;
-        }
+pub(crate) fn sftp_toggle_sync_entry(
+    shell: &mut AppShell,
+    index: usize,
+    checked: bool,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(modal) = shell.state.sftp_modals.sync.as_mut() else {
+        return;
+    };
+    let Some(entry) = modal.entries.get(index) else {
+        return;
+    };
+    if checked && entry.sync_item().is_none() {
+        return;
+    }
+    if let Some(slot) = modal.selected.get_mut(index) {
+        *slot = checked;
+        cx.notify();
+    }
+}
+
+/// 全选/全不选可同步项；类型冲突始终保持不可选。
+pub(crate) fn sftp_select_all_sync(shell: &mut AppShell, selected: bool, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.sftp_modals.sync.as_mut() else {
+        return;
+    };
+    for (index, entry) in modal.entries.iter().enumerate() {
         if let Some(slot) = modal.selected.get_mut(index) {
-            *slot = checked;
-            cx.notify();
+            *slot = selected && entry.sync_item().is_some();
         }
     }
+    cx.notify();
+}
 
-    /// 全选/全不选可同步项；类型冲突始终保持不可选。
-    pub(crate) fn sftp_select_all_sync(&mut self, selected: bool, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.sftp_modals.sync.as_mut() else {
-            return;
-        };
-        for (index, entry) in modal.entries.iter().enumerate() {
-            if let Some(slot) = modal.selected.get_mut(index) {
-                *slot = selected && entry.sync_item().is_some();
+/// 将勾选的差异项打包成一个同步任务入队并启动队列。
+pub(crate) fn start_sftp_sync(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    let verify = app_settings(cx).sftp.verify_after_transfer;
+    let Some(mut modal) = shell.state.sftp_modals.sync.take() else {
+        return;
+    };
+    if modal.scanning || modal.error.is_some() {
+        shell.state.sftp_modals.sync = Some(modal);
+        return;
+    }
+    let tab_id = modal.tab_id;
+    let mut upload_count = 0u32;
+    let mut download_count = 0u32;
+    let mut total_size = 0u64;
+    let items = modal
+        .entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            if !modal.selected.get(index).copied().unwrap_or(false) {
+                return None;
             }
-        }
+            let item = entry.sync_item()?;
+            match item.direction {
+                SyncDirection::Upload => upload_count = upload_count.saturating_add(1),
+                SyncDirection::Download => download_count = download_count.saturating_add(1),
+            }
+            if !item.is_dir {
+                total_size = total_size.saturating_add(item.size);
+            }
+            Some(item)
+        })
+        .collect::<Vec<_>>();
+
+    if items.is_empty() {
+        modal.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
+        shell.state.sftp_modals.sync = Some(modal);
         cx.notify();
+        return;
     }
 
-    /// 将勾选的差异项打包成一个同步任务入队并启动队列。
-    pub(crate) fn start_sftp_sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let verify = app_settings(cx).sftp.verify_after_transfer;
-        let Some(mut modal) = self.state.sftp_modals.sync.take() else {
-            return;
-        };
-        if modal.scanning || modal.error.is_some() {
-            self.state.sftp_modals.sync = Some(modal);
-            return;
-        }
-        let tab_id = modal.tab_id;
-        let mut upload_count = 0u32;
-        let mut download_count = 0u32;
-        let mut total_size = 0u64;
-        let items = modal
-            .entries
-            .iter()
-            .enumerate()
-            .filter_map(|(index, entry)| {
-                if !modal.selected.get(index).copied().unwrap_or(false) {
-                    return None;
-                }
-                let item = entry.sync_item()?;
-                match item.direction {
-                    SyncDirection::Upload => upload_count = upload_count.saturating_add(1),
-                    SyncDirection::Download => download_count = download_count.saturating_add(1),
-                }
-                if !item.is_dir {
-                    total_size = total_size.saturating_add(item.size);
-                }
-                Some(item)
-            })
-            .collect::<Vec<_>>();
-
-        if items.is_empty() {
-            modal.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
-            self.state.sftp_modals.sync = Some(modal);
-            cx.notify();
-            return;
-        }
-
-        let mut task = TransferTask::new_sync(
-            modal.local_root.clone(),
-            modal.remote_root.clone(),
-            items,
-            Some(total_size),
+    let mut task = TransferTask::new_sync(
+        modal.local_root.clone(),
+        modal.remote_root.clone(),
+        items,
+        Some(total_size),
+    );
+    task.verify = VerifyOptions {
+        enabled: verify,
+        mode: app_settings(cx).sftp.verify_mode,
+        algorithm: app_settings(cx).sftp.checksum_algorithm,
+    };
+    task.target_connection_id = Some(modal.connection_id);
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+        panel.state.queue.tasks.push(task);
+        panel.state.set_status(
+            rust_i18n::t!(
+                "sftp.nav.sync_queued",
+                upload = upload_count,
+                download = download_count
+            )
+            .to_string(),
         );
-        task.verify = VerifyOptions {
-            enabled: verify,
-            mode: app_settings(cx).sftp.verify_mode,
-            algorithm: app_settings(cx).sftp.checksum_algorithm,
-        };
-        task.target_connection_id = Some(modal.connection_id);
-        if let Some(mut panel) = self.sftp_view_mut(tab_id, cx) {
-            panel.state.queue.tasks.push(task);
-            panel.state.set_status(
-                rust_i18n::t!(
-                    "sftp.nav.sync_queued",
-                    upload = upload_count,
-                    download = download_count
-                )
-                .to_string(),
-            );
-        }
-        self.focus_active_sftp_panel(window, cx);
-        cx.notify();
-        self.process_sftp_queue(tab_id, cx);
     }
+    crate::sftp::focus_active_sftp_panel(shell, window, cx);
+    cx.notify();
+    crate::sftp::process_sftp_queue(shell, tab_id, cx);
 }

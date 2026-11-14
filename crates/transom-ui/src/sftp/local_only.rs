@@ -24,98 +24,96 @@ use transom_core::Connection;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    pub(crate) fn open_local_file_panel(
-        &mut self,
-        index: usize,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab) = self.state.workspace.tabs.get(index) else {
-            return;
-        };
-        let tab_id = tab.id;
-        let quick_paths = LocalQuickPaths::resolve();
-        // 终端上报过 OSC 7 就从当前 shell 目录打开；否则依次回落到会话配置的
-        // 工作目录、Home、下载目录。本地终端默认从 Home 启动，把下载目录排在
-        // 前面会让面板与终端看起来完全无关。
-        let local_path = initial_local_path(tab, &quick_paths);
-        log::info!(
-            "打开本地文件面板，窗格: {tab_id}，初始目录: {}，终端 cwd: {:?}",
-            local_path.display(),
-            tab.cwd
-        );
-        let inputs = LocalPanelInputs::new(window, cx, &local_path);
-        let local_enter_sub = cx.subscribe_in(
-            &inputs.local_path_input,
-            window,
-            move |this, _, event: &InputEvent, window, cx| {
-                if matches!(event, InputEvent::PressEnter { .. }) {
-                    this.sftp_local_enter_path(tab_id, window, cx);
-                }
-            },
-        );
+pub(crate) fn open_local_file_panel(
+    shell: &mut AppShell,
+    index: usize,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(tab) = shell.state.workspace.tabs.get(index) else {
+        return;
+    };
+    let tab_id = tab.id;
+    let quick_paths = LocalQuickPaths::resolve();
+    // 终端上报过 OSC 7 就从当前 shell 目录打开；否则依次回落到会话配置的
+    // 工作目录、Home、下载目录。本地终端默认从 Home 启动，把下载目录排在
+    // 前面会让面板与终端看起来完全无关。
+    let local_path = initial_local_path(tab, &quick_paths);
+    log::info!(
+        "打开本地文件面板，窗格: {tab_id}，初始目录: {}，终端 cwd: {:?}",
+        local_path.display(),
+        tab.cwd
+    );
+    let inputs = LocalPanelInputs::new(window, cx, &local_path);
+    let local_enter_sub = cx.subscribe_in(
+        &inputs.local_path_input,
+        window,
+        move |this, _, event: &InputEvent, window, cx| {
+            if matches!(event, InputEvent::PressEnter { .. }) {
+                crate::sftp::sftp_local_enter_path(this, tab_id, window, cx);
+            }
+        },
+    );
 
-        // 主连接与命令通道在挂载之前取好：面板之后自己解析目标列与投递命令。
-        let main_connection = self.state.workspace.tabs[index].connection_id;
-        let command_tx = Some(self.state.services.command_tx.clone());
-        let state = SftpPanelState {
-            main_connection,
-            command_tx,
-            editors: Some(self.state.editors.clone()),
-            mount_candidates: Vec::new(),
-            open: true,
-            remote: SftpRemotePaneState::new_main(
-                String::new(),
-                inputs.path_input,
-                inputs.name_input,
-                inputs.remote_filter_input,
-                false,
-            ),
-            local: SftpLocalPaneState::new(SftpLocalPaneInit {
-                path: local_path,
-                path_input: inputs.local_path_input,
-                filter_input: inputs.local_filter_input,
-                quick_paths,
-                only: true,
-                error: None,
-            }),
-            queue: SftpQueueState {
-                tasks: Vec::new(),
-                active_transfers: HashSet::new(),
-                progress: None,
-                resume_enabled: true,
-                expanded: false,
-                height: 160.0,
-                drag_start_y: None,
-                drag_start_height: 160.0,
-                status: None,
-                error: None,
-                status_task: None,
-                error_task: None,
-                drop_overlay: DropOverlayState::default(),
-            },
-            side_remotes: Vec::new(),
-            clipboard: None,
-            mount_menu_open: false,
-            sync_navigation: false,
-            active_pane: SftpActivePane::Local,
-            focus_handle: cx.focus_handle(),
-            hover_preview: None,
-            column_state: cx.new(|_| ResizableState::default()),
-            column_widths: ColumnWidthMemory::default(),
-            pending_width_adjustment: None,
-            _subscriptions: vec![local_enter_sub],
-        };
-        // 本地单栏与 SSH 双栏共用挂载入口：创建实体、登记事件订阅与挂到
-        // 窗格三者必须成对，否则关闭、新建、删除确认等意图会被静默丢弃。
-        if !self.attach_sftp_panel_view(tab_id, index, state, cx) {
-            return;
-        }
-        // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
-        self.spawn_local_dir_refresh(tab_id, None, cx);
-        cx.notify();
+    // 主连接与命令通道在挂载之前取好：面板之后自己解析目标列与投递命令。
+    let main_connection = shell.state.workspace.tabs[index].connection_id;
+    let command_tx = Some(shell.state.services.command_tx.clone());
+    let state = SftpPanelState {
+        main_connection,
+        command_tx,
+        editors: Some(shell.state.editors.clone()),
+        mount_candidates: Vec::new(),
+        open: true,
+        remote: SftpRemotePaneState::new_main(
+            String::new(),
+            inputs.path_input,
+            inputs.name_input,
+            inputs.remote_filter_input,
+            false,
+        ),
+        local: SftpLocalPaneState::new(SftpLocalPaneInit {
+            path: local_path,
+            path_input: inputs.local_path_input,
+            filter_input: inputs.local_filter_input,
+            quick_paths,
+            only: true,
+            error: None,
+        }),
+        queue: SftpQueueState {
+            tasks: Vec::new(),
+            active_transfers: HashSet::new(),
+            progress: None,
+            resume_enabled: true,
+            expanded: false,
+            height: 160.0,
+            drag_start_y: None,
+            drag_start_height: 160.0,
+            status: None,
+            error: None,
+            status_task: None,
+            error_task: None,
+            drop_overlay: DropOverlayState::default(),
+        },
+        side_remotes: Vec::new(),
+        clipboard: None,
+        mount_menu_open: false,
+        sync_navigation: false,
+        active_pane: SftpActivePane::Local,
+        focus_handle: cx.focus_handle(),
+        hover_preview: None,
+        column_state: cx.new(|_| ResizableState::default()),
+        column_widths: ColumnWidthMemory::default(),
+        pending_width_adjustment: None,
+        _subscriptions: vec![local_enter_sub],
+    };
+    // 本地单栏与 SSH 双栏共用挂载入口：创建实体、登记事件订阅与挂到
+    // 窗格三者必须成对，否则关闭、新建、删除确认等意图会被静默丢弃。
+    if !crate::sftp::attach_sftp_panel_view(shell, tab_id, index, state, cx) {
+        return;
     }
+    // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
+    crate::sftp::spawn_local_dir_refresh(shell, tab_id, None, cx);
+    cx.notify();
 }
 
 impl SftpPanelView {

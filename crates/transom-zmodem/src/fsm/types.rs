@@ -1,9 +1,9 @@
 //! ZMODEM 状态机会话阶段与通道契约定义。
 
 use std::io::Write;
+use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 use transom_core::ZmodemEvent;
 

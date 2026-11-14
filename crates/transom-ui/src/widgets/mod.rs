@@ -1,56 +1,21 @@
-//! 应用级表现层组件。
-//!
-//! # 设计原理（Why）
-//! - 组件只接收数据与回调，不依赖 `AppShell`、不直接读写 store；渲染函数可以
-//!   在任意视图、测试与弹窗中复用；
-//! - 视觉语义集中在这里：按钮尺寸、危险确认、设置行、空状态与菜单项的默认
-//!   样式只有一份，页面不再各自拼一套；
-//! - 底层优先复用 `gpui-kit` 的 `Button`、`Dialog`、`Empty` 等组件，应用层只做
-//!   组合与业务语义，不重写焦点、键盘与弹层行为。
-//!
-//! # 代价与局限
-//! - 组件为了避免依赖 `AppShell`，回调统一接收 GPUI 的 `&ClickEvent` /
-//!   `&mut Window` / `&mut App`，调用方需要自己完成 `app.update` 或
-//!   `dialog_host::on_event` 适配；
-//! - 这里只收纳稳定、跨页面复用的结构；仅一处使用的布局仍留在页面内，避免
-//!   为了“组件化”制造一次性抽象。
+//! 应用级表现层组件重导出：无状态基础组件已剥离至 `transom-ui-kit`。
 
-mod button;
-mod checkbox_row;
-mod controls;
-mod dialog;
-mod empty;
-mod form;
-mod list_row;
-mod menu;
-mod notice;
-mod panel_header;
-mod sidebar_row;
-mod status;
-mod switch_card;
-mod tab_bar;
-mod toolbar;
+pub(crate) use transom_ui_kit::widgets::*;
 
-pub(crate) use button::{
-    DialogConfirmKind, IconButton, IconButtonSize, action_button, action_button_with_icon_tint,
-    dialog_cancel_button, dialog_confirm_button,
-};
-pub(crate) use checkbox_row::checkbox_field_row;
-pub(crate) use controls::{dropdown, number_stepper, path_value};
-pub(crate) use dialog::{dialog_actions, dialog_body};
-pub(crate) use empty::empty_state;
-pub(crate) use form::{
-    form_field, secret_field, setting_field_row, setting_frame, setting_row,
-    setting_text_row_with_extra,
-};
-pub(crate) use list_row::{list_row, table_header};
-pub(crate) use menu::{MenuItem, menu_item};
-pub(crate) use notice::{NoticeKind, notice};
-pub(crate) use panel_header::PanelHeader;
-pub(crate) use sidebar_row::{
-    SidebarRowState, sidebar_group_row_band, sidebar_list_frame, sidebar_row_band,
-};
-pub(crate) use status::{progress_bar, status_badge, status_dot, status_dot_bare};
-pub(crate) use switch_card::{SwitchCardProps, switch_card};
-pub(crate) use tab_bar::{underline_tab_active_line, underline_tab_bar_line};
-pub(crate) use toolbar::{toolbar, toolbar_separator};
+use crate::palette::Palette;
+use gpui_kit::AnyElement;
+
+/// Zed 风格设置行（按国际化键翻译标题与说明）。
+pub(crate) fn setting_row(
+    title_key: &'static str,
+    description_key: Option<&'static str>,
+    control: AnyElement,
+    p: &Palette,
+) -> AnyElement {
+    transom_ui_kit::widgets::setting_text_row(
+        rust_i18n::t!(title_key).to_string(),
+        description_key.map(|key| rust_i18n::t!(key).to_string()),
+        control,
+        p,
+    )
+}

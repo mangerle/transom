@@ -88,25 +88,3 @@ impl ContainerWorkspace {
         true
     }
 }
-
-impl AppShell {
-    /// 处理 Quadlet 列表响应：按请求 id 找到所属标签页并写回实体。
-    pub(super) fn on_container_quadlets_listed(
-        &mut self,
-        request_id: ContainerRequestId,
-        units: Vec<transom_core::ContainerQuadletUnit>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
-            return;
-        };
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            let applied = workspace.update(cx, |workspace, _| {
-                workspace.apply_quadlets_listed(request_id, units)
-            });
-            if applied {
-                cx.notify();
-            }
-        }
-    }
-}

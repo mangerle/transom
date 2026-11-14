@@ -54,295 +54,299 @@ impl GitConflictModal {
     }
 }
 
-impl AppShell {
-    /// 打开冲突解决模态框。
-    pub(crate) fn open_git_conflict_modal(&mut self, project: &GitProject, cx: &mut Context<Self>) {
-        let conflict_files: Vec<String> = self
-            .state
-            .git_workspace_of_project(project.id, cx)
-            .and_then(|workspace| {
-                workspace.read(cx).state.status.as_ref().map(|status| {
-                    status
-                        .conflicts()
-                        .into_iter()
-                        .map(|e| e.path.clone())
-                        .collect()
-                })
+/// 打开冲突解决模态框。
+pub(crate) fn open_git_conflict_modal(
+    shell: &mut AppShell,
+    project: &GitProject,
+    cx: &mut Context<AppShell>,
+) {
+    let conflict_files: Vec<String> = shell
+        .state
+        .git_workspace_of_project(project.id, cx)
+        .and_then(|workspace| {
+            workspace.read(cx).state.status.as_ref().map(|status| {
+                status
+                    .conflicts()
+                    .into_iter()
+                    .map(|e| e.path.clone())
+                    .collect()
             })
-            .unwrap_or_default();
+        })
+        .unwrap_or_default();
 
-        if conflict_files.is_empty() {
-            return;
-        }
-
-        let first_file = conflict_files[0].clone();
-        self.state.modals.git.conflict =
-            Some(GitConflictModal::new(project.clone(), conflict_files));
-
-        let request_id = GitRequestId::new();
-        self.send_command(GitCommand::LoadConflictSides {
-            project: project.clone(),
-            request_id,
-            path: first_file,
-        });
-        cx.notify();
+    if conflict_files.is_empty() {
+        return;
     }
 
-    /// 关闭冲突解决模态框。
-    pub(crate) fn close_git_conflict_modal(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.git.conflict = None;
-        cx.notify();
+    let first_file = conflict_files[0].clone();
+    shell.state.modals.git.conflict =
+        Some(GitConflictModal::new(project.clone(), conflict_files));
+
+    let request_id = GitRequestId::new();
+    shell.send_command(GitCommand::LoadConflictSides {
+        project: project.clone(),
+        request_id,
+        path: first_file,
+    });
+    cx.notify();
+}
+
+/// 关闭冲突解决模态框。
+pub(crate) fn close_git_conflict_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    shell.state.modals.git.conflict = None;
+    cx.notify();
+}
+
+/// 切换当前选中的冲突文件并拉取其三方内容。
+pub(super) fn git_conflict_select_file(
+    shell: &mut AppShell,
+    index: usize,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(modal) = shell.state.modals.git.conflict.as_mut() else {
+        return;
+    };
+    if index >= modal.files.len() || modal.selected_index == index {
+        return;
     }
+    modal.selected_index = index;
+    modal.loading = true;
+    modal.error = None;
+    let file = modal.files[index].clone();
+    let project = modal.project.clone();
+    let request_id = GitRequestId::new();
+    shell.send_command(GitCommand::LoadConflictSides {
+        project,
+        request_id,
+        path: file,
+    });
+    cx.notify();
+}
 
-    /// 切换当前选中的冲突文件并拉取其三方内容。
-    pub(crate) fn git_conflict_select_file(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.conflict.as_mut() else {
-            return;
-        };
-        if index >= modal.files.len() || modal.selected_index == index {
-            return;
-        }
-        modal.selected_index = index;
-        modal.loading = true;
-        modal.error = None;
-        let file = modal.files[index].clone();
-        let project = modal.project.clone();
-        let request_id = GitRequestId::new();
-        self.send_command(GitCommand::LoadConflictSides {
-            project,
-            request_id,
-            path: file,
-        });
-        cx.notify();
-    }
+/// 解决冲突：接受本地/当前版本。
+fn git_conflict_resolve_ours(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.conflict.as_mut() else {
+        return;
+    };
+    let Some(path) = modal.active_file().map(|s| s.to_string()) else {
+        return;
+    };
+    modal.resolving = true;
+    let project = modal.project.clone();
+    shell.send_command(GitCommand::ResolveConflictOurs {
+        project,
+        paths: vec![path],
+    });
+    cx.notify();
+}
 
-    /// 解决冲突：接受本地/当前版本。
-    pub(crate) fn git_conflict_resolve_ours(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.conflict.as_mut() else {
-            return;
-        };
-        let Some(path) = modal.active_file().map(|s| s.to_string()) else {
-            return;
-        };
-        modal.resolving = true;
-        let project = modal.project.clone();
-        self.send_command(GitCommand::ResolveConflictOurs {
-            project,
-            paths: vec![path],
-        });
-        cx.notify();
-    }
+/// 解决冲突：接受传入版本。
+fn git_conflict_resolve_theirs(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.conflict.as_mut() else {
+        return;
+    };
+    let Some(path) = modal.active_file().map(|s| s.to_string()) else {
+        return;
+    };
+    modal.resolving = true;
+    let project = modal.project.clone();
+    shell.send_command(GitCommand::ResolveConflictTheirs {
+        project,
+        paths: vec![path],
+    });
+    cx.notify();
+}
 
-    /// 解决冲突：接受传入版本。
-    pub(crate) fn git_conflict_resolve_theirs(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.conflict.as_mut() else {
-            return;
-        };
-        let Some(path) = modal.active_file().map(|s| s.to_string()) else {
-            return;
-        };
-        modal.resolving = true;
-        let project = modal.project.clone();
-        self.send_command(GitCommand::ResolveConflictTheirs {
-            project,
-            paths: vec![path],
-        });
-        cx.notify();
-    }
+/// 解决冲突：标记为已手动解决。
+fn git_conflict_mark_resolved(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.conflict.as_mut() else {
+        return;
+    };
+    let Some(path) = modal.active_file().map(|s| s.to_string()) else {
+        return;
+    };
+    modal.resolving = true;
+    let project = modal.project.clone();
+    shell.send_command(GitCommand::ResolveConflictMark {
+        project,
+        paths: vec![path],
+    });
+    cx.notify();
+}
 
-    /// 解决冲突：标记为已手动解决。
-    pub(crate) fn git_conflict_mark_resolved(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.conflict.as_mut() else {
-            return;
-        };
-        let Some(path) = modal.active_file().map(|s| s.to_string()) else {
-            return;
-        };
-        modal.resolving = true;
-        let project = modal.project.clone();
-        self.send_command(GitCommand::ResolveConflictMark {
-            project,
-            paths: vec![path],
-        });
-        cx.notify();
-    }
+/// 渲染冲突解决弹窗主体。
+pub(crate) fn render_git_conflict_dialog_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _window: &mut Window,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.modals.git.conflict.as_ref() else {
+        return div().into_any_element();
+    };
 
-    /// 渲染冲突解决弹窗主体。
-    pub(crate) fn render_git_conflict_dialog_body(
-        &self,
-        app: &Entity<Self>,
-        _window: &mut Window,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.modals.git.conflict.as_ref() else {
-            return div().into_any_element();
-        };
+    let file_count = modal.files.len();
+    let selected_idx = modal.selected_index;
 
-        let file_count = modal.files.len();
-        let selected_idx = modal.selected_index;
+    let header = render_conflict_header(modal, file_count, selected_idx, p);
+    let toolbar = render_conflict_toolbar(modal, app, p);
+    let body = panels::render_conflict_body(modal, app, p);
+    let footer = render_conflict_footer(app, p);
 
-        let header = self.render_conflict_header(modal, file_count, selected_idx, p);
-        let toolbar = self.render_conflict_toolbar(modal, app, p);
-        let body = self.render_conflict_body(modal, app, p);
-        let footer = self.render_conflict_footer(app, p);
+    v_flex()
+        .w_full()
+        .h(px(520.0))
+        .bg(p.background)
+        .child(header)
+        .child(toolbar)
+        .child(body)
+        .child(footer)
+        .into_any_element()
+}
 
-        v_flex()
-            .w_full()
-            .h(px(520.0))
-            .bg(p.background)
-            .child(header)
-            .child(toolbar)
-            .child(body)
-            .child(footer)
-            .into_any_element()
-    }
+fn render_conflict_header(
+    modal: &GitConflictModal,
+    file_count: usize,
+    selected_idx: usize,
+    p: &Palette,
+) -> Div {
+    h_flex()
+        .w_full()
+        .h(px(32.0))
+        .flex_none()
+        .px_3()
+        .items_center()
+        .justify_between()
+        .bg(p.list_head)
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::MERGE))
+                        .small()
+                        .text_color(p.warning),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(rust_i18n::t!("git.conflict.title").to_string()),
+                )
+                .child(div().text_xs().text_color(p.muted).child(format!(
+                    "({}/{})",
+                    selected_idx + 1,
+                    file_count
+                ))),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted)
+                .child(modal.active_file().unwrap_or("").to_string()),
+        )
+}
 
-    fn render_conflict_header(
-        &self,
-        modal: &GitConflictModal,
-        file_count: usize,
-        selected_idx: usize,
-        p: &Palette,
-    ) -> Div {
-        h_flex()
-            .w_full()
-            .h(px(32.0))
-            .flex_none()
-            .px_3()
-            .items_center()
-            .justify_between()
-            .bg(p.list_head)
-            .border_b_1()
-            .border_color(p.divider(p.border))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        AppIconElement::new(AppIcon::Ui(UiIcon::MERGE))
-                            .small()
-                            .text_color(p.warning),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.foreground)
-                            .child(rust_i18n::t!("git.conflict.title").to_string()),
-                    )
-                    .child(div().text_xs().text_color(p.muted).child(format!(
-                        "({}/{})",
-                        selected_idx + 1,
-                        file_count
-                    ))),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted)
-                    .child(modal.active_file().unwrap_or("").to_string()),
-            )
-    }
+fn render_conflict_toolbar(
+    modal: &GitConflictModal,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> Div {
+    let app_ours = app.clone();
+    let app_theirs = app.clone();
+    let app_mark = app.clone();
+    let is_busy = modal.resolving || modal.loading;
 
-    fn render_conflict_toolbar(
-        &self,
-        modal: &GitConflictModal,
-        app: &Entity<Self>,
-        p: &Palette,
-    ) -> Div {
-        let app_ours = app.clone();
-        let app_theirs = app.clone();
-        let app_mark = app.clone();
-        let is_busy = modal.resolving || modal.loading;
+    h_flex()
+        .w_full()
+        .h(px(32.0))
+        .flex_none()
+        .px_3()
+        .gap_2()
+        .items_center()
+        .justify_between()
+        .bg(p.background)
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    Button::new("btn-resolve-ours")
+                        .outline()
+                        .xsmall()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
+                        .label(rust_i18n::t!("git.conflict.accept_ours").to_string())
+                        .disabled(is_busy)
+                        .on_click(move |_, _, cx| {
+                            app_ours.update(cx, |this, cx| git_conflict_resolve_ours(this, cx));
+                        }),
+                )
+                .child(
+                    Button::new("btn-resolve-theirs")
+                        .outline()
+                        .xsmall()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
+                        .label(rust_i18n::t!("git.conflict.accept_theirs").to_string())
+                        .disabled(is_busy)
+                        .on_click(move |_, _, cx| {
+                            app_theirs
+                                .update(cx, |this, cx| git_conflict_resolve_theirs(this, cx));
+                        }),
+                )
+                .child(
+                    Button::new("btn-mark-resolved")
+                        .ghost()
+                        .xsmall()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
+                        .label(rust_i18n::t!("git.conflict.mark_resolved").to_string())
+                        .disabled(is_busy)
+                        .on_click(move |_, _, cx| {
+                            app_mark.update(cx, |this, cx| git_conflict_mark_resolved(this, cx));
+                        }),
+                ),
+        )
+        .child(if modal.resolving {
+            div()
+                .text_xs()
+                .text_color(p.primary)
+                .child(rust_i18n::t!("git.conflict.resolving").to_string())
+        } else {
+            div()
+        })
+}
 
-        h_flex()
-            .w_full()
-            .h(px(32.0))
-            .flex_none()
-            .px_3()
-            .gap_2()
-            .items_center()
-            .justify_between()
-            .bg(p.background)
-            .border_b_1()
-            .border_color(p.divider(p.border))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        Button::new("btn-resolve-ours")
-                            .outline()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
-                            .label(rust_i18n::t!("git.conflict.accept_ours").to_string())
-                            .disabled(is_busy)
-                            .on_click(move |_, _, cx| {
-                                app_ours.update(cx, |this, cx| this.git_conflict_resolve_ours(cx));
-                            }),
-                    )
-                    .child(
-                        Button::new("btn-resolve-theirs")
-                            .outline()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
-                            .label(rust_i18n::t!("git.conflict.accept_theirs").to_string())
-                            .disabled(is_busy)
-                            .on_click(move |_, _, cx| {
-                                app_theirs
-                                    .update(cx, |this, cx| this.git_conflict_resolve_theirs(cx));
-                            }),
-                    )
-                    .child(
-                        Button::new("btn-mark-resolved")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-                            .label(rust_i18n::t!("git.conflict.mark_resolved").to_string())
-                            .disabled(is_busy)
-                            .on_click(move |_, _, cx| {
-                                app_mark.update(cx, |this, cx| this.git_conflict_mark_resolved(cx));
-                            }),
-                    ),
-            )
-            .child(if modal.resolving {
-                div()
-                    .text_xs()
-                    .text_color(p.primary)
-                    .child(rust_i18n::t!("git.conflict.resolving").to_string())
-            } else {
-                div()
-            })
-    }
+fn render_conflict_footer(app: &Entity<AppShell>, p: &Palette) -> Div {
+    let app_close = app.clone();
 
-    fn render_conflict_footer(&self, app: &Entity<Self>, p: &Palette) -> Div {
-        let app_close = app.clone();
-
-        h_flex()
-            .w_full()
-            .h(px(36.0))
-            .flex_none()
-            .px_3()
-            .items_center()
-            .justify_between()
-            .bg(p.list_head)
-            .border_t_1()
-            .border_color(p.divider(p.border))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted)
-                    .child(rust_i18n::t!("git.conflict.footer_tip").to_string()),
-            )
-            .child(
-                Button::new("btn-conflict-close")
-                    .outline()
-                    .small()
-                    .label(rust_i18n::t!("common.close").to_string())
-                    .on_click(move |_, _, cx| {
-                        app_close.update(cx, |this, cx| this.close_git_conflict_modal(cx));
-                    }),
-            )
-    }
+    h_flex()
+        .w_full()
+        .h(px(36.0))
+        .flex_none()
+        .px_3()
+        .items_center()
+        .justify_between()
+        .bg(p.list_head)
+        .border_t_1()
+        .border_color(p.divider(p.border))
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted)
+                .child(rust_i18n::t!("git.conflict.footer_tip").to_string()),
+        )
+        .child(
+            Button::new("btn-conflict-close")
+                .outline()
+                .small()
+                .label(rust_i18n::t!("common.close").to_string())
+                .on_click(move |_, _, cx| {
+                    app_close.update(cx, |this, cx| close_git_conflict_modal(this, cx));
+                }),
+        )
 }

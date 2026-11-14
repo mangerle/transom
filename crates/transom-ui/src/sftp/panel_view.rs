@@ -18,16 +18,14 @@ use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 当前活动窗格的 SFTP 面板元素：实体实现 `Render`，外壳只负责挂载。
-    pub(crate) fn render_sftp_panel_element(&self) -> AnyElement {
-        self.state
-            .workspace
-            .active_tab
-            .and_then(|tab_id| self.state.sftp_view(tab_id))
-            .map(IntoElement::into_any_element)
-            .unwrap_or_else(|| div().into_any_element())
-    }
+/// 当前活动窗格的 SFTP 面板元素：实体实现 `Render`，外壳只负责挂载。
+pub(crate) fn render_sftp_panel_element(shell: &AppShell) -> AnyElement {
+    shell.state
+        .workspace
+        .active_tab
+        .and_then(|tab_id| shell.state.sftp_view(tab_id))
+        .map(IntoElement::into_any_element)
+        .unwrap_or_else(|| div().into_any_element())
 }
 
 impl SftpPanelView {

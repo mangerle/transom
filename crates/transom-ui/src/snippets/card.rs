@@ -36,7 +36,7 @@ fn snippets_form_button(
     let app = app.clone();
     button.on_click(move |_, window, cx| {
         let existing = existing.clone();
-        app.update(cx, |this, cx| this.open_snippet_form(window, cx, existing));
+        app.update(cx, |this, cx| crate::app::snippets::open_snippet_form(this, window, cx, existing));
     })
 }
 
@@ -68,7 +68,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
             let item = row_item.clone();
             row_app.update(cx, |this, cx| {
                 let execute = app_settings(cx).snippets.execute_directly;
-                this.apply_snippet(&item, execute, cx);
+                crate::app::snippets::apply_snippet(this, &item, execute, cx);
                 this.state.modals.tools.snippet_panel.open = false;
                 cx.notify();
             });
@@ -108,7 +108,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                         cx.stop_propagation();
                         let item = edit_item.clone();
                         edit_app.update(cx, |this, cx| {
-                            this.open_snippet_form(window, cx, Some(item));
+                            crate::app::snippets::open_snippet_form(this, window, cx, Some(item));
                         });
                     }),
                 )
@@ -122,7 +122,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                     .render()
                     .on_click(move |_, _, cx| {
                         cx.stop_propagation();
-                        delete_app.update(cx, |this, cx| this.delete_snippet(item_id, cx));
+                        delete_app.update(cx, |this, cx| super::delete_snippet(this, item_id, cx));
                     }),
                 ),
         )

@@ -95,7 +95,7 @@ pub(super) fn render_commit_row(
         .on_click(move |_, _, cx| {
             let oid = oid_clone.clone();
             app_select.update(cx, |this, cx| {
-                this.git_select_push_commit(oid, cx);
+                super::git_select_push_commit(this, oid, cx);
             });
         })
         .into_any_element()
@@ -164,7 +164,7 @@ pub(super) fn render_commit_detail_card(
                         .on_click(move |_, _, cx| {
                             let oid = oid_full.clone();
                             app_copy.update(cx, |this, cx| {
-                                this.write_clipboard(&oid, cx);
+                                crate::git::helpers::write_clipboard(this, &oid, cx);
                             });
                         }),
                 ),
@@ -244,7 +244,7 @@ pub(super) fn render_file_row(
             if let Some(t_id) = tab_id {
                 let p_str = file_path.clone();
                 app_diff.update(cx, |this, cx| {
-                    this.git_diff_commit_file(t_id, &p_str, cx);
+                    crate::git::actions::git_diff_commit_file(this, t_id, &p_str, cx);
                 });
             }
         })

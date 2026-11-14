@@ -1,0 +1,17 @@
+[package]
+name = "transom-ui-kit"
+description = "Stateless UI presentation components, design tokens, palette, divider and format helpers for Transom."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+transom-core.workspace = true
+transom-ui-icons.workspace = true

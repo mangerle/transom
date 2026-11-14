@@ -2,16 +2,15 @@
 
 use super::common::*;
 
-impl AppShell {
-    pub(crate) fn render_sftp_confirm_body(
-        &self,
-        app: &Entity<AppShell>,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.confirm.as_ref() else {
-            return div().into_any_element();
-        };
+pub(crate) fn render_sftp_confirm_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.confirm.as_ref() else {
+        return div().into_any_element();
+    };
         let title = modal.title.clone();
         let description = modal.description.clone();
 
@@ -24,7 +23,7 @@ impl AppShell {
             rust_i18n::t!("common.cancel").to_string(),
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
                 this.state.sftp_modals.confirm = None;
-                this.focus_active_sftp_panel(window, cx);
+                crate::sftp::focus_active_sftp_panel(this, window, cx);
                 cx.notify();
             }),
         );
@@ -34,8 +33,8 @@ impl AppShell {
             None,
             crate::widgets::DialogConfirmKind::Danger,
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                this.sftp_confirm_delete(cx);
-                this.focus_active_sftp_panel(window, cx);
+                crate::sftp::sftp_confirm_delete(this, cx);
+                crate::sftp::focus_active_sftp_panel(this, window, cx);
             }),
         );
         let footer =
@@ -48,5 +47,4 @@ impl AppShell {
             content,
             Some(footer),
         )
-    }
 }

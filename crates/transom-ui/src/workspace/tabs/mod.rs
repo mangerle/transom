@@ -133,7 +133,7 @@ impl AppShell {
 
         let groups_before = self.state.workspace.groups.len();
         if saved.session == "local" {
-            self.open_local_terminal(window, cx);
+            crate::connection::open_local_terminal(self, window, cx);
         } else {
             let session = self
                 .state
@@ -142,7 +142,7 @@ impl AppShell {
                 .iter()
                 .find(|session| session.id.to_string() == saved.session)
                 .cloned()?;
-            self.connect_session(session.id, window, cx);
+            crate::connection::connect_session(self, session.id, window, cx);
         }
         if self.state.workspace.groups.len() <= groups_before {
             return None;
@@ -170,7 +170,7 @@ impl AppShell {
                 .workspace
                 .tabs
                 .push(TerminalTab::pending(pane_id, session.clone()));
-            self.start_connection(pane_id, session.clone(), cx);
+            crate::connection::start_connection(self, pane_id, session.clone(), cx);
         }
         cx.notify();
         Some(group_id)
@@ -206,7 +206,7 @@ impl AppShell {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         self.state.present_active_group();
-        self.start_connection(tab_id, session, cx);
+        crate::connection::start_connection(self, tab_id, session, cx);
     }
 
     pub(crate) fn activate_tab(
@@ -218,7 +218,7 @@ impl AppShell {
         if let Some(previous) = self.state.workspace.active_tab
             && previous != tab_id
         {
-            self.dismiss_sftp_hover_preview(previous, cx);
+            crate::sftp::dismiss_sftp_hover_preview(self, previous, cx);
         }
         let group_id = self
             .state
@@ -261,7 +261,7 @@ impl AppShell {
                         .monitor
                         .update(cx, |view, _| view.reset_history());
                     let collapsed = shell.state.monitor.read(cx).processes_collapsed();
-                    shell.sample_processes(collapsed, cx);
+                    crate::app::monitor::sample_processes(shell, collapsed, cx);
                 }
             });
         });

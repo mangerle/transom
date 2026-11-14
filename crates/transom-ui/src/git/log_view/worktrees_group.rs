@@ -106,7 +106,7 @@ pub(crate) fn render_worktree_group(
                     move |_, _, cx| {
                         let path = open_path.clone();
                         open_app.update(cx, |this, cx| {
-                            this.git_open_worktree_path(&path, cx);
+                            crate::git::actions::git_open_worktree_path(this, &path, cx);
                         });
                     }
                 })
@@ -131,8 +131,8 @@ pub(crate) fn render_worktree_group(
                                 let path = lock_owned.clone();
                                 let project = lock_project.clone();
                                 lock_app.update(cx, |this, cx| {
-                                    this.git_set_project_worktree_locked(
-                                        &project, path, !locked, cx,
+                                    crate::git::actions::git_set_project_worktree_locked(
+                                        this, &project, path, !locked, cx,
                                     );
                                 });
                             },
@@ -148,7 +148,9 @@ pub(crate) fn render_worktree_group(
                                 let path = remove_owned.clone();
                                 let project = remove_project.clone();
                                 remove_app.update(cx, |this, cx| {
-                                    this.git_remove_worktree(&project, path, false, cx);
+                                    crate::git::actions::git_remove_worktree(
+                                        this, &project, path, false, cx,
+                                    );
                                 });
                             }),
                         )

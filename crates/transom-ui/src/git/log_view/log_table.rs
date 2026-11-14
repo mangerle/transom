@@ -90,7 +90,9 @@ pub(crate) fn render_log_table(
                         .checked(column.is_shown(&context_columns))
                         .on_click(move |_, _, cx| {
                             item_app.update(cx, |this, cx| {
-                                this.git_toggle_log_column(tab_id, column, cx);
+                                crate::git::actions::git_toggle_log_column(
+                                    this, tab_id, column, cx,
+                                );
                             });
                         }),
                 );
@@ -165,7 +167,7 @@ fn render_log_list_item(context: &LogListContext, index: usize, cx: &App) -> Opt
                         .label(rust_i18n::t!("git.log.load_more").to_string())
                         .on_click(move |_, _, cx| {
                             app.update(cx, |this, cx| {
-                                this.git_load_more_log(tab_id, cx);
+                                crate::git::actions::git_load_more_log(this, tab_id, cx);
                             });
                         }),
                 )
@@ -310,7 +312,7 @@ fn render_commit_row(
         })
         .on_click(move |_, _, cx| {
             select_app.update(cx, |this, cx| {
-                this.git_select_commit_by_oid(tab_id, &select_oid, cx);
+                crate::git::actions::git_select_commit_by_oid(this, tab_id, &select_oid, cx);
             });
         })
         .context_menu(move |menu, _window, _cx| {

@@ -11,6 +11,7 @@ mod search_keywords;
 
 pub(crate) use entity::{SettingsServices, SettingsView};
 pub(crate) use event::{SettingsEvent, SettingsRequest};
+pub(crate) use handler::{handle_settings_request, on_settings_event};
 mod appearance_page;
 mod containers_page;
 mod files_page;
@@ -165,71 +166,67 @@ pub(crate) fn sync_terminal_palette(cx: &mut gpui_kit::App) -> bool {
     true
 }
 
-impl AppShell {
-    /// 把外观偏好下发到所有已打开的窗格。
-    ///
-    /// 不做这件事的话，改完字体要重开标签才见效，等于"设置了但没反应"。
-    /// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
-    /// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
-    pub(crate) fn apply_appearance_to_live_panes(&self, cx: &mut Context<Self>) {
-        let mut profile = app_settings(cx).terminal_profile.clone();
-        // 终端背景随窗口整体透明：窗口半透明时，终端区要透出桌面，
-        // 否则只有侧栏与标签栏变透明，终端仍是一块实色。
-        profile.background_transparency = app_settings(cx).window.window_transparency;
-        // 先收集实体再逐个更新：遍历 self.state.workspace.tabs 与逐条 update 会同时借用 self。
-        let terminals: Vec<Entity<TerminalView>> = self
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .filter_map(|tab| tab.terminal())
-            .collect();
-        for terminal in terminals {
-            terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
-        }
-    }
-
-    /// 把语义块偏好热下发给所有运行中的窗格。
-    ///
-    /// 每个窗格按自己会话的覆盖档位解析，不能统一吃全局值：生产构建机可能
-    /// 强制开启，而同一窗口里的交换机 Console 强制关闭。
-    pub(crate) fn apply_block_view_settings(&self, cx: &mut Context<Self>) {
-        let global = app_settings(cx).block_view;
-        let terminals: Vec<(Entity<TerminalView>, transom_core::BlockViewSettings)> = self
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .filter_map(|tab| {
-                let terminal = tab.terminal()?;
-                let override_ = self
-                    .state
-                    .catalog
-                    .sessions
-                    .iter()
-                    .find(|session| session.id == tab.session_id)
-                    .map_or(tab.session.block_view, |session| session.block_view);
-                Some((terminal, global.resolved(override_)))
-            })
-            .collect();
-        for (terminal, settings) in terminals {
-            terminal.update(cx, |view, cx| view.set_block_view(Some(settings), cx));
-        }
+/// 把外观偏好下发到所有已打开的窗格。
+///
+/// 不做这件事的话，改完字体要重开标签才见效，等于"设置了但没反应"。
+/// 会话本身也带 profile，但当前没有任何界面在会话级别改字体，因此以全局偏好为准；
+/// 将来开放会话级字体时，这里必须改成只补空白、不覆盖会话选择。
+pub(crate) fn apply_appearance_to_live_panes(shell: &AppShell, cx: &mut Context<AppShell>) {
+    let mut profile = app_settings(cx).terminal_profile.clone();
+    // 终端背景随窗口整体透明：窗口半透明时，终端区要透出桌面，
+    // 否则只有侧栏与标签栏变透明，终端仍是一块实色。
+    profile.background_transparency = app_settings(cx).window.window_transparency;
+    // 先收集实体再逐个更新：遍历 shell.state.workspace.tabs 与逐条 update 会同时借用 shell。
+    let terminals: Vec<Entity<TerminalView>> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .filter_map(|tab| tab.terminal())
+        .collect();
+    for terminal in terminals {
+        terminal.update(cx, |view, cx| view.apply_appearance(&profile, cx));
     }
 }
 
-impl AppShell {
-    /// 命令面板等非设置入口的外观切换：预览与终端配色共用的写路径不变，
-    /// 变化后把终端外观下发到活窗格。
-    pub(crate) fn update_appearance(
-        &mut self,
-        change: impl FnOnce(&mut transom_core::AppearanceSettings),
-        cx: &mut Context<Self>,
-    ) {
-        preview_appearance(change, cx);
-        if sync_terminal_palette(cx) {
-            self.apply_appearance_to_live_panes(cx);
-        }
-        cx.notify();
+/// 把语义块偏好热下发给所有运行中的窗格。
+///
+/// 每个窗格按自己会话的覆盖档位解析，不能统一吃全局值：生产构建机可能
+/// 强制开启，而同一窗口里的交换机 Console 强制关闭。
+pub(crate) fn apply_block_view_settings(shell: &AppShell, cx: &mut Context<AppShell>) {
+    let global = app_settings(cx).block_view;
+    let terminals: Vec<(Entity<TerminalView>, transom_core::BlockViewSettings)> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .filter_map(|tab| {
+            let terminal = tab.terminal()?;
+            let override_ = shell
+                .state
+                .catalog
+                .sessions
+                .iter()
+                .find(|session| session.id == tab.session_id)
+                .map_or(tab.session.block_view, |session| session.block_view);
+            Some((terminal, global.resolved(override_)))
+        })
+        .collect();
+    for (terminal, settings) in terminals {
+        terminal.update(cx, |view, cx| view.set_block_view(Some(settings), cx));
     }
+}
+
+/// 命令面板等非设置入口的外观切换：预览与终端配色共用的写路径不变，
+/// 变化后把终端外观下发到活窗格。
+pub(crate) fn update_appearance(
+    shell: &mut AppShell,
+    change: impl FnOnce(&mut transom_core::AppearanceSettings),
+    cx: &mut Context<AppShell>,
+) {
+    preview_appearance(change, cx);
+    if sync_terminal_palette(cx) {
+        crate::settings::apply_appearance_to_live_panes(shell, cx);
+    }
+    cx.notify();
 }

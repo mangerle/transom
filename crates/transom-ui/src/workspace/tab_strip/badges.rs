@@ -142,7 +142,7 @@ pub(super) fn build_tiled_group_badge(
                             let app = app_entity.clone();
                             move |_, window, cx| {
                                 app.update(cx, |this, cx| {
-                                    this.activate_group(group_id, window, cx);
+                                    crate::app::tiling::activate_group(this, group_id, window, cx);
                                 });
                             }
                         }),
@@ -177,7 +177,7 @@ pub(super) fn build_tiled_group_badge(
                             let app = app_entity.clone();
                             move |_, _window, cx| {
                                 app.update(cx, |this, cx| {
-                                    this.untile_tiling(tiling_id, cx);
+                                    crate::app::tiling::untile_tiling(this, tiling_id, cx);
                                 });
                             }
                         },

@@ -25,17 +25,16 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 贮藏内联面板：提交页左栏的「贮藏」页签内容。
-    pub(crate) fn render_git_stash_panel(
-        &mut self,
-        tab_id: TabId,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return div().into_any_element();
-        };
+/// 贮藏内联面板：提交页左栏的「贮藏」页签内容。
+pub(crate) fn render_git_stash_panel(
+    shell: &AppShell,
+    tab_id: TabId,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return div().into_any_element();
+    };
         let (project, entries, expanded, files, loading) = {
             let state = &workspace.read(cx).state;
             (
@@ -64,8 +63,8 @@ impl AppShell {
                     .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.git_refresh(&refresh_project, cx);
-                        this.git_reload_stashes(cx);
+                        crate::git::actions::git_refresh(this, &refresh_project, cx);
+                        git_reload_stashes(this, cx);
                     })),
             )
             .child(
@@ -75,7 +74,7 @@ impl AppShell {
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::PATCH)).small())
                     .label(rust_i18n::t!("git.stash.create").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.git_stash_checked(tab_id, cx);
+                        git_stash_checked(this, tab_id, cx);
                     })),
             )
             .child(div().flex_1())
@@ -120,7 +119,7 @@ impl AppShell {
                 files: shown,
                 tab_id,
             };
-            list = list.child(self.stash_row(&view, p, cx));
+            list = list.child(stash_row(shell, &view, p, cx));
         }
 
         v_flex()
@@ -130,15 +129,15 @@ impl AppShell {
             .child(toolbar)
             .child(list)
             .into_any_element()
-    }
+}
 
-    /// 一条贮藏项：标题行 + 展开后的文件清单。
-    fn stash_row(
-        &mut self,
-        view: &StashRowView<'_>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+/// 一条贮藏项：标题行 + 展开后的文件清单。
+fn stash_row(
+    shell: &AppShell,
+    view: &StashRowView<'_>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
         let selector = view.selector.to_string();
         let toggle_area = h_flex()
             .id(ElementId::Name(format!("git-stash-head-{selector}").into()))
@@ -185,7 +184,7 @@ impl AppShell {
                 let project = view.project.clone();
                 let target = selector.clone();
                 move |this, _, _window, cx| {
-                    this.git_toggle_stash_files(&project, &target, cx);
+                    crate::git::actions::git_toggle_stash_files(this, &project, &target, cx);
                 }
             }));
         let title = h_flex()
@@ -207,7 +206,13 @@ impl AppShell {
                     let project = view.project.clone();
                     let target = selector.clone();
                     move |this, _, _window, cx| {
-                        this.git_stash_action(&project, GitAction::StashApply, target.clone(), cx);
+                        crate::git::actions::git_stash_action(
+                            this,
+                            &project,
+                            GitAction::StashApply,
+                            target.clone(),
+                            cx,
+                        );
                     }
                 })),
             )
@@ -222,7 +227,8 @@ impl AppShell {
                         let project = view.project.clone();
                         let target = selector.clone();
                         move |this, _, _window, cx| {
-                            this.git_stash_action(
+                            crate::git::actions::git_stash_action(
+                                this,
                                 &project,
                                 GitAction::StashPop,
                                 target.clone(),
@@ -266,25 +272,25 @@ impl AppShell {
                 .into_any_element();
         }
         for file in view.files {
-            rows = rows.child(self.stash_file_row(view, file, p, cx));
+            rows = rows.child(stash_file_row(shell, view, file, p, cx));
         }
         rows.into_any_element()
-    }
+}
 
-    /// 贮藏清单里的一行文件：点击即看「贮藏前 vs 贮藏后」的差异。
-    fn stash_file_row(
-        &mut self,
-        view: &StashRowView<'_>,
-        file: &transom_core::StashFile,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let visual = crate::git::change_visual(file.change);
-        let (name, dir_prefix) = split_path(&file.path);
-        let selector = view.selector.to_string();
-        let tab_id = view.tab_id;
-        let open_file = file.clone();
-        let selected = self.state.git_workspace(tab_id).is_some_and(|workspace| {
+/// 贮藏清单里的一行文件：点击即看「贮藏前 vs 贮藏后」的差异。
+fn stash_file_row(
+    shell: &AppShell,
+    view: &StashRowView<'_>,
+    file: &transom_core::StashFile,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let visual = crate::git::change_visual(file.change);
+    let (name, dir_prefix) = split_path(&file.path);
+    let selector = view.selector.to_string();
+    let tab_id = view.tab_id;
+    let open_file = file.clone();
+    let selected = shell.state.git_workspace(tab_id).is_some_and(|workspace| {
             workspace
                 .read(cx)
                 .state
@@ -344,55 +350,58 @@ impl AppShell {
                     .unwrap_or_else(|| div().into_any_element()),
             )
             .on_click(cx.listener(move |this, _, _window, cx| {
-                this.git_open_stash_diff(tab_id, &selector, &open_file, cx);
+                crate::git::actions::git_open_stash_diff(this, tab_id, &selector, &open_file, cx);
             }))
             .into_any_element()
-    }
+}
 
-    /// 把改动保存到 Git Stash 栈。
-    pub(crate) fn git_stash_checked(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return;
+/// 把改动保存到 Git Stash 栈。
+pub(crate) fn git_stash_checked(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return;
+    };
+    let (message, project) = {
+        let state = &workspace.read(cx).state;
+        let message = if state.checked.is_empty() {
+            rust_i18n::t!("git.stash.auto_message").to_string()
+        } else {
+            format!(
+                "{} ({})",
+                rust_i18n::t!("git.stash.title"),
+                state.checked.len()
+            )
         };
-        let (message, project) = {
-            let state = &workspace.read(cx).state;
-            let message = if state.checked.is_empty() {
-                rust_i18n::t!("git.stash.auto_message").to_string()
-            } else {
-                format!(
-                    "{} ({})",
-                    rust_i18n::t!("git.stash.title"),
-                    state.checked.len()
-                )
-            };
-            (message, state.project.clone())
-        };
-        self.git_stash_save(&project, message, false, cx);
-        workspace.update(cx, |workspace, _| {
-            workspace.state.checked.clear();
-        });
-        cx.notify();
-    }
+        (message, state.project.clone())
+    };
+    crate::git::actions::git_stash_save(shell, &project, message, false, cx);
+    workspace.update(cx, |workspace, _| {
+        workspace.state.checked.clear();
+    });
+    cx.notify();
+}
 
-    /// 重新拉取贮藏列表。
-    pub(crate) fn git_reload_stashes(&mut self, cx: &mut Context<Self>) {
-        let Some(tab_id) = self.active_git_tab() else {
-            return;
-        };
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return;
-        };
-        let project = workspace.read(cx).state.project.clone();
-        let request_id = transom_core::GitRequestId::new();
-        workspace.update(cx, |workspace, _| {
-            workspace.state.pending.push(request_id);
-        });
-        self.send_command(transom_core::GitCommand::ListStashes {
-            project,
-            request_id,
-        });
-        cx.notify();
-    }
+/// 重新拉取贮藏列表。
+fn git_reload_stashes(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(tab_id) = crate::git::actions::active_git_tab(shell) else {
+        return;
+    };
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return;
+    };
+    let project = workspace.read(cx).state.project.clone();
+    let request_id = transom_core::GitRequestId::new();
+    workspace.update(cx, |workspace, _| {
+        workspace.state.pending.push(request_id);
+    });
+    shell.send_command(transom_core::GitCommand::ListStashes {
+        project,
+        request_id,
+    });
+    cx.notify();
 }
 
 /// 贮藏行的展示参数包。
@@ -427,7 +436,13 @@ fn render_stash_menu(
                 let project = item_project.clone();
                 let selector = item_selector.clone();
                 item_app.update(cx, |this, cx| {
-                    this.git_stash_action(&project, GitAction::StashApply, selector, cx);
+                    crate::git::actions::git_stash_action(
+                        this,
+                        &project,
+                        GitAction::StashApply,
+                        selector,
+                        cx,
+                    );
                 });
             }
         },
@@ -442,7 +457,13 @@ fn render_stash_menu(
                 let project = item_project.clone();
                 let selector = selector.clone();
                 item_app.update(cx, |this, cx| {
-                    this.git_stash_action(&project, GitAction::StashPop, selector, cx);
+                    crate::git::actions::git_stash_action(
+                        this,
+                        &project,
+                        GitAction::StashPop,
+                        selector,
+                        cx,
+                    );
                 });
             }
         },
@@ -455,7 +476,13 @@ fn render_stash_menu(
             let project = drop_project.clone();
             let selector = drop_selector.clone();
             drop_app.update(cx, |this, cx| {
-                this.git_stash_action(&project, GitAction::StashDrop, selector, cx);
+                crate::git::actions::git_stash_action(
+                    this,
+                    &project,
+                    GitAction::StashDrop,
+                    selector,
+                    cx,
+                );
             });
         },
     ))

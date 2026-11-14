@@ -50,352 +50,349 @@ impl GitRebaseModal {
     }
 }
 
-impl AppShell {
-    /// 打开「从这里交互式变基」：先取清单，再让用户编辑。
-    pub(crate) fn git_open_rebase_modal(
-        &mut self,
-        project: &GitProject,
-        base: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let subject = self
-            .state
-            .git_workspace_of_project(project.id, cx)
-            .and_then(|workspace| {
-                let state = &workspace.read(cx).state;
-                state
-                    .log
-                    .entries
-                    .iter()
-                    .find(|entry| entry.oid == base)
-                    .map(|entry| entry.subject.clone())
-            })
-            .unwrap_or_default();
-        let request_id = GitRequestId::new();
-        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
-            workspace.update(cx, |workspace, _| {
-                workspace.state.pending.push(request_id);
-            });
-        }
-        self.state.modals.git.rebase = Some(GitRebaseModal::new(
-            project.clone(),
-            base.to_string(),
-            subject,
-        ));
-        self.send_command(GitCommand::RebaseTodo {
-            project: project.clone(),
-            request_id,
-            base: base.to_string(),
-        });
-        cx.notify();
-    }
-
-    /// 清单落地：只接受与当前打开的基线匹配的结果，迟到事件丢弃。
-    pub(crate) fn git_apply_rebase_todo(&mut self, base: &str, steps: Vec<GitRebaseStep>) {
-        let Some(modal) = self.state.modals.git.rebase.as_mut() else {
-            return;
-        };
-        if modal.base != base {
-            return;
-        }
-        modal.steps = steps;
-        modal.loading = false;
-    }
-
-    /// 循环切换某一行的动作。
-    pub(crate) fn git_rebase_cycle(&mut self, index: usize, cx: &mut Context<Self>) {
-        if let Some(modal) = self.state.modals.git.rebase.as_mut()
-            && let Some(step) = modal.steps.get_mut(index)
-        {
-            step.action = step.action.next();
-        }
-        cx.notify();
-    }
-
-    /// 按提交 OID 循环切换动作，避免重排后索引指向另一条待办。
-    pub(crate) fn git_rebase_cycle_by_oid(&mut self, oid: &str, cx: &mut Context<Self>) {
-        let index = self
-            .state
-            .modals
-            .git
-            .rebase
-            .as_ref()
-            .and_then(|modal| modal.steps.iter().position(|step| step.oid == oid));
-        if let Some(index) = index {
-            self.git_rebase_cycle(index, cx);
-        }
-    }
-
-    /// 按提交 OID 上移/下移一行，避免重排后索引指向另一条待办。
-    pub(crate) fn git_rebase_move_by_oid(&mut self, oid: &str, up: bool, cx: &mut Context<Self>) {
-        let index = self
-            .state
-            .modals
-            .git
-            .rebase
-            .as_ref()
-            .and_then(|modal| modal.steps.iter().position(|step| step.oid == oid));
-        if let Some(index) = index {
-            self.git_rebase_move(index, up, cx);
-        }
-    }
-
-    /// 上移/下移一行：重排待办清单就是重排历史顺序。
-    pub(crate) fn git_rebase_move(&mut self, index: usize, up: bool, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.rebase.as_mut() else {
-            return;
-        };
-        let target = if up {
-            index.checked_sub(1)
-        } else {
-            (index + 1 < modal.steps.len()).then_some(index + 1)
-        };
-        if let Some(to) = target {
-            modal.steps.swap(index, to);
-        }
-        cx.notify();
-    }
-
-    /// 提交执行：把编辑后的清单交给引擎按 `rebase -i` 跑完。
-    pub(crate) fn git_rebase_run(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.rebase.as_mut() else {
-            return;
-        };
-        if modal.steps.is_empty() || modal.running {
-            return;
-        }
-        modal.running = true;
-        let project = modal.project.clone();
-        let base = modal.base.clone();
-        let steps = modal.steps.clone();
-        self.send_command(GitCommand::RebaseRun {
-            project,
-            base,
-            steps,
-        });
-        cx.notify();
-    }
-
-    /// 变基失败时把原因写回对话框并解除执行中：对话框不关，用户要能改清单重试。
-    pub(crate) fn git_rebase_failed(
-        &mut self,
-        project_id: transom_core::GitProjectId,
-        action: transom_core::GitAction,
-        message: String,
-    ) {
-        if action != transom_core::GitAction::RebaseRun {
-            return;
-        }
-        let matches = self
-            .state
-            .modals
-            .git
-            .rebase
-            .as_ref()
-            .is_some_and(|modal| modal.project.id == project_id);
-        if !matches {
-            return;
-        }
-        if let Some(modal) = self.state.modals.git.rebase.as_mut() {
-            modal.running = false;
-            modal.error = Some(message);
-        }
-    }
-
-    /// 关闭对话框（取消不改历史）。
-    pub(crate) fn git_close_rebase_modal(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.git.rebase = None;
-        cx.notify();
-    }
-
-    /// 渲染交互式变基对话框主体（接入 dialog_host）。
-    pub(crate) fn render_git_rebase_dialog_body(
-        &self,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.modals.git.rebase.as_ref() else {
-            return div().into_any_element();
-        };
-        let subtitle = format!(
-            "{} · {}",
-            modal.base.chars().take(7).collect::<String>(),
-            modal.base_subject
-        );
-        let loading = modal.loading;
-        let running = modal.running;
-        let error = modal.error.clone();
-        let total = modal.steps.len();
-
-        let rows: Vec<AnyElement> = if loading {
-            vec![row_hint(rust_i18n::t!("git.rebase.loading").to_string(), p)]
-        } else if modal.steps.is_empty() {
-            vec![row_hint(rust_i18n::t!("git.rebase.empty").to_string(), p)]
-        } else {
-            modal
-                .steps
+/// 打开「从这里交互式变基」：先取清单，再让用户编辑。
+pub(crate) fn git_open_rebase_modal(
+    shell: &mut AppShell,
+    project: &GitProject,
+    base: &str,
+    cx: &mut Context<AppShell>,
+) {
+    let subject = shell
+        .state
+        .git_workspace_of_project(project.id, cx)
+        .and_then(|workspace| {
+            let state = &workspace.read(cx).state;
+            state
+                .log
+                .entries
                 .iter()
-                .enumerate()
-                .map(|(index, step)| {
-                    self.render_rebase_step_row(app, index, total, step, running, p)
-                })
-                .collect()
-        };
-
-        let body = v_flex()
-            .w_full()
-            .gap_2()
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(subtitle),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("git.rebase.hint")),
-            )
-            .child(
-                v_flex()
-                    .max_h(px(360.0))
-                    .min_h_0()
-                    .gap_0p5()
-                    .overflow_y_scrollbar()
-                    .children(rows),
-            )
-            .when(error.is_some(), |el| {
-                el.child(
-                    div()
-                        .text_xs()
-                        .text_color(p.danger)
-                        .child(error.unwrap_or_default()),
-                )
-            });
-        let footer = h_flex()
-            .w_full()
-            .gap_2()
-            .justify_end()
-            .child(crate::widgets::dialog_cancel_button(
-                "git-rebase-cancel",
-                rust_i18n::t!("git.project.cancel").to_string(),
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.git_close_rebase_modal(cx);
-                }),
-            ))
-            .child(
-                crate::widgets::dialog_confirm_button(
-                    "git-rebase-run",
-                    rust_i18n::t!("git.rebase.run").to_string(),
-                    None,
-                    crate::widgets::DialogConfirmKind::Primary,
-                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.git_rebase_run(cx);
-                    }),
-                )
-                .disabled(loading || running || total == 0),
-            );
-        crate::widgets::dialog_body(
-            "git-rebase-dialog",
-            rust_i18n::t!("git.rebase.title").to_string(),
-            None,
-            body,
-            Some(footer),
-        )
+                .find(|entry| entry.oid == base)
+                .map(|entry| entry.subject.clone())
+        })
+        .unwrap_or_default();
+    let request_id = GitRequestId::new();
+    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
+        workspace.update(cx, |workspace, _| {
+            workspace.state.pending.push(request_id);
+        });
     }
+    shell.state.modals.git.rebase = Some(GitRebaseModal::new(
+        project.clone(),
+        base.to_string(),
+        subject,
+    ));
+    shell.send_command(GitCommand::RebaseTodo {
+        project: project.clone(),
+        request_id,
+        base: base.to_string(),
+    });
+    cx.notify();
+}
 
-    /// 一行待办：上移 / 下移 / 动作 / 短号 / 标题。
-    fn render_rebase_step_row(
-        &self,
-        app: &Entity<AppShell>,
-        index: usize,
-        total: usize,
-        step: &GitRebaseStep,
-        running: bool,
-        p: &Palette,
-    ) -> AnyElement {
-        let step_oid = step.oid.clone();
-        let up_oid = step.oid.clone();
-        let down_oid = step.oid.clone();
-        let cycle_oid = step.oid.clone();
-        h_flex()
-            .id(ElementId::Name(format!("git-rebase-{step_oid}").into()))
-            .px_1()
-            .py_0p5()
-            .gap_1()
-            .items_center()
-            .rounded(px(4.0))
-            .hover(|style| style.bg(p.list_hover))
-            .child(
-                Button::new(ElementId::Name(format!("git-rebase-up-{step_oid}").into()))
-                    .ghost()
-                    .xsmall()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::UP)).small())
-                    .accessibility_label("Move step up")
-                    .disabled(running || index == 0)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, _, cx| {
-                            app.update(cx, |this, cx| {
-                                this.git_rebase_move_by_oid(&up_oid, true, cx)
-                            });
-                        }
-                    }),
+/// 清单落地：只接受与当前打开的基线匹配的结果，迟到事件丢弃。
+pub(crate) fn git_apply_rebase_todo(shell: &mut AppShell, base: &str, steps: Vec<GitRebaseStep>) {
+    let Some(modal) = shell.state.modals.git.rebase.as_mut() else {
+        return;
+    };
+    if modal.base != base {
+        return;
+    }
+    modal.steps = steps;
+    modal.loading = false;
+}
+
+/// 循环切换某一行的动作。
+fn git_rebase_cycle(shell: &mut AppShell, index: usize, cx: &mut Context<AppShell>) {
+    if let Some(modal) = shell.state.modals.git.rebase.as_mut()
+        && let Some(step) = modal.steps.get_mut(index)
+    {
+        step.action = step.action.next();
+    }
+    cx.notify();
+}
+
+/// 按提交 OID 循环切换动作，避免重排后索引指向另一条待办。
+fn git_rebase_cycle_by_oid(shell: &mut AppShell, oid: &str, cx: &mut Context<AppShell>) {
+    let index = shell
+        .state
+        .modals
+        .git
+        .rebase
+        .as_ref()
+        .and_then(|modal| modal.steps.iter().position(|step| step.oid == oid));
+    if let Some(index) = index {
+        git_rebase_cycle(shell, index, cx);
+    }
+}
+
+/// 按提交 OID 上移/下移一行，避免重排后索引指向另一条待办。
+fn git_rebase_move_by_oid(shell: &mut AppShell, oid: &str, up: bool, cx: &mut Context<AppShell>) {
+    let index = shell
+        .state
+        .modals
+        .git
+        .rebase
+        .as_ref()
+        .and_then(|modal| modal.steps.iter().position(|step| step.oid == oid));
+    if let Some(index) = index {
+        git_rebase_move(shell, index, up, cx);
+    }
+}
+
+/// 上移/下移一行：重排待办清单就是重排历史顺序。
+fn git_rebase_move(shell: &mut AppShell, index: usize, up: bool, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.rebase.as_mut() else {
+        return;
+    };
+    let target = if up {
+        index.checked_sub(1)
+    } else {
+        (index + 1 < modal.steps.len()).then_some(index + 1)
+    };
+    if let Some(to) = target {
+        modal.steps.swap(index, to);
+    }
+    cx.notify();
+}
+
+/// 提交执行：把编辑后的清单交给引擎按 `rebase -i` 跑完。
+pub(crate) fn git_rebase_run(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.rebase.as_mut() else {
+        return;
+    };
+    if modal.steps.is_empty() || modal.running {
+        return;
+    }
+    modal.running = true;
+    let project = modal.project.clone();
+    let base = modal.base.clone();
+    let steps = modal.steps.clone();
+    shell.send_command(GitCommand::RebaseRun {
+        project,
+        base,
+        steps,
+    });
+    cx.notify();
+}
+
+/// 变基失败时把原因写回对话框并解除执行中：对话框不关，用户要能改清单重试。
+pub(crate) fn git_rebase_failed(
+    shell: &mut AppShell,
+    project_id: transom_core::GitProjectId,
+    action: transom_core::GitAction,
+    message: String,
+) {
+    if action != transom_core::GitAction::RebaseRun {
+        return;
+    }
+    let matches = shell
+        .state
+        .modals
+        .git
+        .rebase
+        .as_ref()
+        .is_some_and(|modal| modal.project.id == project_id);
+    if !matches {
+        return;
+    }
+    if let Some(modal) = shell.state.modals.git.rebase.as_mut() {
+        modal.running = false;
+        modal.error = Some(message);
+    }
+}
+
+/// 关闭对话框（取消不改历史）。
+pub(crate) fn git_close_rebase_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    shell.state.modals.git.rebase = None;
+    cx.notify();
+}
+
+/// 渲染交互式变基对话框主体（接入 dialog_host）。
+pub(crate) fn render_git_rebase_dialog_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _window: &mut Window,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.modals.git.rebase.as_ref() else {
+        return div().into_any_element();
+    };
+    let subtitle = format!(
+        "{} · {}",
+        modal.base.chars().take(7).collect::<String>(),
+        modal.base_subject
+    );
+    let loading = modal.loading;
+    let running = modal.running;
+    let error = modal.error.clone();
+    let total = modal.steps.len();
+
+    let rows: Vec<AnyElement> = if loading {
+        vec![row_hint(rust_i18n::t!("git.rebase.loading").to_string(), p)]
+    } else if modal.steps.is_empty() {
+        vec![row_hint(rust_i18n::t!("git.rebase.empty").to_string(), p)]
+    } else {
+        modal
+            .steps
+            .iter()
+            .enumerate()
+            .map(|(index, step)| render_rebase_step_row(app, index, total, step, running, p))
+            .collect()
+    };
+
+    let body = v_flex()
+        .w_full()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(subtitle),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("git.rebase.hint")),
+        )
+        .child(
+            v_flex()
+                .max_h(px(360.0))
+                .min_h_0()
+                .gap_0p5()
+                .overflow_y_scrollbar()
+                .children(rows),
+        )
+        .when(error.is_some(), |el| {
+            el.child(
+                div()
+                    .text_xs()
+                    .text_color(p.danger)
+                    .child(error.unwrap_or_default()),
             )
-            .child(
-                Button::new(ElementId::Name(
-                    format!("git-rebase-down-{step_oid}").into(),
-                ))
+        });
+    let footer = h_flex()
+        .w_full()
+        .gap_2()
+        .justify_end()
+        .child(crate::widgets::dialog_cancel_button(
+            "git-rebase-cancel",
+            rust_i18n::t!("git.project.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                git_close_rebase_modal(this, cx);
+            }),
+        ))
+        .child(
+            crate::widgets::dialog_confirm_button(
+                "git-rebase-run",
+                rust_i18n::t!("git.rebase.run").to_string(),
+                None,
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    git_rebase_run(this, cx);
+                }),
+            )
+            .disabled(loading || running || total == 0),
+        );
+    crate::widgets::dialog_body(
+        "git-rebase-dialog",
+        rust_i18n::t!("git.rebase.title").to_string(),
+        None,
+        body,
+        Some(footer),
+    )
+}
+
+/// 一行待办：上移 / 下移 / 动作 / 短号 / 标题。
+fn render_rebase_step_row(
+    app: &Entity<AppShell>,
+    index: usize,
+    total: usize,
+    step: &GitRebaseStep,
+    running: bool,
+    p: &Palette,
+) -> AnyElement {
+    let step_oid = step.oid.clone();
+    let up_oid = step.oid.clone();
+    let down_oid = step.oid.clone();
+    let cycle_oid = step.oid.clone();
+    h_flex()
+        .id(ElementId::Name(format!("git-rebase-{step_oid}").into()))
+        .px_1()
+        .py_0p5()
+        .gap_1()
+        .items_center()
+        .rounded(px(4.0))
+        .hover(|style| style.bg(p.list_hover))
+        .child(
+            Button::new(ElementId::Name(format!("git-rebase-up-{step_oid}").into()))
                 .ghost()
                 .xsmall()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
-                .accessibility_label("Move step down")
-                .disabled(running || index + 1 >= total)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::UP)).small())
+                .accessibility_label("Move step up")
+                .disabled(running || index == 0)
                 .on_click({
                     let app = app.clone();
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
-                            this.git_rebase_move_by_oid(&down_oid, false, cx)
+                            git_rebase_move_by_oid(this, &up_oid, true, cx)
                         });
                     }
                 }),
-            )
-            .child(
-                Button::new(ElementId::Name(format!("git-rebase-act-{step_oid}").into()))
-                    .ghost()
-                    .xsmall()
-                    .label(rust_i18n::t!(step.action.i18n_key()).to_string())
-                    .when(step.action != GitRebaseAction::Pick, |btn| btn.secondary())
-                    .disabled(running)
-                    .on_click({
-                        let app = app.clone();
-                        move |_, _, cx| {
-                            app.update(cx, |this, cx| this.git_rebase_cycle_by_oid(&cycle_oid, cx));
-                        }
-                    }),
-            )
-            .child(
-                div()
-                    .w(px(72.0))
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(step.oid.chars().take(7).collect::<String>()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .truncate()
-                    .text_sm()
-                    .text_color(p.foreground)
-                    .child(step.subject.clone()),
-            )
-            .into_any_element()
-    }
+        )
+        .child(
+            Button::new(ElementId::Name(
+                format!("git-rebase-down-{step_oid}").into(),
+            ))
+            .ghost()
+            .xsmall()
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWN)).small())
+            .accessibility_label("Move step down")
+            .disabled(running || index + 1 >= total)
+            .on_click({
+                let app = app.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        git_rebase_move_by_oid(this, &down_oid, false, cx)
+                    });
+                }
+            }),
+        )
+        .child(
+            Button::new(ElementId::Name(format!("git-rebase-act-{step_oid}").into()))
+                .ghost()
+                .xsmall()
+                .label(rust_i18n::t!(step.action.i18n_key()).to_string())
+                .when(step.action != GitRebaseAction::Pick, |btn| btn.secondary())
+                .disabled(running)
+                .on_click({
+                    let app = app.clone();
+                    move |_, _, cx| {
+                        app.update(cx, |this, cx| {
+                            git_rebase_cycle_by_oid(this, &cycle_oid, cx)
+                        });
+                    }
+                }),
+        )
+        .child(
+            div()
+                .w(px(72.0))
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(step.oid.chars().take(7).collect::<String>()),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .truncate()
+                .text_sm()
+                .text_color(p.foreground)
+                .child(step.subject.clone()),
+        )
+        .into_any_element()
 }
 
 /// 清单区的一行提示。

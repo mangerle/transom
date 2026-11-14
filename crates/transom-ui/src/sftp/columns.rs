@@ -20,6 +20,7 @@ mod view;
 mod width;
 
 pub(crate) use super::state::SftpWidthAdjustment;
+pub(crate) use view::{grow_sftp_panel_width, sync_sftp_panel_width};
 pub(crate) use width::{column_layout, plan_side_mount};
 
 /// SFTP 面板内的列身份。

@@ -296,113 +296,112 @@ impl EditorPanels {
     }
 }
 
-impl AppShell {
-    /// 向远端发起提权能力探测；结果由 [`Self::on_sudo_probed`] 回填。
-    pub(super) fn send_sudo_probe(&mut self, request: &SudoProbeRequest) -> Result<(), ()> {
-        if self.state.send_command(SftpCommand::Sftp {
-            tab_id: request.tab_id,
-            connection_id: request.connection_id,
-            op_id: request.op_id,
-            op: SftpOperation::ProbeSudo,
-        }) {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-
-    /// 普通写回与提权写回的统一投递：载荷装配、发送与在途登记已在实体完成。
-    ///
-    /// 设计原理（Why）：两条通道都从同一面板快照取目标与内容，发送失败都回到
-    /// 失败态并取消"保存并关闭"意图；集中一处后，新增通道只需扩展载荷分支，
-    /// 不会漏掉任一状态清理。
-    fn dispatch_editor_write(
-        &mut self,
-        request: EditorWriteRequest,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let backup = app_settings(cx).sftp.editor_write_backup;
-        // expected 始终携带已知指纹：它同时承载并发比对基准与 BOM/CRLF 形态还原
-        // 标记（强制覆盖也必须还原形态，否则保存一次就改掉文件行尾）；跳过比对
-        // 由 force 表达。新文件面板指纹为 None，net 层据此不做比对与还原。
-        let op = if request.sudo {
-            SftpOperation::SudoWriteText {
-                path: request.remote_path,
-                content: request.content,
-                expected: request.expected,
-                // 普通提权保存仍受版本指纹保护；强制覆盖只由冲突横幅显式触发，
-                // 提权通道不提供绕过入口。
-                force: false,
-                backup,
-                password: request.password,
-            }
-        } else {
-            SftpOperation::WriteText {
-                path: request.remote_path,
-                content: request.content,
-                expected: request.expected,
-                force: request.force,
-                backup,
-            }
-        };
-        let command = SftpCommand::Sftp {
-            tab_id: request.tab_id,
-            connection_id: request.connection_id,
-            op_id: request.op_id,
-            op,
-        };
-        if let Err(error) = self.state.services.command_tx.try_send(command.into()) {
-            self.focus_active_sftp_panel(window, cx);
-            return Err(crate::app::command_send_error_text(error));
-        }
-        cx.notify();
+/// 向远端发起提权能力探测；结果由 [`Self::on_sudo_probed`] 回填。
+pub(super) fn send_sudo_probe(shell: &mut AppShell, request: &SudoProbeRequest) -> Result<(), ()> {
+    if shell.state.send_command(SftpCommand::Sftp {
+        tab_id: request.tab_id,
+        connection_id: request.connection_id,
+        op_id: request.op_id,
+        op: SftpOperation::ProbeSudo,
+    }) {
         Ok(())
+    } else {
+        Err(())
     }
+}
 
-    /// 打开 Sudo 口令输入框；只在探测确认"必须口令"或票据失效后失败时调用。
-    pub(super) fn open_sudo_password_modal(
-        &mut self,
-        request: SudoPasswordRequest,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.open_sftp_input_modal(
-            SftpInputModalParams {
-                tab_id: request.tab_id,
-                connection_id: None,
-                title: rust_i18n::t!("editor.sudo_save").to_string(),
-                prompt: rust_i18n::t!("editor.sudo_save_prompt", file_name = request.file_name)
-                    .to_string(),
-                placeholder: rust_i18n::t!("editor.sudo_password_hint").to_string(),
-                value: String::new(),
-                target: SftpInputTarget::SudoElevation {
-                    editor: request.editor,
-                },
-            },
-            window,
-            cx,
-        );
-    }
-
-    /// 执行 Sudo 提权写入提交：改状态由实体完成，这里只负责投递命令。
-    pub(crate) fn submit_sudo_editor_write(
-        &mut self,
-        editor: &Entity<EditorState>,
-        password: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(request) = self.state.editors.update(cx, |panels, cx| {
-            panels.prepare_editor_write(editor, EditorWriteMode::Sudo { password }, cx)
-        }) else {
-            return;
-        };
-        let op_id = request.op_id;
-        if let Err(message) = self.dispatch_editor_write(request, window, cx) {
-            self.state.editors.update(cx, |panels, cx| {
-                panels.fail_editor_write_dispatch(op_id, message, cx)
-            });
+/// 普通写回与提权写回的统一投递：载荷装配、发送与在途登记已在实体完成。
+///
+/// 设计原理（Why）：两条通道都从同一面板快照取目标与内容，发送失败都回到
+/// 失败态并取消"保存并关闭"意图；集中一处后，新增通道只需扩展载荷分支，
+/// 不会漏掉任一状态清理。
+fn dispatch_editor_write(
+    shell: &mut AppShell,
+    request: EditorWriteRequest,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) -> Result<(), String> {
+    let backup = app_settings(cx).sftp.editor_write_backup;
+    // expected 始终携带已知指纹：它同时承载并发比对基准与 BOM/CRLF 形态还原
+    // 标记（强制覆盖也必须还原形态，否则保存一次就改掉文件行尾）；跳过比对
+    // 由 force 表达。新文件面板指纹为 None，net 层据此不做比对与还原。
+    let op = if request.sudo {
+        SftpOperation::SudoWriteText {
+            path: request.remote_path,
+            content: request.content,
+            expected: request.expected,
+            // 普通提权保存仍受版本指纹保护；强制覆盖只由冲突横幅显式触发，
+            // 提权通道不提供绕过入口。
+            force: false,
+            backup,
+            password: request.password,
         }
+    } else {
+        SftpOperation::WriteText {
+            path: request.remote_path,
+            content: request.content,
+            expected: request.expected,
+            force: request.force,
+            backup,
+        }
+    };
+    let command = SftpCommand::Sftp {
+        tab_id: request.tab_id,
+        connection_id: request.connection_id,
+        op_id: request.op_id,
+        op,
+    };
+    if let Err(error) = shell.state.services.command_tx.try_send(command.into()) {
+        crate::sftp::focus_active_sftp_panel(shell, window, cx);
+        return Err(crate::app::command_send_error_text(error));
+    }
+    cx.notify();
+    Ok(())
+}
+
+/// 打开 Sudo 口令输入框；只在探测确认"必须口令"或票据失效后失败时调用。
+pub(super) fn open_sudo_password_modal(
+    shell: &mut AppShell,
+    request: SudoPasswordRequest,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    crate::sftp::open_sftp_input_modal(
+        shell,
+        SftpInputModalParams {
+            tab_id: request.tab_id,
+            connection_id: None,
+            title: rust_i18n::t!("editor.sudo_save").to_string(),
+            prompt: rust_i18n::t!("editor.sudo_save_prompt", file_name = request.file_name)
+                .to_string(),
+            placeholder: rust_i18n::t!("editor.sudo_password_hint").to_string(),
+            value: String::new(),
+            target: SftpInputTarget::SudoElevation {
+                editor: request.editor,
+            },
+        },
+        window,
+        cx,
+    );
+}
+
+/// 执行 Sudo 提权写入提交：改状态由实体完成，这里只负责投递命令。
+pub(crate) fn submit_sudo_editor_write(
+    shell: &mut AppShell,
+    editor: &Entity<EditorState>,
+    password: Option<String>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(request) = shell.state.editors.update(cx, |panels, cx| {
+        panels.prepare_editor_write(editor, EditorWriteMode::Sudo { password }, cx)
+    }) else {
+        return;
+    };
+    let op_id = request.op_id;
+    if let Err(message) = dispatch_editor_write(shell, request, window, cx) {
+        shell.state.editors.update(cx, |panels, cx| {
+            panels.fail_editor_write_dispatch(op_id, message, cx)
+        });
     }
 }

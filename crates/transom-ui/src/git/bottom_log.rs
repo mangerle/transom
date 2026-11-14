@@ -16,49 +16,52 @@ use transom_core::{HeadState, TabId};
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 切换底部 Git 提交记录面板展开/收起。
-    pub(crate) fn toggle_git_bottom_log(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return;
-        };
-        let (is_open, project) = workspace.update(cx, |workspace, _| {
-            let state = &mut workspace.state;
-            state.bottom_log_open = !state.bottom_log_open;
-            (state.bottom_log_open, state.project.clone())
-        });
-        if is_open {
-            self.git_refresh(&project, cx);
-            self.git_load_log(tab_id, 0, cx);
-        }
-        cx.notify();
+/// 切换底部 Git 提交记录面板展开/收起。
+pub(crate) fn toggle_git_bottom_log(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return;
+    };
+    let (is_open, project) = workspace.update(cx, |workspace, _| {
+        let state = &mut workspace.state;
+        state.bottom_log_open = !state.bottom_log_open;
+        (state.bottom_log_open, state.project.clone())
+    });
+    if is_open {
+        crate::git::actions::git_refresh(shell, &project, cx);
+        crate::git::actions::git_load_log(shell, tab_id, 0, cx);
     }
+    cx.notify();
+}
 
-    /// 渲染底部 Git 提交记录抽屉面板（向上占用一部分空间，对齐 IDEA 底部 Git 工具窗口风格）。
-    pub(crate) fn render_git_bottom_log_panel(
-        &self,
-        tab_id: TabId,
-        app: Entity<Self>,
-        p: &Palette,
-        cx: &App,
-    ) -> AnyElement {
-        let Some(workspace) = self.state.git_workspace(tab_id) else {
-            return div().into_any_element();
-        };
-        let branch = {
-            let state = &workspace.read(cx).state;
-            match state.status.as_ref().map(|s| &s.head) {
-                Some(HeadState::OnBranch(name)) | Some(HeadState::Initial { branch: name }) => {
-                    Some(name.clone())
-                }
-                _ => self
-                    .state
-                    .git
-                    .badges
-                    .get(&state.project.id)
-                    .and_then(|b| b.branch.clone()),
+/// 渲染底部 Git 提交记录抽屉面板（向上占用一部分空间，对齐 IDEA 底部 Git 工具窗口风格）。
+pub(crate) fn render_git_bottom_log_panel(
+    shell: &AppShell,
+    tab_id: TabId,
+    app: Entity<AppShell>,
+    p: &Palette,
+    cx: &App,
+) -> AnyElement {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return div().into_any_element();
+    };
+    let branch = {
+        let state = &workspace.read(cx).state;
+        match state.status.as_ref().map(|s| &s.head) {
+            Some(HeadState::OnBranch(name)) | Some(HeadState::Initial { branch: name }) => {
+                Some(name.clone())
             }
-        };
+            _ => shell
+                .state
+                .git
+                .badges
+                .get(&state.project.id)
+                .and_then(|b| b.branch.clone()),
+        }
+    };
         let tab_title = match branch {
             Some(name) if !name.is_empty() => {
                 rust_i18n::t!("git.view.log_with_branch", branch = name.as_str()).to_string()
@@ -127,7 +130,7 @@ impl AppShell {
                                 let close_app = close_app.clone();
                                 move |_, _, cx| {
                                     close_app.update(cx, |this, cx| {
-                                        this.toggle_git_bottom_log(tab_id, cx);
+                                        toggle_git_bottom_log(this, tab_id, cx);
                                     });
                                 }
                             }),
@@ -141,7 +144,7 @@ impl AppShell {
                             .tooltip(rust_i18n::t!("common.close").to_string())
                             .on_click(move |_, _, cx| {
                                 close_app.update(cx, |this, cx| {
-                                    this.toggle_git_bottom_log(tab_id, cx);
+                                    toggle_git_bottom_log(this, tab_id, cx);
                                 });
                             }),
                     ),
@@ -158,8 +161,7 @@ impl AppShell {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .child(self.render_git_log_view(tab_id, app, p, cx)),
+                    .child(super::workspace::render_git_log_view(shell, tab_id, app, p, cx)),
             )
             .into_any_element()
-    }
 }

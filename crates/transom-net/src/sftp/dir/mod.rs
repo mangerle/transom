@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use transom_core::{AppError, ErrorCode, TransferFilter, TransferSummary, VerifyOptions};
 
 /// 并发目录传输的聚合进度回调：装箱为具体类型，供嵌套闭包安全捕获。
-type SharedProgress = Arc<std::sync::Mutex<Box<dyn FnMut(u64, Option<u64>) + Send>>>;
+type SharedProgress = Arc<parking_lot::Mutex<Box<dyn FnMut(u64, Option<u64>) + Send>>>;
 
 /// 建目录阶段每层内的并发 ensure_dir 数。
 const DIR_MKDIR_CONCURRENCY: usize = 8;
@@ -141,7 +141,7 @@ impl SftpClient {
         let total = scan.total_bytes();
         let transferred = Arc::new(AtomicU64::new(0));
         // 回调装箱为具体类型，避免泛型闭包深入并发任务（理由见 DirFileTask 文档）
-        let progress: SharedProgress = Arc::new(std::sync::Mutex::new(Box::new(progress)));
+        let progress: SharedProgress = Arc::new(parking_lot::Mutex::new(Box::new(progress)));
         notify_shared_progress(&progress, 0, Some(total));
 
         self.create_dir_all(remote_root).await?;
@@ -213,7 +213,7 @@ impl SftpClient {
         let total = scan.total_bytes();
         let transferred = Arc::new(AtomicU64::new(0));
         // 回调装箱为具体类型，避免泛型闭包深入并发任务（理由见 DirFileTask 文档）
-        let progress: SharedProgress = Arc::new(std::sync::Mutex::new(Box::new(progress)));
+        let progress: SharedProgress = Arc::new(parking_lot::Mutex::new(Box::new(progress)));
         notify_shared_progress(&progress, 0, Some(total));
 
         // 本地 create_dir_all 自带父目录创建且无网络往返，顺序执行即可
@@ -273,7 +273,7 @@ impl SftpClient {
         let scan = self.scan_remote_snapshot(source_root, &matcher).await?;
         let total = scan.total_bytes();
         let transferred = Arc::new(AtomicU64::new(0));
-        let progress: SharedProgress = Arc::new(std::sync::Mutex::new(Box::new(progress)));
+        let progress: SharedProgress = Arc::new(parking_lot::Mutex::new(Box::new(progress)));
         notify_shared_progress(&progress, 0, Some(total));
 
         target_sftp.create_dir_all(target_root).await?;

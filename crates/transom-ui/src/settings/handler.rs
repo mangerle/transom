@@ -12,157 +12,155 @@ use crate::sidebar::SidebarSection;
 use gpui_kit::*;
 use transom_terminal::TerminalView;
 
-impl AppShell {
-    /// 设置实体发出的跨域意图。
-    pub(crate) fn on_settings_event(&mut self, event: &SettingsEvent, cx: &mut Context<Self>) {
-        match event {
-            SettingsEvent::Saved(settings) => self.on_settings_saved(settings, cx),
-            SettingsEvent::Cancelled | SettingsEvent::ProfilePreview => {
-                self.apply_appearance_to_live_panes(cx);
-                cx.notify();
+/// 设置实体发出的跨域意图。
+pub(crate) fn on_settings_event(shell: &mut AppShell, event: &SettingsEvent, cx: &mut Context<AppShell>) {
+    match event {
+        SettingsEvent::Saved(settings) => on_settings_saved(shell, settings, cx),
+        SettingsEvent::Cancelled | SettingsEvent::ProfilePreview => {
+            crate::settings::apply_appearance_to_live_panes(shell, cx);
+            cx.notify();
+        }
+        SettingsEvent::CatalogChanged(catalog) => {
+            shell.state.catalog = (**catalog).clone();
+            shell.state.refresh_tab_sessions();
+            shell.state.persist_catalog();
+            cx.notify();
+        }
+        SettingsEvent::SetSftpPanelSide(side) => {
+            shell.set_sftp_panel_side(*side, cx);
+        }
+        SettingsEvent::MonitorIntervalChanged(mode) => {
+            crate::app::monitor::set_monitor_interval_mode(shell, *mode, cx);
+        }
+        SettingsEvent::MonitorSectionsChanged(collapse) => {
+            shell.state
+                .monitor
+                .update(cx, |view, _| view.state.collapse = *collapse);
+            cx.notify();
+        }
+        SettingsEvent::MonitorDrawerWidthChanged(width) => {
+            shell.state
+                .monitor
+                .update(cx, |view, _| view.set_drawer_width(*width));
+            cx.notify();
+        }
+        SettingsEvent::TabPositionChanged(position) => {
+            if *position == transom_core::TabPosition::Left {
+                let section = match shell.state.sidebar.section() {
+                    SidebarSection::Sessions => SidebarSection::Tabs,
+                    section => section,
+                };
+                shell.state.sidebar.show_section(section);
+            } else if shell.state.sidebar.section() == SidebarSection::Tabs {
+                shell.state.sidebar.select_section(SidebarSection::Sessions);
             }
-            SettingsEvent::CatalogChanged(catalog) => {
-                self.state.catalog = (**catalog).clone();
-                self.state.refresh_tab_sessions();
-                self.state.persist_catalog();
-                cx.notify();
-            }
-            SettingsEvent::SetSftpPanelSide(side) => {
-                self.set_sftp_panel_side(*side, cx);
-            }
-            SettingsEvent::MonitorIntervalChanged(mode) => {
-                self.set_monitor_interval_mode(*mode, cx);
-            }
-            SettingsEvent::MonitorSectionsChanged(collapse) => {
-                self.state
-                    .monitor
-                    .update(cx, |view, _| view.state.collapse = *collapse);
-                cx.notify();
-            }
-            SettingsEvent::MonitorDrawerWidthChanged(width) => {
-                self.state
-                    .monitor
-                    .update(cx, |view, _| view.set_drawer_width(*width));
-                cx.notify();
-            }
-            SettingsEvent::TabPositionChanged(position) => {
-                if *position == transom_core::TabPosition::Left {
-                    let section = match self.state.sidebar.section() {
-                        SidebarSection::Sessions => SidebarSection::Tabs,
-                        section => section,
-                    };
-                    self.state.sidebar.show_section(section);
-                } else if self.state.sidebar.section() == SidebarSection::Tabs {
-                    self.state.sidebar.select_section(SidebarSection::Sessions);
-                }
-                cx.notify();
-            }
-            SettingsEvent::ApplyTriggers(triggers) => {
-                self.apply_triggers_to_terminals(triggers.as_ref(), cx);
-            }
-            SettingsEvent::OpenShortcutCapture(id) => {
-                self.queue_settings_request(SettingsRequest::OpenShortcutCapture(id));
-            }
-            SettingsEvent::OpenBackupImport => {
-                self.queue_settings_request(SettingsRequest::OpenBackupImport);
-            }
-            SettingsEvent::OpenBackupExport => {
-                self.queue_settings_request(SettingsRequest::OpenBackupExport);
-            }
-            SettingsEvent::OpenAuditViewer => {
-                self.queue_settings_request(SettingsRequest::OpenAuditViewer);
-            }
-            SettingsEvent::CloudSyncCheck => {
-                self.queue_settings_request(SettingsRequest::CloudSyncCheck);
-            }
-            SettingsEvent::CloudSyncTest => {
-                self.queue_settings_request(SettingsRequest::CloudSyncTest);
-            }
-            SettingsEvent::CloudSyncPush => {
-                self.queue_settings_request(SettingsRequest::CloudSyncPush);
-            }
-            SettingsEvent::CloudSyncPull => {
-                self.queue_settings_request(SettingsRequest::CloudSyncPull);
-            }
-            SettingsEvent::GitSyncNow => {
-                self.queue_settings_request(SettingsRequest::GitSyncNow);
-            }
-            SettingsEvent::Status(message) => {
-                self.state.status = Some(message.clone());
-                cx.notify();
-            }
-            SettingsEvent::Error(message) => {
-                self.state.set_error(message.clone());
-                cx.notify();
-            }
-            SettingsEvent::RestartForUpdate => {
-                // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
-                // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
-                self.state
-                    .restart_requested
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                cx.quit();
-            }
+            cx.notify();
+        }
+        SettingsEvent::ApplyTriggers(triggers) => {
+            apply_triggers_to_terminals(shell, triggers.as_ref(), cx);
+        }
+        SettingsEvent::OpenShortcutCapture(id) => {
+            queue_settings_request(shell, SettingsRequest::OpenShortcutCapture(id));
+        }
+        SettingsEvent::OpenBackupImport => {
+            queue_settings_request(shell, SettingsRequest::OpenBackupImport);
+        }
+        SettingsEvent::OpenBackupExport => {
+            queue_settings_request(shell, SettingsRequest::OpenBackupExport);
+        }
+        SettingsEvent::OpenAuditViewer => {
+            queue_settings_request(shell, SettingsRequest::OpenAuditViewer);
+        }
+        SettingsEvent::CloudSyncCheck => {
+            queue_settings_request(shell, SettingsRequest::CloudSyncCheck);
+        }
+        SettingsEvent::CloudSyncTest => {
+            queue_settings_request(shell, SettingsRequest::CloudSyncTest);
+        }
+        SettingsEvent::CloudSyncPush => {
+            queue_settings_request(shell, SettingsRequest::CloudSyncPush);
+        }
+        SettingsEvent::CloudSyncPull => {
+            queue_settings_request(shell, SettingsRequest::CloudSyncPull);
+        }
+        SettingsEvent::GitSyncNow => {
+            queue_settings_request(shell, SettingsRequest::GitSyncNow);
+        }
+        SettingsEvent::Status(message) => {
+            shell.state.status = Some(message.clone());
+            cx.notify();
+        }
+        SettingsEvent::Error(message) => {
+            shell.state.set_error(message.clone());
+            cx.notify();
+        }
+        SettingsEvent::RestartForUpdate => {
+            // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
+            // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
+            shell.state
+                .restart_requested
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            cx.quit();
         }
     }
+}
 
-    /// 设置保存后：应用外观、快捷键、块视图与触发器快照。
-    fn on_settings_saved(&mut self, settings: &transom_core::AppSettings, cx: &mut Context<Self>) {
-        self.apply_appearance_to_live_panes(cx);
-        self.apply_shortcut_settings(cx);
-        self.apply_block_view_settings(cx);
-        self.apply_triggers_to_terminals(&settings.triggers, cx);
-        // Git 可执行文件与提交作者是进程级配置：界面只投递意图，写入权归控制平面。
-        self.send_command(transom_core::GitCommand::Configure {
-            program: settings.git.executable_path.clone(),
-            author_name: settings.git.author_name.clone(),
-            author_email: settings.git.author_email.clone(),
-        });
-        cx.notify();
+/// 设置保存后：应用外观、快捷键、块视图与触发器快照。
+fn on_settings_saved(shell: &mut AppShell, settings: &transom_core::AppSettings, cx: &mut Context<AppShell>) {
+    crate::settings::apply_appearance_to_live_panes(shell, cx);
+    crate::app::shortcuts::apply_shortcut_settings(shell, cx);
+    crate::settings::apply_block_view_settings(shell, cx);
+    apply_triggers_to_terminals(shell, &settings.triggers, cx);
+    // Git 可执行文件与提交作者是进程级配置：界面只投递意图，写入权归控制平面。
+    shell.send_command(transom_core::GitCommand::Configure {
+        program: settings.git.executable_path.clone(),
+        author_name: settings.git.author_name.clone(),
+        author_email: settings.git.author_email.clone(),
+    });
+    cx.notify();
+}
+
+/// 把触发器快照推给所有已打开终端。
+fn apply_triggers_to_terminals(
+    shell: &mut AppShell,
+    triggers: &transom_core::TriggerSettings,
+    cx: &mut Context<AppShell>,
+) {
+    let terminals: Vec<Entity<TerminalView>> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .filter_map(|tab| tab.terminal())
+        .collect();
+    for terminal in terminals {
+        terminal.update(cx, |view, _| view.reload_triggers(triggers));
     }
+}
 
-    /// 把触发器快照推给所有已打开终端。
-    fn apply_triggers_to_terminals(
-        &mut self,
-        triggers: &transom_core::TriggerSettings,
-        cx: &mut Context<Self>,
-    ) {
-        let terminals: Vec<Entity<TerminalView>> = self
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .filter_map(|tab| tab.terminal())
-            .collect();
-        for terminal in terminals {
-            terminal.update(cx, |view, _| view.reload_triggers(triggers));
+/// 设置实体要求外壳做的窗口动作统一入队。
+fn queue_settings_request(shell: &mut AppShell, request: SettingsRequest) {
+    shell.state.window_requests.push_settings(request);
+}
+
+/// 执行一条设置实体排队的窗口动作。
+pub(crate) fn handle_settings_request(
+    shell: &mut AppShell,
+    request: super::SettingsRequest,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    match request {
+        SettingsRequest::OpenShortcutCapture(id) => {
+            crate::app::shortcuts::open_shortcut_capture(shell, id, window, cx);
         }
-    }
-
-    /// 设置实体要求外壳做的窗口动作统一入队。
-    fn queue_settings_request(&mut self, request: SettingsRequest) {
-        self.state.window_requests.push_settings(request);
-    }
-
-    /// 执行一条设置实体排队的窗口动作。
-    pub(crate) fn handle_settings_request(
-        &mut self,
-        request: super::SettingsRequest,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match request {
-            SettingsRequest::OpenShortcutCapture(id) => {
-                self.open_shortcut_capture(id, window, cx);
-            }
-            SettingsRequest::OpenBackupImport => self.open_backup_import(window, cx),
-            SettingsRequest::OpenBackupExport => self.open_backup_export(window, cx),
-            SettingsRequest::OpenAuditViewer => self.open_audit_viewer(None, window, cx),
-            SettingsRequest::CloudSyncCheck => self.start_cloud_sync_check(window, cx),
-            SettingsRequest::CloudSyncTest => self.start_cloud_sync_test(window, cx),
-            SettingsRequest::CloudSyncPush => self.start_cloud_sync_push(window, cx),
-            SettingsRequest::CloudSyncPull => self.start_cloud_sync_pull(window, cx),
-            SettingsRequest::GitSyncNow => self.start_git_sync(window, cx),
-        }
+        SettingsRequest::OpenBackupImport => shell.open_backup_import(window, cx),
+        SettingsRequest::OpenBackupExport => shell.open_backup_export(window, cx),
+        SettingsRequest::OpenAuditViewer => crate::app::audit_viewer::open_audit_viewer(shell, None, window, cx),
+        SettingsRequest::CloudSyncCheck => crate::cloud_sync::start_cloud_sync_check(shell, window, cx),
+        SettingsRequest::CloudSyncTest => crate::cloud_sync::start_cloud_sync_test(shell, window, cx),
+        SettingsRequest::CloudSyncPush => crate::cloud_sync::start_cloud_sync_push(shell, window, cx),
+        SettingsRequest::CloudSyncPull => crate::cloud_sync::start_cloud_sync_pull(shell, window, cx),
+        SettingsRequest::GitSyncNow => crate::cloud_sync::start_git_sync(shell, window, cx),
     }
 }

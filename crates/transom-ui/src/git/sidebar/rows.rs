@@ -30,14 +30,12 @@ const ROW_CHEVRON_SIZE: Rems = rems(size::TREE_CHEVRON);
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;
 
-impl AppShell {
-    /// 渲染一个分组行：折叠开关、组内计数、上下三分之一换序、中段收纳项目。
-    pub(crate) fn render_git_folder_row(
-        &mut self,
-        row: &GitFolderRow,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+/// 渲染一个分组行：折叠开关、组内计数、上下三分之一换序、中段收纳项目。
+pub(super) fn render_git_folder_row(
+    row: &GitFolderRow,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
         let folder_id = row.id;
         let app_entity = cx.entity().clone();
         // 遮罩与菜单都要握住面板句柄，各自留一份：闭包会移走它。
@@ -55,7 +53,7 @@ impl AppShell {
             .items_center()
             .cursor_pointer()
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_git_folder_collapsed(folder_id, cx);
+                crate::git::actions::toggle_git_folder_collapsed(this, folder_id, cx);
             }))
             .on_drag(anchor, move |_, _, _, cx| {
                 cx.new(|_| GitDragPreview::new(label.clone(), UiIcon::FOLDER.into()))
@@ -98,23 +96,23 @@ impl AppShell {
         element.child(band).into_any_element()
     }
 
-    /// 渲染一个项目行：活动底色、拖拽源与上下半区落点。
-    ///
-    /// `folders` 是渲染期取好的分组列表，直接带进右键菜单——菜单闭包运行时再回查
-    /// `self.state.git` 的借用不成立。
-    pub(crate) fn render_git_project_row(
-        &mut self,
-        row: &GitProjectRow,
-        row_state: SidebarRowState,
-        folders: &[(GitFolderId, String)],
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let project = &row.project;
-        let id = project.id;
-        let badge = self.state.git.badges.get(&id).cloned().unwrap_or_default();
+/// 渲染一个项目行：活动底色、拖拽源与上下半区落点。
+///
+/// `folders` 是渲染期取好的分组列表，直接带进右键菜单——菜单闭包运行时再回查
+/// `shell.state.git` 的借用不成立。
+pub(super) fn render_git_project_row(
+    shell: &AppShell,
+    row: &GitProjectRow,
+    row_state: SidebarRowState,
+    folders: &[(GitFolderId, String)],
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let project = &row.project;
+    let id = project.id;
+    let badge = shell.state.git.badges.get(&id).cloned().unwrap_or_default();
         let name = project.display_name();
-        let active_branch = self
+        let active_branch = shell
             .state
             .git_workspace_of_project(id, cx)
             .and_then(|workspace| {
@@ -158,9 +156,9 @@ impl AppShell {
             .cursor_pointer()
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                 if event.click_count() >= 2 {
-                    this.open_git_tab(project_for_click.clone(), window, cx);
+                    crate::git::actions::open_git_tab(this, project_for_click.clone(), window, cx);
                 } else {
-                    this.select_git_project(id, cx);
+                    crate::git::actions::select_git_project(this, id, cx);
                 }
             }))
             .on_drag(GitSidebarDrag::Project(id), move |_, _, _, cx| {
@@ -224,7 +222,6 @@ impl AppShell {
             p,
         ));
         element.child(band).into_any_element()
-    }
 }
 
 /// 行首图标的状态色：读不到仓库标红，刷新中标灰，有改动标警示，活动行跟随激活前景色。
@@ -335,7 +332,7 @@ fn reorder_half(
     zone.on_drop(move |drag: &GitSidebarDrag, window, cx| {
         let drag = *drag;
         app.update(cx, |this, cx| {
-            this.apply_git_drop(drag, target, cx);
+            crate::git::actions::apply_git_drop(this, drag, target, cx);
             window.refresh();
         });
     })

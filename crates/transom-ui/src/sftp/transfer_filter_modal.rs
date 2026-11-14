@@ -20,36 +20,38 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    /// 校验并保存排除规则；非法规则保留弹窗并就地提示，不中断已有传输。
-    pub(crate) fn save_sftp_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(mut modal) = self.state.sftp_modals.filter.take() else {
-            return;
-        };
-        let text = modal.textarea.read(cx).value().to_string();
-        if let Err(error) = validate_transfer_filter(&text) {
-            modal.error = Some(
-                error
-                    .detail
-                    .unwrap_or_else(|| rust_i18n::t!("sftp.filter.invalid").to_string()),
-            );
-            let textarea = modal.textarea.clone();
-            self.state.sftp_modals.filter = Some(modal);
-            textarea.update(cx, |state, cx| state.focus(window, cx));
-            cx.notify();
-            return;
-        }
-        update_app_settings(cx, |s| s.sftp.transfer_filter = text);
-        let settings_snapshot = app_settings(cx).clone();
-        match self.state.persist_settings(&settings_snapshot) {
-            Ok(()) => {
-                self.state.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
-            }
-            Err(error) => {
-                self.state.set_error(localized_error(&error));
-            }
-        }
-        self.focus_active_sftp_panel(window, cx);
+/// 校验并保存排除规则；非法规则保留弹窗并就地提示，不中断已有传输。
+pub(crate) fn save_sftp_filter_modal(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(mut modal) = shell.state.sftp_modals.filter.take() else {
+        return;
+    };
+    let text = modal.textarea.read(cx).value().to_string();
+    if let Err(error) = validate_transfer_filter(&text) {
+        modal.error = Some(
+            error
+                .detail
+                .unwrap_or_else(|| rust_i18n::t!("sftp.filter.invalid").to_string()),
+        );
+        let textarea = modal.textarea.clone();
+        shell.state.sftp_modals.filter = Some(modal);
+        textarea.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
+        return;
     }
+    update_app_settings(cx, |s| s.sftp.transfer_filter = text);
+    let settings_snapshot = app_settings(cx).clone();
+    match shell.state.persist_settings(&settings_snapshot) {
+        Ok(()) => {
+            shell.state.status = Some(rust_i18n::t!("sftp.filter_rules_saved").to_string());
+        }
+        Err(error) => {
+            shell.state.set_error(localized_error(&error));
+        }
+    }
+    crate::sftp::focus_active_sftp_panel(shell, window, cx);
+    cx.notify();
 }

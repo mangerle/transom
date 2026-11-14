@@ -12,58 +12,55 @@ use crate::editor::RemoteCodeLocation;
 use gpui_kit::*;
 use transom_core::TabId;
 
-impl AppShell {
-    /// 处理终端投递的代码位置链接。
-    pub(crate) fn open_terminal_code_location(
-        &mut self,
-        tab_id: TabId,
-        path: &str,
-        line: u32,
-        column: Option<u32>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(connection_id) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .map(|tab| tab.connection_id)
-        else {
-            return;
-        };
-        let remote_dir = self
-            .sftp_state(tab_id, cx)
-            .map(|panel| panel.remote.path.clone());
-        let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
-            self.state.status =
-                Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
+/// 处理终端投递的代码位置链接。
+pub(crate) fn open_terminal_code_location(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    path: &str,
+    line: u32,
+    column: Option<u32>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(connection_id) = shell
+        .state
+        .workspace
+        .tab(tab_id)
+        .map(|tab| tab.connection_id)
+    else {
+        return;
+    };
+    let remote_dir = crate::sftp::sftp_state(shell, tab_id, cx)
+        .map(|panel| panel.remote.path.clone());
+    let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
+        shell.state.status =
+            Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
+        cx.notify();
+        return;
+    };
+    let Some(connection_id) = connection_id else {
+        // 本地标签：直接用系统默认程序打开文件；行号跳转只在内置编辑器可用。
+        let local = std::path::Path::new(&resolved);
+        if local.is_absolute() {
+            crate::audit::open_local_path(local);
+        } else {
+            shell.state.status =
+                Some(rust_i18n::t!("editor.error_local_absolute", path = resolved).to_string());
             cx.notify();
-            return;
-        };
-        let Some(connection_id) = connection_id else {
-            // 本地标签：直接用系统默认程序打开文件；行号跳转只在内置编辑器可用。
-            let local = std::path::Path::new(&resolved);
-            if local.is_absolute() {
-                crate::audit::open_local_path(local);
-            } else {
-                self.state.status =
-                    Some(rust_i18n::t!("editor.error_local_absolute", path = resolved).to_string());
-                cx.notify();
-            }
-            return;
-        };
-        self.open_remote_code_location(
-            RemoteCodeLocation {
-                tab_id,
-                connection_id,
-                remote_path: resolved,
-                line,
-                column,
-            },
-            window,
-            cx,
-        );
-    }
+        }
+        return;
+    };
+    crate::editor::open_remote_code_location(shell, 
+        RemoteCodeLocation {
+            tab_id,
+            connection_id,
+            remote_path: resolved,
+            line,
+            column,
+        },
+        window,
+        cx,
+    );
 }
 
 /// 绝对路径原样使用；相对路径以远端当前目录为基准拼接。

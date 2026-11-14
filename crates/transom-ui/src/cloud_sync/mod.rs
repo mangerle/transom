@@ -19,7 +19,17 @@ mod scheduler;
 mod sidebar;
 mod state;
 
+pub(crate) use actions::{
+    dispatch_cloud_sync_check, dispatch_cloud_sync_pull, dispatch_cloud_sync_push,
+    dispatch_cloud_sync_test, finish_sync_failure, record_sync_history, start_cloud_sync_check,
+    start_cloud_sync_force_pull, start_cloud_sync_force_push, start_cloud_sync_pull,
+    start_cloud_sync_push, start_cloud_sync_test, start_git_sync, start_git_sync_scheduled,
+};
+pub(crate) use auto_sync::tick_cloud_sync_auto;
+pub(crate) use events::handle_sync_app_event;
 pub(crate) use form::{DEFAULT_SYNC_DIRECTORY, SyncFormInputs};
 pub(crate) use history::{SyncHistoryWriter, load_history, sync_history_path};
+pub(crate) use pull::finish_cloud_sync_pull;
 pub(crate) use scheduler::GitSyncScheduler;
+pub(crate) use sidebar::{render_cloud_sync_sidebar, toggle_cloud_sync_sidebar};
 pub(crate) use state::CloudSyncViewState;

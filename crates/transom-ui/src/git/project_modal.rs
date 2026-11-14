@@ -25,109 +25,108 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitCommand, GitFolderId, GitRequestId, SessionColor, SessionIcon};
 
-impl AppShell {
-    /// 打开「打开项目」对话框；`folder` 是「在此分组添加」带进来的目标分组。
-    pub(crate) fn open_git_project_modal(
-        &mut self,
-        folder: Option<GitFolderId>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let placeholder = rust_i18n::t!("git.project.path_placeholder").to_string();
-        let folder_placeholder = rust_i18n::t!("git.project.folder_placeholder").to_string();
-        // 「在此分组添加」带进来的是分组 id，字段里存的是名字：回填成名字，
-        // 用户看到的就是他熟悉的那一行文字，而不是一个内部标识。
-        let preset_name = folder
-            .and_then(|id| {
-                self.state
-                    .git
-                    .folders
-                    .iter()
-                    .find(|item| item.id == id)
-                    .map(|item| item.name.clone())
-            })
-            .unwrap_or_default();
-        self.state.modals.git.project = Some(GitProjectModal {
-            picker: super::dir_browser::DirPicker::new(window, cx, &placeholder),
-            folder: super::form::GitFolderField::new(window, cx, &folder_placeholder),
-            icon: SessionIcon::default(),
-            color: SessionColor::default(),
-            detected: None,
-            probing: false,
-            init_if_missing: false,
-            request_id: GitRequestId::new(),
-        });
-        if !preset_name.is_empty() {
-            self.git_folder_pick(GitHost::Modal, preset_name, window, cx);
-        }
-        cx.notify();
-        // 开窗就按面板起点走一次：用户不该先点一下才知道家目录里有什么。
-        if let Some(current) = self
-            .state
-            .modals
-            .git
-            .project
-            .as_ref()
-            .map(|modal| modal.picker.browser.root.clone())
-        {
-            self.git_browse_root(GitHost::Modal, current, window, cx);
-        }
+/// 打开「打开项目」对话框；`folder` 是「在此分组添加」带进来的目标分组。
+pub(crate) fn open_git_project_modal(
+    shell: &mut AppShell,
+    folder: Option<GitFolderId>,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let placeholder = rust_i18n::t!("git.project.path_placeholder").to_string();
+    let folder_placeholder = rust_i18n::t!("git.project.folder_placeholder").to_string();
+    // 「在此分组添加」带进来的是分组 id，字段里存的是名字：回填成名字，
+    // 用户看到的就是他熟悉的那一行文字，而不是一个内部标识。
+    let preset_name = folder
+        .and_then(|id| {
+            shell
+                .state
+                .git
+                .folders
+                .iter()
+                .find(|item| item.id == id)
+                .map(|item| item.name.clone())
+        })
+        .unwrap_or_default();
+    shell.state.modals.git.project = Some(GitProjectModal {
+        picker: super::dir_browser::DirPicker::new(window, cx, &placeholder),
+        folder: super::form::GitFolderField::new(window, cx, &folder_placeholder),
+        icon: SessionIcon::default(),
+        color: SessionColor::default(),
+        detected: None,
+        probing: false,
+        init_if_missing: false,
+        request_id: GitRequestId::new(),
+    });
+    if !preset_name.is_empty() {
+        super::folder_field::git_folder_pick(shell, GitHost::Modal, preset_name, window, cx);
     }
-
-    /// 关闭对话框。
-    pub(crate) fn close_git_project_modal(&mut self, cx: &mut Context<Self>) {
-        self.state.modals.git.project = None;
-        cx.notify();
+    cx.notify();
+    // 开窗就按面板起点走一次：用户不该先点一下才知道家目录里有什么。
+    if let Some(current) = shell
+        .state
+        .modals
+        .git
+        .project
+        .as_ref()
+        .map(|modal| modal.picker.browser.root.clone())
+    {
+        crate::git::dir_browser::git_browse_root(shell, GitHost::Modal, current, window, cx);
     }
+}
 
-    /// 提交本机仓库表单：若通过校验则添加项目并关闭弹窗。
-    pub(crate) fn commit_git_project_modal(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.project.as_ref() else {
-            return;
-        };
-        let path = expand_home(&modal.picker.path.read(cx).value());
-        let folder_name = modal.folder.name.read(cx).value().trim().to_string();
-        let (icon, color, already_repo, init) = (
-            modal.icon,
-            modal.color,
-            modal.detected.is_some(),
-            modal.init_if_missing,
-        );
-        let mut draft = GitProjectDraft::new(path);
-        draft.icon = icon;
-        draft.color = color;
-        if already_repo {
-            draft.folder_id = self.git_folder_id_for_name(&folder_name, cx);
-            self.add_git_project(draft, cx);
-            self.state.modals.git.project = None;
-        } else if init {
-            draft.folder_id = self.git_folder_id_for_name(&folder_name, cx);
-            self.init_git_project_dir(draft, cx);
-        } else {
-            draft.folder_id = self.git_folder_id_for_name(&folder_name, cx);
-            self.add_git_project(draft, cx);
-            self.state.modals.git.project = None;
-        }
-        cx.notify();
+/// 关闭对话框。
+pub(crate) fn close_git_project_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    shell.state.modals.git.project = None;
+    cx.notify();
+}
+
+/// 提交本机仓库表单：若通过校验则添加项目并关闭弹窗。
+pub(crate) fn commit_git_project_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.project.as_ref() else {
+        return;
+    };
+    let path = expand_home(&modal.picker.path.read(cx).value());
+    let folder_name = modal.folder.name.read(cx).value().trim().to_string();
+    let (icon, color, already_repo, init) = (
+        modal.icon,
+        modal.color,
+        modal.detected.is_some(),
+        modal.init_if_missing,
+    );
+    let mut draft = GitProjectDraft::new(path);
+    draft.icon = icon;
+    draft.color = color;
+    if already_repo {
+        draft.folder_id = super::folder_field::git_folder_id_for_name(shell, &folder_name, cx);
+        crate::git::actions::add_git_project(shell, draft, cx);
+        shell.state.modals.git.project = None;
+    } else if init {
+        draft.folder_id = super::folder_field::git_folder_id_for_name(shell, &folder_name, cx);
+        init_git_project_dir(shell, draft, cx);
+    } else {
+        draft.folder_id = super::folder_field::git_folder_id_for_name(shell, &folder_name, cx);
+        crate::git::actions::add_git_project(shell, draft, cx);
+        shell.state.modals.git.project = None;
     }
+    cx.notify();
+}
 
-    /// 添加对话框主体。
-    /// 添加对话框主体（接入 dialog_host）。
-    pub(crate) fn render_git_project_dialog_body(
-        &self,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.modals.git.project.as_ref() else {
-            return div().into_any_element();
-        };
-        let detected = modal.detected.clone();
-        let probing = modal.probing;
-        let error = modal.picker.error.clone();
-        let path_value = modal.picker.path.read(cx).value().trim().to_string();
-        let folders = self.git_folder_names();
+/// 添加对话框主体（接入 dialog_host）。
+pub(crate) fn render_git_project_dialog_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _window: &mut Window,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.modals.git.project.as_ref() else {
+        return div().into_any_element();
+    };
+    let detected = modal.detected.clone();
+    let probing = modal.probing;
+    let error = modal.picker.error.clone();
+    let path_value = modal.picker.path.read(cx).value().trim().to_string();
+    let folders = super::folder_field::git_folder_names(shell);
         let folder = modal.folder.clone();
         let icon_choice = modal.icon;
         let color_choice = modal.color;
@@ -291,7 +290,7 @@ impl AppShell {
                 "git-project-cancel",
                 rust_i18n::t!("git.project.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.close_git_project_modal(cx);
+                    close_git_project_modal(this, cx);
                 }),
             ))
             .child(
@@ -301,7 +300,7 @@ impl AppShell {
                     None,
                     crate::widgets::DialogConfirmKind::Primary,
                     crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        this.commit_git_project_modal(cx);
+                        commit_git_project_modal(this, cx);
                     }),
                 )
                 .disabled(!can_confirm),
@@ -314,114 +313,117 @@ impl AppShell {
             body,
             Some(footer),
         )
-    }
+}
 
-    /// 对当前输入路径发起仓库探测。
-    ///
-    /// 只要路径一变就自动跑一次：底部按钮的文案（添加 / 初始化并添加）读的就是这个
-    /// 结果，因此省掉「检测」按钮，也避免用户点了添加才发现口径不对。
-    pub(crate) fn probe_git_project_dir(&mut self, cx: &mut Context<Self>) {
-        let Some(modal) = self.state.modals.git.project.as_mut() else {
-            return;
-        };
-        let raw = modal.picker.path.read(cx).value().trim().to_string();
-        if raw.is_empty() {
-            return;
-        }
-        let path = expand_home(&raw);
-        let request_id = GitRequestId::new();
+/// 对当前输入路径发起仓库探测。
+///
+/// 只要路径一变就自动跑一次：底部按钮的文案（添加 / 初始化并添加）读的就是这个
+/// 结果，因此省掉「检测」按钮，也避免用户点了添加才发现口径不对。
+pub(crate) fn probe_git_project_dir(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    let Some(modal) = shell.state.modals.git.project.as_mut() else {
+        return;
+    };
+    let raw = modal.picker.path.read(cx).value().trim().to_string();
+    if raw.is_empty() {
+        return;
+    }
+    let path = expand_home(&raw);
+    let request_id = GitRequestId::new();
+    modal.request_id = request_id;
+    modal.probing = true;
+    modal.detected = None;
+    modal.picker.error = None;
+    shell.send_command(GitCommand::Probe { request_id, path });
+    cx.notify();
+}
+
+/// 对普通目录执行 `git init`，成功后按同一份草稿加入列表。
+fn init_git_project_dir(
+    shell: &mut AppShell,
+    draft: GitProjectDraft,
+    cx: &mut Context<AppShell>,
+) {
+    let request_id = GitRequestId::new();
+    let path = draft.path.clone();
+    if let Some(modal) = shell.state.modals.git.project.as_mut() {
         modal.request_id = request_id;
         modal.probing = true;
-        modal.detected = None;
         modal.picker.error = None;
-        self.send_command(GitCommand::Probe { request_id, path });
-        cx.notify();
     }
+    shell.state.git.pending_init = Some((request_id, draft));
+    shell.send_command(GitCommand::Init { request_id, path });
+    cx.notify();
+}
 
-    /// 对普通目录执行 `git init`，成功后按同一份草稿加入列表。
-    pub(crate) fn init_git_project_dir(&mut self, draft: GitProjectDraft, cx: &mut Context<Self>) {
-        let request_id = GitRequestId::new();
-        let path = draft.path.clone();
-        if let Some(modal) = self.state.modals.git.project.as_mut() {
-            modal.request_id = request_id;
-            modal.probing = true;
-            modal.picker.error = None;
+/// 处理探测与初始化事件。
+pub(crate) fn apply_git_probe_event(
+    shell: &mut AppShell,
+    event: transom_core::GitAppEvent,
+    cx: &mut Context<AppShell>,
+) {
+    use transom_core::GitAppEvent;
+    match event {
+        GitAppEvent::Probed {
+            request_id,
+            path,
+            info,
+            error,
+        } => {
+            let Some(modal) = shell.state.modals.git.project.as_mut() else {
+                return;
+            };
+            if modal.request_id != request_id {
+                return;
+            }
+            modal.probing = false;
+            modal.picker.error = error.as_ref().map(crate::palette::localized_error);
+            modal.detected = info.map(|info| *info);
+            if modal.detected.is_none() && modal.picker.error.is_none() {
+                // 探测成功但不是仓库：保持空 detected，界面显示「初始化并添加」。
+                log::debug!(
+                    "目录不是 Git 仓库，等待用户选择初始化，路径: {}",
+                    path.display()
+                );
+            }
+            cx.notify();
         }
-        self.state.git.pending_init = Some((request_id, draft));
-        self.send_command(GitCommand::Init { request_id, path });
-        cx.notify();
-    }
-
-    /// 处理探测与初始化事件。
-    pub(crate) fn apply_git_probe_event(
-        &mut self,
-        event: transom_core::GitAppEvent,
-        cx: &mut Context<Self>,
-    ) {
-        use transom_core::GitAppEvent;
-        match event {
-            GitAppEvent::Probed {
-                request_id,
-                path,
-                info,
-                error,
-            } => {
-                let Some(modal) = self.state.modals.git.project.as_mut() else {
-                    return;
-                };
-                if modal.request_id != request_id {
-                    return;
-                }
+        GitAppEvent::Inited {
+            request_id,
+            path,
+            error,
+        } => {
+            let Some((pending_id, draft)) = shell.state.git.pending_init.take() else {
+                return;
+            };
+            if pending_id != request_id {
+                // 不是这一次弹窗初始化发起的回调：放回去，别把别的初始化
+                // 结果错记到当前草稿上。
+                shell.state.git.pending_init = Some((pending_id, draft));
+                return;
+            }
+            if let Some(modal) = shell.state.modals.git.project.as_mut() {
                 modal.probing = false;
-                modal.picker.error = error.as_ref().map(crate::palette::localized_error);
-                modal.detected = info.map(|info| *info);
-                if modal.detected.is_none() && modal.picker.error.is_none() {
-                    // 探测成功但不是仓库：保持空 detected，界面显示「初始化并添加」。
-                    log::debug!(
-                        "目录不是 Git 仓库，等待用户选择初始化，路径: {}",
+                modal.request_id = request_id;
+            }
+            match error {
+                Some(error) => {
+                    let message = crate::palette::localized_error(&error);
+                    log::error!(
+                        "初始化 Git 仓库失败，路径: {}，原因: {message}",
                         path.display()
                     );
-                }
-                cx.notify();
-            }
-            GitAppEvent::Inited {
-                request_id,
-                path,
-                error,
-            } => {
-                let Some((pending_id, draft)) = self.state.git.pending_init.take() else {
-                    return;
-                };
-                if pending_id != request_id {
-                    // 不是这一次弹窗初始化发起的回调：放回去，别把别的初始化
-                    // 结果错记到当前草稿上。
-                    self.state.git.pending_init = Some((pending_id, draft));
-                    return;
-                }
-                if let Some(modal) = self.state.modals.git.project.as_mut() {
-                    modal.probing = false;
-                    modal.request_id = request_id;
-                }
-                match error {
-                    Some(error) => {
-                        let message = crate::palette::localized_error(&error);
-                        log::error!(
-                            "初始化 Git 仓库失败，路径: {}，原因: {message}",
-                            path.display()
-                        );
-                        if let Some(modal) = self.state.modals.git.project.as_mut() {
-                            modal.picker.error = Some(message);
-                        }
-                    }
-                    None => {
-                        self.add_git_project(draft, cx);
-                        self.state.modals.git.project = None;
+                    if let Some(modal) = shell.state.modals.git.project.as_mut() {
+                        modal.picker.error = Some(message);
                     }
                 }
-                cx.notify();
+                None => {
+                    crate::git::actions::add_git_project(shell, draft, cx);
+                    shell.state.modals.git.project = None;
+                }
             }
-            _ => {}
+            cx.notify();
         }
+        _ => {}
     }
 }
 

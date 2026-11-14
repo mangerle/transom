@@ -2,14 +2,12 @@
 
 use super::*;
 
-impl AppShell {
-    /// 复制行的标识到剪贴板，并给出右上角回执。
-    pub(super) fn copy_row_text(
+impl ContainerWorkspace {
+    /// 复制行的标识到剪贴板，并经事件通知外壳弹右上角回执。
+    pub(crate) fn copy_row_text(
         &mut self,
-        tab_id: TabId,
         target: &RowTarget,
         action: RowAction,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let text = match (target, action) {
@@ -24,45 +22,30 @@ impl AppShell {
             (RowTarget::Network(id), RowAction::CopyId) => id.clone(),
             (RowTarget::Network(id), RowAction::CopyName) => self
                 .state
-                .container_workspace(tab_id)
-                .and_then(|workspace| {
-                    let state = &workspace.read(cx).state;
-                    state
-                        .networks
-                        .iter()
-                        .find(|network| &network.id == id)
-                        .map(|network| network.name.clone())
-                })
+                .networks
+                .iter()
+                .find(|network| &network.id == id)
+                .map(|network| network.name.clone())
                 .unwrap_or_else(|| id.clone()),
-            (RowTarget::Image(id), action) => {
-                let workspace = self.state.container_workspace(tab_id);
-                match action {
-                    RowAction::CopyId => id.clone(),
-                    _ => workspace
-                        .and_then(|workspace| {
-                            let state = &workspace.read(cx).state;
-                            state
-                                .images
-                                .iter()
-                                .find(|image| &image.id == id)
-                                .map(|image| image.display_name())
-                        })
-                        .unwrap_or_else(|| transom_core::short_id(id)),
-                }
-            }
+            (RowTarget::Image(id), action) => match action {
+                RowAction::CopyId => id.clone(),
+                _ => self
+                    .state
+                    .images
+                    .iter()
+                    .find(|image| &image.id == id)
+                    .map(|image| image.display_name())
+                    .unwrap_or_else(|| transom_core::short_id(id)),
+            },
             _ => return,
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-        self.show_toast(
-            rust_i18n::t!("container.row.copied", value = text).to_string(),
-            true,
-            window,
-            cx,
-        );
+        cx.emit(ContainerWorkspaceEvent::ShowToast {
+            message: rust_i18n::t!("container.row.copied", value = text).to_string(),
+            success: true,
+        });
     }
-}
 
-impl ContainerWorkspace {
     /// 停止当前选中项的日志、统计与终端会话。
     pub(crate) fn stop_container_streams(&mut self) {
         let requests = [

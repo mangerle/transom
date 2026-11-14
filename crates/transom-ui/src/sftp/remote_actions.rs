@@ -239,34 +239,32 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    pub(crate) fn remote_pane_scope<'a>(
-        &self,
-        tab_id: TabId,
-        target: SftpRemotePaneRef,
-        cx: &'a App,
-    ) -> Option<RemotePaneScope<'a>> {
-        let tab = self.state.workspace.tab(tab_id)?;
-        let panel = self.sftp_state(tab_id, cx)?;
-        let pane = panel.remote_pane(target)?;
-        let connection_id = panel.remote_connection(target, tab.connection_id)?;
-        Some(RemotePaneScope {
-            pane,
-            connection_id,
-        })
-    }
+pub(crate) fn remote_pane_scope<'a>(
+    shell: &AppShell,
+    tab_id: TabId,
+    target: SftpRemotePaneRef,
+    cx: &'a App,
+) -> Option<RemotePaneScope<'a>> {
+    let tab = shell.state.workspace.tab(tab_id)?;
+    let panel = crate::sftp::sftp_state(shell, tab_id, cx)?;
+    let pane = panel.remote_pane(target)?;
+    let connection_id = panel.remote_connection(target, tab.connection_id)?;
+    Some(RemotePaneScope {
+        pane,
+        connection_id,
+    })
+}
 
-    pub(crate) fn send_sftp_op_for_connection(
-        &mut self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        op: SftpOperation,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.send_op_for_connection(connection_id, op, cx)
-            });
-        }
+pub(crate) fn send_sftp_op_for_connection(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op: SftpOperation,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| {
+            view.send_op_for_connection(connection_id, op, cx)
+        });
     }
 }

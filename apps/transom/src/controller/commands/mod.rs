@@ -1,0 +1,258 @@
+//! 用户命令的分发与处理。
+//!
+//! 设计原理（Why）：命令处理此前内联在控制循环的巨型 match 里（单函数
+//! 超过七百行，四条命令分支之外还混着状态表管理）；拆到本模块后，主循环
+//! 只负责"收事件、委托处理、判定是否停机"，新增命令不再触碰循环本体。
+
+
+mod forward;
+mod host;
+mod sync;
+
+use super::container_ops::handle_container_command;
+use super::lifecycle::{ConnectingTab, ShutdownTables, drop_local_host, shutdown_all};
+use super::pty::{ConnectDispatch, dispatch_connect};
+use super::sftp_exec::{SftpDispatch, dispatch_sftp_op};
+use super::state::{ControllerCtx, ControllerState};
+use forward::handle_forward_command;
+use host::handle_host_command;
+use sync::handle_sync_command;
+use transom_core::{
+    AppCommand, ConnectParams, SftpCommand, TabId, TerminalCommand, ZmodemCommand,
+};
+use transom_zmodem::ZmodemConfig;
+
+/// 主循环的继续/停机判定。
+pub(super) enum LoopControl {
+    /// 继续处理下一条事件。
+    Continue,
+    /// 收到停机命令或通道关闭：执行收尾后退出主循环。
+    Shutdown,
+}
+
+/// 分发一条用户命令。
+pub(super) async fn handle_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: AppCommand,
+) -> LoopControl {
+    match command {
+        AppCommand::Terminal(cmd) => handle_terminal_command(state, ctx, cmd).await,
+        AppCommand::Sftp(cmd) => {
+            handle_sftp_command(state, ctx, cmd);
+            LoopControl::Continue
+        }
+        AppCommand::Forward(cmd) => {
+            handle_forward_command(state, ctx, cmd).await;
+            LoopControl::Continue
+        }
+        AppCommand::Host(cmd) => {
+            handle_host_command(state, ctx, cmd).await;
+            LoopControl::Continue
+        }
+        AppCommand::Sync(cmd) => {
+            handle_sync_command(state, ctx, *cmd).await;
+            LoopControl::Continue
+        }
+        AppCommand::Zmodem(cmd) => {
+            handle_zmodem_command(state, cmd);
+            LoopControl::Continue
+        }
+        AppCommand::Container(cmd) => {
+            handle_container_command(state, ctx, *cmd);
+            LoopControl::Continue
+        }
+        AppCommand::Git(cmd) => {
+            super::git_ops::handle_git_command(state, ctx, cmd);
+            LoopControl::Continue
+        }
+    }
+}
+
+async fn handle_terminal_command(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: TerminalCommand,
+) -> LoopControl {
+    match command {
+        TerminalCommand::Connect(params) => {
+            let ConnectParams {
+                tab_id,
+                connection_id,
+                session,
+                jumps,
+                proxy,
+                size,
+                secrets,
+                zmodem,
+                allow_sha1_publickey_auth,
+                shell_integration,
+            } = *params;
+            start_connect(
+                state,
+                ConnectDispatch {
+                    known_hosts: ctx.known_hosts.clone(),
+                    event_tx: ctx.event_tx.clone(),
+                    internal_tx: ctx.internal_tx.clone(),
+                    tab_id,
+                    connection_id,
+                    session: Box::new(session),
+                    jumps,
+                    proxy,
+                    size,
+                    secrets,
+                    zmodem: ZmodemConfig {
+                        download_dir: zmodem.resolved_download_dir(),
+                        auto_receive: zmodem.auto_receive,
+                    },
+                    allow_sha1_publickey_auth,
+                    shell_integration,
+                },
+            );
+            LoopControl::Continue
+        }
+        TerminalCommand::CloseTab { tab_id } => {
+            close_tab(state, ctx, tab_id);
+            LoopControl::Continue
+        }
+        TerminalCommand::Shutdown => LoopControl::Shutdown,
+    }
+}
+
+fn handle_sftp_command(state: &mut ControllerState, ctx: &ControllerCtx, command: SftpCommand) {
+    match command {
+        SftpCommand::Sftp {
+            tab_id,
+            connection_id,
+            op_id,
+            op,
+        } => {
+            dispatch_sftp_op(SftpDispatch {
+                sessions: &mut state.sessions,
+                sftp_tasks: &mut state.sftp_tasks,
+                event_tx: ctx.event_tx.clone(),
+                internal_tx: ctx.internal_tx.clone(),
+                tab_id,
+                connection_id,
+                op_id,
+                op,
+            });
+        }
+        SftpCommand::SftpCancel { tab_id, op_id } => {
+            if let Some(handle) = state.sftp_tasks.remove(&(tab_id, op_id)) {
+                handle.abort();
+            }
+        }
+    }
+}
+
+
+fn handle_zmodem_command(state: &mut ControllerState, command: ZmodemCommand) {
+    match command {
+        ZmodemCommand::ZmodemUpload { tab_id, files } => {
+            let control = state
+                .sessions
+                .get(&tab_id)
+                .and_then(|s| s.zmodem_control.clone());
+            if let Some(control) = control
+                && !control.upload(files)
+            {
+                log::warn!("ZMODEM 上传决策被丢弃，标签 {tab_id:?} 无等待中的传输会话");
+            }
+        }
+        ZmodemCommand::ZmodemCancel { tab_id } => {
+            let control = state
+                .sessions
+                .get(&tab_id)
+                .and_then(|s| s.zmodem_control.clone());
+            if let Some(control) = control {
+                control.cancel();
+            }
+        }
+    }
+}
+
+/// 发起连接：登记最新意图并派发建连任务。
+///
+/// 同标签的旧建连任务作废并取消，它迟到的完成结果会被接入裁决拒收，
+/// 不再覆盖新连接。
+fn start_connect(state: &mut ControllerState, dispatch: ConnectDispatch) {
+    let tab_id = dispatch.tab_id;
+    let connection_id = dispatch.connection_id;
+    if let Some(previous) = state.connecting.remove(&tab_id) {
+        previous.task.abort();
+    }
+    let task = dispatch_connect(dispatch);
+    state.connecting.insert(
+        tab_id,
+        ConnectingTab {
+            connection_id,
+            task,
+        },
+    );
+}
+
+/// 启动端口转发：建立有多次网络往返，移入任务执行；结果经 ForwardReady
+/// 回流提交，分发循环不再等待远端应答。
+
+/// 关闭标签：注销连接意图与全部附属任务，优雅断开远端。
+fn close_tab(state: &mut ControllerState, ctx: &ControllerCtx, tab_id: TabId) {
+    // 关闭即注销连接意图并取消建连任务：DNS/握手/认证等待中的连接随任务
+    // 中止，迟到的完成结果被接入裁决拒收。
+    if let Some(entry) = state.connecting.remove(&tab_id) {
+        entry.task.abort();
+    }
+    drop_local_host(&state.local_host_tabs, tab_id);
+    state.terminate_session(tab_id, "tab closed");
+    state.sftp_tasks.retain(|(t, _), handle| {
+        if *t == tab_id {
+            handle.abort();
+            false
+        } else {
+            true
+        }
+    });
+    // 容器工作区与终端会话互不影响，但同一标签关闭时必须一起回收。
+    if let Some(task) = state.container_connects.remove(&tab_id) {
+        task.abort();
+    }
+    if let Some(mut workspace) = state.container_workspaces.remove(&tab_id) {
+        for request_id in workspace.shutdown() {
+            ctx.container.finish(request_id);
+        }
+    }
+}
+
+/// 停机收尾：中止在途云同步、停全部后台任务、断开全部远端并限时等待。
+///
+/// 收尾完成后通过 `shutdown_tx` 通知 `Controller::shutdown`；提前发送会
+/// 让远端断开会话随运行时关闭被取消。
+pub(super) async fn shutdown(
+    state: &mut ControllerState,
+    shutdown_tx: &std::sync::mpsc::Sender<()>,
+) {
+    // 在途云同步没有可续传的事务，停机即中止。
+    if let Some(task) = state.sync_task.take() {
+        task.abort();
+    }
+    shutdown_all(ShutdownTables {
+        connecting: &mut state.connecting,
+        sessions: &mut state.sessions,
+        sftp_tasks: &mut state.sftp_tasks,
+        cleanup: &mut state.cleanup_set,
+        local_host_task: &mut state.local_host_task,
+    })
+    .await;
+    state.monitor_set.shutdown().await;
+    // 容器工作区：中止探测、长任务与一次性查询，不留脱缰任务。
+    for (_, handle) in state.container_connects.drain() {
+        handle.abort();
+    }
+    for (_, mut workspace) in state.container_workspaces.drain() {
+        workspace.shutdown();
+    }
+    state.container_ops.shutdown().await;
+    // Git 请求全部是自带超时的子进程，限时等完即可，不需要单独中止。
+    state.git_set.shutdown().await;
+    let _ = shutdown_tx.send(());
+}

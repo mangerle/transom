@@ -2,6 +2,7 @@
 
 mod layout;
 mod shell;
+pub(crate) use shell::{activate_group, add_groups_to_tiling, apply_tiling_layout_for, clear_tab_selection, close_tiling_group, close_tiling_groups, fill_tiling_slot, focus_neighbor_tile, tile_tab, toggle_tab_selection, untile_tiling};
 mod strip;
 mod tabs;
 mod types;

@@ -158,21 +158,19 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    pub(crate) fn sftp_local_refresh(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.local_refresh(cx));
-        }
+pub(crate) fn sftp_local_refresh(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.local_refresh(cx));
     }
+}
 
-    pub(crate) fn sftp_local_enter_path(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.local_enter_path(tab_id, window, cx));
-        }
+pub(crate) fn sftp_local_enter_path(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.local_enter_path(tab_id, window, cx));
     }
 }

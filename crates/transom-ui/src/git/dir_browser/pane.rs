@@ -133,7 +133,7 @@ fn actions_row(
             .render()
             .on_click(move |_, window, cx| {
                 mkdir_app.update(cx, |this, cx| {
-                    this.git_start_dir_draft(target, window, cx);
+                    super::git_start_dir_draft(this, target, window, cx);
                 });
             }),
         )
@@ -154,7 +154,7 @@ fn actions_row(
             .selected(picker.browser.show_hidden)
             .render()
             .on_click(move |_, _, cx| {
-                hidden_app.update(cx, |this, cx| this.git_toggle_hidden(target, cx));
+                hidden_app.update(cx, |this, cx| super::git_toggle_hidden(this, target, cx));
             }),
         )
         .child(
@@ -165,7 +165,7 @@ fn actions_row(
             )
             .render()
             .on_click(move |_, _, cx| {
-                refresh_app.update(cx, |this, cx| this.git_refresh_browser(target, cx));
+                refresh_app.update(cx, |this, cx| super::git_refresh_browser(this, target, cx));
             }),
         )
         .into_any_element()
@@ -190,7 +190,7 @@ fn quick_path_button(
     .render()
     .on_click(move |_, window, cx| {
         click_app.update(cx, |this, cx| {
-            this.git_browse_quick(target, path.clone(), window, cx);
+            super::git_browse_quick(this, target, path.clone(), window, cx);
         });
     })
     .into_any_element()
@@ -332,11 +332,11 @@ fn entry_row(
             let path = select_path.clone();
             let is_double_click = event.click_count() >= 2;
             select_app.update(cx, |this, cx| {
-                this.git_select_dir(target, path, window, cx);
+                super::git_select_dir(this, target, path, window, cx);
                 // 双击落在目录行上视为「选好了」：克隆弹窗把目录树收起，
                 // 项目弹窗的树是主内容，保持展开。
                 if is_double_click {
-                    this.git_close_dir_tree(target, cx);
+                    super::git_close_dir_tree(this, target, cx);
                 }
             });
         });
@@ -392,7 +392,7 @@ fn draft_row(
             .render()
             .on_click(move |_, window, cx| {
                 ok_app.update(cx, |this, cx| {
-                    this.git_commit_dir_draft(target, window, cx);
+                    super::git_commit_dir_draft(this, target, window, cx);
                 });
             }),
         )
@@ -406,7 +406,7 @@ fn draft_row(
             .render()
             .on_click(move |_, _, cx| {
                 cancel_app.update(cx, |this, cx| {
-                    this.git_cancel_dir_draft(target, cx);
+                    super::git_cancel_dir_draft(this, target, cx);
                 });
             }),
         )
@@ -461,7 +461,7 @@ fn chevron(
             cx.stop_propagation();
             let path = path.clone();
             click_app.update(cx, |this, cx| {
-                this.git_toggle_tree_dir(host, path, cx);
+                super::git_toggle_tree_dir(this, host, path, cx);
             });
         })
         .into_any_element()

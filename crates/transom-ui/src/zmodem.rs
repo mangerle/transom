@@ -24,191 +24,189 @@ pub(crate) struct ZmodemState {
     pub(crate) total: Option<u64>,
 }
 
-impl AppShell {
-    /// 处理控制器转发的 ZMODEM 事件。
-    pub(crate) fn handle_zmodem_event(
-        &mut self,
-        tab_id: transom_core::TabId,
-        event: ZmodemEvent,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(pane) = self
-            .state
-            .workspace
-            .tab_mut(tab_id)
-            .and_then(|tab| tab.session_pane_mut())
-        else {
-            return;
-        };
-        match event {
-            ZmodemEvent::Started { direction } => {
-                pane.zmodem = Some(ZmodemState {
-                    direction,
-                    name: String::new(),
-                    transferred: 0,
-                    total: None,
-                });
-                let text = rust_i18n::t!("zmodem.started").to_string();
-                self.state.status = Some(text);
-            }
-            ZmodemEvent::Progress {
+/// 处理控制器转发的 ZMODEM 事件。
+pub(crate) fn handle_zmodem_event(
+    shell: &mut AppShell,
+    tab_id: transom_core::TabId,
+    event: ZmodemEvent,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(pane) = shell
+        .state
+        .workspace
+        .tab_mut(tab_id)
+        .and_then(|tab| tab.session_pane_mut())
+    else {
+        return;
+    };
+    match event {
+        ZmodemEvent::Started { direction } => {
+            pane.zmodem = Some(ZmodemState {
+                direction,
+                name: String::new(),
+                transferred: 0,
+                total: None,
+            });
+            let text = rust_i18n::t!("zmodem.started").to_string();
+            shell.state.status = Some(text);
+        }
+        ZmodemEvent::Progress {
+            direction,
+            name,
+            transferred,
+            total,
+        } => {
+            pane.zmodem = Some(ZmodemState {
                 direction,
                 name,
                 transferred,
                 total,
-            } => {
-                pane.zmodem = Some(ZmodemState {
-                    direction,
-                    name,
-                    transferred,
-                    total,
-                });
-            }
-            ZmodemEvent::AwaitUpload => {
-                // 用户取消文件选择视同放弃上传：让对端 rz 尽快退出轮询。
-                let Some(files) = rfd::FileDialog::new().pick_files() else {
-                    self.state.send_zmodem_cancel(tab_id);
-                    return;
-                };
-                self.state.send_zmodem_upload(tab_id, files);
+            });
+        }
+        ZmodemEvent::AwaitUpload => {
+            // 用户取消文件选择视同放弃上传：让对端 rz 尽快退出轮询。
+            let Some(files) = rfd::FileDialog::new().pick_files() else {
+                shell.state.send_zmodem_cancel(tab_id);
                 return;
-            }
-            ZmodemEvent::Finished(outcome) => {
-                pane.zmodem = None;
-                let text = match outcome {
-                    ZmodemFinished::Completed { files } => {
-                        send_zmodem_notification(true, files);
-                        rust_i18n::t!("zmodem.done", files = files).to_string()
-                    }
-                    ZmodemFinished::Cancelled => rust_i18n::t!("zmodem.cancelled").to_string(),
-                    ZmodemFinished::Failed(reason) => {
-                        send_zmodem_notification(false, 0);
-                        reason
-                    }
-                };
-                self.state.status = Some(text);
-            }
+            };
+            shell.state.send_zmodem_upload(tab_id, files);
+            return;
         }
-        cx.notify();
+        ZmodemEvent::Finished(outcome) => {
+            pane.zmodem = None;
+            let text = match outcome {
+                ZmodemFinished::Completed { files } => {
+                    send_zmodem_notification(true, files);
+                    rust_i18n::t!("zmodem.done", files = files).to_string()
+                }
+                ZmodemFinished::Cancelled => rust_i18n::t!("zmodem.cancelled").to_string(),
+                ZmodemFinished::Failed(reason) => {
+                    send_zmodem_notification(false, 0);
+                    reason
+                }
+            };
+            shell.state.status = Some(text);
+        }
     }
+    cx.notify();
+}
 
-    /// 传输进行中把 Esc 解释为取消命令。
-    ///
-    /// 设计原理：协议激活期间写过滤本就丢弃用户输入，Esc 到不了远端程序，
-    /// 因此单独截获它不会与 vim 等全屏程序争键；无传输时保持零开销直接返回，
-    /// 避免干扰搜索栏、弹窗等既有 Esc 语义。
-    pub(crate) fn on_zmodem_cancel_key(
-        &mut self,
-        event: &KeyDownEvent,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-        if !event.keystroke.key.eq_ignore_ascii_case("escape") {
-            return;
-        }
-        let modifiers = event.keystroke.modifiers;
-        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
-            return;
-        }
-        let Some(tab_id) = self.state.workspace.active_tab else {
-            return;
-        };
-        if self
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .any(|tab| tab.id == tab_id && tab.zmodem().is_some())
-        {
-            self.state.send_zmodem_cancel(tab_id);
-        }
+/// 传输进行中把 Esc 解释为取消命令。
+///
+/// 设计原理：协议激活期间写过滤本就丢弃用户输入，Esc 到不了远端程序，
+/// 因此单独截获它不会与 vim 等全屏程序争键；无传输时保持零开销直接返回，
+/// 避免干扰搜索栏、弹窗等既有 Esc 语义。
+pub(crate) fn on_zmodem_cancel_key(
+    shell: &mut AppShell,
+    event: &KeyDownEvent,
+    _window: &mut Window,
+    _cx: &mut Context<AppShell>,
+) {
+    if !event.keystroke.key.eq_ignore_ascii_case("escape") {
+        return;
     }
+    let modifiers = event.keystroke.modifiers;
+    if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+        return;
+    }
+    let Some(tab_id) = shell.state.workspace.active_tab else {
+        return;
+    };
+    if shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .any(|tab| tab.id == tab_id && tab.zmodem().is_some())
+    {
+        shell.state.send_zmodem_cancel(tab_id);
+    }
+}
 
-    /// 状态栏的 ZMODEM 进度徽章：进度/文件名 + 取消按钮。
-    /// 无活跃会话时返回 None。
-    pub(crate) fn render_zmodem_badge(
-        &mut self,
-        tab_id: transom_core::TabId,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let state = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.zmodem().cloned())?;
-        let direction_label = match state.direction {
-            ZmodemDirection::Upload => rust_i18n::t!("zmodem.upload").to_string(),
-            ZmodemDirection::Download => rust_i18n::t!("zmodem.download").to_string(),
-        };
-        let name = if state.name.is_empty() {
-            direction_label.clone()
-        } else {
-            format!("{direction_label}: {}", state.name)
-        };
-        let progress = match state.total.filter(|total| *total > 0) {
-            Some(total) => format!(
-                "{} / {}",
-                format_size(state.transferred),
-                format_size(total)
-            ),
-            None => format_size(state.transferred),
-        };
-        let tooltip = format!(
-            "{name} · {progress} · {}",
-            rust_i18n::t!("zmodem.cancel_hint")
-        );
-        let cancel = cx.listener(move |this, _, _, _cx| {
-            this.state.send_zmodem_cancel(tab_id);
-        });
-        Some(
-            h_flex()
-                .id("zmodem-badge")
-                .flex_none()
-                .max_w(rems(18.0))
-                .gap_2()
-                .items_center()
-                .h(rems(crate::status_bar::BADGE_HEIGHT))
-                .px_2()
-                .rounded(p.radius.md)
-                .bg(p.secondary)
-                .border_1()
-                .border_color(p.border)
-                .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
-                .child(
-                    div()
-                        .flex_none()
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.muted_foreground)
-                        .child(progress),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.secondary_foreground)
-                        .child(name),
-                )
-                .child(
-                    div()
-                        .id("zmodem-cancel")
-                        .flex_none()
-                        .px_1()
-                        .rounded(p.radius.sm)
-                        .text_xs()
-                        .text_color(p.danger)
-                        .cursor_pointer()
-                        .hover(|style| style.bg(p.tone.danger_subtle))
-                        .child(rust_i18n::t!("zmodem.cancel").to_string())
-                        .on_click(cancel),
-                )
-                .into_any_element(),
-        )
-    }
+/// 状态栏的 ZMODEM 进度徽章：进度/文件名 + 取消按钮。
+/// 无活跃会话时返回 None。
+pub(crate) fn render_zmodem_badge(
+    shell: &mut AppShell,
+    tab_id: transom_core::TabId,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> Option<AnyElement> {
+    let state = shell
+        .state
+        .workspace
+        .tab(tab_id)
+        .and_then(|tab| tab.zmodem().cloned())?;
+    let direction_label = match state.direction {
+        ZmodemDirection::Upload => rust_i18n::t!("zmodem.upload").to_string(),
+        ZmodemDirection::Download => rust_i18n::t!("zmodem.download").to_string(),
+    };
+    let name = if state.name.is_empty() {
+        direction_label.clone()
+    } else {
+        format!("{direction_label}: {}", state.name)
+    };
+    let progress = match state.total.filter(|total| *total > 0) {
+        Some(total) => format!(
+            "{} / {}",
+            format_size(state.transferred),
+            format_size(total)
+        ),
+        None => format_size(state.transferred),
+    };
+    let tooltip = format!(
+        "{name} · {progress} · {}",
+        rust_i18n::t!("zmodem.cancel_hint")
+    );
+    let cancel = cx.listener(move |this, _, _, _cx| {
+        this.state.send_zmodem_cancel(tab_id);
+    });
+    Some(
+        h_flex()
+            .id("zmodem-badge")
+            .flex_none()
+            .max_w(rems(18.0))
+            .gap_2()
+            .items_center()
+            .h(rems(crate::status_bar::BADGE_HEIGHT))
+            .px_2()
+            .rounded(p.radius.md)
+            .bg(p.secondary)
+            .border_1()
+            .border_color(p.border)
+            .tooltip(move |_window, cx| Tooltip::new(tooltip.clone()).build(_window, cx))
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.muted_foreground)
+                    .child(progress),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.secondary_foreground)
+                    .child(name),
+            )
+            .child(
+                div()
+                    .id("zmodem-cancel")
+                    .flex_none()
+                    .px_1()
+                    .rounded(p.radius.sm)
+                    .text_xs()
+                    .text_color(p.danger)
+                    .cursor_pointer()
+                    .hover(|style| style.bg(p.tone.danger_subtle))
+                    .child(rust_i18n::t!("zmodem.cancel").to_string())
+                    .on_click(cancel),
+            )
+            .into_any_element(),
+    )
 }
 
 /// 桌面通知：仅完成与失败需要提示（进行中有状态栏徽章，取消是用户主动行为）。

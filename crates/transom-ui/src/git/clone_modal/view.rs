@@ -17,28 +17,27 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 渲染「克隆仓库」弹窗主体（接入 dialog_host）。
-    pub(crate) fn render_git_clone_dialog_body(
-        &self,
-        app: &Entity<AppShell>,
-        _window: &mut Window,
-        cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.modals.git.clone.as_ref() else {
-            return div().into_any_element();
-        };
-        let url = modal.url.clone();
-        let depth = modal.depth.clone();
-        let folder = modal.folder.clone();
-        let error = modal.error.clone();
-        let depth_enabled = modal.depth_enabled;
-        let tree_open = modal.tree_open;
-        let icon_choice = modal.icon;
-        let color_choice = modal.color;
-        let path_input = modal.picker.path.clone();
-        let folders = self.git_folder_names();
+/// 渲染「克隆仓库」弹窗主体（接入 dialog_host）。
+pub(crate) fn render_git_clone_dialog_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _window: &mut Window,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.modals.git.clone.as_ref() else {
+        return div().into_any_element();
+    };
+    let url = modal.url.clone();
+    let depth = modal.depth.clone();
+    let folder = modal.folder.clone();
+    let error = modal.error.clone();
+    let depth_enabled = modal.depth_enabled;
+    let tree_open = modal.tree_open;
+    let icon_choice = modal.icon;
+    let color_choice = modal.color;
+    let path_input = modal.picker.path.clone();
+    let folders = crate::git::folder_field::git_folder_names(shell);
         let target = GitHost::Clone;
 
         let body = v_flex()
@@ -224,7 +223,7 @@ impl AppShell {
                 "git-clone-cancel",
                 rust_i18n::t!("git.clone.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    this.close_git_clone_modal(cx);
+                    super::close_git_clone_modal(this, cx);
                 }),
             ))
             .child(crate::widgets::dialog_confirm_button(
@@ -233,7 +232,7 @@ impl AppShell {
                 Some(AppIcon::Ui(UiIcon::DOWNLOAD)),
                 crate::widgets::DialogConfirmKind::Primary,
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.start_git_clone(window, cx);
+                    super::start_git_clone(this, window, cx);
                 }),
             ));
 
@@ -244,5 +243,4 @@ impl AppShell {
             body,
             Some(footer),
         )
-    }
 }

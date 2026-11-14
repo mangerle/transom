@@ -42,8 +42,8 @@ pub(super) fn render_push_dialog(
     let no_verify = modal.no_verify;
     let commits_count = modal.commits.len();
     let files_count = modal.commit_files.len();
-    let is_protected = shell.is_git_branch_protected(remote_branch, _cx);
-    let tab_id = shell.git_tab_for_project(modal.project.id, _cx);
+    let is_protected = super::is_git_branch_protected(remote_branch, _cx);
+    let tab_id = crate::git::actions::git_tab_for_project(shell, modal.project.id, _cx);
 
     // 1. 顶部目标路径胶囊与统计
     let target_bar = h_flex()
@@ -353,7 +353,7 @@ pub(super) fn render_push_dialog(
                         .child(tags_label),
                 )
                 .on_click(move |_, _, cx| {
-                    app_tags.update(cx, |this, cx| this.git_cycle_push_tags_mode(cx));
+                    app_tags.update(cx, |this, cx| super::git_cycle_push_tags_mode(this, cx));
                 }),
         )
         .child(
@@ -385,7 +385,7 @@ pub(super) fn render_push_dialog(
                 )
                 .on_click(move |_, _, cx| {
                     if !is_protected {
-                        app_force.update(cx, |this, cx| this.git_toggle_push_force(cx));
+                        app_force.update(cx, |this, cx| super::git_toggle_push_force(this, cx));
                     }
                 }),
         )
@@ -403,7 +403,7 @@ pub(super) fn render_push_dialog(
                         .child(rust_i18n::t!("git.push.no_verify").to_string()),
                 )
                 .on_click(move |_, _, cx| {
-                    app_no_verify.update(cx, |this, cx| this.git_toggle_push_no_verify(cx));
+                    app_no_verify.update(cx, |this, cx| super::git_toggle_push_no_verify(this, cx));
                 }),
         )
         .child(div().flex_1())
@@ -413,7 +413,7 @@ pub(super) fn render_push_dialog(
                 .small()
                 .label(rust_i18n::t!("git.project.cancel").to_string())
                 .on_click(move |_, _, cx| {
-                    app_cancel.update(cx, |this, cx| this.close_git_push_modal(cx));
+                    app_cancel.update(cx, |this, cx| super::close_git_push_modal(this, cx));
                 }),
         )
         .child(
@@ -430,7 +430,7 @@ pub(super) fn render_push_dialog(
                     rust_i18n::t!("git.menu.push").to_string()
                 })
                 .on_click(move |_, _, cx| {
-                    app_submit.update(cx, |this, cx| this.submit_git_push_modal(cx));
+                    app_submit.update(cx, |this, cx| super::submit_git_push_modal(this, cx));
                 }),
         );
 

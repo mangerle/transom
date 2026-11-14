@@ -228,9 +228,9 @@ pub(super) fn render_vertical_tab_row(
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
             let modifiers = event.modifiers();
             if modifiers.control || modifiers.platform {
-                this.toggle_tab_selection(&selection_groups, cx);
+                crate::app::tiling::toggle_tab_selection(this, &selection_groups, cx);
             } else {
-                this.clear_tab_selection(cx);
+                crate::app::tiling::clear_tab_selection(this, cx);
                 this.activate_tab(active_pane, window, cx);
             }
         }))

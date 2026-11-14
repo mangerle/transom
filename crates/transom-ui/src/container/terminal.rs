@@ -73,62 +73,60 @@ impl ContainerWorkspace {
     }
 }
 
-impl AppShell {
-    pub(super) fn create_container_terminal(
-        &mut self,
-        io: transom_core::TerminalIo,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> (Entity<TerminalView>, Subscription) {
-        let settings = app_settings(cx);
-        let mut profile = settings.terminal_profile.clone();
-        profile.background_transparency = settings.window.window_transparency;
-        let interaction = settings.terminal_interaction;
-        let remote_clipboard_allowed = interaction.default_allow_remote_clipboard_write;
-        let reserved = self.state.shortcut_recording.filter.clone();
-        let key_filter: KeyFilter = Arc::new(move |keystroke| {
-            reserved
-                .read()
-                .iter()
-                .any(|binding| keystroke.should_match(binding))
-        });
-        let terminal = cx.new(|cx| {
-            TerminalView::new(
-                window,
-                cx,
-                transom_terminal::TerminalViewParams {
-                    io,
-                    profile,
-                    interaction,
-                    key_filter: Some(key_filter),
-                    audit_path: None,
-                    shell_integration_enabled: false,
-                    remote_clipboard_allowed,
-                    clear_on_first_resize: false,
-                },
-            )
-        });
-        let provider = self.state.history_provider.clone();
-        terminal.update(cx, |view, _cx| view.attach_history(provider));
-        let focus_handle = terminal.read(cx).focus_handle().clone();
-        window.focus(&focus_handle, cx);
-        let subscription = cx.subscribe_in(
-            &terminal,
+pub(super) fn create_container_terminal(
+    shell: &mut AppShell,
+    io: transom_core::TerminalIo,
+    tab_id: TabId,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) -> (Entity<TerminalView>, Subscription) {
+    let settings = app_settings(cx);
+    let mut profile = settings.terminal_profile.clone();
+    profile.background_transparency = settings.window.window_transparency;
+    let interaction = settings.terminal_interaction;
+    let remote_clipboard_allowed = interaction.default_allow_remote_clipboard_write;
+    let reserved = shell.state.shortcut_recording.filter.clone();
+    let key_filter: KeyFilter = Arc::new(move |keystroke| {
+        reserved
+            .read()
+            .iter()
+            .any(|binding| keystroke.should_match(binding))
+    });
+    let terminal = cx.new(|cx| {
+        TerminalView::new(
             window,
-            move |this, _, event: &TerminalEvent, _window, cx| {
-                if matches!(event, TerminalEvent::Exit)
-                    && let Some(workspace) = this.state.container_workspace(tab_id)
-                {
-                    workspace.update(cx, |workspace, cx| {
-                        workspace.state.terminal = None;
-                        workspace.state.notice =
-                            Some(rust_i18n::t!("container.terminal.closed").to_string());
-                        cx.notify();
-                    });
-                }
+            cx,
+            transom_terminal::TerminalViewParams {
+                io,
+                profile,
+                interaction,
+                key_filter: Some(key_filter),
+                audit_path: None,
+                shell_integration_enabled: false,
+                remote_clipboard_allowed,
+                clear_on_first_resize: false,
             },
-        );
-        (terminal, subscription)
-    }
+        )
+    });
+    let provider = shell.state.history_provider.clone();
+    terminal.update(cx, |view, _cx| view.attach_history(provider));
+    let focus_handle = terminal.read(cx).focus_handle().clone();
+    window.focus(&focus_handle, cx);
+    let subscription = cx.subscribe_in(
+        &terminal,
+        window,
+        move |this, _, event: &TerminalEvent, _window, cx| {
+            if matches!(event, TerminalEvent::Exit)
+                && let Some(workspace) = this.state.container_workspace(tab_id)
+            {
+                workspace.update(cx, |workspace, cx| {
+                    workspace.state.terminal = None;
+                    workspace.state.notice =
+                        Some(rust_i18n::t!("container.terminal.closed").to_string());
+                    cx.notify();
+                });
+            }
+        },
+    );
+    (terminal, subscription)
 }

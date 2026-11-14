@@ -104,7 +104,7 @@ pub(crate) fn render_filter_bar(
                 .when(state.query.regex, |btn| btn.secondary())
                 .on_click(move |_, _, cx| {
                     regex_app.update(cx, |this, cx| {
-                        this.git_toggle_filter_flag(tab_id, true, cx);
+                        crate::git::actions::git_toggle_filter_flag(this, tab_id, true, cx);
                     });
                 }),
         )
@@ -119,7 +119,7 @@ pub(crate) fn render_filter_bar(
                 .when(state.query.case_sensitive, |btn| btn.secondary())
                 .on_click(move |_, _, cx| {
                     case_app.update(cx, |this, cx| {
-                        this.git_toggle_filter_flag(tab_id, false, cx);
+                        crate::git::actions::git_toggle_filter_flag(this, tab_id, false, cx);
                     });
                 }),
         );
@@ -158,7 +158,8 @@ pub(crate) fn render_filter_bar(
                                 UiIcon::VCS,
                                 move |_, _, cx| {
                                     current_app.update(cx, |this, cx| {
-                                        this.git_set_log_scope(
+                                        crate::git::actions::git_set_log_scope(
+                                            this,
                                             tab_id,
                                             transom_core::LogScope::CurrentBranch,
                                             cx,
@@ -173,7 +174,8 @@ pub(crate) fn render_filter_bar(
                                     let all_app = menu_app.clone();
                                     move |_, _, cx| {
                                         all_app.update(cx, |this, cx| {
-                                            this.git_set_log_scope(
+                                            crate::git::actions::git_set_log_scope(
+                                                this,
                                                 tab_id,
                                                 transom_core::LogScope::AllRefs,
                                                 cx,
@@ -189,7 +191,8 @@ pub(crate) fn render_filter_bar(
                                 menu.item(menu_item(name.clone(), UiIcon::VCS, move |_, _, cx| {
                                     let name = name.clone();
                                     item_app.update(cx, |this, cx| {
-                                        this.git_set_log_scope(
+                                        crate::git::actions::git_set_log_scope(
+                                            this,
                                             tab_id,
                                             transom_core::LogScope::Ref(name),
                                             cx,
@@ -244,7 +247,8 @@ pub(crate) fn render_filter_bar(
                     let abort_app = app.clone();
                     move |_, _, cx| {
                         abort_app.update(cx, |this, cx| {
-                            this.git_history_on_current(
+                            crate::git::actions::git_history_on_current(
+                                this,
                                 crate::git::actions::GitHistoryAction::RebaseAbort,
                                 cx,
                             );
@@ -262,7 +266,7 @@ pub(crate) fn render_filter_bar(
                     let apply_app = app.clone();
                     move |_, _, cx| {
                         apply_app.update(cx, |this, cx| {
-                            this.git_apply_filter_inputs(tab_id, cx);
+                            crate::git::actions::git_apply_filter_inputs(this, tab_id, cx);
                         });
                     }
                 }),

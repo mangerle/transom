@@ -260,122 +260,120 @@ impl AppState {
     }
 }
 
-impl AppShell {
-    /// 按当前模式与查询词构建条目模型。
-    ///
-    /// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
-    /// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
-    pub(super) fn build_palette_model(
-        &self,
-        action_mode: bool,
-        term: &str,
-        cx: &App,
-    ) -> PaletteModel {
-        let needle = term.to_lowercase();
-        let mut model = PaletteModel::with_capacity(7);
+/// 按当前模式与查询词构建条目模型。
+///
+/// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
+/// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
+pub(super) fn build_palette_model(
+    shell: &AppShell,
+    action_mode: bool,
+    term: &str,
+    cx: &App,
+) -> PaletteModel {
+    let needle = term.to_lowercase();
+    let mut model = PaletteModel::with_capacity(7);
 
-        if action_mode {
-            // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
-            model.push(
-                rust_i18n::t!("app.palette_actions").to_string(),
-                action_items(&needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle, cx),
-            );
-        } else {
-            model.push(
-                rust_i18n::t!("app.sessions").to_string(),
-                self.state.session_items(term, &needle),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_containers").to_string(),
-                self.state.container_items(&needle, cx),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_snippets").to_string(),
-                self.snippet_items(&needle, cx),
-            );
-            model.push(
-                rust_i18n::t!("app.palette_actions").to_string(),
-                action_items(&needle),
-            );
-        }
+    if action_mode {
+        // 动作模式把可执行项排在最前：用户敲 `>` 的目的就是执行。
         model.push(
-            rust_i18n::t!("app.palette_settings_pages").to_string(),
-            settings_page_items(&needle),
+            rust_i18n::t!("app.palette_actions").to_string(),
+            action_items(&needle),
         );
         model.push(
-            rust_i18n::t!("app.palette_ui_themes").to_string(),
-            ui_theme_items(&needle, cx),
+            rust_i18n::t!("app.palette_snippets").to_string(),
+            snippet_items(shell, &needle, cx),
+        );
+    } else {
+        model.push(
+            rust_i18n::t!("app.sessions").to_string(),
+            shell.state.session_items(term, &needle),
         );
         model.push(
-            rust_i18n::t!("app.palette_terminal_themes").to_string(),
-            self.terminal_theme_items(&needle, app_settings(cx)),
+            rust_i18n::t!("app.palette_containers").to_string(),
+            shell.state.container_items(&needle, cx),
         );
-        model
+        model.push(
+            rust_i18n::t!("app.palette_snippets").to_string(),
+            snippet_items(shell, &needle, cx),
+        );
+        model.push(
+            rust_i18n::t!("app.palette_actions").to_string(),
+            action_items(&needle),
+        );
     }
+    model.push(
+        rust_i18n::t!("app.palette_settings_pages").to_string(),
+        settings_page_items(&needle),
+    );
+    model.push(
+        rust_i18n::t!("app.palette_ui_themes").to_string(),
+        ui_theme_items(&needle, cx),
+    );
+    model.push(
+        rust_i18n::t!("app.palette_terminal_themes").to_string(),
+        terminal_theme_items(shell, &needle, app_settings(cx)),
+    );
+    model
+}
 
-    fn snippet_items(&self, needle: &str, cx: &App) -> Vec<(CommandItem, PaletteTarget)> {
-        app_settings(cx)
-            .snippets
-            .items
-            .iter()
-            .filter(|snippet| {
-                hit(
-                    needle,
-                    &snippet.name,
-                    &[SharedString::from(snippet.command.clone())],
-                )
-            })
-            .map(|snippet| {
-                (
-                    CommandItem::new()
-                        .icon(AppIcon::Ui(UiIcon::LIGHTNING))
-                        .label(snippet.name.clone())
-                        .keywords(vec![SharedString::from(snippet.command.clone())]),
-                    PaletteTarget::Snippet(snippet.id),
-                )
-            })
-            .collect()
-    }
-    fn terminal_theme_items(
-        &self,
-        needle: &str,
-        settings: &AppSettings,
-    ) -> Vec<(CommandItem, PaletteTarget)> {
-        let active = settings.terminal_profile.theme_name.as_str();
-        // 中文关键词取本地化标题，避免把界面文案硬编码进源码。
-        let group_keyword = rust_i18n::t!("app.palette_terminal_themes").to_string();
-        preset_themes()
-            .into_iter()
-            .filter(|theme| {
-                hit(
-                    needle,
-                    &theme.name,
-                    &[
-                        SharedString::from("terminal"),
-                        SharedString::from(group_keyword.clone()),
-                    ],
-                )
-            })
-            .map(|theme| {
-                let name = theme.name;
-                (
-                    CommandItem::new()
-                        .icon(AppIcon::Ui(UiIcon::LAYOUT))
-                        .label(name.clone())
-                        .keywords(vec![
-                            SharedString::from(name.clone()),
-                            SharedString::from("theme"),
-                        ])
-                        .checked(name.as_str() == active),
-                    PaletteTarget::TerminalTheme(name),
-                )
-            })
-            .collect()
-    }
+fn snippet_items(_shell: &AppShell, needle: &str, cx: &App) -> Vec<(CommandItem, PaletteTarget)> {
+    app_settings(cx)
+        .snippets
+        .items
+        .iter()
+        .filter(|snippet| {
+            hit(
+                needle,
+                &snippet.name,
+                &[SharedString::from(snippet.command.clone())],
+            )
+        })
+        .map(|snippet| {
+            (
+                CommandItem::new()
+                    .icon(AppIcon::Ui(UiIcon::LIGHTNING))
+                    .label(snippet.name.clone())
+                    .keywords(vec![SharedString::from(snippet.command.clone())]),
+                PaletteTarget::Snippet(snippet.id),
+            )
+        })
+        .collect()
+}
+fn terminal_theme_items(
+    _shell: &AppShell,
+    needle: &str,
+    settings: &AppSettings,
+) -> Vec<(CommandItem, PaletteTarget)> {
+    let active = settings.terminal_profile.theme_name.as_str();
+    // 中文关键词取本地化标题，避免把界面文案硬编码进源码。
+    let group_keyword = rust_i18n::t!("app.palette_terminal_themes").to_string();
+    preset_themes()
+        .into_iter()
+        .filter(|theme| {
+            hit(
+                needle,
+                &theme.name,
+                &[
+                    SharedString::from("terminal"),
+                    SharedString::from(group_keyword.clone()),
+                ],
+            )
+        })
+        .map(|theme| {
+            let name = theme.name;
+            (
+                CommandItem::new()
+                    .icon(AppIcon::Ui(UiIcon::LAYOUT))
+                    .label(name.clone())
+                    .keywords(vec![
+                        SharedString::from(name.clone()),
+                        SharedString::from("theme"),
+                    ])
+                    .checked(name.as_str() == active),
+                PaletteTarget::TerminalTheme(name),
+            )
+        })
+        .collect()
 }
 
 /// 动作条目：直接携带真实 Action，组件会自动关联并展示当前键位。

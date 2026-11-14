@@ -49,7 +49,8 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
                 PopupMenuItem::new(collapse_label).on_click(move |_, _, cx| {
                     let next_collapse = !collapse_unchanged;
                     toggle_app.update(cx, |this, cx| {
-                        this.git_update_diff_options(
+                        crate::git::actions::git_update_diff_options(
+                            this,
                             tab_id,
                             Box::new(move |opts: &mut DiffViewOptions| {
                                 opts.collapse_unchanged = next_collapse
@@ -63,7 +64,7 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
                 PopupMenuItem::new(rust_i18n::t!("git.diff.refresh").to_string()).on_click(
                     move |_, _, cx| {
                         refresh_app.update(cx, |this, cx| {
-                            this.git_refresh_active_diff(tab_id, cx);
+                            crate::git::actions::git_refresh_active_diff(this, tab_id, cx);
                         });
                     },
                 ),
@@ -72,7 +73,7 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
                 PopupMenuItem::new(rust_i18n::t!("git.diff.open_source").to_string()).on_click(
                     move |_, _, cx| {
                         open_app.update(cx, |this, cx| {
-                            this.git_open_diff_source(tab_id, cx);
+                            crate::git::actions::git_open_diff_source(this, tab_id, cx);
                         });
                     },
                 ),
@@ -83,7 +84,8 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
                     .disabled(total_tabs <= 1)
                     .on_click(move |_, _, cx| {
                         close_other_app.update(cx, |this, cx| {
-                            this.git_close_diff_tabs_scope(
+                            crate::git::actions::git_close_diff_tabs_scope(
+                                this,
                                 tab_id,
                                 Some(active_request_id),
                                 DiffTabCloseScope::Other,
@@ -97,7 +99,8 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
                     .disabled(total_tabs == 0)
                     .on_click(move |_, _, cx| {
                         close_all_app.update(cx, |this, cx| {
-                            this.git_close_diff_tabs_scope(
+                            crate::git::actions::git_close_diff_tabs_scope(
+                                this,
                                 tab_id,
                                 None,
                                 DiffTabCloseScope::All,

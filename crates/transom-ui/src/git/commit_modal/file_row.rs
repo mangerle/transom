@@ -57,14 +57,12 @@ pub(crate) struct GitFileRowProps<'a> {
     pub(crate) show_dir_prefix: bool,
 }
 
-impl AppShell {
-    /// 一行文件：勾选 + 图标 + 语义着色文件名 + 灰色目录后缀。
-    pub(crate) fn git_file_row(
-        &mut self,
-        props: &GitFileRowProps<'_>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+/// 一行文件：勾选 + 图标 + 语义着色文件名 + 灰色目录后缀。
+pub(crate) fn git_file_row(
+    props: &GitFileRowProps<'_>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
         let project = props.project;
         let entry = props.entry;
         let group = props.group;
@@ -113,7 +111,7 @@ impl AppShell {
                     .child(check_box(is_checked, p))
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
-                        this.toggle_git_checked(&check_project, &check_path, cx);
+                        crate::git::helpers::toggle_git_checked(this, &check_project, &check_path, cx);
                     })),
             );
         } else {
@@ -172,7 +170,7 @@ impl AppShell {
                 if event.click_count() > 1 {
                     return;
                 }
-                this.git_open_worktree_diff(&click_project, group, click_path.clone(), cx);
+                crate::git::actions::git_open_worktree_diff(this, &click_project, group, click_path.clone(), cx);
             }));
         }
         if group.actionable() {
@@ -184,7 +182,6 @@ impl AppShell {
         } else {
             row.into_any_element()
         }
-    }
 }
 
 /// 文件行右键菜单。
@@ -254,7 +251,7 @@ fn render_file_menu(
         move |_, _, cx| {
             let p = conflict_project.clone();
             conflict_app.update(cx, |this, cx| {
-                this.open_git_conflict_modal(&p, cx);
+                crate::git::conflict_modal::open_git_conflict_modal(this, &p, cx);
             });
         },
     ));
@@ -265,7 +262,7 @@ fn render_file_menu(
             let project = diff_project.clone();
             let path = diff_path.clone();
             diff_app.update(cx, |this, cx| {
-                this.git_open_worktree_diff(&project, group, path, cx);
+                crate::git::actions::git_open_worktree_diff(this, &project, group, path, cx);
             });
         },
     ));
@@ -286,7 +283,7 @@ fn render_file_menu(
         AppIcon::Ui(UiIcon::COPY),
         move |_, _, cx| {
             copy_app.update(cx, |this, cx| {
-                this.write_clipboard(&copy_path, cx);
+                crate::git::helpers::write_clipboard(this, &copy_path, cx);
             });
         },
     ));
@@ -296,7 +293,7 @@ fn render_file_menu(
         move |_, _, cx| {
             let project = refresh_project.clone();
             refresh_app.update(cx, |this, cx| {
-                this.git_refresh(&project, cx);
+                crate::git::actions::git_refresh(this, &project, cx);
             });
         },
     ))
@@ -313,7 +310,7 @@ fn run_paths(
     let path = path.to_string();
     let project = project.clone();
     app.update(cx, |this, cx| {
-        this.git_run_paths(&project, action, vec![path], cx);
+        crate::git::actions::git_run_paths(this, &project, action, vec![path], cx);
     });
 }
 

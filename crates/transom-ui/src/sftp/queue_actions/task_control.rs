@@ -8,48 +8,46 @@ use crate::app::AppShell;
 use gpui_kit::*;
 use transom_core::{TabId, TransferId};
 
-impl AppShell {
-    pub(crate) fn sftp_pause_task(
-        &mut self,
-        tab_id: TabId,
-        op_id: TransferId,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.pause_task(tab_id, op_id, cx));
-        }
+pub(crate) fn sftp_pause_task(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    op_id: TransferId,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.pause_task(tab_id, op_id, cx));
     }
+}
 
-    pub(crate) fn sftp_resume_task(
-        &mut self,
-        tab_id: TabId,
-        op_id: TransferId,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.resume_task(tab_id, op_id, cx));
-        }
+pub(crate) fn sftp_resume_task(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    op_id: TransferId,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.resume_task(tab_id, op_id, cx));
     }
+}
 
-    pub(crate) fn sftp_cancel_task(
-        &mut self,
-        tab_id: TabId,
-        op_id: TransferId,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.cancel_task(tab_id, op_id, cx));
-        }
+pub(crate) fn sftp_cancel_task(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    op_id: TransferId,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.cancel_task(tab_id, op_id, cx));
     }
+}
 
-    pub(crate) fn sftp_remove_task(
-        &mut self,
-        tab_id: TabId,
-        op_id: TransferId,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.remove_task(op_id, cx));
-        }
+pub(crate) fn sftp_remove_task(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    op_id: TransferId,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.remove_task(op_id, cx));
     }
 }

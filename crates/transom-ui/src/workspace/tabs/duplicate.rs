@@ -56,7 +56,7 @@ impl AppShell {
             .filter(|tab| tab.session_id == session_id)
             .map(|tab| tab.id)
             .collect();
-        if self.block_close_for_dirty_editors(
+        if crate::editor::block_close_for_dirty_editors(self, 
             &removed_tabs,
             PendingEditorClose::Session(session_id),
             cx,
@@ -80,7 +80,7 @@ impl AppShell {
             .workspace
             .tabs
             .retain(|tab| tab.session_id != session_id);
-        self.prune_tab_overlays(cx);
+        crate::editor::prune_tab_overlays(self, cx);
         let tiled_focus = self
             .state
             .active_tiling()

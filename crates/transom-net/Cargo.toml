@@ -31,9 +31,9 @@ serialport.workspace = true
 encoding_rs = "0.8"
 # HTTP CONNECT 代理 Basic 认证头的编码。
 base64.workspace = true
+parking_lot.workspace = true
 
 [dev-dependencies]
-parking_lot.workspace = true
 ssh-key.workspace = true
 tempfile.workspace = true
 # 集成测试用真实 known_hosts 存储跑握手回环：仅测试依赖，生产依赖图

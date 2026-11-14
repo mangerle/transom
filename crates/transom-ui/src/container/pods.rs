@@ -89,28 +89,3 @@ impl ContainerWorkspace {
         true
     }
 }
-
-impl AppShell {
-    /// 处理 Pod 列表响应：按请求 id 找到所属标签页并写回实体。
-    ///
-    /// 设计原理（Why）：请求登记在实体内部，事件只带 `request_id`；外壳取走
-    /// 登记后调用实体具名方法，不在闭包里拼装状态修改逻辑。
-    pub(super) fn on_container_pods_listed(
-        &mut self,
-        request_id: ContainerRequestId,
-        pods: Vec<transom_core::ContainerPodSummary>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(tab_id) = self.state.take_container_request(request_id, cx) else {
-            return;
-        };
-        if let Some(workspace) = self.state.container_workspace(tab_id) {
-            let applied = workspace.update(cx, |workspace, _| {
-                workspace.apply_pods_listed(request_id, pods)
-            });
-            if applied {
-                cx.notify();
-            }
-        }
-    }
-}

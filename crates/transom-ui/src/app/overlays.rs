@@ -103,16 +103,16 @@ impl AppShell {
     ) -> Vec<AnyElement> {
         let p = Palette::from(cx);
         let mut overlays = Vec::new();
-        if let Some(preview) = self.render_sftp_hover_preview(window, &p, cx) {
+        if let Some(preview) = crate::sftp::render_sftp_hover_preview(self, window, &p, cx) {
             overlays.push(preview);
         }
         if self.state.modals.tools.show_quick_open {
-            overlays.push(self.render_command_palette_modal(window, cx, &p));
+            overlays.push(crate::app::command_palette::render_command_palette_modal(self, window, cx, &p));
         }
         if let Some(tab_id) = self.state.containers.fullscreen {
             overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
         }
-        if let Some(clone_task) = self.render_git_clone_task(window, cx, &p) {
+        if let Some(clone_task) = crate::git::clone_modal::render_git_clone_task(self, window, cx, &p) {
             overlays.push(clone_task);
         }
         overlays

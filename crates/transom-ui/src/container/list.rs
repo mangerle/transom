@@ -32,7 +32,7 @@ use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{
     ComposeProject, ContainerImageSummary, ContainerNetworkSummary, ContainerSummary,
-    ContainerVolumeSummary, TabId, short_id,
+    ContainerVolumeSummary, short_id,
 };
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
@@ -287,29 +287,4 @@ fn render_list_toolbar(
         .child(main_action_btn)
         .child(render_more_menu(view, params))
         .into_any_element()
-}
-
-impl AppShell {
-    /// 键盘事件到来时按当前状态重算行集合，再交给列表键盘导航处理。
-    ///
-    /// 设计原理（Why）：行集合随搜索、筛选与排序实时变化；如果只在渲染帧捕获，
-    /// 输入与按键同一帧交错时容易导航到旧行。这里复用 [`list_rows`] 的唯一
-    /// 排序规则，保证键盘选择与画面一致。渲染函数本身不再挂 `impl AppShell`。
-    pub(crate) fn handle_container_list_key(
-        &mut self,
-        tab_id: TabId,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(view) = self.state.container_workspace(tab_id) else {
-            return;
-        };
-        let rows = {
-            let workspace = view.read(cx);
-            let query = workspace.state.query(cx);
-            list_rows(&workspace.state, &query)
-        };
-        handle_list_key_down(self, tab_id, &rows, event, window, cx);
-    }
 }

@@ -79,9 +79,9 @@ pub(crate) fn build_tab_context_menu(
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
                         if is_local {
-                            this.open_local_terminal(window, cx);
+                            crate::connection::open_local_terminal(this, window, cx);
                         } else {
-                            this.connect_session(session_id, window, cx);
+                            crate::connection::connect_session(this, session_id, window, cx);
                         }
                     });
                 }
@@ -94,7 +94,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.open_audit_viewer_for_tab(active_pane, window, cx);
+                        crate::app::audit_viewer::open_audit_viewer_for_tab(this, active_pane, window, cx);
                     });
                 }
             },
@@ -134,7 +134,7 @@ pub(crate) fn build_tab_context_menu(
             AppIcon::Domain(DomainIcon::CONTAINER),
             move |_, window, cx| {
                 container_app.update(cx, |this, cx| {
-                    this.open_container_workspace_for_session(session_id, window, cx);
+                    crate::container::open_container_workspace_for_session(this, session_id, window, cx);
                 });
             },
         ));
@@ -148,7 +148,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.toggle_recording(active_pane, window, cx);
+                        crate::record::toggle_recording(this, active_pane, window, cx);
                     });
                 }
             },
@@ -160,7 +160,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.open_replay_modal(active_pane, window, cx);
+                        crate::record::open_replay_modal(this, active_pane, window, cx);
                     });
                 }
             },
@@ -174,7 +174,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        this.split_active_pane(SplitAxis::Horizontal, window, cx);
+                        crate::app::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
                     });
                 }
             },
@@ -187,7 +187,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        this.split_active_pane(SplitAxis::Vertical, window, cx);
+                        crate::app::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
                     });
                 }
             },
@@ -202,7 +202,7 @@ pub(crate) fn build_tab_context_menu(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             this.activate_tab(active_pane, window, cx);
-                            this.toggle_split_axis(cx);
+                            crate::app::split::toggle_split_axis(this, cx);
                         });
                     }
                 },
@@ -215,7 +215,7 @@ pub(crate) fn build_tab_context_menu(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             this.activate_tab(active_pane, window, cx);
-                            this.detach_pane_to_tab(active_pane, window, cx);
+                            crate::app::split::detach_pane_to_tab(this, active_pane, window, cx);
                         });
                     }
                 },
@@ -245,7 +245,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.tile_tab(group_id, SplitAxis::Horizontal, window, cx);
+                        crate::app::tiling::tile_tab(this, group_id, SplitAxis::Horizontal, window, cx);
                     });
                 }
             }),
@@ -260,7 +260,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        this.tile_tab(group_id, SplitAxis::Vertical, window, cx);
+                        crate::app::tiling::tile_tab(this, group_id, SplitAxis::Vertical, window, cx);
                     });
                 }
             }),
@@ -273,8 +273,8 @@ pub(crate) fn build_tab_context_menu(
             AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(group) = this.add_groups_to_tiling(set_id, groups.clone(), window) {
-                        this.activate_group(group, window, cx);
+                    if let Some(group) = crate::app::tiling::add_groups_to_tiling(this, set_id, groups.clone(), window) {
+                        crate::app::tiling::activate_group(this, group, window, cx);
                         this.state.workspace.tab_selection.clear();
                     } else {
                         this.state.set_error(
@@ -329,7 +329,7 @@ pub(crate) fn build_tab_context_menu(
             let app = app.clone();
             move |_, _window, cx| {
                 if let Some(id) = this_set_id {
-                    app.update(cx, |this, cx| this.untile_tiling(id, cx));
+                    app.update(cx, |this, cx| crate::app::tiling::untile_tiling(this, id, cx));
                 }
             }
         }),
@@ -358,7 +358,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     if let Some(id) = this_set_id {
                         app.update(cx, |this, cx| {
-                            this.close_tiling_group(id, window, cx);
+                            crate::app::tiling::close_tiling_group(this, id, window, cx);
                         });
                     }
                 }

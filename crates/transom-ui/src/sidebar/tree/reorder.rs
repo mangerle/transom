@@ -143,7 +143,7 @@ fn reorder_half(
     zone.on_drop(move |drag: &SidebarDrag, window, cx| {
         let drag = *drag;
         app.update(cx, |this, cx| {
-            this.handle_sidebar_drop(drag, target, cx);
+            crate::sidebar::handle_sidebar_drop(this, drag, target, cx);
             window.refresh();
         });
     })

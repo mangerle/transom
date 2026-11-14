@@ -21,27 +21,26 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 三组改动清单（模态框与概览屏共用）。
-    pub(crate) fn render_git_group_list(
-        &mut self,
-        project: &GitProject,
-        display: &GroupDisplay,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let checked = &display.checked;
-        let Some(status) = self
-            .state
-            .git_workspace_of_project(project.id, cx)
-            .and_then(|workspace| workspace.read(cx).state.status.clone())
-        else {
-            return hint(rust_i18n::t!("git.overview.loading").to_string(), p);
-        };
-        let active_diff = self
-            .state
-            .git_workspace_of_project(project.id, cx)
-            .and_then(|workspace| workspace.read(cx).state.last_diff.clone());
+/// 三组改动清单（模态框与概览屏共用）。
+pub(crate) fn render_git_group_list(
+    shell: &mut AppShell,
+    project: &GitProject,
+    display: &GroupDisplay,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let checked = &display.checked;
+    let Some(status) = shell
+        .state
+        .git_workspace_of_project(project.id, cx)
+        .and_then(|workspace| workspace.read(cx).state.status.clone())
+    else {
+        return hint(rust_i18n::t!("git.overview.loading").to_string(), p);
+    };
+    let active_diff = shell
+        .state
+        .git_workspace_of_project(project.id, cx)
+        .and_then(|workspace| workspace.read(cx).state.last_diff.clone());
         let staged: Vec<StatusEntry> = status
             .entries
             .iter()
@@ -118,7 +117,7 @@ impl AppShell {
                         .label(rust_i18n::t!("git.conflict.resolve_btn").to_string())
                         .on_click(move |_, _, cx| {
                             app_resolve.update(cx, |this, cx| {
-                                this.open_git_conflict_modal(&conflict_project, cx);
+                                crate::git::conflict_modal::open_git_conflict_modal(this, &conflict_project, cx);
                             });
                         }),
                 );
@@ -138,7 +137,7 @@ impl AppShell {
             let group_collapsed = display.collapsed_groups.contains(key);
             let group_paths: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
             let check_state = compute_check_state(&group_paths, checked);
-            list = list.child(self.git_group_header(
+            list = list.child(git_group_header(
                 project,
                 &GroupView {
                     group,
@@ -160,11 +159,11 @@ impl AppShell {
                     active_diff: active_diff.as_ref(),
                     palette: p,
                 };
-                list = list.children(self.git_dir_rows(&dir_ctx, entries, cx));
+                list = list.children(git_dir_rows(&dir_ctx, entries, cx));
                 continue;
             }
             for entry in entries.iter() {
-                list = list.child(self.git_file_row(
+                list = list.child(super::file_row::git_file_row(
                     &super::file_row::GitFileRowProps {
                         project,
                         entry,
@@ -183,84 +182,77 @@ impl AppShell {
             list = list.child(hint(rust_i18n::t!("git.group.clean").to_string(), p));
         }
         list.into_any_element()
-    }
+}
 
-    /// 按目录模式：构建多级压缩目录树，按层级缩进渲染目录行与文件行。
-    fn git_dir_rows(
-        &mut self,
-        ctx: &DirRenderCtx<'_>,
-        entries: &[StatusEntry],
-        cx: &mut Context<Self>,
-    ) -> Vec<AnyElement> {
-        let tree = build_dir_tree(entries);
-        let mut rows = Vec::with_capacity(entries.len());
-        self.append_dir_tree_rows(ctx, &tree, 0, &mut rows, cx);
-        rows
-    }
+/// 按目录模式：构建多级压缩目录树，按层级缩进渲染目录行与文件行。
+fn git_dir_rows(
+    ctx: &DirRenderCtx<'_>,
+    entries: &[StatusEntry],
+    cx: &mut Context<AppShell>,
+) -> Vec<AnyElement> {
+    let tree = build_dir_tree(entries);
+    let mut rows = Vec::with_capacity(entries.len());
+    append_dir_tree_rows(ctx, &tree, 0, &mut rows, cx);
+    rows
+}
 
-    fn append_dir_tree_rows(
-        &mut self,
-        ctx: &DirRenderCtx<'_>,
-        nodes: &[DirTreeNode<'_>],
-        depth: usize,
-        rows: &mut Vec<AnyElement>,
-        cx: &mut Context<Self>,
-    ) {
-        let dir_indent = 16.0 + depth as f32 * 20.0;
-        // 文件行没有左侧折叠箭头（14px 图标 + 6px 间距），补齐 20px 使同级复选框与子级对齐父文件夹图标。
-        let file_indent = dir_indent + 20.0;
-        for node in nodes {
-            match node {
-                DirTreeNode::Directory {
+fn append_dir_tree_rows(
+    ctx: &DirRenderCtx<'_>,
+    nodes: &[DirTreeNode<'_>],
+    depth: usize,
+    rows: &mut Vec<AnyElement>,
+    cx: &mut Context<AppShell>,
+) {
+    let dir_indent = 16.0 + depth as f32 * 20.0;
+    // 文件行没有左侧折叠箭头（14px 图标 + 6px 间距），补齐 20px 使同级复选框与子级对齐父文件夹图标。
+    let file_indent = dir_indent + 20.0;
+    for node in nodes {
+        match node {
+            DirTreeNode::Directory {
+                name,
+                dir_path,
+                all_paths,
+                children,
+            } => {
+                let key = format!("{}|{dir_path}", ctx.group.key());
+                let check_state = compute_check_state(all_paths, &ctx.display.checked);
+                let collapsed = ctx.display.collapsed_dirs.contains(&key);
+                let view = DirView {
+                    group: ctx.group,
+                    project: ctx.project,
                     name,
-                    dir_path,
-                    all_paths,
-                    children,
-                } => {
-                    let key = format!("{}|{dir_path}", ctx.group.key());
-                    let check_state = compute_check_state(all_paths, &ctx.display.checked);
-                    let collapsed = ctx.display.collapsed_dirs.contains(&key);
-                    let view = DirView {
-                        group: ctx.group,
+                    element_key: &key,
+                    paths: all_paths,
+                    indent: dir_indent,
+                    check_state,
+                    collapsed,
+                };
+                rows.push(git_dir_header(&view, ctx.palette, cx));
+                if !collapsed {
+                    append_dir_tree_rows(ctx, children, depth + 1, rows, cx);
+                }
+            }
+            DirTreeNode::File(entry) => {
+                rows.push(super::file_row::git_file_row(
+                    &super::file_row::GitFileRowProps {
                         project: ctx.project,
-                        name,
-                        element_key: &key,
-                        paths: all_paths,
-                        indent: dir_indent,
-                        check_state,
-                        collapsed,
-                    };
-                    rows.push(self.git_dir_header(&view, ctx.palette, cx));
-                    if !collapsed {
-                        self.append_dir_tree_rows(ctx, children, depth + 1, rows, cx);
-                    }
-                }
-                DirTreeNode::File(entry) => {
-                    rows.push(self.git_file_row(
-                        &super::file_row::GitFileRowProps {
-                            project: ctx.project,
-                            entry,
-                            group: ctx.group,
-                            checked: &ctx.display.checked,
-                            indent: file_indent,
-                            selected: diff_matches(ctx.active_diff, &entry.path, ctx.group),
-                            show_dir_prefix: false,
-                        },
-                        ctx.palette,
-                        cx,
-                    ));
-                }
+                        entry,
+                        group: ctx.group,
+                        checked: &ctx.display.checked,
+                        indent: file_indent,
+                        selected: diff_matches(ctx.active_diff, &entry.path, ctx.group),
+                        show_dir_prefix: false,
+                    },
+                    ctx.palette,
+                    cx,
+                ));
             }
         }
     }
+}
 
-    /// 目录行：仅点击折叠箭头展开/收起，点击多选框仅切换整目录选中态。
-    fn git_dir_header(
-        &mut self,
-        view: &DirView<'_>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+/// 目录行：仅点击折叠箭头展开/收起，点击多选框仅切换整目录选中态。
+fn git_dir_header(view: &DirView<'_>, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
         let (group, project, name, key, paths) = (
             view.group,
             view.project,
@@ -302,7 +294,7 @@ impl AppShell {
                     )
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
-                        this.git_toggle_dir(&toggle_project, &toggle_key, cx);
+                        crate::git::actions::git_toggle_dir(this, &toggle_project, &toggle_key, cx);
                     })),
             );
         if group.actionable() {
@@ -317,7 +309,13 @@ impl AppShell {
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
                         let target = check_state != CheckState::Checked;
-                        this.git_set_group_checked(&select_project, &select_paths, target, cx);
+                        crate::git::actions::git_set_group_checked(
+                            this,
+                            &select_project,
+                            &select_paths,
+                            target,
+                            cx,
+                        );
                     })),
             );
         } else {
@@ -355,14 +353,13 @@ impl AppShell {
         }
     }
 
-    /// 分组头：折叠箭头 + 三态勾选 + 名称 + 数量。
-    fn git_group_header(
-        &mut self,
-        project: &GitProject,
-        view: &GroupView<'_>,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+/// 分组头：折叠箭头 + 三态勾选 + 名称 + 数量。
+fn git_group_header(
+    project: &GitProject,
+    view: &GroupView<'_>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
         let group = view.group;
         let entries = view.entries;
         let check_state = view.check_state;
@@ -401,7 +398,7 @@ impl AppShell {
                     )
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
-                        this.git_toggle_group(&toggle_project, &group_key, cx);
+                        crate::git::actions::git_toggle_group(this, &toggle_project, &group_key, cx);
                     })),
             );
         // 忽略组只读：不摆勾选框与整组菜单，用同宽占位保持与其它组左对齐。
@@ -417,7 +414,13 @@ impl AppShell {
                     .on_click(cx.listener(move |this, _, _window, cx| {
                         cx.stop_propagation();
                         let target = check_state != CheckState::Checked;
-                        this.git_set_group_checked(&select_project, &select_paths, target, cx);
+                        crate::git::actions::git_set_group_checked(
+                            this,
+                            &select_project,
+                            &select_paths,
+                            target,
+                            cx,
+                        );
                     })),
             );
         } else {
@@ -441,7 +444,6 @@ impl AppShell {
         } else {
             header.into_any_element()
         }
-    }
 }
 
 /// 递归渲染目录树的上下文参数包。

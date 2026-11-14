@@ -60,7 +60,7 @@ pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -
         rust_i18n::t!("activity.restore_default").to_string(),
         AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
-            app_restore.update(cx, |this, cx| this.restore_status_bar(cx));
+            app_restore.update(cx, |this, cx| crate::status_bar::restore_status_bar(this, cx));
         },
     ))
 }
@@ -196,12 +196,10 @@ fn metrics_item_context_menu(
     ))
 }
 
-impl AppShell {
-    pub(crate) fn restore_status_bar(&mut self, cx: &mut Context<Self>) {
-        if app_settings_mut(cx).status_bar.restore_defaults() {
-            self.persist_layout_settings(cx);
-        } else {
-            cx.notify();
-        }
+pub(crate) fn restore_status_bar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    if app_settings_mut(cx).status_bar.restore_defaults() {
+        shell.persist_layout_settings(cx);
+    } else {
+        cx.notify();
     }
 }

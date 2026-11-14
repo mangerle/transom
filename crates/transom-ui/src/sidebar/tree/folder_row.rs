@@ -16,56 +16,54 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 渲染单个文件夹树行，包含折叠切换、拖放放置、右键菜单与整组拨测入口。
-    pub(crate) fn render_folder_row(
-        &mut self,
-        row: &FolderRow,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let folder_id = row.id;
-        let app_entity = cx.entity().clone();
-        let label = row.name.clone();
-        let chevron = if row.collapsed {
-            AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
-        } else {
-            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
-        };
+/// 渲染单个文件夹树行，包含折叠切换、拖放放置、右键菜单与整组拨测入口。
+pub(crate) fn render_folder_row(
+    _shell: &mut AppShell,
+    row: &FolderRow,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
+    let folder_id = row.id;
+    let app_entity = cx.entity().clone();
+    let label = row.name.clone();
+    let chevron = if row.collapsed {
+        AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
+    } else {
+        AppIcon::Ui(UiIcon::CHEVRON_DOWN)
+    };
 
-        let element = div()
-            .id(ElementId::Name(format!("folder-{folder_id}").into()))
-            .w_full()
-            .h(rems(ROW_HEIGHT_REM))
-            .pl(indent_padding(row.depth))
-            .pr(px(4.0))
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_folder_collapsed(folder_id, cx);
-            }))
-            .on_drag(SidebarDrag::Folder(folder_id), move |_, _, _, cx| {
-                cx.new(|_| SidebarDragPreview::new(label.clone(), AppIcon::Ui(UiIcon::FOLDER)))
-            })
-            .on_drop({
-                let app = app_entity.clone();
-                move |drag: &SidebarDrag, window, cx| {
-                    let drag = *drag;
-                    app.update(cx, |this, cx| {
-                        this.handle_sidebar_drop(drag, SidebarTarget::Folder(folder_id), cx);
-                        window.refresh();
-                    });
-                }
-            })
-            .context_menu({
-                let menu_app = app_entity.clone();
-                move |menu, _window, _cx| folder_context_menu(menu, &menu_app, folder_id)
-            });
+    let element = div()
+        .id(ElementId::Name(format!("folder-{folder_id}").into()))
+        .w_full()
+        .h(rems(ROW_HEIGHT_REM))
+        .pl(indent_padding(row.depth))
+        .pr(px(4.0))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            crate::sidebar::toggle_folder_collapsed(this, folder_id, cx);
+        }))
+        .on_drag(SidebarDrag::Folder(folder_id), move |_, _, _, cx| {
+            cx.new(|_| SidebarDragPreview::new(label.clone(), AppIcon::Ui(UiIcon::FOLDER)))
+        })
+        .on_drop({
+            let app = app_entity.clone();
+            move |drag: &SidebarDrag, window, cx| {
+                let drag = *drag;
+                app.update(cx, |this, cx| {
+                    crate::sidebar::handle_sidebar_drop(this, drag, SidebarTarget::Folder(folder_id), cx);
+                    window.refresh();
+                });
+            }
+        })
+        .context_menu({
+            let menu_app = app_entity.clone();
+            move |menu, _window, _cx| folder_context_menu(menu, &menu_app, folder_id)
+        });
 
-        let band = folder_band(row, chevron, &app_entity, p, cx);
-        element.child(band).into_any_element()
-    }
+    let band = folder_band(row, chevron, &app_entity, p, cx);
+    element.child(band).into_any_element()
 }
 
 /// 文件夹行主体：折叠箭头、图标、名称、计数、拨测按钮与换序落点。
@@ -115,7 +113,7 @@ fn folder_band(
             on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
                 // 点按钮不该顺带折叠/展开这个分组。
                 cx.stop_propagation();
-                this.probe_folder(folder_id, cx);
+                crate::app::probe::probe_folder(this, folder_id, cx);
             }),
         },
         p,
@@ -141,7 +139,7 @@ fn folder_context_menu(
         AppIcon::Ui(UiIcon::ADD),
         move |_, window, cx| {
             new_session.update(cx, |this, cx| {
-                this.open_new_session_in_folder(folder_id, window, cx);
+                crate::sidebar::open_new_session_in_folder(this, folder_id, window, cx);
             });
         },
     ))
@@ -150,7 +148,7 @@ fn folder_context_menu(
         AppIcon::Ui(UiIcon::NEW_FOLDER),
         move |_, window, cx| {
             new_folder.update(cx, |this, cx| {
-                this.open_new_folder(Some(folder_id), window, cx);
+                crate::sidebar::open_new_folder(this, Some(folder_id), window, cx);
             });
         },
     ))
@@ -159,7 +157,7 @@ fn folder_context_menu(
         AppIcon::Ui(UiIcon::EDIT),
         move |_, window, cx| {
             rename.update(cx, |this, cx| {
-                this.open_rename_folder(folder_id, window, cx);
+                crate::sidebar::open_rename_folder(this, folder_id, window, cx);
             });
         },
     ))
@@ -169,7 +167,7 @@ fn folder_context_menu(
         AppIcon::Ui(UiIcon::DELETE),
         move |_, _, cx| {
             delete.update(cx, |this, cx| {
-                this.delete_folder(folder_id, cx);
+                crate::sidebar::delete_folder(this, folder_id, cx);
             });
         },
     ))

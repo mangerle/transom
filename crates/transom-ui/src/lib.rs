@@ -13,6 +13,7 @@ pub(crate) const APP_AUTHORS: &str = "wangle";
 mod app;
 mod app_assets;
 mod audit;
+mod backup;
 mod brand;
 mod bundled_fonts;
 mod cast_player;
@@ -33,7 +34,7 @@ mod window_appearance;
 // 对 crate 其它模块保持私有。这里重导出旧路径，避免大面积改写 `crate::sftp`
 // 之类的引用；模块的真实父级仍是 `app`，因此不会绕过状态封装。
 pub(crate) use app::{
-    activity_bar, audit_viewer, backup, clipboard_prompt, cloud_sync, connection, container,
+    activity_bar, audit_viewer, clipboard_prompt, cloud_sync, connection, container,
     dialog_host, diff_viewer, editor, forward, git, identity, keys, monitor, notify, record,
     session_appearance, session_form, settings, sftp, sidebar, snippets, status_bar, tiling,
     trigger_panel, workspace, zmodem,

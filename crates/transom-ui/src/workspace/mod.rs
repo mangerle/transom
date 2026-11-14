@@ -3,6 +3,7 @@
 mod empty_state;
 mod pane_header;
 mod panes;
+pub(crate) mod render;
 pub(crate) mod state;
 mod tab_drag;
 pub(crate) mod tab_presentation;
@@ -60,7 +61,7 @@ impl AppShell {
         main = main.child(content);
         // 广播条贴在终端区底部、状态栏之上；只对当前具备可输入终端的标签显示。
         if self.state.broadcast.open && self.state.active_tab_has_terminal() {
-            main = main.child(self.render_broadcast_bar(cx, p));
+            main = main.child(crate::app::broadcast::render_broadcast_bar(self, cx, p));
         }
         main.into_any_element()
     }

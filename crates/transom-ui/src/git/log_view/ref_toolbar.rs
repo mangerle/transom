@@ -75,7 +75,7 @@ pub(crate) fn render_refs_action_bar(
             )
             .on_click(move |_, _, cx| {
                 hide_app.update(cx, |this, cx| {
-                    this.git_toggle_refs_panel(tab_id, cx);
+                    crate::git::actions::git_toggle_refs_panel(this, tab_id, cx);
                 });
             }),
         )
@@ -89,7 +89,7 @@ pub(crate) fn render_refs_action_bar(
             .on_click(move |_, window, cx| {
                 let start = new_branch_start.clone();
                 new_app.update(cx, |this, cx| {
-                    this.git_create_branch_from(&start, window, cx);
+                    crate::git::actions::git_create_branch_from(this, &start, window, cx);
                 });
             }),
         )
@@ -102,7 +102,8 @@ pub(crate) fn render_refs_action_bar(
             .disabled(!can_update)
             .on_click(move |_, _, cx| {
                 update_app.update(cx, |this, cx| {
-                    this.git_remote_action(
+                    crate::git::actions::git_remote_action(
+                        this,
                         &pull_project,
                         crate::git::actions::GitRemoteAction::Pull { rebase: false },
                         cx,
@@ -122,7 +123,7 @@ pub(crate) fn render_refs_action_bar(
                     return;
                 };
                 delete_app.update(cx, |this, cx| {
-                    this.git_delete_project_ref(&project, name, cx);
+                    crate::git::actions::git_delete_project_ref(this, &project, name, cx);
                 });
             }),
         )
@@ -134,7 +135,8 @@ pub(crate) fn render_refs_action_bar(
             )
             .on_click(move |_, _, cx| {
                 fetch_app.update(cx, |this, cx| {
-                    this.git_remote_action(
+                    crate::git::actions::git_remote_action(
+                        this,
                         &fetch_project,
                         crate::git::actions::GitRemoteAction::Fetch,
                         cx,
@@ -150,8 +152,8 @@ pub(crate) fn render_refs_action_bar(
             )
             .on_click(move |_, _, cx| {
                 refresh_app.update(cx, |this, cx| {
-                    this.git_refresh(&refresh_project, cx);
-                    this.git_load_log(tab_id, 0, cx);
+                    crate::git::actions::git_refresh(this, &refresh_project, cx);
+                    crate::git::actions::git_load_log(this, tab_id, 0, cx);
                 });
             }),
         )
@@ -164,7 +166,7 @@ pub(crate) fn render_refs_action_bar(
             )
             .on_click(move |_, window, cx| {
                 settings_app.update(cx, |this, cx| {
-                    this.open_git_settings(window, cx);
+                    crate::git::actions::open_git_settings(this, window, cx);
                 });
             }),
         )
@@ -176,7 +178,7 @@ pub(crate) fn render_refs_action_bar(
             )
             .on_click(move |_, _, cx| {
                 expand_app.update(cx, |this, cx| {
-                    this.git_set_all_ref_groups_expanded(true, cx);
+                    crate::git::actions::git_set_all_ref_groups_expanded(this, true, cx);
                 });
             }),
         )
@@ -188,7 +190,7 @@ pub(crate) fn render_refs_action_bar(
             )
             .on_click(move |_, _, cx| {
                 collapse_app.update(cx, |this, cx| {
-                    this.git_set_all_ref_groups_expanded(false, cx);
+                    crate::git::actions::git_set_all_ref_groups_expanded(this, false, cx);
                 });
             }),
         )

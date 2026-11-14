@@ -7,99 +7,97 @@ use crate::app::{AppShell, TerminalTab};
 use gpui_kit::*;
 use transom_core::{Connection, SavedTabGroup, SavedTabTiling};
 
-impl AppShell {
-    pub(crate) fn save_window_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // 全屏时的窗口几何是屏幕尺寸，写入设置会污染下次普通启动的窗口位置。
-        if app_settings(cx).window.remember_window_bounds && !window.is_fullscreen() {
-            let bounds = window.bounds();
-            update_app_settings(cx, |s| s.window.window_width = bounds.size.width / px(1.0));
-            update_app_settings(cx, |s| {
-                s.window.window_height = bounds.size.height / px(1.0)
-            });
-            update_app_settings(cx, |s| s.window.window_x = Some(bounds.origin.x / px(1.0)));
-            update_app_settings(cx, |s| s.window.window_y = Some(bounds.origin.y / px(1.0)));
-        }
-        // 会话列表展开状态与标签组、窗口几何同属"上次状态"，一起在退出时落盘：
-        // 崩溃后三者一起退到上次正常退出，不会出现标签组是旧的、侧栏是新的那种
-        // 半新半旧；也不必为一次点击写一次配置文件。
+pub(crate) fn save_window_state(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    // 全屏时的窗口几何是屏幕尺寸，写入设置会污染下次普通启动的窗口位置。
+    if app_settings(cx).window.remember_window_bounds && !window.is_fullscreen() {
+        let bounds = window.bounds();
+        update_app_settings(cx, |s| s.window.window_width = bounds.size.width / px(1.0));
         update_app_settings(cx, |s| {
-            s.window.last_sidebar_visible = self.state.sidebar.visible()
+            s.window.window_height = bounds.size.height / px(1.0)
         });
-        let sessions: Vec<_> = self.state.workspace.tabs.iter().map(session_key).collect();
-        update_app_settings(cx, |s| s.window.previous_tab_sessions = sessions);
-        self.state.prune_tilings();
-        // 先建立"组 ID → 落盘下标"的映射：并排快照用下标引用标签组，
-        // 而组 ID 是运行期 UUID，不随设置文件保存。
-        let saved_groups: Vec<_> = self
-            .state
-            .workspace
-            .groups
-            .iter()
-            .filter_map(|group| {
-                let tab = self
-                    .state
-                    .workspace
-                    .tabs
-                    .iter()
-                    .find(|tab| tab.id == group.active_pane)?;
-                Some((
-                    group.id,
-                    SavedTabGroup {
-                        session: session_key(tab),
-                        layout: group.root.to_saved(),
-                    },
-                ))
-            })
-            .collect();
-        // 每张并排网格各自落盘：槽位按"组 ID → 落盘下标"引用标签组，
-        // 而组 ID 是运行期 UUID，不随设置文件保存。
-        app_settings_mut(cx).window.tab_tilings = self
-            .state
-            .workspace
-            .tiled_sets
-            .iter()
-            .filter_map(|tiled| {
-                let slots: Vec<Option<usize>> = tiled
-                    .slots
-                    .iter()
-                    .map(|slot| {
-                        slot.and_then(|group| saved_groups.iter().position(|(id, _)| *id == group))
-                    })
-                    .collect();
-                // 没落盘的标签组会变成空槽；有效槽位少于两个时并排本身已没有意义。
-                if slots.iter().flatten().count() < 2 {
-                    return None;
-                }
-                Some(SavedTabTiling {
-                    rows: tiled.rows,
-                    cols: tiled.cols,
-                    slots,
-                    focused: tiled.focused,
-                    auto: tiled.auto,
+        update_app_settings(cx, |s| s.window.window_x = Some(bounds.origin.x / px(1.0)));
+        update_app_settings(cx, |s| s.window.window_y = Some(bounds.origin.y / px(1.0)));
+    }
+    // 会话列表展开状态与标签组、窗口几何同属"上次状态"，一起在退出时落盘：
+    // 崩溃后三者一起退到上次正常退出，不会出现标签组是旧的、侧栏是新的那种
+    // 半新半旧；也不必为一次点击写一次配置文件。
+    update_app_settings(cx, |s| {
+        s.window.last_sidebar_visible = shell.state.sidebar.visible()
+    });
+    let sessions: Vec<_> = shell.state.workspace.tabs.iter().map(session_key).collect();
+    update_app_settings(cx, |s| s.window.previous_tab_sessions = sessions);
+    shell.state.prune_tilings();
+    // 先建立"组 ID → 落盘下标"的映射：并排快照用下标引用标签组，
+    // 而组 ID 是运行期 UUID，不随设置文件保存。
+    let saved_groups: Vec<_> = shell
+        .state
+        .workspace
+        .groups
+        .iter()
+        .filter_map(|group| {
+            let tab = shell
+                .state
+                .workspace
+                .tabs
+                .iter()
+                .find(|tab| tab.id == group.active_pane)?;
+            Some((
+                group.id,
+                SavedTabGroup {
+                    session: session_key(tab),
+                    layout: group.root.to_saved(),
+                },
+            ))
+        })
+        .collect();
+    // 每张并排网格各自落盘：槽位按"组 ID → 落盘下标"引用标签组，
+    // 而组 ID 是运行期 UUID，不随设置文件保存。
+    app_settings_mut(cx).window.tab_tilings = shell
+        .state
+        .workspace
+        .tiled_sets
+        .iter()
+        .filter_map(|tiled| {
+            let slots: Vec<Option<usize>> = tiled
+                .slots
+                .iter()
+                .map(|slot| {
+                    slot.and_then(|group| saved_groups.iter().position(|(id, _)| *id == group))
                 })
+                .collect();
+            // 没落盘的标签组会变成空槽；有效槽位少于两个时并排本身已没有意义。
+            if slots.iter().flatten().count() < 2 {
+                return None;
+            }
+            Some(SavedTabTiling {
+                rows: tiled.rows,
+                cols: tiled.cols,
+                slots,
+                focused: tiled.focused,
+                auto: tiled.auto,
             })
-            .collect();
-        app_settings_mut(cx).window.previous_tab_groups =
-            saved_groups.into_iter().map(|(_, group)| group).collect();
-        // 退出路径必须同步落盘：异步写盘线程虽然会在 Drop 时 join，但这里
-        // 是最后一次状态快照，直接写能保证进程退出前已经落定。
-        if let Err(error) = self.state.services.settings_store.save(app_settings(cx)) {
-            // 这一处原先是静默丢弃的：保存失败等于下次启动窗口位置与标签组全丢，
-            // 用户只会说"我上次开的那几个标签没了"，日志是唯一能回溯的现场。
-            log::warn!("退出前保存窗口与标签组状态失败，下次启动将沿用上一次的记录，原因: {error}");
-        }
+        })
+        .collect();
+    app_settings_mut(cx).window.previous_tab_groups =
+        saved_groups.into_iter().map(|(_, group)| group).collect();
+    // 退出路径必须同步落盘：异步写盘线程虽然会在 Drop 时 join，但这里
+    // 是最后一次状态快照，直接写能保证进程退出前已经落定。
+    if let Err(error) = shell.state.services.settings_store.save(app_settings(cx)) {
+        // 这一处原先是静默丢弃的：保存失败等于下次启动窗口位置与标签组全丢，
+        // 用户只会说"我上次开的那几个标签没了"，日志是唯一能回溯的现场。
+        log::warn!("退出前保存窗口与标签组状态失败，下次启动将沿用上一次的记录，原因: {error}");
     }
+}
 
-    /// 关闭程序前保存状态并退出
-    pub(crate) fn close_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        log::info!(
-            "应用正在退出，窗格数: {}，标签组数: {}",
-            self.state.workspace.tabs.len(),
-            self.state.workspace.groups.len()
-        );
-        self.save_window_state(window, cx);
-        cx.quit();
-    }
+/// 关闭程序前保存状态并退出
+pub(crate) fn close_app(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+    log::info!(
+        "应用正在退出，窗格数: {}，标签组数: {}",
+        shell.state.workspace.tabs.len(),
+        shell.state.workspace.groups.len()
+    );
+    crate::app::window_state::save_window_state(shell, window, cx);
+    cx.quit();
 }
 
 /// 窗口恢复使用的会话键：本地终端固定为 `local`，其余使用持久化会话 ID。

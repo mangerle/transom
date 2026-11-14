@@ -52,62 +52,62 @@ pub(crate) struct GitProjectRow {
     pub(crate) in_folder: bool,
 }
 
-impl AppShell {
-    /// 侧栏内容：标题行 + 分组与项目行 + 空态。
-    pub(crate) fn render_git_sidebar(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        // 分组列表在渲染期就取好带走：右键菜单闭包运行时再回查 `self.state.git` 的借用不成立。
-        let folders = git_folder_options(&self.state.git);
-        let active_project = self.active_git_project_id(cx);
-        let selected_project = self.state.git.selected_project;
-        let mut rows = sidebar_list_frame("git-sidebar-rows");
-        for row in build_git_rows(&self.state.git) {
-            rows = match row {
-                GitSidebarRow::Folder(row) => rows.child(self.render_git_folder_row(&row, p, cx)),
-                GitSidebarRow::Project(row) => {
-                    let id = row.project.id;
-                    let state = if active_project == Some(id) {
-                        SidebarRowState::Current
-                    } else if selected_project == Some(id) {
-                        SidebarRowState::Selected
-                    } else {
-                        SidebarRowState::Normal
-                    };
-                    rows.child(self.render_git_project_row(&row, state, &folders, p, cx))
-                }
-            };
-        }
-        if self.state.git.projects.is_empty() {
-            rows = rows.child(self.render_git_empty(p, cx));
-        }
-
-        let list = v_flex()
-            .flex_1()
-            .id("git-sidebar-list")
-            .overflow_y_scrollbar()
-            .child(rows);
-
-        let app = cx.entity().clone();
-        v_flex()
-            .size_full()
-            .bg(p.background)
-            .text_color(p.foreground)
-            .child(self.render_git_sidebar_header(window, p, cx))
-            .child(list)
-            .context_menu(move |menu, _window, _cx| render_git_sidebar_menu(menu, &app))
-            .into_any_element()
+/// 侧栏内容：标题行 + 分组与项目行 + 空态。
+pub(crate) fn render_git_sidebar(
+    shell: &AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+    p: &Palette,
+) -> AnyElement {
+    // 分组列表在渲染期就取好带走：右键菜单闭包运行时再回查 `shell.state.git` 的借用不成立。
+    let folders = git_folder_options(&shell.state.git);
+    let active_project = super::helpers::active_git_project_id(shell, cx);
+    let selected_project = shell.state.git.selected_project;
+    let mut rows = sidebar_list_frame("git-sidebar-rows");
+    for row in build_git_rows(&shell.state.git) {
+        rows = match row {
+            GitSidebarRow::Folder(row) => rows.child(rows::render_git_folder_row(&row, p, cx)),
+            GitSidebarRow::Project(row) => {
+                let id = row.project.id;
+                let state = if active_project == Some(id) {
+                    SidebarRowState::Current
+                } else if selected_project == Some(id) {
+                    SidebarRowState::Selected
+                } else {
+                    SidebarRowState::Normal
+                };
+                rows.child(rows::render_git_project_row(
+                    shell, &row, state, &folders, p, cx,
+                ))
+            }
+        };
+    }
+    if shell.state.git.projects.is_empty() {
+        rows = rows.child(render_git_empty(p, cx));
     }
 
-    fn render_git_sidebar_header(
-        &mut self,
-        _window: &mut Window,
-        p: &Palette,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    let list = v_flex()
+        .flex_1()
+        .id("git-sidebar-list")
+        .overflow_y_scrollbar()
+        .child(rows);
+
+    let app = cx.entity().clone();
+    v_flex()
+        .size_full()
+        .bg(p.background)
+        .text_color(p.foreground)
+        .child(render_git_sidebar_header(window, p, cx))
+        .child(list)
+        .context_menu(move |menu, _window, _cx| render_git_sidebar_menu(menu, &app))
+        .into_any_element()
+}
+
+fn render_git_sidebar_header(
+    _window: &mut Window,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
         h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
             .px(rems(space::MD))
@@ -130,7 +130,7 @@ impl AppShell {
                 )
                 .render()
                 .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_git_folder_modal(window, cx);
+                    crate::git::name_modal::open_git_folder_modal(this, window, cx);
                 })),
             )
             .child(
@@ -141,7 +141,7 @@ impl AppShell {
                 )
                 .render()
                 .on_click(cx.listener(|this, _, _window, cx| {
-                    this.refresh_all_git_projects(cx);
+                    crate::git::actions::refresh_all_git_projects(this, cx);
                 })),
             )
             .child(
@@ -152,7 +152,7 @@ impl AppShell {
                 )
                 .render()
                 .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_git_clone_modal(window, cx);
+                    crate::git::clone_modal::open_git_clone_modal(this, window, cx);
                 })),
             )
             .child(
@@ -163,32 +163,31 @@ impl AppShell {
                 )
                 .render()
                 .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_git_project_modal(None, window, cx);
+                    crate::git::project_modal::open_git_project_modal(this, None, window, cx);
                 })),
             )
             .into_any_element()
     }
 
-    fn render_git_empty(&mut self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        v_flex()
-            .gap_2()
-            .p_3()
-            .text_sm()
-            .text_color(p.muted_foreground)
-            .child(rust_i18n::t!("git.sidebar.empty").to_string())
-            .child(
-                action_button(
-                    "git-sidebar-add-empty",
-                    UiIcon::ADD,
-                    rust_i18n::t!("git.sidebar.add").to_string(),
-                )
-                .primary()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_git_project_modal(None, window, cx);
-                })),
+fn render_git_empty(p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+    v_flex()
+        .gap_2()
+        .p_3()
+        .text_sm()
+        .text_color(p.muted_foreground)
+        .child(rust_i18n::t!("git.sidebar.empty").to_string())
+        .child(
+            action_button(
+                "git-sidebar-add-empty",
+                UiIcon::ADD,
+                rust_i18n::t!("git.sidebar.add").to_string(),
             )
-            .into_any_element()
-    }
+            .primary()
+            .on_click(cx.listener(|this, _, window, cx| {
+                crate::git::project_modal::open_git_project_modal(this, None, window, cx);
+            })),
+        )
+        .into_any_element()
 }
 
 /// 侧栏行表：分组在前（各自紧跟组内项目），未归组的项目排在最后。
@@ -257,14 +256,16 @@ fn render_git_sidebar_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu
         rust_i18n::t!("git.sidebar.refresh_all").to_string(),
         UiIcon::REFRESH,
         move |_, _, cx| {
-            app_refresh.update(cx, |this, cx| this.refresh_all_git_projects(cx));
+            app_refresh.update(cx, |this, cx| crate::git::actions::refresh_all_git_projects(this, cx));
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.sidebar.new_folder").to_string(),
         UiIcon::ADD,
         move |_, window, cx| {
-            app_folder.update(cx, |this, cx| this.open_git_folder_modal(window, cx));
+            app_folder.update(cx, |this, cx| {
+                crate::git::name_modal::open_git_folder_modal(this, window, cx);
+            });
         },
     ))
 }
@@ -295,7 +296,7 @@ fn render_git_project_menu(
                 let Some(project) = found else {
                     return;
                 };
-                app_open.update(cx, |this, cx| this.open_git_tab(project, window, cx));
+                app_open.update(cx, |this, cx| crate::git::actions::open_git_tab(this, project, window, cx));
             },
         ))
         .item(menu_item(
@@ -312,7 +313,7 @@ fn render_git_project_menu(
                         .find(|item| item.id == id)
                         .map(|item| item.path.clone());
                     if let Some(path) = path {
-                        this.spawn_local_terminal(Some(path), cx);
+                        crate::connection::spawn_local_terminal(this, Some(path), cx);
                     }
                 });
             },
@@ -330,7 +331,7 @@ fn render_git_project_menu(
                         .find(|item| item.id == id)
                         .cloned()
                     {
-                        this.git_refresh(&project, cx);
+                        crate::git::actions::git_refresh(this, &project, cx);
                     }
                 });
             },
@@ -345,7 +346,8 @@ fn render_git_project_menu(
             UiIcon::FOLDER,
             move |_, _, cx| {
                 app_move.update(cx, |this, cx| {
-                    this.apply_git_drop(
+                    crate::git::actions::apply_git_drop(
+                        this,
                         GitSidebarDrag::Project(id),
                         GitDropTarget::Folder(folder_id),
                         cx,
@@ -359,7 +361,9 @@ fn render_git_project_menu(
         rust_i18n::t!("git.menu.move_to_root").to_string(),
         UiIcon::TREE,
         move |_, _, cx| {
-            app_root.update(cx, |this, cx| this.git_move_project_to_root(id, cx));
+            app_root.update(cx, |this, cx| {
+                crate::git::actions::git_move_project_to_root(this, id, cx)
+            });
         },
     ));
     let app_remove = app;
@@ -367,7 +371,7 @@ fn render_git_project_menu(
         rust_i18n::t!("git.menu.remove").to_string(),
         UiIcon::DELETE,
         move |_, _, cx| {
-            app_remove.update(cx, |this, cx| this.remove_git_project(id, cx));
+            app_remove.update(cx, |this, cx| crate::git::actions::remove_git_project(this, id, cx));
         },
     ))
 }
@@ -382,7 +386,7 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
         UiIcon::ADD,
         move |_, window, cx| {
             app_add.update(cx, |this, cx| {
-                this.open_git_project_modal(Some(id), window, cx);
+                crate::git::project_modal::open_git_project_modal(this, Some(id), window, cx);
             });
         },
     ))
@@ -391,7 +395,7 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
         UiIcon::FOLDER,
         move |_, window, cx| {
             app_rename.update(cx, |this, cx| {
-                this.open_git_rename_folder_modal(id, window, cx);
+                crate::git::name_modal::open_git_rename_folder_modal(this, id, window, cx);
             });
         },
     ))
@@ -399,7 +403,9 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
         rust_i18n::t!("git.folder.delete").to_string(),
         UiIcon::DELETE,
         move |_, _, cx| {
-            app_delete.update(cx, |this, cx| this.delete_git_folder(id, cx));
+            app_delete.update(cx, |this, cx| {
+                crate::git::actions::delete_git_folder(this, id, cx)
+            });
         },
     ))
 }

@@ -5,16 +5,15 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    pub(crate) fn render_sftp_chmod_body(
-        &self,
-        app: &Entity<AppShell>,
-        _cx: &App,
-        p: &Palette,
-    ) -> AnyElement {
-        let Some(modal) = self.state.sftp_modals.chmod.as_ref() else {
-            return div().into_any_element();
-        };
+pub(crate) fn render_sftp_chmod_body(
+    shell: &AppShell,
+    app: &Entity<AppShell>,
+    _cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let Some(modal) = shell.state.sftp_modals.chmod.as_ref() else {
+        return div().into_any_element();
+    };
         let file_name = modal.file_name.clone();
         let remote_path = modal.remote_path.clone();
         let perms = modal.permissions & 0o777;
@@ -38,7 +37,7 @@ impl AppShell {
                 rust_i18n::t!("common.cancel").to_string(),
                 crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
                     this.state.sftp_modals.chmod = None;
-                    this.focus_active_sftp_panel(window, cx);
+                    crate::sftp::focus_active_sftp_panel(this, window, cx);
                     cx.notify();
                 }),
             ))
@@ -50,7 +49,7 @@ impl AppShell {
                     .on_click(crate::dialog_host::on_event(
                         app,
                         |this, _: &ClickEvent, window, cx| {
-                            this.save_sftp_chmod_modal(window, cx);
+                            crate::sftp::save_sftp_chmod_modal(this, window, cx);
                         },
                     )),
             );
@@ -62,7 +61,6 @@ impl AppShell {
             content,
             Some(footer),
         )
-    }
 }
 
 /// 八进制输入、等价的 rwx 文案与四个常用预设。
@@ -90,7 +88,7 @@ fn chmod_octal_row(
                 .on_click(crate::dialog_host::on_event(
                     app,
                     move |this, _: &ClickEvent, window, cx| {
-                        this.sftp_set_chmod_preset(mode_val, window, cx);
+                        crate::sftp::sftp_set_chmod_preset(this, mode_val, window, cx);
                     },
                 )),
         );
@@ -180,7 +178,9 @@ fn chmod_grid(perms: u32, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
                                 .on_change(crate::dialog_host::on_event(
                                     app,
                                     move |this, checked: &bool, window, cx| {
-                                        this.sftp_toggle_chmod_bit(r_mask, *checked, window, cx);
+                                        crate::sftp::sftp_toggle_chmod_bit(
+                                            this, r_mask, *checked, window, cx,
+                                        );
                                     },
                                 )),
                         )
@@ -191,7 +191,9 @@ fn chmod_grid(perms: u32, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
                                 .on_change(crate::dialog_host::on_event(
                                     app,
                                     move |this, checked: &bool, window, cx| {
-                                        this.sftp_toggle_chmod_bit(w_mask, *checked, window, cx);
+                                        crate::sftp::sftp_toggle_chmod_bit(
+                                            this, w_mask, *checked, window, cx,
+                                        );
                                     },
                                 )),
                         )
@@ -202,7 +204,9 @@ fn chmod_grid(perms: u32, app: &Entity<AppShell>, p: &Palette) -> AnyElement {
                                 .on_change(crate::dialog_host::on_event(
                                     app,
                                     move |this, checked: &bool, window, cx| {
-                                        this.sftp_toggle_chmod_bit(x_mask, *checked, window, cx);
+                                        crate::sftp::sftp_toggle_chmod_bit(
+                                            this, x_mask, *checked, window, cx,
+                                        );
                                     },
                                 )),
                         ),

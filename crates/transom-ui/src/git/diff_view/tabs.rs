@@ -156,12 +156,12 @@ fn render_single_diff_tab(
         .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
             cx.stop_propagation();
             middle_app.update(cx, |this, cx| {
-                this.git_close_diff_tab_by_request(tab_id, request_id, cx);
+                crate::git::actions::git_close_diff_tab_by_request(this, tab_id, request_id, cx);
             });
         })
         .on_click(move |_, _, cx| {
             outer_tab_app.update(cx, |this, cx| {
-                this.git_select_diff_tab_by_request(tab_id, request_id, cx);
+                crate::git::actions::git_select_diff_tab_by_request(this, tab_id, request_id, cx);
             });
         })
         .context_menu(move |menu, _window, _cx| {
@@ -174,7 +174,9 @@ fn render_single_diff_tab(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_tab").to_string()).on_click(
                     move |_, _, cx| {
                         close_self.update(cx, |this, cx| {
-                            this.git_close_diff_tab_by_request(tab_id, request_id, cx);
+                            crate::git::actions::git_close_diff_tab_by_request(
+                                this, tab_id, request_id, cx,
+                            );
                         });
                     },
                 ),
@@ -184,7 +186,8 @@ fn render_single_diff_tab(
                     .disabled(total_tabs <= 1)
                     .on_click(move |_, _, cx| {
                         close_others.update(cx, |this, cx| {
-                            this.git_close_diff_tabs_scope(
+                            crate::git::actions::git_close_diff_tabs_scope(
+                                this,
                                 tab_id,
                                 Some(request_id),
                                 DiffTabCloseScope::Other,
@@ -198,7 +201,8 @@ fn render_single_diff_tab(
                     .disabled(idx == 0)
                     .on_click(move |_, _, cx| {
                         close_left.update(cx, |this, cx| {
-                            this.git_close_diff_tabs_scope(
+                            crate::git::actions::git_close_diff_tabs_scope(
+                                this,
                                 tab_id,
                                 Some(request_id),
                                 DiffTabCloseScope::Left,
@@ -212,7 +216,8 @@ fn render_single_diff_tab(
                     .disabled(idx + 1 >= total_tabs)
                     .on_click(move |_, _, cx| {
                         close_right.update(cx, |this, cx| {
-                            this.git_close_diff_tabs_scope(
+                            crate::git::actions::git_close_diff_tabs_scope(
+                                this,
                                 tab_id,
                                 Some(request_id),
                                 DiffTabCloseScope::Right,
@@ -226,7 +231,8 @@ fn render_single_diff_tab(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_all_tabs").to_string()).on_click(
                     move |_, _, cx| {
                         close_all.update(cx, |this, cx| {
-                            this.git_close_diff_tabs_scope(
+                            crate::git::actions::git_close_diff_tabs_scope(
+                                this,
                                 tab_id,
                                 None,
                                 DiffTabCloseScope::All,
@@ -259,7 +265,9 @@ fn render_single_diff_tab(
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
                     tab_app.update(cx, |this, cx| {
-                        this.git_select_diff_tab_by_request(tab_id, request_id, cx);
+                        crate::git::actions::git_select_diff_tab_by_request(
+                            this, tab_id, request_id, cx,
+                        );
                     });
                 }),
         )
@@ -274,7 +282,9 @@ fn render_single_diff_tab(
             .on_click(move |_, _, cx| {
                 cx.stop_propagation();
                 close_app.update(cx, |this, cx| {
-                    this.git_close_diff_tab_by_request(tab_id, request_id, cx);
+                    crate::git::actions::git_close_diff_tab_by_request(
+                        this, tab_id, request_id, cx,
+                    );
                 });
             }),
         )

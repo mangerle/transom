@@ -201,7 +201,12 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                     )
                     .on_click(move |_, _, cx| {
                         toggle_app.update(cx, |this, cx| {
-                            this.git_toggle_log_file_dir(params.tab_id, &toggle_key, cx);
+                            crate::git::actions::git_toggle_log_file_dir(
+                                this,
+                                params.tab_id,
+                                &toggle_key,
+                                cx,
+                            );
                         });
                     });
                 elements.push(dir_row.into_any_element());
@@ -280,7 +285,12 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                             return;
                         }
                         click_app.update(cx, |this, cx| {
-                            this.git_diff_commit_file(params.tab_id, &path_clone, cx);
+                            crate::git::actions::git_diff_commit_file(
+                                this,
+                                params.tab_id,
+                                &path_clone,
+                                cx,
+                            );
                         });
                     })
                     .context_menu(move |menu, _window, _cx| {

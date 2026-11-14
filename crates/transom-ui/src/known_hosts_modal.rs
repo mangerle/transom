@@ -11,19 +11,17 @@ use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
-impl AppShell {
-    /// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
-    pub(crate) fn on_known_hosts_event(&mut self, event: &KnownHostsEvent, cx: &mut Context<Self>) {
-        match event {
-            KnownHostsEvent::Removed { error: Some(error) } => {
-                self.state.set_error(localized_error(error))
-            }
-            KnownHostsEvent::Removed { error: None } => {
-                self.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
-            }
+/// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
+pub(crate) fn on_known_hosts_event(shell: &mut AppShell, event: &KnownHostsEvent, cx: &mut Context<AppShell>) {
+    match event {
+        KnownHostsEvent::Removed { error: Some(error) } => {
+            shell.state.set_error(localized_error(error))
         }
-        cx.notify();
+        KnownHostsEvent::Removed { error: None } => {
+            shell.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
+        }
     }
+    cx.notify();
 }
 
 impl KnownHostsView {

@@ -144,31 +144,29 @@ impl SftpPanelView {
     }
 }
 
-impl AppShell {
-    /// 后台刷新本地目录。
-    pub(crate) fn spawn_local_dir_refresh(
-        &mut self,
-        tab_id: TabId,
-        select_after: Option<PathBuf>,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| {
-                view.spawn_local_dir_refresh(select_after, cx)
-            });
-        }
+/// 后台刷新本地目录。
+pub(crate) fn spawn_local_dir_refresh(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    select_after: Option<PathBuf>,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| {
+            view.spawn_local_dir_refresh(select_after, cx)
+        });
     }
+}
 
-    /// 执行已确认的本地删除。
-    pub(crate) fn perform_sftp_local_delete(
-        &mut self,
-        tab_id: TabId,
-        paths: Vec<PathBuf>,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.state.sftp_view(tab_id) {
-            view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
-        }
+/// 执行已确认的本地删除。
+pub(crate) fn perform_sftp_local_delete(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    paths: Vec<PathBuf>,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
     }
 }
 /// 本地批量删除的结果：成功数与逐项失败原因。

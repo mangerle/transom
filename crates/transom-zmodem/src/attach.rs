@@ -14,9 +14,9 @@
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use transom_core::{TerminalIo, ZmodemEvent, ZmodemFinished};
@@ -229,13 +229,13 @@ impl Write for ZmodemWriter {
         if self.shared.active.load(Ordering::Acquire) {
             return Ok(buf.len());
         }
-        let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut guard = self.inner.lock();
         guard.write_all(buf)?;
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut guard = self.inner.lock();
         guard.flush()
     }
 }

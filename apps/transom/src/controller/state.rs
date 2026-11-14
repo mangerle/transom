@@ -66,7 +66,7 @@ impl ControllerState {
             sync_task: None,
             cleanup_set: JoinSet::new(),
             connecting: HashMap::new(),
-            local_host_tabs: Arc::new(std::sync::Mutex::new(Vec::new())),
+            local_host_tabs: Arc::new(parking_lot::Mutex::new(Vec::new())),
             local_host_task: None,
             stats_sampling: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             host_action_tasks: JoinSet::new(),

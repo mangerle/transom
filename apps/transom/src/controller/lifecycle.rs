@@ -15,12 +15,10 @@ use super::session_context::ManagedSessionContext;
 
 /// 注销一个标签的本地宿主采样订阅；订阅清空后采样器自行退出。
 pub(super) fn drop_local_host(
-    tabs: &Arc<std::sync::Mutex<Vec<(TabId, ConnectionId)>>>,
+    tabs: &Arc<parking_lot::Mutex<Vec<(TabId, ConnectionId)>>>,
     tab_id: TabId,
 ) {
-    if let Ok(mut tabs) = tabs.lock() {
-        tabs.retain(|(tab, _)| *tab != tab_id);
-    }
+    tabs.lock().retain(|(tab, _)| *tab != tab_id);
 }
 
 /// 新连接接入的登记参数。

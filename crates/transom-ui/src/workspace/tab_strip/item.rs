@@ -164,9 +164,9 @@ pub(super) fn render_tab_entry(
             window.focus(&focus, cx);
             let modifiers = event.modifiers();
             if modifiers.control || modifiers.platform {
-                this.toggle_tab_selection(&selection_groups, cx);
+                crate::app::tiling::toggle_tab_selection(this, &selection_groups, cx);
             } else {
-                this.clear_tab_selection(cx);
+                crate::app::tiling::clear_tab_selection(this, cx);
                 this.activate_tab(active_pane, window, cx);
             }
         }))

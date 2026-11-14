@@ -86,14 +86,12 @@ pub(in crate::app::dialog_host) fn container_create_values(
 }
 
 pub(in crate::app::dialog_host) fn container_confirm_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.confirm.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.confirm.is_some())
         .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_rename_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.rename_container.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.rename_container.is_some())
         .is_some()
 }
 
@@ -101,16 +99,14 @@ pub(in crate::app::dialog_host) fn container_rename_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.rename_container.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.rename_container.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.rename_container.as_ref())
         .map(|(_, input)| vec![input.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
 pub(in crate::app::dialog_host) fn container_tag_image_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.tag_image.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.tag_image.is_some())
         .is_some()
 }
 
@@ -118,16 +114,14 @@ pub(in crate::app::dialog_host) fn container_tag_image_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.tag_image.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.tag_image.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.tag_image.as_ref())
         .map(|(_, input)| vec![input.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
 pub(in crate::app::dialog_host) fn container_commit_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.commit_container.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.commit_container.is_some())
         .is_some()
 }
 
@@ -135,8 +129,7 @@ pub(in crate::app::dialog_host) fn container_commit_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.commit_container.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.commit_container.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.commit_container.as_ref())
         .map(|state| {
             vec![
@@ -149,8 +142,7 @@ pub(in crate::app::dialog_host) fn container_commit_values(
 }
 
 pub(in crate::app::dialog_host) fn container_update_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.update_container.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.update_container.is_some())
         .is_some()
 }
 
@@ -158,8 +150,7 @@ pub(in crate::app::dialog_host) fn container_update_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.update_container.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.update_container.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.update_container.as_ref())
         .map(|(_, mem, cpu)| {
             vec![
@@ -174,8 +165,7 @@ pub(in crate::app::dialog_host) fn container_network_connect_open(
     shell: &AppShell,
     cx: &App,
 ) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.connect_network.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.connect_network.is_some())
         .is_some()
 }
 
@@ -183,8 +173,7 @@ pub(in crate::app::dialog_host) fn container_network_connect_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.connect_network.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.connect_network.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.connect_network.as_ref())
         .map(|(_, input)| vec![input.read(cx).value().to_string()])
         .unwrap_or_default()
@@ -194,14 +183,12 @@ pub(in crate::app::dialog_host) fn container_export_config_open(
     shell: &AppShell,
     cx: &App,
 ) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.export_config.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.export_config.is_some())
         .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_file_rename_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.files.prompt_input.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.files.prompt_input.is_some())
         .is_some()
 }
 
@@ -209,16 +196,14 @@ pub(in crate::app::dialog_host) fn container_file_rename_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.files.prompt_input.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.files.prompt_input.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.files.prompt_input.as_ref())
         .map(|input| vec![input.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
 pub(in crate::app::dialog_host) fn container_file_new_dir_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| {
+    crate::container::find_container_modal_tab(shell, cx, |ws| {
             ws.files.new_dir_open && ws.files.new_dir_input.is_some()
         })
         .is_some()
@@ -228,22 +213,19 @@ pub(in crate::app::dialog_host) fn container_file_new_dir_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.files.new_dir_input.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.files.new_dir_input.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.files.new_dir_input.as_ref())
         .map(|input| vec![input.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
 pub(in crate::app::dialog_host) fn container_hub_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.hub_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.hub_dialog.is_some())
         .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_push_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.push_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.push_dialog.is_some())
         .is_some()
 }
 
@@ -251,8 +233,7 @@ pub(in crate::app::dialog_host) fn container_push_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.push_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.push_dialog.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.push_dialog.as_ref())
         .map(|push| {
             vec![
@@ -264,14 +245,12 @@ pub(in crate::app::dialog_host) fn container_push_values(
 }
 
 pub(in crate::app::dialog_host) fn container_system_df_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.system_df_dialog_open)
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.system_df_dialog_open)
         .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_build_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.build_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.build_dialog.is_some())
         .is_some()
 }
 
@@ -279,8 +258,7 @@ pub(in crate::app::dialog_host) fn container_build_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.build_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.build_dialog.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.build_dialog.as_ref())
         .map(|build| {
             vec![
@@ -293,8 +271,7 @@ pub(in crate::app::dialog_host) fn container_build_values(
 }
 
 pub(in crate::app::dialog_host) fn container_forward_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.forward_dialog.is_some())
         .is_some()
 }
 
@@ -302,8 +279,7 @@ pub(in crate::app::dialog_host) fn container_forward_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.forward_dialog.is_some())
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.forward_dialog.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.forward_dialog.as_ref())
         .map(|fwd| {
             vec![
@@ -316,13 +292,11 @@ pub(in crate::app::dialog_host) fn container_forward_values(
 }
 
 pub(in crate::app::dialog_host) fn container_pods_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.pods_dialog_open)
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.pods_dialog_open)
         .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_quadlet_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .find_container_modal_tab(cx, |ws| ws.quadlets_dialog_open)
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.quadlets_dialog_open)
         .is_some()
 }

@@ -76,9 +76,9 @@ fn run_group_action(
     let project = project.clone();
     app.update(cx, |this, cx| {
         if matches!(action, GitAction::Discard) {
-            this.git_run_paths(&project, GitAction::Discard, paths, cx);
+            crate::git::actions::git_run_paths(this, &project, GitAction::Discard, paths, cx);
             return;
         }
-        this.git_run_paths(&project, action, paths, cx);
+        crate::git::actions::git_run_paths(this, &project, action, paths, cx);
     });
 }

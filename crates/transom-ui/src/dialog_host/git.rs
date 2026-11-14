@@ -15,31 +15,31 @@ impl ModalKind {
     ) -> Option<bool> {
         match self {
             ModalKind::GitProject => {
-                shell.close_git_project_modal(cx);
+                crate::git::project_modal::close_git_project_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitClone => {
-                shell.close_git_clone_modal(cx);
+                crate::git::clone_modal::close_git_clone_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitWorktree => {
-                shell.close_git_worktree_modal(cx);
+                crate::git::worktree_modal::close_git_worktree_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitName => {
-                shell.close_git_name_modal(cx);
+                crate::git::name_modal::close_git_name_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitRebase => {
-                shell.git_close_rebase_modal(cx);
+                crate::git::rebase_modal::git_close_rebase_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitPush => {
-                shell.close_git_push_modal(cx);
+                crate::git::push_modal::close_git_push_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitConflict => {
-                shell.close_git_conflict_modal(cx);
+                crate::git::conflict_modal::close_git_conflict_modal(shell, cx);
                 Some(true)
             }
             _ => None,
@@ -55,31 +55,31 @@ impl ModalKind {
     ) -> Option<()> {
         match self {
             ModalKind::GitProject => {
-                shell.commit_git_project_modal(cx);
+                crate::git::project_modal::commit_git_project_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitClone => {
-                shell.start_git_clone(window, cx);
+                crate::git::clone_modal::start_git_clone(shell, window, cx);
                 Some(())
             }
             ModalKind::GitWorktree => {
-                shell.commit_git_worktree(cx);
+                crate::git::worktree_modal::commit_git_worktree(shell, cx);
                 Some(())
             }
             ModalKind::GitName => {
-                shell.submit_git_name(cx);
+                crate::git::name_modal::submit_git_name(shell, cx);
                 Some(())
             }
             ModalKind::GitRebase => {
-                shell.git_rebase_run(cx);
+                crate::git::rebase_modal::git_rebase_run(shell, cx);
                 Some(())
             }
             ModalKind::GitPush => {
-                shell.submit_git_push_modal(cx);
+                crate::git::push_modal::submit_git_push_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitConflict => {
-                shell.close_git_conflict_modal(cx);
+                crate::git::conflict_modal::close_git_conflict_modal(shell, cx);
                 Some(())
             }
             _ => None,
@@ -137,13 +137,27 @@ impl ModalKind {
         p: &Palette,
     ) -> Option<AnyElement> {
         let element = match self {
-            ModalKind::GitProject => shell.render_git_project_dialog_body(app, window, cx, p),
-            ModalKind::GitClone => shell.render_git_clone_dialog_body(app, window, cx, p),
-            ModalKind::GitWorktree => shell.render_git_worktree_dialog_body(app, window, cx, p),
-            ModalKind::GitName => shell.render_git_name_dialog_body(app, cx, p),
-            ModalKind::GitRebase => shell.render_git_rebase_dialog_body(app, window, cx, p),
-            ModalKind::GitPush => shell.render_git_push_dialog_body(app, window, cx, p),
-            ModalKind::GitConflict => shell.render_git_conflict_dialog_body(app, window, cx, p),
+            ModalKind::GitProject => {
+                crate::git::project_modal::render_git_project_dialog_body(shell, app, window, cx, p)
+            }
+            ModalKind::GitClone => {
+                crate::git::clone_modal::view::render_git_clone_dialog_body(shell, app, window, cx, p)
+            }
+            ModalKind::GitWorktree => {
+                crate::git::worktree_modal::render_git_worktree_dialog_body(shell, app, window, cx, p)
+            }
+            ModalKind::GitName => {
+                crate::git::name_modal::render_git_name_dialog_body(shell, app, cx, p)
+            }
+            ModalKind::GitRebase => {
+                crate::git::rebase_modal::render_git_rebase_dialog_body(shell, app, window, cx, p)
+            }
+            ModalKind::GitPush => {
+                crate::git::push_modal::render_git_push_dialog_body(shell, app, window, cx, p)
+            }
+            ModalKind::GitConflict => {
+                crate::git::conflict_modal::render_git_conflict_dialog_body(shell, app, window, cx, p)
+            }
             _ => return None,
         };
         Some(element)
