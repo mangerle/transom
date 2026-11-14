@@ -83,20 +83,24 @@ impl UiIcon {
     pub const REAL_INTENTION_BULB: Self = Self("realIntentionBulb");
     pub const REFRESH: Self = Self("refresh");
     pub const REFRESH_AUTO: Self = Self("refreshAuto");
+    pub const RESET: Self = Self("reset");
     pub const RESTORE: Self = Self("restore");
     pub const RIGHT: Self = Self("right");
     pub const RUN_ANYTHING: Self = Self("runAnything");
     pub const RUN: Self = Self("run");
     pub const SAVE: Self = Self("save");
+    pub const SCROLL_DOWN: Self = Self("scrollDown");
     pub const SEARCH: Self = Self("search");
     pub const SETTINGS: Self = Self("settings");
     pub const SHELVE: Self = Self("shelve");
     pub const SHOW: Self = Self("show");
     pub const SHOW_AS_TREE: Self = Self("tree");
+    pub const SOFT_WRAP: Self = Self("softWrap");
     pub const SORT_BY: Self = Self("sortBy");
     pub const STAR: Self = Self("star");
     pub const STOP: Self = Self("stop");
     pub const TAG: Self = Self("tag");
+    pub const TOGGLE_VISIBILITY: Self = Self("toggleVisibility");
     pub const TREE: Self = Self("tree");
     pub const UNDO: Self = Self("undo");
     pub const UPDATE: Self = Self("update");
@@ -163,6 +167,10 @@ mod tests {
             UiIcon::EXCEPTION_ANALYZER,
             UiIcon::REAL_INTENTION_BULB,
             UiIcon::REFRESH_AUTO,
+            UiIcon::RESET,
+            UiIcon::TOGGLE_VISIBILITY,
+            UiIcon::SCROLL_DOWN,
+            UiIcon::SOFT_WRAP,
             UiIcon::KEY,
         ] {
             let light = icon.light_path();
