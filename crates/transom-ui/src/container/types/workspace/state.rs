@@ -52,6 +52,10 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) logs_timestamps: bool,
     /// 是否把最新一行排在最前：跟随日志时不必手动滚到底。
     pub(crate) logs_reversed: bool,
+    /// 日志区是否开启自动换行。
+    pub(crate) logs_soft_wrap: bool,
+    /// 日志滚动容器句柄，用于顶部/底部快速跳转。
+    pub(crate) logs_scroll: gpui::ScrollHandle,
     pub(crate) logs_request: Option<ContainerRequestId>,
     pub(crate) stats: Option<ContainerStats>,
     /// 历史采样：统计页的走势图参考主机监控，只留最后一帧就只能画一个点。
@@ -247,6 +251,8 @@ impl ContainerWorkspaceState {
             logs_tail: LOG_TAIL_DEFAULT,
             logs_timestamps: false,
             logs_reversed: false,
+            logs_soft_wrap: false,
+            logs_scroll: gpui::ScrollHandle::new(),
             logs_request: None,
             stats: None,
             stats_history: VecDeque::with_capacity(STATS_HISTORY_LIMIT),

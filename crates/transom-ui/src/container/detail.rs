@@ -159,6 +159,8 @@ pub(super) fn render_container_detail(
     let logs_tail = workspace.logs_tail;
     let logs_timestamps = workspace.logs_timestamps;
     let logs_reversed = workspace.logs_reversed;
+    let logs_soft_wrap = workspace.logs_soft_wrap;
+    let logs_scroll = workspace.logs_scroll.clone();
     let logs_search = workspace.logs_search.clone();
     let inspect_search = workspace.inspect_search.clone();
     let changes = workspace.changes.clone();
@@ -280,6 +282,8 @@ pub(super) fn render_container_detail(
                     tail: logs_tail,
                     timestamps: logs_timestamps,
                     reversed: logs_reversed,
+                    soft_wrap: logs_soft_wrap,
+                    scroll: &logs_scroll,
                     search: &logs_search,
                     filter: logs_filter,
                 },

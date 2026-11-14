@@ -7035,6 +7035,18 @@ container:
     tail_format:
       en: "Tail %{count}"
       zh-CN: "尾部 %{count} 行"
+    tail_lines:
+      en: Tail lines
+      zh-CN: 尾部行数
+    scroll_top:
+      en: Scroll to top
+      zh-CN: 滚动到顶部
+    scroll_bottom:
+      en: Scroll to bottom
+      zh-CN: 滚动到底部
+    soft_wrap:
+      en: Soft wrap
+      zh-CN: 自动换行
   terminal:
     hint:
       en: Open an interactive shell inside this container.

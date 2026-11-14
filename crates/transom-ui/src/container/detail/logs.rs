@@ -2,13 +2,11 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
-use crate::theme::tokens::{control, space, typography};
-use crate::widgets::{IconButton, action_button, status_dot_bare};
-use gpui_kit::component::Side;
+use crate::theme::tokens::typography;
+use crate::widgets::{IconButton, status_dot_bare};
 use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::component::{Selectable, Side};
 use gpui_kit::prelude::FluentBuilder;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 日志页签渲染参数。
@@ -18,6 +16,8 @@ pub(crate) struct ContainerLogsView<'a> {
     pub(super) tail: usize,
     pub(super) timestamps: bool,
     pub(super) reversed: bool,
+    pub(super) soft_wrap: bool,
+    pub(super) scroll: &'a ScrollHandle,
     pub(super) search: &'a Entity<InputState>,
     pub(super) filter: &'a str,
 }
@@ -36,7 +36,7 @@ fn container_badge_color(name: &str) -> (gpui::Hsla, gpui::Hsla) {
 }
 
 /// 渲染单行日志：等宽 12px、行高 1.5，提取时间戳弱色，ERROR/WARN 语义着色，搜索关键词背景高亮。
-fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
+fn render_log_line(line: &str, filter: &str, soft_wrap: bool, p: &Palette) -> AnyElement {
     let mut prefix_badge = None;
     let mut remaining_line = line;
 
@@ -98,6 +98,8 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
     let filter = filter.trim();
     let text_element: AnyElement = if filter.is_empty() {
         div()
+            .when(soft_wrap, |el| el.flex_1().min_w_0())
+            .when(!soft_wrap, |el| el.whitespace_nowrap())
             .text_color(text_color)
             .child(remaining_line.to_string())
             .into_any_element()
@@ -131,12 +133,18 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
                     .child(remaining_line[last_end..].to_string()),
             );
         }
-        h_flex().gap_0().children(spans).into_any_element()
+        h_flex()
+            .gap_0()
+            .when(soft_wrap, |el| el.flex_1().min_w_0().flex_wrap())
+            .when(!soft_wrap, |el| el.whitespace_nowrap())
+            .children(spans)
+            .into_any_element()
     };
 
     let mut line_row = h_flex()
         .w_full()
         .items_baseline()
+        .when(!soft_wrap, |el| el.whitespace_nowrap())
         .font_family(p.mono_font_family.clone())
         .text_size(rems(typography::CAPTION))
         .line_height(relative(1.5));
@@ -150,33 +158,138 @@ fn render_log_line(line: &str, filter: &str, p: &Palette) -> AnyElement {
     line_row.child(text_element).into_any_element()
 }
 
-pub(crate) fn render_logs(
+/// 渲染日志右侧竖向工具栏：视图选项、导航跳转、换行/跟随切换与导出/清空操作。
+fn render_logs_sidebar(
     view: &Entity<ContainerWorkspace>,
-    params: ContainerLogsView<'_>,
+    params: &ContainerLogsView<'_>,
     p: &Palette,
 ) -> AnyElement {
-    let ContainerLogsView {
-        logs,
-        follow,
-        tail,
-        timestamps,
-        reversed,
-        search,
-        filter,
-    } = params;
+    let follow = params.follow;
+    let tail = params.tail;
+    let timestamps = params.timestamps;
+    let reversed = params.reversed;
+    let soft_wrap = params.soft_wrap;
+    let scroll = params.scroll;
+    let divider = || {
+        div()
+            .w_4()
+            .my_1()
+            .border_color(p.divider(p.border))
+            .divider_edge(DividerEdge::Top, p.divider_width)
+    };
 
-    let all_lines_count = logs.lines().count();
-    let lines = filtered_log_lines(logs, filter, reversed, LOG_RENDER_LIMIT);
-    let matched_count = lines.len();
+    let timestamps_btn = IconButton::new(
+        "container-logs-timestamps",
+        UiIcon::TOGGLE_VISIBILITY,
+        rust_i18n::t!("container.logs.timestamps").to_string(),
+    )
+    .render()
+    .selected(timestamps)
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.toggle_container_logs_timestamps();
+                cx.notify();
+            });
+        }
+    });
 
-    // 1. 跟随主行动按钮
-    let follow_btn = action_button(
+    let reverse_btn = IconButton::new(
+        "container-logs-reverse",
+        UiIcon::SORT_BY,
+        rust_i18n::t!("container.logs.reverse").to_string(),
+    )
+    .render()
+    .selected(reversed)
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.state.logs_reversed = !workspace.state.logs_reversed;
+                cx.notify();
+            });
+        }
+    });
+
+    let tail_view = view.clone();
+    let tail_btn = IconButton::new(
+        "container-logs-tail-dropdown",
+        UiIcon::LIST_FILES,
+        rust_i18n::t!("container.logs.tail_lines").to_string(),
+    )
+    .render()
+    .dropdown_menu(move |menu, _, _| {
+        let mut menu = menu.check_side(Side::Right);
+        for choice in LOG_TAIL_CHOICES {
+            let label = if choice == 0 {
+                rust_i18n::t!("container.logs.tail_all").to_string()
+            } else {
+                rust_i18n::t!("container.logs.tail_format", count = choice).to_string()
+            };
+            menu = menu.item(PopupMenuItem::new(label).checked(choice == tail).on_click({
+                let view = tail_view.clone();
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.set_container_logs_tail(choice);
+                        cx.notify();
+                    });
+                }
+            }));
+        }
+        menu
+    });
+
+    let top_btn = IconButton::new(
+        "container-logs-scroll-top",
+        UiIcon::UP,
+        rust_i18n::t!("container.logs.scroll_top").to_string(),
+    )
+    .render()
+    .on_click({
+        let scroll = scroll.clone();
+        move |_, _, _| {
+            scroll.set_offset(point(px(0.0), px(0.0)));
+        }
+    });
+
+    let bottom_btn = IconButton::new(
+        "container-logs-scroll-bottom",
+        UiIcon::DOWN,
+        rust_i18n::t!("container.logs.scroll_bottom").to_string(),
+    )
+    .render()
+    .on_click({
+        let scroll = scroll.clone();
+        move |_, _, _| {
+            scroll.scroll_to_bottom();
+        }
+    });
+
+    let soft_wrap_btn = IconButton::new(
+        "container-logs-soft-wrap",
+        UiIcon::SOFT_WRAP,
+        rust_i18n::t!("container.logs.soft_wrap").to_string(),
+    )
+    .render()
+    .selected(soft_wrap)
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.state.logs_soft_wrap = !workspace.state.logs_soft_wrap;
+                cx.notify();
+            });
+        }
+    });
+
+    let follow_btn = IconButton::new(
         "container-logs-follow",
-        UiIcon::DIFF,
+        UiIcon::SCROLL_DOWN,
         rust_i18n::t!("container.logs.follow").to_string(),
     )
-    .when(follow, |b| b.secondary())
-    .when(!follow, |b| b.ghost())
+    .render()
+    .selected(follow)
     .on_click({
         let view = view.clone();
         move |_, _, cx| {
@@ -187,133 +300,104 @@ pub(crate) fn render_logs(
         }
     });
 
-    // 2. 尾部行数下拉菜单
-    let tail_text = if tail == 0 {
-        rust_i18n::t!("container.logs.tail_all").to_string()
-    } else {
-        rust_i18n::t!("container.logs.tail_format", count = tail).to_string()
-    };
-    let tail_view = view.clone();
-    let tail_dropdown = Button::new("container-logs-tail-dropdown")
-        .ghost()
-        .small()
-        .accessibility_label(tail_text.clone())
-        .child(
-            h_flex()
-                .items_center()
-                .gap(rems(space::COMPACT))
-                .child(tail_text)
-                .child(
-                    AppIconElement::new(UiIcon::CHEVRON_DOWN)
-                        .with_rems(rems(control::COMPACT_ICON)),
-                ),
-        )
-        .dropdown_menu(move |menu, _, _| {
-            let mut menu = menu;
-            for choice in LOG_TAIL_CHOICES {
-                let label = if choice == 0 {
-                    rust_i18n::t!("container.logs.tail_all").to_string()
-                } else {
-                    rust_i18n::t!("container.logs.tail_format", count = choice).to_string()
-                };
-                menu = menu.item(PopupMenuItem::new(label).checked(choice == tail).on_click({
-                    let view = tail_view.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.set_container_logs_tail(choice);
-                            cx.notify();
-                        });
-                    }
-                }));
-            }
-            menu
-        });
-
-    // 3. 更多操作下拉菜单（时间戳、倒序、复制、导出、清空）
-    let more_view = view.clone();
-    let more_btn = IconButton::new(
-        "container-logs-more-menu",
-        UiIcon::MORE_HORIZONTAL,
-        rust_i18n::t!("common.more").to_string(),
+    let copy_btn = IconButton::new(
+        "container-logs-copy",
+        UiIcon::COPY,
+        rust_i18n::t!("container.logs.copy").to_string(),
     )
     .render()
-    .dropdown_menu(move |menu, _, _| {
-        let timestamps_view = more_view.clone();
-        let reverse_view = more_view.clone();
-        let copy_view = more_view.clone();
-        let export_view = more_view.clone();
-        let clear_view = more_view.clone();
-
-        let menu = menu.check_side(Side::Right);
-        menu.item(
-            PopupMenuItem::new(rust_i18n::t!("container.logs.timestamps").to_string())
-                .checked(timestamps)
-                .on_click(move |_, _, cx| {
-                    timestamps_view.update(cx, |workspace, cx| {
-                        workspace.toggle_container_logs_timestamps();
-                        cx.notify();
-                    });
-                }),
-        )
-        .item(
-            PopupMenuItem::new(rust_i18n::t!("container.logs.reverse").to_string())
-                .checked(reversed)
-                .on_click(move |_, _, cx| {
-                    reverse_view.update(cx, |workspace, cx| {
-                        workspace.state.logs_reversed = !workspace.state.logs_reversed;
-                        cx.notify();
-                    });
-                }),
-        )
-        .separator()
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("container.logs.copy").to_string(),
-            AppIcon::Ui(UiIcon::COPY),
-            move |_, _, cx| {
-                copy_view.update(cx, |workspace, cx| {
-                    workspace.copy_container_logs(cx);
-                });
-            },
-        ))
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("container.logs.export").to_string(),
-            AppIcon::Ui(UiIcon::DOWNLOAD),
-            move |_, _window, cx| {
-                export_view.update(cx, |workspace, cx| {
-                    workspace.export_container_logs(cx);
-                });
-            },
-        ))
-        .separator()
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("container.logs.clear").to_string(),
-            AppIcon::Ui(UiIcon::DELETE),
-            move |_, _, cx| {
-                clear_view.update(cx, |workspace, cx| {
-                    workspace.state.logs.clear();
-                    cx.notify();
-                });
-            },
-        ))
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.copy_container_logs(cx);
+            });
+        }
     });
+
+    let export_btn = IconButton::new(
+        "container-logs-export",
+        UiIcon::DOWNLOAD,
+        rust_i18n::t!("container.logs.export").to_string(),
+    )
+    .render()
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.export_container_logs(cx);
+            });
+        }
+    });
+
+    let clear_btn = IconButton::new(
+        "container-logs-clear",
+        UiIcon::DELETE,
+        rust_i18n::t!("container.logs.clear").to_string(),
+    )
+    .render()
+    .on_click({
+        let view = view.clone();
+        move |_, _, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.state.logs.clear();
+                cx.notify();
+            });
+        }
+    });
+
+    v_flex()
+        .w_8()
+        .h_full()
+        .flex_shrink_0()
+        .py_2()
+        .gap_1()
+        .items_center()
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Left, p.divider_width)
+        .child(timestamps_btn)
+        .child(reverse_btn)
+        .child(tail_btn)
+        .child(divider())
+        .child(top_btn)
+        .child(bottom_btn)
+        .child(soft_wrap_btn)
+        .child(follow_btn)
+        .child(divider())
+        .child(copy_btn)
+        .child(export_btn)
+        .child(clear_btn)
+        .into_any_element()
+}
+
+pub(crate) fn render_logs(
+    view: &Entity<ContainerWorkspace>,
+    params: ContainerLogsView<'_>,
+    p: &Palette,
+) -> AnyElement {
+    let ContainerLogsView {
+        logs,
+        follow,
+        reversed,
+        soft_wrap,
+        scroll,
+        search,
+        filter,
+        ..
+    } = params;
+
+    let all_lines_count = logs.lines().count();
+    let lines = filtered_log_lines(logs, filter, reversed, LOG_RENDER_LIMIT);
+    let matched_count = lines.len();
 
     let toolbar = h_flex()
         .w_full()
         .px_3()
         .py_2()
         .items_center()
-        .justify_between()
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(
-            h_flex()
-                .gap_2()
-                .items_center()
-                .child(follow_btn)
-                .child(tail_dropdown)
-                .child(div().w(px(180.0)).child(Input::new(search).small())),
-        )
-        .child(more_btn);
+        .child(div().w(px(220.0)).child(Input::new(search).small()));
 
     // 4. 底部弱色状态栏
     let status_text = if filter.trim().is_empty() {
@@ -357,18 +441,29 @@ pub(crate) fn render_logs(
         );
 
     let body = if logs.is_empty() {
-        centered_hint(rust_i18n::t!("container.logs.empty").to_string(), p)
+        div()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .child(centered_hint(
+                rust_i18n::t!("container.logs.empty").to_string(),
+                p,
+            ))
+            .into_any_element()
     } else {
         let rows = v_flex().gap_0().children(
             lines
                 .into_iter()
-                .map(|line| render_log_line(line, filter, p)),
+                .map(|line| render_log_line(line, filter, soft_wrap, p)),
         );
         div()
             .id("container-logs-scroll")
+            .track_scroll(scroll)
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
+            .min_w_0()
+            .when(soft_wrap, |el| el.overflow_y_scroll())
+            .when(!soft_wrap, |el| el.overflow_scroll())
             .px_3()
             .py_2()
             .font_family(p.mono_font_family.clone())
@@ -378,11 +473,21 @@ pub(crate) fn render_logs(
             .into_any_element()
     };
 
+    let sidebar = render_logs_sidebar(view, &params, p);
+
     v_flex()
         .size_full()
         .overflow_hidden()
         .child(toolbar)
-        .child(body)
+        .child(
+            h_flex()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .overflow_hidden()
+                .child(body)
+                .child(sidebar),
+        )
         .child(status_bar)
         .into_any_element()
 }
