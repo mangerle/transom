@@ -38,7 +38,12 @@ impl SidebarRowState {
 /// 三个侧栏统一使用同一内边距；滚动与显隐仍由调用方决定，因为会话侧栏使用虚拟列表，
 /// 容器与 Git 侧栏使用普通滚动区域。
 pub(crate) fn sidebar_list_frame(id: impl Into<ElementId>) -> Stateful<Div> {
-    v_flex().id(id.into()).w_full().min_h_0().p(rems(space::SM))
+    v_flex()
+        .id(id.into())
+        .w_full()
+        .min_h_0()
+        .p(rems(space::SM))
+        .gap(px(2.0))
 }
 
 /// 构造普通侧栏行的视觉外壳。
@@ -55,8 +60,8 @@ pub(crate) fn sidebar_row_band(
     } else {
         p.sidebar_foreground
     };
-    let active_bg = p.list_active;
-    let active_border = p.list_active_border;
+    let current_bg = p.surface.control_selected;
+    let subtle_border = p.stroke.subtle;
     let hover_bg = p.list_hover;
     let mut band = h_flex()
         .id(id.into())
@@ -74,26 +79,18 @@ pub(crate) fn sidebar_row_band(
             band = band.hover(move |style| style.bg(hover_bg));
         }
         SidebarRowState::Selected => {
-            band = band.bg(active_bg).child(
+            band = band.bg(current_bg).child(
                 div()
                     .absolute()
                     .inset_0()
                     .rounded(p.radius.md)
                     .border_1()
-                    .border_color(active_border),
+                    .border_color(subtle_border),
             );
         }
         SidebarRowState::Current => {
-            band = band.bg(active_bg).child(
-                div()
-                    .absolute()
-                    .left_0()
-                    .top_0()
-                    .bottom_0()
-                    .w(rems(size::SIDEBAR_SELECTION_RAIL_WIDTH))
-                    .rounded_full()
-                    .bg(active_border),
-            );
+            // 纯净中性灰胶囊选中态：去掉左侧蓝色竖条，与活动栏统一。
+            band = band.bg(current_bg);
         }
     }
     band
@@ -104,7 +101,7 @@ pub(crate) fn sidebar_row_band(
 /// 分组行不参与单选，因此只统一组头底色、底部分隔线、圆角和悬浮反馈；折叠、拖放及
 /// 菜单仍由调用方追加。
 pub(crate) fn sidebar_group_row_band(id: impl Into<ElementId>, p: &Palette) -> Stateful<Div> {
-    let hover_bg = p.list_head.blend(p.sidebar_border.opacity(0.6));
+    let hover_bg = p.list_hover;
     h_flex()
         .id(id.into())
         .relative()
@@ -115,8 +112,6 @@ pub(crate) fn sidebar_group_row_band(id: impl Into<ElementId>, p: &Palette) -> S
         .items_center()
         .rounded(p.radius.md)
         .bg(p.list_head)
-        .border_b_1()
-        .border_color(p.sidebar_border)
         .text_color(p.sidebar_foreground)
         .hover(move |style| style.bg(hover_bg))
 }

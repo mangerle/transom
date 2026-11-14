@@ -54,7 +54,7 @@ pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
     }
     let row_count = rows.len();
     let rows = Rc::new(rows);
-    let row_height = rems(2.5).to_pixels(rem);
+    let row_height = rems(2.5).to_pixels(rem) + px(2.0);
     let item_sizes = Rc::new(vec![size(px(0.0), row_height); row_count]);
     let p = p.clone();
     let view_for_rows = view.clone();
@@ -67,13 +67,20 @@ pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
                 .filter_map(|index| {
                     let row = rows.get(index)?;
                     let is_selected = selected.as_deref() == Some(row_key(&row.target));
-                    Some(list_row(
-                        &view_for_rows,
-                        row,
-                        is_selected,
-                        &focus_handle,
-                        &p,
-                    ))
+                    Some(
+                        div()
+                            .w_full()
+                            .px_1p5()
+                            .pb(px(2.0))
+                            .child(list_row(
+                                &view_for_rows,
+                                row,
+                                is_selected,
+                                &focus_handle,
+                                &p,
+                            ))
+                            .into_any_element(),
+                    )
                 })
                 .collect()
         },
@@ -86,6 +93,7 @@ pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
         .relative()
         .flex_1()
         .min_h_0()
+        .pt_1()
         .child(ScrollBounce::new("container-list-scroll-bounce", &scroll, list).enabled(false))
         .child(Scrollbar::vertical(&scroll).viewport_from_layout())
         .into_any_element()

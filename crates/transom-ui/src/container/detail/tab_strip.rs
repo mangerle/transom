@@ -59,7 +59,7 @@ pub(super) fn render_detail_tab_buttons(
                         ElementId::Name(format!("container-detail-tab-{}", tab.label_key()).into()),
                         detail_icon(tab),
                         rust_i18n::t!(tab.label_key()).to_string(),
-                        selected.then_some(p.list_active_border),
+                        selected.then_some(p.foreground),
                     )
                     .selected(selected)
                     .on_click(move |_, _, cx| {
@@ -87,7 +87,7 @@ pub(super) fn render_detail_tab_buttons(
                             "container-detail-tab-terminal",
                             DomainIcon::TERMINAL,
                             rust_i18n::t!("container.detail.terminal").to_string(),
-                            selected.then_some(p.list_active_border),
+                            selected.then_some(p.foreground),
                         )
                         .ghost()
                         .selected(selected)

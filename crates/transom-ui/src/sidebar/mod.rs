@@ -116,8 +116,8 @@ impl AppShell {
         v_flex()
             .size_full()
             .overflow_hidden()
-            .bg(p.sidebar)
-            .text_color(p.sidebar_foreground)
+            .bg(p.background)
+            .text_color(p.foreground)
             .child(header)
             .child(
                 sidebar_list_frame("session-list")

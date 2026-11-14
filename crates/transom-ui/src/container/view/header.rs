@@ -299,7 +299,7 @@ fn render_section_tabs(
                 .map(|(index, (section, count))| {
                     let is_selected = section == selected;
                     let icon_color = if is_selected {
-                        p.primary
+                        p.foreground
                     } else {
                         p.muted_foreground
                     };
@@ -317,6 +317,7 @@ fn render_section_tabs(
                     .gap_1p5()
                     .items_center()
                     .text_size(rems(typography::BODY))
+                    .when(is_selected, |this| this.font_weight(FontWeight::MEDIUM))
                     .cursor_pointer()
                     .text_color(text_color)
                     .set_position(index + 1, tab_count);

@@ -94,8 +94,8 @@ impl AppShell {
         let app = cx.entity().clone();
         v_flex()
             .size_full()
-            .bg(p.sidebar)
-            .text_color(p.sidebar_foreground)
+            .bg(p.background)
+            .text_color(p.foreground)
             .child(self.render_git_sidebar_header(window, p, cx))
             .child(list)
             .context_menu(move |menu, _window, _cx| render_git_sidebar_menu(menu, &app))

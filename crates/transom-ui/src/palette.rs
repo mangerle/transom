@@ -93,9 +93,9 @@ impl SurfaceTokens {
     fn from_theme(colors: &ColorTokens, selected: Hsla) -> Self {
         let is_dark = colors.background.l < 0.5;
         let control_selected = if is_dark {
-            colors.foreground.opacity(0.18)
+            colors.foreground.opacity(0.24)
         } else {
-            colors.foreground.opacity(0.14)
+            colors.foreground.opacity(0.20)
         };
         Self {
             ghost: colors.muted.opacity(0.04),
@@ -234,6 +234,8 @@ impl Palette {
         let theme = cx.theme();
         let colors = theme.semantic_tokens().colors;
         let divider = crate::divider::settings(cx);
+        let surface = SurfaceTokens::from_theme(&colors, theme.colors.list_active);
+        let list_active = surface.control_selected;
         // 主题里已经按窗口透明度折算过表面色的 alpha，这里直接取用：
         // 自绘界面与 gpui-kit 组件必须共用同一份透明度，否则会出现割裂。
         Self {
@@ -242,7 +244,7 @@ impl Palette {
             border: theme.border,
             muted: theme.muted,
             muted_foreground: theme.muted_foreground,
-            surface: SurfaceTokens::from_theme(&colors, theme.colors.list_active),
+            surface,
             stroke: BorderTokens::from_color(colors.border),
             tone: ToneTokens::from_theme(&colors, theme.warning, theme.success),
             text: TextTokens::from_color(colors.muted_foreground),
@@ -265,7 +267,7 @@ impl Palette {
             list_background: theme.colors.list,
             list_head: theme.colors.list_head,
             list_hover: theme.colors.list_hover,
-            list_active: theme.colors.list_active,
+            list_active,
             drop_target: theme.drop_target,
             primary: theme.primary,
             warning: theme.warning,

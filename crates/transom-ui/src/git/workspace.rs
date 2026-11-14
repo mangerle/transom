@@ -101,7 +101,7 @@ impl AppShell {
             .flex_none()
             .border_color(p.divider(p.border))
             .border_b_1()
-            .bg(p.sidebar)
+            .bg(p.background)
             .child(div().flex_1())
             .child(self.render_git_branch_chip(project_id, p))
             .child(self.render_git_remote_actions(tab_id, project, cx))
