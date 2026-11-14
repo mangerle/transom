@@ -13,6 +13,7 @@
 //! - 勾选集合存在标签页状态里而不是模态框里：关掉模态框再打开，勾选不该丢。
 
 mod change_tree;
+pub(crate) mod dir_tree;
 mod file_row;
 mod group_menu;
 
@@ -314,26 +315,55 @@ pub(crate) fn split_path(path: &str) -> (String, String) {
     }
 }
 
-/// 勾选框本体。
-pub(crate) fn check_box(checked: bool, p: &Palette) -> AnyElement {
+/// 勾选框三态：未选、部分选中（半选横杠）、全选。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CheckState {
+    Unchecked,
+    Indeterminate,
+    Checked,
+}
+
+/// 勾选框本体（支持三态，蓝色背景配纯白对勾/横杠，对齐 IDEA）。
+pub(crate) fn check_box_state(state: CheckState, p: &Palette) -> AnyElement {
+    let filled = state != CheckState::Unchecked;
     div()
-        .size(px(13.0))
+        .size(px(14.0))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(2.0))
+        .rounded(px(3.0))
         .border_1()
-        .border_color(if checked { p.primary } else { p.border })
-        .bg(if checked { p.primary } else { p.background })
-        .when(checked, |el| {
-            el.child(
-                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
-                    .xsmall()
-                    .text_color(p.sidebar_accent_foreground),
-            )
+        .border_color(if filled { p.primary } else { p.border })
+        .bg(if filled { p.primary } else { p.background })
+        .map(|el| match state {
+            CheckState::Checked => el.child(
+                gpui_kit::component::Icon::new(gpui_kit::component::IconName::Check)
+                    .size(px(10.0))
+                    .text_color(gpui_kit::white()),
+            ),
+            CheckState::Indeterminate => el.child(
+                div()
+                    .w(px(8.0))
+                    .h(px(1.5))
+                    .rounded(px(0.5))
+                    .bg(gpui_kit::white()),
+            ),
+            CheckState::Unchecked => el,
         })
         .into_any_element()
+}
+
+/// 勾选框本体（二态兼容封装）。
+pub(crate) fn check_box(checked: bool, p: &Palette) -> AnyElement {
+    check_box_state(
+        if checked {
+            CheckState::Checked
+        } else {
+            CheckState::Unchecked
+        },
+        p,
+    )
 }
 
 /// 只读行的勾选位占位：与勾选框同宽，保证忽略组与其它组的列对齐。

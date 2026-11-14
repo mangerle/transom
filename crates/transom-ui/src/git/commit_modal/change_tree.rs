@@ -4,8 +4,9 @@
 //! 嵌套），单独成模块后，改折叠或改分组顺序只碰这一处；它只依赖 `ChangeGroup` 与
 //! 父模块的可视件（勾选框、状态字母、配色），不反向依赖对话框本体。
 
+use super::dir_tree::{DirTreeNode, build_dir_tree, compute_check_state};
 use super::group_menu::render_group_menu;
-use super::{ChangeGroup, GroupDisplay, check_box, check_placeholder, hint};
+use super::{ChangeGroup, CheckState, GroupDisplay, check_box_state, check_placeholder, hint};
 use crate::app::AppShell;
 use crate::git::actions::GitDiffRequest;
 use crate::palette::Palette;
@@ -74,7 +75,7 @@ impl AppShell {
             .cloned()
             .collect();
 
-        let mut list = v_flex().gap_1().flex_1().min_h_0().overflow_y_scrollbar();
+        let mut list = v_flex().gap_0().flex_1().min_h_0().overflow_y_scrollbar();
 
         let conflict_count = status.conflicts().len();
         if conflict_count > 0 {
@@ -135,13 +136,14 @@ impl AppShell {
             }
             let key = group.key();
             let group_collapsed = display.collapsed_groups.contains(key);
-            let all_checked = entries.iter().all(|entry| checked.contains(&entry.path));
+            let group_paths: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
+            let check_state = compute_check_state(&group_paths, checked);
             list = list.child(self.git_group_header(
                 project,
                 &GroupView {
                     group,
                     entries,
-                    all_checked,
+                    check_state,
                     collapsed: group_collapsed,
                 },
                 p,
@@ -151,7 +153,15 @@ impl AppShell {
                 continue;
             }
             if display.by_directory {
-                list = list.children(self.git_dir_rows(project, group, entries, display, p, cx));
+                list = list.children(self.git_dir_rows(
+                    project,
+                    group,
+                    entries,
+                    display,
+                    active_diff.as_ref(),
+                    p,
+                    cx,
+                ));
                 continue;
             }
             for entry in entries.iter() {
@@ -163,6 +173,7 @@ impl AppShell {
                         checked,
                         indent: 24.0,
                         selected: diff_matches(active_diff.as_ref(), &entry.path, group),
+                        show_dir_prefix: true,
                     },
                     p,
                     cx,
@@ -175,84 +186,101 @@ impl AppShell {
         list.into_any_element()
     }
 
-    /// 按目录模式：每个目录一行（可折叠、可整目录勾选），后接该目录的文件行。
+    /// 按目录模式：构建多级压缩目录树，按层级缩进渲染目录行与文件行。
     fn git_dir_rows(
         &mut self,
         project: &GitProject,
         group: ChangeGroup,
         entries: &[StatusEntry],
         display: &GroupDisplay,
+        active_diff: Option<&GitDiffRequest>,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        let active_diff = self
-            .state
-            .git_workspace_of_project(project.id, cx)
-            .and_then(|workspace| workspace.read(cx).state.last_diff.clone());
-        let mut buckets: Vec<(String, Vec<&StatusEntry>)> = Vec::new();
-        for entry in entries {
-            let dir = match entry.path.rfind('/') {
-                Some(at) => entry.path[..at].to_string(),
-                None => String::new(),
-            };
-            match buckets.iter_mut().find(|(name, _)| *name == dir) {
-                Some((_, list)) => list.push(entry),
-                None => buckets.push((dir, vec![entry])),
-            }
-        }
-        buckets.sort_by(|left, right| left.0.cmp(&right.0));
-        let mut rows = Vec::with_capacity(buckets.len());
-        for (dir, items) in buckets {
-            let key = format!("{}|{}", group.key(), dir);
-            let paths: Vec<String> = items.iter().map(|entry| entry.path.clone()).collect();
-            let all_checked = paths.iter().all(|path| display.checked.contains(path));
-            let collapsed = display.collapsed_dirs.contains(&key);
-            let view = DirView {
-                group,
-                project,
-                path: &dir,
-                element_key: &key,
-                paths: &paths,
-                all_checked,
-                collapsed,
-            };
-            rows.push(self.git_dir_header(&view, p, cx));
-            if collapsed {
-                continue;
-            }
-            for entry in items {
-                rows.push(self.git_file_row(
-                    &super::file_row::GitFileRowProps {
-                        project,
-                        entry,
-                        group,
-                        checked: &display.checked,
-                        indent: 32.0,
-                        selected: diff_matches(active_diff.as_ref(), &entry.path, group),
-                    },
-                    p,
-                    cx,
-                ));
-            }
-        }
+        let tree = build_dir_tree(entries);
+        let mut rows = Vec::with_capacity(entries.len());
+        let ctx = DirRenderCtx {
+            project,
+            group,
+            display,
+            active_diff,
+            palette: p,
+        };
+        self.append_dir_tree_rows(&ctx, &tree, 0, &mut rows, cx);
         rows
     }
 
-    /// 目录行：折叠箭头 + 整目录勾选 + 目录名 + 数量。
+    fn append_dir_tree_rows(
+        &mut self,
+        ctx: &DirRenderCtx<'_>,
+        nodes: &[DirTreeNode<'_>],
+        depth: usize,
+        rows: &mut Vec<AnyElement>,
+        cx: &mut Context<Self>,
+    ) {
+        let dir_indent = 16.0 + depth as f32 * 20.0;
+        // 文件行没有左侧折叠箭头（14px 图标 + 6px 间距），补齐 20px 使同级复选框与子级对齐父文件夹图标。
+        let file_indent = dir_indent + 20.0;
+        for node in nodes {
+            match node {
+                DirTreeNode::Directory {
+                    name,
+                    dir_path,
+                    all_paths,
+                    children,
+                } => {
+                    let key = format!("{}|{dir_path}", ctx.group.key());
+                    let check_state = compute_check_state(all_paths, &ctx.display.checked);
+                    let collapsed = ctx.display.collapsed_dirs.contains(&key);
+                    let view = DirView {
+                        group: ctx.group,
+                        project: ctx.project,
+                        name,
+                        element_key: &key,
+                        paths: all_paths,
+                        indent: dir_indent,
+                        check_state,
+                        collapsed,
+                    };
+                    rows.push(self.git_dir_header(&view, ctx.palette, cx));
+                    if !collapsed {
+                        self.append_dir_tree_rows(ctx, children, depth + 1, rows, cx);
+                    }
+                }
+                DirTreeNode::File(entry) => {
+                    rows.push(self.git_file_row(
+                        &super::file_row::GitFileRowProps {
+                            project: ctx.project,
+                            entry,
+                            group: ctx.group,
+                            checked: &ctx.display.checked,
+                            indent: file_indent,
+                            selected: diff_matches(ctx.active_diff, &entry.path, ctx.group),
+                            show_dir_prefix: false,
+                        },
+                        ctx.palette,
+                        cx,
+                    ));
+                }
+            }
+        }
+    }
+
+    /// 目录行：仅点击折叠箭头展开/收起，点击多选框仅切换整目录选中态。
     fn git_dir_header(
         &mut self,
         view: &DirView<'_>,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let (group, project, dir, key, paths) = (
+        let (group, project, name, key, paths) = (
             view.group,
             view.project,
-            view.path,
+            view.name,
             view.element_key,
             view.paths,
         );
-        let (all_checked, collapsed) = (view.all_checked, view.collapsed);
+        let (check_state, collapsed, indent) = (view.check_state, view.collapsed, view.indent);
         let count = paths.len();
         let app: Entity<AppShell> = cx.entity().clone();
         let menu_paths = paths.to_vec();
@@ -263,19 +291,31 @@ impl AppShell {
         let display_key = key.to_string();
         let mut row = h_flex()
             .id(ElementId::Name(format!("git-dir-{display_key}").into()))
-            .h(px(22.0))
-            .pl(px(24.0))
+            .h(px(24.0))
+            .pl(px(indent))
             .pr_2()
-            .gap_2()
+            .gap_1p5()
             .items_center()
-            .cursor_pointer()
+            .hover(|style| style.bg(p.list_hover))
             .child(
-                AppIconElement::new(if collapsed {
-                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
-                } else {
-                    AppIcon::Ui(UiIcon::CHEVRON_DOWN)
-                })
-                .xsmall(),
+                div()
+                    .id(ElementId::Name(
+                        format!("git-dir-toggle-{display_key}").into(),
+                    ))
+                    .flex_none()
+                    .cursor_pointer()
+                    .child(
+                        AppIconElement::new(if collapsed {
+                            AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
+                        } else {
+                            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
+                        })
+                        .xsmall(),
+                    )
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        cx.stop_propagation();
+                        this.git_toggle_dir(&toggle_project, &toggle_key, cx);
+                    })),
             );
         if group.actionable() {
             row = row.child(
@@ -284,9 +324,11 @@ impl AppShell {
                         format!("git-dir-check-{display_key}").into(),
                     ))
                     .flex_none()
-                    .child(check_box(all_checked, p))
+                    .cursor_pointer()
+                    .child(check_box_state(check_state, p))
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        let target = !all_checked;
+                        cx.stop_propagation();
+                        let target = check_state != CheckState::Checked;
                         this.git_set_group_checked(&select_project, &select_paths, target, cx);
                     })),
             );
@@ -295,27 +337,26 @@ impl AppShell {
         }
         let row = row
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(if dir.is_empty() {
-                        rust_i18n::t!("git.group.root").to_string()
-                    } else {
-                        dir.to_string()
-                    }),
+                AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
+                    .with_rems(rems(crate::theme::tokens::control::ICON)),
             )
             .child(
                 div()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .text_color(p.foreground)
+                    .child(name.to_string()),
+            )
+            .child(
+                div()
+                    .flex_none()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(format!("({count})")),
-            )
-            .on_click(cx.listener(move |this, _, _window, cx| {
-                this.git_toggle_dir(&toggle_project, &toggle_key, cx);
-            }));
+                    .child(
+                        rust_i18n::t!("git.commit.file_count", count = count).to_string(),
+                    ),
+            );
         // 右键菜单会换掉元素类型，只能在链尾按可操作性挂载。
         if group.actionable() {
             let menu_project = view.project.clone();
@@ -328,9 +369,7 @@ impl AppShell {
         }
     }
 
-    /// 分组头：折叠箭头 + 整组勾选 + 名称 + 数量。
-    ///
-    /// 五个展示参数收进 [`GroupView`]：平铺的入参在这一处正好超了规范的 5 个上限。
+    /// 分组头：折叠箭头 + 三态勾选 + 名称 + 数量。
     fn git_group_header(
         &mut self,
         project: &GitProject,
@@ -340,7 +379,7 @@ impl AppShell {
     ) -> AnyElement {
         let group = view.group;
         let entries = view.entries;
-        let all_checked = view.all_checked;
+        let check_state = view.check_state;
         let collapsed = view.collapsed;
         let paths: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
         let toggle_project = project.clone();
@@ -351,22 +390,33 @@ impl AppShell {
         let menu_paths = paths.clone();
         let mut header = h_flex()
             .id(ElementId::Name(format!("git-group-{}", group.key()).into()))
+            .h(px(24.0))
             .px_2()
-            .py_1()
-            .gap_2()
+            .gap_1p5()
             .items_center()
-            .cursor_pointer()
             .bg(p.surface.active)
-            .text_xs()
-            .font_weight(FontWeight::BOLD)
-            .text_color(p.muted_foreground)
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(p.foreground)
             .child(
-                AppIconElement::new(if collapsed {
-                    AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
-                } else {
-                    AppIcon::Ui(UiIcon::CHEVRON_DOWN)
-                })
-                .xsmall(),
+                div()
+                    .id(ElementId::Name(
+                        format!("git-group-toggle-{}", group.key()).into(),
+                    ))
+                    .flex_none()
+                    .cursor_pointer()
+                    .child(
+                        AppIconElement::new(if collapsed {
+                            AppIcon::Ui(UiIcon::CHEVRON_RIGHT)
+                        } else {
+                            AppIcon::Ui(UiIcon::CHEVRON_DOWN)
+                        })
+                        .xsmall(),
+                    )
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        cx.stop_propagation();
+                        this.git_toggle_group(&toggle_project, &group_key, cx);
+                    })),
             );
         // 忽略组只读：不摆勾选框与整组菜单，用同宽占位保持与其它组左对齐。
         if group.actionable() {
@@ -376,9 +426,11 @@ impl AppShell {
                         format!("git-group-check-{}", group.key()).into(),
                     ))
                     .flex_none()
-                    .child(check_box(all_checked, p))
+                    .cursor_pointer()
+                    .child(check_box_state(check_state, p))
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        let target = !all_checked;
+                        cx.stop_propagation();
+                        let target = check_state != CheckState::Checked;
                         this.git_set_group_checked(&select_project, &select_paths, target, cx);
                     })),
             );
@@ -386,11 +438,17 @@ impl AppShell {
             header = header.child(check_placeholder());
         }
         let header = header
-            .child(div().flex_1().child(group.title()))
-            .child(div().child(format!("({})", entries.len())))
-            .on_click(cx.listener(move |this, _, _window, cx| {
-                this.git_toggle_group(&toggle_project, &group_key, cx);
-            }));
+            .child(div().flex_none().child(group.title()))
+            .child(
+                div()
+                    .flex_1()
+                    .text_xs()
+                    .font_weight(FontWeight::NORMAL)
+                    .text_color(p.muted_foreground)
+                    .child(
+                        rust_i18n::t!("git.commit.file_count", count = entries.len()).to_string(),
+                    ),
+            );
         if group.actionable() {
             let menu_project = project.clone();
             header
@@ -404,14 +462,24 @@ impl AppShell {
     }
 }
 
-/// 目录行的展示参数包：七个入参超了规范上限，收成一个视图结构。
+/// 递归渲染目录树的上下文参数包。
+struct DirRenderCtx<'a> {
+    project: &'a GitProject,
+    group: ChangeGroup,
+    display: &'a GroupDisplay,
+    active_diff: Option<&'a GitDiffRequest>,
+    palette: &'a Palette,
+}
+
+/// 目录行的展示参数包。
 struct DirView<'a> {
     group: ChangeGroup,
     project: &'a GitProject,
-    path: &'a str,
+    name: &'a str,
     element_key: &'a str,
     paths: &'a [String],
-    all_checked: bool,
+    indent: f32,
+    check_state: CheckState,
     collapsed: bool,
 }
 
@@ -419,7 +487,7 @@ struct DirView<'a> {
 struct GroupView<'a> {
     group: ChangeGroup,
     entries: &'a [StatusEntry],
-    all_checked: bool,
+    check_state: CheckState,
     collapsed: bool,
 }
 

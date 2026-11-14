@@ -186,26 +186,39 @@ impl AppShell {
             if state.group_by_directory
                 && let Some(status) = state.status.as_ref()
             {
+                use crate::git::commit_modal::dir_tree::{build_dir_tree, collect_dir_keys};
+                let mut grouped: [Vec<transom_core::StatusEntry>; 4] = Default::default();
                 for entry in &status.entries {
                     let group = match entry.record {
                         transom_core::StatusRecord::Tracked { index, worktree } => {
                             if index != transom_core::ChangeCode::Unmodified {
-                                Some(ChangeGroup::Staged)
+                                Some(0)
                             } else if worktree != transom_core::ChangeCode::Unmodified {
-                                Some(ChangeGroup::Unstaged)
+                                Some(1)
                             } else {
                                 None
                             }
                         }
-                        transom_core::StatusRecord::Conflict => Some(ChangeGroup::Staged),
-                        transom_core::StatusRecord::Untracked => Some(ChangeGroup::Untracked),
-                        transom_core::StatusRecord::Ignored => Some(ChangeGroup::Ignored),
+                        transom_core::StatusRecord::Conflict => Some(0),
+                        transom_core::StatusRecord::Untracked => Some(2),
+                        transom_core::StatusRecord::Ignored => Some(3),
                     };
-                    if let Some(group) = group {
-                        let dir = entry.path.rfind('/').map_or("", |at| &entry.path[..at]);
-                        state
-                            .collapsed_dirs
-                            .insert(format!("{}|{dir}", group.key()));
+                    if let Some(idx) = group {
+                        grouped[idx].push(entry.clone());
+                    }
+                }
+                for (group, entries) in [
+                    ChangeGroup::Staged,
+                    ChangeGroup::Unstaged,
+                    ChangeGroup::Untracked,
+                    ChangeGroup::Ignored,
+                ]
+                .into_iter()
+                .zip(grouped.iter())
+                {
+                    if !entries.is_empty() {
+                        let tree = build_dir_tree(entries);
+                        collect_dir_keys(group.key(), &tree, &mut state.collapsed_dirs);
                     }
                 }
             }

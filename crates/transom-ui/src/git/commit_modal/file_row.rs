@@ -13,6 +13,7 @@ use crate::widgets::menu_item;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu};
 use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GitAction, GitProject, GitSide, StatusEntry};
@@ -53,6 +54,7 @@ pub(crate) struct GitFileRowProps<'a> {
     pub(crate) checked: &'a HashSet<String>,
     pub(crate) indent: f32,
     pub(crate) selected: bool,
+    pub(crate) show_dir_prefix: bool,
 }
 
 impl AppShell {
@@ -89,7 +91,7 @@ impl AppShell {
 
         let mut row = h_flex()
             .id(ElementId::Name(element_id.into()))
-            .h(px(22.0))
+            .h(px(24.0))
             .pl(px(indent))
             .pr_2()
             .gap_2()
@@ -136,16 +138,18 @@ impl AppShell {
                     })
                     .child(file_name),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .truncate()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(dir_prefix),
-            )
+            .when(props.show_dir_prefix && !dir_prefix.is_empty(), |el| {
+                el.child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .truncate()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(dir_prefix),
+                )
+            })
             .child(
                 old_path
                     .map(|old| {
