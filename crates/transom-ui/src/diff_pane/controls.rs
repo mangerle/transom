@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use gpui_kit::base::{Disableable, h_flex};
-use gpui_kit::component::Sizable;
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::diff::{
     Diff, DiffChangeIndicator, DiffHoverHighlight, DiffHunkSeparator, DiffState,
@@ -139,7 +139,7 @@ pub(crate) fn render_mode_toggle(
                 .child(AppIconElement::new(UiIcon::EDITOR_PREVIEW))
                 .tooltip(rust_i18n::t!("git.diff.side_by_side").to_string())
                 .accessibility_label(rust_i18n::t!("git.diff.side_by_side").to_string())
-                .when(side_by_side, |btn| btn.secondary())
+                .selected(side_by_side)
                 .on_click(move |_, window, cx| {
                     split_cb(Box::new(|options| options.side_by_side = true), window, cx);
                 }),
@@ -151,7 +151,7 @@ pub(crate) fn render_mode_toggle(
                 .child(AppIconElement::new(UiIcon::EDITOR_ONLY))
                 .tooltip(rust_i18n::t!("git.diff.unified").to_string())
                 .accessibility_label(rust_i18n::t!("git.diff.unified").to_string())
-                .when(!side_by_side, |btn| btn.secondary())
+                .selected(!side_by_side)
                 .on_click(move |_, window, cx| {
                     unified_cb(Box::new(|options| options.side_by_side = false), window, cx);
                 }),
