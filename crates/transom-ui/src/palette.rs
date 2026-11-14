@@ -294,6 +294,16 @@ impl Palette {
     pub(crate) fn divider(&self, fallback: Hsla) -> Hsla {
         self.divider_color.unwrap_or(fallback)
     }
+
+    /// 分割线像素厚度：由用户设置的分割线粗细档位决定。
+    pub(crate) fn divider_thickness(&self) -> Pixels {
+        px(self.divider_width.pixels())
+    }
+
+    /// 下划线激活标签底部强调线像素厚度：不低于 2px。
+    pub(crate) fn divider_active_line_thickness(&self) -> Pixels {
+        px(self.divider_width.pixels().max(2.0))
+    }
 }
 
 impl AppShell {

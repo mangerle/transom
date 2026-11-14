@@ -338,9 +338,9 @@ pub(crate) fn check_box_state(state: CheckState, p: &Palette) -> AnyElement {
         .bg(if filled { p.primary } else { p.background })
         .map(|el| match state {
             CheckState::Checked => el.child(
-                gpui_kit::component::Icon::new(gpui_kit::component::IconName::Check)
-                    .size(px(10.0))
-                    .text_color(gpui_kit::white()),
+                AppIconElement::new(UiIcon::CHECK)
+                    .with_size(px(10.0))
+                    .monochrome(gpui_kit::white()),
             ),
             CheckState::Indeterminate => el.child(
                 div()

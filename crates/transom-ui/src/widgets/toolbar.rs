@@ -17,7 +17,7 @@ pub(crate) fn toolbar() -> Div {
 pub(crate) fn toolbar_separator(p: &Palette) -> Div {
     div()
         .flex_none()
-        .w(px(p.divider_width.pixels()))
+        .w(p.divider_thickness())
         .h(rems(control::COMPACT_ICON))
         .bg(p.divider(p.border))
 }

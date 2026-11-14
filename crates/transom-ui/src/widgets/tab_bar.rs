@@ -16,7 +16,7 @@ pub(crate) fn underline_tab_bar_line(p: &Palette) -> Div {
         .left_0()
         .right_0()
         .bottom_0()
-        .h(px(p.divider_width.pixels()))
+        .h(p.divider_thickness())
         .bg(p.divider(p.border))
 }
 
@@ -27,6 +27,6 @@ pub(crate) fn underline_tab_active_line(p: &Palette) -> Div {
         .left_0()
         .right_0()
         .bottom_0()
-        .h(px(p.divider_width.pixels().max(2.0)))
+        .h(p.divider_active_line_thickness())
         .bg(p.primary)
 }

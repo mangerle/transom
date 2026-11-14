@@ -43,7 +43,7 @@ pub(crate) fn sidebar_list_frame(id: impl Into<ElementId>) -> Stateful<Div> {
         .w_full()
         .min_h_0()
         .p(rems(space::SM))
-        .gap(px(2.0))
+        .gap(rems(space::XXS))
 }
 
 /// 构造普通侧栏行的视觉外壳。
