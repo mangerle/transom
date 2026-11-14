@@ -88,7 +88,7 @@ use std::sync::Arc;
 use transom_core::{
     AppError, Connection, ContainerAppEvent, ContainerCommand, ContainerConnection,
     ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRequestId,
-    DividerWidth, Session, TabId, TerminalIo, TerminalSize,
+    Session, TabId, TerminalIo, TerminalSize,
 };
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 
@@ -96,16 +96,7 @@ use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 ///
 /// 两块内容位于同一水平带；如果由各自内容高度决定，右侧底边会随按钮数量或
 /// 文字换行而上下漂移。固定高度让两栏的分割线始终落在同一条水平线上。
-pub(crate) const CONTENT_HEADER_HEIGHT: f32 = 3.0;
-
-/// 把分割线档位换算为像素值，供需要精确覆盖父级边框的强调线使用。
-pub(crate) fn divider_width_px(width: DividerWidth) -> f32 {
-    match width {
-        DividerWidth::Hairline | DividerWidth::Unknown => 1.0,
-        DividerWidth::Medium => 2.0,
-        DividerWidth::Thick => 3.0,
-    }
-}
+pub(crate) const CONTENT_HEADER_HEIGHT: f32 = crate::theme::tokens::size::LARGE_HEADER_HEIGHT;
 
 impl AppState {
     /// 按标签取容器工作区实体句柄；不是容器标签时返回 `None`。

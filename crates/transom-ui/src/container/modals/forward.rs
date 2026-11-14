@@ -126,7 +126,7 @@ pub(crate) fn render_container_forward_dialog_body(
                 .items_center()
                 .child(
                     AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
-                        .size(px(14.0))
+                        .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
                         .text_color(p.warning),
                 )
                 .child(
@@ -173,7 +173,7 @@ pub(crate) fn render_container_forward_dialog_body(
                     })
                     .child(
                         AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL))
-                            .size(px(13.0))
+                            .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
                             .text_color(text_color),
                     )
                     .child(div().text_xs().text_color(text_color).child(display_name))
@@ -223,7 +223,7 @@ pub(crate) fn render_container_forward_dialog_body(
                 .items_center()
                 .child(
                     AppIconElement::new(AppIcon::Ui(UiIcon::WARNING))
-                        .size(px(14.0))
+                        .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
                         .text_color(p.warning),
                 )
                 .child(

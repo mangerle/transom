@@ -43,7 +43,10 @@ impl SettingsView {
                 .items_center()
                 .border_b_1()
                 .border_color(p.stroke.strong)
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).with_size(px(14.0)))
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED))
+                        .with_rems(rems(crate::theme::tokens::control::ICON)),
+                )
                 .child(div().flex_1().text_sm().child(format!(
                     "{} · {}",
                     identity.name,

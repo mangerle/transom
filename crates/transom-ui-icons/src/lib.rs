@@ -121,9 +121,9 @@ impl AppIconElement {
         self
     }
 
-    /// 使用更紧凑尺寸，对应组件库的 `xsmall()`。
+    /// 使用更紧凑尺寸（与 `small()` 统一为 16px，保持全应用小图标一致）。
     pub fn xsmall(mut self) -> Self {
-        self.size = Rems(0.875).into();
+        self.size = Rems(1.0).into();
         self
     }
 

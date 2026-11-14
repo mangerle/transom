@@ -16,11 +16,12 @@
 use super::commit_box::CommitBoxProps;
 use super::commit_modal::{GroupDisplay, amend_file_row};
 use super::diff_view;
-use super::{DIFF_FOLD_ROW_HEIGHT, GitCommitTab, WORKSPACE_HEADER_HEIGHT};
+use super::{DIFF_FOLD_ROW_HEIGHT, GitCommitTab};
 use crate::app::AppShell;
-use crate::divider::{h_resizable, v_resizable};
+use crate::divider::{DividerEdge, DividerStyled, h_resizable, v_resizable};
 use crate::palette::Palette;
-use crate::theme::tokens::typography;
+use crate::theme::tokens::{size, typography};
+use crate::widgets::{underline_tab_active_line, underline_tab_bar_line};
 use gpui_kit::base::{Tab, Tabs, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -154,15 +155,15 @@ impl AppShell {
             rust_i18n::t!("git.stash.title").to_string()
         };
         let tabs = Tabs::new("git-commit-tabs")
+            .relative()
             .w_full()
-            .h(rems(WORKSPACE_HEADER_HEIGHT))
+            .h(rems(size::TAB_BAR_HEIGHT))
             .flex_none()
             .flex()
             .px_2()
             .gap_1()
             .items_center()
-            .border_color(p.divider(p.border))
-            .border_b_1()
+            .child(underline_tab_bar_line(p))
             .child(commit_tab_btn(
                 "git-commit-tab-commit",
                 rust_i18n::t!("git.commit.title").to_string(),
@@ -207,7 +208,6 @@ impl AppShell {
                     cx,
                 );
 
-                let branch_chip = self.render_git_branch_chip(project.id, p);
                 let refresh_project = project.clone();
                 let rollback_project = project.clone();
                 let tree_project = project.clone();
@@ -221,7 +221,7 @@ impl AppShell {
                         Button::new("git-commit-refresh")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::REFRESH)
+                            .child(AppIconElement::new(UiIcon::REFRESH))
                             .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                             .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -232,7 +232,7 @@ impl AppShell {
                         Button::new("git-commit-rollback")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::UNDO)
+                            .child(AppIconElement::new(UiIcon::UNDO))
                             .accessibility_label(rust_i18n::t!("git.menu.discard").to_string())
                             .tooltip(rust_i18n::t!("git.menu.discard").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -243,7 +243,7 @@ impl AppShell {
                         Button::new("git-commit-show-diff")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::DIFF)
+                            .child(AppIconElement::new(UiIcon::DIFF))
                             .accessibility_label(rust_i18n::t!("git.menu.show_diff").to_string())
                             .tooltip(rust_i18n::t!("git.menu.show_diff").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -254,7 +254,7 @@ impl AppShell {
                         Button::new("git-commit-shelve")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::PATCH)
+                            .child(AppIconElement::new(UiIcon::PATCH))
                             .accessibility_label(rust_i18n::t!("git.shelf.create").to_string())
                             .tooltip(rust_i18n::t!("git.shelf.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -265,7 +265,7 @@ impl AppShell {
                         Button::new("git-commit-stash")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::SHELVE)
+                            .child(AppIconElement::new(UiIcon::SHELVE))
                             .accessibility_label(rust_i18n::t!("git.stash.create").to_string())
                             .tooltip(rust_i18n::t!("git.stash.create").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -276,7 +276,7 @@ impl AppShell {
                         Button::new("git-commit-group-tree")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::TREE)
+                            .child(AppIconElement::new(UiIcon::TREE))
                             .when(by_directory, |btn| btn.bg(p.muted.opacity(0.8)))
                             .accessibility_label(
                                 rust_i18n::t!("git.group.by_directory").to_string(),
@@ -290,7 +290,7 @@ impl AppShell {
                         Button::new("git-commit-expand-all")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::EXPAND_ALL)
+                            .child(AppIconElement::new(UiIcon::EXPAND_ALL))
                             .accessibility_label(rust_i18n::t!("git.group.expand_all").to_string())
                             .tooltip(rust_i18n::t!("git.group.expand_all").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -301,7 +301,7 @@ impl AppShell {
                         Button::new("git-commit-collapse-all")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::COLLAPSE_ALL)
+                            .child(AppIconElement::new(UiIcon::COLLAPSE_ALL))
                             .accessibility_label(
                                 rust_i18n::t!("git.group.collapse_all").to_string(),
                             )
@@ -437,14 +437,13 @@ impl AppShell {
                     .child(
                         h_flex()
                             .w_full()
+                            .h(rems(size::PANE_HEADER_HEIGHT))
+                            .flex_none()
                             .px_2()
-                            .py_1()
                             .gap_2()
                             .items_center()
                             .border_color(p.divider(p.border))
-                            .border_b_1()
-                            .child(branch_chip)
-                            .child(div().flex_1())
+                            .divider_edge(DividerEdge::Bottom, p.divider_width)
                             .child(toolbar_actions),
                     )
                     .child(
@@ -530,6 +529,7 @@ fn commit_tab_btn(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Tab {
     Tab::new(id)
+        .relative()
         .h_full()
         .px_2()
         .text_size(rems(typography::BODY))
@@ -539,8 +539,7 @@ fn commit_tab_btn(
         } else {
             FontWeight::NORMAL
         })
-        .border_b_2()
-        .border_color(if active { p.primary } else { p.background })
+        .when(active, |el| el.child(underline_tab_active_line(p)))
         .child(label)
         .on_click(on_click)
 }

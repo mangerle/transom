@@ -221,7 +221,10 @@ impl AppShell {
             .tooltip(move |window, cx| {
                 Tooltip::new(rust_i18n::t!("app.remove_from_recent").to_string()).build(window, cx)
             })
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).size(px(11.0)))
+            .child(
+                AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE))
+                    .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON)),
+            )
             .on_click(cx.listener(move |this, _, _window, cx| {
                 cx.stop_propagation();
                 this.remove_recent_session(session_id, cx);

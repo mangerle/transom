@@ -1,7 +1,7 @@
 //! 统计页工具栏：采样档位、刷新与错误提示。
 
 use super::*;
-use crate::widgets::{IconButton, action_button};
+use crate::widgets::{IconButton, action_button, toolbar_separator};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -103,7 +103,7 @@ pub(crate) fn stats_toolbar(
         .p_2()
         .items_center()
         .child(interval_chips)
-        .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
+        .child(toolbar_separator(p))
         .child(
             IconButton::new(
                 "container-stats-chart",

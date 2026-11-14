@@ -119,6 +119,7 @@ impl AppShell {
                 rust_i18n::t!("git.view.expand_log")
             };
             let mut btn = Button::new("status-bar-git-log")
+                .ghost()
                 .xsmall()
                 .child(AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT)).small())
                 .accessibility_label(tooltip_text.to_string())
@@ -129,9 +130,7 @@ impl AppShell {
                     });
                 });
             if is_open {
-                btn = btn.primary();
-            } else {
-                btn = btn.ghost();
+                btn = btn.bg(p.surface.control_selected).text_color(p.foreground);
             }
             btn
         };

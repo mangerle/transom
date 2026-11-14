@@ -29,6 +29,8 @@ pub(crate) struct SurfaceTokens {
     pub(crate) pressed: Hsla,
     /// 列表当前项与选中项表面。
     pub(crate) selected: Hsla,
+    /// 控件与切换开关的选中态底色（中性深灰，区分亮色与暗色主题）。
+    pub(crate) control_selected: Hsla,
     /// 浮层与弹窗表面。
     pub(crate) floating: Hsla,
     /// 以文字色叠加的轻量强调表面，用于极弱分割与交互反馈。
@@ -89,6 +91,12 @@ impl SurfaceTokens {
     /// 透明度只允许在本模块集中定义：主题只需提供 muted、foreground、surface
     /// 等基础色，应用级界面即可获得一致的弱表面和交互表面。
     fn from_theme(colors: &ColorTokens, selected: Hsla) -> Self {
+        let is_dark = colors.background.l < 0.5;
+        let control_selected = if is_dark {
+            colors.foreground.opacity(0.18)
+        } else {
+            colors.foreground.opacity(0.14)
+        };
         Self {
             ghost: colors.muted.opacity(0.04),
             faint: colors.muted.opacity(0.08),
@@ -97,6 +105,7 @@ impl SurfaceTokens {
             active: colors.muted.opacity(0.35),
             pressed: colors.muted.opacity(0.40),
             selected,
+            control_selected,
             floating: colors.surface,
             contrast: colors.foreground.opacity(0.08),
         }

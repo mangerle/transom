@@ -34,9 +34,9 @@ pub(crate) mod size {
     pub const ACTIVITY_BAR_WIDTH: f32 = 3.0;
     /// 活动栏按钮边长（标准档 34px）。
     pub const ACTIVITY_BUTTON_SIZE: f32 = 2.125;
-    /// 活动栏图标边长（标准档 18px）；与会话树行图标尺寸保持一致，让左侧
+    /// 活动栏图标边长（标准档 20px）；与会话树行图标尺寸保持一致，让左侧
     /// 两条竖栏的视觉分量对齐（树侧常量为模块私有，调整时两处必须同步）。
-    pub const ACTIVITY_ICON_SIZE: f32 = 1.125;
+    pub const ACTIVITY_ICON_SIZE: f32 = 1.25;
     /// 侧栏最小宽度（标准档 180px）。
     pub const SIDEBAR_MIN_WIDTH: f32 = 11.25;
     /// 侧栏初始宽度（标准档 270px）；用户拖出的宽度存于 ResizableState。
@@ -71,16 +71,18 @@ pub(crate) mod size {
     pub const TREE_ROW_HEIGHT: f32 = 2.375;
     /// 侧栏树内层高亮条高度（标准档 34px）。
     pub const TREE_BAND_HEIGHT: f32 = 2.125;
-    /// 侧栏树行内主图标边长（标准档 18px）；与活动栏图标一致。
-    pub const TREE_ROW_ICON: f32 = 1.125;
-    /// 侧栏树折叠箭头边长（标准档 14px）。
-    pub const TREE_CHEVRON: f32 = 0.875;
+    /// 侧栏树行内主图标边长（标准档 20px）；与活动栏图标一致。
+    pub const TREE_ROW_ICON: f32 = 1.25;
+    /// 侧栏树折叠箭头边长（标准档 16px）。
+    pub const TREE_CHEVRON: f32 = 1.0;
     /// 侧栏当前行左侧强调条宽度（标准档 2px）。
     pub const SIDEBAR_SELECTION_RAIL_WIDTH: f32 = 0.125;
     /// 标准文件列表行高（标准档 28px）。
     pub const FILE_ROW_HEIGHT: f32 = 1.75;
     /// 紧凑文件树行高（标准档 24px，用于变更文件树等紧凑清单）。
     pub const COMPACT_TREE_ROW_HEIGHT: f32 = 1.5;
+    /// 双行/复合信息头部高度（标准档 48px，用于容器列表与详情头等带次级信息的头部）。
+    pub const LARGE_HEADER_HEIGHT: f32 = 3.0;
 }
 /// 间距档位：以 rem 表达，供组件层替换 `gap_2` / `py_2` 这类魔法数字。
 ///
@@ -117,8 +119,8 @@ pub(crate) mod typography {
 pub(crate) mod control {
     /// 16px：常规工具图标。
     pub const ICON: f32 = 1.0;
-    /// 14px：紧凑工具栏图标。
-    pub const COMPACT_ICON: f32 = 0.875;
+    /// 16px：紧凑工具栏、标签页与行内操作图标（与常规图标统一为 16px）。
+    pub const COMPACT_ICON: f32 = 1.0;
     /// 26px：侧栏工具按钮。
     pub const ICON_BUTTON: f32 = 1.625;
     /// 22px：标签栏紧凑按钮。

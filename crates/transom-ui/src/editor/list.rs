@@ -20,9 +20,9 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl EditorPanels {
     /// 从列表行跳转：展开、置顶并聚焦目标面板，然后收起浮层。
@@ -136,7 +136,10 @@ fn render_editor_list_card(
                         this.focus_listed_editor(&row_editor, window, cx);
                     });
                 })
-                .child(render_app_icon(AppIcon::for_file(remote_path), 16.0))
+                .child(
+                    AppIconElement::new(AppIcon::for_file(remote_path))
+                        .with_rems(rems(crate::theme::tokens::control::ICON)),
+                )
                 .child(
                     div()
                         .flex_1()

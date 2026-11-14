@@ -175,7 +175,7 @@ pub(crate) fn render_logs(
         UiIcon::DIFF,
         rust_i18n::t!("container.logs.follow").to_string(),
     )
-    .when(follow, |b| b.primary())
+    .when(follow, |b| b.secondary())
     .when(!follow, |b| b.ghost())
     .on_click({
         let view = view.clone();

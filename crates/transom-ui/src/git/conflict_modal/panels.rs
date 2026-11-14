@@ -6,7 +6,7 @@ use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement};
 
 impl AppShell {
     pub(super) fn render_conflict_body(
@@ -64,7 +64,10 @@ impl AppShell {
                             this.git_conflict_select_file(idx, cx);
                         });
                     })
-                    .child(render_app_icon(AppIcon::for_file(path), 16.0))
+                    .child(
+                        AppIconElement::new(AppIcon::for_file(path))
+                            .with_rems(rems(crate::theme::tokens::control::ICON)),
+                    )
                     .child(
                         div()
                             .flex_1()

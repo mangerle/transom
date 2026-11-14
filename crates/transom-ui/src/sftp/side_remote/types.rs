@@ -13,7 +13,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::BTreeSet;
 use transom_core::{ConnectionId, TabId};
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement};
 
 /// 跨栏剪贴板数据来源。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +75,10 @@ impl Render for SftpDragPreview {
             .text_color(p.foreground)
             .text_xs()
             .items_center()
-            .child(render_app_icon(AppIcon::for_file(&self.name), 16.0))
+            .child(
+                AppIconElement::new(AppIcon::for_file(&self.name))
+                    .with_rems(rems(crate::theme::tokens::control::ICON)),
+            )
             .child(self.name.clone())
             .when(self.count > 1, |this| {
                 this.child(

@@ -66,12 +66,12 @@ pub(crate) fn ports_card(
                     } else {
                         AppIcon::Ui(UiIcon::CHEVRON_DOWN)
                     })
-                    .size(px(14.0))
+                    .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
                     .text_color(p.muted_foreground),
                 )
                 .child(
                     AppIconElement::new(AppIcon::Custom(CustomIcon::PORT))
-                        .size(px(14.0))
+                        .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
                         .text_color(p.muted_foreground),
                 )
                 .child(

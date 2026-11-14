@@ -36,7 +36,7 @@ pub(crate) fn stat_card(
                         .min_w_0()
                         .child(
                             AppIconElement::new(icon)
-                                .size(px(14.0))
+                                .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
                                 .text_color(p.muted_foreground),
                         )
                         .child(

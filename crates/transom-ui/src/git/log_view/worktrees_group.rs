@@ -13,7 +13,6 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::render_app_icon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -75,7 +74,9 @@ pub(crate) fn render_worktree_group(
                         .text_color(p.warning)
                         .into_any_element()
                 } else {
-                    render_app_icon(UiIcon::FOLDER.into(), 14.0)
+                    AppIconElement::new(UiIcon::FOLDER)
+                        .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
+                        .into_any_element()
                 })
                 .child(
                     v_flex()

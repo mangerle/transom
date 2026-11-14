@@ -11,7 +11,7 @@ use super::LOG_TOOLBAR_HEIGHT;
 use super::files_tree::{FileTreeNode, FileTreeRenderParams, render_tree_nodes};
 use super::placeholder;
 use crate::app::AppShell;
-use crate::divider::v_resizable;
+use crate::divider::{DividerEdge, DividerStyled, v_resizable};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -21,7 +21,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 type State = crate::git::GitWorkspaceState;
 
@@ -100,13 +100,13 @@ fn render_files_section(
 
     let toolbar = h_flex()
         .w_full()
-        .h(px(LOG_TOOLBAR_HEIGHT))
+        .h(rems(LOG_TOOLBAR_HEIGHT))
         .flex_none()
         .px_2()
         .items_center()
         .justify_between()
         .border_color(p.divider(p.border))
-        .border_b_1()
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(
             div()
                 .text_sm()
@@ -122,7 +122,7 @@ fn render_files_section(
             Button::new("git-diff-tab-btn")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::EXTERNAL_LINK)
+                .child(AppIconElement::new(UiIcon::EXTERNAL_LINK))
                 .accessibility_label(rust_i18n::t!("git.details.open_in_tab").to_string())
                 .tooltip(rust_i18n::t!("git.details.open_in_tab").to_string())
                 .on_click({

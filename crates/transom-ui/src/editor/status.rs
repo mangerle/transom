@@ -17,6 +17,7 @@ use super::panel::{EditorPanelState, EditorPhase};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::sftp::format_size;
+use crate::theme::tokens::size;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{EditorState, RopeExt};
@@ -29,9 +30,6 @@ use transom_core::format_octal_permissions;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-
-/// 状态栏高度：单行小字，与编辑器画布之间只留一条分隔线。
-const STATUS_BAR_HEIGHT: f32 = 26.0;
 
 impl EditorPanels {
     /// 渲染编辑器式状态栏：左侧位置，右侧文件属性、回传阶段与动作。
@@ -64,7 +62,7 @@ impl EditorPanels {
         let phase = render_phase(item, p);
 
         h_flex()
-            .h(px(STATUS_BAR_HEIGHT))
+            .h(rems(size::STATUS_BAR_HEIGHT))
             .items_center()
             .gap_2()
             .px_2()

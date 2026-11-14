@@ -295,7 +295,7 @@ impl AppShell {
             .children(filter_options.into_iter().map(|(value, label)| {
                 Button::new(format!("cloud-sync-filter-{}", history_filter_key(value)))
                     .xsmall()
-                    .when(value == filter, |button| button.primary())
+                    .when(value == filter, |button| button.secondary())
                     .when(value != filter, |button| button.ghost())
                     .label(label.to_string())
                     .on_click(cx.listener(move |this, _, _, cx| {

@@ -5,12 +5,13 @@
 //! 动作经 [`ContainerWorkspaceEvent`] 上报。渲染函数不再挂在 `AppShell` 上，
 //! 也不需要按 `tab_id` 反查状态。
 
-use crate::container::divider_width_px;
 use crate::container::types::ContainerSection;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceEvent, ContainerWorkspaceState};
 use crate::palette::Palette;
 use crate::theme::tokens::{control, typography};
-use crate::widgets::{IconButton, action_button};
+use crate::widgets::{
+    IconButton, action_button, underline_tab_active_line, underline_tab_bar_line,
+};
 use gpui_kit::base::{Tab, Tabs, h_flex};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::prelude::FluentBuilder;
@@ -44,15 +45,7 @@ pub(super) fn render_container_header(
         .items_center()
         .justify_between()
         .flex_none()
-        .child(
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .bottom_0()
-                .h(px(divider_width_px(p.divider_width)))
-                .bg(p.divider(p.border)),
-        )
+        .child(underline_tab_bar_line(p))
         .child(section_tabs)
         .child(
             h_flex()
@@ -293,8 +286,6 @@ fn render_section_tabs(
     ];
 
     let tab_count = ContainerSection::ALL.len();
-    let divider_px = divider_width_px(p.divider_width);
-    let active_line_px = divider_px.max(2.0);
     Tabs::new("container-section-tabs")
         .h_full()
         .flex()
@@ -349,15 +340,7 @@ fn render_section_tabs(
                         )
                     })
                     .when(is_selected, |this| {
-                        this.child(
-                            div()
-                                .absolute()
-                                .left_0()
-                                .right_0()
-                                .bottom_0()
-                                .h(px(active_line_px))
-                                .bg(p.primary),
-                        )
+                        this.child(underline_tab_active_line(p))
                     })
                     .on_click({
                         let view = view.clone();

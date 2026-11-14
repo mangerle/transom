@@ -15,9 +15,9 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::diff::{Diff, DiffGutterMarker, DiffLinePosition};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
-use gpui_kit::{AnyElement, ElementId, Entity, IntoElement, SharedString, div};
+use gpui_kit::{AnyElement, ElementId, Entity, IntoElement, ParentElement, SharedString, div};
 use transom_core::{GitAction, RepoStatus, TabId};
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 当当前差异对比支持块级写操作时，向 `Diff` 控件注入槽位按钮与补丁应用回调。
 pub(super) fn attach_hunk_actions(
@@ -80,7 +80,7 @@ fn render_unstaged_hunk_button(
     Button::new(id)
         .ghost()
         .xsmall()
-        .icon(UiIcon::MORE_HORIZONTAL)
+        .child(AppIconElement::new(UiIcon::MORE_HORIZONTAL))
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .dropdown_menu(move |menu, _window, _cx| {
@@ -136,7 +136,7 @@ fn render_staged_hunk_button(
     Button::new(id)
         .ghost()
         .xsmall()
-        .icon(UiIcon::UNDO)
+        .child(AppIconElement::new(UiIcon::UNDO))
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)
         .on_click(move |_, _, cx| {

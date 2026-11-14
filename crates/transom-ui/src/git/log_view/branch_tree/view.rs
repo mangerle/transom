@@ -18,7 +18,6 @@ use gpui_kit::*;
 use transom_core::{LogScope, TabId};
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::render_app_icon;
 
 type State = crate::git::GitWorkspaceState;
 
@@ -323,8 +322,12 @@ fn branch_icon(node: &RefNode, is_selected: bool, p: &Palette) -> AnyElement {
                 p.muted_foreground
             })
             .into_any_element(),
-        RefNodeKind::Tag => render_app_icon(UiIcon::TAG.into(), 14.0),
-        RefNodeKind::Folder => render_app_icon(UiIcon::FOLDER.into(), 14.0),
+        RefNodeKind::Tag => AppIconElement::new(UiIcon::TAG)
+            .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
+            .into_any_element(),
+        RefNodeKind::Folder => AppIconElement::new(UiIcon::FOLDER)
+            .with_rems(rems(crate::theme::tokens::control::COMPACT_ICON))
+            .into_any_element(),
     }
 }
 

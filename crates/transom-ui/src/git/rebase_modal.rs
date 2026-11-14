@@ -368,7 +368,7 @@ impl AppShell {
                     .ghost()
                     .xsmall()
                     .label(rust_i18n::t!(step.action.i18n_key()).to_string())
-                    .when(step.action != GitRebaseAction::Pick, |btn| btn.primary())
+                    .when(step.action != GitRebaseAction::Pick, |btn| btn.secondary())
                     .disabled(running)
                     .on_click({
                         let app = app.clone();

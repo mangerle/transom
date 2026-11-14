@@ -185,8 +185,6 @@ impl SftpPanelView {
             .overflow_hidden()
             .bg(p.background)
             .text_color(p.foreground)
-            .border_l_1()
-            .border_color(p.sidebar_border)
             .child(header)
             .child(div().flex_1().w_full().overflow_hidden().child(local_pane));
         if let Some(status_bar) = status_bar {

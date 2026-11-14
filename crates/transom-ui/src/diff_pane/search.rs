@@ -18,7 +18,7 @@ use gpui_kit::{
     Subscription, div, px,
 };
 use similar::{ChangeTag, TextDiff};
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 use super::compute::{sanitize_diff_path, split_lines_stripped};
 use super::types::DiffUiAction;
@@ -228,7 +228,7 @@ pub(crate) fn render_diff_search_bar(props: DiffSearchBarProps<'_>) -> Option<An
                 Button::new(format!("{}-search-prev", props.id_prefix))
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::CHEVRON_UP)
+                    .child(AppIconElement::new(UiIcon::CHEVRON_UP))
                     .disabled(!has_matches)
                     .accessibility_label(rust_i18n::t!("git.diff.search_prev").to_string())
                     .tooltip(rust_i18n::t!("git.diff.search_prev").to_string())
@@ -238,7 +238,7 @@ pub(crate) fn render_diff_search_bar(props: DiffSearchBarProps<'_>) -> Option<An
                 Button::new(format!("{}-search-next", props.id_prefix))
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::CHEVRON_DOWN)
+                    .child(AppIconElement::new(UiIcon::CHEVRON_DOWN))
                     .disabled(!has_matches)
                     .accessibility_label(rust_i18n::t!("git.diff.search_next").to_string())
                     .tooltip(rust_i18n::t!("git.diff.search_next").to_string())
@@ -249,7 +249,7 @@ pub(crate) fn render_diff_search_bar(props: DiffSearchBarProps<'_>) -> Option<An
                 Button::new(format!("{}-search-close", props.id_prefix))
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::CLOSE)
+                    .child(AppIconElement::new(UiIcon::CLOSE))
                     .accessibility_label(rust_i18n::t!("git.diff.search_close").to_string())
                     .tooltip(rust_i18n::t!("git.diff.search_close").to_string())
                     .on_click(move |_, window, cx| on_close_btn(window, cx)),

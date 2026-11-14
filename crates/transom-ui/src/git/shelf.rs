@@ -21,9 +21,9 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitCommand, GitRequestId, GitSide, HeadState, ShelfEntry, TabId};
+use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl AppShell {
     /// 搁置内联面板：提交页左栏的「搁置」页签内容。
@@ -276,7 +276,10 @@ impl AppShell {
             .hover(|style| style.bg(p.list_hover))
             .when(selected, |el| el.bg(p.list_active))
             .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx))
-            .child(render_app_icon(AppIcon::for_file(&path_str), 16.0))
+            .child(
+                AppIconElement::new(AppIcon::for_file(&path_str))
+                    .with_rems(rems(crate::theme::tokens::control::ICON)),
+            )
             .child(
                 div()
                     .text_sm()

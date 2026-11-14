@@ -126,7 +126,7 @@ impl AppShell {
                 Button::new("git-toolbar-refresh")
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::REFRESH)
+                    .child(AppIconElement::new(UiIcon::REFRESH))
                     .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
                     .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -138,7 +138,7 @@ impl AppShell {
                 Button::new("git-toolbar-fetch")
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::FETCH)
+                    .child(AppIconElement::new(UiIcon::FETCH))
                     .accessibility_label(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.fetch").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -153,7 +153,7 @@ impl AppShell {
                 Button::new("git-toolbar-pull")
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::UPDATE)
+                    .child(AppIconElement::new(UiIcon::UPDATE))
                     .accessibility_label(rust_i18n::t!("git.toolbar.pull").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.pull").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -168,7 +168,7 @@ impl AppShell {
                 Button::new("git-toolbar-push")
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::PUSH)
+                    .child(AppIconElement::new(UiIcon::PUSH))
                     .accessibility_label(rust_i18n::t!("git.toolbar.push").to_string())
                     .tooltip(rust_i18n::t!("git.toolbar.push").to_string())
                     .on_click(cx.listener(move |this, _, _window, cx| {
@@ -311,7 +311,7 @@ fn render_collapsed_refs_panel(tab_id: TabId, app: Entity<AppShell>) -> AnyEleme
             Button::new("git-refs-toggle-open")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::CHEVRON_RIGHT)
+                .child(AppIconElement::new(UiIcon::CHEVRON_RIGHT))
                 .accessibility_label(rust_i18n::t!("git.refs.panel_toggle").to_string())
                 .tooltip(rust_i18n::t!("git.refs.panel_toggle").to_string())
                 .on_click(move |_, _, cx| {

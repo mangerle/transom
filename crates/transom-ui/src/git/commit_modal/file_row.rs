@@ -17,7 +17,7 @@ use gpui_kit::*;
 use std::collections::HashSet;
 use transom_core::{GitAction, GitProject, GitSide, StatusEntry};
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement};
 
 /// 某个改动行「看差异」该跟谁比：已暂存看 HEAD→索引，其余看索引→工作区。
 pub(crate) fn worktree_diff_request(group: ChangeGroup, path: String) -> GitDiffRequest {
@@ -118,7 +118,10 @@ impl AppShell {
             row = row.child(check_placeholder());
         }
         row = row
-            .child(render_app_icon(AppIcon::for_file(&path), 16.0))
+            .child(
+                AppIconElement::new(AppIcon::for_file(&path))
+                    .with_rems(rems(crate::theme::tokens::control::ICON)),
+            )
             .child(
                 div()
                     .text_sm()
@@ -328,7 +331,10 @@ pub(crate) fn amend_file_row(file: &transom_core::CommitFile, p: &Palette) -> An
         .overflow_hidden()
         .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx))
         .child(div().w(px(14.0)))
-        .child(render_app_icon(AppIcon::for_file(&file.path), 16.0))
+        .child(
+            AppIconElement::new(AppIcon::for_file(&file.path))
+                .with_rems(rems(crate::theme::tokens::control::ICON)),
+        )
         .child(
             div()
                 .text_sm()

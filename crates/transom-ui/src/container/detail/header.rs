@@ -3,7 +3,7 @@
 use super::*;
 use crate::container::{CONTENT_HEADER_HEIGHT, ContainerWorkspace, ContainerWorkspaceEvent};
 use crate::theme::tokens::{control, typography};
-use crate::widgets::IconButton;
+use crate::widgets::{IconButton, toolbar_separator};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::CustomIcon;
@@ -200,7 +200,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
 
             if let Some(tabs) = tabs {
                 title_row = title_row
-                    .child(div().w(px(1.0)).h(px(16.0)).bg(p.divider(p.border)).mx_1())
+                    .child(toolbar_separator(p).mx_1())
                     .child(tabs);
             }
 
@@ -224,7 +224,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                 );
             if let Some(tabs) = tabs {
                 row = row
-                    .child(div().w(px(1.0)).h(px(16.0)).bg(p.divider(p.border)).mx_1())
+                    .child(toolbar_separator(p).mx_1())
                     .child(tabs);
             }
             row.into_any_element()
@@ -242,7 +242,13 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
         .overflow_hidden()
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(left)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .child(left),
+        )
         .child(
             h_flex()
                 .gap_2()

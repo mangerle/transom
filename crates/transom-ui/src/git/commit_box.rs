@@ -14,7 +14,7 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
 use transom_core::TabId;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 提交输入表单属性包。
 pub(crate) struct CommitBoxProps<'a> {
@@ -60,7 +60,7 @@ impl AppShell {
         let recent_btn = Button::new("git-commit-recent-messages")
             .ghost()
             .xsmall()
-            .icon(UiIcon::HISTORY)
+            .child(AppIconElement::new(UiIcon::HISTORY))
             .accessibility_label(rust_i18n::t!("git.commit.recent_messages").to_string())
             .tooltip(rust_i18n::t!("git.commit.recent_messages").to_string())
             .dropdown_menu({
@@ -141,7 +141,7 @@ impl AppShell {
                         Button::new("git-commit-and-push")
                             .primary()
                             .small()
-                            .icon(UiIcon::PUSH)
+                            .child(AppIconElement::new(UiIcon::PUSH))
                             .label(rust_i18n::t!("git.commit.and_push").to_string())
                             .disabled(submitting)
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -153,7 +153,7 @@ impl AppShell {
                         Button::new("git-commit-settings")
                             .ghost()
                             .small()
-                            .icon(UiIcon::SETTINGS)
+                            .child(AppIconElement::new(UiIcon::SETTINGS))
                             .accessibility_label(rust_i18n::t!("git.commit.settings").to_string())
                             .tooltip(rust_i18n::t!("git.commit.settings").to_string())
                             .on_click(cx.listener(move |this, _, window, cx| {

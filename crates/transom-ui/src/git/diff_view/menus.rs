@@ -8,7 +8,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::{GitRequestId, TabId};
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 差异工具条「更多操作」菜单渲染参数。
 pub(super) struct DiffMoreMenuParams {
@@ -31,7 +31,7 @@ pub(super) fn render_settings_menu(params: DiffMoreMenuParams) -> AnyElement {
     Button::new("git-diff-gear")
         .ghost()
         .xsmall()
-        .icon(UiIcon::SETTINGS)
+        .child(AppIconElement::new(UiIcon::SETTINGS))
         .accessibility_label(rust_i18n::t!("common.more").to_string())
         .tooltip(rust_i18n::t!("common.more").to_string())
         .dropdown_menu(move |menu, _window, _cx| {

@@ -21,8 +21,10 @@ use crate::diff_pane::{
     render_change_nav_buttons, render_diff_body, render_diff_search_bar, render_option_controls,
     sync_diff_state_options,
 };
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap::{DIFF_VIEW_CONTEXT, DiffFindInView};
 use crate::palette::Palette;
+use crate::widgets::toolbar_separator;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -328,7 +330,7 @@ impl EditorPanels {
             .px_2()
             .py_1()
             .border_color(p.divider(p.border))
-            .border_b_1()
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .text_xs()
             .text_color(p.muted_foreground)
             .child(render_change_nav_buttons(
@@ -336,7 +338,7 @@ impl EditorPanels {
                 item.diff.clone(),
                 has_changes,
             ))
-            .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
+            .child(toolbar_separator(p))
             .child(div().flex_1().min_w_0().truncate().child(summary_text))
             .child(render_option_controls(
                 "editor-diff",
@@ -347,7 +349,7 @@ impl EditorPanels {
                 Button::new("editor-diff-search-toggle")
                     .ghost()
                     .xsmall()
-                    .icon(UiIcon::SEARCH)
+                    .child(AppIconElement::new(UiIcon::SEARCH))
                     .when(item.diff_search.open, |btn| btn.secondary())
                     .accessibility_label(rust_i18n::t!("git.diff.search_toggle").to_string())
                     .tooltip(rust_i18n::t!("git.diff.search_toggle").to_string())
@@ -355,7 +357,7 @@ impl EditorPanels {
                         this.toggle_editor_diff_search(&search_toggle_editor, window, cx);
                     })),
             )
-            .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
+            .child(toolbar_separator(p))
             .child(
                 Button::new("editor-diff-back")
                     .ghost()

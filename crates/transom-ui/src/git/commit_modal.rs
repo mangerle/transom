@@ -157,7 +157,7 @@ impl AppShell {
         Button::new("git-grouping")
             .ghost()
             .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::SHOW)).small())
+            .child(AppIconElement::new(UiIcon::SHOW))
             .accessibility_label(rust_i18n::t!("git.group.by").to_string())
             .tooltip(rust_i18n::t!("git.group.by").to_string())
             .dropdown_menu(move |menu, _window, _cx| {

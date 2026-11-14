@@ -16,6 +16,7 @@
 //!   再导出，调用方的引用路径不变。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::h_flex;
@@ -50,8 +51,8 @@ pub(crate) use log_table::render_log_table;
 
 type State = crate::git::GitWorkspaceState;
 
-/// 日志页顶部筛选栏与右侧文件工具栏的统一高度。
-pub(crate) const LOG_TOOLBAR_HEIGHT: f32 = 28.0;
+/// 日志页顶部筛选栏与右侧文件工具栏的统一高度（对齐窗格标头高度）。
+pub(crate) const LOG_TOOLBAR_HEIGHT: f32 = crate::theme::tokens::size::PANE_HEADER_HEIGHT;
 
 /// 日志过滤条：对应 IDEA 日志页顶部那一排（检索框、`.*`/`Cc` 开关、
 /// 分支 / 用户 / 日期 / 路径下拉）。
@@ -100,7 +101,7 @@ pub(crate) fn render_filter_bar(
                 .label(".*")
                 .accessibility_label(regex_tooltip.clone())
                 .tooltip(regex_tooltip)
-                .when(state.query.regex, |btn| btn.primary())
+                .when(state.query.regex, |btn| btn.secondary())
                 .on_click(move |_, _, cx| {
                     regex_app.update(cx, |this, cx| {
                         this.git_toggle_filter_flag(tab_id, true, cx);
@@ -115,7 +116,7 @@ pub(crate) fn render_filter_bar(
                 .label("Cc")
                 .accessibility_label(case_tooltip.clone())
                 .tooltip(case_tooltip)
-                .when(state.query.case_sensitive, |btn| btn.primary())
+                .when(state.query.case_sensitive, |btn| btn.secondary())
                 .on_click(move |_, _, cx| {
                     case_app.update(cx, |this, cx| {
                         this.git_toggle_filter_flag(tab_id, false, cx);
@@ -124,14 +125,14 @@ pub(crate) fn render_filter_bar(
         );
     h_flex()
         .id("git-filter-bar")
-        .h(px(LOG_TOOLBAR_HEIGHT))
+        .h(rems(LOG_TOOLBAR_HEIGHT))
         .px_2()
         .py_0()
         .gap_2()
         .items_center()
         .flex_none()
         .border_color(p.divider(p.border))
-        .border_b_1()
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(
             div()
                 .w(px(240.0))
@@ -205,7 +206,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-date")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::HISTORY)
+                .child(AppIconElement::new(UiIcon::HISTORY))
                 .label(date_label)
                 .dropdown_menu({
                     let date_app = app.clone();
@@ -216,13 +217,13 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-path")
                 .ghost()
                 .xsmall()
-                .icon(
+                .child(AppIconElement::new(
                     state
                         .query
                         .paths
                         .first()
                         .map_or(UiIcon::FILTER.into(), |path| AppIcon::for_file(path)),
-                )
+                ))
                 .label(path_label)
                 .dropdown_menu({
                     let path_app = app.clone();
@@ -236,7 +237,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-rebase-abort")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::ABORT)
+                .child(AppIconElement::new(UiIcon::ABORT))
                 .accessibility_label(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .tooltip(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .on_click({
@@ -255,7 +256,7 @@ pub(crate) fn render_filter_bar(
             Button::new("git-filter-apply")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::SEARCH)
+                .child(AppIconElement::new(UiIcon::SEARCH))
                 .accessibility_label("Apply filter")
                 .on_click({
                     let apply_app = app.clone();

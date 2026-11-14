@@ -164,8 +164,6 @@ impl SftpPanelView {
             .overflow_hidden()
             .bg(p.background)
             .text_color(p.foreground)
-            .border_l_1()
-            .border_color(p.sidebar_border)
             .child(header)
             .child(
                 div()

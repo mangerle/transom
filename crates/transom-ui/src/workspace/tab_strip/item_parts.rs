@@ -45,7 +45,7 @@ pub(super) fn render_pane_badge(
     Button::new(ElementId::Name(format!("pane-list-{group_id}").into()))
         .ghost()
         .xsmall()
-        .icon(badge_icon)
+        .child(AppIconElement::new(badge_icon))
         .label(pane_count.to_string())
         .dropdown_menu({
             let app_entity = app_entity.clone();

@@ -95,7 +95,7 @@ pub(super) fn build_tiled_group_badge(
     Button::new(ElementId::Name(format!("tiled-list-{tiling_id}").into()))
         .ghost()
         .xsmall()
-        .icon(layout_icon)
+        .child(AppIconElement::new(layout_icon))
         .label(count.to_string())
         .dropdown_menu({
             let app_entity = app_entity.clone();

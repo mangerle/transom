@@ -25,8 +25,8 @@ use transom_core::{ConnectionId, RemoteTextMeta, TabId, TransferId};
 /// 面板默认尺寸：足够容纳一个两百行的配置文件，又不至于盖住整个工作区。
 pub(crate) const PANEL_WIDTH: f32 = 880.0;
 pub(crate) const PANEL_HEIGHT: f32 = 540.0;
-/// 标题栏高度：与编辑器标签栏同档，不再用对话框标题栏的厚边距。
-pub(crate) const PANEL_HEADER_HEIGHT: f32 = 34.0;
+/// 标题栏高度（标准档 32px，与 `size::TAB_BAR_HEIGHT` 对齐）。
+pub(crate) const PANEL_HEADER_HEIGHT: f32 = 32.0;
 /// 折叠为仅标题栏后的高度，与标题栏同高。
 const PANEL_COLLAPSED_HEIGHT: f32 = PANEL_HEADER_HEIGHT;
 /// 拖拽与落位时允许贴近视口边缘的最小间距。

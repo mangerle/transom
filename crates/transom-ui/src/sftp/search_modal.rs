@@ -21,9 +21,9 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteSearchQuery, RemoteSearchResultItem, SftpOperation, TabId};
+use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// SFTP 远程检索模态弹窗状态。
 #[derive(Clone)]
@@ -348,7 +348,10 @@ fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
         .rounded_md()
         .hover(|s| s.bg(p.surface.hover))
         .cursor_pointer()
-        .child(render_app_icon(AppIcon::for_file(&target_path), 16.0))
+        .child(
+            AppIconElement::new(AppIcon::for_file(&target_path))
+                .with_rems(rems(crate::theme::tokens::control::ICON)),
+        )
         .child(
             div()
                 .text_xs()

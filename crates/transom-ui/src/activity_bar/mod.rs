@@ -186,7 +186,7 @@ impl AppShell {
 
         if selected {
             button = button
-                .bg(p.sidebar_accent)
+                .bg(p.surface.control_selected)
                 .text_color(p.sidebar_accent_foreground)
                 .cursor_pointer();
         } else if disabled {

@@ -6,6 +6,7 @@
 //! - 主体复用 `render_git_log_view`，完整呈现引用树、提交图列表与提交详情三栏，避免代码重复。
 
 use crate::app::AppShell;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -72,7 +73,7 @@ impl AppShell {
             .flex_none()
             .bg(p.background)
             .border_color(p.divider(p.border))
-            .border_b_1()
+            .divider_edge(DividerEdge::Bottom, p.divider_width)
             .items_center()
             .px_2()
             .justify_between()
@@ -119,7 +120,7 @@ impl AppShell {
                         Button::new("git-bottom-log-collapse")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::CHEVRON_DOWN)
+                            .child(AppIconElement::new(UiIcon::CHEVRON_DOWN))
                             .accessibility_label(rust_i18n::t!("git.view.collapse_log").to_string())
                             .tooltip(rust_i18n::t!("git.view.collapse_log").to_string())
                             .on_click({
@@ -135,7 +136,7 @@ impl AppShell {
                         Button::new("git-bottom-log-close")
                             .ghost()
                             .xsmall()
-                            .icon(UiIcon::CLOSE)
+                            .child(AppIconElement::new(UiIcon::CLOSE))
                             .accessibility_label(rust_i18n::t!("common.close").to_string())
                             .tooltip(rust_i18n::t!("common.close").to_string())
                             .on_click(move |_, _, cx| {

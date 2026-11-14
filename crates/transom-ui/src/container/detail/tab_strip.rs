@@ -7,7 +7,7 @@
 use super::*;
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::theme::tokens::control;
-use crate::widgets::action_button_with_icon_tint;
+use crate::widgets::{action_button_with_icon_tint, toolbar_separator};
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -98,7 +98,7 @@ pub(super) fn render_detail_tab_buttons(
                             });
                         }),
                     )
-                    .child(div().w(px(1.0)).h(px(14.0)).bg(p.border))
+                    .child(toolbar_separator(p))
                     .child(
                         Button::new("container-detail-tab-terminal-menu")
                             .small()

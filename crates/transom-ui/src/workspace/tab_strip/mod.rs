@@ -8,7 +8,7 @@ pub(crate) mod menu;
 use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use crate::theme::tokens::size;
+use crate::theme::tokens::{control, size};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants, DropdownButton};
@@ -29,6 +29,7 @@ impl AppShell {
         // 边框无法被条目内元素覆盖，改为条目与右侧空白区各自画一段。
         let mut tab_strip = h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
+            .flex_none()
             .items_center()
             .bg(p.tab_bar)
             .overflow_hidden();
@@ -61,7 +62,10 @@ impl AppShell {
                         let action = Button::new("tab-strip-quick-new")
                             .ghost()
                             .xsmall()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
+                            .child(
+                                AppIconElement::new(AppIcon::Ui(UiIcon::ADD))
+                                    .with_rems(rems(control::COMPACT_ICON)),
+                            )
                             .accessibility_label(rust_i18n::t!("app.new_local").to_string())
                             .tooltip(rust_i18n::t!("app.new_local").to_string())
                             .on_click(cx.listener(|this, _, window, cx| {

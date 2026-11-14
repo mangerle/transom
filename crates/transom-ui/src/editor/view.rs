@@ -17,8 +17,9 @@ use super::drag_tracker::EditorDragTracker;
 use super::entity::EditorPanels;
 use super::open::parent_dir;
 use super::panel::{
-    EditorPanelState, EditorPhase, PANEL_HEADER_HEIGHT, PANEL_KEEP_VISIBLE, clamp_axis,
+    EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis,
 };
+use crate::theme::tokens::{control, size};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
@@ -29,9 +30,9 @@ use gpui_kit::component::input::{Editor, EditorState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
 
 impl Render for EditorPanels {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -149,7 +150,7 @@ impl EditorPanels {
         let directory = parent_dir(&item.remote_path).unwrap_or("");
 
         h_flex()
-            .h(px(PANEL_HEADER_HEIGHT))
+            .h(rems(size::TAB_BAR_HEIGHT))
             // 标题栏可拖拽，但保持系统默认箭头：组件库的 cursor_move 实际映射为
             // 闭合手形，悬停时会让人误以为在抓取文件内容而不是移动面板。
             .cursor_default()
@@ -164,7 +165,10 @@ impl EditorPanels {
                     this.begin_editor_panel_drag(&drag_editor, event.position, cx);
                 })
             })
-            .child(render_app_icon(AppIcon::for_file(&item.remote_path), 16.0))
+            .child(
+                AppIconElement::new(AppIcon::for_file(&item.remote_path))
+                    .with_rems(rems(control::ICON)),
+            )
             .child(
                 div()
                     .flex_none()

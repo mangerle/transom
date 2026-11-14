@@ -79,6 +79,7 @@ impl PanelHeader {
 
         h_flex()
             .h(rems(size::TAB_BAR_HEIGHT))
+            .flex_none()
             .w_full()
             .px(rems(space::MD))
             .items_center()

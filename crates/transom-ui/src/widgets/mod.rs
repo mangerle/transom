@@ -28,6 +28,7 @@ mod panel_header;
 mod sidebar_row;
 mod status;
 mod switch_card;
+mod tab_bar;
 mod toolbar;
 
 pub(crate) use button::{
@@ -51,4 +52,5 @@ pub(crate) use sidebar_row::{
 };
 pub(crate) use status::{progress_bar, status_badge, status_dot, status_dot_bare};
 pub(crate) use switch_card::{SwitchCardProps, switch_card};
-pub(crate) use toolbar::toolbar;
+pub(crate) use tab_bar::{underline_tab_active_line, underline_tab_bar_line};
+pub(crate) use toolbar::{toolbar, toolbar_separator};

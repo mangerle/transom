@@ -12,7 +12,7 @@ use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use std::sync::Arc;
-use transom_ui_icons::{AppIcon, render_app_icon};
+use transom_ui_icons::{AppIcon, AppIconElement};
 
 impl AppShell {
     /// 渲染当前活动面板的悬停预览卡片；无预览或仍在延迟期时返回 `None`。
@@ -98,7 +98,10 @@ fn preview_card_header(preview: &SftpPreviewState, p: &Palette) -> AnyElement {
     h_flex()
         .gap_2()
         .items_center()
-        .child(render_app_icon(AppIcon::for_file(&preview.name), 16.0))
+        .child(
+            AppIconElement::new(AppIcon::for_file(&preview.name))
+                .with_rems(rems(crate::theme::tokens::control::ICON)),
+        )
         .child(
             div()
                 .flex_1()

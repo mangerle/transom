@@ -10,11 +10,14 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::app::AppShell;
-use crate::git::WORKSPACE_HEADER_HEIGHT;
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::actions::DiffTabCloseScope;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
-use crate::widgets::{IconButton, IconButtonSize};
+use crate::theme::tokens::{control, size};
+use crate::widgets::{
+    IconButton, IconButtonSize, underline_tab_active_line, underline_tab_bar_line,
+};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -23,9 +26,9 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::{GitRequestId, TabId};
+use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
-use transom_ui_icons::{AppIcon, render_app_icon};
 
 /// 为同批差异标签计算去重后的展示名称：同名不同目录附父目录名，同路径不同比较侧附目标侧标签。
 pub(crate) fn disambiguated_tab_titles(tabs: &[GitDiffState]) -> Vec<String> {
@@ -80,15 +83,15 @@ pub(crate) fn render_diff_tab_bar(
     let titles = disambiguated_tab_titles(&state.diff_tabs);
     let bar = h_flex()
         .id("git-diff-tab-bar")
+        .relative()
         .w_full()
-        .h(rems(WORKSPACE_HEADER_HEIGHT))
+        .h(rems(size::TAB_BAR_HEIGHT))
         .flex_none()
-        .border_color(p.divider(p.border))
-        .border_b_1()
         .items_center()
         .px_1()
         .gap_1()
         .overflow_x_scrollbar()
+        .child(underline_tab_bar_line(p))
         .children(state.diff_tabs.iter().zip(titles).enumerate().map(
             |(idx, (tab_item, display_title))| {
                 render_single_diff_tab(
@@ -135,6 +138,7 @@ fn render_single_diff_tab(
         .id(ElementId::Name(
             format!("git-diff-tab-item-{request_id}").into(),
         ))
+        .relative()
         .h_full()
         .flex_none()
         .items_center()
@@ -148,12 +152,7 @@ fn render_single_diff_tab(
             gpui::transparent_black()
         })
         .when(!is_active, |el| el.hover(|s| s.bg(p.list_hover)))
-        .border_color(if is_active {
-            p.primary
-        } else {
-            gpui::transparent_black()
-        })
-        .border_b_2()
+        .when(is_active, |el| el.child(underline_tab_active_line(p)))
         .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
             cx.stop_propagation();
             middle_app.update(cx, |this, cx| {
@@ -244,7 +243,10 @@ fn render_single_diff_tab(
                 .xsmall()
                 .accessibility_label(display_title.clone())
                 .tooltip(tooltip_text)
-                .child(render_app_icon(AppIcon::for_file(&tab_item.path), 14.0))
+                .child(
+                    AppIconElement::new(AppIcon::for_file(&tab_item.path))
+                        .with_rems(rems(control::COMPACT_ICON)),
+                )
                 .child(
                     div()
                         .text_color(if is_active {
@@ -305,7 +307,7 @@ pub(crate) fn render_diff_columns_header(
         .h(px(22.0))
         .flex_none()
         .border_color(p.divider(p.border))
-        .border_b_1()
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .text_xs()
         .child(
             h_flex().w_1_2().h_full().px_2().items_center().child(

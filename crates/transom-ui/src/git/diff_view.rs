@@ -19,10 +19,12 @@ use crate::diff_pane::{
     DiffSearchBarProps, OptionsUpdater, render_change_nav_with_handlers, render_diff_body,
     render_diff_search_bar, render_option_controls,
 };
+use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::WORKSPACE_HEADER_HEIGHT;
 use crate::git::types::GitWorkspaceState as State;
 use crate::keymap::{DIFF_VIEW_CONTEXT, DiffFindInView, DiffNextChange, DiffPrevChange};
 use crate::palette::Palette;
+use crate::widgets::toolbar_separator;
 use gpui_kit::base::Disableable;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -31,7 +33,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
 use transom_core::TabId;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 渲染 Git 差异面板。
 pub(crate) fn render(
@@ -106,7 +108,7 @@ pub(crate) fn render(
         .text_xs()
         .bg(p.background)
         .border_color(p.divider(p.border))
-        .border_b_1()
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
         .child(render_change_nav_with_handlers(
             "git-diff",
             nav_disabled,
@@ -121,12 +123,12 @@ pub(crate) fn render(
                 });
             }),
         ))
-        .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
+        .child(toolbar_separator(p))
         .child(
             Button::new("git-diff-prev-file")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::ARROW_LEFT)
+                .child(AppIconElement::new(UiIcon::ARROW_LEFT))
                 .accessibility_label(rust_i18n::t!("git.diff.prev_file").to_string())
                 .tooltip(rust_i18n::t!("git.diff.prev_file").to_string())
                 .disabled(current_tab_idx == 0)
@@ -148,7 +150,7 @@ pub(crate) fn render(
             Button::new("git-diff-next-file")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::ARROW_RIGHT)
+                .child(AppIconElement::new(UiIcon::ARROW_RIGHT))
                 .accessibility_label(rust_i18n::t!("git.diff.next_file").to_string())
                 .tooltip(rust_i18n::t!("git.diff.next_file").to_string())
                 .disabled(total_tabs <= 1 || current_tab_idx + 1 >= total_tabs)
@@ -162,14 +164,14 @@ pub(crate) fn render(
         )
         .child(div().flex_1())
         .children(diff_summary_pill)
-        .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
+        .child(toolbar_separator(p))
         .child(render_option_controls("git-diff", options, on_update))
-        .child(div().w(px(1.0)).h(px(12.0)).bg(p.divider(p.border)))
+        .child(toolbar_separator(p))
         .child(
             Button::new("git-diff-search-toggle")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::SEARCH)
+                .child(AppIconElement::new(UiIcon::SEARCH))
                 .when(state.diff_search.open, |btn| btn.secondary())
                 .accessibility_label(rust_i18n::t!("git.diff.search_toggle").to_string())
                 .tooltip(rust_i18n::t!("git.diff.search_toggle").to_string())
@@ -183,7 +185,7 @@ pub(crate) fn render(
             Button::new("git-diff-refresh")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::REFRESH)
+                .child(AppIconElement::new(UiIcon::REFRESH))
                 .accessibility_label(rust_i18n::t!("git.diff.refresh").to_string())
                 .tooltip(rust_i18n::t!("git.diff.refresh").to_string())
                 .on_click(move |_, _, cx| {
@@ -196,7 +198,7 @@ pub(crate) fn render(
             Button::new("git-diff-open-source")
                 .ghost()
                 .xsmall()
-                .icon(UiIcon::EDIT)
+                .child(AppIconElement::new(UiIcon::EDIT))
                 .accessibility_label(rust_i18n::t!("git.diff.open_source").to_string())
                 .tooltip(rust_i18n::t!("git.diff.open_source").to_string())
                 .on_click(move |_, _, cx| {
