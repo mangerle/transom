@@ -80,7 +80,7 @@ pub(crate) fn render_files(
         .rounded(p.radius.md)
         .items_center()
         .child(
-            AppIconElement::new(AppIcon::Ui(UiIcon::UNDO))
+            AppIconElement::new(AppIcon::Ui(UiIcon::UP))
                 .with_rems(rems(control::ICON))
                 .text_color(p.muted_foreground),
         )

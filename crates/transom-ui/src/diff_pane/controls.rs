@@ -215,7 +215,7 @@ pub(crate) fn render_ignore_menu(
     Button::new(format!("{id_prefix}-ignore"))
         .ghost()
         .xsmall()
-        .child(AppIconElement::new(UiIcon::HIDE))
+        .child(AppIconElement::new(UiIcon::TOGGLE_VISIBILITY))
         .when(is_active, |btn| btn.secondary())
         .accessibility_label(tooltip.clone())
         .tooltip(tooltip)

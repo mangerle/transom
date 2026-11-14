@@ -232,7 +232,7 @@ impl AppShell {
                         Button::new("git-commit-rollback")
                             .ghost()
                             .xsmall()
-                            .child(AppIconElement::new(UiIcon::UNDO))
+                            .child(AppIconElement::new(UiIcon::RESET))
                             .accessibility_label(rust_i18n::t!("git.menu.discard").to_string())
                             .tooltip(rust_i18n::t!("git.menu.discard").to_string())
                             .on_click(cx.listener(move |this, _, _window, cx| {
