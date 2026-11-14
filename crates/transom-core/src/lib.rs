@@ -65,7 +65,7 @@ pub use model::git::{GitPushOptions, PushTagsMode, ShelfEntry};
 pub use model::history::{
     HISTORY_LIMIT, SUGGESTION_LIMIT, record as record_command, suggestions as command_suggestions,
 };
-pub use model::host::{HostAction, HostOutcome};
+pub use model::host::{HostAction, HostOutcome, ProbeKind};
 pub use model::identity::Identity;
 pub use model::known_hosts::{
     HostKeyInfo, HostKeyRecord, HostKeyStatus, KnownHostsStore, normalize_host,

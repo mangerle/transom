@@ -25,7 +25,7 @@ pub use client::{
 };
 pub use error::NetError;
 pub use forward::{ForwardTask, start_forward};
-pub use host::{probe_tcp, send_wake_on_lan};
+pub use host::{probe_ssh, probe_tcp, send_wake_on_lan};
 pub use keys::deploy_public_key;
 pub use mosh::{
     MoshClientCommand, MoshSessionInfo, build_mosh_server_command, local_mosh_client,

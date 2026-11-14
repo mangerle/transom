@@ -16,9 +16,9 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use transom_core::{
-    AppError, AppEvent, ErrorCode, HostAction, HostAppEvent, HostOutcome, SessionId,
+    AppError, AppEvent, ErrorCode, HostAction, HostAppEvent, HostOutcome, ProbeKind, SessionId,
 };
-use transom_net::probe_tcp;
+use transom_net::{probe_ssh, probe_tcp};
 
 /// 跨批次共享的在途动作上限。
 ///
@@ -90,8 +90,13 @@ async fn execute(action: HostAction) -> (SessionId, HostOutcome) {
         session_id,
         host,
         port,
+        kind,
     } = action;
-    match probe_tcp(&host, port, PROBE_TIMEOUT).await {
+    let result = match kind {
+        ProbeKind::Ssh => probe_ssh(&host, port, PROBE_TIMEOUT).await,
+        ProbeKind::Tcp => probe_tcp(&host, port, PROBE_TIMEOUT).await,
+    };
+    match result {
         Ok(latency) => (
             session_id,
             HostOutcome::Reachable {
@@ -128,16 +133,32 @@ mod tests {
         let closed_port = closed.local_addr().unwrap().port();
         drop(closed);
 
+        let ssh_server_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let ssh_port = ssh_server_listener.local_addr().unwrap().port();
+        let ssh_server = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let (mut socket, _) = ssh_server_listener.accept().await.unwrap();
+            socket.write_all(b"SSH-2.0-OpenSSH_9.6\r\n").await.unwrap();
+        });
+
         let actions = vec![
             HostAction::Probe {
                 session_id: SessionId::new(),
                 host: "127.0.0.1".to_string(),
                 port: open_port,
+                kind: ProbeKind::Tcp,
+            },
+            HostAction::Probe {
+                session_id: SessionId::new(),
+                host: "127.0.0.1".to_string(),
+                port: ssh_port,
+                kind: ProbeKind::Ssh,
             },
             HostAction::Probe {
                 session_id: SessionId::new(),
                 host: "127.0.0.1".to_string(),
                 port: closed_port,
+                kind: ProbeKind::Ssh,
             },
         ];
         let (tx, rx) = flume::bounded::<AppEvent>(16);
@@ -164,7 +185,7 @@ mod tests {
                 _ => panic!("只应收到主机动作结果事件"),
             }
         }
-        assert_eq!(reachable, 1, "开放端口应判可达");
+        assert_eq!(reachable, 2, "开放的 TCP 与 SSH 端口应判可达");
         assert_eq!(unreachable, 1, "已关闭端口应判不可达");
         assert_eq!(reported.len(), actions.len());
         // 每条动作归属唯一会话：结果串行化到行全靠这个 id。
@@ -175,6 +196,7 @@ mod tests {
                 .len(),
             actions.len()
         );
+        ssh_server.await.unwrap();
         drop(open);
     }
 }

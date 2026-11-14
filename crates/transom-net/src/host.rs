@@ -12,13 +12,18 @@
 //!   不覆盖跨 VLAN 场景；也无法确认网卡是否真的把机器叫醒，`WakeSent` 的语义
 //!   上限就是"包已发出"。
 
+use std::io::ErrorKind;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
+use tokio::io::AsyncReadExt;
 use tokio::net::{TcpStream, UdpSocket};
 use transom_core::MacAddress;
 
 use crate::error::NetError;
+
+/// SSH 服务端建连后主动下发的版本标识前缀（RFC 4253 Section 4.2）。
+const SSH_BANNER_PREFIX: &[u8; 4] = b"SSH-";
 
 /// Wake-on-LAN 约定端口：echo(7) 与 discard(9)。
 const WOL_PORTS: [u16; 2] = [7, 9];
@@ -47,6 +52,62 @@ pub async fn probe_tcp(host: &str, port: u16, timeout: Duration) -> Result<Durat
             port,
             source,
         }),
+        Err(_elapsed) => Err(NetError::ProbeTimeout {
+            host: host.to_string(),
+            port,
+            timeout_ms: timeout.as_millis() as u64,
+        }),
+    }
+}
+
+/// 探测 SSH 服务端口：完成 TCP 握手后校验服务端主动下发的 `SSH-` 协议标识。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：本机开启 TUN 虚拟网卡或透明代理时，未绕过的目标 IP 会由本机内核
+///   直接代答 TCP SYN-ACK，导致纯 `TcpStream::connect` 误判可达。
+/// - 核心优势：SSH 服务端建连后会立即发送 `SSH-2.0-...` 标识，只读取前 4 字节
+///   即可识别真 SSH 服务，无需发起密钥交换或认证，依然对目标无副作用。
+/// - 代价与局限：若服务端在发 `SSH-` 行前先发送多行前置提示且超过 4 字节，
+///   会被判定为协议标识不匹配；生产环境中主流 OpenSSH / Dropbear 均首行即发 `SSH-`。
+///
+/// # Errors
+///
+/// - 建连或读取超时（含透明代理假握手后无响应）：[`NetError::ProbeTimeout`]
+/// - DNS 解析失败、连接被拒或读取 I/O 错误：[`NetError::Connect`]
+/// - 对端提前断开或返回非 `SSH-` 开头的数据：[`NetError::Handshake`]
+pub async fn probe_ssh(host: &str, port: u16, timeout: Duration) -> Result<Duration, NetError> {
+    let started = Instant::now();
+    let attempt = async {
+        let mut stream = TcpStream::connect((host, port))
+            .await
+            .map_err(|source| NetError::Connect {
+                host: host.to_string(),
+                port,
+                source,
+            })?;
+        let mut banner = [0u8; 4];
+        match stream.read_exact(&mut banner).await {
+            Ok(_) if &banner == SSH_BANNER_PREFIX => Ok(()),
+            Ok(_) => Err(NetError::Handshake {
+                host: host.to_string(),
+                port,
+                reason: "对端未返回有效的 SSH 协议标识".to_string(),
+            }),
+            Err(source) if source.kind() == ErrorKind::UnexpectedEof => Err(NetError::Handshake {
+                host: host.to_string(),
+                port,
+                reason: "对端建连后未发送 SSH 协议标识即断开".to_string(),
+            }),
+            Err(source) => Err(NetError::Connect {
+                host: host.to_string(),
+                port,
+                source,
+            }),
+        }
+    };
+    match tokio::time::timeout(timeout, attempt).await {
+        Ok(Ok(())) => Ok(started.elapsed()),
+        Ok(Err(error)) => Err(error),
         Err(_elapsed) => Err(NetError::ProbeTimeout {
             host: host.to_string(),
             port,
@@ -170,6 +231,68 @@ mod tests {
         };
         let app_error = transom_core::AppError::from(error);
         assert_eq!(app_error.code, expected_code);
+    }
+
+    #[tokio::test]
+    async fn probe_ssh_accepts_valid_banner() {
+        use tokio::io::AsyncWriteExt;
+
+        let (port, listener) = listen_on_loopback().await;
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            socket.write_all(b"SSH-2.0-OpenSSH_9.6\r\n").await.unwrap();
+        });
+
+        let latency = probe_ssh("127.0.0.1", port, Duration::from_secs(2))
+            .await
+            .expect("返回有效 SSH Banner 应判定可达");
+        assert!(latency.as_millis() < 1000, "耗时异常: {latency:?}");
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn probe_ssh_times_out_when_peer_sends_no_banner() {
+        let (port, listener) = listen_on_loopback().await;
+        let (hold_tx, hold_rx) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(async move {
+            let (_socket, _) = listener.accept().await.unwrap();
+            // 模拟 TUN 假握手：TCP 建连后既不发数据也不关闭，直到探测超时。
+            let _ = hold_rx.await;
+        });
+
+        let error = probe_ssh("127.0.0.1", port, Duration::from_millis(80))
+            .await
+            .expect_err("建连后无 SSH Banner 应判定超时不可达");
+        assert!(matches!(error, NetError::ProbeTimeout { .. }));
+        let _ = hold_tx.send(());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn probe_ssh_rejects_eof_and_non_ssh_banner() {
+        use tokio::io::AsyncWriteExt;
+
+        let (eof_port, eof_listener) = listen_on_loopback().await;
+        let eof_server = tokio::spawn(async move {
+            let (socket, _) = eof_listener.accept().await.unwrap();
+            drop(socket);
+        });
+        let eof_error = probe_ssh("127.0.0.1", eof_port, Duration::from_secs(2))
+            .await
+            .expect_err("建连后立即断开应判定不可达");
+        assert!(matches!(eof_error, NetError::Handshake { .. }));
+        eof_server.await.unwrap();
+
+        let (http_port, http_listener) = listen_on_loopback().await;
+        let http_server = tokio::spawn(async move {
+            let (mut socket, _) = http_listener.accept().await.unwrap();
+            socket.write_all(b"HTTP/1.1 200 OK\r\n").await.unwrap();
+        });
+        let http_error = probe_ssh("127.0.0.1", http_port, Duration::from_secs(2))
+            .await
+            .expect_err("非 SSH 协议标识应判定不可达");
+        assert!(matches!(http_error, NetError::Handshake { .. }));
+        http_server.await.unwrap();
     }
 
     /// 非法 MAC 在发包前就被拒绝：不能把无法解析的字符串编成包扔进网络。

@@ -14,14 +14,25 @@
 use crate::ids::SessionId;
 use crate::model::session::{Connection, Session};
 
+/// 拨测协议口径：区分只需 TCP 握手的通用端口与需校验协议标识的 SSH 端口。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeKind {
+    /// SSH 会话：TCP 建连后校验服务端主动下发的 `SSH-` 版本标识，
+    /// 避免 TUN 虚拟网卡或透明代理在本机代答 SYN-ACK 造成假可达。
+    Ssh,
+    /// 纯 TCP 端口探测（如 Telnet）：只做三次握手，不等待服务端首包。
+    Tcp,
+}
+
 /// 一次主机级网络动作；`session_id` 用于把结果回填到会话列表的对应行。
 #[derive(Debug, Clone)]
 pub enum HostAction {
-    /// TCP 连接探测：只做三次握手，成功后立即断开，不发送任何协议报文。
+    /// 主机连通性探测：按 `kind` 执行纯 TCP 握手或 SSH 协议标识校验。
     Probe {
         session_id: SessionId,
         host: String,
         port: u16,
+        kind: ProbeKind,
     },
 }
 
@@ -37,12 +48,12 @@ pub enum HostOutcome {
 impl HostAction {
     /// 从会话派生拨测动作；本地 Shell 与串口没有网络地址，返回 `None`。
     ///
-    /// Telnet 与 SSH 一样按"主机 + 端口"探测：拨测回答的是"这台机器上的这个
-    /// 端口通不通"，与上层协议无关。
+    /// SSH 派生为 [`ProbeKind::Ssh`]（校验服务端 Banner），Telnet 派生为
+    /// [`ProbeKind::Tcp`]（仅做三次握手）。
     pub fn probe_for(session: &Session) -> Option<Self> {
-        let (host, port) = match &session.connection {
-            Connection::Ssh(ssh) => (ssh.host.clone(), ssh.port),
-            Connection::Telnet(telnet) => (telnet.host.clone(), telnet.port),
+        let (host, port, kind) = match &session.connection {
+            Connection::Ssh(ssh) => (ssh.host.clone(), ssh.port, ProbeKind::Ssh),
+            Connection::Telnet(telnet) => (telnet.host.clone(), telnet.port, ProbeKind::Tcp),
             _ => return None,
         };
         if host.trim().is_empty() {
@@ -52,6 +63,7 @@ impl HostAction {
             session_id: session.id,
             host,
             port,
+            kind,
         })
     }
 
@@ -80,7 +92,12 @@ mod tests {
         let probe = HostAction::probe_for(&ssh_session()).unwrap();
         assert!(matches!(
             probe,
-            HostAction::Probe { host, port: 22, .. } if host == "10.0.0.8"
+            HostAction::Probe {
+                host,
+                port: 22,
+                kind: ProbeKind::Ssh,
+                ..
+            } if host == "10.0.0.8"
         ));
 
         let telnet = Session::new(
@@ -88,7 +105,14 @@ mod tests {
             Connection::Telnet(TelnetConnection::new("bbs.example")),
         );
         let probe = HostAction::probe_for(&telnet).unwrap();
-        assert!(matches!(probe, HostAction::Probe { port: 23, .. }));
+        assert!(matches!(
+            probe,
+            HostAction::Probe {
+                port: 23,
+                kind: ProbeKind::Tcp,
+                ..
+            }
+        ));
 
         // 本地 Shell 与串口没有可探测的网络地址。
         let local = Session::new("local", Connection::Local(LocalConnection::default()));
