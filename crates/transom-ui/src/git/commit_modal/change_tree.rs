@@ -153,15 +153,14 @@ impl AppShell {
                 continue;
             }
             if display.by_directory {
-                list = list.children(self.git_dir_rows(
+                let dir_ctx = DirRenderCtx {
                     project,
                     group,
-                    entries,
                     display,
-                    active_diff.as_ref(),
-                    p,
-                    cx,
-                ));
+                    active_diff: active_diff.as_ref(),
+                    palette: p,
+                };
+                list = list.children(self.git_dir_rows(&dir_ctx, entries, cx));
                 continue;
             }
             for entry in entries.iter() {
@@ -189,24 +188,13 @@ impl AppShell {
     /// 按目录模式：构建多级压缩目录树，按层级缩进渲染目录行与文件行。
     fn git_dir_rows(
         &mut self,
-        project: &GitProject,
-        group: ChangeGroup,
+        ctx: &DirRenderCtx<'_>,
         entries: &[StatusEntry],
-        display: &GroupDisplay,
-        active_diff: Option<&GitDiffRequest>,
-        p: &Palette,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let tree = build_dir_tree(entries);
         let mut rows = Vec::with_capacity(entries.len());
-        let ctx = DirRenderCtx {
-            project,
-            group,
-            display,
-            active_diff,
-            palette: p,
-        };
-        self.append_dir_tree_rows(&ctx, &tree, 0, &mut rows, cx);
+        self.append_dir_tree_rows(ctx, &tree, 0, &mut rows, cx);
         rows
     }
 
@@ -353,9 +341,7 @@ impl AppShell {
                     .flex_none()
                     .text_xs()
                     .text_color(p.muted_foreground)
-                    .child(
-                        rust_i18n::t!("git.commit.file_count", count = count).to_string(),
-                    ),
+                    .child(rust_i18n::t!("git.commit.file_count", count = count).to_string()),
             );
         // 右键菜单会换掉元素类型，只能在链尾按可操作性挂载。
         if group.actionable() {
@@ -437,18 +423,14 @@ impl AppShell {
         } else {
             header = header.child(check_placeholder());
         }
-        let header = header
-            .child(div().flex_none().child(group.title()))
-            .child(
-                div()
-                    .flex_1()
-                    .text_xs()
-                    .font_weight(FontWeight::NORMAL)
-                    .text_color(p.muted_foreground)
-                    .child(
-                        rust_i18n::t!("git.commit.file_count", count = entries.len()).to_string(),
-                    ),
-            );
+        let header = header.child(div().flex_none().child(group.title())).child(
+            div()
+                .flex_1()
+                .text_xs()
+                .font_weight(FontWeight::NORMAL)
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("git.commit.file_count", count = entries.len()).to_string()),
+        );
         if group.actionable() {
             let menu_project = project.clone();
             header

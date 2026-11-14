@@ -9,12 +9,12 @@
 use std::rc::Rc;
 
 use gpui_kit::base::{Disableable, h_flex};
-use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::diff::{
     Diff, DiffChangeIndicator, DiffHoverHighlight, DiffHunkSeparator, DiffState,
 };
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::{Selectable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::{AppIconElement, UiIcon};

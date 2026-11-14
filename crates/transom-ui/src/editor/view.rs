@@ -16,13 +16,11 @@
 use super::drag_tracker::EditorDragTracker;
 use super::entity::EditorPanels;
 use super::open::parent_dir;
-use super::panel::{
-    EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis,
-};
-use crate::theme::tokens::{control, size};
+use super::panel::{EditorPanelState, EditorPhase, PANEL_KEEP_VISIBLE, clamp_axis};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
+use crate::theme::tokens::{control, size};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;

@@ -340,9 +340,7 @@ fn render_section_tabs(
                                 .child(count.to_string()),
                         )
                     })
-                    .when(is_selected, |this| {
-                        this.child(underline_tab_active_line(p))
-                    })
+                    .when(is_selected, |this| this.child(underline_tab_active_line(p)))
                     .on_click({
                         let view = view.clone();
                         move |_, window, cx| {

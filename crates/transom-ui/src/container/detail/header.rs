@@ -199,9 +199,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
             }
 
             if let Some(tabs) = tabs {
-                title_row = title_row
-                    .child(toolbar_separator(p).mx_1())
-                    .child(tabs);
+                title_row = title_row.child(toolbar_separator(p).mx_1()).child(tabs);
             }
 
             title_row.into_any_element()
@@ -223,9 +221,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                         .child(title),
                 );
             if let Some(tabs) = tabs {
-                row = row
-                    .child(toolbar_separator(p).mx_1())
-                    .child(tabs);
+                row = row.child(toolbar_separator(p).mx_1()).child(tabs);
             }
             row.into_any_element()
         }
@@ -242,13 +238,7 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
         .overflow_hidden()
         .border_color(p.divider(p.border))
         .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .overflow_hidden()
-                .child(left),
-        )
+        .child(div().flex_1().min_w_0().overflow_hidden().child(left))
         .child(
             h_flex()
                 .gap_2()

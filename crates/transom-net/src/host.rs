@@ -78,13 +78,14 @@ pub async fn probe_tcp(host: &str, port: u16, timeout: Duration) -> Result<Durat
 pub async fn probe_ssh(host: &str, port: u16, timeout: Duration) -> Result<Duration, NetError> {
     let started = Instant::now();
     let attempt = async {
-        let mut stream = TcpStream::connect((host, port))
-            .await
-            .map_err(|source| NetError::Connect {
-                host: host.to_string(),
-                port,
-                source,
-            })?;
+        let mut stream =
+            TcpStream::connect((host, port))
+                .await
+                .map_err(|source| NetError::Connect {
+                    host: host.to_string(),
+                    port,
+                    source,
+                })?;
         let mut banner = [0u8; 4];
         match stream.read_exact(&mut banner).await {
             Ok(_) if &banner == SSH_BANNER_PREFIX => Ok(()),
