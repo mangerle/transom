@@ -63,7 +63,7 @@ impl UiIcon {
     pub const HOME_FOLDER: Self = Self("homeFolder");
     pub const LIGHTNING: Self = Self("lightning");
     pub const LANGUAGE: Self = Self("language");
-    pub const KEY: Self = Self("greyKey");
+    pub const KEY: Self = Self("cwmPermissions");
     pub const KEYBOARD: Self = Self("keyboard");
     pub const LAYOUT: Self = Self("layout");
     pub const LEFT: Self = Self("left");
