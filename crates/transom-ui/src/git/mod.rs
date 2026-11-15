@@ -46,6 +46,7 @@ pub(crate) use name_modal::{GitNameModalEvent, GitNameModalView, GitNamePurpose}
 pub(crate) use project_modal::GitProjectModalView;
 pub(crate) use push_modal::GitPushModalView;
 pub(crate) use rebase_modal::GitRebaseModalView;
+pub(crate) use sidebar::{GitSidebarEvent, GitSidebarParams, GitSidebarView};
 pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};
 pub(crate) use worktree_modal::{GitWorktreeModalEvent, GitWorktreeModalView};
 

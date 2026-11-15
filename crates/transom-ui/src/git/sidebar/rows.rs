@@ -3,12 +3,11 @@
 //! 设计原理（Why）：尺寸与配色令牌整套对齐会话侧栏（见 `widgets/sidebar_row`）——
 //! 通过 `Rems` 令牌实现（默认密度下为 38px 行槽位套 34px 圆角内容条并随 UI 密度缩放），
 //! 普通、选中和当前三态由共享组件统一决定。
-//! 两个面板是同一个壳里的同类清单，用户切换活动栏条目时不该重新学一遍「哪一行是我正在看的」。
-//! 行槽位与内容条分离还有第二个理由：槽位负责命中与缩进，内容条负责高亮，
-//! 高亮背景才不会贴到面板边缘、也不会盖住缩进区。
 
-use super::{GitFolderRow, GitProjectRow, render_git_folder_menu, render_git_project_menu};
-use crate::app::AppShell;
+use super::{
+    GitFolderRow, GitProjectRow, GitSidebarEvent, GitSidebarView, emit_sidebar,
+    render_git_folder_menu, render_git_project_menu,
+};
 use crate::git::types::{GitBadge, GitDropTarget, GitSidebarDrag};
 use crate::palette::Palette;
 use crate::session_appearance::session_color;
@@ -20,26 +19,30 @@ use gpui_kit::*;
 use transom_core::{DropSide, GitFolderId};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-/// 行槽位高度：通过 `tokens::size` 与会话侧栏对齐，切换面板与调整 UI 密度时行高同步缩放。
 const ROW_HEIGHT: Rems = rems(size::TREE_ROW_HEIGHT);
-/// 行首图标尺寸：与内容条匹配并随 `rem` 缩放。
 const ROW_ICON_SIZE: Rems = rems(size::TREE_ROW_ICON);
-/// 折叠箭头尺寸：比行图标小一档，避免与文件夹图标抢视觉重心。
 const ROW_CHEVRON_SIZE: Rems = rems(size::TREE_CHEVRON);
-/// 缩进基准与每级步长：分组下的项目比根层缩进一级。
 const INDENT_BASE: f32 = 6.0;
 const INDENT_STEP: f32 = 18.0;
 
+pub(super) struct GitProjectRowProps<'a> {
+    pub(super) view: &'a Entity<GitSidebarView>,
+    pub(super) row: &'a GitProjectRow,
+    pub(super) badge: &'a GitBadge,
+    pub(super) active_branch: Option<&'a str>,
+    pub(super) row_state: SidebarRowState,
+    pub(super) folders: &'a [(GitFolderId, String)],
+}
+
 /// 渲染一个分组行：折叠开关、组内计数、上下三分之一换序、中段收纳项目。
 pub(super) fn render_git_folder_row(
+    view: &Entity<GitSidebarView>,
     row: &GitFolderRow,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
     let folder_id = row.id;
-    let app_entity = cx.entity().clone();
-    // 遮罩与菜单都要握住面板句柄，各自留一份：闭包会移走它。
-    let overlay_app = app_entity.clone();
+    let click_view = view.clone();
+    let menu_view = view.clone();
     let anchor = GitSidebarDrag::Folder(folder_id);
     let label = row.name.clone();
 
@@ -52,18 +55,22 @@ pub(super) fn render_git_folder_row(
         .flex()
         .items_center()
         .cursor_pointer()
-        .on_click(cx.listener(move |this, _, _, cx| {
-            crate::git::actions::toggle_git_folder_collapsed(this, folder_id, cx);
-        }))
+        .on_click(move |_, _, cx| {
+            emit_sidebar(
+                &click_view,
+                GitSidebarEvent::ToggleFolderCollapsed(folder_id),
+                cx,
+            );
+        })
         .on_drag(anchor, move |_, _, _, cx| {
             cx.new(|_| GitDragPreview::new(label.clone(), UiIcon::FOLDER.into()))
         })
         .context_menu(move |menu, _window, _cx| {
-            render_git_folder_menu(menu, app_entity.clone(), folder_id)
+            render_git_folder_menu(menu, menu_view.clone(), folder_id)
         });
 
     let into_bg = p.drop_target;
-    let mut band = sidebar_group_row_band(
+    let band = sidebar_group_row_band(
         ElementId::Name(format!("git-folder-band-{folder_id}").into()),
         p,
     )
@@ -91,53 +98,46 @@ pub(super) fn render_git_folder_row(
             .text_xs()
             .text_color(p.text.muted)
             .child(row.project_count.to_string()),
-    );
-    band = band.child(reorder_overlay(&overlay_app, anchor, true, p));
+    )
+    .child(reorder_overlay(view, anchor, true, p));
     element.child(band).into_any_element()
 }
 
 /// 渲染一个项目行：活动底色、拖拽源与上下半区落点。
-///
-/// `folders` 是渲染期取好的分组列表，直接带进右键菜单——菜单闭包运行时再回查
-/// `shell.state.git` 的借用不成立。
 pub(super) fn render_git_project_row(
-    shell: &AppShell,
-    row: &GitProjectRow,
-    row_state: SidebarRowState,
-    folders: &[(GitFolderId, String)],
+    props: GitProjectRowProps<'_>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
+    let GitProjectRowProps {
+        view,
+        row,
+        badge,
+        active_branch,
+        row_state,
+        folders,
+    } = props;
     let project = &row.project;
     let id = project.id;
-    let badge = shell.state.git.badges.get(&id).cloned().unwrap_or_default();
     let name = project.display_name();
-    let active_branch = shell
-        .state
-        .git_workspace_of_project(id, cx)
-        .and_then(|workspace| {
-            let state = &workspace.read(cx).state;
-            state.status.as_ref().and_then(|status| match &status.head {
-                transom_core::HeadState::OnBranch(name) => Some(name.clone()),
-                transom_core::HeadState::Initial { branch } => Some(branch.clone()),
-                transom_core::HeadState::Detached => status
-                    .oid
-                    .as_deref()
-                    .map(|oid| oid.chars().take(7).collect()),
-            })
+
+    let branch = badge
+        .branch
+        .as_deref()
+        .or(active_branch)
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            if badge.error.is_some() {
+                rust_i18n::t!("git.sidebar.unavailable").to_string()
+            } else if badge.loading {
+                rust_i18n::t!("git.sidebar.loading").to_string()
+            } else {
+                "-".to_string()
+            }
         });
 
-    let branch = badge.branch.clone().or(active_branch).unwrap_or_else(|| {
-        if badge.error.is_some() {
-            rust_i18n::t!("git.sidebar.unavailable").to_string()
-        } else if badge.loading {
-            rust_i18n::t!("git.sidebar.loading").to_string()
-        } else {
-            "-".to_string()
-        }
-    });
-    let app_entity = cx.entity().clone();
-    let menu_app = app_entity.clone();
+    let click_view = view.clone();
+    let menu_view = view.clone();
+    let menu_project = project.clone();
     let menu_folders = folders.to_vec();
     let project_for_click = project.clone();
     let drag_label = name.clone();
@@ -154,18 +154,22 @@ pub(super) fn render_git_project_row(
         .flex()
         .items_center()
         .cursor_pointer()
-        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+        .on_click(move |event: &ClickEvent, _, cx| {
             if event.click_count() >= 2 {
-                crate::git::actions::open_git_tab(this, project_for_click.clone(), window, cx);
+                emit_sidebar(
+                    &click_view,
+                    GitSidebarEvent::OpenProjectTab(project_for_click.clone()),
+                    cx,
+                );
             } else {
-                crate::git::actions::select_git_project(this, id, cx);
+                emit_sidebar(&click_view, GitSidebarEvent::SelectProject(id), cx);
             }
-        }))
+        })
         .on_drag(GitSidebarDrag::Project(id), move |_, _, _, cx| {
             cx.new(|_| GitDragPreview::new(drag_label.clone(), icon_name))
         })
         .context_menu(move |menu, _window, _cx| {
-            render_git_project_menu(menu, menu_app.clone(), id, menu_folders.clone())
+            render_git_project_menu(menu, menu_view.clone(), menu_project.clone(), menu_folders.clone())
         });
 
     let mut band = sidebar_row_band(
@@ -178,7 +182,7 @@ pub(super) fn render_git_project_row(
             .with_rems(ROW_ICON_SIZE)
             .text_color(
                 session_color(project.color)
-                    .unwrap_or_else(|| state_icon_color(&badge, row_state, p)),
+                    .unwrap_or_else(|| state_icon_color(badge, row_state, p)),
             ),
     )
     .child(
@@ -207,7 +211,6 @@ pub(super) fn render_git_project_row(
             ),
     );
     if badge.dirty > 0 {
-        // 计数只用弱色：语义色留给行首图标，两处同时上色会把一行变成告警条。
         band = band.child(
             div()
                 .text_xs()
@@ -216,7 +219,7 @@ pub(super) fn render_git_project_row(
         );
     }
     let band = band.child(reorder_overlay(
-        &app_entity,
+        view,
         GitSidebarDrag::Project(id),
         false,
         p,
@@ -224,10 +227,6 @@ pub(super) fn render_git_project_row(
     element.child(band).into_any_element()
 }
 
-/// 行首图标的状态色：读不到仓库标红，刷新中标灰，有改动标警示，活动行跟随激活前景色。
-///
-/// 与会话行同口径——状态靠图标说，脏文件数靠行尾弱色数字说，两处不抢同一个颜色。
-/// 用户给项目贴了环境色时这段不生效：环境标记优先于状态提示（与会话行一致）。
 fn state_icon_color(badge: &GitBadge, row_state: SidebarRowState, p: &Palette) -> Hsla {
     if badge.error.is_some() {
         p.danger
@@ -278,13 +277,8 @@ impl Render for GitDragPreview {
     }
 }
 
-/// 覆盖整行的排序落点：把行按份数等分，用户不需要瞄准行边缘。
-///
-/// 项目行整行二分（上半插到之前、下半插到之后）；分组行三分并留出中段，
-/// 中段不注册任何监听，因此不产生命中框，拖放会继续落到分组行本身，
-/// 即「放入该分组」。等分用 `flex_1` 而非百分比宽度，gpui 没有宽度百分比。
 fn reorder_overlay(
-    app: &Entity<AppShell>,
+    view: &Entity<GitSidebarView>,
     anchor: GitSidebarDrag,
     keep_middle: bool,
     p: &Palette,
@@ -294,29 +288,25 @@ fn reorder_overlay(
         .inset_0()
         .flex()
         .flex_col()
-        .child(reorder_half(app, anchor, DropSide::Before, true, p));
+        .child(reorder_half(view, anchor, DropSide::Before, true, p));
     let overlay = if keep_middle {
         overlay.child(div().flex_1())
     } else {
         overlay
     };
     overlay
-        .child(reorder_half(app, anchor, DropSide::After, false, p))
+        .child(reorder_half(view, anchor, DropSide::After, false, p))
         .into_any_element()
 }
 
-/// 半区落点本身：`top` 决定插入线画在上沿还是下沿。
-///
-/// 插入线用 `sidebar_accent_foreground`：accent 已经是行底色，同色描边看不出。
 fn reorder_half(
-    app: &Entity<AppShell>,
+    view: &Entity<GitSidebarView>,
     anchor: GitSidebarDrag,
     side: DropSide,
     top: bool,
     p: &Palette,
 ) -> AnyElement {
     let target = GitDropTarget::Relative { anchor, side };
-    // `drag_over` 的闭包要求 `'static`，颜色先取成局部值再捕获。
     let line_color = p.sidebar_accent_foreground;
     let zone = div().flex_1().border_color(line_color);
     let zone = if top {
@@ -328,13 +318,11 @@ fn reorder_half(
             style.border_b_2().border_color(line_color)
         })
     };
-    let app = app.clone();
+    let view = view.clone();
     zone.on_drop(move |drag: &GitSidebarDrag, window, cx| {
         let drag = *drag;
-        app.update(cx, |this, cx| {
-            crate::git::actions::apply_git_drop(this, drag, target, cx);
-            window.refresh();
-        });
+        emit_sidebar(&view, GitSidebarEvent::Drop(drag, target), cx);
+        window.refresh();
     })
     .into_any_element()
 }

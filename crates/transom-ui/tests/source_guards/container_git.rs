@@ -405,8 +405,8 @@ fn git_sidebar_project_row_selects_then_opens() {
     let content = std::fs::read_to_string(path).expect("读取 Git 侧栏行失败");
     assert!(
         content.contains("click_count() >= 2")
-            && content.contains("select_git_project(this, id, cx)")
-            && content.contains("open_git_tab(this, project_for_click.clone(), window, cx)"),
+            && content.contains("GitSidebarEvent::SelectProject")
+            && content.contains("GitSidebarEvent::OpenProjectTab"),
         "Git 项目行必须单击选中、双击打开"
     );
 }
@@ -437,6 +437,7 @@ fn git_workspace_views_have_no_app_shell() {
         "src/git/conflict_modal",
         "src/git/push_modal",
         "src/git/shelf",
+        "src/git/sidebar",
     ] {
         for entry in walkdir_like(&root.join(dir)) {
             if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {

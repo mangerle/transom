@@ -57,6 +57,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) git_workspaces: HashMap<TabId, Subscription>,
     /// 容器引擎侧栏发往外壳的意图事件：侧栏是单例实体。
     pub(crate) container_sidebar: Option<Subscription>,
+    /// Git 侧栏发往外壳的意图事件：侧栏是单例实体。
+    pub(crate) git_sidebar: Option<Subscription>,
     pub(crate) settings: Option<Subscription>,
     /// 会话表单：保存落目录与删除会话由外壳处理。
     pub(crate) session_form: Option<Subscription>,
@@ -100,6 +102,7 @@ impl PanelSubscriptions {
             container_workspaces: HashMap::new(),
             git_workspaces: HashMap::new(),
             container_sidebar: None,
+            git_sidebar: None,
             settings: None,
             session_form: None,
             container_form: None,

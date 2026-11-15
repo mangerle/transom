@@ -39,7 +39,9 @@ pub(crate) mod modal_bridges;
 mod ref_actions;
 mod shelf_actions;
 pub(crate) use shelf_actions::CreateWorktreeParams;
+pub(crate) use sidebar_bridge::on_git_sidebar_event;
 mod sidebar_actions;
+mod sidebar_bridge;
 mod workspace_refs;
 pub(crate) use sidebar_actions::{
     add_git_folder, apply_git_drop, delete_git_folder, git_move_project_to_root, rename_git_folder,

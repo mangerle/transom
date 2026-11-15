@@ -36,7 +36,7 @@ pub(crate) use close::{
 pub(crate) use code_link::open_terminal_code_location;
 pub(crate) use code_open::{RemoteCodeLocation, open_remote_code_location};
 pub(crate) use diff::EditorDiffWriteSync;
-pub(crate) use entity::{EditorDiffSource, EditorPanelEvent, EditorPanels, on_editor_panel_event};
+pub(crate) use entity::{EditorDiffSource, EditorPanelEvent, EditorPanels};
 pub(crate) use list::render_editor_list_popover;
 pub(crate) use navigate::{
     EditorGotoLineModalState, cancel_editor_goto_line, commit_editor_goto_line,

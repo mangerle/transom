@@ -140,6 +140,7 @@ pub(super) fn assemble_state(
         feedback: super::super::state::UiFeedbackState::new(prepared.pending_notices),
         containers: crate::container::ContainerUiState::new(window, cx),
         git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
+        git_sidebar: cx.new(|_| crate::git::GitSidebarView::new()),
         restart_requested,
     }
 }

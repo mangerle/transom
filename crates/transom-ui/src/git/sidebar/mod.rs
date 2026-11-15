@@ -9,9 +9,11 @@
 //! - 行的几何、配色与拖放落点整套复用会话侧栏，具体控件在 `rows` 子模块，
 //!   本文件只管「有哪些行、按什么顺序、右键有什么」。
 
+mod entity;
 mod rows;
 
-use crate::app::AppShell;
+pub(crate) use entity::{GitSidebarEvent, GitSidebarView};
+
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::types::{GitDropTarget, GitHub, GitSidebarDrag};
 use crate::palette::Palette;
@@ -22,10 +24,18 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use transom_core::{GitFolderId, GitProject, GitProjectId};
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
+
+/// Git 侧栏渲染快照入参。
+pub(crate) struct GitSidebarParams<'a> {
+    pub(crate) view: &'a Entity<GitSidebarView>,
+    pub(crate) git: &'a GitHub,
+    pub(crate) active_project: Option<GitProjectId>,
+    pub(crate) active_branches: &'a HashMap<GitProjectId, String>,
+}
 
 /// 侧栏的一行：分组标题或项目。
 #[derive(Clone)]
@@ -53,37 +63,42 @@ pub(crate) struct GitProjectRow {
 }
 
 /// 侧栏内容：标题行 + 分组与项目行 + 空态。
-pub(crate) fn render_git_sidebar(
-    shell: &AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-    p: &Palette,
-) -> AnyElement {
-    // 分组列表在渲染期就取好带走：右键菜单闭包运行时再回查 `shell.state.git` 的借用不成立。
-    let folders = git_folder_options(&shell.state.git);
-    let active_project = super::helpers::active_git_project_id(shell, cx);
-    let selected_project = shell.state.git.selected_project;
+pub(crate) fn render_git_sidebar(params: GitSidebarParams<'_>, p: &Palette) -> AnyElement {
+    let folders = git_folder_options(params.git);
+    let selected_project = params.git.selected_project;
     let mut rows = sidebar_list_frame("git-sidebar-rows");
-    for row in build_git_rows(&shell.state.git) {
+    for row in build_git_rows(params.git) {
         rows = match row {
-            GitSidebarRow::Folder(row) => rows.child(rows::render_git_folder_row(&row, p, cx)),
+            GitSidebarRow::Folder(row) => {
+                rows.child(rows::render_git_folder_row(params.view, &row, p))
+            }
             GitSidebarRow::Project(row) => {
                 let id = row.project.id;
-                let state = if active_project == Some(id) {
+                let state = if params.active_project == Some(id) {
                     SidebarRowState::Current
                 } else if selected_project == Some(id) {
                     SidebarRowState::Selected
                 } else {
                     SidebarRowState::Normal
                 };
+                let badge = params.git.badges.get(&id).cloned().unwrap_or_default();
+                let active_branch = params.active_branches.get(&id).map(String::as_str);
                 rows.child(rows::render_git_project_row(
-                    shell, &row, state, &folders, p, cx,
+                    rows::GitProjectRowProps {
+                        view: params.view,
+                        row: &row,
+                        badge: &badge,
+                        active_branch,
+                        row_state: state,
+                        folders: &folders,
+                    },
+                    p,
                 ))
             }
         };
     }
-    if shell.state.git.projects.is_empty() {
-        rows = rows.child(render_git_empty(p, cx));
+    if params.git.projects.is_empty() {
+        rows = rows.child(render_git_empty(params.view, p));
     }
 
     let list = v_flex()
@@ -92,22 +107,26 @@ pub(crate) fn render_git_sidebar(
         .overflow_y_scrollbar()
         .child(rows);
 
-    let app = cx.entity().clone();
+    let menu_view = params.view.clone();
     v_flex()
         .size_full()
         .bg(p.background)
         .text_color(p.foreground)
-        .child(render_git_sidebar_header(window, p, cx))
+        .child(render_git_sidebar_header(params.view, p))
         .child(list)
-        .context_menu(move |menu, _window, _cx| render_git_sidebar_menu(menu, &app))
+        .context_menu(move |menu, _window, _cx| render_git_sidebar_menu(menu, &menu_view))
         .into_any_element()
 }
 
-fn render_git_sidebar_header(
-    _window: &mut Window,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
+fn emit_sidebar(view: &Entity<GitSidebarView>, event: GitSidebarEvent, cx: &mut App) {
+    view.update(cx, |_, cx| cx.emit(event));
+}
+
+fn render_git_sidebar_header(view: &Entity<GitSidebarView>, p: &Palette) -> AnyElement {
+    let folder_view = view.clone();
+    let refresh_view = view.clone();
+    let clone_view = view.clone();
+    let add_view = view.clone();
     h_flex()
         .h(rems(size::TAB_BAR_HEIGHT))
         .px(rems(space::MD))
@@ -129,9 +148,9 @@ fn render_git_sidebar_header(
                 rust_i18n::t!("git.sidebar.new_folder").to_string(),
             )
             .render()
-            .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::actions::modal_bridges::open_git_folder_modal(this, window, cx);
-            })),
+            .on_click(move |_, _, cx| {
+                emit_sidebar(&folder_view, GitSidebarEvent::OpenNewFolderModal, cx);
+            }),
         )
         .child(
             IconButton::new(
@@ -140,9 +159,9 @@ fn render_git_sidebar_header(
                 rust_i18n::t!("git.sidebar.refresh").to_string(),
             )
             .render()
-            .on_click(cx.listener(|this, _, _window, cx| {
-                crate::git::actions::refresh_all_git_projects(this, cx);
-            })),
+            .on_click(move |_, _, cx| {
+                emit_sidebar(&refresh_view, GitSidebarEvent::RefreshAll, cx);
+            }),
         )
         .child(
             IconButton::new(
@@ -151,9 +170,9 @@ fn render_git_sidebar_header(
                 rust_i18n::t!("git.clone.title").to_string(),
             )
             .render()
-            .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::actions::modal_bridges::open_git_clone_modal(this, window, cx);
-            })),
+            .on_click(move |_, _, cx| {
+                emit_sidebar(&clone_view, GitSidebarEvent::OpenCloneModal, cx);
+            }),
         )
         .child(
             IconButton::new(
@@ -162,14 +181,15 @@ fn render_git_sidebar_header(
                 rust_i18n::t!("git.sidebar.add").to_string(),
             )
             .render()
-            .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::actions::modal_bridges::open_git_project_modal(this, None, window, cx);
-            })),
+            .on_click(move |_, _, cx| {
+                emit_sidebar(&add_view, GitSidebarEvent::OpenProjectModal(None), cx);
+            }),
         )
         .into_any_element()
 }
 
-fn render_git_empty(p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+fn render_git_empty(view: &Entity<GitSidebarView>, p: &Palette) -> AnyElement {
+    let add_view = view.clone();
     v_flex()
         .gap_2()
         .p_3()
@@ -183,9 +203,9 @@ fn render_git_empty(p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
                 rust_i18n::t!("git.sidebar.add").to_string(),
             )
             .primary()
-            .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::actions::modal_bridges::open_git_project_modal(this, None, window, cx);
-            })),
+            .on_click(move |_, _, cx| {
+                emit_sidebar(&add_view, GitSidebarEvent::OpenProjectModal(None), cx);
+            }),
         )
         .into_any_element()
 }
@@ -193,54 +213,51 @@ fn render_git_empty(p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
 /// 侧栏行表：分组在前（各自紧跟组内项目），未归组的项目排在最后。
 ///
 /// 设计原理（Why）：
-/// - 严格照数组原始顺序输出，绝不按名称排序：数组顺序就是用户拖拽排定的显示顺序，
-///   一旦在这里排序，拖拽结果会被静默覆盖（会话侧栏 `tree/rows.rs` 同一教训）；
-/// - 折叠只影响显示，不影响归属：组折叠时组内项目不出现，但仍在项目列表里，
-///   刷新、标签页与提交面板都不受影响；
-/// - `folder_id` 指向已不存在的分组（手改过文件或旧数据）时按根层处理：
-///   宁可让仓库出现在根层，也不能让它从列表里消失。
-fn build_git_rows(git: &GitHub) -> Vec<GitSidebarRow> {
-    let known: HashSet<GitFolderId> = git.folders.iter().map(|folder| folder.id).collect();
-    let mut rows = Vec::with_capacity(git.projects.len() + git.folders.len());
+/// - 分组折叠时跳过它的项目行：展开的组跟未归组的项目看起来同级（靠缩进区分），
+///   收起时就像一个「可点击的文件夹行 + 右侧数量」，不需要专门的状态字段去存可见性；
+/// - `folder_id` 指向已删分组的项目自动归入未归组：避免删组后仓库在侧栏"隐身"。
+pub(crate) fn build_git_rows(git: &GitHub) -> Vec<GitSidebarRow> {
+    let folder_ids: HashSet<GitFolderId> = git.folders.iter().map(|folder| folder.id).collect();
+    let mut rows = Vec::with_capacity(git.folders.len() + git.projects.len());
     for folder in &git.folders {
-        let members: Vec<&GitProject> = git
+        let count = git
             .projects
             .iter()
             .filter(|project| project.folder_id == Some(folder.id))
-            .collect();
+            .count();
         rows.push(GitSidebarRow::Folder(GitFolderRow {
             id: folder.id,
             name: folder.name.clone(),
             collapsed: folder.collapsed,
-            project_count: members.len(),
+            project_count: count,
         }));
-        if folder.collapsed {
-            continue;
+        if !folder.collapsed {
+            for project in git
+                .projects
+                .iter()
+                .filter(|project| project.folder_id == Some(folder.id))
+            {
+                rows.push(GitSidebarRow::Project(GitProjectRow {
+                    project: project.clone(),
+                    in_folder: true,
+                }));
+            }
         }
-        rows.extend(members.into_iter().cloned().map(|project| {
-            GitSidebarRow::Project(GitProjectRow {
-                project,
-                in_folder: true,
-            })
-        }));
     }
-    rows.extend(
-        git.projects
-            .iter()
-            .filter(|project| !project.folder_id.is_some_and(|id| known.contains(&id)))
-            .cloned()
-            .map(|project| {
-                GitSidebarRow::Project(GitProjectRow {
-                    project,
-                    in_folder: false,
-                })
-            }),
-    );
+    for project in &git.projects {
+        if project
+            .folder_id
+            .is_none_or(|folder_id| !folder_ids.contains(&folder_id))
+        {
+            rows.push(GitSidebarRow::Project(GitProjectRow {
+                project: project.clone(),
+                in_folder: false,
+            }));
+        }
+    }
     rows
 }
 
-/// 分组下拉/菜单用的 (id, 名称) 列表：渲染期就取好带走，菜单闭包运行时再回查
-/// `self.state.git` 的借用不成立。
 fn git_folder_options(git: &GitHub) -> Vec<(GitFolderId, String)> {
     git.folders
         .iter()
@@ -248,175 +265,130 @@ fn git_folder_options(git: &GitHub) -> Vec<(GitFolderId, String)> {
         .collect()
 }
 
-/// 侧栏空白处右键：整体刷新 + 新建分组。
-fn render_git_sidebar_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu {
-    let app_refresh = app.clone();
-    let app_folder = app.clone();
+fn render_git_sidebar_menu(menu: PopupMenu, view: &Entity<GitSidebarView>) -> PopupMenu {
+    let view_refresh = view.clone();
+    let view_folder = view.clone();
     menu.item(menu_item(
         rust_i18n::t!("git.sidebar.refresh_all").to_string(),
         UiIcon::REFRESH,
         move |_, _, cx| {
-            app_refresh.update(cx, crate::git::actions::refresh_all_git_projects);
+            emit_sidebar(&view_refresh, GitSidebarEvent::RefreshAll, cx);
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.sidebar.new_folder").to_string(),
         UiIcon::ADD,
-        move |_, window, cx| {
-            app_folder.update(cx, |this, cx| {
-                crate::git::actions::modal_bridges::open_git_folder_modal(this, window, cx);
-            });
+        move |_, _, cx| {
+            emit_sidebar(&view_folder, GitSidebarEvent::OpenNewFolderModal, cx);
         },
     ))
 }
 
-/// 单行项目的右键菜单：打开 / 在本地终端打开 / 刷新 / 移到分组 / 移除。
-fn render_git_project_menu(
+pub(super) fn render_git_project_menu(
     menu: PopupMenu,
-    app: Entity<AppShell>,
-    id: GitProjectId,
+    view: Entity<GitSidebarView>,
+    project: GitProject,
     folders: Vec<(GitFolderId, String)>,
 ) -> PopupMenu {
-    let app_refresh = app.clone();
-    let app_open = app.clone();
-    let app_terminal = app.clone();
+    let id = project.id;
+    let view_open = view.clone();
+    let view_terminal = view.clone();
+    let view_refresh = view.clone();
     let mut menu = menu
         .item(menu_item(
             rust_i18n::t!("git.menu.open").to_string(),
             UiIcon::FOLDER,
-            move |_, window, cx| {
-                let found = app_open.update(cx, |this, _cx| {
-                    this.state
-                        .git
-                        .projects
-                        .iter()
-                        .find(|item| item.id == id)
-                        .cloned()
-                });
-                let Some(project) = found else {
-                    return;
-                };
-                app_open.update(cx, |this, cx| {
-                    crate::git::actions::open_git_tab(this, project, window, cx)
-                });
+            move |_, _, cx| {
+                emit_sidebar(
+                    &view_open,
+                    GitSidebarEvent::OpenProjectTab(project.clone()),
+                    cx,
+                );
             },
         ))
         .item(menu_item(
             rust_i18n::t!("git.menu.open_in_terminal").to_string(),
             DomainIcon::TERMINAL,
             move |_, _, cx| {
-                app_terminal.update(cx, |this, cx| {
-                    // 目录不能只在渲染期捕获：菜单弹出后项目可能被移除，点击时按 id 现取。
-                    let path = this
-                        .state
-                        .git
-                        .projects
-                        .iter()
-                        .find(|item| item.id == id)
-                        .map(|item| item.path.clone());
-                    if let Some(path) = path {
-                        crate::connection::spawn_local_terminal(this, Some(path), cx);
-                    }
-                });
+                emit_sidebar(&view_terminal, GitSidebarEvent::OpenInTerminal(id), cx);
             },
         ))
         .item(menu_item(
             rust_i18n::t!("git.menu.refresh").to_string(),
             UiIcon::REFRESH,
             move |_, _, cx| {
-                app_refresh.update(cx, |this, cx| {
-                    if let Some(project) = this
-                        .state
-                        .git
-                        .projects
-                        .iter()
-                        .find(|item| item.id == id)
-                        .cloned()
-                    {
-                        crate::git::actions::git_refresh(this, &project, cx);
-                    }
-                });
+                emit_sidebar(&view_refresh, GitSidebarEvent::RefreshProject(id), cx);
             },
         ))
         .item(PopupMenuItem::separator());
-    // 「移到分组」逐个组列出，再加一项退回根层：单层分组下没有层级可藏，
-    // 平铺出来最省一次点击。
     for (folder_id, name) in folders {
-        let app_move = app.clone();
+        let view_move = view.clone();
         menu = menu.item(menu_item(
             format!("{} {}", rust_i18n::t!("git.menu.move_to"), name),
             UiIcon::FOLDER,
             move |_, _, cx| {
-                app_move.update(cx, |this, cx| {
-                    crate::git::actions::apply_git_drop(
-                        this,
+                emit_sidebar(
+                    &view_move,
+                    GitSidebarEvent::Drop(
                         GitSidebarDrag::Project(id),
                         GitDropTarget::Folder(folder_id),
-                        cx,
-                    );
-                });
+                    ),
+                    cx,
+                );
             },
         ));
     }
-    let app_root = app.clone();
+    let view_root = view.clone();
     menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.move_to_root").to_string(),
         UiIcon::TREE,
         move |_, _, cx| {
-            app_root.update(cx, |this, cx| {
-                crate::git::actions::git_move_project_to_root(this, id, cx)
-            });
+            emit_sidebar(&view_root, GitSidebarEvent::MoveProjectToRoot(id), cx);
         },
     ));
-    let app_remove = app;
     menu.item(menu_item(
         rust_i18n::t!("git.menu.remove").to_string(),
         UiIcon::DELETE,
         move |_, _, cx| {
-            app_remove.update(cx, |this, cx| {
-                crate::git::actions::remove_git_project(this, id, cx)
-            });
+            emit_sidebar(&view, GitSidebarEvent::RemoveProject(id), cx);
         },
     ))
 }
 
-/// 分组行的右键菜单：重命名 / 删除。
-fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderId) -> PopupMenu {
-    let app_add = app.clone();
-    let app_rename = app.clone();
-    let app_delete = app;
+pub(super) fn render_git_folder_menu(
+    menu: PopupMenu,
+    view: Entity<GitSidebarView>,
+    id: GitFolderId,
+) -> PopupMenu {
+    let view_add = view.clone();
+    let view_rename = view.clone();
     menu.item(menu_item(
         rust_i18n::t!("git.folder.new_project").to_string(),
         UiIcon::ADD,
-        move |_, window, cx| {
-            app_add.update(cx, |this, cx| {
-                crate::git::actions::modal_bridges::open_git_project_modal(
-                    this,
-                    Some(id),
-                    window,
-                    cx,
-                );
-            });
+        move |_, _, cx| {
+            emit_sidebar(
+                &view_add,
+                GitSidebarEvent::OpenProjectModal(Some(id)),
+                cx,
+            );
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.folder.rename").to_string(),
         UiIcon::FOLDER,
-        move |_, window, cx| {
-            app_rename.update(cx, |this, cx| {
-                crate::git::actions::modal_bridges::open_git_rename_folder_modal(
-                    this, id, window, cx,
-                );
-            });
+        move |_, _, cx| {
+            emit_sidebar(
+                &view_rename,
+                GitSidebarEvent::OpenRenameFolderModal(id),
+                cx,
+            );
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.folder.delete").to_string(),
         UiIcon::DELETE,
         move |_, _, cx| {
-            app_delete.update(cx, |this, cx| {
-                crate::git::actions::delete_git_folder(this, id, cx)
-            });
+            emit_sidebar(&view, GitSidebarEvent::DeleteFolder(id), cx);
         },
     ))
 }
@@ -432,7 +404,6 @@ mod tests {
         GitProject::new(PathBuf::from(format!("/srv/{name}")))
     }
 
-    /// 行表读起来是「组:名字 / 项目:名字」，折叠与归属都体现在行的顺序上。
     fn labels(rows: &[GitSidebarRow]) -> Vec<String> {
         rows.iter()
             .map(|row| match row {
@@ -447,57 +418,31 @@ mod tests {
     }
 
     #[test]
-    fn folders_group_their_projects_and_ungrouped_come_last() {
-        let group = GitFolder::new("公司");
-        let mut in_group = project("beta");
-        in_group.folder_id = Some(group.id);
-        // 数组顺序就是显示顺序：仓库名 beta 排在 alpha 之前也不会被重排。
-        let git = GitHub {
-            projects: vec![in_group, project("alpha")],
-            folders: vec![group],
-            ..GitHub::default()
-        };
+    fn folders_appear_first_with_collapsed_hiding_children() {
+        let mut work = GitFolder::new("工作");
+        work.collapsed = true;
+        let personal = GitFolder::new("个人");
+        let mut p1 = project("alpha");
+        p1.folder_id = Some(work.id);
+        let mut p2 = project("beta");
+        p2.folder_id = Some(personal.id);
+        let p3 = project("orphan");
 
+        let hub = GitHub::new(vec![p1, p2, p3], vec![work, personal]);
+        let rows = build_git_rows(&hub);
         assert_eq!(
-            labels(&build_git_rows(&git)),
-            vec!["组:公司", "项目:beta@组内", "项目:alpha"]
+            labels(&rows),
+            vec!["组:工作", "组:个人", "项目:beta@组内", "项目:orphan"]
         );
     }
 
     #[test]
-    fn collapsed_folder_hides_members_but_still_counts_them() {
-        let mut group = GitFolder::new("公司");
-        group.collapsed = true;
-        let mut member = project("beta");
-        member.folder_id = Some(group.id);
-        let git = GitHub {
-            projects: vec![member],
-            folders: vec![group],
-            ..GitHub::default()
-        };
-
-        let rows = build_git_rows(&git);
-        assert_eq!(labels(&rows), vec!["组:公司"]);
-        match &rows[0] {
-            GitSidebarRow::Folder(row) => assert_eq!(
-                row.project_count, 1,
-                "折叠时计数照实统计，否则看不出组里还有没有东西"
-            ),
-            _ => panic!("首行应为分组"),
-        }
-    }
-
-    /// 分组被删掉（或文件被手改过）时，项目退回根层而不是从列表里消失。
-    #[test]
-    fn unknown_folder_falls_back_to_root() {
-        let mut orphan = project("orphan");
-        orphan.folder_id = Some(transom_core::GitFolderId::new());
-        let git = GitHub {
-            projects: vec![orphan],
-            folders: Vec::new(),
-            ..GitHub::default()
-        };
-
-        assert_eq!(labels(&build_git_rows(&git)), vec!["项目:orphan"]);
+    fn project_with_dangling_folder_falls_back_to_root() {
+        let missing = transom_core::GitFolderId::new();
+        let mut p = project("lost");
+        p.folder_id = Some(missing);
+        let hub = GitHub::new(vec![p], vec![]);
+        let rows = build_git_rows(&hub);
+        assert_eq!(labels(&rows), vec!["项目:lost"]);
     }
 }

@@ -29,6 +29,8 @@ pub(crate) enum WindowRequest {
     },
     /// 容器侧栏动作：侧栏是单例实体，事件自带全部数据。
     ContainerSidebar(crate::container::ContainerSidebarEvent),
+    /// Git 侧栏发往外壳的意图动作。
+    GitSidebar(crate::git::GitSidebarEvent),
     /// Git 工作区窗口级动作。
     Git(GitWorkspaceEvent),
 }
@@ -66,6 +68,10 @@ impl WindowRequests {
         event: crate::container::ContainerSidebarEvent,
     ) {
         self.items.push(WindowRequest::ContainerSidebar(event));
+    }
+
+    pub(crate) fn push_git_sidebar(&mut self, event: crate::git::GitSidebarEvent) {
+        self.items.push(WindowRequest::GitSidebar(event));
     }
 
     pub(crate) fn push_git(&mut self, event: GitWorkspaceEvent) {

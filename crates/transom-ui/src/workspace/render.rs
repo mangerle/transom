@@ -199,7 +199,29 @@ impl AppShell {
                         p,
                     )
                 }
-                SidebarSection::Git => crate::git::sidebar::render_git_sidebar(self, window, cx, p),
+                SidebarSection::Git => {
+                    let active_project = crate::git::helpers::active_git_project_id(self, cx);
+                    let mut active_branches =
+                        std::collections::HashMap::with_capacity(self.state.git.projects.len());
+                    for project in &self.state.git.projects {
+                        if let Some(workspace) =
+                            self.state.git_workspace_of_project(project.id, cx)
+                            && let Some(transom_core::HeadState::OnBranch(name)) =
+                                workspace.read(cx).state.status.as_ref().map(|s| &s.head)
+                        {
+                            active_branches.insert(project.id, name.clone());
+                        }
+                    }
+                    crate::git::sidebar::render_git_sidebar(
+                        crate::git::GitSidebarParams {
+                            view: &self.state.git_sidebar,
+                            git: &self.state.git,
+                            active_project,
+                            active_branches: &active_branches,
+                        },
+                        p,
+                    )
+                }
                 SidebarSection::CloudSync => {
                     crate::cloud_sync::render_cloud_sync_sidebar(self, window, cx, p)
                 }

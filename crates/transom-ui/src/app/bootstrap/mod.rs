@@ -186,6 +186,13 @@ impl AppShell {
                 cx.notify();
             },
         ));
+        self.state.tasks.subscriptions.git_sidebar = Some(cx.subscribe(
+            &self.state.git_sidebar,
+            |shell, _view, event: &crate::git::GitSidebarEvent, cx| {
+                shell.state.window_requests.push_git_sidebar(event.clone());
+                cx.notify();
+            },
+        ));
         self.state.tasks.subscriptions._status_metrics = Some(cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
@@ -201,7 +208,8 @@ impl AppShell {
         self.state.tasks.subscriptions.editor = Some(cx.subscribe(
             &self.state.editors,
             |shell, _panels, event: &crate::editor::EditorPanelEvent, cx| {
-                crate::editor::on_editor_panel_event(shell, event, cx);
+                shell.state.window_requests.push_editor(event.clone());
+                cx.notify();
             },
         ));
         self.state

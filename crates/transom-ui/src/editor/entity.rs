@@ -17,7 +17,6 @@
 use super::close::PendingEditorClose;
 use super::manager::EditorManager;
 use super::panel::{EditorPanelState, EditorPhase};
-use crate::app::AppShell;
 use crate::app::app_settings;
 use gpui_kit::component::input::EditorState;
 use gpui_kit::*;
@@ -249,16 +248,4 @@ impl EditorPanels {
     pub(super) fn phase_busy(phase: EditorPhase) -> bool {
         matches!(phase, EditorPhase::Reading | EditorPhase::Writing)
     }
-}
-
-/// 处理编辑面板发来的意图。
-///
-/// 需要窗口的动作排到渲染期执行：事件派发阶段没有 `Window`。
-pub(crate) fn on_editor_panel_event(
-    shell: &mut AppShell,
-    event: &EditorPanelEvent,
-    cx: &mut Context<AppShell>,
-) {
-    shell.state.window_requests.push_editor(event.clone());
-    cx.notify();
 }
