@@ -33,199 +33,11 @@ pub(crate) struct ContainerHeaderView<'a> {
     pub(super) timeline: Option<super::timeline::StatusTimeline>,
 }
 
-pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette) -> AnyElement {
-    let ContainerHeaderView {
-        view,
-        section,
-        title,
-        tabs,
-        detail_tab,
-        container,
-        details,
-        image,
-        volume,
-        network,
-        compose,
-        all_containers,
-        timeline,
-    } = params;
-    // 健康状态点：healthy 绿、unhealthy 红、starting 等其他状态弱色。
-    // 只在镜像声明了 HEALTHCHECK 时出现，没声明就不制造噪声。
-    let health_chip: Option<AnyElement> = details
-        .as_ref()
-        .and_then(|details| details.health.clone())
-        .map(|health| {
-            let color = if health == "healthy" {
-                p.success
-            } else if health == "unhealthy" {
-                p.danger
-            } else {
-                p.muted_foreground
-            };
-            h_flex()
-                .gap_1()
-                .items_center()
-                .flex_none()
-                .child(div().size_2().rounded_full().bg(color))
-                .child(div().text_xs().text_color(p.muted_foreground).child(health))
-                .into_any_element()
-        });
-    let mut actions = h_flex().gap_1().items_center().flex_shrink_0();
-    match section {
-        ContainerSection::Containers => {
-            if let Some(container) = container {
-                actions = actions.children(super::header_container::container_header_actions(
-                    view, container, detail_tab,
-                ));
-            }
-        }
-        ContainerSection::Compose => {
-            if let Some(project) = compose {
-                actions = actions.children(super::header_actions::compose_header_actions(
-                    view,
-                    project,
-                    all_containers,
-                ));
-            }
-        }
-        ContainerSection::Images => {
-            if let Some(image) = image {
-                actions =
-                    actions.children(super::header_actions::image_header_actions(view, image));
-            }
-        }
-        ContainerSection::Volumes => {
-            if let Some(volume) = volume {
-                let backup_view = view.clone();
-                let vol_name_backup = volume.name.clone();
-                actions = actions.child(
-                    IconButton::new(
-                        "volume-backup",
-                        UiIcon::DOWNLOAD,
-                        rust_i18n::t!("container.action.backup_volume").to_string(),
-                    )
-                    .render()
-                    .on_click(move |_, _, cx| {
-                        backup_view.update(cx, |_, cx| {
-                            cx.emit(ContainerWorkspaceEvent::BackupVolume(
-                                vol_name_backup.clone(),
-                            ));
-                        });
-                    }),
-                );
-                let restore_view = view.clone();
-                let vol_name_restore = volume.name.clone();
-                actions = actions.child(
-                    IconButton::new(
-                        "volume-restore",
-                        UiIcon::UPLOAD,
-                        rust_i18n::t!("container.action.restore_volume").to_string(),
-                    )
-                    .render()
-                    .on_click(move |_, _, cx| {
-                        restore_view.update(cx, |_, cx| {
-                            cx.emit(ContainerWorkspaceEvent::RestoreVolume(Some(
-                                vol_name_restore.clone(),
-                            )));
-                        });
-                    }),
-                );
-                actions = actions.child(delete_button(
-                    view,
-                    "volume-delete",
-                    ContainerConfirm::Volume(volume.name.clone()),
-                ));
-            }
-        }
-        ContainerSection::Networks => {
-            if let Some(network) = network {
-                actions =
-                    actions.children(super::header_actions::network_header_actions(view, network));
-            }
-        }
-    }
-
-    // 头部左侧：根据规范显示「容器名 16px/600 + 状态胶囊 + 健康点」并跟随页签组
-    let left: AnyElement = match section {
-        ContainerSection::Containers => {
-            let mut title_row = h_flex().gap_2().items_center().min_w_0();
-            title_row = title_row.child(
-                AppIconElement::new(section.icon())
-                    .with_rems(rems(control::ICON))
-                    .text_color(p.primary),
-            );
-            title_row = title_row.child(
-                div()
-                    .text_size(rems(typography::TITLE))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .max_w(px(220.0))
-                    .truncate()
-                    .child(title),
-            );
-
-            if let Some(c) = container {
-                let (state_label, state_color) = match c.state {
-                    transom_core::ContainerState::Running => (
-                        rust_i18n::t!("container.state.running").to_string(),
-                        p.success,
-                    ),
-                    transom_core::ContainerState::Paused => (
-                        rust_i18n::t!("container.state.paused").to_string(),
-                        p.warning,
-                    ),
-                    transom_core::ContainerState::Restarting => (
-                        rust_i18n::t!("container.state.restarting").to_string(),
-                        p.primary,
-                    ),
-                    transom_core::ContainerState::Exited => (
-                        rust_i18n::t!("container.state.exited").to_string(),
-                        p.muted_foreground,
-                    ),
-                    _ => (
-                        rust_i18n::t!(format!("container.state.{}", c.state.key())).to_string(),
-                        p.muted_foreground,
-                    ),
-                };
-                title_row =
-                    title_row.child(crate::widgets::status_badge(state_label, state_color, p));
-            }
-
-            if let Some(chip) = health_chip {
-                title_row = title_row.child(chip);
-            }
-
-            if let Some(tl) = timeline {
-                title_row = title_row.child(super::timeline::render_status_timeline(&tl, p));
-            }
-
-            if let Some(tabs) = tabs {
-                title_row = title_row.child(toolbar_separator(p).mx_1()).child(tabs);
-            }
-
-            title_row.into_any_element()
-        }
-        _ => {
-            let mut row = h_flex().gap_2().items_center().min_w_0();
-            row = row
-                .child(
-                    AppIconElement::new(section.icon())
-                        .with_rems(rems(control::ICON))
-                        .text_color(p.primary),
-                )
-                .child(
-                    div()
-                        .text_size(rems(typography::TITLE))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .max_w(px(260.0))
-                        .truncate()
-                        .child(title),
-                );
-            if let Some(tabs) = tabs {
-                row = row.child(toolbar_separator(p).mx_1()).child(tabs);
-            }
-            row.into_any_element()
-        }
-    };
+pub(super) fn render_detail_header(mut params: ContainerHeaderView<'_>, p: &Palette) -> AnyElement {
+    let tabs = params.tabs.take();
+    let health_chip = build_health_chip(params.details.as_ref(), p);
+    let actions = build_header_actions(&params);
+    let left = build_header_left(&params, tabs, health_chip, p);
 
     h_flex()
         .h(rems(CONTENT_HEADER_HEIGHT))
@@ -247,6 +59,193 @@ pub(super) fn render_detail_header(params: ContainerHeaderView<'_>, p: &Palette)
                 .child(actions),
         )
         .into_any_element()
+}
+
+/// 构造健康检查状态点；仅在镜像声明了 HEALTHCHECK 时显示。
+fn build_health_chip(
+    details: Option<&transom_core::ContainerDetails>,
+    p: &Palette,
+) -> Option<AnyElement> {
+    details
+        .and_then(|details| details.health.clone())
+        .map(|health| {
+            let color = if health == "healthy" {
+                p.success
+            } else if health == "unhealthy" {
+                p.danger
+            } else {
+                p.muted_foreground
+            };
+            h_flex()
+                .gap_1()
+                .items_center()
+                .flex_none()
+                .child(div().size_2().rounded_full().bg(color))
+                .child(div().text_xs().text_color(p.muted_foreground).child(health))
+                .into_any_element()
+        })
+}
+
+/// 构造头部右侧各区域的操作按钮栏。
+fn build_header_actions(params: &ContainerHeaderView<'_>) -> AnyElement {
+    let view = params.view;
+    let mut actions = h_flex().gap_1().items_center().flex_shrink_0();
+    match params.section {
+        ContainerSection::Containers => {
+            if let Some(container) = params.container {
+                actions = actions.children(super::header_container::container_header_actions(
+                    view,
+                    container,
+                    params.detail_tab,
+                ));
+            }
+        }
+        ContainerSection::Compose => {
+            if let Some(project) = params.compose {
+                actions = actions.children(super::header_actions::compose_header_actions(
+                    view,
+                    project,
+                    params.all_containers,
+                ));
+            }
+        }
+        ContainerSection::Images => {
+            if let Some(image) = params.image {
+                actions = actions.children(super::header_actions::image_header_actions(view, image));
+            }
+        }
+        ContainerSection::Volumes => {
+            if let Some(volume) = params.volume {
+                actions = actions.children(build_volume_header_actions(view, &volume.name));
+            }
+        }
+        ContainerSection::Networks => {
+            if let Some(network) = params.network {
+                actions =
+                    actions.children(super::header_actions::network_header_actions(view, network));
+            }
+        }
+    }
+    actions.into_any_element()
+}
+
+fn build_volume_header_actions(
+    view: &Entity<ContainerWorkspace>,
+    volume_name: &str,
+) -> Vec<AnyElement> {
+    let backup_view = view.clone();
+    let vol_name_backup = volume_name.to_string();
+    let restore_view = view.clone();
+    let vol_name_restore = volume_name.to_string();
+    vec![
+        IconButton::new(
+            "volume-backup",
+            UiIcon::DOWNLOAD,
+            rust_i18n::t!("container.action.backup_volume").to_string(),
+        )
+        .render()
+        .on_click(move |_, _, cx| {
+            backup_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::BackupVolume(
+                    vol_name_backup.clone(),
+                ));
+            });
+        })
+        .into_any_element(),
+        IconButton::new(
+            "volume-restore",
+            UiIcon::UPLOAD,
+            rust_i18n::t!("container.action.restore_volume").to_string(),
+        )
+        .render()
+        .on_click(move |_, _, cx| {
+            restore_view.update(cx, |_, cx| {
+                cx.emit(ContainerWorkspaceEvent::RestoreVolume(Some(
+                    vol_name_restore.clone(),
+                )));
+            });
+        })
+        .into_any_element(),
+        delete_button(
+            view,
+            "volume-delete",
+            ContainerConfirm::Volume(volume_name.to_string()),
+        ),
+    ]
+}
+
+/// 构造头部左侧标题、状态胶囊与详情页签组。
+fn build_header_left(
+    params: &ContainerHeaderView<'_>,
+    tabs: Option<AnyElement>,
+    health_chip: Option<AnyElement>,
+    p: &Palette,
+) -> AnyElement {
+    let max_title_w = if params.section == ContainerSection::Containers {
+        px(220.0)
+    } else {
+        px(260.0)
+    };
+    let mut row = h_flex()
+        .gap_2()
+        .items_center()
+        .min_w_0()
+        .child(
+            AppIconElement::new(params.section.icon())
+                .with_rems(rems(control::ICON))
+                .text_color(p.primary),
+        )
+        .child(
+            div()
+                .text_size(rems(typography::TITLE))
+                .font_weight(FontWeight::SEMIBOLD)
+                .max_w(max_title_w)
+                .truncate()
+                .child(params.title.clone()),
+        );
+
+    if params.section == ContainerSection::Containers {
+        if let Some(container) = params.container {
+            let (state_label, state_color) = container_state_badge(container.state, p);
+            row = row.child(crate::widgets::status_badge(state_label, state_color, p));
+        }
+        if let Some(chip) = health_chip {
+            row = row.child(chip);
+        }
+        if let Some(tl) = &params.timeline {
+            row = row.child(super::timeline::render_status_timeline(tl, p));
+        }
+    }
+
+    if let Some(tabs) = tabs {
+        row = row.child(toolbar_separator(p).mx_1()).child(tabs);
+    }
+    row.into_any_element()
+}
+
+fn container_state_badge(state: transom_core::ContainerState, p: &Palette) -> (String, Hsla) {
+    match state {
+        transom_core::ContainerState::Running => (
+            rust_i18n::t!("container.state.running").to_string(),
+            p.success,
+        ),
+        transom_core::ContainerState::Paused => (
+            rust_i18n::t!("container.state.paused").to_string(),
+            p.warning,
+        ),
+        transom_core::ContainerState::Restarting => (
+            rust_i18n::t!("container.state.restarting").to_string(),
+            p.primary,
+        ),
+        transom_core::ContainerState::Exited => (
+            rust_i18n::t!("container.state.exited").to_string(),
+            p.muted_foreground,
+        ),
+        _ => (
+            rust_i18n::t!(format!("container.state.{}", state.key())).to_string(),
+            p.muted_foreground,
+        ),
+    }
 }
 
 pub(crate) fn detail_icon(tab: ContainerDetailTab) -> AppIcon {

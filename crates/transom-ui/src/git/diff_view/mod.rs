@@ -21,7 +21,7 @@ use crate::diff_pane::{
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::git::GitWorkspace;
 use crate::git::WORKSPACE_HEADER_HEIGHT;
-use crate::git::types::GitWorkspaceState as State;
+use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::keymap::{DIFF_VIEW_CONTEXT, DiffFindInView, DiffNextChange, DiffPrevChange};
 use crate::palette::Palette;
 use crate::widgets::toolbar_separator;
@@ -41,7 +41,49 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
     };
     let options = state.diff_options;
     let tab_bar = tabs::render_diff_tab_bar(state, workspace.clone(), p);
+    let header = render_diff_header(state, diff, &workspace, p);
+    let columns_header = if !diff.loading && diff.error.is_none() {
+        tabs::render_diff_columns_header(diff, options.side_by_side, p)
+    } else {
+        None
+    };
+    let body = render_diff_content(state, diff, workspace.clone(), p);
+    let search_bar = render_search_bar_for_view(state, &workspace, p);
 
+    let kbd_prev_ws = workspace.clone();
+    let kbd_next_ws = workspace.clone();
+    let kbd_find_ws = workspace;
+
+    v_flex()
+        .id("git-diff-view-pane")
+        .key_context(DIFF_VIEW_CONTEXT)
+        .on_action(move |_: &DiffPrevChange, _, cx| {
+            kbd_prev_ws.update(cx, |ws, cx| ws.step_diff_change(false, cx));
+        })
+        .on_action(move |_: &DiffNextChange, _, cx| {
+            kbd_next_ws.update(cx, |ws, cx| ws.step_diff_change(true, cx));
+        })
+        .on_action(move |_: &DiffFindInView, window, cx| {
+            kbd_find_ws.update(cx, |ws, cx| ws.open_diff_search(window, cx));
+        })
+        .flex_1()
+        .min_h_0()
+        .children(tab_bar)
+        .child(header)
+        .children(search_bar)
+        .children(columns_header)
+        .child(body)
+        .into_any_element()
+}
+
+/// 渲染 Git 差异头部工具条。
+fn render_diff_header(
+    state: &State,
+    diff: &GitDiffState,
+    workspace: &Entity<GitWorkspace>,
+    p: &Palette,
+) -> AnyElement {
+    let options = state.diff_options;
     let total_tabs = state.diff_tabs.len();
     let current_tab_idx = state.active_diff_tab.unwrap_or(0);
     let prev_ws = workspace.clone();
@@ -52,20 +94,11 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
     let refresh_ws = workspace.clone();
     let open_ws = workspace.clone();
     let search_toggle_ws = workspace.clone();
-    let search_prev_ws = workspace.clone();
-    let search_next_ws = workspace.clone();
-    let search_close_ws = workspace.clone();
-    let kbd_prev_ws = workspace.clone();
-    let kbd_next_ws = workspace.clone();
-    let kbd_find_ws = workspace.clone();
     let on_update: OptionsUpdater = Rc::new(move |updater, _window, cx| {
-        opt_ws.update(cx, |ws, cx| {
-            ws.update_diff_options(updater, cx);
-        });
+        opt_ws.update(cx, |ws, cx| ws.update_diff_options(updater, cx));
     });
 
-    let has_changes = diff.diff_state.is_some();
-    let nav_disabled = total_tabs <= 1 && !has_changes;
+    let nav_disabled = total_tabs <= 1 && diff.diff_state.is_none();
     let show_summary = !diff.loading
         && !diff.computing
         && diff.error.is_none()
@@ -79,7 +112,6 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
             p,
         )
     });
-
     let file_count_text = if total_tabs > 1 {
         rust_i18n::t!(
             "git.diff.files_indicator",
@@ -91,7 +123,7 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
         rust_i18n::t!("git.diff.single_file_indicator").to_string()
     };
 
-    let header = h_flex()
+    h_flex()
         .id("git-diff-header")
         .w_full()
         .h(rems(WORKSPACE_HEADER_HEIGHT))
@@ -107,14 +139,10 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
             "git-diff",
             nav_disabled,
             Rc::new(move |_, cx| {
-                prev_change_ws.update(cx, |ws, cx| {
-                    ws.step_diff_change(false, cx);
-                });
+                prev_change_ws.update(cx, |ws, cx| ws.step_diff_change(false, cx));
             }),
             Rc::new(move |_, cx| {
-                next_change_ws.update(cx, |ws, cx| {
-                    ws.step_diff_change(true, cx);
-                });
+                next_change_ws.update(cx, |ws, cx| ws.step_diff_change(true, cx));
             }),
         ))
         .child(toolbar_separator(p))
@@ -128,9 +156,7 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
                 .disabled(current_tab_idx == 0)
                 .on_click(move |_, _, cx| {
                     if current_tab_idx > 0 {
-                        prev_ws.update(cx, |ws, cx| {
-                            ws.select_diff_tab(current_tab_idx - 1, cx);
-                        });
+                        prev_ws.update(cx, |ws, cx| ws.select_diff_tab(current_tab_idx - 1, cx));
                     }
                 }),
         )
@@ -150,9 +176,7 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
                 .disabled(total_tabs <= 1 || current_tab_idx + 1 >= total_tabs)
                 .on_click(move |_, _, cx| {
                     if current_tab_idx + 1 < total_tabs {
-                        next_ws.update(cx, |ws, cx| {
-                            ws.select_diff_tab(current_tab_idx + 1, cx);
-                        });
+                        next_ws.update(cx, |ws, cx| ws.select_diff_tab(current_tab_idx + 1, cx));
                     }
                 }),
         )
@@ -170,9 +194,7 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
                 .accessibility_label(rust_i18n::t!("git.diff.search_toggle").to_string())
                 .tooltip(rust_i18n::t!("git.diff.search_toggle").to_string())
                 .on_click(move |_, window, cx| {
-                    search_toggle_ws.update(cx, |ws, cx| {
-                        ws.toggle_diff_search(window, cx);
-                    });
+                    search_toggle_ws.update(cx, |ws, cx| ws.toggle_diff_search(window, cx));
                 }),
         )
         .child(
@@ -183,9 +205,7 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
                 .accessibility_label(rust_i18n::t!("git.diff.refresh").to_string())
                 .tooltip(rust_i18n::t!("git.diff.refresh").to_string())
                 .on_click(move |_, _, cx| {
-                    refresh_ws.update(cx, |ws, cx| {
-                        ws.refresh_active_diff(cx);
-                    });
+                    refresh_ws.update(cx, |ws, cx| ws.refresh_active_diff(cx));
                 }),
         )
         .child(
@@ -195,124 +215,99 @@ pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette
                 .child(AppIconElement::new(UiIcon::EDIT))
                 .accessibility_label(rust_i18n::t!("git.diff.open_source").to_string())
                 .tooltip(rust_i18n::t!("git.diff.open_source").to_string())
-                .on_click(move |_, _, cx| {
-                    open_ws.read(cx).open_diff_source();
-                }),
+                .on_click(move |_, _, cx| open_ws.read(cx).open_diff_source()),
         )
         .child(render_settings_menu(DiffMoreMenuParams {
             workspace: workspace.clone(),
             active_request_id: diff.request_id,
             total_tabs,
             collapse_unchanged: options.collapse_unchanged,
-        }));
+        }))
+        .into_any_element()
+}
 
-    let columns_header = if !diff.loading && diff.error.is_none() {
-        tabs::render_diff_columns_header(diff, options.side_by_side, p)
-    } else {
-        None
+/// 渲染差异主体区域。
+fn render_diff_content(
+    state: &State,
+    diff: &GitDiffState,
+    workspace: Entity<GitWorkspace>,
+    p: &Palette,
+) -> AnyElement {
+    if diff.loading {
+        return placeholder(rust_i18n::t!("git.diff.loading").to_string(), p);
+    }
+    if let Some(error) = diff.error.clone() {
+        return placeholder_colored(error, p.danger);
+    }
+    if diff.computing {
+        return placeholder(rust_i18n::t!("git.diff.computing").to_string(), p);
+    }
+    let Some(content) = diff.content.as_ref() else {
+        return placeholder(rust_i18n::t!("git.diff.none").to_string(), p);
     };
-
-    let body = if diff.loading {
-        placeholder(rust_i18n::t!("git.diff.loading").to_string(), p)
-    } else if let Some(error) = diff.error.clone() {
-        placeholder_colored(error, p.danger)
-    } else if diff.computing {
-        placeholder(rust_i18n::t!("git.diff.computing").to_string(), p)
-    } else {
-        match diff.content.as_ref() {
-            None => placeholder(rust_i18n::t!("git.diff.none").to_string(), p),
-            Some(content) if content.binary => {
-                placeholder(rust_i18n::t!("git.diff.binary").to_string(), p)
-            }
-            Some(content) => match diff.diff_state.as_ref() {
-                None => {
-                    let message_key = if diff.whitespace_only {
-                        "git.diff.whitespace_only"
-                    } else {
-                        "git.diff.no_changes"
-                    };
-                    placeholder(rust_i18n::t!(message_key).to_string(), p)
-                }
-                Some(diff_state) => {
-                    let truncated_banner = content.truncated.then(|| {
-                        div()
-                            .w_full()
-                            .px_3()
-                            .py_1()
-                            .bg(p.tone.warning_subtle)
-                            .border_color(p.divider(p.border))
-                            .border_b_1()
-                            .text_xs()
-                            .text_color(p.warning)
-                            .child(rust_i18n::t!("git.diff.truncated").to_string())
-                            .into_any_element()
-                    });
-                    let diff_widget = attach_hunk_actions(
-                        render_diff_body(diff_state, options)
-                            .decorations(state.diff_search.build_decorations(p)),
-                        diff,
-                        state.status.as_ref(),
-                        workspace,
-                    );
-                    v_flex()
-                        .flex_1()
-                        .min_h_0()
-                        .w_full()
-                        .children(truncated_banner)
-                        .child(diff_widget.flex_1().w_full())
-                        .into_any_element()
-                }
-            },
-        }
+    if content.binary {
+        return placeholder(rust_i18n::t!("git.diff.binary").to_string(), p);
+    }
+    let Some(diff_state) = diff.diff_state.as_ref() else {
+        let message_key = if diff.whitespace_only {
+            "git.diff.whitespace_only"
+        } else {
+            "git.diff.no_changes"
+        };
+        return placeholder(rust_i18n::t!(message_key).to_string(), p);
     };
+    let truncated_banner = content.truncated.then(|| {
+        div()
+            .w_full()
+            .px_3()
+            .py_1()
+            .bg(p.tone.warning_subtle)
+            .border_color(p.divider(p.border))
+            .border_b_1()
+            .text_xs()
+            .text_color(p.warning)
+            .child(rust_i18n::t!("git.diff.truncated").to_string())
+            .into_any_element()
+    });
+    let diff_widget = attach_hunk_actions(
+        render_diff_body(diff_state, state.diff_options)
+            .decorations(state.diff_search.build_decorations(p)),
+        diff,
+        state.status.as_ref(),
+        workspace,
+    );
+    v_flex()
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .children(truncated_banner)
+        .child(diff_widget.flex_1().w_full())
+        .into_any_element()
+}
 
-    let search_bar = render_diff_search_bar(DiffSearchBarProps {
+/// 渲染差异视图内嵌搜索栏。
+fn render_search_bar_for_view(
+    state: &State,
+    workspace: &Entity<GitWorkspace>,
+    p: &Palette,
+) -> Option<AnyElement> {
+    let search_prev_ws = workspace.clone();
+    let search_next_ws = workspace.clone();
+    let search_close_ws = workspace.clone();
+    render_diff_search_bar(DiffSearchBarProps {
         id_prefix: "git-diff",
         state: &state.diff_search,
         p,
         on_prev: Rc::new(move |_, cx| {
-            search_prev_ws.update(cx, |ws, cx| {
-                ws.step_diff_search(false, cx);
-            });
+            search_prev_ws.update(cx, |ws, cx| ws.step_diff_search(false, cx));
         }),
         on_next: Rc::new(move |_, cx| {
-            search_next_ws.update(cx, |ws, cx| {
-                ws.step_diff_search(true, cx);
-            });
+            search_next_ws.update(cx, |ws, cx| ws.step_diff_search(true, cx));
         }),
         on_close: Rc::new(move |_, cx| {
-            search_close_ws.update(cx, |ws, cx| {
-                ws.close_diff_search(cx);
-            });
+            search_close_ws.update(cx, |ws, cx| ws.close_diff_search(cx));
         }),
-    });
-
-    v_flex()
-        .id("git-diff-view-pane")
-        .key_context(DIFF_VIEW_CONTEXT)
-        .on_action(move |_: &DiffPrevChange, _, cx| {
-            kbd_prev_ws.update(cx, |ws, cx| {
-                ws.step_diff_change(false, cx);
-            });
-        })
-        .on_action(move |_: &DiffNextChange, _, cx| {
-            kbd_next_ws.update(cx, |ws, cx| {
-                ws.step_diff_change(true, cx);
-            });
-        })
-        .on_action(move |_: &DiffFindInView, window, cx| {
-            kbd_find_ws.update(cx, |ws, cx| {
-                ws.open_diff_search(window, cx);
-            });
-        })
-        .flex_1()
-        .min_h_0()
-        .children(tab_bar)
-        .child(header)
-        .children(search_bar)
-        .children(columns_header)
-        .child(body)
-        .into_any_element()
+    })
 }
 
 /// 渲染工具栏右侧的差异统计徽章（块数 + 新增/删除行数，或空白忽略提示）。

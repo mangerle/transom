@@ -163,104 +163,20 @@ impl AppShell {
 
     /// 安装面板事件订阅与输入框联动；全部订阅由 `TaskHub` 托管生命周期。
     fn bootstrap_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let git_focus = Self::observe_window_focus(window, cx);
-        self.state.tasks.subscriptions._git_focus = Some(git_focus);
+        self.state.tasks.subscriptions._git_focus = Some(Self::observe_window_focus(window, cx));
+        self.subscribe_panel_entities(cx);
+        self.subscribe_modal_entities(window, cx);
+        self.subscribe_input_controls(window, cx);
+    }
 
-        // 监控面板的意图事件由外壳订阅处理。
-        let monitor_subscription = cx.subscribe(
+    fn subscribe_panel_entities(&mut self, cx: &mut Context<Self>) {
+        self.state.tasks.subscriptions.monitor = Some(cx.subscribe(
             &self.state.monitor,
             |shell, _view, event: &crate::monitor::MonitorPanelEvent, cx| {
                 crate::monitor::on_monitor_panel_event(shell, event, cx);
             },
-        );
-        self.state.tasks.subscriptions.monitor = Some(monitor_subscription);
-        let known_hosts_subscription = cx.subscribe(
-            &self.state.modals.connection.known_hosts,
-            |shell, _, event: &KnownHostsEvent, cx| {
-                crate::app::events::on_known_hosts_event(shell, event, cx)
-            },
-        );
-        self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
-        let connection_prompts_subscription = cx.subscribe(
-            &self.state.modals.connection.prompts,
-            |shell, _view, event: &crate::connection::ConnectionPromptsEvent, cx| {
-                crate::connection::on_connection_prompts_event(shell, event, cx);
-            },
-        );
-        self.state.tasks.subscriptions.connection_prompts = Some(connection_prompts_subscription);
-        let key_wizard_subscription = cx.subscribe(
-            &self.state.modals.tools.key_wizard,
-            |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {
-                crate::keys::on_key_wizard_event(shell, event, cx);
-            },
-        );
-        self.state.tasks.subscriptions.key_wizard = Some(key_wizard_subscription);
-        let backup_subscription = cx.subscribe(
-            &self.state.modals.tools.backup_prompt,
-            |shell, _view, event: &crate::backup::BackupPromptEvent, cx| {
-                shell.on_backup_event(event, cx);
-            },
-        );
-        self.state.tasks.subscriptions.backup = Some(backup_subscription);
-        let audit_subscription = cx.subscribe_in(
-            &self.state.modals.tools.audit_viewer,
-            window,
-            |shell, _view, event: &AuditViewerEvent, window, cx| {
-                crate::audit_viewer::on_audit_viewer_event(shell, event, window, cx);
-            },
-        );
-        self.state.tasks.subscriptions.audit_viewer = Some(audit_subscription);
-        let replay_subscription = cx.subscribe_in(
-            &self.state.modals.tools.replay,
-            window,
-            |shell, _view, event: &ReplayEvent, window, cx| {
-                crate::record::on_replay_event(shell, event, window, cx);
-            },
-        );
-        self.state.tasks.subscriptions.replay = Some(replay_subscription);
-        let settings_subscription = cx.subscribe(
-            &self.state.modals.settings,
-            |shell, _view, event: &crate::settings::SettingsEvent, cx| {
-                crate::settings::on_settings_event(shell, event, cx);
-            },
-        );
-        self.state.tasks.subscriptions.settings = Some(settings_subscription);
-        let session_form_subscription = cx.subscribe_in(
-            &self.state.modals.session.form,
-            window,
-            |shell, _view, event: &crate::session_form::SessionFormEvent, window, cx| {
-                shell.on_session_form_event(event, window, cx);
-            },
-        );
-        self.state.tasks.subscriptions.session_form = Some(session_form_subscription);
-        // 容器连接表单的保存与删除仍由外壳落目录：实体只上交意图。
-        let container_form_subscription = cx.subscribe_in(
-            &self.state.modals.tools.container_form,
-            window,
-            |shell, _view, event: &crate::container::ContainerFormEvent, window, cx| {
-                crate::container::on_container_form_event(shell, event, window, cx);
-            },
-        );
-        self.state.tasks.subscriptions.container_form = Some(container_form_subscription);
-        // 运行容器表单只上交提交意图：目标工作区定位与命令投递仍归外壳。
-        let container_run_form_subscription = cx.subscribe(
-            &self.state.modals.tools.run_form,
-            |shell, _view, event: &crate::container::ContainerRunFormEvent, cx| {
-                crate::container::on_container_run_form_event(shell, event, cx);
-            },
-        );
-        self.state.tasks.subscriptions.container_run_form = Some(container_run_form_subscription);
-        // 拉取/新建弹窗只上交附加字段：主输入校验、命令投递与关闭仍归外壳。
-        let container_create_subscription = cx.subscribe_in(
-            &self.state.modals.tools.create_dialog,
-            window,
-            |shell, _view, event: &crate::container::ContainerCreateDialogEvent, window, cx| {
-                crate::container::on_container_create_event(shell, event, window, cx);
-            },
-        );
-        self.state.tasks.subscriptions.container_create = Some(container_create_subscription);
-        // 容器侧栏只上交目录/窗口动作：事件自带数据，外壳在渲染期统一执行。
-        let container_sidebar_subscription = cx.subscribe(
+        ));
+        self.state.tasks.subscriptions.container_sidebar = Some(cx.subscribe(
             &self.state.containers.sidebar,
             |shell, _view, event: &crate::container::ContainerSidebarEvent, cx| {
                 shell
@@ -269,9 +185,8 @@ impl AppShell {
                     .push_container_sidebar(event.clone());
                 cx.notify();
             },
-        );
-        self.state.tasks.subscriptions.container_sidebar = Some(container_sidebar_subscription);
-        let metrics_subscription = cx.subscribe(
+        ));
+        self.state.tasks.subscriptions._status_metrics = Some(cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
                 if matches!(
@@ -281,22 +196,94 @@ impl AppShell {
                     shell.persist_layout_settings(cx);
                 }
             },
-        );
-        self.state.tasks.subscriptions._status_metrics = Some(metrics_subscription);
-        // 编辑器面板的意图事件由外壳订阅处理；命令通道在创建时注入，
-        // 面板自己投递 SFTP 命令，不需要回指外壳。
+        ));
         let editor_command_tx = self.state.services.command_tx.clone();
-        let editor_subscription = cx.subscribe(
+        self.state.tasks.subscriptions.editor = Some(cx.subscribe(
             &self.state.editors,
             |shell, _panels, event: &crate::editor::EditorPanelEvent, cx| {
                 crate::editor::on_editor_panel_event(shell, event, cx);
             },
-        );
-        self.state.tasks.subscriptions.editor = Some(editor_subscription);
+        ));
         self.state
             .editors
             .update(cx, |panels, _| panels.set_command_tx(editor_command_tx));
+    }
 
+    fn subscribe_modal_entities(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.state.tasks.subscriptions.known_hosts = Some(cx.subscribe(
+            &self.state.modals.connection.known_hosts,
+            |shell, _, event: &KnownHostsEvent, cx| {
+                crate::app::events::on_known_hosts_event(shell, event, cx)
+            },
+        ));
+        self.state.tasks.subscriptions.connection_prompts = Some(cx.subscribe(
+            &self.state.modals.connection.prompts,
+            |shell, _view, event: &crate::connection::ConnectionPromptsEvent, cx| {
+                crate::connection::on_connection_prompts_event(shell, event, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.key_wizard = Some(cx.subscribe(
+            &self.state.modals.tools.key_wizard,
+            |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {
+                crate::keys::on_key_wizard_event(shell, event, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.backup = Some(cx.subscribe(
+            &self.state.modals.tools.backup_prompt,
+            |shell, _view, event: &crate::backup::BackupPromptEvent, cx| {
+                shell.on_backup_event(event, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.audit_viewer = Some(cx.subscribe_in(
+            &self.state.modals.tools.audit_viewer,
+            window,
+            |shell, _view, event: &AuditViewerEvent, window, cx| {
+                crate::audit_viewer::on_audit_viewer_event(shell, event, window, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.replay = Some(cx.subscribe_in(
+            &self.state.modals.tools.replay,
+            window,
+            |shell, _view, event: &ReplayEvent, window, cx| {
+                crate::record::on_replay_event(shell, event, window, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.settings = Some(cx.subscribe(
+            &self.state.modals.settings,
+            |shell, _view, event: &crate::settings::SettingsEvent, cx| {
+                crate::settings::on_settings_event(shell, event, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.session_form = Some(cx.subscribe_in(
+            &self.state.modals.session.form,
+            window,
+            |shell, _view, event: &crate::session_form::SessionFormEvent, window, cx| {
+                shell.on_session_form_event(event, window, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.container_form = Some(cx.subscribe_in(
+            &self.state.modals.tools.container_form,
+            window,
+            |shell, _view, event: &crate::container::ContainerFormEvent, window, cx| {
+                crate::container::on_container_form_event(shell, event, window, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.container_run_form = Some(cx.subscribe(
+            &self.state.modals.tools.run_form,
+            |shell, _view, event: &crate::container::ContainerRunFormEvent, cx| {
+                crate::container::on_container_run_form_event(shell, event, cx);
+            },
+        ));
+        self.state.tasks.subscriptions.container_create = Some(cx.subscribe_in(
+            &self.state.modals.tools.create_dialog,
+            window,
+            |shell, _view, event: &crate::container::ContainerCreateDialogEvent, window, cx| {
+                crate::container::on_container_create_event(shell, event, window, cx);
+            },
+        ));
+    }
+
+    fn subscribe_input_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         cx.subscribe_in(
             &self.state.broadcast.input,
             window,
@@ -317,7 +304,6 @@ impl AppShell {
             },
         )
         .detach();
-        // 搜索词变化时整壳重绘，纵向标签列表的过滤结果才会跟着输入实时更新。
         cx.subscribe(
             &self.state.vertical_tabs_search,
             |_, _, event: &InputEvent, cx| {

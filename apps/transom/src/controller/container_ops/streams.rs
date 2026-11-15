@@ -71,30 +71,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             request_id,
             options,
             size,
-        } => {
-            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
-                return;
-            };
-            let event_tx = ctx.event_tx.clone();
-            spawn_long(state, ctx, tab_id, request_id, cancel, async move {
-                let outcome = transom_container::open_exec(&engine, &options, size).await;
-                match outcome {
-                    Ok((io, exit)) => {
-                        send_event(
-                            &event_tx,
-                            ContainerAppEvent::ExecReady {
-                                tab_id,
-                                request_id,
-                                io: Box::new(io),
-                                exit,
-                            },
-                        )
-                        .await;
-                    }
-                    Err(error) => send_failed(&event_tx, request_id, error).await,
-                }
-            });
-        }
+        } => spawn_exec_terminal(state, ctx, tab_id, request_id, options, size),
         ContainerCommand::Logs {
             tab_id,
             request_id,
@@ -102,34 +79,18 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             tail,
             follow,
             timestamps,
-        } => {
-            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
-                return;
-            };
-            let event_tx = ctx.event_tx.clone();
-            spawn_long(
-                state,
-                ctx,
+        } => spawn_log_stream(
+            state,
+            ctx,
+            LogStreamParams {
                 tab_id,
                 request_id,
-                Arc::clone(&cancel),
-                async move {
-                    let mut batcher = LogBatcher::new(&event_tx, request_id);
-                    let mut sink = |bytes: Vec<u8>| batcher.push(&bytes);
-                    let result = transom_container::stream_logs(
-                        &engine, &container, tail, follow, timestamps, &cancel, &mut sink,
-                    )
-                    .await;
-                    drop(sink);
-                    batcher.flush();
-                    match result {
-                        Ok(()) | Err(transom_container::ContainerError::Cancelled) => {}
-                        Err(error) => send_failed(&event_tx, request_id, error).await,
-                    }
-                    send_event(&event_tx, ContainerAppEvent::LogsClosed { request_id }).await;
-                },
-            );
-        }
+                target: LogStreamTarget::Container(container),
+                tail,
+                follow,
+                timestamps,
+            },
+        ),
         ContainerCommand::ProjectLogs {
             tab_id,
             request_id,
@@ -138,63 +99,25 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             tail,
             follow,
             timestamps,
-        } => {
-            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
-                return;
-            };
-            let event_tx = ctx.event_tx.clone();
-            spawn_long(
-                state,
-                ctx,
+        } => spawn_log_stream(
+            state,
+            ctx,
+            LogStreamParams {
                 tab_id,
                 request_id,
-                Arc::clone(&cancel),
-                async move {
-                    let mut batcher = LogBatcher::new(&event_tx, request_id);
-                    let mut sink = |bytes: Vec<u8>| batcher.push(&bytes);
-                    let result = transom_container::stream_project_logs(
-                        &engine, containers, tail, follow, timestamps, &cancel, &mut sink,
-                    )
-                    .await;
-                    drop(sink);
-                    batcher.flush();
-                    match result {
-                        Ok(()) | Err(transom_container::ContainerError::Cancelled) => {}
-                        Err(error) => send_failed(&event_tx, request_id, error).await,
-                    }
-                    send_event(&event_tx, ContainerAppEvent::LogsClosed { request_id }).await;
-                },
-            );
-        }
+                target: LogStreamTarget::Project(containers),
+                tail,
+                follow,
+                timestamps,
+            },
+        ),
         ContainerCommand::Stats {
             tab_id,
             request_id,
             container,
             enabled,
             interval_ms: _,
-        } => {
-            if !enabled {
-                cancel_task(state, ctx, tab_id, request_id);
-                return;
-            }
-            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
-                log::warn!("容器统计未能启动，容器: {container}，标签: {tab_id}");
-                return;
-            };
-            log::info!("容器统计流已启动，容器: {container}");
-            let event_tx = ctx.event_tx.clone();
-            spawn_long(
-                state,
-                ctx,
-                tab_id,
-                request_id,
-                Arc::clone(&cancel),
-                async move {
-                    stream_stats_with_reconnect(engine, container, cancel, event_tx, request_id)
-                        .await;
-                },
-            );
-        }
+        } => spawn_stats_stream(state, ctx, tab_id, request_id, container, enabled),
         ContainerCommand::ListProcesses {
             tab_id,
             request_id,
@@ -212,6 +135,132 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         ),
         _ => {}
     }
+}
+
+fn spawn_exec_terminal(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    tab_id: TabId,
+    request_id: ContainerRequestId,
+    options: transom_core::ContainerConnection,
+    size: transom_core::TerminalSize,
+) {
+    let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+        return;
+    };
+    let event_tx = ctx.event_tx.clone();
+    spawn_long(state, ctx, tab_id, request_id, cancel, async move {
+        match transom_container::open_exec(&engine, &options, size).await {
+            Ok((io, exit)) => {
+                send_event(
+                    &event_tx,
+                    ContainerAppEvent::ExecReady {
+                        tab_id,
+                        request_id,
+                        io: Box::new(io),
+                        exit,
+                    },
+                )
+                .await;
+            }
+            Err(error) => send_failed(&event_tx, request_id, error).await,
+        }
+    });
+}
+
+enum LogStreamTarget {
+    Container(String),
+    Project(Vec<String>),
+}
+
+struct LogStreamParams {
+    tab_id: TabId,
+    request_id: ContainerRequestId,
+    target: LogStreamTarget,
+    tail: usize,
+    follow: bool,
+    timestamps: bool,
+}
+
+fn spawn_log_stream(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    params: LogStreamParams,
+) {
+    let LogStreamParams {
+        tab_id,
+        request_id,
+        target,
+        tail,
+        follow,
+        timestamps,
+    } = params;
+    let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+        return;
+    };
+    let event_tx = ctx.event_tx.clone();
+    spawn_long(
+        state,
+        ctx,
+        tab_id,
+        request_id,
+        Arc::clone(&cancel),
+        async move {
+            let mut batcher = LogBatcher::new(&event_tx, request_id);
+            let mut sink = |bytes: Vec<u8>| batcher.push(&bytes);
+            let result = match target {
+                LogStreamTarget::Container(container) => {
+                    transom_container::stream_logs(
+                        &engine, &container, tail, follow, timestamps, &cancel, &mut sink,
+                    )
+                    .await
+                }
+                LogStreamTarget::Project(containers) => {
+                    transom_container::stream_project_logs(
+                        &engine, containers, tail, follow, timestamps, &cancel, &mut sink,
+                    )
+                    .await
+                }
+            };
+            drop(sink);
+            batcher.flush();
+            match result {
+                Ok(()) | Err(transom_container::ContainerError::Cancelled) => {}
+                Err(error) => send_failed(&event_tx, request_id, error).await,
+            }
+            send_event(&event_tx, ContainerAppEvent::LogsClosed { request_id }).await;
+        },
+    );
+}
+
+fn spawn_stats_stream(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    tab_id: TabId,
+    request_id: ContainerRequestId,
+    container: String,
+    enabled: bool,
+) {
+    if !enabled {
+        cancel_task(state, ctx, tab_id, request_id);
+        return;
+    }
+    let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+        log::warn!("容器统计未能启动，容器: {container}，标签: {tab_id}");
+        return;
+    };
+    log::info!("容器统计流已启动，容器: {container}");
+    let event_tx = ctx.event_tx.clone();
+    spawn_long(
+        state,
+        ctx,
+        tab_id,
+        request_id,
+        Arc::clone(&cancel),
+        async move {
+            stream_stats_with_reconnect(engine, container, cancel, event_tx, request_id).await;
+        },
+    );
 }
 
 /// 维护一条统计流：流断开后指数退避重连，短暂失败保留 UI 上一帧。
