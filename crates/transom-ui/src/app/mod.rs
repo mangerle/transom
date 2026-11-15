@@ -19,6 +19,8 @@ pub(crate) use settings_global::{
     app_settings, app_settings_mut, install_app_settings, update_app_settings,
 };
 mod secret_prefill;
+mod session_duplicate;
+mod session_ops;
 mod state;
 mod task_hub;
 mod types;

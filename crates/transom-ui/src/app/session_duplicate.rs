@@ -166,3 +166,29 @@ pub(super) fn duplicate_base(name: &str) -> String {
 pub(super) fn strip_copy_suffix<'a>(text: &'a str, suffix: &str) -> Option<&'a str> {
     text.strip_suffix(suffix).map(str::trim_end)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{duplicate_base, strip_copy_suffix};
+
+    #[test]
+    fn duplicate_base_strips_only_our_own_suffix() {
+        let suffix = rust_i18n::t!("common.duplicate_name", name = "").to_string();
+        assert_eq!(
+            duplicate_base(&format!("web-01{suffix}")),
+            "web-01".to_string()
+        );
+        assert_eq!(
+            duplicate_base(&format!("web-01{suffix} #2")),
+            "web-01".to_string()
+        );
+        assert_eq!(duplicate_base("db #12"), "db #12".to_string());
+        assert_eq!(duplicate_base("web-01"), "web-01".to_string());
+        assert_eq!(
+            duplicate_base("release #12 #13"),
+            "release #12 #13".to_string()
+        );
+        assert_eq!(strip_copy_suffix(&format!("a{suffix}"), &suffix), Some("a"));
+        assert_eq!(strip_copy_suffix("plain", &suffix), None);
+    }
+}

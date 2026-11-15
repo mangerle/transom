@@ -6,11 +6,6 @@
 //! 归属一致，不再出现“标签状态在工作区、行为在另一个顶层模块”的分裂。
 
 mod close_ops;
-mod duplicate;
-mod session_ops;
-
-#[cfg(test)]
-mod tests;
 
 use crate::app::{AppShell, AppState, TabContent, TabGroup, TabStatus, TerminalTab};
 use crate::pane_tree::LayoutNode;

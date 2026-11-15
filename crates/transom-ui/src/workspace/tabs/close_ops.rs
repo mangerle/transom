@@ -36,7 +36,7 @@ impl AppState {
     }
 
     /// 从所属标签组的分割树里摘除一个窗格，返回应接管的焦点窗格。
-    pub(super) fn detach_pane_from_group(&mut self, tab_id: TabId) -> Option<TabId> {
+    pub(crate) fn detach_pane_from_group(&mut self, tab_id: TabId) -> Option<TabId> {
         let group_index = self.workspace.group_index_for_tab(tab_id)?;
         let was_active = self.workspace.active_tab == Some(tab_id);
         let replacement = match self.workspace.groups[group_index].root.remove_leaf(tab_id) {

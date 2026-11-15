@@ -407,7 +407,7 @@ fn session_form_is_owned_by_entity() {
         "会话表单的旧外壳渲染/动作不得复活，跨域数据走 SessionFormEvent：\n{}",
         offenders.join("\n")
     );
-    let ops = std::fs::read_to_string(root.join("src/workspace/tabs/session_ops.rs"))
+    let ops = std::fs::read_to_string(root.join("src/app/session_ops.rs"))
         .expect("读取会话表单外壳事件处理失败");
     for forbidden in [
         "fn save_session_form(",
