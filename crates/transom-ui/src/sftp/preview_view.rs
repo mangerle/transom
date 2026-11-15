@@ -7,24 +7,19 @@
 use super::preview::{
     PREVIEW_CARD_WIDTH, PREVIEW_IMAGE_HEIGHT, PreviewContent, PreviewKind, SftpPreviewState,
 };
-use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_ui_icons::{AppIcon, AppIconElement};
 
-/// 渲染当前活动面板的悬停预览卡片；无预览或仍在延迟期时返回 `None`。
+/// 渲染悬停预览卡片；无预览或仍在延迟期时返回 `None`。
 pub(crate) fn render_sftp_hover_preview(
-    shell: &AppShell,
+    preview: Option<&SftpPreviewState>,
     window: &Window,
     p: &Palette,
-    cx: &App,
 ) -> Option<AnyElement> {
-    let tab_id = shell.state.workspace.active_tab?;
-    let preview = crate::sftp::sftp_state(shell, tab_id, cx)?
-        .hover_preview
-        .as_ref()?;
+    let preview = preview?;
     if matches!(preview.content, PreviewContent::Pending) {
         return None;
     }

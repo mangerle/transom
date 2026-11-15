@@ -3,14 +3,15 @@
 //! 与 [`crate::event_handlers`] 的分工：本文件只处理 SFTP 传输相关事件，
 //! 连接/认证与遥测事件在另一处；拆分让每个文件保持在工程规范的体量内。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, app_settings};
 use crate::notify::send_desktop_notification;
 use crate::palette::localized_error;
 use crate::sftp::TransferFailure;
 use crate::sftp::TransferStatus;
+use crate::sftp::columns::SftpWidthAdjustment;
 use crate::sftp::{format_size, parent_remote};
 use gpui_kit::*;
-use transom_core::{SftpAppEvent, TransferDirection};
+use transom_core::{AppSettings, SftpAppEvent, TransferDirection};
 
 /// SFTP 完成事件中与队列落定相关的输入。
 struct SftpFinishInput {
@@ -342,4 +343,96 @@ pub(crate) fn on_sftp_failed(
         view.update(cx, |view, cx| view.process_queue(tab_id, cx));
     }
     true
+}
+
+/// 处理 SFTP 面板在列折叠/展开时产生的尺寸调整请求。
+pub(crate) fn sync_sftp_panel_width(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(tab_id) = shell.state.workspace.active_tab else {
+        return;
+    };
+    let adjustment = crate::sftp::sftp_view_mut(shell, tab_id, cx)
+        .and_then(|mut panel| panel.state.pending_width_adjustment.take());
+    let Some(adjustment) = adjustment else {
+        return;
+    };
+    let Some(panel) = crate::sftp::sftp_state(shell, tab_id, cx) else {
+        return;
+    };
+    if !panel.open {
+        return;
+    }
+    let Some(index) = sftp_resizable_index(shell, app_settings(cx)) else {
+        return;
+    };
+    let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
+        shell.state.workspace_panels_left.clone()
+    } else {
+        shell.state.workspace_panels.clone()
+    };
+    let current_width = panels
+        .read(cx)
+        .sizes()
+        .get(index)
+        .copied()
+        .map(|width| width.as_f32())
+        .unwrap_or(360.0);
+
+    let target = match adjustment {
+        SftpWidthAdjustment::Exact(w) => w,
+        SftpWidthAdjustment::Delta(d) => current_width + d,
+    };
+    let min_w = panel.min_content_width();
+    let target = target.max(min_w);
+
+    panels.update(cx, |state, cx| {
+        state.resize_panel(index, px(target), window, cx)
+    });
+}
+
+/// 把 SFTP 面板加宽 `delta`：挂载新列时现有面板放不下，直接向工作区分栏申请空间。
+pub(crate) fn grow_sftp_panel_width(
+    shell: &mut AppShell,
+    delta: f32,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    if delta <= 0.5 {
+        return;
+    }
+    let Some(index) = sftp_resizable_index(shell, app_settings(cx)) else {
+        return;
+    };
+    let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
+        shell.state.workspace_panels_left.clone()
+    } else {
+        shell.state.workspace_panels.clone()
+    };
+    let Some(current) = panels
+        .read(cx)
+        .sizes()
+        .get(index)
+        .copied()
+        .map(|width| width.as_f32())
+    else {
+        return;
+    };
+    panels.update(cx, |state, cx| {
+        state.resize_panel(index, px(current + delta), window, cx)
+    });
+}
+
+/// SFTP 面板在工作区分组里的面板索引。
+fn sftp_resizable_index(shell: &AppShell, settings: &AppSettings) -> Option<usize> {
+    if shell.state.immersive {
+        return None;
+    }
+    Some(if settings.window.sftp_panel_side.is_left() {
+        1
+    } else {
+        2
+    })
 }

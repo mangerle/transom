@@ -625,3 +625,114 @@ fn editor_domain_modules_have_no_app_shell() {
         offenders.join("\n")
     );
 }
+
+fn assert_app_shell_confined_to(domain: &str, allowed_suffixes: &[&str]) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join(domain);
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let norm = normalized_path(&entry);
+        if allowed_suffixes
+            .iter()
+            .any(|suffix| norm.ends_with(suffix))
+        {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        let has_code_ref = content
+            .lines()
+            .any(|line| !line.trim_start().starts_with("//") && line.contains("AppShell"));
+        if has_code_ref {
+            offenders.push(norm);
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "{domain} 领域非桥接文件不得引入 AppShell 耦合：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 容器域除明确登记的外壳桥接/事件写回文件外，其余所有视图、状态与弹窗不得引用 AppShell。
+#[test]
+fn container_app_shell_is_confined_to_bridges() {
+    assert_app_shell_confined_to(
+        "container",
+        &[
+            "/container/engines.rs",
+            "/container/event.rs",
+            "/container/events/connection.rs",
+            "/container/events/file_stats.rs",
+            "/container/events/listing.rs",
+            "/container/events/mod.rs",
+            "/container/events/operations.rs",
+            "/container/events/pull.rs",
+            "/container/events/result.rs",
+            "/container/events/system.rs",
+            "/container/events/terminal.rs",
+            "/container/form/mod.rs",
+            "/container/form/run/mod.rs",
+            "/container/lifecycle.rs",
+            "/container/mod.rs",
+            "/container/port_forward.rs",
+            "/container/sidebar_events.rs",
+            "/container/terminal.rs",
+        ],
+    );
+}
+
+/// SFTP 域除明确登记的桥接与事件写回文件外，所有视图、列布局、浮层与弹窗不得引用 AppShell。
+#[test]
+fn sftp_app_shell_is_confined_to_bridges() {
+    assert_app_shell_confined_to(
+        "sftp",
+        &[
+            "/sftp/drop_upload.rs",
+            "/sftp/entity/mod.rs",
+            "/sftp/events.rs",
+            "/sftp/file_ops/commit.rs",
+            "/sftp/file_ops/mod.rs",
+            "/sftp/handlers.rs",
+            "/sftp/input_modal.rs",
+            "/sftp/local_only.rs",
+            "/sftp/modals/bridge.rs",
+            "/sftp/nav_actions/init.rs",
+            "/sftp/nav_actions/mod.rs",
+            "/sftp/nav_actions/panel_events.rs",
+            "/sftp/remote_actions.rs",
+            "/sftp/side_remote/mod.rs",
+            "/sftp/sync_actions.rs",
+        ],
+    );
+}
+
+/// Git 域除 actions 桥接及显式外联入口外，所有视图、状态、类型与弹窗不得引用 AppShell。
+#[test]
+fn git_app_shell_is_confined_to_bridges() {
+    assert_app_shell_confined_to(
+        "git",
+        &[
+            "/git/actions/event_dispatch/action_done.rs",
+            "/git/actions/event_dispatch/mod.rs",
+            "/git/actions/event_dispatch/read_events.rs",
+            "/git/actions/event_dispatch/shelf_events.rs",
+            "/git/actions/init_event.rs",
+            "/git/actions/mod.rs",
+            "/git/actions/modal_bridges/clone.rs",
+            "/git/actions/modal_bridges/lightweight.rs",
+            "/git/actions/modal_bridges/mod.rs",
+            "/git/actions/modal_bridges/project.rs",
+            "/git/actions/sidebar_actions.rs",
+            "/git/actions/sidebar_bridge.rs",
+            "/git/clone_modal/task.rs",
+            "/git/patch.rs",
+            "/git/web_link.rs",
+        ],
+    );
+}

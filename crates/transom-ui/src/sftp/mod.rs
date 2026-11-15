@@ -84,7 +84,6 @@ pub(crate) use self::task::{
 pub(crate) use crate::editor::PendingEditorClose;
 use crate::palette::Palette;
 use crate::theme::tokens::control;
-pub(crate) use columns::{grow_sftp_panel_width, sync_sftp_panel_width};
 pub(crate) use drop_upload::handle_dropped_files;
 pub(crate) use events::{
     on_sftp_dir_compared, on_sftp_listing, on_sftp_metadata, on_sftp_preview,
@@ -92,7 +91,9 @@ pub(crate) use events::{
 };
 pub(crate) use file_ops::execute_sftp_delete;
 use gpui_kit::*;
-pub(crate) use handlers::{on_sftp_failed, on_sftp_finished};
+pub(crate) use handlers::{
+    grow_sftp_panel_width, on_sftp_failed, on_sftp_finished, sync_sftp_panel_width,
+};
 pub(crate) use input_modal::open_sftp_input_modal;
 pub(crate) use local_only::open_local_file_panel;
 pub(crate) use nav_actions::{
@@ -100,7 +101,6 @@ pub(crate) use nav_actions::{
     request_sftp_list, request_sftp_list_pane, sftp_sync_with_terminal_cwd, toggle_sftp,
 };
 pub(crate) use overlay::render_drop_overlay;
-pub(crate) use panel_view::render_sftp_panel_element;
 pub(crate) use preview_view::render_sftp_hover_preview;
 pub(crate) use side_remote::request_sftp_list_for_connection;
 use std::path::{Path, PathBuf};

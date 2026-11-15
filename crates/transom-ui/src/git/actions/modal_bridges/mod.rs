@@ -334,7 +334,9 @@ fn on_push_modal_event(
             }
         }
         GitPushModalEvent::CopyOid(oid) => {
-            crate::git::helpers::write_clipboard(shell, oid, cx);
+            cx.write_to_clipboard(ClipboardItem::new_string(oid.to_string()));
+            shell.set_transient_status(rust_i18n::t!("git.menu.copied"), cx);
+            cx.notify();
         }
         GitPushModalEvent::Close => close_git_push_modal(shell, cx),
     }

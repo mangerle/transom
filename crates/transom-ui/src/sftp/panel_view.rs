@@ -5,7 +5,6 @@ use super::columns::{SftpColumn, SftpColumnId};
 use super::local_pane_view::SftpLocalPaneProps;
 use super::queue_view::{SftpQueuePaneProps, SftpStatusBarProps};
 use super::remote_pane::RemotePaneProps;
-use crate::app::AppShell;
 use crate::app::AppState;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
@@ -17,17 +16,6 @@ use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
-
-/// 当前活动窗格的 SFTP 面板元素：实体实现 `Render`，外壳只负责挂载。
-pub(crate) fn render_sftp_panel_element(shell: &AppShell) -> AnyElement {
-    shell
-        .state
-        .workspace
-        .active_tab
-        .and_then(|tab_id| shell.state.sftp_view(tab_id))
-        .map(IntoElement::into_any_element)
-        .unwrap_or_else(|| div().into_any_element())
-}
 
 impl SftpPanelView {
     /// 构建面板内容：状态、列、队列与状态栏都在实体上下文里完成。

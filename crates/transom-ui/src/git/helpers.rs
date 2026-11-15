@@ -3,8 +3,6 @@
 //! 设计原理（Why）：这些方法被侧栏、标签页与两个模态框共同需要，放在任意
 //! 一个视图文件里都会造成反向依赖，单独成模块保持「视图 → 辅助」的单向引用。
 
-use crate::app::AppShell;
-use gpui_kit::*;
 use std::cmp::Ordering;
 use transom_core::{DropSide, GitFolder, GitFolderId, GitProject, GitProjectId};
 
@@ -133,22 +131,6 @@ pub(crate) fn find_folder_by_name(
         .iter()
         .find(|folder| folder.name.trim() == name)
         .map(|folder| folder.id)
-}
-
-/// 当前活动标签页对应的 Git 项目 id：侧栏据此给行上激活底色与左竖条。
-pub(crate) fn active_git_project_id(shell: &AppShell, cx: &App) -> Option<GitProjectId> {
-    let tab_id = shell.state.workspace.active_tab?;
-    shell
-        .state
-        .git_workspace(tab_id)
-        .map(|workspace| workspace.read(cx).state.project.id)
-}
-
-/// 把文本写入系统剪贴板。
-pub(crate) fn write_clipboard(shell: &mut AppShell, text: &str, cx: &mut Context<AppShell>) {
-    cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-    shell.set_transient_status(rust_i18n::t!("git.menu.copied"), cx);
-    cx.notify();
 }
 
 #[cfg(test)]

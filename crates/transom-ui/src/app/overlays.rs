@@ -103,7 +103,14 @@ impl AppShell {
     ) -> Vec<AnyElement> {
         let p = Palette::from(cx);
         let mut overlays = Vec::new();
-        if let Some(preview) = crate::sftp::render_sftp_hover_preview(self, window, &p, cx) {
+        if let Some(preview) = self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| crate::sftp::sftp_state(self, tab_id, cx))
+            .and_then(|state| state.hover_preview.as_ref())
+            .and_then(|preview| crate::sftp::render_sftp_hover_preview(Some(preview), window, &p))
+        {
             overlays.push(preview);
         }
         if self.state.modals.tools.show_quick_open {

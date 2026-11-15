@@ -200,7 +200,12 @@ impl AppShell {
                     )
                 }
                 SidebarSection::Git => {
-                    let active_project = crate::git::helpers::active_git_project_id(self, cx);
+                    let active_project = self
+                        .state
+                        .workspace
+                        .active_tab
+                        .and_then(|tab_id| self.state.git_workspace(tab_id))
+                        .map(|workspace| workspace.read(cx).state.project.id);
                     let mut active_branches =
                         std::collections::HashMap::with_capacity(self.state.git.projects.len());
                     for project in &self.state.git.projects {
@@ -294,7 +299,14 @@ impl AppShell {
                         .size(px(plan.sftp_width.min(plan.sftp_max_width)))
                         .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
-                        .child(crate::sftp::render_sftp_panel_element(self)),
+                        .child(
+                            self.state
+                                .workspace
+                                .active_tab
+                                .and_then(|tab_id| self.state.sftp_view(tab_id))
+                                .map(IntoElement::into_any_element)
+                                .unwrap_or_else(|| div().into_any_element()),
+                        ),
                 );
                 panels_before_drawer += 1;
             }
@@ -318,7 +330,14 @@ impl AppShell {
                         .size(px(plan.sftp_width.min(plan.sftp_max_width)))
                         .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
-                        .child(crate::sftp::render_sftp_panel_element(self)),
+                        .child(
+                            self.state
+                                .workspace
+                                .active_tab
+                                .and_then(|tab_id| self.state.sftp_view(tab_id))
+                                .map(IntoElement::into_any_element)
+                                .unwrap_or_else(|| div().into_any_element()),
+                        ),
                 );
                 panels_before_drawer += 1;
             }

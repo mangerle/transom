@@ -161,10 +161,10 @@ pub(crate) struct GitWorkspaceState {
 }
 
 impl GitWorkspaceState {
-    pub(crate) fn new(
+    pub(crate) fn new<V: 'static>(
         project: GitProject,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<V>,
     ) -> Self {
         let search_input = cx.new(|cx| {
             InputState::new(window, cx)
