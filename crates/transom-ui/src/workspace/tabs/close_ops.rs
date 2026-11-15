@@ -1,11 +1,8 @@
-//! 标签关闭、窗格摘除与应用语言切换操作。
+//! 标签窗格摘除与可见性判定（纯工作区状态操作）。
 
-use crate::app::{AppShell, AppState, app_settings};
+use crate::app::AppState;
 use crate::pane_tree::RemoveOutcome;
-use crate::sftp::PendingEditorClose;
-use crate::tiling::StripEntry;
-use gpui_kit::*;
-use transom_core::{GroupId, TabId, TerminalCommand};
+use transom_core::TabId;
 
 impl AppState {
     /// 当前活动标签所属分组的索引；没有活动标签时为 `None`。
@@ -14,9 +11,8 @@ impl AppState {
             .active_tab
             .and_then(|tab_id| self.workspace.group_index_for_tab(tab_id))
     }
-}
 
-impl AppState {
+    /// 该窗格此刻是否正被渲染：属于可见标签组、在分割树里，且没被"单窗格最大化"挡在后面。
     pub(crate) fn is_rendered_pane(&self, tab_id: TabId) -> bool {
         let Some(group_index) = self.workspace.group_index_for_tab(tab_id) else {
             return false;
@@ -67,6 +63,7 @@ impl AppState {
         replacement
     }
 
+    /// 移除指定标签并按优先级回退焦点窗格。
     pub(crate) fn remove_tab(&mut self, tab_id: TabId) {
         let was_active = self.workspace.active_tab == Some(tab_id);
         let group_id = self
@@ -84,188 +81,5 @@ impl AppState {
         }
         self.prune_tab_selection();
         self.sync_broadcast_targets();
-    }
-}
-
-impl AppShell {
-    /// 该窗格此刻是否正被渲染：属于可见标签组、在分割树里，且没被"单窗格最大化"挡在后面。
-    pub(crate) fn close_other_tabs(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(target_group) = self.state.workspace.group_index_for_tab(tab_id) else {
-            return;
-        };
-        let target_group_id = self.state.workspace.groups[target_group].id;
-        let mut keep = vec![target_group_id];
-        if let Some(tiled) = self.state.tiling_of_group(target_group_id) {
-            keep.extend(tiled.occupied_groups());
-        }
-        let others: Vec<GroupId> = self
-            .state
-            .workspace
-            .groups
-            .iter()
-            .filter(|group| !keep.contains(&group.id))
-            .map(|group| group.id)
-            .collect();
-        for group_id in others {
-            self.close_group(group_id, window, cx);
-        }
-    }
-
-    /// 关闭窗格所属的整个标签组。
-    pub(crate) fn close_tab(&mut self, tab_id: TabId, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(group_id) = self
-            .state
-            .workspace
-            .group_index_for_tab(tab_id)
-            .map(|index| self.state.workspace.groups[index].id)
-        else {
-            return;
-        };
-        self.close_group(group_id, window, cx);
-    }
-
-    /// 关闭标签组，并回收其中全部窗格的连接。
-    pub(crate) fn close_group(
-        &mut self,
-        group_id: GroupId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(index) = self.state.workspace.group_index(group_id) else {
-            return;
-        };
-        let panes = self.state.workspace.groups[index].pane_ids();
-        if crate::editor::block_close_for_dirty_editors(
-            self,
-            &panes,
-            PendingEditorClose::Group(group_id),
-            cx,
-        ) {
-            return;
-        }
-        let tiled_focus = self
-            .state
-            .tiling_of_group(group_id)
-            .and_then(|tiled| tiled.focused_group());
-        self.state.workspace.groups.remove(index);
-        for tab_id in &panes {
-            self.state
-                .send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
-        }
-        self.state
-            .workspace
-            .tabs
-            .retain(|tab| !panes.contains(&tab.id));
-        crate::editor::prune_tab_overlays(self, cx);
-        self.state.prune_tilings();
-
-        let active_removed = self
-            .state
-            .workspace
-            .active_tab
-            .is_some_and(|id| panes.contains(&id));
-        if active_removed {
-            let tiled_return = self
-                .state
-                .active_tiling()
-                .and_then(|tiled| tiled.focused_group())
-                .or(tiled_focus)
-                .and_then(|id| self.state.workspace.group(id))
-                .map(|group| group.active_pane);
-            self.state.workspace.active_tab = tiled_return.or_else(|| {
-                self.state
-                    .workspace
-                    .groups
-                    .get(index.saturating_sub(1))
-                    .or_else(|| self.state.workspace.groups.first())
-                    .map(|group| group.active_pane)
-            });
-            if let Some(active) = self.state.workspace.active_tab {
-                self.activate_tab(active, window, cx);
-            }
-        }
-        self.state.prune_tab_selection();
-        self.state.sync_broadcast_targets();
-        if self.state.workspace.groups.is_empty()
-            && app_settings(cx).window.close_window_on_all_tabs_closed
-        {
-            crate::window_state::close_app(self, window, cx);
-            return;
-        }
-        cx.notify();
-    }
-
-    /// 关闭单个窗格；组内最后一个窗格关闭时等价于关闭整个标签。
-    pub(crate) fn close_pane(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) else {
-            return;
-        };
-        if self.state.workspace.groups[group_index].pane_count() == 1 {
-            let group_id = self.state.workspace.groups[group_index].id;
-            self.close_group(group_id, window, cx);
-            return;
-        }
-        if crate::editor::block_close_for_dirty_editors(
-            self,
-            std::slice::from_ref(&tab_id),
-            PendingEditorClose::Pane(tab_id),
-            cx,
-        ) {
-            return;
-        }
-
-        self.state
-            .send_command(TerminalCommand::CloseTab { tab_id });
-        self.state.workspace.tabs.retain(|tab| tab.id != tab_id);
-        crate::editor::prune_tab_overlays(self, cx);
-        let replacement = self.state.detach_pane_from_group(tab_id);
-        self.state.prune_tilings();
-        if let Some(next) = replacement {
-            self.activate_tab(next, window, cx);
-        }
-        cx.notify();
-    }
-
-    /// 连接尚未建立时的静默移除，不向控制器发送关闭命令。
-    /// 在标签栏条目之间轮转：并排网格算一条，组内成员不单独占位。
-    pub(crate) fn cycle_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let entries = self.state.strip_entries();
-        if entries.len() <= 1 {
-            return;
-        }
-        let current = self
-            .state
-            .active_group_id()
-            .and_then(|group| {
-                entries
-                    .iter()
-                    .position(|entry| self.state.entry_contains(*entry, group))
-            })
-            .unwrap_or(0);
-        let next = if forward {
-            (current + 1) % entries.len()
-        } else {
-            (current + entries.len() - 1) % entries.len()
-        };
-        let target = match entries[next] {
-            StripEntry::Single(group) => Some(group),
-            StripEntry::Tiled { id, .. } => self
-                .state
-                .tiling_by_id(id)
-                .and_then(|tiled| tiled.focused_group()),
-        };
-        if let Some(group) = target {
-            crate::tiling::activate_group(self, group, window, cx);
-        }
     }
 }

@@ -141,6 +141,7 @@ pub(super) fn assemble_state(
         containers: crate::container::ContainerUiState::new(window, cx),
         git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
         git_sidebar: cx.new(|_| crate::git::GitSidebarView::new()),
+        session_sidebar: cx.new(|_| crate::sidebar::SessionSidebarView::new()),
         restart_requested,
     }
 }

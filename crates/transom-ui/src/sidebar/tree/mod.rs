@@ -8,14 +8,13 @@ pub(crate) mod reorder;
 pub(crate) use reorder::SidebarDragPreview;
 mod rows;
 mod session_row;
-pub(crate) use session_row::render_session_row;
+pub(crate) use session_row::{SessionRowRenderParams, render_session_row};
 
 pub(crate) use rows::build_rows;
 
-use crate::app::AppShell;
 use crate::theme::tokens::size;
 use gpui_kit::*;
-use transom_core::{CatalogError, DropSide, FolderId, Session, SessionId};
+use transom_core::{DropSide, FolderId, Session, SessionId};
 
 /// 行槽位高度（rem）：虚拟列表按它分配空间，渲染时必须严格一致。
 pub(crate) const ROW_HEIGHT_REM: f32 = size::TREE_ROW_HEIGHT;
@@ -78,132 +77,6 @@ impl SidebarRow {
     pub(crate) fn height(&self, rem_size: Pixels) -> Pixels {
         // 文件夹与会话保持统一行高；内层内容条再压缩，兼顾两行信息与紧凑度。
         rems(ROW_HEIGHT_REM).to_pixels(rem_size)
-    }
-}
-
-/// 折叠或展开文件夹，并持久化收纳状态。
-pub(crate) fn toggle_folder_collapsed(
-    shell: &mut AppShell,
-    id: FolderId,
-    cx: &mut Context<AppShell>,
-) {
-    let collapsed = shell
-        .state
-        .catalog
-        .folder(id)
-        .map(|folder| !folder.collapsed);
-    if let Some(collapsed) = collapsed {
-        if let Err(error) = shell.state.catalog.set_folder_collapsed(id, collapsed) {
-            shell.state.set_error(error.to_string());
-            cx.notify();
-            return;
-        }
-        shell.state.persist_catalog();
-    }
-    cx.notify();
-}
-
-/// 处理会话/文件夹拖放：换父级或调整同级顺序。
-///
-/// 目标文件夹被折叠时自动展开，保证拖入的条目立即可见；
-/// 非法移动（拖入自身子树）由领域层拒绝并显示中文原因。
-pub(crate) fn handle_sidebar_drop(
-    shell: &mut AppShell,
-    drag: SidebarDrag,
-    target: SidebarTarget,
-    cx: &mut Context<AppShell>,
-) {
-    match apply_sidebar_drop(shell, drag, target) {
-        Ok(landed) => {
-            if let Some(folder_id) = landed
-                && let Some(folder) = shell
-                    .state
-                    .catalog
-                    .folders
-                    .iter_mut()
-                    .find(|f| f.id == folder_id)
-            {
-                folder.collapsed = false;
-            }
-            shell.state.persist_catalog();
-        }
-        Err(error) => shell.state.set_error(error.to_string()),
-    }
-    cx.notify();
-}
-
-/// 把落点翻译成领域操作，返回条目最终所属文件夹（`None` 表示根层级）。
-///
-/// 跨类型落点按“能落进容器”解释：会话落在文件夹行上下沿即放入该文件夹，
-/// 文件夹落在会话行上下沿即放入该会话所在文件夹；两者都不需要用户二次操作。
-fn apply_sidebar_drop(
-    shell: &mut AppShell,
-    drag: SidebarDrag,
-    target: SidebarTarget,
-) -> Result<Option<FolderId>, CatalogError> {
-    match (drag, target) {
-        (SidebarDrag::Session(session_id), SidebarTarget::Root) => {
-            shell.state.catalog.move_session(session_id, None)?;
-            Ok(None)
-        }
-        (SidebarDrag::Folder(folder_id), SidebarTarget::Root) => {
-            shell.state.catalog.move_folder(folder_id, None)?;
-            Ok(None)
-        }
-        (SidebarDrag::Session(session_id), SidebarTarget::Folder(folder_id)) => {
-            shell
-                .state
-                .catalog
-                .move_session(session_id, Some(folder_id))?;
-            Ok(Some(folder_id))
-        }
-        (SidebarDrag::Folder(moved_id), SidebarTarget::Folder(parent_id)) => {
-            if moved_id == parent_id {
-                return Ok(Some(parent_id));
-            }
-            shell.state.catalog.move_folder(moved_id, Some(parent_id))?;
-            Ok(Some(parent_id))
-        }
-        (drag, SidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
-            (SidebarDrag::Session(session_id), SidebarDrag::Session(anchor_id)) => {
-                shell
-                    .state
-                    .catalog
-                    .reorder_session(session_id, anchor_id, side)?;
-                Ok(shell
-                    .state
-                    .catalog
-                    .folder_of_session(anchor_id)
-                    .map(|folder| folder.id))
-            }
-            (SidebarDrag::Folder(folder_id), SidebarDrag::Folder(anchor_id)) => {
-                shell
-                    .state
-                    .catalog
-                    .reorder_folder(folder_id, anchor_id, side)?;
-                Ok(shell
-                    .state
-                    .catalog
-                    .folder(folder_id)
-                    .and_then(|folder| folder.parent))
-            }
-            (SidebarDrag::Session(session_id), SidebarDrag::Folder(anchor_id)) => {
-                shell
-                    .state
-                    .catalog
-                    .move_session(session_id, Some(anchor_id))?;
-                Ok(Some(anchor_id))
-            }
-            (SidebarDrag::Folder(folder_id), SidebarDrag::Session(anchor_id)) => {
-                let parent = shell
-                    .state
-                    .catalog
-                    .folder_of_session(anchor_id)
-                    .map(|folder| folder.id);
-                shell.state.catalog.move_folder(folder_id, parent)?;
-                Ok(parent)
-            }
-        },
     }
 }
 

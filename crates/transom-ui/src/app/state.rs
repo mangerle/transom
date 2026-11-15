@@ -99,6 +99,8 @@ pub(crate) struct AppState {
     pub(crate) catalog_revision: u64,
     /// 统一托管的侧栏核心状态与选择集。
     pub(crate) sidebar: SidebarState,
+    /// 会话侧栏视图实体：点击、折叠、拖拽与右键菜单事件都归它。
+    pub(crate) session_sidebar: Entity<crate::sidebar::SessionSidebarView>,
     /// 统一托管的工作区多标签与分屏网格核心状态。
     pub(crate) workspace: WorkspaceState,
     /// 工作区分组（侧栏、主区、SFTP、转发）的列宽状态。

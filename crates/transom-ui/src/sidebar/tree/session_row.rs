@@ -1,26 +1,35 @@
 //! 侧边栏会话树行渲染。
 
+use super::super::entity::{SessionSidebarEvent, SessionSidebarView};
 use super::reorder::{
     RowActionButtonProps, SidebarDragPreview, reorder_overlay, row_action_button,
 };
 use super::{
     ROW_HEIGHT_REM, ROW_ICON_SIZE, SessionRow, SidebarDrag, SidebarTarget, indent_padding,
 };
-use crate::app::AppShell;
 use crate::connection::session_host;
 use crate::palette::Palette;
+use crate::probe::ProbeBadge;
 use crate::session_appearance::{session_color, session_icon};
 use crate::widgets::{SidebarRowState, sidebar_row_band};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
+use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::*;
-use transom_core::{HostAction, SessionId};
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
-use transom_ui_icons::DomainIcon;
-use transom_ui_icons::UiIcon;
+use transom_core::{FolderId, HostAction, Session, SessionId};
+use transom_ui_icons::{AppIcon, AppIconElement, DomainIcon, UiIcon};
+
+/// 渲染单个会话行所需的只读上下文参数。
+pub(crate) struct SessionRowRenderParams<'a> {
+    pub(crate) view: &'a Entity<SessionSidebarView>,
+    pub(crate) row: &'a SessionRow,
+    pub(crate) active_session: Option<SessionId>,
+    pub(crate) selection_mode: bool,
+    pub(crate) is_selected: bool,
+    pub(crate) is_marked: bool,
+    pub(crate) probe_badge: Option<&'a ProbeBadge>,
+}
 
 /// 会话行主体（图标、名称、详情、选中框与活动条）的渲染参数。
 struct SessionBandParams {
@@ -35,13 +44,10 @@ struct SessionBandParams {
 }
 
 /// 渲染会话行主体；行尾动作（拨测、拖拽落点）由调用方追加。
-///
-/// 拆出来是为了让 `render_session_row` 只负责行级交互与菜单装配，
-/// 图标着色与两行文本集中在一处，行底色和状态边框交由共享侧栏组件统一决定。
 fn session_band(
     params: SessionBandParams,
+    view: &Entity<SessionSidebarView>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> gpui_kit::Stateful<gpui_kit::Div> {
     let SessionBandParams {
         session_id,
@@ -59,16 +65,25 @@ fn session_band(
         p,
     );
     if selection_mode {
+        let check_view = view.clone();
         inner = inner.child(
             Checkbox::new(ElementId::Name(
                 format!("session-select-{session_id}").into(),
             ))
             .small()
             .checked(is_selected)
-            .on_click(cx.listener(move |this, &checked, _, cx| {
+            .on_click(move |&checked, _, cx| {
                 cx.stop_propagation();
-                crate::batch::toggle_session_selection(this, session_id, checked, cx);
-            })),
+                check_view.update(cx, |this, cx| {
+                    this.emit_action(
+                        SessionSidebarEvent::ToggleSessionSelection {
+                            session_id,
+                            selected: checked,
+                        },
+                        cx,
+                    );
+                });
+            }),
         );
     }
     inner
@@ -91,7 +106,7 @@ fn session_band(
                         .line_height(px(17.0))
                         .font_weight(FontWeight::MEDIUM)
                         .truncate()
-                        .child(title.clone()),
+                        .child(title),
                 )
                 .child(
                     div()
@@ -105,140 +120,84 @@ fn session_band(
 }
 
 /// 会话行右键菜单：连接、移动、复制、编辑、审计、复制主机与删除。
-///
-/// 菜单在渲染期构建、点击后才回交外壳；`app` 是外壳实体句柄，菜单闭包
-/// 不持有会话行的借用，避免菜单还开着时会话被删除导致的悬垂引用。
 fn session_context_menu(
     session_id: SessionId,
-    folder_id: Option<transom_core::FolderId>,
+    folder_id: Option<FolderId>,
     menu_host: Option<String>,
     is_ssh: bool,
-    app_entity: Entity<AppShell>,
-) -> impl Fn(
-    gpui_kit::component::menu::PopupMenu,
-    &mut Window,
-    &mut Context<gpui_kit::component::menu::PopupMenu>,
-) -> gpui_kit::component::menu::PopupMenu
-+ 'static {
+    view: Entity<SessionSidebarView>,
+) -> impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static {
     move |menu, _window, _cx| {
-        let app = app_entity.clone();
-        let mut menu = menu.item(crate::widgets::menu_item(
+        let emit_item = |menu: PopupMenu, label: String, icon: AppIcon, event: SessionSidebarEvent| {
+            let view = view.clone();
+            menu.item(crate::widgets::menu_item(label, icon, move |_, _, cx| {
+                view.update(cx, |this, cx| this.emit_action(event.clone(), cx));
+            }))
+        };
+
+        let mut menu = emit_item(
+            menu,
             rust_i18n::t!("menu.connect").to_string(),
             AppIcon::Domain(DomainIcon::TERMINAL),
-            {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        crate::connection::connect_session(this, session_id, window, cx);
-                        this.reveal_vertical_tabs_panel(cx);
-                    });
-                }
-            },
-        ));
+            SessionSidebarEvent::ConnectSession(session_id),
+        );
         if is_ssh {
-            let container_app = app.clone();
-            menu = menu.item(crate::widgets::menu_item(
+            menu = emit_item(
+                menu,
                 rust_i18n::t!("menu.manage_containers").to_string(),
                 AppIcon::Domain(DomainIcon::CONTAINER),
-                move |_, window, cx| {
-                    container_app.update(cx, |this, cx| {
-                        crate::container::open_container_workspace_for_session(
-                            this, session_id, window, cx,
-                        );
-                    });
-                },
-            ));
+                SessionSidebarEvent::OpenContainerWorkspace(session_id),
+            );
         }
         if folder_id.is_some() {
-            menu = menu.item(crate::widgets::menu_item(
+            menu = emit_item(
+                menu,
                 rust_i18n::t!("menu.move_to_root").to_string(),
                 AppIcon::Ui(UiIcon::SHOW_AS_TREE),
-                {
-                    let app = app.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            crate::sidebar::handle_sidebar_drop(
-                                this,
-                                SidebarDrag::Session(session_id),
-                                SidebarTarget::Root,
-                                cx,
-                            );
-                        });
-                    }
-                },
-            ));
+                SessionSidebarEvent::Drop(SidebarDrag::Session(session_id), SidebarTarget::Root),
+            );
         }
-        menu = menu
-            .item(crate::widgets::menu_item(
-                rust_i18n::t!("menu.duplicate").to_string(),
-                AppIcon::Ui(UiIcon::ADD),
-                {
-                    let app = app.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            this.duplicate_session(session_id, cx);
-                        });
-                    }
-                },
-            ))
-            .item(crate::widgets::menu_item(
-                rust_i18n::t!("menu.edit").to_string(),
-                AppIcon::Ui(UiIcon::SETTINGS),
-                {
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            this.open_edit_session(session_id, window, cx);
-                        });
-                    }
-                },
-            ))
-            .item(crate::widgets::menu_item(
-                rust_i18n::t!("audit_viewer.menu_item").to_string(),
-                AppIcon::Ui(UiIcon::DIFF),
-                {
-                    let app = app.clone();
-                    move |_, window, cx| {
-                        app.update(cx, |this, cx| {
-                            crate::audit_viewer::open_audit_viewer_for_session(
-                                this, session_id, window, cx,
-                            );
-                        });
-                    }
-                },
-            ));
+        menu = emit_item(
+            menu,
+            rust_i18n::t!("menu.duplicate").to_string(),
+            AppIcon::Ui(UiIcon::ADD),
+            SessionSidebarEvent::DuplicateSession(session_id),
+        );
+        menu = emit_item(
+            menu,
+            rust_i18n::t!("menu.edit").to_string(),
+            AppIcon::Ui(UiIcon::SETTINGS),
+            SessionSidebarEvent::EditSession(session_id),
+        );
+        menu = emit_item(
+            menu,
+            rust_i18n::t!("audit_viewer.menu_item").to_string(),
+            AppIcon::Ui(UiIcon::DIFF),
+            SessionSidebarEvent::OpenAuditViewer(session_id),
+        );
 
         // 与标签栏同一口径：取不到地址（本地终端、串口）就不放这一项。
         if let Some(host) = menu_host.clone() {
-            let copy_app = app.clone();
+            let copy_view = view.clone();
             menu = menu.item(crate::widgets::menu_item(
                 rust_i18n::t!("menu.copy_host").to_string(),
                 AppIcon::Ui(UiIcon::COPY),
                 move |_, _, cx| {
-                    let text = host.clone();
-                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-                    copy_app.update(cx, |this, cx| {
-                        this.state.status =
-                            Some(rust_i18n::t!("sidebar.host_copied", host = text).to_string());
-                        cx.notify();
+                    cx.write_to_clipboard(ClipboardItem::new_string(host.clone()));
+                    copy_view.update(cx, |this, cx| {
+                        this.emit_action(SessionSidebarEvent::CopyHost(host.clone()), cx);
                     });
                 },
             ));
         }
 
-        menu.item(PopupMenuItem::separator())
-            .item(crate::widgets::menu_item(
-                rust_i18n::t!("menu.delete").to_string(),
-                AppIcon::Ui(UiIcon::DELETE),
-                {
-                    let app = app.clone();
-                    move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            this.delete_session_by_id(session_id, cx);
-                        });
-                    }
-                },
-            ))
+        let menu = menu.item(PopupMenuItem::separator());
+        emit_item(
+            menu,
+            rust_i18n::t!("menu.delete").to_string(),
+            AppIcon::Ui(UiIcon::DELETE),
+            SessionSidebarEvent::DeleteSession(session_id),
+        )
     }
 }
 
@@ -249,8 +208,6 @@ struct SessionRowVisuals {
     icon_name: AppIcon,
     detail_text: String,
     icon_color: Option<Hsla>,
-    selection_mode: bool,
-    is_selected: bool,
     drag_label: String,
     drag_icon: AppIcon,
     state: SidebarRowState,
@@ -262,25 +219,18 @@ struct SessionProbeParts {
     button: Option<AnyElement>,
 }
 
-/// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
 /// 行尾拨测状态点与按钮；无网络地址的会话两者都不出现。
 fn session_probe_parts(
-    shell: &AppShell,
-    session: &transom_core::Session,
+    view: &Entity<SessionSidebarView>,
+    session: &Session,
+    probe_badge: Option<&ProbeBadge>,
     highlighted: bool,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> SessionProbeParts {
     let session_id = session.id;
-    // 行尾状态点只在有在途请求或结果时存在，到期由 probe 模块自行清理。
-    let probe_badge = shell
-        .state
-        .probe_badges
-        .get(&session_id)
-        .map(|badge| crate::probe::render_probe_badge(session_id, badge, p));
-    // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
-    // "没有可拨测主机"，不如根本不给出这个动作。
-    let probe_button = HostAction::probe_for(session).map(|_| {
+    let badge = probe_badge.map(|badge| crate::probe::render_probe_badge(session_id, badge, p));
+    let button = HostAction::probe_for(session).map(|_| {
+        let probe_view = view.clone();
         row_action_button(
             RowActionButtonProps {
                 element_id: format!("session-probe-{session_id}"),
@@ -291,42 +241,33 @@ fn session_probe_parts(
                 } else {
                     p.muted_foreground
                 },
-                on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
-                    // 拨测这一台不该同时选中这一行，更不该触发双击连接。
+                on_click: move |_: &ClickEvent, _window: &mut Window, cx: &mut App| {
                     cx.stop_propagation();
-                    crate::probe::probe_session(this, session_id, cx);
-                }),
+                    probe_view.update(cx, |this, cx| {
+                        this.emit_action(SessionSidebarEvent::ProbeSession(session_id), cx);
+                    });
+                },
             },
             p,
         )
     });
     SessionProbeParts {
-        badge: probe_badge,
-        button: probe_button.map(IntoElement::into_any_element),
+        badge,
+        button: button.map(IntoElement::into_any_element),
     }
 }
 
 /// 会话行的展示快照：图标/颜色、详情、选中态与拖拽标签。
-fn session_row_visuals(
-    shell: &AppShell,
-    row: &SessionRow,
-    active_session: Option<SessionId>,
-) -> SessionRowVisuals {
-    let session = &row.session;
+fn session_row_visuals(params: &SessionRowRenderParams<'_>) -> SessionRowVisuals {
+    let session = &params.row.session;
     let session_id = session.id;
-    // 右键菜单在渲染期就把地址算好带走：菜单闭包运行时会话行早已渲染完，
-    // 届时再回查 row 的借用不成立。
     let menu_host = session_host(session).map(str::to_string);
-    let icon_name = crate::connection::icon(&session.connection);
+    let base_icon = crate::connection::icon(&session.connection);
     let detail_text = crate::connection::display_compact(&session.connection);
-    // 会话专属图标覆盖连接类型图标；环境色直接染在图标上。
     let icon_color = session_color(session.color);
-    let icon_name = session_icon(session.icon).unwrap_or(icon_name);
-    let is_active = active_session == Some(session_id);
-    let selection_mode = shell.state.sidebar.selection_mode;
-    let is_selected = shell.state.sidebar.selected_sessions.contains(&session_id);
-    let is_marked = shell.state.sidebar.tree_selection == Some(session_id);
-    let row_selected = is_marked || (selection_mode && is_selected);
+    let icon_name = session_icon(session.icon).unwrap_or(base_icon);
+    let is_active = params.active_session == Some(session_id);
+    let row_selected = params.is_marked || (params.selection_mode && params.is_selected);
     let state = if is_active {
         SidebarRowState::Current
     } else if row_selected {
@@ -341,118 +282,99 @@ fn session_row_visuals(
         icon_name,
         detail_text,
         icon_color,
-        selection_mode,
-        is_selected,
         drag_label: session.name.clone(),
         drag_icon: icon_name,
         state,
     }
 }
 
-/// 会话行单击：选择模式下切换多选，双击连接，普通单击只标记。
-fn session_row_click(
-    shell: &mut AppShell,
-    session_id: SessionId,
-    event: &ClickEvent,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    if shell.state.sidebar.selection_mode {
-        let selected = shell.state.sidebar.selected_sessions.contains(&session_id);
-        crate::batch::toggle_session_selection(shell, session_id, !selected, cx);
-    } else if event.click_count() >= 2 {
-        crate::connection::connect_session(shell, session_id, window, cx);
-        // 连接入口在会话树，连接完成后用户要看的是终端列表：
-        // 左侧标签模式自动把槽位切到标签面板。
-        shell.reveal_vertical_tabs_panel(cx);
-    } else {
-        shell.state.sidebar.tree_selection = Some(session_id);
-        cx.notify();
-    }
-}
-
-pub(crate) fn render_session_row(
-    shell: &mut AppShell,
-    row: &SessionRow,
-    active_session: Option<SessionId>,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-    let session = &row.session;
+/// 渲染单个会话树行，支持连接状态着色、双击连接、拖放排序与右键菜单。
+pub(crate) fn render_session_row(params: SessionRowRenderParams<'_>, p: &Palette) -> AnyElement {
+    let session = &params.row.session;
     let session_id = session.id;
     let folder_id = session.folder_id;
-    let app_entity = cx.entity().clone();
+    let selection_mode = params.selection_mode;
+    let is_selected = params.is_selected;
     let SessionRowVisuals {
         is_ssh,
         menu_host,
         icon_name,
         detail_text,
-        icon_color: session_color,
-        selection_mode,
-        is_selected,
+        icon_color,
         drag_label,
         drag_icon,
         state,
-    } = session_row_visuals(shell, row, active_session);
+    } = session_row_visuals(&params);
+
+    let click_view = params.view.clone();
+    let drop_view = params.view.clone();
+    let menu_view = params.view.clone();
+
     let element = div()
         .id(ElementId::Name(format!("session-{session_id}").into()))
         .w_full()
         .h(rems(ROW_HEIGHT_REM))
-        .pl(indent_padding(row.depth))
+        .pl(indent_padding(params.row.depth))
         .pr(px(4.0))
         .flex()
         .items_center()
         .cursor_pointer()
-        // 单击只负责选中这一行，双击才建立连接：会话行是列表里最容易被顺手点到的
-        // 元素，把连接挂在单击上会让"看一眼"和"连上去"没法区分。
-        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-            session_row_click(this, session_id, event, window, cx);
-        }))
+        .on_click(move |event: &ClickEvent, _, cx| {
+            let action = if selection_mode {
+                SessionSidebarEvent::ToggleSessionSelection {
+                    session_id,
+                    selected: !is_selected,
+                }
+            } else if event.click_count() >= 2 {
+                SessionSidebarEvent::ConnectSession(session_id)
+            } else {
+                SessionSidebarEvent::SelectTreeSession(session_id)
+            };
+            click_view.update(cx, |this, cx| this.emit_action(action, cx));
+        })
         .on_drag(SidebarDrag::Session(session_id), move |_, _, _, cx| {
             cx.new(|_| SidebarDragPreview::new(drag_label.clone(), drag_icon))
         })
-        .on_drop({
-            let app = app_entity.clone();
-            move |drag: &SidebarDrag, window, cx| {
-                let drag = *drag;
-                // 落在会话行中部：放进该会话所在层级末尾（根层级会话则回到根）。
-                let target = match folder_id {
-                    Some(folder_id) => SidebarTarget::Folder(folder_id),
-                    None => SidebarTarget::Root,
-                };
-                app.update(cx, |this, cx| {
-                    crate::sidebar::handle_sidebar_drop(this, drag, target, cx);
-                    window.refresh();
-                });
-            }
+        .on_drop(move |drag: &SidebarDrag, window, cx| {
+            let drag = *drag;
+            let target = match folder_id {
+                Some(folder_id) => SidebarTarget::Folder(folder_id),
+                None => SidebarTarget::Root,
+            };
+            drop_view.update(cx, |this, cx| {
+                this.emit_action(SessionSidebarEvent::Drop(drag, target), cx);
+            });
+            window.refresh();
         })
         .context_menu(session_context_menu(
-            session_id,
-            folder_id,
-            menu_host,
-            is_ssh,
-            app_entity.clone(),
+            session_id, folder_id, menu_host, is_ssh, menu_view,
         ));
+
     let inner = session_band(
         SessionBandParams {
             session_id,
             title: session.name.clone(),
             detail: detail_text,
             icon: icon_name,
-            icon_color: session_color,
+            icon_color,
             selection_mode,
             is_selected,
             state,
         },
+        params.view,
         p,
-        cx,
     );
-    let probe = session_probe_parts(shell, session, state.is_highlighted(), p, cx);
+    let probe = session_probe_parts(
+        params.view,
+        session,
+        params.probe_badge,
+        state.is_highlighted(),
+        p,
+    );
     let anchor = SidebarDrag::Session(session_id);
-    // 会话行没有子级，整行二分为“插到之前/之后”，不存在落空的中间区。
     let inner = inner
         .children(probe.badge)
         .children(probe.button)
-        .child(reorder_overlay(&app_entity, anchor, false, p));
+        .child(reorder_overlay(params.view, anchor, false, p));
     element.child(inner).into_any_element()
 }

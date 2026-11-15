@@ -229,7 +229,24 @@ impl AppShell {
                     self.render_vertical_tabs_panel(p, cx)
                 }
                 SidebarSection::Sessions | SidebarSection::Tabs => {
-                    crate::sidebar::render_sidebar(self, window, cx, p)
+                    let query = self.state.sidebar.search.read(cx).value().to_string();
+                    let rows = self.state.sidebar_rows(&query);
+                    let active_session = self.state.active_session_id();
+                    crate::sidebar::render_sidebar(
+                        crate::sidebar::SessionSidebarParams {
+                            view: &self.state.session_sidebar,
+                            search: &self.state.sidebar.search,
+                            rows,
+                            query: &query,
+                            selection_mode: self.state.sidebar.selection_mode,
+                            selected_sessions: &self.state.sidebar.selected_sessions,
+                            tree_selection: self.state.sidebar.tree_selection,
+                            active_session,
+                            probe_badges: &self.state.probe_badges,
+                        },
+                        window,
+                        p,
+                    )
                 }
             };
             sidebar_panel = sidebar_panel.child(content);

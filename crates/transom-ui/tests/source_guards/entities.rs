@@ -548,3 +548,53 @@ fn workspace_has_no_mut_shell_free_functions() {
         offenders.join("\n")
     );
 }
+
+/// 会话侧栏已完成向 `Entity<SessionSidebarView>` 迁移：`src/sidebar` 下只允许 `bridge.rs` 桥接外壳。
+#[test]
+fn session_sidebar_is_owned_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/sidebar");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let norm = normalized_path(&entry);
+        if norm.ends_with("/sidebar/bridge.rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.contains("AppShell") {
+            offenders.push(norm);
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "会话侧栏渲染与行模块不得依赖 AppShell：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 工作区标签纯数据结构层不得再包含任何 AppShell 耦合。
+#[test]
+fn workspace_tabs_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/workspace/tabs");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.contains("AppShell") {
+            offenders.push(normalized_path(&entry));
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "workspace/tabs 必须保持纯标签数据操作，不得依赖 AppShell：\n{}",
+        offenders.join("\n")
+    );
+}

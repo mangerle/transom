@@ -1,19 +1,19 @@
 //! 会话树侧边栏：搜索、文件夹树渲染与根层级拖放区域。
 
+mod bridge;
+mod entity;
 mod folders;
 mod slot;
 mod state;
 mod tree;
 
-pub(crate) use folders::{
-    FolderForm, delete_folder, open_new_folder, open_new_session_in_folder, open_rename_folder,
-    pick_folder_default_key_path, render_folder_form_body, save_folder_form,
+pub(crate) use bridge::{
+    on_session_sidebar_event, render_folder_form_body, save_folder_form,
 };
+pub(crate) use entity::{SessionSidebarEvent, SessionSidebarView};
+pub(crate) use folders::FolderForm;
 pub(crate) use slot::{SidebarSlotLayout, SidebarSlotSync, sync_sidebar_slot};
 pub(crate) use state::{SidebarRowsCache, SidebarSection, SidebarState};
-pub(crate) use tree::{
-    handle_sidebar_drop, render_folder_row, render_session_row, toggle_folder_collapsed,
-};
 
 /// 侧栏工具图标按钮配置属性。
 pub(crate) struct SidebarButtonProps<F> {
@@ -24,24 +24,40 @@ pub(crate) struct SidebarButtonProps<F> {
     pub(crate) on_click: F,
 }
 
-use crate::app::{AppShell, AppState};
+use crate::app::AppState;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
+use crate::probe::ProbeBadge;
 use crate::widgets::sidebar_list_frame;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::*;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use transom_core::SessionId;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::UiIcon;
-pub(crate) use tree::SidebarRow;
-pub(crate) use tree::{
-    ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, indent_padding,
+use transom_ui_icons::{AppIcon, UiIcon};
+use tree::{
+    SessionRowRenderParams, SidebarDrag, SidebarTarget, build_rows, render_folder_row,
+    render_session_row,
 };
-use tree::{SidebarDrag, SidebarTarget, build_rows};
+pub(crate) use tree::{
+    ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, SidebarRow, indent_padding,
+};
+
+/// 渲染会话侧栏所需的只读参数。
+pub(crate) struct SessionSidebarParams<'a> {
+    pub(crate) view: &'a Entity<SessionSidebarView>,
+    pub(crate) search: &'a Entity<InputState>,
+    pub(crate) rows: Rc<Vec<SidebarRow>>,
+    pub(crate) query: &'a str,
+    pub(crate) selection_mode: bool,
+    pub(crate) selected_sessions: &'a HashSet<SessionId>,
+    pub(crate) tree_selection: Option<SessionId>,
+    pub(crate) active_session: Option<SessionId>,
+    pub(crate) probe_badges: &'a HashMap<SessionId, ProbeBadge>,
+}
 
 impl AppState {
     pub(crate) fn sidebar_rows(&mut self, query: &str) -> Rc<Vec<SidebarRow>> {
@@ -67,50 +83,57 @@ impl AppState {
     }
 }
 
-/// 侧栏行快照：目录版本与搜索词都没变时复用上次构建结果。
-///
-/// 设计原理（Why）：render 在流量/统计事件触发时整壳重建，行构建是
-/// O(会话数) 的分配与遍历；缓存把"数据没变"的重绘成本降到一次 Rc
-/// clone。失效键用 persist_catalog 推进的目录版本——目录的每次修改
-/// 都以持久化为终点（见 AppShell 字段注释）。
+/// 渲染会话侧栏主体（头部工具条 + 虚拟列表 + 根层级拖放区）。
 pub(crate) fn render_sidebar(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
+    params: SessionSidebarParams<'_>,
+    window: &Window,
     p: &Palette,
 ) -> AnyElement {
-    let query = shell.state.sidebar.search.read(cx).value().to_string();
-    // 目录与搜索词都没变时复用上次构建的行表（见 `sidebar_rows`）。
-    let rows = shell.state.sidebar_rows(&query);
-    let content = if rows.is_empty() {
-        render_sidebar_empty(shell, &query, p)
+    let view = params.view.clone();
+    let content = if params.rows.is_empty() {
+        render_sidebar_empty(params.query, p)
     } else {
         let item_sizes = Rc::new(
-            rows.iter()
+            params
+                .rows
+                .iter()
                 .map(|row| size(px(0.0), row.height(window.rem_size())))
                 .collect::<Vec<_>>(),
         );
+        let rows = params.rows.clone();
+        let active_session = params.active_session;
+        let selection_mode = params.selection_mode;
+        let selected_sessions = params.selected_sessions.clone();
+        let tree_selection = params.tree_selection;
+        let probe_badges = params.probe_badges.clone();
         let p = p.clone();
         v_virtual_list(
-            cx.entity().clone(),
+            view.clone(),
             "sidebar-sessions-virtual-list",
             item_sizes,
-            move |this, range, _window, cx| {
-                let active_session = this.state.active_session_id();
+            move |view_ref, range, _window, cx| {
+                let view_handle = cx.entity();
+                let _ = view_ref;
                 range
                     .filter_map(|index| {
                         let row = rows.get(index)?;
                         match row {
-                            SidebarRow::Folder(row) => {
-                                Some(crate::sidebar::render_folder_row(this, row, &p, cx))
+                            SidebarRow::Folder(row) => Some(render_folder_row(&view_handle, row, &p)),
+                            SidebarRow::Session(row) => {
+                                let session_id = row.session.id;
+                                Some(render_session_row(
+                                    SessionRowRenderParams {
+                                        view: &view_handle,
+                                        row,
+                                        active_session,
+                                        selection_mode,
+                                        is_selected: selected_sessions.contains(&session_id),
+                                        is_marked: tree_selection == Some(session_id),
+                                        probe_badge: probe_badges.get(&session_id),
+                                    },
+                                    &p,
+                                ))
                             }
-                            SidebarRow::Session(row) => Some(crate::sidebar::render_session_row(
-                                this,
-                                row,
-                                active_session,
-                                &p,
-                                cx,
-                            )),
                         }
                     })
                     .collect()
@@ -119,8 +142,8 @@ pub(crate) fn render_sidebar(
         .into_any_element()
     };
 
-    let app_entity = cx.entity().clone();
-    let header = render_sidebar_header(shell, p, cx);
+    let header = render_sidebar_header(&params, p);
+    let drop_view = view;
 
     v_flex()
         .size_full()
@@ -134,10 +157,10 @@ pub(crate) fn render_sidebar(
                 .overflow_hidden()
                 .on_drop(move |drag: &SidebarDrag, window, cx| {
                     let drag = *drag;
-                    app_entity.update(cx, |this, cx| {
-                        crate::sidebar::handle_sidebar_drop(this, drag, SidebarTarget::Root, cx);
-                        window.refresh();
+                    drop_view.update(cx, |this, cx| {
+                        this.emit_action(SessionSidebarEvent::Drop(drag, SidebarTarget::Root), cx);
                     });
+                    window.refresh();
                 })
                 .child(content),
         )
@@ -146,7 +169,6 @@ pub(crate) fn render_sidebar(
 
 fn sidebar_icon_button(
     props: SidebarButtonProps<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
-    _p: &Palette,
 ) -> AnyElement {
     let SidebarButtonProps {
         id,
@@ -163,7 +185,14 @@ fn sidebar_icon_button(
 }
 
 /// 侧栏头部：搜索框、选择/新建按钮、筛选与新建会话/批量入口。
-fn render_sidebar_header(shell: &AppShell, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+fn render_sidebar_header(params: &SessionSidebarParams<'_>, p: &Palette) -> AnyElement {
+    let emit = |event: SessionSidebarEvent| {
+        let view = params.view.clone();
+        move |_: &ClickEvent, _window: &mut Window, cx: &mut App| {
+            view.update(cx, |this, cx| this.emit_action(event.clone(), cx));
+        }
+    };
+
     let mut header = v_flex()
         .w_full()
         .p_3()
@@ -175,61 +204,47 @@ fn render_sidebar_header(shell: &AppShell, p: &Palette, cx: &mut Context<AppShel
                 .w_full()
                 .gap_1()
                 .items_center()
-                .child(
-                    div()
-                        .flex_1()
-                        .child(Input::new(&shell.state.sidebar.search).w_full()),
-                )
-                .child(sidebar_icon_button(
-                    SidebarButtonProps {
-                        id: "sidebar-select",
-                        icon: AppIcon::Ui(UiIcon::CHECK),
-                        tooltip: rust_i18n::t!("batch.select_mode").to_string(),
-                        active: shell.state.sidebar.selection_mode,
-                        on_click: cx.listener(|this, _, _, cx| {
-                            crate::batch::toggle_selection_mode(this, cx);
-                        }),
-                    },
-                    p,
-                ))
-                .child(sidebar_icon_button(
-                    SidebarButtonProps {
-                        id: "sidebar-new-folder",
-                        icon: AppIcon::Ui(UiIcon::NEW_FOLDER),
-                        tooltip: rust_i18n::t!("sidebar.new_group").to_string(),
-                        active: false,
-                        on_click: cx.listener(|this, _, window, cx| {
-                            crate::sidebar::open_new_folder(this, None, window, cx);
-                        }),
-                    },
-                    p,
-                ))
-                .child(sidebar_icon_button(
-                    SidebarButtonProps {
-                        id: "sidebar-new",
-                        icon: AppIcon::Ui(UiIcon::ADD),
-                        tooltip: rust_i18n::t!("app.new_session").to_string(),
-                        active: false,
-                        on_click: cx.listener(|this, _, window, cx| {
-                            this.open_new_session(window, cx);
-                        }),
-                    },
-                    p,
-                )),
+                .child(div().flex_1().child(Input::new(params.search).w_full()))
+                .child(sidebar_icon_button(SidebarButtonProps {
+                    id: "sidebar-select",
+                    icon: AppIcon::Ui(UiIcon::CHECK),
+                    tooltip: rust_i18n::t!("batch.select_mode").to_string(),
+                    active: params.selection_mode,
+                    on_click: emit(SessionSidebarEvent::ToggleSelectionMode),
+                }))
+                .child(sidebar_icon_button(SidebarButtonProps {
+                    id: "sidebar-new-folder",
+                    icon: AppIcon::Ui(UiIcon::NEW_FOLDER),
+                    tooltip: rust_i18n::t!("sidebar.new_group").to_string(),
+                    active: false,
+                    on_click: emit(SessionSidebarEvent::OpenNewFolder(None)),
+                }))
+                .child(sidebar_icon_button(SidebarButtonProps {
+                    id: "sidebar-new",
+                    icon: AppIcon::Ui(UiIcon::ADD),
+                    tooltip: rust_i18n::t!("app.new_session").to_string(),
+                    active: false,
+                    on_click: emit(SessionSidebarEvent::OpenNewSession(None)),
+                })),
         );
-    if shell.state.sidebar.selection_mode {
-        header = header.child(render_batch_selection_bar(shell, p, cx));
+    if params.selection_mode {
+        header = header.child(render_batch_selection_bar(
+            params.view,
+            params.selected_sessions.len(),
+            p,
+        ));
     }
     header.into_any_element()
 }
 
 /// 批量选择状态条：已选数量、全选与批量编辑入口。
 fn render_batch_selection_bar(
-    shell: &AppShell,
+    view: &Entity<SessionSidebarView>,
+    selected_count: usize,
     p: &Palette,
-    cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let selected_count = shell.state.sidebar.selected_sessions.len();
+    let select_all_view = view.clone();
+    let edit_view = view.clone();
     h_flex()
         .w_full()
         .justify_between()
@@ -248,24 +263,28 @@ fn render_batch_selection_bar(
                         .ghost()
                         .xsmall()
                         .label(rust_i18n::t!("batch.select_all").to_string())
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            crate::batch::select_all_sessions(this, cx);
-                        })),
+                        .on_click(move |_, _, cx| {
+                            select_all_view.update(cx, |this, cx| {
+                                this.emit_action(SessionSidebarEvent::SelectAllSessions, cx);
+                            });
+                        }),
                 )
                 .child(
                     Button::new("batch-open")
                         .primary()
                         .xsmall()
                         .label(rust_i18n::t!("batch.edit").to_string())
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            crate::batch::open_batch_edit(this, window, cx);
-                        })),
+                        .on_click(move |_, _, cx| {
+                            edit_view.update(cx, |this, cx| {
+                                this.emit_action(SessionSidebarEvent::OpenBatchEdit, cx);
+                            });
+                        }),
                 ),
         )
         .into_any_element()
 }
 
-fn render_sidebar_empty(_shell: &AppShell, query: &str, p: &Palette) -> AnyElement {
+fn render_sidebar_empty(query: &str, p: &Palette) -> AnyElement {
     let (icon, title, hint) = if !query.trim().is_empty() {
         (
             AppIcon::Ui(UiIcon::SEARCH),

@@ -22,6 +22,7 @@ mod secret_prefill;
 mod session_duplicate;
 mod session_ops;
 mod state;
+mod tab_coordination;
 mod task_hub;
 mod types;
 mod window_requests;

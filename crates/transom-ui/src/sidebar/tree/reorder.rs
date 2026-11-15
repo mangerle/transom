@@ -1,7 +1,7 @@
 //! 侧边栏拖拽重排序落点遮罩、拖拽预览与行内操作按钮。
 
+use super::super::entity::{SessionSidebarEvent, SessionSidebarView};
 use super::{SidebarDrag, SidebarTarget};
-use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::h_flex;
 use gpui_kit::*;
@@ -95,7 +95,7 @@ impl Render for SidebarDragPreview {
 /// 中间块不注册任何监听，因此不产生命中框，拖放会继续落到行本身，
 /// 即“放入该文件夹”。等分用 `flex_1` 而非百分比宽度，gpui 没有宽度百分比。
 pub(super) fn reorder_overlay(
-    app: &Entity<AppShell>,
+    view: &Entity<SessionSidebarView>,
     anchor: SidebarDrag,
     keep_middle: bool,
     p: &Palette,
@@ -105,14 +105,14 @@ pub(super) fn reorder_overlay(
         .inset_0()
         .flex()
         .flex_col()
-        .child(reorder_half(app, anchor, DropSide::Before, true, p));
+        .child(reorder_half(view, anchor, DropSide::Before, true, p));
     let overlay = if keep_middle {
         overlay.child(div().flex_1())
     } else {
         overlay
     };
     overlay
-        .child(reorder_half(app, anchor, DropSide::After, false, p))
+        .child(reorder_half(view, anchor, DropSide::After, false, p))
         .into_any_element()
 }
 
@@ -120,7 +120,7 @@ pub(super) fn reorder_overlay(
 ///
 /// 插入线用 accent_foreground：accent 已经是行底色，同色描边看不出。
 fn reorder_half(
-    app: &Entity<AppShell>,
+    view: &Entity<SessionSidebarView>,
     anchor: SidebarDrag,
     side: DropSide,
     top: bool,
@@ -139,13 +139,13 @@ fn reorder_half(
             style.border_b_2().border_color(line_color)
         })
     };
-    let app = app.clone();
+    let view = view.clone();
     zone.on_drop(move |drag: &SidebarDrag, window, cx| {
         let drag = *drag;
-        app.update(cx, |this, cx| {
-            crate::sidebar::handle_sidebar_drop(this, drag, target, cx);
-            window.refresh();
+        view.update(cx, |this, cx| {
+            this.emit_action(SessionSidebarEvent::Drop(drag, target), cx);
         });
+        window.refresh();
     })
     .into_any_element()
 }

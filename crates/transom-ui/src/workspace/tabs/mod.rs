@@ -1,17 +1,14 @@
-//! 标签页生命周期：关闭、复制、会话回填与分组查询。
+//! 标签页集合与分割树的纯数据结构操作：建组、会话快照回填与焦点回退查询。
 //!
-//! 设计原理（Why）：标签是工作区的组成单位，纯分组查询与建组逻辑放在
-//! [`WorkspaceState`] 上；关闭/复制需要命令通道或窗口的动作留在外壳，
-//! 通过本模块的方法组织。文件放在 `workspace/tabs/` 下，模块归属与状态
-//! 归属一致，不再出现“标签状态在工作区、行为在另一个顶层模块”的分裂。
+//! 设计原理（Why）：本目录只维护 `WorkspaceState` 与 `AppState` 上的纯标签集合
+//! 读写与查询，不直接持有应用外壳；跨面板/控制面的打开、激活与关闭协调位于
+//! `app/tab_coordination.rs`。
 
 mod close_ops;
 
-use crate::app::{AppShell, AppState, TabContent, TabGroup, TabStatus, TerminalTab};
-use crate::pane_tree::LayoutNode;
+use crate::app::{AppState, TabGroup};
 use crate::workspace::WorkspaceState;
-use gpui_kit::*;
-use transom_core::{Connection, GroupId, SavedTabGroup, Session, SessionId, TabId};
+use transom_core::{Connection, GroupId, Session, SessionId, TabId};
 
 impl WorkspaceState {
     /// 标签所属分组的索引；标签不属于任何分组时返回 `None`。
@@ -80,9 +77,8 @@ impl AppState {
             }
         }
     }
-}
 
-impl AppState {
+    /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
     pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
         let index = self.workspace.tab_index(tab_id)?;
         let session_id = self.workspace.tabs[index].session_id;
@@ -96,6 +92,11 @@ impl AppState {
         )
     }
 
+    /// 计算当前标签被移除或替换后应激活的窗格。
+    ///
+    /// 优先级：显式替换目标 → 并排网格当前焦点组 → 移除前的分组焦点 →
+    /// 第一个分组。关闭标签、删除会话与复制标签共用同一顺序，避免几处
+    /// 各写一条 `or_else` 链后逐渐漂移。
     pub(crate) fn fallback_active_pane(
         &self,
         replacement: Option<TabId>,
@@ -112,155 +113,5 @@ impl AppState {
                     .and_then(|group| self.workspace.group(group).map(|item| item.active_pane))
             })
             .or_else(|| self.workspace.groups.first().map(|group| group.active_pane))
-    }
-}
-
-impl AppShell {
-    /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
-    /// 根据窗口设置恢复一个标签组及其分割树布局，返回实际创建的标签组。
-    pub(crate) fn restore_tab_group(
-        &mut self,
-        saved: &SavedTabGroup,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<GroupId> {
-        let pane_count = LayoutNode::saved_pane_count(&saved.layout).unwrap_or(1);
-
-        let groups_before = self.state.workspace.groups.len();
-        if saved.session == "local" {
-            crate::connection::open_local_terminal(self, window, cx);
-        } else {
-            let session = self
-                .state
-                .catalog
-                .sessions
-                .iter()
-                .find(|session| session.id.to_string() == saved.session)
-                .cloned()?;
-            crate::connection::connect_session(self, session.id, window, cx);
-        }
-        if self.state.workspace.groups.len() <= groups_before {
-            return None;
-        }
-        let group_index = self.state.workspace.groups.len() - 1;
-        let group_id = self.state.workspace.groups[group_index].id;
-        if pane_count < 2 {
-            return Some(group_id);
-        }
-        let first = self.state.workspace.groups[group_index].active_pane;
-        let Some(session) = self.state.session_for_tab(first) else {
-            return Some(group_id);
-        };
-        if matches!(session.connection, Connection::Serial(_)) {
-            return Some(group_id);
-        }
-        let extra: Vec<TabId> = (1..pane_count).map(|_| TabId::new()).collect();
-        let mut ids = std::iter::once(first).chain(extra.iter().copied());
-        let Some(root) = LayoutNode::from_saved(&saved.layout, &mut ids) else {
-            return Some(group_id);
-        };
-        self.state.workspace.groups[group_index].root = root;
-        for pane_id in extra {
-            self.state
-                .workspace
-                .tabs
-                .push(TerminalTab::pending(pane_id, session.clone()));
-            crate::connection::start_connection(self, pane_id, session.clone(), cx);
-        }
-        cx.notify();
-        Some(group_id)
-    }
-
-    /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
-    /// 计算当前标签被移除或替换后应激活的窗格。
-    ///
-    /// 优先级：显式替换目标 → 并排网格当前焦点组 → 移除前的分组焦点 →
-    /// 第一个分组。关闭标签、删除会话与复制标签共用同一顺序，避免几处
-    /// 各写一条 `or_else` 链后逐渐漂移。
-    pub(crate) fn reconnect_tab(
-        &mut self,
-        tab_id: TabId,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(index) = self.state.workspace.tab_index(tab_id) else {
-            return;
-        };
-        let Some(session) = self.state.session_for_tab(tab_id) else {
-            return;
-        };
-        let tab = &mut self.state.workspace.tabs[index];
-        tab.content = TabContent::Session(Box::default());
-        tab.connection_id = None;
-        tab.status = TabStatus::Connecting;
-        // 新连接尚未收到 OSC 0/2 与 OSC 7：标签回落会话名，SFTP 重新等待上报。
-        tab.title.clear();
-        tab.cwd = None;
-        self.state.workspace.active_tab = Some(tab_id);
-        if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
-            self.state.workspace.groups[group_index].active_pane = tab_id;
-        }
-        self.state.present_active_group();
-        crate::connection::start_connection(self, tab_id, session, cx);
-    }
-
-    pub(crate) fn activate_tab(
-        &mut self,
-        tab_id: TabId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(previous) = self.state.workspace.active_tab
-            && previous != tab_id
-            && let Some(view) = self.state.sftp_view(previous)
-        {
-            view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
-        }
-        let group_id = self
-            .state
-            .workspace
-            .group_index_for_tab(tab_id)
-            .map(|index| self.state.workspace.groups[index].id);
-        if let Some(group_id) = group_id
-            && let Some(tiled) = self
-                .state
-                .workspace
-                .tiled_sets
-                .iter_mut()
-                .find(|tiled| tiled.contains(group_id))
-            && let Some(slot) = tiled.slot_of(group_id)
-        {
-            tiled.focused = slot;
-        }
-        self.state.workspace.active_tab = Some(tab_id);
-        if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
-            self.state.workspace.groups[group_index].active_pane = tab_id;
-        }
-        if let Some(terminal) = self
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.terminal())
-        {
-            let focus_handle = terminal.read(cx).focus_handle().clone();
-            window.focus(&focus_handle, cx);
-        }
-        self.state.sync_broadcast_targets();
-        // 监控面板的重置排到绘制之后：本方法也会被监控面板自己的按钮调用
-        // （脱离为标签页、收回抽屉），此刻面板实体正被租借，立即读写会双重租借。
-        let app = cx.entity().clone();
-        window.defer(cx, move |_window, cx| {
-            app.update(cx, |shell, cx| {
-                if shell.state.monitor.read(cx).is_open() {
-                    shell
-                        .state
-                        .monitor
-                        .update(cx, |view, _| view.reset_history());
-                    let collapsed = shell.state.monitor.read(cx).processes_collapsed();
-                    crate::monitor::sample_processes(shell, collapsed, cx);
-                }
-            });
-        });
-        cx.notify();
     }
 }

@@ -244,6 +244,9 @@ impl AppShell {
                 WindowRequest::GitSidebar(event) => {
                     crate::git::actions::on_git_sidebar_event(self, &event, window, cx);
                 }
+                WindowRequest::SessionSidebar(event) => {
+                    crate::sidebar::on_session_sidebar_event(self, &event, window, cx);
+                }
                 WindowRequest::Git(event) => match &event {
                     crate::git::GitWorkspaceEvent::OpenSettings => {
                         crate::git::actions::open_git_settings(self, window, cx);

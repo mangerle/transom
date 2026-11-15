@@ -193,6 +193,16 @@ impl AppShell {
                 cx.notify();
             },
         ));
+        self.state.tasks.subscriptions.session_sidebar = Some(cx.subscribe(
+            &self.state.session_sidebar,
+            |shell, _view, event: &crate::sidebar::SessionSidebarEvent, cx| {
+                shell
+                    .state
+                    .window_requests
+                    .push_session_sidebar(event.clone());
+                cx.notify();
+            },
+        ));
         self.state.tasks.subscriptions._status_metrics = Some(cx.subscribe(
             &self.state.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
