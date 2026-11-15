@@ -83,5 +83,7 @@ pub(crate) fn handle_dropped_files(
         paths.len(),
         crate::connection::describe_target(&shell.state.workspace.tabs[index].session)
     );
-    crate::sftp::show_drop_overlay(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.show_drop_overlay(cx));
+    }
 }

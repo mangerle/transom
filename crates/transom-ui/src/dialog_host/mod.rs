@@ -176,7 +176,7 @@ mod container_views;
 mod git;
 mod registry;
 mod stack;
-pub(crate) use stack::{close_sftp_modal, dialog_dim, reconcile_dialogs};
+pub(crate) use stack::{dialog_dim, reconcile_dialogs};
 mod state;
 
 pub(crate) use body::{dialog_bindings, on_event};
@@ -312,7 +312,58 @@ impl ModalKind {
             return view.update(cx, |view, cx| view.render_body(self, cx, p));
         }
         let shell = app.read(cx);
-        self.render_shell_body(shell, app, window, cx, p)
+        match self {
+            ModalKind::SftpConfirm => shell
+                .state
+                .sftp_modals
+                .confirm
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::SftpInput => shell
+                .state
+                .sftp_modals
+                .input
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::SftpChmod => shell
+                .state
+                .sftp_modals
+                .chmod
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::SftpProperties => shell
+                .state
+                .sftp_modals
+                .properties
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::SftpFilter => shell
+                .state
+                .sftp_modals
+                .filter
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::SftpSearch => shell
+                .state
+                .sftp_modals
+                .search
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::SftpSync => shell
+                .state
+                .sftp_modals
+                .sync
+                .as_ref()
+                .map(|m| m.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            _ => self.render_shell_body(shell, app, window, cx, p),
+        }
     }
 
     /// 非实体弹窗的渲染分发：只读外壳状态。
@@ -328,22 +379,9 @@ impl ModalKind {
             return element;
         }
         match self {
-            ModalKind::SftpConfirm => crate::sftp::render_sftp_confirm_body(shell, app, cx, p),
-            // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
-            ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt => {
-                div().into_any_element()
-            }
             ModalKind::ForwardConfirm => {
                 crate::forward::render_forward_confirm_body(shell, app, cx, p)
             }
-            ModalKind::SftpInput => crate::sftp::render_sftp_input_body(shell, app, cx, p),
-            ModalKind::SftpChmod => crate::sftp::render_sftp_chmod_body(shell, app, cx, p),
-            ModalKind::SftpProperties => {
-                crate::sftp::render_sftp_properties_body(shell, app, cx, p)
-            }
-            ModalKind::SftpFilter => crate::sftp::render_sftp_filter_body(shell, app, cx, p),
-            ModalKind::SftpSearch => crate::sftp::render_sftp_search_body(shell, app, cx, p),
-            ModalKind::SftpSync => crate::sftp::render_sftp_sync_body(shell, app, cx, p),
             ModalKind::EditorGotoLine => {
                 crate::editor::render_editor_goto_line_body(shell, app, cx, p)
             }

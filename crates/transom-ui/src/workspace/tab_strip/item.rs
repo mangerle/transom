@@ -89,8 +89,9 @@ pub(super) fn render_tab_entry(
     let this_set_id = tiled_set.as_ref().map(|tiled| tiled.id);
 
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
-    let tab_icon = crate::workspace::tab_presentation::tab_icon(shell, tab, active, p, cx).0;
-    let session_color = crate::workspace::tab_presentation::tab_accent(shell, tab, cx);
+    let tab_icon =
+        crate::workspace::tab_presentation::tab_icon(&shell.state, tab, active, p, cx).0;
+    let session_color = crate::workspace::tab_presentation::tab_accent(&shell.state, tab, cx);
     let mut tab_element = h_flex()
         .id(ElementId::Name(format!("tab-{group_id}").into()))
         .relative()
@@ -246,12 +247,24 @@ pub(super) fn render_tab_entry(
     }
 
     if pane_count > 1 && !composite {
-        let pane_badge = render_pane_badge(shell, group, active_pane, root_axis, app_entity, p);
+        let pane_badge = render_pane_badge(
+            &shell.state.workspace,
+            group,
+            active_pane,
+            root_axis,
+            app_entity,
+            p,
+        );
         element = element.child(pane_badge);
     }
 
     if let Some(tiled) = &tiled_set {
-        element = element.child(build_tiled_group_badge(shell, tiled, app_entity, p));
+        element = element.child(build_tiled_group_badge(
+            &shell.state.workspace,
+            tiled,
+            app_entity,
+            p,
+        ));
     }
 
     if app_settings(cx).window.show_tab_close_button {

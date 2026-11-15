@@ -127,13 +127,12 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpSearchResults { items, .. } => {
-                if let Some(ref mut modal) = self.state.sftp_modals.search {
-                    modal.is_searching = false;
-                    modal.results = items;
+                if let Some(modal) = self.state.sftp_modals.search.clone() {
+                    modal.update(cx, |m, cx| m.apply_results(items, None, cx));
                 }
                 true
             }
-            SftpAppEvent::SftpDirCompared { .. } => crate::sftp::on_sftp_dir_compared(self, event),
+            SftpAppEvent::SftpDirCompared { .. } => crate::sftp::on_sftp_dir_compared(self, event, cx),
             SftpAppEvent::SudoProbed {
                 op_id, capability, ..
             } => {

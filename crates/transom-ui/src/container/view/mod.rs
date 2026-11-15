@@ -7,7 +7,6 @@
 
 mod header;
 
-use crate::app::AppShell;
 use crate::container::detail::{ContainerDetailParams, render_container_detail};
 use crate::container::list::render_container_list;
 use crate::container::types::ContainerWorkspaceStatus;
@@ -98,8 +97,8 @@ pub(crate) fn render_container_tab_body(
 }
 
 /// 渲染列表栏原始内容；焦点与键盘包装由外壳完成。
-pub(crate) fn render_container_list_content(
-    app_entity: Entity<AppShell>,
+pub(crate) fn render_container_list_content<V: Render + 'static>(
+    host: Entity<V>,
     view: &Entity<ContainerWorkspace>,
     state: &ContainerWorkspaceState,
     cx: &App,
@@ -107,7 +106,7 @@ pub(crate) fn render_container_list_content(
     p: &Palette,
 ) -> AnyElement {
     let query = state.query(cx);
-    render_container_list(app_entity, view, state, &query, rem, p)
+    render_container_list(host, view, state, &query, rem, p)
 }
 
 /// 渲染容器工作区的连接态占位页。

@@ -137,7 +137,9 @@ pub(crate) fn on_sftp_finished(
         view.update(cx, |view, cx| view.set_transient_status(message, cx));
     }
     // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
-    crate::sftp::sync_drop_overlay(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.sync_drop_overlay(cx));
+    }
     if let Some((dir, file_name, bytes)) = notify_info {
         let action = match dir {
             TransferDirection::Upload => rust_i18n::t!("sftp.handlers.notify_upload_done"),
@@ -268,14 +270,20 @@ pub(crate) fn on_sftp_failed(
     else {
         return true;
     };
-    if let Some(modal) = shell.state.sftp_modals.sync.as_mut()
-        && modal.op_id == op_id
-        && modal.connection_id == connection_id
-    {
-        modal.scanning = false;
-        modal.error = Some(localized_error(&error));
-        cx.notify();
-        return false;
+    if let Some(modal) = shell.state.sftp_modals.sync.clone() {
+        let matched = modal.update(cx, |modal, cx| {
+            if modal.state.op_id == op_id && modal.state.connection_id == connection_id {
+                modal.state.scanning = false;
+                modal.state.error = Some(localized_error(&error));
+                cx.notify();
+                true
+            } else {
+                false
+            }
+        });
+        if matched {
+            return false;
+        }
     }
     let mut failed_notify: Option<(String, String)> = None;
     let mut queue_error: Option<String> = None;
@@ -321,7 +329,9 @@ pub(crate) fn on_sftp_failed(
     {
         view.update(cx, |view, cx| view.set_transient_queue_error(message, cx));
     }
-    crate::sftp::sync_drop_overlay(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.sync_drop_overlay(cx));
+    }
     if let Some((file_name, err_msg)) = failed_notify {
         send_desktop_notification(
             &rust_i18n::t!("sftp.handlers.notify_failed_title"),

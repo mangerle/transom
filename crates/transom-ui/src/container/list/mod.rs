@@ -13,7 +13,6 @@
 //! 代价与局限：行内只放启停与删除两个按钮，其余动作收进右键菜单，
 //! 窄列表下仍要展开菜单；筛选与排序都在前端完成，不额外发请求。
 
-use crate::app::AppShell;
 use crate::container::CONTENT_HEADER_HEIGHT;
 use crate::container::types::{
     ContainerPruneTarget, ContainerQuickFilter, ContainerSection, ContainerSortKey,
@@ -45,7 +44,6 @@ mod render;
 mod rows;
 
 pub(crate) use filters::*;
-pub(crate) use keyboard::*;
 pub(crate) use render::*;
 pub(crate) use rows::*;
 
@@ -84,8 +82,8 @@ pub(crate) struct ListRow {
 /// 设计原理（Why）：外壳只读一次实体状态并把句柄、快照与搜索词传进来；本函数
 /// 不再反查 `AppShell`。焦点与按键装饰留在外壳的标签骨架里，避免把窗口级
 /// 焦点管理塞进纯渲染函数。
-pub(crate) fn render_container_list(
-    app_entity: Entity<AppShell>,
+pub(crate) fn render_container_list<V: Render + 'static>(
+    host: Entity<V>,
     view: &Entity<ContainerWorkspace>,
     workspace: &ContainerWorkspaceState,
     query: &str,
@@ -108,7 +106,7 @@ pub(crate) fn render_container_list(
         p,
     );
     let body = render_rows(ContainerRowsParams {
-        app_entity,
+        host,
         view,
         rows,
         selected: workspace.selected.clone(),

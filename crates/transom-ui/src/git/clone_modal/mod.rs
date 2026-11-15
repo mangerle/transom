@@ -12,8 +12,8 @@
 //!   自己解析，界面不拼接、不改写协议或端口；只做首尾空白裁剪。
 //! - 输入 URL 时自动把仓库名追加到目标目录：用户在目录框里选的是父目录，
 //!   最终落盘位置是「父目录/仓库名」；用户手改过目录后不再覆盖。
-//! - 成功后延后一帧再开仓库标签：完成事件落地时没有 Window，而开标签、激活
-//!   分组都需要它；`cx.defer_in` 把动作排到绘制之后，避免渲染中改交互状态。
+//! - 弹窗视图作为独立 GPUI 实体管理内部表单状态与目录树交互，通过 `EventEmitter`
+//!   向上抛出克隆启动与关闭意图。
 //!
 //! 代价与局限：
 //! - 左侧没有 GitHub / GitHub Enterprise 账号栏：本应用尚无账号授权能力，
@@ -27,217 +27,208 @@ pub(crate) mod view;
 pub(crate) use calc::*;
 pub(crate) use task::*;
 
-use super::dir_browser::{DirPicker, GitHost};
-use crate::app::AppShell;
+use super::dir_browser::{DirPicker, GitDirBrowserEvent};
+use super::form::GitFolderField;
 use crate::keys::expand_home;
-use gpui_kit::component::input::InputState;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
-use transom_core::{GitCommand, GitRequestId, SessionColor, SessionIcon};
+use std::path::PathBuf;
+use transom_core::{SessionColor, SessionIcon};
 
 /// 图标行与分组字段共用的宽度：10 个 small 图标按钮加间距的实测宽度。
 ///
 /// 分组的输入下拉不能比这一行更长，否则左右边界会和上方图标错开。
 pub(crate) const CONTROL_COLUMN_WIDTH: f32 = 240.0;
 
-/// 克隆弹窗的全部状态；随弹窗关闭一起释放。
-pub(crate) struct GitCloneModal {
+/// 克隆弹窗对外发出的事件。
+#[derive(Debug, Clone)]
+pub(crate) enum GitCloneModalEvent {
+    /// 参数校验通过，请求启动后台克隆任务。
+    Start {
+        url: String,
+        dest: PathBuf,
+        depth: Option<u32>,
+        repo_name: String,
+        folder_name: String,
+        icon: SessionIcon,
+        color: SessionColor,
+    },
+    /// 取消或关闭弹窗。
+    Close,
+}
+
+/// 克隆弹窗独立实体；随弹窗关闭一起释放。
+pub(crate) struct GitCloneModalView {
     /// 目标目录选择面板：路径框 + 目录树 + 一句错误。
-    pub picker: DirPicker,
+    pub picker: Entity<DirPicker>,
     /// 远端地址。
     pub url: Entity<InputState>,
     /// 克隆完登记到哪个分组（可输入新组名，也可从既有分组里选）。
-    pub folder: super::form::GitFolderField,
+    pub folder: GitFolderField,
+    /// 既有分组名候选列表。
+    pub folders: Vec<String>,
     /// 登记时的专属图标。
     pub icon: SessionIcon,
     /// 登记时的环境色。
     pub color: SessionColor,
     /// 是否做浅克隆。
     pub depth_enabled: bool,
-    /// 浅克隆深度输入框，默认 1。
+    /// 浅克隆深度输入（默认 `"1"`）。
     pub depth: Entity<InputState>,
-    /// 目录树是否展开。
+    /// 目录树展开开关：默认折叠，点文件夹图标切换。
     pub tree_open: bool,
-    /// 校验失败原因（字段未填、深度非法）；克隆过程不在这里显示。
+    /// 上一次参与推导的 URL，用于识别变化并避免重复覆写。
+    pub last_url: String,
+    /// 上一次自动追加在目录尾部的仓库名；目录不再以它结尾说明用户手动改过。
+    pub auto_repo: Option<String>,
+    /// 表单校验错误或冲突提示。
     pub error: Option<String>,
-    /// 上一次渲染看到的 URL：用于在地址变化时自动补目录名。
-    pub(crate) last_url: String,
-    /// 上一次自动追加到目录末尾的仓库名：地址再次变化时先摘掉它再加新的。
-    pub(crate) auto_repo: Option<String>,
+    _subscriptions: Vec<Subscription>,
 }
 
-/// 打开「克隆仓库」弹窗。
-pub(crate) fn open_git_clone_modal(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let dest_placeholder = rust_i18n::t!("git.clone.dest_placeholder").to_string();
-    let folder_placeholder = rust_i18n::t!("git.project.folder_placeholder").to_string();
-    let depth = cx.new(|cx| InputState::new(window, cx).placeholder("1"));
-    depth.update(cx, |state, cx| state.set_value("1", window, cx));
-    let url = cx.new(|cx| {
-        InputState::new(window, cx)
-            .placeholder(rust_i18n::t!("git.clone.url_placeholder").to_string())
-    });
-    cx.subscribe_in(
-        &url,
-        window,
-        |this, _, event: &gpui_kit::component::input::InputEvent, window, cx| {
-            if matches!(event, gpui_kit::component::input::InputEvent::Change) {
-                sync_clone_auto_dest(this, window, cx);
+impl EventEmitter<GitCloneModalEvent> for GitCloneModalView {}
+
+impl GitCloneModalView {
+    /// 创建克隆弹窗实体并绑定 URL 与目录选择器的联动订阅。
+    pub(crate) fn new(
+        folders: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let picker = cx.new(|cx| DirPicker::new(window, cx, ""));
+        let url_placeholder = rust_i18n::t!("git.clone.url_placeholder").to_string();
+        let folder_placeholder = rust_i18n::t!("git.project.folder_placeholder").to_string();
+        let url = cx.new(|cx| InputState::new(window, cx).placeholder(&url_placeholder));
+        let depth = cx.new(|cx| InputState::new(window, cx).default_value("1"));
+        let folder = GitFolderField::new(window, cx, &folder_placeholder);
+
+        let url_sub = cx.subscribe_in(&url, window, |this, _, event: &InputEvent, window, cx| {
+            if matches!(event, InputEvent::Change) {
+                this.sync_auto_dest(window, cx);
             }
-        },
-    )
-    .detach();
-    shell.state.modals.git.clone = Some(GitCloneModal {
-        picker: DirPicker::new(window, cx, &dest_placeholder),
-        url,
-        folder: super::form::GitFolderField::new(window, cx, &folder_placeholder),
-        icon: SessionIcon::default(),
-        color: SessionColor::default(),
-        depth_enabled: false,
-        depth,
-        tree_open: false,
-        error: None,
-        last_url: String::new(),
-        auto_repo: None,
-    });
-    // 开窗先把路径框落到主目录：用户不用先点一下才知道起点在哪。
-    if let Some(root) = shell
-        .state
-        .modals
-        .git
-        .clone
-        .as_ref()
-        .map(|modal| modal.picker.browser.root.clone())
-    {
-        crate::git::dir_browser::git_browse_root(shell, GitHost::Clone, root, window, cx);
-    }
-    cx.notify();
-}
+        });
+        let picker_sub =
+            cx.subscribe_in(
+                &picker,
+                window,
+                |this, _, event: &GitDirBrowserEvent, window, cx| match event {
+                    GitDirBrowserEvent::PathSelected(path) => {
+                        this.apply_selected_parent(path.clone(), window, cx);
+                    }
+                    GitDirBrowserEvent::CloseTree => {
+                        this.tree_open = false;
+                        cx.notify();
+                    }
+                },
+            );
+        let picker_obs = cx.observe(&picker, |_, _, cx| cx.notify());
 
-/// 当 URL 变更时自动推导目标目录并写入路径输入框。
-fn sync_clone_auto_dest(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
-    let Some(modal) = shell.state.modals.git.clone.as_mut() else {
-        return;
-    };
-    let url_value = modal.url.read(cx).value().trim().to_string();
-    if url_value == modal.last_url {
-        return;
-    }
-    let Some(repo) = calc::repo_name_from_url(&url_value) else {
-        modal.last_url = url_value;
-        return;
-    };
-    let current = modal.picker.path.read(cx).value().trim().to_string();
-    let fallback = modal.picker.browser.root.display().to_string();
-    let next = calc::clone_destination(&current, modal.auto_repo.as_deref(), &repo, &fallback);
-    modal.last_url = url_value;
-    modal.auto_repo = Some(repo);
-    if next != current {
-        modal
-            .picker
-            .path
-            .update(cx, |input, cx| input.set_value(next, window, cx));
-    }
-}
-
-/// 关闭弹窗。克隆一旦开始就由进度卡接管，这里不取消在途任务。
-pub(crate) fn close_git_clone_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.clone = None;
-    cx.notify();
-}
-
-/// 开始克隆：校验输入后关弹窗，任务交给右下角进度卡。
-pub(crate) fn start_git_clone(
-    shell: &mut AppShell,
-    _window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    // 一次只跑一个克隆：覆盖任务表会让旧子进程失去取消入口。
-    if shell.state.git.clone_task.is_some() {
-        if let Some(modal) = shell.state.modals.git.clone.as_mut() {
-            modal.error = Some(rust_i18n::t!("git.clone.busy").to_string());
+        Self {
+            picker,
+            url,
+            folder,
+            folders,
+            icon: SessionIcon::default(),
+            color: SessionColor::default(),
+            depth_enabled: false,
+            depth,
+            tree_open: false,
+            last_url: String::new(),
+            auto_repo: None,
+            error: None,
+            _subscriptions: vec![url_sub, picker_sub, picker_obs],
         }
-        cx.notify();
-        return;
     }
-    let Some(modal) = shell.state.modals.git.clone.as_ref() else {
-        return;
-    };
-    let url = modal.url.read(cx).value().trim().to_string();
-    let raw_dest = modal.picker.path.read(cx).value().trim().to_string();
-    if url.is_empty() || raw_dest.is_empty() {
-        if let Some(modal) = shell.state.modals.git.clone.as_mut() {
-            modal.error = Some(rust_i18n::t!("git.clone.need_fields").to_string());
+
+    /// 供焦点管理获取 URL 输入框焦点句柄。
+    pub(crate) fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.url.read(cx).focus_handle(cx)
+    }
+
+    /// 设置校验或冲突提示文案。
+    pub(crate) fn set_error(&mut self, message: String, cx: &mut Context<Self>) {
+        self.error = Some(message);
+        cx.notify();
+    }
+
+    /// 当 URL 变更时自动推导目标目录并写入路径输入框。
+    fn sync_auto_dest(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let url_value = self.url.read(cx).value().trim().to_string();
+        if url_value == self.last_url {
+            return;
         }
-        cx.notify();
-        return;
+        let Some(repo) = calc::repo_name_from_url(&url_value) else {
+            self.last_url = url_value;
+            return;
+        };
+        let (current, fallback) = {
+            let picker = self.picker.read(cx);
+            (
+                picker.path.read(cx).value().trim().to_string(),
+                picker.browser.root.display().to_string(),
+            )
+        };
+        let next = calc::clone_destination(&current, self.auto_repo.as_deref(), &repo, &fallback);
+        self.last_url = url_value;
+        self.auto_repo = Some(repo);
+        if next != current {
+            let path_input = self.picker.read(cx).path.clone();
+            path_input.update(cx, |input, cx| input.set_value(next, window, cx));
+        }
     }
-    let depth = if modal.depth_enabled {
-        match modal.depth.read(cx).value().trim().parse::<u32>() {
-            Ok(value) if value > 0 => Some(value),
-            _ => {
-                if let Some(modal) = shell.state.modals.git.clone.as_mut() {
-                    modal.error = Some(rust_i18n::t!("git.clone.depth_invalid").to_string());
+
+    /// 目录树里换父目录后，把当前 URL 的仓库名继续补在后面。
+    fn apply_selected_parent(
+        &mut self,
+        parent: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let url = self.url.read(cx).value().trim().to_string();
+        let Some(repo) = repo_name_from_url(&url) else {
+            return;
+        };
+        self.auto_repo = Some(repo.clone());
+        let joined = parent.join(repo);
+        self.picker.update(cx, |p, cx| p.set_path_text(&joined, window, cx));
+    }
+
+    /// 校验表单输入并在通过后发出启动克隆事件。
+    pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        let url = self.url.read(cx).value().trim().to_string();
+        let raw_dest = self.picker.read(cx).path.read(cx).value().trim().to_string();
+        if url.is_empty() || raw_dest.is_empty() {
+            self.error = Some(rust_i18n::t!("git.clone.need_fields").to_string());
+            cx.notify();
+            return;
+        }
+        let depth = if self.depth_enabled {
+            match self.depth.read(cx).value().trim().parse::<u32>() {
+                Ok(value) if value > 0 => Some(value),
+                _ => {
+                    self.error = Some(rust_i18n::t!("git.clone.depth_invalid").to_string());
+                    cx.notify();
+                    return;
                 }
-                cx.notify();
-                return;
             }
-        }
-    } else {
-        None
-    };
-    let dest = expand_home(&raw_dest);
-    let repo_name = repo_name_from_url(&url).unwrap_or_else(|| {
-        dest.file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| rust_i18n::t!("git.clone.title").to_string())
-    });
-    let folder_name = modal.folder.name.read(cx).value().trim().to_string();
-    let (icon, color) = (modal.icon, modal.color);
-    let request_id = GitRequestId::new();
-    shell.state.git.clone_task = Some(GitCloneTask {
-        request_id,
-        repo_name,
-        folder_name,
-        icon,
-        color,
-        last_line: String::new(),
-        percent: None,
-        running: true,
-        error: None,
-        done: None,
-    });
-    // 弹窗立即关闭：进度、取消都在右下角卡片上，用户可以去干别的。
-    shell.state.modals.git.clone = None;
-    // URL 原样交给系统 git：ssh://、git@host:path 与 http(s):// 都由 git
-    // 自己解析；这里只裁剪首尾空白，不拼接、不改写协议或端口。
-    shell.send_command(GitCommand::Clone {
-        request_id,
-        url,
-        dest,
-        depth,
-    });
-    cx.notify();
-}
-
-/// 目录树里换父目录后，把当前 URL 的仓库名继续补在后面。
-///
-/// 树里的选中高亮仍落在用户点的目录上；写回路径框的是「父目录/仓库名」，
-/// 这样切换父目录不会丢掉仓库名。URL 没有仓库名时原样返回。
-pub(crate) fn git_clone_selected_input(
-    shell: &mut AppShell,
-    path: std::path::PathBuf,
-    cx: &Context<AppShell>,
-) -> std::path::PathBuf {
-    let Some(modal) = shell.state.modals.git.clone.as_mut() else {
-        return path;
-    };
-    let url = modal.url.read(cx).value().trim().to_string();
-    let Some(repo) = repo_name_from_url(&url) else {
-        return path;
-    };
-    modal.auto_repo = Some(repo.clone());
-    path.join(repo)
+        } else {
+            None
+        };
+        let dest = expand_home(&raw_dest);
+        let repo_name = repo_name_from_url(&url).unwrap_or_else(|| {
+            dest.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| rust_i18n::t!("git.clone.title").to_string())
+        });
+        let folder_name = self.folder.name.read(cx).value().trim().to_string();
+        cx.emit(GitCloneModalEvent::Start {
+            url,
+            dest,
+            depth,
+            repo_name,
+            folder_name,
+            icon: self.icon,
+            color: self.color,
+        });
+    }
 }

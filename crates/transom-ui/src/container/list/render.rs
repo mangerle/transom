@@ -5,7 +5,6 @@
 //! `AppShell` 的渲染方法。
 
 use super::*;
-use crate::app::AppShell;
 use crate::theme::tokens::typography;
 use crate::widgets::{IconButton, IconButtonSize, status_dot_bare};
 use gpui_kit::base::{ScrollBounce, v_virtual_list};
@@ -14,8 +13,8 @@ use gpui_kit::component::scroll::Scrollbar;
 use std::rc::Rc;
 
 /// 容器列表虚拟渲染参数。
-pub(crate) struct ContainerRowsParams<'a> {
-    pub(crate) app_entity: Entity<AppShell>,
+pub(crate) struct ContainerRowsParams<'a, V: Render + 'static> {
+    pub(crate) host: Entity<V>,
     pub(crate) view: &'a Entity<ContainerWorkspace>,
     pub(crate) rows: Vec<ListRow>,
     pub(crate) selected: Option<String>,
@@ -26,9 +25,9 @@ pub(crate) struct ContainerRowsParams<'a> {
 }
 
 /// 渲染列表；空结果给出可行动的提示而不是白屏。
-pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
+pub(crate) fn render_rows<V: Render + 'static>(params: ContainerRowsParams<'_, V>) -> AnyElement {
     let ContainerRowsParams {
-        app_entity,
+        host,
         view,
         rows,
         selected,
@@ -59,7 +58,7 @@ pub(crate) fn render_rows(params: ContainerRowsParams<'_>) -> AnyElement {
     let p = p.clone();
     let view_for_rows = view.clone();
     let list = v_virtual_list(
-        app_entity,
+        host,
         ElementId::Name("container-list-virtual-list".into()),
         item_sizes,
         move |_app, range, _window, _cx| {

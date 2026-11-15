@@ -167,10 +167,10 @@ pub(crate) struct ContainerWorkspaceState {
 }
 
 impl ContainerWorkspaceState {
-    pub(crate) fn new(
+    pub(crate) fn new<V: 'static>(
         profile: ContainerEngineProfile,
         window: &mut Window,
-        cx: &mut Context<crate::app::AppShell>,
+        cx: &mut Context<V>,
     ) -> Self {
         let search = cx.new(|cx| {
             InputState::new(window, cx).placeholder(rust_i18n::t!("container.search").to_string())

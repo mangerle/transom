@@ -25,416 +25,240 @@ mod pane;
 mod rows;
 mod state;
 
-pub(crate) use crate::git::form::GitHost;
 use listing::{DirListing, check_dir_name, list_entries};
 pub(crate) use pane::render_git_browser;
 pub(crate) use state::DirPicker;
 
-use crate::app::AppShell;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 pub(crate) use state::{DirDraft, GitDirBrowser};
 use std::path::{Path, PathBuf};
 
-/// 按宿主取到那棵树的只读视图。
-fn picker(shell: &AppShell, target: GitHost) -> Option<&DirPicker> {
-    match target {
-        GitHost::Modal => shell
-            .state
-            .modals
-            .git
-            .project
-            .as_ref()
-            .map(|modal| &modal.picker),
-        GitHost::Clone => shell
-            .state
-            .modals
-            .git
-            .clone
-            .as_ref()
-            .map(|modal| &modal.picker),
+/// 目录树面板向上层宿主上报的事件。
+pub(crate) enum GitDirBrowserEvent {
+    /// 选中目录或换根后通知宿主最新路径。
+    PathSelected(PathBuf),
+    /// 双击条目后请求宿主收起折叠树（项目弹窗忽略，克隆弹窗收起）。
+    CloseTree,
+}
+
+impl EventEmitter<GitDirBrowserEvent> for DirPicker {}
+
+impl DirPicker {
+    /// 把指定路径写回路径输入框。
+    pub(crate) fn set_path_text(&self, path: &Path, window: &mut Window, cx: &mut App) {
+        let text = path.display().to_string();
+        self.path.update(cx, |state, cx| {
+            state.set_value(text, window, cx);
+        });
     }
-}
 
-/// 按宿主取到那棵树的可写视图。
-fn picker_mut(shell: &mut AppShell, target: GitHost) -> Option<&mut DirPicker> {
-    match target {
-        GitHost::Modal => shell
-            .state
-            .modals
-            .git
-            .project
-            .as_mut()
-            .map(|modal| &mut modal.picker),
-        GitHost::Clone => shell
-            .state
-            .modals
-            .git
-            .clone
-            .as_mut()
-            .map(|modal| &mut modal.picker),
-    }
-}
-
-/// 换根到某个目录：写回路径框并立刻探测是不是仓库。
-pub(crate) fn git_browse_root(
-    shell: &mut AppShell,
-    target: GitHost,
-    path: PathBuf,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    // 克隆弹窗里用户点的是父目录，路径框要保留「父目录/仓库名」；
-    // 项目弹窗点哪个目录就是哪个目录。
-    let input_path = if matches!(target, GitHost::Clone) {
-        crate::git::clone_modal::git_clone_selected_input(shell, path.clone(), cx)
-    } else {
-        path.clone()
-    };
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    picker.browser.re_root(path.clone());
-    picker.browser.selected = Some(path.clone());
-    sync_path_inputs(picker, &input_path, window, cx);
-    cx.notify();
-    spawn_dir_listing(shell, target, path, cx);
-    probe_if_modal(shell, target, cx);
-}
-
-/// 跳到快捷目录；目录不存在（按钮已置灰）时不动。
-pub(crate) fn git_browse_quick(
-    shell: &mut AppShell,
-    target: GitHost,
-    path: Option<PathBuf>,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(path) = path else {
-        return;
-    };
-    git_browse_root(shell, target, path, window, cx);
-}
-
-/// 点目录行：选中它（写回路径框 + 探测），不改变展开状态。
-///
-/// 为什么选中与展开分开：一路点行进到深层，等于把「选中的东西」和「看的东西」
-/// 绑死，想选父级就得换根；三角管看，行管选，两件事各一次点击。
-pub(crate) fn git_select_dir(
-    shell: &mut AppShell,
-    target: GitHost,
-    path: PathBuf,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let input_path = if matches!(target, GitHost::Clone) {
-        crate::git::clone_modal::git_clone_selected_input(shell, path.clone(), cx)
-    } else {
-        path.clone()
-    };
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    picker.browser.selected = Some(path);
-    sync_path_inputs(picker, &input_path, window, cx);
-    cx.notify();
-    probe_if_modal(shell, target, cx);
-}
-
-/// 双击选中目录后收起克隆弹窗的目录树；项目弹窗的树是主内容，不收起。
-pub(crate) fn git_close_dir_tree(
-    shell: &mut AppShell,
-    target: GitHost,
-    cx: &mut Context<AppShell>,
-) {
-    if !matches!(target, GitHost::Clone) {
-        return;
-    }
-    let Some(modal) = shell.state.modals.git.clone.as_mut() else {
-        return;
-    };
-    if modal.tree_open {
-        modal.tree_open = false;
+    /// 换根到某个目录：写回路径框并通知宿主。
+    pub(crate) fn browse_root(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.browser.re_root(path.clone());
+        self.browser.selected = Some(path.clone());
+        self.set_path_text(&path, window, cx);
         cx.notify();
+        self.spawn_dir_listing(path.clone(), cx);
+        cx.emit(GitDirBrowserEvent::PathSelected(path));
     }
-}
 
-/// 点三角：展开或收起树里某个目录，首次展开时读它那一层。
-pub(crate) fn git_toggle_tree_dir(
-    shell: &mut AppShell,
-    target: GitHost,
-    path: PathBuf,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    let needs_listing = picker.browser.toggle(&path);
-    cx.notify();
-    if let Some(path) = needs_listing {
-        spawn_dir_listing(shell, target, path, cx);
+    /// 跳到快捷目录；目录不存在（按钮已置灰）时不动。
+    pub(crate) fn browse_quick(
+        &mut self,
+        path: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = path else {
+            return;
+        };
+        self.browse_root(path, window, cx);
     }
-}
 
-/// 重新列举：根与所有展开中的目录都清缓存重读，外部改了文件系统不必重开弹窗。
-pub(crate) fn git_refresh_browser(
-    shell: &mut AppShell,
-    target: GitHost,
-    cx: &mut Context<AppShell>,
-) {
-    relist_browser(shell, target, cx);
-}
-
-/// 切换是否显示隐藏条目：口径变了，所有缓存都要作废。
-pub(crate) fn git_toggle_hidden(shell: &mut AppShell, target: GitHost, cx: &mut Context<AppShell>) {
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    picker.browser.show_hidden = !picker.browser.show_hidden;
-    relist_browser(shell, target, cx);
-}
-
-/// 作废并重列根与展开中的目录。
-fn relist_browser(shell: &mut AppShell, target: GitHost, cx: &mut Context<AppShell>) {
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    let paths = picker.browser.relist_all();
-    cx.notify();
-    for path in paths {
-        spawn_dir_listing(shell, target, path, cx);
+    /// 点目录行：选中它（写回路径框 + 通知宿主），不改变展开状态。
+    pub(crate) fn select_dir(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.browser.selected = Some(path.clone());
+        self.set_path_text(&path, window, cx);
+        cx.notify();
+        cx.emit(GitDirBrowserEvent::PathSelected(path));
     }
-}
 
-/// 点「新建目录」：在目标父级末尾长出一行处于重命名态的条目。
-///
-/// 目标父级取「选中项，没选中就是根」：用户点了哪个目录就往哪个目录里建，
-/// 与文件管理器的直觉一致；父级处于收起态时先展开，否则新行看不见。
-pub(crate) fn git_start_dir_draft(
-    shell: &mut AppShell,
-    target: GitHost,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    let parent = picker
-        .browser
-        .selected
-        .clone()
-        .unwrap_or_else(|| picker.browser.root.clone());
-    picker.browser.expand(&parent);
-    let needs_listing = !picker.browser.is_listed(&parent);
-    if needs_listing {
-        // 收起的父级还没读过内容，不补一次列举就会出现"有输入框却没有列表"。
-        picker.browser.queue(&parent);
+    /// 双击选中目录后通知宿主收起目录树。
+    pub(crate) fn close_dir_tree(&mut self, cx: &mut Context<Self>) {
+        cx.emit(GitDirBrowserEvent::CloseTree);
     }
-    picker.error = None;
-    let input = cx.new(|cx| InputState::new(window, cx));
-    picker.browser.draft = Some(DirDraft {
-        parent: parent.clone(),
-        input: input.clone(),
-    });
-    cx.notify();
-    // 借用到此结束：下面要动 shell 派发列举，也要动 window 投焦点。
-    if needs_listing {
-        spawn_dir_listing(shell, target, parent, cx);
+
+    /// 点三角：展开或收起树里某个目录，首次展开时读它那一层。
+    pub(crate) fn toggle_tree_dir(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let needs_listing = self.browser.toggle(&path);
+        cx.notify();
+        if let Some(path) = needs_listing {
+            self.spawn_dir_listing(path, cx);
+        }
     }
-    // 焦点延后一帧再投：草稿行是这一帧才建出来的，元素还没挂上，此时 focus 会被
-    // 平台退回原来的焦点（活动标签页里的终端），表现就是"名字打进终端了"。
-    let entity = cx.entity().clone();
-    let exec = cx.background_executor().clone();
-    window
-        .spawn(cx, async move |cx| {
+
+    /// 重新列举：根与所有展开中的目录都清缓存重读。
+    pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
+        self.relist_browser(cx);
+    }
+
+    /// 切换是否显示隐藏条目：口径变了，所有缓存都要作废。
+    pub(crate) fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
+        self.browser.show_hidden = !self.browser.show_hidden;
+        self.relist_browser(cx);
+    }
+
+    fn relist_browser(&mut self, cx: &mut Context<Self>) {
+        let paths = self.browser.relist_all();
+        cx.notify();
+        for path in paths {
+            self.spawn_dir_listing(path, cx);
+        }
+    }
+
+    /// 点「新建目录」：在目标父级末尾长出一行处于重命名态的条目。
+    pub(crate) fn start_dir_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let parent = self
+            .browser
+            .selected
+            .clone()
+            .unwrap_or_else(|| self.browser.root.clone());
+        self.browser.expand(&parent);
+        let needs_listing = !self.browser.is_listed(&parent);
+        if needs_listing {
+            self.browser.queue(&parent);
+        }
+        self.error = None;
+        let input = cx.new(|cx| InputState::new(window, cx));
+        self.browser.draft = Some(DirDraft {
+            parent: parent.clone(),
+            input,
+        });
+        cx.notify();
+        if needs_listing {
+            self.spawn_dir_listing(parent, cx);
+        }
+        let exec = cx.background_executor().clone();
+        cx.spawn_in(window, async move |this, cx| {
             exec.timer(std::time::Duration::from_millis(30)).await;
-            let _ = cx.update(|window, app| {
-                entity.update(app, |this, cx| {
-                    focus_git_draft_input(this, target, window, cx);
-                });
+            let _ = this.update_in(cx, |picker, window, cx| {
+                picker.focus_draft_input(window, cx);
             });
         })
         .detach();
-}
-
-/// 把焦点投给草稿行的输入框；草稿已提交或取消时什么都不做。
-fn focus_git_draft_input(
-    shell: &mut AppShell,
-    target: GitHost,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(handle) = picker(shell, target)
-        .and_then(|picker| picker.browser.draft.as_ref())
-        .map(|draft| draft.input.read(cx).focus_handle(cx))
-    else {
-        return;
-    };
-    window.focus(&handle, cx);
-}
-
-/// 取消草稿行：只收掉这一行，不动已选中的目录。
-pub(crate) fn git_cancel_dir_draft(
-    shell: &mut AppShell,
-    target: GitHost,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(picker) = picker_mut(shell, target) {
-        picker.browser.draft = None;
     }
-    cx.notify();
-}
 
-/// 确认草稿行：校验名字后建目录，建好即选中并探测。
-pub(crate) fn git_commit_dir_draft(
-    shell: &mut AppShell,
-    host: GitHost,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(picker) = picker_mut(shell, host) else {
-        return;
-    };
-    let (parent, raw) = match picker.browser.draft.as_ref() {
-        Some(draft) => (
-            draft.parent.clone(),
-            draft.input.read(cx).value().trim().to_string(),
-        ),
-        None => return,
-    };
-    if let Some(key) = check_dir_name(&raw) {
-        picker.error = Some(rust_i18n::t!(key).to_string());
+    fn focus_draft_input(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(handle) = self
+            .browser
+            .draft
+            .as_ref()
+            .map(|draft| draft.input.read(cx).focus_handle(cx))
+        else {
+            return;
+        };
+        window.focus(&handle, cx);
+    }
+
+    /// 取消草稿行：只收掉这一行，不动已选中的目录。
+    pub(crate) fn cancel_dir_draft(&mut self, cx: &mut Context<Self>) {
+        self.browser.draft = None;
         cx.notify();
-        return;
     }
-    let created_path = parent.join(&raw);
-    picker.error = None;
-    let entity = cx.entity().clone();
-    let executor = cx.background_executor().clone();
-    // 用 `window.spawn` 而不是 `cx.spawn`：建好目录后要写回路径框，
-    // 而 `InputState::set_value` 只有拿到 Window 才调得动。
-    window
-        .spawn(cx, async move |cx| {
+
+    /// 确认草稿行：校验名字后建目录，建好即选中并通知宿主。
+    pub(crate) fn commit_dir_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (parent, raw) = match self.browser.draft.as_ref() {
+            Some(draft) => (
+                draft.parent.clone(),
+                draft.input.read(cx).value().trim().to_string(),
+            ),
+            None => return,
+        };
+        if let Some(key) = check_dir_name(&raw) {
+            self.error = Some(rust_i18n::t!(key).to_string());
+            cx.notify();
+            return;
+        }
+        let created_path = parent.join(&raw);
+        self.error = None;
+        let executor = cx.background_executor().clone();
+        cx.spawn_in(window, async move |this, cx| {
             let created = executor
                 .spawn(async move { std::fs::create_dir_all(&created_path).map(|()| created_path) })
                 .await;
-            let _ = cx.update(|window, app| match created {
+            let _ = this.update_in(cx, |picker, window, cx| match created {
                 Ok(path) => {
                     log::info!("已在目录树里新建目录: {}", path.display());
-                    entity.update(app, |this, cx| {
-                        git_after_mkdir(this, host, &path, window, cx);
-                    });
+                    picker.after_mkdir(&path, window, cx);
                 }
                 Err(error) => {
                     log::warn!("新建目录失败，原因: {error}");
-                    entity.update(app, |this, cx| {
-                        if let Some(picker) = picker_mut(this, host) {
-                            picker.error = Some(format!(
-                                "{}: {error}",
-                                rust_i18n::t!("git.browser.mkdir_failed")
-                            ));
-                        }
-                        cx.notify();
-                    });
+                    picker.error = Some(format!(
+                        "{}: {error}",
+                        rust_i18n::t!("git.browser.mkdir_failed")
+                    ));
+                    cx.notify();
                 }
             });
         })
         .detach();
-}
-
-/// 新建目录成功后的收尾：展开父级、补列没读过的层、把新目录设为选中项。
-fn git_after_mkdir(
-    shell: &mut AppShell,
-    target: GitHost,
-    path: &Path,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    // 新建的是父目录，克隆弹窗的路径框仍要带仓库名；树里选中的是新建目录本身。
-    let input_path = if matches!(target, GitHost::Clone) {
-        crate::git::clone_modal::git_clone_selected_input(shell, path.to_path_buf(), cx)
-    } else {
-        path.to_path_buf()
-    };
-    let Some(picker) = picker_mut(shell, target) else {
-        return;
-    };
-    let owned = path.to_path_buf();
-    let mut pending: Vec<PathBuf> = Vec::with_capacity(2);
-    if let Some(parent) = path.parent() {
-        picker.browser.expand(parent);
-        let parent = parent.to_path_buf();
-        // 父级可能早已列过（展开时读过、当时还没有这个目录），只判断"没列过"
-        // 会把新条目挡在缓存之外，表现为新建成功但树里看不到。这里强制重读。
-        pending.push(picker.browser.refresh_one(&parent));
     }
-    picker.browser.queue(&owned);
-    pending.push(owned.clone());
-    picker.browser.selected = Some(owned);
-    picker.browser.draft = None;
-    sync_path_inputs(picker, &input_path, window, cx);
-    cx.notify();
-    for path in pending {
-        spawn_dir_listing(shell, target, path, cx);
+
+    fn after_mkdir(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+        let owned = path.to_path_buf();
+        let mut pending: Vec<PathBuf> = Vec::with_capacity(2);
+        if let Some(parent) = path.parent() {
+            self.browser.expand(parent);
+            let parent = parent.to_path_buf();
+            pending.push(self.browser.refresh_one(&parent));
+        }
+        self.browser.queue(&owned);
+        pending.push(owned.clone());
+        self.browser.selected = Some(owned.clone());
+        self.browser.draft = None;
+        self.set_path_text(&owned, window, cx);
+        cx.notify();
+        for path in pending {
+            self.spawn_dir_listing(path, cx);
+        }
+        cx.emit(GitDirBrowserEvent::PathSelected(owned));
     }
-    probe_if_modal(shell, target, cx);
-}
 
-/// 派发一次后台列举，结果按路径归位到那一格。
-fn spawn_dir_listing(
-    shell: &mut AppShell,
-    target: GitHost,
-    path: PathBuf,
-    cx: &mut Context<AppShell>,
-) {
-    let executor = cx.background_executor().clone();
-    let show_hidden = picker(shell, target).is_some_and(|picker| picker.browser.show_hidden);
-    let entity = cx.entity().clone();
-    // 路径既要交给后台任务，又要用来定位结果那一格，先复制一份。
-    let job_path = path.clone();
-    cx.spawn(async move |_, cx| {
-        let (entries, truncated, error) = executor
-            .spawn(async move { list_entries(&job_path, show_hidden) })
-            .await;
-        entity.update(cx, |this, cx| {
-            let Some(picker) = picker_mut(this, target) else {
-                return;
-            };
-            // 结果只写回它自己那一格：期间换根或收起都不影响别的目录。
-            let recorded = picker.browser.record(
-                &path,
-                DirListing {
-                    entries,
-                    truncated,
-                    error,
-                    loading: false,
-                },
-            );
-            if recorded {
-                cx.notify();
-            }
-        });
-    })
-    .detach();
-}
-
-/// 只有「打开本机仓库」的宿主需要探测：克隆标签页的目标目录还不存在，
-/// 对它跑 `rev-parse` 只会得到一句"不是仓库"并污染状态行。
-fn probe_if_modal(shell: &mut AppShell, target: GitHost, cx: &mut Context<AppShell>) {
-    if matches!(target, GitHost::Modal) {
-        crate::git::project_modal::probe_git_project_dir(shell, cx);
+    fn spawn_dir_listing(&self, path: PathBuf, cx: &mut Context<Self>) {
+        let executor = cx.background_executor().clone();
+        let show_hidden = self.browser.show_hidden;
+        let job_path = path.clone();
+        cx.spawn(async move |this, cx| {
+            let (entries, truncated, error) = executor
+                .spawn(async move { list_entries(&job_path, show_hidden) })
+                .await;
+            let _ = this.update(cx, |picker, cx| {
+                let recorded = picker.browser.record(
+                    &path,
+                    DirListing {
+                        entries,
+                        truncated,
+                        error,
+                        loading: false,
+                    },
+                );
+                if recorded {
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
-}
-
-/// 浏览结果写回路径框：路径框是唯一真相，底部按钮的语义读的就是它。
-fn sync_path_inputs(
-    picker: &mut DirPicker,
-    path: &Path,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let text = path.display().to_string();
-    picker.path.update(cx, |state, cx| {
-        state.set_value(text, window, cx);
-    });
 }

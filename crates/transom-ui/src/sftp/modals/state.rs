@@ -1,8 +1,15 @@
 //! SFTP 弹窗状态定义。
 
+use super::chmod::SftpChmodModalView;
 use super::common::*;
+use super::confirm::SftpConfirmModalView;
+use super::filter::SftpFilterModalView;
+use super::input::SftpInputModalView;
+use super::properties::SftpPropertiesModalView;
+use crate::sftp::{SftpSearchModalView, SftpSyncModalView};
 
 /// 待用户确认的破坏性操作。
+#[derive(Clone)]
 pub(crate) enum SftpPendingDelete {
     Local {
         tab_id: TabId,
@@ -16,23 +23,29 @@ pub(crate) enum SftpPendingDelete {
     },
 }
 
-/// 删除确认弹窗：破坏性操作必须经过一次显式确认，且文案说明不可恢复。
-pub(crate) struct SftpConfirmModalState {
-    pub(crate) action: SftpPendingDelete,
-    pub(crate) title: String,
-    pub(crate) description: String,
+/// 弹窗实体的事件订阅槽位，随弹窗关闭自动释放。
+#[derive(Default)]
+pub(crate) struct SftpModalSubscriptions {
+    pub(crate) chmod: Option<Subscription>,
+    pub(crate) input: Option<Subscription>,
+    pub(crate) properties: Option<Subscription>,
+    pub(crate) filter: Option<Subscription>,
+    pub(crate) sync: Option<Subscription>,
+    pub(crate) confirm: Option<Subscription>,
+    pub(crate) search: Option<Subscription>,
 }
 
-/// SFTP 五类模态弹窗与编辑器跳转行的聚合状态。
+/// SFTP 七类模态弹窗的聚合实体句柄。
 ///
-/// 这些弹窗都依附于 SFTP 双栏或内置编辑器，统一由本模块管理显隐；
-/// AppShell 只持有聚合对象，不再平铺五个互不相关的 `Option` 字段。
+/// 每个弹窗都是独立的 GPUI 实体，通过事件向外壳上交意图，不再共享外壳渲染自由函数。
+#[derive(Default)]
 pub(crate) struct SftpModals {
-    pub(crate) chmod: Option<SftpChmodModalState>,
-    pub(crate) input: Option<SftpInputModalState>,
-    pub(crate) properties: Option<SftpPropertiesModalState>,
-    pub(crate) filter: Option<SftpFilterModalState>,
-    pub(crate) sync: Option<SftpSyncModalState>,
-    pub(crate) confirm: Option<SftpConfirmModalState>,
-    pub(crate) search: Option<crate::sftp::search_modal::SftpSearchModalState>,
+    pub(crate) chmod: Option<Entity<SftpChmodModalView>>,
+    pub(crate) input: Option<Entity<SftpInputModalView>>,
+    pub(crate) properties: Option<Entity<SftpPropertiesModalView>>,
+    pub(crate) filter: Option<Entity<SftpFilterModalView>>,
+    pub(crate) sync: Option<Entity<SftpSyncModalView>>,
+    pub(crate) confirm: Option<Entity<SftpConfirmModalView>>,
+    pub(crate) search: Option<Entity<SftpSearchModalView>>,
+    pub(crate) subs: SftpModalSubscriptions,
 }

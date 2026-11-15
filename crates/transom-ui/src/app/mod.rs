@@ -7,6 +7,7 @@ pub(crate) mod event_handlers;
 mod event_terminal_ready;
 pub(crate) mod events;
 mod frame_effects;
+mod language;
 mod modal_hub;
 mod overlays;
 mod persistence;

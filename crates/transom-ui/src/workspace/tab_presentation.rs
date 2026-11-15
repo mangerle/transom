@@ -6,7 +6,7 @@
 //!
 //! 代价与局限：只覆盖视觉映射，标签布局仍各按横向/纵向排版。
 
-use crate::app::{AppShell, TerminalTab};
+use crate::app::{AppState, TerminalTab};
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
 use crate::workspace::pane_status_indicator;
@@ -20,7 +20,7 @@ use transom_ui_icons::UiIcon;
 /// 标签图标与图标颜色：播放器/监控看板有专属图标，Git 标签跟随仓库项目外观，
 /// 其余按会话外观回落连接类型。
 pub(crate) fn tab_icon(
-    shell: &AppShell,
+    state: &AppState,
     tab: &TerminalTab,
     active: bool,
     p: &Palette,
@@ -57,7 +57,7 @@ pub(crate) fn tab_icon(
         });
         return (icon, color);
     }
-    let appearance = shell.state.session_appearance(tab);
+    let appearance = state.session_appearance(tab);
     let icon = appearance
         .icon
         .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
@@ -70,11 +70,11 @@ pub(crate) fn tab_icon(
 }
 
 /// 用户为会话配置的环境色；未配置时不画强调条。
-pub(crate) fn tab_accent(shell: &AppShell, tab: &TerminalTab, cx: &App) -> Option<Hsla> {
+pub(crate) fn tab_accent(state: &AppState, tab: &TerminalTab, cx: &App) -> Option<Hsla> {
     if let Some(workspace) = tab.git() {
         return git_project_color(&workspace.read(cx).state.project);
     }
-    shell.state.session_appearance(tab).color
+    state.session_appearance(tab).color
 }
 
 /// Git 标签图标与左侧仓库行保持一致，统一使用 Git 领域图标。

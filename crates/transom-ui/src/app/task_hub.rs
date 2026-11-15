@@ -78,6 +78,8 @@ pub(crate) struct PanelSubscriptions {
     /// 会话回放弹窗：打开播放器、终端回放与外部文件选择由外壳处理。
     pub(crate) replay: Option<Subscription>,
     pub(crate) diff_viewer: Option<Subscription>,
+    pub(crate) git_project_modal: Option<Subscription>,
+    pub(crate) git_clone_modal: Option<Subscription>,
     pub(crate) git_rebase_modal: Option<Subscription>,
     pub(crate) git_conflict_modal: Option<Subscription>,
     pub(crate) git_push_modal: Option<Subscription>,
@@ -110,6 +112,8 @@ impl PanelSubscriptions {
             audit_viewer: None,
             replay: None,
             diff_viewer: None,
+            git_project_modal: None,
+            git_clone_modal: None,
             git_rebase_modal: None,
             git_conflict_modal: None,
             git_push_modal: None,

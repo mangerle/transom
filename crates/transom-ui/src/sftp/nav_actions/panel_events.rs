@@ -22,27 +22,27 @@ fn try_open_sftp_modal(
             permissions,
             octal_input,
         } => {
-            shell.state.sftp_modals.chmod = Some(crate::sftp::SftpChmodModalState {
-                tab_id: *tab_id,
-                connection_id: *connection_id,
-                remote_path: remote_path.clone(),
-                file_name: file_name.clone(),
-                permissions: *permissions,
-                octal_input: octal_input.clone(),
-                error: None,
-            });
-            cx.notify();
+            crate::sftp::open_sftp_chmod_modal(
+                shell,
+                *tab_id,
+                *connection_id,
+                file_name.clone(),
+                remote_path.clone(),
+                *permissions,
+                octal_input.clone(),
+                cx,
+            );
         }
         SftpPanelEvent::OpenSearchModal(state) => {
-            shell.state.sftp_modals.search = Some((**state).clone());
-            cx.notify();
+            crate::sftp::open_sftp_search_modal(shell, (**state).clone(), cx);
         }
         SftpPanelEvent::ShowProperties { scope, properties } => {
-            shell.state.sftp_modals.properties = Some(crate::sftp::SftpPropertiesModalState {
-                scope: scope.clone(),
-                properties: properties.clone(),
-            });
-            cx.notify();
+            crate::sftp::open_sftp_properties_modal(
+                shell,
+                scope.clone(),
+                properties.clone(),
+                cx,
+            );
         }
         SftpPanelEvent::PersistSettings { status } => {
             let snapshot = crate::app::app_settings(cx).clone();
@@ -55,36 +55,33 @@ fn try_open_sftp_modal(
             cx.notify();
         }
         SftpPanelEvent::ConfirmLocalDelete { tab_id, paths } => {
-            shell.state.sftp_modals.confirm = Some(crate::sftp::SftpConfirmModalState {
-                action: crate::sftp::SftpPendingDelete::Local {
+            crate::sftp::open_sftp_confirm_modal(
+                shell,
+                crate::sftp::SftpPendingDelete::Local {
                     tab_id: *tab_id,
                     paths: paths.clone(),
                 },
-                title: rust_i18n::t!("sftp.local_async.delete_title").to_string(),
-                description: rust_i18n::t!("sftp.local_async.delete_body", count = paths.len())
-                    .to_string(),
-            });
-            cx.notify();
+                rust_i18n::t!("sftp.local_async.delete_title").to_string(),
+                rust_i18n::t!("sftp.local_async.delete_body", count = paths.len()).to_string(),
+                cx,
+            );
         }
         SftpPanelEvent::ConfirmRemoteDelete {
             tab_id,
             connection_id,
             targets,
         } => {
-            shell.state.sftp_modals.confirm = Some(crate::sftp::SftpConfirmModalState {
-                action: crate::sftp::SftpPendingDelete::Remote {
+            crate::sftp::open_sftp_confirm_modal(
+                shell,
+                crate::sftp::SftpPendingDelete::Remote {
                     tab_id: *tab_id,
                     connection_id: *connection_id,
                     targets: targets.clone(),
                 },
-                title: rust_i18n::t!("sftp.file_ops.delete_remote_title").to_string(),
-                description: rust_i18n::t!(
-                    "sftp.file_ops.delete_remote_body",
-                    count = targets.len()
-                )
-                .to_string(),
-            });
-            cx.notify();
+                rust_i18n::t!("sftp.file_ops.delete_remote_title").to_string(),
+                rust_i18n::t!("sftp.file_ops.delete_remote_body", count = targets.len()).to_string(),
+                cx,
+            );
         }
         _ => return false,
     }
@@ -112,15 +109,10 @@ pub(super) fn on_sftp_panel_event(
             shell.state.window_requests.push_sftp(event.clone());
         }
         SftpPanelEvent::OpenSyncModal(state) => {
-            shell.state.sftp_modals.sync = Some((**state).clone());
-            cx.notify();
+            crate::sftp::open_sftp_sync_modal(shell, (**state).clone(), cx);
         }
         SftpPanelEvent::OpenFilterModal { textarea } => {
-            shell.state.sftp_modals.filter = Some(crate::sftp::SftpFilterModalState {
-                textarea: textarea.clone(),
-                error: None,
-            });
-            cx.notify();
+            crate::sftp::open_sftp_filter_modal(shell, textarea.clone(), cx);
         }
         SftpPanelEvent::ClosePanel { tab_id } => {
             shell.state.close_sftp_panel(*tab_id);
@@ -131,6 +123,9 @@ pub(super) fn on_sftp_panel_event(
         }
         SftpPanelEvent::SetStatus(message) => {
             shell.state.status = Some(message.clone());
+            cx.notify();
+        }
+        SftpPanelEvent::OverlayChanged => {
             cx.notify();
         }
         // 需要弹窗状态的分支已由 try_open_sftp_modal 处理。

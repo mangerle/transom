@@ -103,47 +103,37 @@ fn close_container_create_dialog(shell: &mut AppShell, cx: &mut Context<AppShell
     cx.notify();
 }
 
-/// 清理未使用卷或悬空镜像：删除不可恢复，因此第一下只待确认，第二下才下发。
-///
-/// 两个目标的确认状态共用 `prune_armed` 一个槽位：同一时刻只会有一个待确认
-/// 动作，分开存反而可能出现两条按钮同时武装。
-pub(crate) fn prune_container_target(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    target: ContainerPruneTarget,
-    armed: bool,
-    cx: &mut Context<AppShell>,
-) {
-    if !armed {
-        if let Some(workspace) = shell.state.container_workspace(tab_id) {
-            workspace.update(cx, |workspace, cx| {
-                workspace.state.prune_armed = Some(target);
-                cx.notify();
-            });
-        }
-        return;
-    }
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
-        workspace.update(cx, |workspace, _| {
-            workspace.state.prune_armed = None;
-            workspace.state.busy = true;
-        });
-    }
-    let request_id = ContainerRequestId::new();
-    let command = match target {
-        ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
-        ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
-        ContainerPruneTarget::Networks => ContainerCommand::PruneNetworks { tab_id, request_id },
-    };
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
-        workspace.update(cx, |workspace, _| {
-            workspace.send_tracked(request_id, command);
-        });
-    }
-    cx.notify();
-}
-
 impl ContainerWorkspace {
+    /// 清理未使用卷、悬空镜像或未使用网络：删除不可恢复，因此第一下只待确认，第二下才下发。
+    ///
+    /// 两个目标的确认状态共用 `prune_armed` 一个槽位：同一时刻只会有一个待确认
+    /// 动作，分开存反而可能出现两条按钮同时武装。
+    pub(crate) fn prune_target(
+        &mut self,
+        target: ContainerPruneTarget,
+        armed: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if !armed {
+            self.state.prune_armed = Some(target);
+            cx.notify();
+            return;
+        }
+        self.state.prune_armed = None;
+        self.state.busy = true;
+        let request_id = ContainerRequestId::new();
+        let tab_id = self.tab_id;
+        let command = match target {
+            ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
+            ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
+            ContainerPruneTarget::Networks => {
+                ContainerCommand::PruneNetworks { tab_id, request_id }
+            }
+        };
+        self.send_tracked(request_id, command);
+        cx.notify();
+    }
+
     /// 生命周期动作（启动/停止/重启/删除）。
     pub(crate) fn container_lifecycle(
         &mut self,

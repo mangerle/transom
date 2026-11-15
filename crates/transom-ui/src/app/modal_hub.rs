@@ -93,8 +93,8 @@ pub(crate) struct ToolModals {
 
 /// Git 仓库管理、克隆与分支操作类弹窗。
 pub(crate) struct GitModals {
-    pub(crate) project: Option<crate::git::GitProjectModal>,
-    pub(crate) clone: Option<crate::git::GitCloneModal>,
+    pub(crate) project: Option<Entity<crate::git::GitProjectModalView>>,
+    pub(crate) clone: Option<Entity<crate::git::GitCloneModalView>>,
     pub(crate) worktree: Option<Entity<crate::git::GitWorktreeModalView>>,
     pub(crate) name: Option<Entity<crate::git::GitNameModalView>>,
     pub(crate) rebase: Option<Entity<crate::git::GitRebaseModalView>>,

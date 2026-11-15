@@ -1,12 +1,11 @@
 //! 目录树面板的两行工具条与画行。
 //!
-//! 设计原理（Why）：渲染单独成文件是因为它只读面板状态，动作全部经 `cx.listener`
-//! 回到 `AppShell`；画行与状态改动放在一起会让「谁在什么时候改状态」看不清。
+//! 设计原理（Why）：渲染单独成文件是因为它只读 `DirPicker` 状态，动作全部直接派发给
+//! `Entity<DirPicker>`；画行与状态改动放在一起会让「谁在什么时候改状态」看不清。
 
+use super::GitDirBrowser;
 use super::listing::GitDirEntry;
 use super::rows::{GitRow, RowBody, build_rows};
-use super::{GitDirBrowser, GitHost};
-use crate::app::AppShell;
 use crate::format::format_size;
 use crate::git::dir_browser::DirPicker;
 use crate::palette::Palette;
@@ -36,18 +35,14 @@ const ROW_HEIGHT: f32 = size::FILE_ROW_HEIGHT;
 ///
 /// `show_path` 控制树头里的路径框：项目弹窗没有单独的路径字段，必须保留；
 /// 克隆弹窗上方已有目录输入框，展开树时再画一个就是重复输入。
-///
-/// 刻意做成不借用 `self` 的函数：调用方此刻正持有 `self.state.modals.git.project` 的
-/// 不可变借用；动作全部通过 `app.update` 回调回写状态。
 pub(crate) fn render_git_browser(
-    picker: &DirPicker,
-    target: GitHost,
+    view: &Entity<DirPicker>,
     rows: usize,
     show_path: bool,
     p: &Palette,
-    app: &Entity<AppShell>,
-    _cx: &App,
+    cx: &App,
 ) -> AnyElement {
+    let picker = view.read(cx);
     let quick_paths = &picker.browser.quick_paths;
     let mut head = v_flex()
         .w_full()
@@ -59,18 +54,16 @@ pub(crate) fn render_git_browser(
     if show_path {
         head = head.child(nav_row(picker));
     }
-    let head = head.child(actions_row(picker, target, quick_paths, app));
+    let head = head.child(actions_row(picker, quick_paths, view));
     v_flex()
         .w_full()
         .rounded(p.radius.md)
         .border_1()
         .border_color(p.border)
         .bg(p.background)
-        // 头部（路径框 + 工具条）用 `muted` 底色并压一条下边线，与下面的目录列表
-        // 分开：底色一致时看不出哪一块是可点的目录、哪一块是输入与动作。
         .overflow_hidden()
         .child(head)
-        .child(render_tree(picker, target, rows, p, app))
+        .child(render_tree(picker, rows, p, view))
         .into_any_element()
 }
 
@@ -90,39 +83,35 @@ fn nav_row(picker: &DirPicker) -> AnyElement {
 /// 第二行：快捷目录 + 新建目录 + 显示隐藏条目 + 刷新。
 fn actions_row(
     picker: &DirPicker,
-    target: GitHost,
     quick_paths: &LocalQuickPaths,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
-    let mkdir_app = app.clone();
-    let hidden_app = app.clone();
-    let refresh_app = app.clone();
+    let mkdir_view = view.clone();
+    let hidden_view = view.clone();
+    let refresh_view = view.clone();
     h_flex()
         .gap_1()
         .items_center()
         .child(quick_path_button(
             "git-browser-home",
-            target,
             AppIcon::Ui(UiIcon::HOME_FOLDER),
             "sftp.home",
             quick_paths.home.clone(),
-            app,
+            view,
         ))
         .child(quick_path_button(
             "git-browser-desktop",
-            target,
             AppIcon::Ui(UiIcon::DESKTOP),
             "sftp.desktop",
             quick_paths.desktop.clone(),
-            app,
+            view,
         ))
         .child(quick_path_button(
             "git-browser-downloads",
-            target,
             AppIcon::Ui(UiIcon::DOWNLOAD),
             "sftp.downloads",
             quick_paths.downloads.clone(),
-            app,
+            view,
         ))
         .child(
             IconButton::new(
@@ -132,8 +121,8 @@ fn actions_row(
             )
             .render()
             .on_click(move |_, window, cx| {
-                mkdir_app.update(cx, |this, cx| {
-                    super::git_start_dir_draft(this, target, window, cx);
+                mkdir_view.update(cx, |picker, cx| {
+                    picker.start_dir_draft(window, cx);
                 });
             }),
         )
@@ -154,7 +143,7 @@ fn actions_row(
             .selected(picker.browser.show_hidden)
             .render()
             .on_click(move |_, _, cx| {
-                hidden_app.update(cx, |this, cx| super::git_toggle_hidden(this, target, cx));
+                hidden_view.update(cx, |picker, cx| picker.toggle_hidden(cx));
             }),
         )
         .child(
@@ -165,7 +154,7 @@ fn actions_row(
             )
             .render()
             .on_click(move |_, _, cx| {
-                refresh_app.update(cx, |this, cx| super::git_refresh_browser(this, target, cx));
+                refresh_view.update(cx, |picker, cx| picker.refresh(cx));
             }),
         )
         .into_any_element()
@@ -174,13 +163,12 @@ fn actions_row(
 /// 快捷目录按钮：目录不存在时置灰而不是隐藏，用户才知道「这个入口有，只是本机没有」。
 fn quick_path_button(
     id: &'static str,
-    target: GitHost,
     icon: AppIcon,
     tooltip_key: &'static str,
     path: Option<PathBuf>,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
-    let click_app = app.clone();
+    let click_view = view.clone();
     IconButton::new(
         ElementId::Name(id.into()),
         icon,
@@ -189,8 +177,8 @@ fn quick_path_button(
     .disabled(path.is_none())
     .render()
     .on_click(move |_, window, cx| {
-        click_app.update(cx, |this, cx| {
-            super::git_browse_quick(this, target, path.clone(), window, cx);
+        click_view.update(cx, |picker, cx| {
+            picker.browse_quick(path.clone(), window, cx);
         });
     })
     .into_any_element()
@@ -199,10 +187,9 @@ fn quick_path_button(
 /// 树本体：把展开中的层级扁平化后逐行画出来；根目录空且已读完时补一句空态。
 fn render_tree(
     picker: &DirPicker,
-    target: GitHost,
     rows: usize,
     p: &Palette,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
     let container = v_flex()
         .w_full()
@@ -217,7 +204,7 @@ fn render_tree(
     let mut list = build_rows(&picker.browser)
         .into_iter()
         .fold(container, |list, row| {
-            list.child(render_row(row, &picker.browser, target, p, app))
+            list.child(render_row(row, &picker.browser, p, view))
         });
     let root_listing = picker.browser.listed.get(&picker.browser.root);
     let empty = root_listing
@@ -241,16 +228,15 @@ fn render_tree(
 fn render_row(
     row: GitRow,
     browser: &GitDirBrowser,
-    target: GitHost,
     p: &Palette,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
     let depth = row.depth;
     match row.body {
         RowBody::Note(text) => indented_note(text, depth, p),
-        RowBody::Draft => draft_row(browser, target, depth, p, app),
+        RowBody::Draft => draft_row(browser, depth, p, view),
         RowBody::Entry { entry, expanded } => {
-            entry_row(entry, depth, expanded, &browser.selected, target, p, app)
+            entry_row(entry, depth, expanded, &browser.selected, p, view)
         }
     }
 }
@@ -261,9 +247,8 @@ fn entry_row(
     depth: usize,
     expanded: bool,
     selected: &Option<PathBuf>,
-    target: GitHost,
     p: &Palette,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
     let indent = px(4.0 + depth as f32 * INDENT_STEP);
     let band = h_flex()
@@ -303,7 +288,7 @@ fn entry_row(
     }
     let is_selected = selected.as_ref() == Some(&entry.path);
     let path = entry.path.clone();
-    let select_app = app.clone();
+    let select_view = view.clone();
     let select_path = path.clone();
     let mut band = band
         .cursor_pointer()
@@ -313,7 +298,7 @@ fn entry_row(
         } else {
             p.sidebar_foreground
         })
-        .child(chevron(&path, expanded, target, p, app))
+        .child(chevron(&path, expanded, p, view))
         .child(
             AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER))
                 .with_rems(rems(control::ICON))
@@ -331,12 +316,10 @@ fn entry_row(
         .on_click(move |event: &ClickEvent, window, cx| {
             let path = select_path.clone();
             let is_double_click = event.click_count() >= 2;
-            select_app.update(cx, |this, cx| {
-                super::git_select_dir(this, target, path, window, cx);
-                // 双击落在目录行上视为「选好了」：克隆弹窗把目录树收起，
-                // 项目弹窗的树是主内容，保持展开。
+            select_view.update(cx, |picker, cx| {
+                picker.select_dir(path, window, cx);
                 if is_double_click {
-                    super::git_close_dir_tree(this, target, cx);
+                    picker.close_dir_tree(cx);
                 }
             });
         });
@@ -354,17 +337,16 @@ fn entry_row(
 /// 取消各给一个可见按钮，键位口径等弹窗整体迁到 Dialog 容器时再统一。
 fn draft_row(
     browser: &GitDirBrowser,
-    target: GitHost,
     depth: usize,
     p: &Palette,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
     let Some(draft) = browser.draft.as_ref() else {
         return div().into_any_element();
     };
     let input = draft.input.clone();
-    let ok_app = app.clone();
-    let cancel_app = app.clone();
+    let ok_view = view.clone();
+    let cancel_view = view.clone();
     h_flex()
         .id("git-tree-draft")
         .pl(px(4.0 + depth as f32 * INDENT_STEP))
@@ -391,8 +373,8 @@ fn draft_row(
             .size(IconButtonSize::RowAction)
             .render()
             .on_click(move |_, window, cx| {
-                ok_app.update(cx, |this, cx| {
-                    super::git_commit_dir_draft(this, target, window, cx);
+                ok_view.update(cx, |picker, cx| {
+                    picker.commit_dir_draft(window, cx);
                 });
             }),
         )
@@ -405,8 +387,8 @@ fn draft_row(
             .size(IconButtonSize::RowAction)
             .render()
             .on_click(move |_, _, cx| {
-                cancel_app.update(cx, |this, cx| {
-                    super::git_cancel_dir_draft(this, target, cx);
+                cancel_view.update(cx, |picker, cx| {
+                    picker.cancel_dir_draft(cx);
                 });
             }),
         )
@@ -432,12 +414,11 @@ fn indented_note(text: String, depth: usize, p: &Palette) -> AnyElement {
 fn chevron(
     path: &Path,
     expanded: bool,
-    host: GitHost,
     p: &Palette,
-    app: &Entity<AppShell>,
+    view: &Entity<DirPicker>,
 ) -> AnyElement {
     let path = path.to_path_buf();
-    let click_app = app.clone();
+    let click_view = view.clone();
     div()
         .id(ElementId::Name(
             format!("git-tree-chevron-{}", path.display()).into(),
@@ -460,8 +441,8 @@ fn chevron(
         .on_click(move |_: &ClickEvent, _, cx| {
             cx.stop_propagation();
             let path = path.clone();
-            click_app.update(cx, |this, cx| {
-                super::git_toggle_tree_dir(this, host, path, cx);
+            click_view.update(cx, |picker, cx| {
+                picker.toggle_tree_dir(path, cx);
             });
         })
         .into_any_element()

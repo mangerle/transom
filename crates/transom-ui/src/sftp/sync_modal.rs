@@ -1,7 +1,6 @@
-//! 目录对比与增量同步弹窗视图。
+//! 目录对比与增量同步弹窗视图实体。
 
-use super::{format_size, format_unix_time};
-use crate::app::AppShell;
+use super::{SftpSyncModalState, format_size, format_unix_time};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -10,60 +9,122 @@ use gpui_kit::component::progress::Progress;
 use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use std::path::PathBuf;
 use std::rc::Rc;
-use transom_core::DirDiffStatus;
+use transom_core::{DirDiffEntry, DirDiffStatus, TabId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-pub(crate) fn render_sftp_sync_body(
-    shell: &AppShell,
-    app: &Entity<AppShell>,
-    _cx: &App,
-    p: &Palette,
-) -> AnyElement {
-    let Some(modal) = shell.state.sftp_modals.sync.as_ref() else {
-        return div().into_any_element();
-    };
-    let scanning = modal.scanning;
-    let error = modal.error.clone();
-    let local_root = modal.local_root.display().to_string();
-    let remote_root = modal.remote_root.clone();
-    let entries = modal.entries.clone();
-    let selected = modal.selected.clone();
+/// 目录对比与同步弹窗事件。
+pub(crate) enum SftpSyncModalEvent {
+    Rescan(TabId),
+    Start {
+        tab_id: TabId,
+        local_root: PathBuf,
+        remote_root: String,
+        entries: Vec<DirDiffEntry>,
+    },
+    Cancel,
+}
 
-    let selected_count = selected.iter().filter(|checked| **checked).count();
-    let diff_count = entries.len();
-    let has_error = error.is_some();
-    let can_start = !scanning && !has_error && diff_count > 0;
+/// 目录对比与增量同步弹窗实体视图。
+pub(crate) struct SftpSyncModalView {
+    pub(crate) state: SftpSyncModalState,
+}
 
-    let content = match sync_status_panel(modal, app, p) {
-        Some(status) => status,
-        None => sync_diff_list(modal, app, p),
-    };
+impl EventEmitter<SftpSyncModalEvent> for SftpSyncModalView {}
 
-    let footer = sync_footer(modal, app, can_start, selected_count, p);
+impl Render for SftpSyncModalView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
+        self.render_body(cx, &p)
+    }
+}
 
-    crate::widgets::dialog_body(
-        "sftp-sync-modal",
-        rust_i18n::t!("sftp.sync.title").to_string(),
-        Some(
-            rust_i18n::t!(
-                "sftp.sync.subtitle",
-                local = local_root.as_str(),
-                remote = remote_root.as_str()
-            )
-            .to_string(),
-        ),
-        content,
-        Some(footer),
-    )
+impl SftpSyncModalView {
+    pub(crate) fn new(state: SftpSyncModalState) -> Self {
+        Self { state }
+    }
+
+    pub(crate) fn toggle_entry(&mut self, index: usize, checked: bool, cx: &mut Context<Self>) {
+        if let Some(slot) = self.state.selected.get_mut(index) {
+            *slot = checked;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn select_all(&mut self, checked: bool, cx: &mut Context<Self>) {
+        for (entry, slot) in self.state.entries.iter().zip(self.state.selected.iter_mut()) {
+            if entry.status != DirDiffStatus::TypeMismatch {
+                *slot = checked;
+            }
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        if self.state.scanning || self.state.error.is_some() {
+            return;
+        }
+        let selected_entries: Vec<DirDiffEntry> = self
+            .state
+            .entries
+            .iter()
+            .zip(self.state.selected.iter())
+            .filter_map(|(entry, checked)| {
+                (*checked && entry.status != DirDiffStatus::TypeMismatch).then(|| entry.clone())
+            })
+            .collect();
+        cx.emit(SftpSyncModalEvent::Start {
+            tab_id: self.state.tab_id,
+            local_root: self.state.local_root.clone(),
+            remote_root: self.state.remote_root.clone(),
+            entries: selected_entries,
+        });
+    }
+
+    pub(crate) fn cancel(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SftpSyncModalEvent::Cancel);
+    }
+
+    fn render_body(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        let scanning = self.state.scanning;
+        let error = self.state.error.as_ref();
+        let local_root = self.state.local_root.display().to_string();
+        let remote_root = self.state.remote_root.as_str();
+        let selected_count = self.state.selected.iter().filter(|checked| **checked).count();
+        let diff_count = self.state.entries.len();
+        let can_start = !scanning && error.is_none() && diff_count > 0;
+
+        let content = match sync_status_panel(&self.state, cx, p) {
+            Some(status) => status,
+            None => sync_diff_list(&self.state, cx, p),
+        };
+
+        let footer = sync_footer(cx, can_start, selected_count);
+
+        crate::widgets::dialog_body(
+            "sftp-sync-modal",
+            rust_i18n::t!("sftp.sync.title").to_string(),
+            Some(
+                rust_i18n::t!(
+                    "sftp.sync.subtitle",
+                    local = local_root.as_str(),
+                    remote = remote_root
+                )
+                .to_string(),
+            ),
+            content,
+            Some(footer),
+        )
+    }
 }
 
 /// 扫描中/错误/无差异三种状态；返回 `None` 表示应渲染差异列表。
 fn sync_status_panel(
-    modal: &crate::sftp::state::SftpSyncModalState,
-    app: &Entity<AppShell>,
+    modal: &SftpSyncModalState,
+    cx: &mut Context<SftpSyncModalView>,
     p: &Palette,
 ) -> Option<AnyElement> {
     let tab_id = modal.tab_id;
@@ -97,12 +158,9 @@ fn sync_status_panel(
                         .ghost()
                         .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                         .label(rust_i18n::t!("sftp.sync.rescan").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            move |this, _: &ClickEvent, _, cx| {
-                                crate::sftp::sftp_open_sync_modal(this, tab_id, cx);
-                            },
-                        )),
+                        .on_click(cx.listener(move |_this, _: &ClickEvent, _, cx| {
+                            cx.emit(SftpSyncModalEvent::Rescan(tab_id));
+                        })),
                 )
                 .into_any_element(),
         )
@@ -132,8 +190,8 @@ fn sync_status_panel(
 
 /// 差异列表：表头、虚拟列表与汇总行。
 fn sync_diff_list(
-    modal: &crate::sftp::state::SftpSyncModalState,
-    app: &Entity<AppShell>,
+    modal: &SftpSyncModalState,
+    cx: &mut Context<SftpSyncModalView>,
     p: &Palette,
 ) -> AnyElement {
     let tab_id = modal.tab_id;
@@ -168,15 +226,12 @@ fn sync_diff_list(
     let row_sizes = Rc::new(vec![size(px(0.0), px(32.0)); entries.len()]);
     let entries_rc = Rc::new(entries);
     let selected_rc = Rc::new(selected);
-    // 虚拟列表闭包单独持有一份调色板与外壳句柄：这两样要跨到
-    // 'static 的渲染闭包里，方法参数的借用活不到那时候。
     let list_palette = p.clone();
-    let list_app = app.clone();
     let list = v_virtual_list(
-        app.clone(),
+        cx.entity(),
         format!("sftp-sync-virtual-list-{tab_id}"),
         row_sizes,
-        move |_this, range, _window, _cx| {
+        move |_this, range, _window, cx| {
             range
                 .filter_map(|index| {
                     let entry = entries_rc.get(index)?;
@@ -199,14 +254,9 @@ fn sync_diff_list(
                         row = row.child(
                             Checkbox::new(format!("sftp-sync-check-{index}"))
                                 .checked(checked)
-                                .on_change(crate::dialog_host::on_event(
-                                    &list_app,
-                                    move |this, checked: &bool, _, cx| {
-                                        crate::sftp::sftp_toggle_sync_entry(
-                                            this, index, *checked, cx,
-                                        );
-                                    },
-                                )),
+                                .on_change(cx.listener(move |this, checked: &bool, _, cx| {
+                                    this.toggle_entry(index, *checked, cx);
+                                })),
                         );
                     } else {
                         row = row.child(div().w(px(16.0)));
@@ -302,24 +352,16 @@ fn sync_diff_list(
 
 /// 同步弹窗页脚：取消、全选/全不选与开始同步。
 fn sync_footer(
-    modal: &crate::sftp::state::SftpSyncModalState,
-    app: &Entity<AppShell>,
+    cx: &mut Context<SftpSyncModalView>,
     can_start: bool,
     selected_count: usize,
-    p: &Palette,
 ) -> AnyElement {
-    let _ = modal;
-    let _ = p;
     let footer = h_flex()
         .gap_2()
         .child(crate::widgets::dialog_cancel_button(
             "cancel-sftp-sync",
             rust_i18n::t!("common.cancel").to_string(),
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                this.state.sftp_modals.sync = None;
-                crate::sftp::focus_active_sftp_panel(this, window, cx);
-                cx.notify();
-            }),
+            cx.listener(|this, _: &ClickEvent, _, cx| this.cancel(cx)),
         ))
         .when(can_start, |this| {
             this.child(
@@ -327,36 +369,27 @@ fn sync_footer(
                     .ghost()
                     .xsmall()
                     .label(rust_i18n::t!("sftp.sync.select_all").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            crate::sftp::sftp_select_all_sync(this, true, cx);
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.select_all(true, cx);
+                    })),
             )
             .child(
                 Button::new("select-none-sftp-sync")
                     .ghost()
                     .xsmall()
                     .label(rust_i18n::t!("sftp.sync.select_none").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, _, cx| {
-                            crate::sftp::sftp_select_all_sync(this, false, cx);
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.select_all(false, cx);
+                    })),
             )
             .child(
                 Button::new("start-sftp-sync")
                     .primary()
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::DIFF)).small())
                     .label(rust_i18n::t!("sftp.sync.start", count = selected_count).to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            crate::sftp::start_sftp_sync(this, window, cx);
-                        },
-                    )),
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.submit(cx);
+                    })),
             )
         });
     footer.into_any_element()

@@ -472,14 +472,19 @@ fn replay_modal_is_owned_by_entity() {
 fn sftp_entity_actions_have_no_app_shell() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut offenders = Vec::new();
-    for dir in ["src/sftp/queue_actions", "src/sftp/entity"] {
+    for dir in [
+        "src/sftp/queue_actions",
+        "src/sftp/entity",
+        "src/sftp/overlay",
+        "src/sftp/modals",
+    ] {
         for entry in walkdir_like(&root.join(dir)) {
             if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
                 continue;
             }
             let rel = normalized_path(&entry);
-            // `entity/mod.rs` 仍保留外壳查表 helper，其余子模块必须零 AppShell。
-            if rel.ends_with("sftp/entity/mod.rs") {
+            // `entity/mod.rs` 保留外壳查表 helper，`modals/bridge.rs` 是外壳打开/订阅唯一桥接层。
+            if rel.ends_with("sftp/entity/mod.rs") || rel.ends_with("sftp/modals/bridge.rs") {
                 continue;
             }
             let Ok(content) = std::fs::read_to_string(&entry) else {
@@ -495,6 +500,10 @@ fn sftp_entity_actions_have_no_app_shell() {
         "src/sftp/local_async.rs",
         "src/sftp/nav_actions/local_nav.rs",
         "src/sftp/columns/mod.rs",
+        "src/sftp/chmod.rs",
+        "src/sftp/transfer_filter_modal.rs",
+        "src/sftp/sync_modal.rs",
+        "src/sftp/search_modal.rs",
     ] {
         let path = root.join(file);
         let Ok(content) = std::fs::read_to_string(&path) else {
@@ -527,6 +536,12 @@ fn workspace_has_no_mut_shell_free_functions() {
             offenders.push(normalized_path(&entry));
         }
     }
+    let tab_presentation =
+        std::fs::read_to_string(root.join("../tab_presentation.rs")).unwrap_or_default();
+    assert!(
+        !tab_presentation.contains("AppShell"),
+        "workspace/tab_presentation.rs 不得再依赖 AppShell"
+    );
     assert!(
         offenders.is_empty(),
         "工作区模块不得再使用 `shell: &mut AppShell` 自由函数：\n{}",

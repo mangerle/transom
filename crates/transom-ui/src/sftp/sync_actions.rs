@@ -78,70 +78,23 @@ pub(crate) fn sftp_open_sync_modal(
     }
 }
 
-pub(crate) fn sftp_toggle_sync_entry(
+/// 将勾选的差异项打包成一个同步任务入队并启动队列。返回是否成功入队。
+pub(crate) fn execute_sftp_sync(
     shell: &mut AppShell,
-    index: usize,
-    checked: bool,
+    tab_id: TabId,
+    connection_id: Option<transom_core::ConnectionId>,
+    local_root: &std::path::Path,
+    remote_root: &str,
+    entries: &[transom_core::DirDiffEntry],
     cx: &mut Context<AppShell>,
-) {
-    let Some(modal) = shell.state.sftp_modals.sync.as_mut() else {
-        return;
-    };
-    let Some(entry) = modal.entries.get(index) else {
-        return;
-    };
-    if checked && entry.sync_item().is_none() {
-        return;
-    }
-    if let Some(slot) = modal.selected.get_mut(index) {
-        *slot = checked;
-        cx.notify();
-    }
-}
-
-/// 全选/全不选可同步项；类型冲突始终保持不可选。
-pub(crate) fn sftp_select_all_sync(
-    shell: &mut AppShell,
-    selected: bool,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(modal) = shell.state.sftp_modals.sync.as_mut() else {
-        return;
-    };
-    for (index, entry) in modal.entries.iter().enumerate() {
-        if let Some(slot) = modal.selected.get_mut(index) {
-            *slot = selected && entry.sync_item().is_some();
-        }
-    }
-    cx.notify();
-}
-
-/// 将勾选的差异项打包成一个同步任务入队并启动队列。
-pub(crate) fn start_sftp_sync(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
+) -> bool {
     let verify = app_settings(cx).sftp.verify_after_transfer;
-    let Some(mut modal) = shell.state.sftp_modals.sync.take() else {
-        return;
-    };
-    if modal.scanning || modal.error.is_some() {
-        shell.state.sftp_modals.sync = Some(modal);
-        return;
-    }
-    let tab_id = modal.tab_id;
     let mut upload_count = 0u32;
     let mut download_count = 0u32;
     let mut total_size = 0u64;
-    let items = modal
-        .entries
+    let items = entries
         .iter()
-        .enumerate()
-        .filter_map(|(index, entry)| {
-            if !modal.selected.get(index).copied().unwrap_or(false) {
-                return None;
-            }
+        .filter_map(|entry| {
             let item = entry.sync_item()?;
             match item.direction {
                 SyncDirection::Upload => upload_count = upload_count.saturating_add(1),
@@ -155,15 +108,18 @@ pub(crate) fn start_sftp_sync(
         .collect::<Vec<_>>();
 
     if items.is_empty() {
-        modal.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
-        shell.state.sftp_modals.sync = Some(modal);
-        cx.notify();
-        return;
+        if let Some(modal) = shell.state.sftp_modals.sync.as_ref() {
+            modal.update(cx, |m, cx| {
+                m.state.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
+                cx.notify();
+            });
+        }
+        return false;
     }
 
     let mut task = TransferTask::new_sync(
-        modal.local_root.clone(),
-        modal.remote_root.clone(),
+        local_root.to_path_buf(),
+        remote_root.to_string(),
         items,
         Some(total_size),
     );
@@ -172,7 +128,7 @@ pub(crate) fn start_sftp_sync(
         mode: app_settings(cx).sftp.verify_mode,
         algorithm: app_settings(cx).sftp.checksum_algorithm,
     };
-    task.target_connection_id = Some(modal.connection_id);
+    task.target_connection_id = connection_id;
     if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
         panel.state.queue.tasks.push(task);
         panel.state.set_status(
@@ -184,9 +140,9 @@ pub(crate) fn start_sftp_sync(
             .to_string(),
         );
     }
-    crate::sftp::focus_active_sftp_panel(shell, window, cx);
     cx.notify();
     if let Some(view) = shell.state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.process_queue(tab_id, cx));
     }
+    true
 }

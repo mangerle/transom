@@ -1,8 +1,4 @@
-//! SFTP 文件权限操作：远端 Chmod 弹窗的打开、位切换与保存，以及右键一键授予执行位。
-
-use crate::app::AppShell;
-use gpui_kit::*;
-use transom_core::{SftpOperation, format_octal_permissions, parse_octal_permissions};
+//! SFTP 文件权限辅助：右键一键授予执行位。
 
 /// 在现有权限上叠加属主/组/其他三方的执行位，其余位（含 setuid、sticky）原样保留。
 ///
@@ -11,98 +7,12 @@ use transom_core::{SftpOperation, format_octal_permissions, parse_octal_permissi
 ///   所以只能在原值上或出执行位；
 /// - 核心优势：直接写死 755 会把组写位、特殊位一并覆盖，`u+x` 又常在别人执行时失败，
 ///   按位叠加对两种误操作都免疫；服务端未回权限时退回目录 755、文件 644，
-///   与 Chmod 弹窗打开时用的基线（`sftp_open_chmod_modal`）保持同一套约定；
+///   与 Chmod 弹窗打开时用的基线保持同一套约定；
 /// - 代价与局限：这是"只加不减"，已经带执行位的条目再点一次结果不变，不提供撤销入口——
 ///   减位属于精细调整，交给 Chmod 弹窗。
 pub(super) fn exec_granted_mode(current: Option<u32>, is_dir: bool) -> u32 {
     let baseline = current.unwrap_or(if is_dir { 0o755 } else { 0o644 }) & 0o7777;
     baseline | 0o111
-}
-
-/// 切换 Chmod 弹窗中的单个权限位，并同步八进制输入框。
-pub(crate) fn sftp_toggle_chmod_bit(
-    shell: &mut AppShell,
-    mask: u32,
-    checked: bool,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(modal) = shell.state.sftp_modals.chmod.as_mut() else {
-        return;
-    };
-    if checked {
-        modal.permissions |= mask;
-    } else {
-        modal.permissions &= !mask;
-    }
-    modal.error = None;
-    let octal_str = format_octal_permissions(modal.permissions);
-    let input = modal.octal_input.clone();
-    input.update(cx, |state, cx| {
-        state.set_value(octal_str, window, cx);
-    });
-    cx.notify();
-}
-
-pub(crate) fn sftp_set_chmod_preset(
-    shell: &mut AppShell,
-    mode: u32,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(modal) = shell.state.sftp_modals.chmod.as_mut() else {
-        return;
-    };
-    modal.permissions = mode & 0o777;
-    modal.error = None;
-    let octal_str = format_octal_permissions(modal.permissions);
-    let input = modal.octal_input.clone();
-    input.update(cx, |state, cx| {
-        state.set_value(octal_str, window, cx);
-    });
-    cx.notify();
-}
-
-pub(crate) fn save_sftp_chmod_modal(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(mut modal) = shell.state.sftp_modals.chmod.take() else {
-        return;
-    };
-    let input_text = modal.octal_input.read(cx).value().trim().to_string();
-    let target_perms = if input_text.is_empty() {
-        modal.permissions & 0o777
-    } else {
-        match parse_octal_permissions(&input_text) {
-            Some(p) => p,
-            None => {
-                modal.error = Some(rust_i18n::t!("sftp.chmod.octal_invalid").to_string());
-                let input = modal.octal_input.clone();
-                shell.state.sftp_modals.chmod = Some(modal);
-                input.update(cx, |state, cx| state.focus(window, cx));
-                cx.notify();
-                return;
-            }
-        }
-    };
-    let tab_id = modal.tab_id;
-    let Some(connection_id) = modal.connection_id.or_else(|| {
-        shell
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id)
-    }) else {
-        return;
-    };
-    let op = SftpOperation::Chmod {
-        path: modal.remote_path,
-        permissions: target_perms,
-    };
-    super::remote_actions::send_sftp_op_for_connection(shell, tab_id, connection_id, op, cx);
-    crate::sftp::focus_active_sftp_panel(shell, window, cx);
 }
 
 #[cfg(test)]

@@ -396,5 +396,9 @@ pub(crate) fn close_git_push_modal(shell: &mut AppShell, cx: &mut Context<AppShe
     cx.notify();
 }
 
+mod clone;
 mod lightweight;
+mod project;
+pub(crate) use clone::*;
 pub(crate) use lightweight::*;
+pub(crate) use project::*;

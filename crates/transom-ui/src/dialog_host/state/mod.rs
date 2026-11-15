@@ -77,7 +77,7 @@ impl ModalKind {
     ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                shell.state.sftp_modals.confirm = None;
+                crate::sftp::close_sftp_confirm_modal(shell, cx);
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
@@ -113,22 +113,34 @@ impl ModalKind {
                 true
             }
             ModalKind::SftpInput => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.input = None, window, cx)
+                crate::sftp::close_sftp_input_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                true
             }
             ModalKind::SftpChmod => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.chmod = None, window, cx)
+                crate::sftp::close_sftp_chmod_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                true
             }
             ModalKind::SftpProperties => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.properties = None, window, cx)
+                crate::sftp::close_sftp_properties_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                true
             }
             ModalKind::SftpFilter => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.filter = None, window, cx)
+                crate::sftp::close_sftp_filter_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                true
             }
             ModalKind::SftpSearch => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.search = None, window, cx)
+                crate::sftp::close_sftp_search_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                true
             }
             ModalKind::SftpSync => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.sync = None, window, cx)
+                crate::sftp::close_sftp_sync_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                true
             }
             _ => true,
         }

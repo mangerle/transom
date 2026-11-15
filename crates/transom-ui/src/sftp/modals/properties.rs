@@ -1,62 +1,74 @@
-//! SFTP 弹窗视图。
+//! SFTP 属性查看弹窗视图实体。
 
 use super::common::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-pub(crate) fn render_sftp_properties_body(
-    shell: &AppShell,
-    app: &Entity<AppShell>,
-    _cx: &App,
-    p: &Palette,
-) -> AnyElement {
-    let Some(modal) = shell.state.sftp_modals.properties.as_ref() else {
-        return div().into_any_element();
-    };
-    let scope = modal.scope.clone();
-    let properties = modal.properties.clone();
-    let name = properties.name.clone();
-    let path = properties.path.clone();
+/// SFTP 属性弹窗事件。
+pub(crate) enum SftpPropertiesModalEvent {
+    Close,
+}
 
-    let rows = property_rows(&properties, p);
-    let content = v_flex().gap_1().children(rows);
+/// SFTP 属性查看弹窗实体视图。
+pub(crate) struct SftpPropertiesModalView {
+    scope: String,
+    properties: crate::sftp::FileProperties,
+}
 
-    let footer = h_flex().gap_2().child(
-        Button::new("close-sftp-properties")
-            .ghost()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-            .label(rust_i18n::t!("app.close").to_string())
-            .on_click(crate::dialog_host::on_event(
-                app,
-                |this, _: &ClickEvent, window, cx| {
-                    this.state.sftp_modals.properties = None;
-                    crate::sftp::focus_active_sftp_panel(this, window, cx);
-                    cx.notify();
-                },
-            )),
-    );
+impl EventEmitter<SftpPropertiesModalEvent> for SftpPropertiesModalView {}
 
-    let scope_label = if scope == "本地" {
-        rust_i18n::t!("sftp.local_title").to_string()
-    } else {
-        rust_i18n::t!("sftp.modals.scope_remote").to_string()
-    };
+impl Render for SftpPropertiesModalView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
+        self.render_body(cx, &p)
+    }
+}
 
-    crate::widgets::dialog_body(
-        "sftp-properties-modal",
-        rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
-        Some(
-            rust_i18n::t!(
-                "sftp.properties.subtitle",
-                scope = scope_label,
-                path = path.as_str()
-            )
-            .to_string(),
-        ),
-        content,
-        Some(footer),
-    )
+impl SftpPropertiesModalView {
+    pub(crate) fn new(scope: String, properties: crate::sftp::FileProperties) -> Self {
+        Self { scope, properties }
+    }
+
+    pub(crate) fn close(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SftpPropertiesModalEvent::Close);
+    }
+
+    fn render_body(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        let name = self.properties.name.clone();
+        let path = self.properties.path.clone();
+        let rows = property_rows(&self.properties, p);
+        let content = v_flex().gap_1().children(rows);
+
+        let footer = h_flex().gap_2().child(
+            Button::new("close-sftp-properties")
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
+                .label(rust_i18n::t!("app.close").to_string())
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close(cx))),
+        );
+
+        let scope_label = if self.scope == "本地" {
+            rust_i18n::t!("sftp.local_title").to_string()
+        } else {
+            rust_i18n::t!("sftp.modals.scope_remote").to_string()
+        };
+
+        crate::widgets::dialog_body(
+            "sftp-properties-modal",
+            rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
+            Some(
+                rust_i18n::t!(
+                    "sftp.properties.subtitle",
+                    scope = scope_label,
+                    path = path.as_str()
+                )
+                .to_string(),
+            ),
+            content,
+            Some(footer),
+        )
+    }
 }
 
 /// 属性弹窗的全部字段行：名称、类型与可选的尺寸/权限/时间信息。

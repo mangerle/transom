@@ -59,4 +59,6 @@ pub(crate) enum SftpPanelEvent {
         connection_id: Option<ConnectionId>,
         targets: Vec<RemoteDeleteTarget>,
     },
+    /// 拖拽上传浮层可见性或展开状态变更，通知外壳刷新终端窗格上的浮层。
+    OverlayChanged,
 }

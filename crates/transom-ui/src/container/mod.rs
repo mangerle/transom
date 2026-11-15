@@ -43,9 +43,6 @@ mod view;
 
 pub(crate) use actions::ShellRowAction;
 pub(crate) use build_dialog::render_container_build_dialog_body;
-pub(crate) use compose::{
-    create_local_compose_with_content, edit_compose_yaml, import_local_compose,
-};
 pub(crate) use create_dialog_view::{ContainerCreateDialogEvent, ContainerCreateDialogView};
 pub(crate) use engines::{
     delete_container_profile, on_container_form_event, open_container_workspace_for_session,
@@ -60,8 +57,7 @@ pub(crate) use form::{
     open_container_run_form, recreate_container,
 };
 pub(crate) use hub::render_container_hub_dialog_body;
-pub(crate) use lifecycle::{on_container_create_event, prune_container_target};
-pub(crate) use list::handle_container_list_key;
+pub(crate) use lifecycle::on_container_create_event;
 pub(crate) use modals::{
     render_container_commit_dialog_body, render_container_confirm_dialog_body,
     render_container_export_config_dialog_body, render_container_file_new_dir_dialog_body,

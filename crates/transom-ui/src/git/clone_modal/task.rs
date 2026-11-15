@@ -87,7 +87,7 @@ pub(crate) fn apply_git_clone_event(
                 draft.icon = icon;
                 draft.color = color;
                 draft.folder_id =
-                    crate::git::folder_field::git_folder_id_for_name(shell, &folder_name, cx);
+                    crate::git::actions::modal_bridges::git_folder_id_for_name(shell, &folder_name, cx);
                 crate::git::actions::add_git_project(shell, draft, cx);
             }
             cx.notify();

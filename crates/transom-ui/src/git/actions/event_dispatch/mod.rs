@@ -49,7 +49,7 @@ pub(crate) fn dispatch_git_event(
             shelf_events::handle_shelf_worktree_event(shell, event, cx);
         }
         GitAppEvent::Probed { .. } => {
-            crate::git::project_modal::apply_git_probe_event(shell, event, cx);
+            crate::git::actions::modal_bridges::apply_git_probe_event(shell, event, cx);
         }
         GitAppEvent::Inited {
             request_id,
@@ -66,7 +66,7 @@ pub(crate) fn dispatch_git_event(
                     shell, request_id, &path, error, cx,
                 );
             } else {
-                crate::git::project_modal::apply_git_probe_event(
+                crate::git::actions::modal_bridges::apply_git_probe_event(
                     shell,
                     GitAppEvent::Inited {
                         request_id,

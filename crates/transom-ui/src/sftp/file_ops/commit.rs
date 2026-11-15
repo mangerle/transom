@@ -1,36 +1,23 @@
 //! SFTP 模态输入框提交处理与本地软链接创建。
 
-use super::validate::name_validation_error;
 use crate::app::AppShell;
 use crate::app::spawn_blocking_local;
-use crate::sftp::state::SftpInputModalState;
 use crate::sftp::{SftpInputTarget, SftpRemotePaneRef, join_remote, parent_remote};
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::{SftpOperation, TabId};
+use transom_core::{ConnectionId, SftpOperation, TabId};
 
-/// 提交当前打开的 SFTP 输入模态对话框，执行创建文件夹、新建文件编辑、重命名或软链接。
-pub(crate) fn commit_sftp_input_modal(
+/// 执行已通过基础名称校验的 SFTP 输入弹窗提交动作。
+pub(in crate::sftp) fn commit_sftp_input_value(
     shell: &mut AppShell,
+    tab_id: TabId,
+    connection_id: Option<ConnectionId>,
+    modal_target: &SftpInputTarget,
+    name: &str,
     window: &mut Window,
     cx: &mut Context<AppShell>,
-) {
-    let Some(modal) = shell.state.sftp_modals.input.take() else {
-        return;
-    };
-    let tab_id = modal.tab_id;
-    let name = modal.input.read(cx).value().trim().to_string();
-    if name.is_empty() {
-        let message = rust_i18n::t!("sftp.file_ops.name_empty").to_string();
-        fail_sftp_input(shell, modal, message, window, cx);
-        return;
-    }
-    if let Some(message) = name_validation_error(&modal.target, &name) {
-        fail_sftp_input(shell, modal, message, window, cx);
-        return;
-    }
-
-    let target = match modal.connection_id {
+) -> Result<(), String> {
+    let target = match connection_id {
         Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
         None => SftpRemotePaneRef::Main,
     };
@@ -43,18 +30,16 @@ pub(crate) fn commit_sftp_input_modal(
             }
         });
 
-    // 新建文件在通用校验后直接分流：同名目录报错回填，同名文件交给打开
-    // 流程，全新路径才生成空编辑面板。
-    if matches!(modal.target, SftpInputTarget::RemoteEditorNewFile) {
+    if matches!(modal_target, SftpInputTarget::RemoteEditorNewFile) {
         if let Some(scope) = scope {
-            commit_new_remote_file(shell, modal, &name, &scope, window, cx);
+            return commit_new_remote_file(shell, tab_id, name, &scope, window, cx);
         }
-        return;
+        return Ok(());
     }
 
-    match &modal.target {
+    match modal_target {
         SftpInputTarget::SudoElevation { editor } => {
-            let password = (!name.trim().is_empty()).then_some(name);
+            let password = (!name.trim().is_empty()).then(|| name.to_string());
             crate::editor::submit_sudo_editor_write(shell, editor, password, window, cx);
         }
         SftpInputTarget::RemoteMkdir
@@ -63,7 +48,7 @@ pub(crate) fn commit_sftp_input_modal(
         | SftpInputTarget::RemoteArchive { .. }
         | SftpInputTarget::RemoteExtract { .. } => {
             if let Some(scope) = &scope
-                && let Some(op) = remote_operation(&modal.target, &scope.base_path, &name)
+                && let Some(op) = remote_operation(modal_target, &scope.base_path, name)
             {
                 super::super::remote_actions::send_sftp_op_for_connection(
                     shell,
@@ -79,38 +64,21 @@ pub(crate) fn commit_sftp_input_modal(
         | SftpInputTarget::LocalNewFile
         | SftpInputTarget::LocalRename { .. }
         | SftpInputTarget::LocalSymlink { .. } => {
-            commit_local_input(shell, &modal.target, &name, tab_id, cx);
+            commit_local_input(shell, modal_target, name, tab_id, cx);
         }
     }
-    crate::sftp::focus_active_sftp_panel(shell, window, cx);
-    cx.notify();
-}
-
-/// 校验失败：把弹窗放回去、写错误并聚焦输入框。
-fn fail_sftp_input(
-    shell: &mut AppShell,
-    mut modal: SftpInputModalState,
-    message: String,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    modal.error = Some(message);
-    let input = modal.input.clone();
-    shell.state.sftp_modals.input = Some(modal);
-    input.update(cx, |state, cx| state.focus(window, cx));
-    cx.notify();
+    Ok(())
 }
 
 /// 远端新建文件：同名目录报错，同名文件直接打开，全新路径生成空编辑面板。
 fn commit_new_remote_file(
     shell: &mut AppShell,
-    modal: SftpInputModalState,
+    tab_id: TabId,
     name: &str,
     scope: &SftpInputScope,
     window: &mut Window,
     cx: &mut Context<AppShell>,
-) {
-    let tab_id = modal.tab_id;
+) -> Result<(), String> {
     let path = join_remote(&scope.base_path, name);
     let existing_is_dir = scope
         .entries
@@ -118,11 +86,7 @@ fn commit_new_remote_file(
         .find(|entry| entry.path == path)
         .map(|entry| entry.is_dir);
     match existing_is_dir {
-        Some(true) => {
-            let message =
-                rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name).to_string();
-            fail_sftp_input(shell, modal, message, window, cx);
-        }
+        Some(true) => Err(rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name).to_string()),
         Some(false) => {
             crate::editor::sftp_edit_remote_file_on(
                 shell,
@@ -132,16 +96,20 @@ fn commit_new_remote_file(
                 window,
                 cx,
             );
+            Ok(())
         }
-        None => crate::editor::spawn_new_editor_panel(
-            shell,
-            tab_id,
-            scope.connection_id,
-            path,
-            name.to_string(),
-            window,
-            cx,
-        ),
+        None => {
+            crate::editor::spawn_new_editor_panel(
+                shell,
+                tab_id,
+                scope.connection_id,
+                path,
+                name.to_string(),
+                window,
+                cx,
+            );
+            Ok(())
+        }
     }
 }
 

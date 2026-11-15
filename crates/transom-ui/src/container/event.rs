@@ -197,10 +197,16 @@ pub(crate) fn on_container_workspace_event(
             }
         }
         ContainerWorkspaceEvent::CreateComposeFromTemplate(content) => {
-            crate::container::create_local_compose_with_content(shell, tab_id, content.clone(), cx);
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |ws, cx| {
+                    ws.create_local_compose_with_content(content.clone(), cx);
+                });
+            }
         }
         ContainerWorkspaceEvent::ImportCompose => {
-            crate::container::import_local_compose(shell, tab_id, cx);
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |ws, cx| ws.import_local_compose(cx));
+            }
         }
         ContainerWorkspaceEvent::LoadImage => {
             if let Some(workspace) = shell.state.container_workspace(tab_id) {
@@ -208,7 +214,9 @@ pub(crate) fn on_container_workspace_event(
             }
         }
         ContainerWorkspaceEvent::PruneTarget(target) => {
-            crate::container::prune_container_target(shell, tab_id, *target, true, cx);
+            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+                workspace.update(cx, |workspace, cx| workspace.prune_target(*target, true, cx));
+            }
         }
         ContainerWorkspaceEvent::BackupVolume(volume) => {
             if let Some(workspace) = shell.state.container_workspace(tab_id) {

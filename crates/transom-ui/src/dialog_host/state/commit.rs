@@ -34,7 +34,9 @@ impl ModalKind {
         }
         match self {
             ModalKind::SftpConfirm => {
-                crate::sftp::sftp_confirm_delete(shell, cx);
+                if let Some(modal) = shell.state.sftp_modals.confirm.clone() {
+                    modal.update(cx, |m, cx| m.submit(cx));
+                }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::HostKeyConfirm => {
@@ -63,24 +65,37 @@ impl ModalKind {
                     .update(cx, |view, cx| view.submit_auth(cx));
             }
             ModalKind::SftpInput => {
-                crate::sftp::commit_sftp_input_modal(shell, window, cx);
+                if let Some(modal) = shell.state.sftp_modals.input.clone() {
+                    modal.update(cx, |m, cx| m.submit(window, cx));
+                }
+            }
+            ModalKind::SftpChmod => {
+                if let Some(modal) = shell.state.sftp_modals.chmod.clone() {
+                    modal.update(cx, |m, cx| m.submit(window, cx));
+                }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
-            ModalKind::SftpChmod => crate::sftp::save_sftp_chmod_modal(shell, window, cx),
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
-                crate::dialog_host::close_sftp_modal(
-                    shell,
-                    |hub| hub.properties = None,
-                    window,
-                    cx,
-                );
+                crate::sftp::close_sftp_properties_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpSearch => {
-                crate::dialog_host::close_sftp_modal(shell, |hub| hub.search = None, window, cx);
+                crate::sftp::close_sftp_search_modal(shell, cx);
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
-            ModalKind::SftpFilter => crate::sftp::save_sftp_filter_modal(shell, window, cx),
-            ModalKind::SftpSync => crate::sftp::start_sftp_sync(shell, window, cx),
+            ModalKind::SftpFilter => {
+                if let Some(modal) = shell.state.sftp_modals.filter.clone() {
+                    modal.update(cx, |m, cx| m.submit(window, cx));
+                }
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+            }
+            ModalKind::SftpSync => {
+                if let Some(modal) = shell.state.sftp_modals.sync.clone() {
+                    modal.update(cx, |m, cx| m.submit(cx));
+                }
+                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+            }
             ModalKind::EditorGotoLine => crate::editor::commit_editor_goto_line(shell, window, cx),
             ModalKind::ContainerForm => {
                 shell
@@ -182,21 +197,21 @@ impl ModalKind {
                     .sftp_modals
                     .input
                     .as_ref()
-                    .map(|modal| modal.input.clone())
+                    .map(|modal| modal.read(cx).input.clone())
             }),
             ModalKind::SftpChmod => input_focus(shell, |state| {
                 state
                     .sftp_modals
                     .chmod
                     .as_ref()
-                    .map(|modal| modal.octal_input.clone())
+                    .map(|modal| modal.read(cx).octal_input.clone())
             }),
             ModalKind::SftpSearch => input_focus(shell, |state| {
                 state
                     .sftp_modals
                     .search
                     .as_ref()
-                    .map(|modal| modal.input.clone())
+                    .map(|modal| modal.read(cx).state.input.clone())
             }),
             ModalKind::EditorGotoLine => input_focus(shell, |state| {
                 state
@@ -284,7 +299,7 @@ impl ModalKind {
                 .filter
                 .as_ref()
                 .map_or(ModalFocus::None, |modal| {
-                    ModalFocus::Textarea(modal.textarea.clone())
+                    ModalFocus::Textarea(modal.read(cx).textarea.clone())
                 }),
             // 改键录入面板自己持有焦点句柄：录键期间按键要落在这块面板上。
             ModalKind::ShortcutCapture => shell

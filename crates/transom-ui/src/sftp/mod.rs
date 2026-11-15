@@ -58,18 +58,23 @@ pub(crate) use self::entity::{
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
 pub(crate) use self::input_modal::SftpInputModalParams;
 pub(crate) use self::local_listing::LocalDirectoryLister;
-pub(crate) use self::modals::{SftpConfirmModalState, SftpModals, SftpPendingDelete};
+pub(crate) use self::modals::{
+    SftpModals, SftpPendingDelete, close_sftp_chmod_modal, close_sftp_confirm_modal,
+    close_sftp_filter_modal, close_sftp_input_modal, close_sftp_properties_modal,
+    close_sftp_search_modal, close_sftp_sync_modal, open_sftp_chmod_modal,
+    open_sftp_confirm_modal, open_sftp_filter_modal, open_sftp_properties_modal,
+    open_sftp_search_modal, open_sftp_sync_modal, subscribe_sftp_input_modal,
+};
 pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
-pub(crate) use self::properties::{
-    SftpPropertiesModalState, format_unix_time, remote_file_properties,
-};
+pub(crate) use self::properties::{format_unix_time, remote_file_properties};
 pub(crate) use self::quick_paths::LocalQuickPaths;
-pub(crate) use self::search_modal::SftpSearchModalState;
+pub(crate) use self::search_modal::{
+    SftpSearchModalEvent, SftpSearchModalState, SftpSearchModalView,
+};
 pub(crate) use self::side_remote::{SftpActivePane, SftpDragItem};
 pub(crate) use self::state::{
-    LocalFileEntry, RemoteDirCacheEntry, SFTP_DIR_CACHE_TTL, SftpChmodModalState,
-    SftpFilterModalState, SftpInputModalState, SftpInputTarget, SftpLocalPaneInit,
+    LocalFileEntry, RemoteDirCacheEntry, SFTP_DIR_CACHE_TTL, SftpInputTarget, SftpLocalPaneInit,
     SftpLocalPaneState, SftpMountCandidate, SftpPanelState, SftpQueueState, SftpRemotePaneRef,
     SftpRemotePaneState, SftpSyncModalState,
 };
@@ -79,39 +84,28 @@ pub(crate) use self::task::{
 pub(crate) use crate::editor::PendingEditorClose;
 use crate::palette::Palette;
 use crate::theme::tokens::control;
-pub(crate) use chmod::{save_sftp_chmod_modal, sftp_set_chmod_preset, sftp_toggle_chmod_bit};
 pub(crate) use columns::{grow_sftp_panel_width, sync_sftp_panel_width};
 pub(crate) use drop_upload::handle_dropped_files;
 pub(crate) use events::{
     on_sftp_dir_compared, on_sftp_listing, on_sftp_metadata, on_sftp_preview,
     on_sftp_preview_failed, on_sftp_progress, on_sftp_retrying, on_sftp_verifying,
 };
-pub(crate) use file_ops::{commit_sftp_input_modal, sftp_confirm_delete};
+pub(crate) use file_ops::execute_sftp_delete;
 use gpui_kit::*;
 pub(crate) use handlers::{on_sftp_failed, on_sftp_finished};
 pub(crate) use input_modal::open_sftp_input_modal;
 pub(crate) use local_only::open_local_file_panel;
-pub(crate) use modals::{
-    render_sftp_chmod_body, render_sftp_confirm_body, render_sftp_filter_body,
-    render_sftp_input_body, render_sftp_properties_body,
-};
 pub(crate) use nav_actions::{
     attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp,
     request_sftp_list, request_sftp_list_pane, sftp_sync_with_terminal_cwd, toggle_sftp,
 };
-pub(crate) use overlay::{
-    note_drop_overlay_progress, render_drop_overlay, show_drop_overlay, sync_drop_overlay,
-};
+pub(crate) use overlay::render_drop_overlay;
 pub(crate) use panel_view::render_sftp_panel_element;
 pub(crate) use preview_view::render_sftp_hover_preview;
-pub(crate) use search_modal::render_sftp_search_body;
 pub(crate) use side_remote::request_sftp_list_for_connection;
 use std::path::{Path, PathBuf};
-pub(crate) use sync_actions::{
-    sftp_open_sync_modal, sftp_select_all_sync, sftp_toggle_sync_entry, start_sftp_sync,
-};
-pub(crate) use sync_modal::render_sftp_sync_body;
-pub(crate) use transfer_filter_modal::save_sftp_filter_modal;
+pub(crate) use sync_actions::{execute_sftp_sync, sftp_open_sync_modal};
+pub(crate) use sync_modal::{SftpSyncModalEvent, SftpSyncModalView};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(crate) fn local_home() -> PathBuf {

@@ -306,7 +306,10 @@ impl AppShell {
         if let Some(terminal) = self.state.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
             // 最小外包块，绝对定位因此不受侧栏与面板列宽度变化的影响。
-            let overlay = crate::sftp::render_drop_overlay(self, tab_id, p, cx);
+            let overlay = self
+                .state
+                .sftp_view(tab_id)
+                .and_then(|view| crate::sftp::render_drop_overlay(&view, tab_id, p, cx));
             div()
                 .flex_1()
                 .relative()

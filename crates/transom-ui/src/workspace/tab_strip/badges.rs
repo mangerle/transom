@@ -3,6 +3,7 @@
 use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::tiling::TiledTabs;
+use crate::workspace::WorkspaceState;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
@@ -39,7 +40,7 @@ pub(super) struct TiledRow {
 
 /// 构建并排组徽标元素。
 pub(super) fn build_tiled_group_badge(
-    shell: &AppShell,
+    workspace: &WorkspaceState,
     tiled: &TiledTabs,
     app_entity: &Entity<AppShell>,
     p: &Palette,
@@ -49,12 +50,10 @@ pub(super) fn build_tiled_group_badge(
         let Some(group_id) = *group_id else {
             continue;
         };
-        let Some(group) = shell.state.workspace.group(group_id) else {
+        let Some(group) = workspace.group(group_id) else {
             continue;
         };
-        let Some(tab) = shell
-            .state
-            .workspace
+        let Some(tab) = workspace
             .tabs
             .iter()
             .find(|tab| tab.id == group.active_pane)

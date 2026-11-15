@@ -3,7 +3,7 @@
 use crate::app::AppShell;
 use crate::sftp::TransferStatus;
 use crate::sftp::{
-    RemoteDirCacheEntry, SftpPreviewResponse, SftpPropertiesModalState, remote_file_properties,
+    RemoteDirCacheEntry, SftpPreviewResponse, remote_file_properties,
 };
 use gpui_kit::*;
 use transom_core::SftpAppEvent;
@@ -113,7 +113,12 @@ pub(crate) fn on_sftp_progress(
     if applied {
         // 浮层的速率与重绘按"窗格是否真的在屏上"判断，比只看活动窗格更宽：
         // 分屏里两个窗格可以同时显示各自的浮层。
-        crate::sftp::note_drop_overlay_progress(shell, tab_id, cx);
+        if let Some(view) = shell.state.sftp_view(tab_id) {
+            view.update(cx, |view, _| view.note_drop_overlay_progress());
+        }
+        if shell.state.is_rendered_pane(tab_id) {
+            cx.notify();
+        }
     }
     if applied && shell.state.workspace.active_tab == Some(tab_id) && !shell.state.immersive {
         cx.notify();
@@ -206,10 +211,12 @@ pub(crate) fn on_sftp_metadata(
         // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
         return false;
     }
-    shell.state.sftp_modals.properties = Some(SftpPropertiesModalState {
-        scope: rust_i18n::t!("sftp.modals.scope_remote").to_string(),
-        properties: remote_file_properties(&metadata),
-    });
+    crate::sftp::open_sftp_properties_modal(
+        shell,
+        rust_i18n::t!("sftp.modals.scope_remote").to_string(),
+        remote_file_properties(&metadata),
+        cx,
+    );
     if let Some(view) = shell.state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.process_queue(tab_id, cx));
     }
@@ -282,7 +289,11 @@ pub(crate) fn on_sftp_preview_failed(
 }
 
 /// 目录对比完成：仅在同步模态仍匹配该操作时回填结果。
-pub(crate) fn on_sftp_dir_compared(shell: &mut AppShell, event: SftpAppEvent) -> bool {
+pub(crate) fn on_sftp_dir_compared(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpDirCompared {
         connection_id,
         op_id,
@@ -292,19 +303,21 @@ pub(crate) fn on_sftp_dir_compared(shell: &mut AppShell, event: SftpAppEvent) ->
     else {
         return true;
     };
-    if let Some(modal) = shell.state.sftp_modals.sync.as_mut()
-        && modal.op_id == op_id
-        && modal.connection_id == connection_id
-    {
-        modal.scanning = false;
-        modal.skipped = comparison.skipped;
-        modal.selected = comparison
-            .entries
-            .iter()
-            .map(|entry| entry.sync_item().is_some())
-            .collect();
-        modal.entries = comparison.entries;
-        modal.error = None;
+    if let Some(modal) = shell.state.sftp_modals.sync.clone() {
+        modal.update(cx, |modal, cx| {
+            if modal.state.op_id == op_id && modal.state.connection_id == connection_id {
+                modal.state.scanning = false;
+                modal.state.skipped = comparison.skipped;
+                modal.state.selected = comparison
+                    .entries
+                    .iter()
+                    .map(|entry| entry.sync_item().is_some())
+                    .collect();
+                modal.state.entries = comparison.entries;
+                modal.state.error = None;
+                cx.notify();
+            }
+        });
     }
     true
 }

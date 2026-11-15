@@ -13,7 +13,7 @@ pub(in crate::dialog_host) fn git_project_values(shell: &AppShell, cx: &App) -> 
         .git
         .project
         .as_ref()
-        .map(|modal| vec![modal.picker.path.read(cx).value().to_string()])
+        .map(|modal| vec![modal.read(cx).picker.read(cx).path.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
@@ -29,9 +29,10 @@ pub(in crate::dialog_host) fn git_clone_values(shell: &AppShell, cx: &App) -> Ve
         .clone
         .as_ref()
         .map(|modal| {
+            let modal = modal.read(cx);
             vec![
                 modal.url.read(cx).value().to_string(),
-                modal.picker.path.read(cx).value().to_string(),
+                modal.picker.read(cx).path.read(cx).value().to_string(),
             ]
         })
         .unwrap_or_default()

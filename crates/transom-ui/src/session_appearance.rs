@@ -4,7 +4,7 @@
 //! 画的东西：图标资产名与色值。映射集中在一处，标签栏、侧栏与新建表单读的是
 //! 同一份定义，不会出现"表单里选了数据库、标签栏画成服务器"的分裂。
 
-use crate::app::{AppShell, TerminalTab};
+use crate::app::TerminalTab;
 use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex};
 use gpui_kit::component::Sizable;
@@ -120,17 +120,17 @@ impl crate::app::AppState {
 const SWATCH_SIZE: f32 = 18.0;
 
 /// 图标选择行（通用）。
-pub(crate) fn render_appearance_icon_row<F>(
+pub(crate) fn render_appearance_icon_row<V: 'static, F>(
     id_prefix: &'static str,
     icon: SessionIcon,
     on_icon: F,
-    app: &Entity<AppShell>,
+    view: &Entity<V>,
     _cx: &App,
 ) -> AnyElement
 where
-    F: Fn(&mut AppShell, SessionIcon, &mut Context<AppShell>) + Copy + 'static,
+    F: Fn(&mut V, SessionIcon, &mut Context<V>) + Copy + 'static,
 {
-    let auto_app = app.clone();
+    let auto_app = view.clone();
     h_flex()
         .gap_1()
         .flex_wrap()
@@ -151,7 +151,7 @@ where
             let Some(name) = session_icon(choice) else {
                 return div().into_any_element();
             };
-            let choice_app = app.clone();
+            let choice_app = view.clone();
             Button::new(ElementId::Name(
                 format!("{id_prefix}-icon-{choice:?}").into(),
             ))
@@ -171,18 +171,18 @@ where
 }
 
 /// 环境色选择行（通用）。
-pub(crate) fn render_appearance_color_row<G>(
+pub(crate) fn render_appearance_color_row<V: 'static, G>(
     id_prefix: &'static str,
     color: SessionColor,
     on_color: G,
     p: &Palette,
-    app: &Entity<AppShell>,
+    view: &Entity<V>,
     _cx: &App,
 ) -> AnyElement
 where
-    G: Fn(&mut AppShell, SessionColor, &mut Context<AppShell>) + Copy + 'static,
+    G: Fn(&mut V, SessionColor, &mut Context<V>) + Copy + 'static,
 {
-    let none_app = app.clone();
+    let none_app = view.clone();
     h_flex()
         .gap_2()
         .child(
@@ -212,7 +212,7 @@ where
             let Some(value) = session_color(choice) else {
                 return div().into_any_element();
             };
-            let choice_app = app.clone();
+            let choice_app = view.clone();
             div()
                 .id(ElementId::Name(
                     format!("{id_prefix}-color-{choice:?}").into(),

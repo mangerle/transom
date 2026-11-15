@@ -6,7 +6,6 @@ use super::super::*;
 pub(crate) enum ShellRowAction {
     RunImage(String),
     CloneContainer { id: String, name: String },
-    EditComposeYaml(String),
 }
 
 impl ContainerWorkspace {
@@ -141,7 +140,7 @@ impl ContainerWorkspace {
                 let RowTarget::Compose(name) = target else {
                     return None;
                 };
-                return Some(ShellRowAction::EditComposeYaml(name));
+                self.edit_compose_yaml(&name, cx);
             }
             RowAction::BackupVolume => {
                 let RowTarget::Volume(name) = target else {

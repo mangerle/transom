@@ -5,8 +5,7 @@
 //! 本文件后，输入框焦点与弹窗状态只有一个装配点。
 
 use crate::app::AppShell;
-use crate::palette::sftp_text_input;
-use crate::sftp::{SftpInputModalState, SftpInputTarget};
+use crate::sftp::SftpInputTarget;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
 
@@ -30,16 +29,5 @@ pub(crate) fn open_sftp_input_modal(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let input = sftp_text_input(window, cx, &params.value, &params.placeholder);
-    input.update(cx, |state, cx| state.focus(window, cx));
-    shell.state.sftp_modals.input = Some(SftpInputModalState {
-        tab_id: params.tab_id,
-        connection_id: params.connection_id,
-        title: params.title,
-        prompt: params.prompt,
-        input,
-        target: params.target,
-        error: None,
-    });
-    cx.notify();
+    crate::sftp::subscribe_sftp_input_modal(shell, params, window, cx);
 }

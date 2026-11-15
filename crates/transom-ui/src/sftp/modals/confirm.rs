@@ -1,50 +1,73 @@
-//! SFTP 弹窗视图。
+//! SFTP 删除确认弹窗视图实体。
 
 use super::common::*;
+use super::state::SftpPendingDelete;
 
-pub(crate) fn render_sftp_confirm_body(
-    shell: &AppShell,
-    app: &Entity<AppShell>,
-    _cx: &App,
-    p: &Palette,
-) -> AnyElement {
-    let Some(modal) = shell.state.sftp_modals.confirm.as_ref() else {
-        return div().into_any_element();
-    };
-    let title = modal.title.clone();
-    let description = modal.description.clone();
+/// SFTP 删除确认弹窗事件。
+pub(crate) enum SftpConfirmModalEvent {
+    Confirm,
+    Cancel,
+}
 
-    let content = div()
-        .text_sm()
-        .text_color(p.muted_foreground)
-        .child(description);
-    let cancel = crate::widgets::dialog_cancel_button(
-        "cancel-sftp-delete",
-        rust_i18n::t!("common.cancel").to_string(),
-        crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-            this.state.sftp_modals.confirm = None;
-            crate::sftp::focus_active_sftp_panel(this, window, cx);
-            cx.notify();
-        }),
-    );
-    let confirm = crate::widgets::dialog_confirm_button(
-        "confirm-sftp-delete",
-        rust_i18n::t!("common.confirm_delete").to_string(),
-        None,
-        crate::widgets::DialogConfirmKind::Danger,
-        crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-            crate::sftp::sftp_confirm_delete(this, cx);
-            crate::sftp::focus_active_sftp_panel(this, window, cx);
-        }),
-    );
-    let footer =
-        crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
+/// SFTP 删除确认弹窗实体视图。
+pub(crate) struct SftpConfirmModalView {
+    pub(crate) action: SftpPendingDelete,
+    pub(crate) title: String,
+    pub(crate) description: String,
+}
 
-    crate::widgets::dialog_body(
-        "sftp-confirm-modal",
-        title,
-        None::<String>,
-        content,
-        Some(footer),
-    )
+impl EventEmitter<SftpConfirmModalEvent> for SftpConfirmModalView {}
+
+impl Render for SftpConfirmModalView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
+        self.render_body(cx, &p)
+    }
+}
+
+impl SftpConfirmModalView {
+    pub(crate) fn new(action: SftpPendingDelete, title: String, description: String) -> Self {
+        Self {
+            action,
+            title,
+            description,
+        }
+    }
+
+    pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SftpConfirmModalEvent::Confirm);
+    }
+
+    pub(crate) fn cancel(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SftpConfirmModalEvent::Cancel);
+    }
+
+    fn render_body(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        let content = div()
+            .text_sm()
+            .text_color(p.muted_foreground)
+            .child(self.description.clone());
+        let cancel = crate::widgets::dialog_cancel_button(
+            "cancel-sftp-delete",
+            rust_i18n::t!("common.cancel").to_string(),
+            cx.listener(|this, _: &ClickEvent, _, cx| this.cancel(cx)),
+        );
+        let confirm = crate::widgets::dialog_confirm_button(
+            "confirm-sftp-delete",
+            rust_i18n::t!("common.confirm_delete").to_string(),
+            None,
+            crate::widgets::DialogConfirmKind::Danger,
+            cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)),
+        );
+        let footer =
+            crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
+
+        crate::widgets::dialog_body(
+            "sftp-confirm-modal",
+            self.title.clone(),
+            None::<String>,
+            content,
+            Some(footer),
+        )
+    }
 }

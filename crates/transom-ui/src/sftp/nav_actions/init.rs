@@ -104,7 +104,9 @@ pub(crate) fn toggle_sftp(shell: &mut AppShell, window: &mut Window, cx: &mut Co
                 view.state.open = true;
             }
             // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
-            crate::sftp::sync_drop_overlay(shell, tab_id, cx);
+            if let Some(view) = shell.state.sftp_view(tab_id) {
+                view.update(cx, |view, cx| view.sync_drop_overlay(cx));
+            }
             if let Some(view) = shell.state.sftp_view(tab_id) {
                 view.update(cx, |view, cx| view.spawn_local_dir_refresh(None, cx));
             }

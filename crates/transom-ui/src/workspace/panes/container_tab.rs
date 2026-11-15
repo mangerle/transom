@@ -42,7 +42,9 @@ impl AppShell {
                 .track_focus(&list_focus)
                 .key_context("ContainerList")
                 .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-                    crate::container::handle_container_list_key(this, tab_id, event, window, cx);
+                    if let Some(workspace) = this.state.container_workspace(tab_id) {
+                        workspace.update(cx, |ws, cx| ws.handle_list_key(event, window, cx));
+                    }
                 }))
                 .h_full()
                 .w_full()

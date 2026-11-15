@@ -1,13 +1,9 @@
 //! 标签关闭、窗格摘除与应用语言切换操作。
 
-use crate::app::app_settings;
-use crate::app::update_app_settings;
-use crate::app::{AppShell, AppState};
-use crate::palette::localized_error;
+use crate::app::{AppShell, AppState, app_settings};
 use crate::pane_tree::RemoveOutcome;
 use crate::sftp::PendingEditorClose;
 use crate::tiling::StripEntry;
-use gpui_kit::component::set_locale;
 use gpui_kit::*;
 use transom_core::{GroupId, TabId, TerminalCommand};
 
@@ -271,29 +267,5 @@ impl AppShell {
         if let Some(group) = target {
             crate::tiling::activate_group(self, group, window, cx);
         }
-    }
-
-    /// 设置界面语言并立即落盘；空串表示跟随系统。
-    pub(crate) fn set_language(&mut self, language: String, cx: &mut Context<Self>) {
-        if app_settings(cx).language == language {
-            return;
-        }
-        update_app_settings(cx, |s| s.language = language);
-        set_locale(&crate::i18n::resolve_language(&app_settings(cx).language));
-        let settings_snapshot = app_settings(cx).clone();
-        if let Err(error) = self.state.persist_settings(&settings_snapshot) {
-            self.state.set_error(localized_error(&error));
-        }
-        cx.notify();
-    }
-
-    /// 活动栏的语言按钮：在中文与英文之间切换（跟随系统时以当前生效语言为起点）。
-    pub(crate) fn toggle_language(&mut self, cx: &mut Context<Self>) {
-        let next = if crate::i18n::resolve_language(&app_settings(cx).language) == "zh-CN" {
-            "en"
-        } else {
-            "zh-CN"
-        };
-        self.set_language(next.to_string(), cx);
     }
 }

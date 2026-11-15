@@ -7,7 +7,7 @@ use super::quick_paths::LocalQuickPaths;
 use super::side_remote::{SftpActivePane, SftpClipboardData};
 use super::task::TransferTask;
 use gpui_kit::component::VirtualListScrollHandle;
-use gpui_kit::component::input::{InputState, TextareaState};
+use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use std::collections::{BTreeSet, HashSet};
@@ -20,23 +20,6 @@ pub(crate) struct LocalFileEntry {
     pub(crate) path: PathBuf,
     pub(crate) is_dir: bool,
     pub(crate) size: u64,
-}
-
-pub(crate) struct SftpChmodModalState {
-    pub(crate) tab_id: TabId,
-    /// 目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
-    pub(crate) connection_id: Option<ConnectionId>,
-    pub(crate) remote_path: String,
-    pub(crate) file_name: String,
-    pub(crate) permissions: u32,
-    pub(crate) octal_input: Entity<InputState>,
-    pub(crate) error: Option<String>,
-}
-
-/// 传输排除规则编辑弹窗状态。
-pub(crate) struct SftpFilterModalState {
-    pub(crate) textarea: Entity<TextareaState>,
-    pub(crate) error: Option<String>,
 }
 
 /// 目录对比与增量同步弹窗状态。
@@ -91,18 +74,6 @@ pub(crate) enum SftpInputTarget {
     SudoElevation {
         editor: Entity<gpui_kit::component::input::EditorState>,
     },
-}
-
-pub(crate) struct SftpInputModalState {
-    pub(crate) tab_id: TabId,
-    /// 远端目标连接；`None` 表示标签页主远端，`Some` 表示并列远端列。
-    /// 本地目标不使用该字段。
-    pub(crate) connection_id: Option<ConnectionId>,
-    pub(crate) title: String,
-    pub(crate) prompt: String,
-    pub(crate) input: Entity<InputState>,
-    pub(crate) target: SftpInputTarget,
-    pub(crate) error: Option<String>,
 }
 
 /// 远程目录条目短期缓存存活时间：60 秒。

@@ -1,8 +1,8 @@
 //! SFTP 文件系统增删改查、模态对话框交互及软链接操作。
 
 mod commit;
-pub(crate) use commit::commit_sftp_input_modal;
-mod validate;
+pub(in crate::sftp) use commit::commit_sftp_input_value;
+pub(in crate::sftp) mod validate;
 
 use crate::app::AppShell;
 use crate::sftp::SftpPendingDelete;
@@ -43,11 +43,12 @@ pub(crate) fn perform_sftp_delete(
 }
 
 /// 执行确认弹窗中挂起的删除动作。
-pub(crate) fn sftp_confirm_delete(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(modal) = shell.state.sftp_modals.confirm.take() else {
-        return;
-    };
-    match modal.action {
+pub(crate) fn execute_sftp_delete(
+    shell: &mut AppShell,
+    action: SftpPendingDelete,
+    cx: &mut Context<AppShell>,
+) {
+    match action {
         SftpPendingDelete::Local { tab_id, paths } => {
             if let Some(view) = shell.state.sftp_view(tab_id) {
                 view.update(cx, |view, cx| view.perform_local_delete(paths, cx));

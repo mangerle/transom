@@ -9,7 +9,6 @@
 //! - 代价与局限：当前每次检索重走独立的 SSH Exec 通道，暂不维护远端常驻的倒排索引。
 
 use super::entity::SftpPanelView;
-use crate::app::AppShell;
 use crate::palette::Palette;
 use crate::sftp::{SftpRemotePaneRef, parent_remote};
 use gpui_kit::base::{h_flex, v_flex};
@@ -20,10 +19,39 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{ConnectionId, RemoteSearchQuery, RemoteSearchResultItem, SftpOperation, TabId};
+use transom_core::{ConnectionId, RemoteSearchQuery, RemoteSearchResultItem, TabId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
+
+/// SFTP 远程检索弹窗事件。
+pub(crate) enum SftpSearchModalEvent {
+    Execute {
+        tab_id: TabId,
+        connection_id: Option<ConnectionId>,
+        query: RemoteSearchQuery,
+    },
+    Jump {
+        tab_id: TabId,
+        connection_id: Option<ConnectionId>,
+        dir: String,
+    },
+    Cancel,
+}
+
+/// SFTP 远程检索模态弹窗实体视图。
+pub(crate) struct SftpSearchModalView {
+    pub(crate) state: SftpSearchModalState,
+}
+
+impl EventEmitter<SftpSearchModalEvent> for SftpSearchModalView {}
+
+impl Render for SftpSearchModalView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
+        self.render_body(cx, &p)
+    }
+}
 
 /// SFTP 远程检索模态弹窗状态。
 #[derive(Clone)]
@@ -85,150 +113,127 @@ impl SftpPanelView {
     }
 }
 
-/// 触发执行远程搜索请求。
-pub(crate) fn sftp_execute_search(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(ref mut modal) = shell.state.sftp_modals.search else {
-        return;
-    };
-    let pattern = modal.input.read(cx).value().trim().to_string();
-    let input = modal.input.clone();
-    if pattern.is_empty() {
-        modal.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
-        input.update(cx, |state, cx| state.focus(window, cx));
-        cx.notify();
-        return;
+impl SftpSearchModalView {
+    pub(crate) fn new(state: SftpSearchModalState) -> Self {
+        Self { state }
     }
 
-    modal.error = None;
-    modal.is_searching = true;
-    modal.results.clear();
-
-    let tab_id = modal.tab_id;
-    let target_connection = modal.connection_id;
-    let query = RemoteSearchQuery {
-        path: modal.root_path.clone(),
-        pattern,
-        is_content: modal.is_content,
-        case_sensitive: modal.case_sensitive,
-        max_depth: Some(10),
-        max_results: 200,
-    };
-
-    log::info!(
-        "发起远程检索请求，路径: {}，模式: {}，是否内容: {}",
-        query.path,
-        query.pattern,
-        query.is_content
-    );
-    let Some(connection_id) = target_connection.or_else(|| {
-        shell
-            .state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.connection_id)
-    }) else {
-        return;
-    };
-    super::remote_actions::send_sftp_op_for_connection(
-        shell,
-        tab_id,
-        connection_id,
-        SftpOperation::Search { query },
-        cx,
-    );
-    cx.notify();
-}
-
-/// 渲染远程搜索弹窗视图。
-pub(crate) fn render_sftp_search_body(
-    shell: &AppShell,
-    app: &Entity<AppShell>,
-    _cx: &App,
-    p: &Palette,
-) -> AnyElement {
-    let Some(modal) = shell.state.sftp_modals.search.as_ref() else {
-        return div().into_any_element();
-    };
-
-    let is_searching = modal.is_searching;
-    let results = modal.results.clone();
-    let target_connection = modal.connection_id;
-
-    let header = render_search_header(modal, app, p);
-
-    let mut results_container = v_flex()
-        .id("sftp-search-results-list")
-        .gap_1()
-        .w_full()
-        .h(px(280.0))
-        .overflow_y_scrollbar();
-
-    if is_searching {
-        results_container = results_container.child(
-            div()
-                .p_4()
-                .text_sm()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("sftp.search.searching_hint").to_string()),
-        );
-    } else if results.is_empty() {
-        results_container = results_container.child(
-            div()
-                .p_4()
-                .text_sm()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("sftp.search.no_results").to_string()),
-        );
-    } else {
-        for (idx, item) in results.into_iter().enumerate() {
-            results_container = results_container.child(search_result_row(SearchResultRow {
-                idx,
-                item: &item,
-                tab_id: modal.tab_id,
-                connection_id: target_connection,
-                app,
-                p,
-            }));
+    pub(crate) fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let pattern = self.state.input.read(cx).value().trim().to_string();
+        if pattern.is_empty() {
+            self.state.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
+            self.state.input.update(cx, |state, cx| state.focus(window, cx));
+            cx.notify();
+            return;
         }
+        self.state.error = None;
+        self.state.is_searching = true;
+        self.state.results.clear();
+
+        let query = RemoteSearchQuery {
+            path: self.state.root_path.clone(),
+            pattern,
+            is_content: self.state.is_content,
+            case_sensitive: self.state.case_sensitive,
+            max_depth: Some(10),
+            max_results: 200,
+        };
+        log::info!(
+            "发起远程检索请求，路径: {}，模式: {}，是否内容: {}",
+            query.path,
+            query.pattern,
+            query.is_content
+        );
+        cx.emit(SftpSearchModalEvent::Execute {
+            tab_id: self.state.tab_id,
+            connection_id: self.state.connection_id,
+            query,
+        });
+        cx.notify();
     }
 
-    let content = v_flex().gap_3().child(header).child(results_container);
+    pub(crate) fn apply_results(
+        &mut self,
+        results: Vec<RemoteSearchResultItem>,
+        error: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.is_searching = false;
+        self.state.results = results;
+        self.state.error = error;
+        cx.notify();
+    }
 
-    let footer = h_flex().gap_2().child(
-        Button::new("close-sftp-search")
-            .ghost()
-            .label(rust_i18n::t!("app.close").to_string())
-            .on_click(crate::dialog_host::on_event(
-                app,
-                |this, _: &ClickEvent, window, cx| {
-                    this.state.sftp_modals.search = None;
-                    crate::sftp::focus_active_sftp_panel(this, window, cx);
-                    cx.notify();
-                },
-            )),
-    );
+    pub(crate) fn cancel(&mut self, cx: &mut Context<Self>) {
+        cx.emit(SftpSearchModalEvent::Cancel);
+    }
 
-    crate::widgets::dialog_body(
-        "sftp-search-modal",
-        rust_i18n::t!("sftp.search.title").to_string(),
-        None::<String>,
-        content,
-        Some(footer),
-    )
+    fn render_body(&self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
+        let is_searching = self.state.is_searching;
+        let header = render_search_header(&self.state, cx, p);
+
+        let mut results_container = v_flex()
+            .id("sftp-search-results-list")
+            .gap_1()
+            .w_full()
+            .h(px(280.0))
+            .overflow_y_scrollbar();
+
+        if is_searching {
+            results_container = results_container.child(
+                div()
+                    .p_4()
+                    .text_sm()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("sftp.search.searching_hint").to_string()),
+            );
+        } else if self.state.results.is_empty() {
+            results_container = results_container.child(
+                div()
+                    .p_4()
+                    .text_sm()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("sftp.search.no_results").to_string()),
+            );
+        } else {
+            for (idx, item) in self.state.results.iter().enumerate() {
+                results_container = results_container.child(search_result_row(
+                    idx,
+                    item,
+                    self.state.tab_id,
+                    self.state.connection_id,
+                    cx,
+                    p,
+                ));
+            }
+        }
+
+        let content = v_flex().gap_3().child(header).child(results_container);
+
+        let footer = h_flex().gap_2().child(
+            Button::new("close-sftp-search")
+                .ghost()
+                .label(rust_i18n::t!("app.close").to_string())
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.cancel(cx))),
+        );
+
+        crate::widgets::dialog_body(
+            "sftp-search-modal",
+            rust_i18n::t!("sftp.search.title").to_string(),
+            None::<String>,
+            content,
+            Some(footer),
+        )
+    }
 }
 
 /// 检索弹窗头部：根路径、输入框、检索按钮、模式开关与错误提示。
 fn render_search_header(
     modal: &SftpSearchModalState,
-    app: &Entity<AppShell>,
+    cx: &mut Context<SftpSearchModalView>,
     p: &Palette,
 ) -> AnyElement {
-    let root_path = modal.root_path.clone();
-    let input = modal.input.clone();
+    let root_path = modal.root_path.as_str();
     let is_content = modal.is_content;
     let case_sensitive = modal.case_sensitive;
     let is_searching = modal.is_searching;
@@ -239,13 +244,13 @@ fn render_search_header(
             div()
                 .text_xs()
                 .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("sftp.search.root", path = root_path.as_str()).to_string()),
+                .child(rust_i18n::t!("sftp.search.root", path = root_path).to_string()),
         )
         .child(
             h_flex()
                 .gap_2()
                 .w_full()
-                .child(Input::new(&input).w_full())
+                .child(Input::new(&modal.input).w_full())
                 .child(
                     Button::new("btn-trigger-search")
                         .primary()
@@ -256,12 +261,9 @@ fn render_search_header(
                             rust_i18n::t!("sftp.search.search").to_string()
                         })
                         .disabled(is_searching)
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, _: &ClickEvent, window, cx| {
-                                sftp_execute_search(this, window, cx);
-                            },
-                        )),
+                        .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                            this.submit(window, cx);
+                        })),
                 ),
         )
         .child(
@@ -271,29 +273,19 @@ fn render_search_header(
                     Checkbox::new("chk-is-content")
                         .checked(is_content)
                         .label(rust_i18n::t!("sftp.search.content_mode").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, checked: &bool, _, cx| {
-                                if let Some(ref mut m) = this.state.sftp_modals.search {
-                                    m.is_content = *checked;
-                                    cx.notify();
-                                }
-                            },
-                        )),
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.state.is_content = *checked;
+                            cx.notify();
+                        })),
                 )
                 .child(
                     Checkbox::new("chk-case-sensitive")
                         .checked(case_sensitive)
                         .label(rust_i18n::t!("sftp.search.case_sensitive").to_string())
-                        .on_click(crate::dialog_host::on_event(
-                            app,
-                            |this, checked: &bool, _, cx| {
-                                if let Some(ref mut m) = this.state.sftp_modals.search {
-                                    m.case_sensitive = *checked;
-                                    cx.notify();
-                                }
-                            },
-                        )),
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.state.case_sensitive = *checked;
+                            cx.notify();
+                        })),
                 ),
         )
         .when_some(error, |this, err| {
@@ -302,26 +294,15 @@ fn render_search_header(
     header.into_any_element()
 }
 
-/// 检索结果行参数。
-struct SearchResultRow<'a> {
-    idx: usize,
-    item: &'a transom_core::RemoteSearchResultItem,
-    tab_id: transom_core::TabId,
-    connection_id: Option<transom_core::ConnectionId>,
-    app: &'a Entity<AppShell>,
-    p: &'a Palette,
-}
-
 /// 单条检索结果：路径、行号、匹配内容与跳转。
-fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
-    let SearchResultRow {
-        idx,
-        item,
-        tab_id,
-        connection_id,
-        app,
-        p,
-    } = row;
+fn search_result_row(
+    idx: usize,
+    item: &RemoteSearchResultItem,
+    tab_id: TabId,
+    connection_id: Option<ConnectionId>,
+    cx: &mut Context<SftpSearchModalView>,
+    p: &Palette,
+) -> AnyElement {
     let target_path = item.path.clone();
     let line_info = item
         .line_number
@@ -363,27 +344,13 @@ fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
                     .child(format!(": {excerpt}")),
             )
         })
-        .on_click(crate::dialog_host::on_event(
-            app,
-            move |this, _: &ClickEvent, window, cx| {
-                // 点击条目：关闭弹窗并导航到目标所在文件夹。
-                // 并列远端的检索结果必须回到该列自己的连接，不能落到主远端。
-                this.state.sftp_modals.search = None;
-                let dir = parent_remote(&target_path);
-                if let Some(connection_id) = connection_id {
-                    crate::sftp::request_sftp_list_for_connection(
-                        this,
-                        tab_id,
-                        connection_id,
-                        dir,
-                        cx,
-                    );
-                } else {
-                    crate::sftp::request_sftp_list(this, tab_id, dir, cx);
-                }
-                crate::sftp::focus_active_sftp_panel(this, window, cx);
-                cx.notify();
-            },
-        ));
+        .on_click(cx.listener(move |_this, _: &ClickEvent, _, cx| {
+            let dir = parent_remote(&target_path);
+            cx.emit(SftpSearchModalEvent::Jump {
+                tab_id,
+                connection_id,
+                dir,
+            });
+        }));
     row.into_any_element()
 }

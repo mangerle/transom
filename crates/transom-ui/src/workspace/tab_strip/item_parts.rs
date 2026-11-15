@@ -1,13 +1,14 @@
 //! 标签条目的徽标与关闭按钮等子元素。
 
 use super::*;
+use crate::workspace::WorkspaceState;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 /// 渲染分屏窗格列表徽标。
 pub(super) fn render_pane_badge(
-    shell: &AppShell,
+    workspace: &WorkspaceState,
     group: &TabGroup,
     active_pane: TabId,
     root_axis: SplitAxis,
@@ -19,7 +20,7 @@ pub(super) fn render_pane_badge(
         .into_iter()
         .enumerate()
         .filter_map(|(position, pane_id)| {
-            let tab = shell.state.workspace.tab(pane_id)?;
+            let tab = workspace.tab(pane_id)?;
             let (dot_color, icon) = crate::workspace::pane_status_indicator(&tab.status, p);
             Some(PaneRow {
                 tab_id: pane_id,

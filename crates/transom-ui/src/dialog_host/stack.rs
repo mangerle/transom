@@ -260,22 +260,3 @@ pub(crate) fn dialog_dim(shell: &AppShell, p: &Palette) -> Option<AnyElement> {
             .into_any_element(),
     )
 }
-
-/// 关闭一个 SFTP 弹窗：清状态并把焦点还给活动面板。
-///
-/// 七个 SFTP 弹窗的取消动作只差"清哪个字段"，用闭包参数而不是七个
-/// 同形方法，避免复制七遍同样的焦点与重绘逻辑。
-pub(crate) fn close_sftp_modal<F>(
-    shell: &mut AppShell,
-    clear: F,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) -> bool
-where
-    F: FnOnce(&mut crate::sftp::SftpModals),
-{
-    clear(&mut shell.state.sftp_modals);
-    crate::sftp::focus_active_sftp_panel(shell, window, cx);
-    cx.notify();
-    true
-}

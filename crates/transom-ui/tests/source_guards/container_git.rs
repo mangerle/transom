@@ -512,3 +512,101 @@ fn git_workspace_actions_have_no_app_shell() {
         offenders.join("\n")
     );
 }
+
+/// 容器详情、侧栏、Compose、列表键盘导航、拉取抽屉与基础状态类型禁止在代码中依赖 `AppShell`。
+#[test]
+fn container_domain_modules_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for dir in [
+        "src/container/detail",
+        "src/container/sidebar",
+        "src/container/compose",
+        "src/container/actions",
+        "src/container/list",
+        "src/container/view",
+    ] {
+        for entry in walkdir_like(&root.join(dir)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            if content
+                .lines()
+                .any(|line| !line.trim_start().starts_with("//") && line.contains("AppShell"))
+            {
+                offenders.push(entry.display().to_string());
+            }
+        }
+    }
+    for file in [
+        "src/container/list/keyboard.rs",
+        "src/container/list/filters.rs",
+        "src/container/pull_drawer.rs",
+        "src/container/types/dialogs.rs",
+        "src/container/types/workspace/state.rs",
+    ] {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content
+            .lines()
+            .any(|line| !line.trim_start().starts_with("//") && line.contains("AppShell"))
+        {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下容器领域模块仍在代码中包含 AppShell 耦合：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// Git 目录选择器、分组字段与项目/克隆独立弹窗实体禁止在代码中依赖 `AppShell`。
+#[test]
+fn git_modals_and_browser_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/git/dir_browser")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content
+            .lines()
+            .any(|line| !line.trim_start().starts_with("//") && line.contains("AppShell"))
+        {
+            offenders.push(entry.display().to_string());
+        }
+    }
+    for file in [
+        "src/git/form.rs",
+        "src/git/folder_field.rs",
+        "src/git/project_modal.rs",
+        "src/git/clone_modal/mod.rs",
+        "src/git/clone_modal/view.rs",
+        "src/session_appearance.rs",
+    ] {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content
+            .lines()
+            .any(|line| !line.trim_start().starts_with("//") && line.contains("AppShell"))
+        {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下 Git 弹窗与浏览组件仍在代码中包含 AppShell 耦合：\n{}",
+        offenders.join("\n")
+    );
+}

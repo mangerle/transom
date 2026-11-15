@@ -5,7 +5,6 @@
 //! 列举、缓存、展开集合这些实现细节淹没。
 
 use super::listing::DirListing;
-use crate::app::AppShell;
 use crate::sftp::quick_paths::LocalQuickPaths;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -23,7 +22,11 @@ pub(crate) struct DirPicker {
 
 impl DirPicker {
     /// 用给定起点建面板。
-    pub(crate) fn new(window: &mut Window, cx: &mut Context<AppShell>, placeholder: &str) -> Self {
+    pub(crate) fn new<V: 'static>(
+        window: &mut Window,
+        cx: &mut Context<V>,
+        placeholder: &str,
+    ) -> Self {
         Self {
             browser: GitDirBrowser::new(),
             path: cx.new(|cx| InputState::new(window, cx).placeholder(placeholder)),

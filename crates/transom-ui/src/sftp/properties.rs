@@ -72,13 +72,6 @@ pub(crate) struct FileProperties {
     pub(crate) link_target: Option<String>,
 }
 
-/// 文件属性查看弹窗状态（只读展示，无输入控件）。
-pub(crate) struct SftpPropertiesModalState {
-    /// 属性来源描述（「远端」/「本地」），用于弹窗副标题
-    pub(crate) scope: String,
-    pub(crate) properties: FileProperties,
-}
-
 /// 由远端属性契约转换为展示层属性快照
 pub(crate) fn remote_file_properties(metadata: &RemoteMetadata) -> FileProperties {
     let name = metadata

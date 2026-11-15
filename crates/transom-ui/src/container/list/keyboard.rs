@@ -5,12 +5,12 @@
 //! - 提取独立的纯算法函数计算导航步进（上下越界保护、首尾停顿），与 UI 调度解耦并具备确定性单测；
 //! - 按键动作严格分流：输入框未失焦时不拦截普通字符，确保输入与全局快捷键互不干扰。
 
-use super::{ListRow, row_key};
-use crate::app::AppShell;
+use super::{ListRow, list_rows, row_key};
 use crate::container::ContainerDetailTab;
+use crate::container::entity::ContainerWorkspace;
 use crate::container::types::RowTarget;
 use gpui_kit::{Context, KeyDownEvent, Window};
-use transom_core::{ComposeAction, ContainerLifecycleAction, TabId};
+use transom_core::{ComposeAction, ContainerLifecycleAction};
 
 /// 根据步进偏移量计算下一项选中目标。
 ///
@@ -49,159 +49,95 @@ pub(crate) fn find_selected_row<'a>(
     rows.iter().find(|r| row_key(&r.target) == key)
 }
 
-/// 键盘事件到来时按当前状态重算行集合，再交给列表键盘导航处理。
-pub(crate) fn handle_container_list_key(
-    app: &mut AppShell,
-    tab_id: TabId,
-    event: &KeyDownEvent,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(view) = app.state.container_workspace(tab_id) else {
-        return;
-    };
-    let rows = {
-        let workspace = view.read(cx);
-        let query = workspace.state.query(cx);
-        super::list_rows(&workspace.state, &query)
-    };
-    handle_list_key_down(app, tab_id, &rows, event, window, cx);
-}
+impl ContainerWorkspace {
+    /// 键盘事件到来时按当前状态重算行集合并处理列表快捷键。
+    pub(crate) fn handle_list_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // 存在控制修饰符（Ctrl/Alt/Meta）时放行，交由全局快捷键系统处理
+        if event.keystroke.modifiers.control
+            || event.keystroke.modifiers.alt
+            || event.keystroke.modifiers.platform
+        {
+            return;
+        }
+        let query = self.state.query(cx);
+        let rows = list_rows(&self.state, &query);
+        let current_selected = self.state.selected.clone();
 
-/// 处理列表键盘事件。
-pub(crate) fn handle_list_key_down(
-    app: &mut AppShell,
-    tab_id: TabId,
-    rows: &[ListRow],
-    event: &KeyDownEvent,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    // 存在控制修饰符（Ctrl/Alt/Meta）时放行，交由全局快捷键系统处理
-    if event.keystroke.modifiers.control
-        || event.keystroke.modifiers.alt
-        || event.keystroke.modifiers.platform
-    {
-        return;
-    }
-
-    let key = event.keystroke.key.as_str();
-
-    match key {
-        // 下移一行
-        "j" | "ArrowDown" | "down" => {
-            let current_selected = app
-                .state
-                .container_workspace(tab_id)
-                .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(target) = navigate_selection(rows, current_selected.as_deref(), 1)
-                && let Some(workspace) = app.state.container_workspace(tab_id)
-            {
-                workspace.update(cx, |workspace, cx| workspace.select_row(&target, cx));
-            }
-        }
-        // 上移一行
-        "k" | "ArrowUp" | "up" => {
-            let current_selected = app
-                .state
-                .container_workspace(tab_id)
-                .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(target) = navigate_selection(rows, current_selected.as_deref(), -1)
-                && let Some(workspace) = app.state.container_workspace(tab_id)
-            {
-                workspace.update(cx, |workspace, cx| workspace.select_row(&target, cx));
-            }
-        }
-        // 回车：打开/激活当前条目
-        "Enter" | "enter" => {
-            let current_selected = app
-                .state
-                .container_workspace(tab_id)
-                .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(row) = find_selected_row(rows, current_selected.as_deref()) {
-                match &row.target {
-                    RowTarget::Container { .. } => {
-                        // 若已选中容器，打开概览页
-                        if let Some(workspace) = app.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.set_detail_tab(ContainerDetailTab::Overview, cx);
-                            });
-                        }
-                    }
-                    _ => {
-                        if let Some(workspace) = app.state.container_workspace(tab_id) {
-                            workspace
-                                .update(cx, |workspace, cx| workspace.select_row(&row.target, cx));
-                        }
-                    }
-                }
-            } else if let Some(first) = rows.first()
-                && let Some(workspace) = app.state.container_workspace(tab_id)
-            {
-                workspace.update(cx, |workspace, cx| workspace.select_row(&first.target, cx));
-            }
-        }
-        // 'l'：快速切换至日志页签
-        "l" => {
-            let current_selected = app
-                .state
-                .container_workspace(tab_id)
-                .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(row) = find_selected_row(rows, current_selected.as_deref())
-                && matches!(row.target, RowTarget::Container { .. })
-                && let Some(workspace) = app.state.container_workspace(tab_id)
-            {
-                workspace.update(cx, |workspace, cx| {
-                    workspace.set_detail_tab(ContainerDetailTab::Logs, cx);
-                });
-            }
-        }
-        // 's'：启停当前选中的容器或 Compose 项目
-        "s" => {
-            let current_selected = app
-                .state
-                .container_workspace(tab_id)
-                .and_then(|w| w.read(cx).state.selected.clone());
-            if let Some(row) = find_selected_row(rows, current_selected.as_deref()) {
-                match &row.target {
-                    RowTarget::Container { name, .. } => {
-                        let is_running = row.running == Some(true);
-                        let action = if is_running {
-                            ContainerLifecycleAction::Stop
-                        } else {
-                            ContainerLifecycleAction::Start
-                        };
-                        if let Some(workspace) = app.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.container_lifecycle(name.clone(), action, cx);
-                            });
-                        }
-                    }
-                    RowTarget::Compose(name) => {
-                        let is_running = row.running == Some(true);
-                        let action = if is_running {
-                            ComposeAction::Down
-                        } else {
-                            ComposeAction::Up
-                        };
-                        if let Some(workspace) = app.state.container_workspace(tab_id) {
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.run_compose(name.clone(), action, cx);
-                            });
-                        }
-                    }
-                    _ => {}
+        match event.keystroke.key.as_str() {
+            // 下移一行
+            "j" | "ArrowDown" | "down" => {
+                if let Some(target) = navigate_selection(&rows, current_selected.as_deref(), 1) {
+                    self.select_row(&target, cx);
                 }
             }
-        }
-        // '/'：聚焦搜索框
-        "/" => {
-            if let Some(workspace) = app.state.container_workspace(tab_id) {
-                let search = workspace.read(cx).state.search.clone();
+            // 上移一行
+            "k" | "ArrowUp" | "up" => {
+                if let Some(target) = navigate_selection(&rows, current_selected.as_deref(), -1) {
+                    self.select_row(&target, cx);
+                }
+            }
+            // 回车：打开/激活当前条目
+            "Enter" | "enter" => {
+                if let Some(row) = find_selected_row(&rows, current_selected.as_deref()) {
+                    match &row.target {
+                        RowTarget::Container { .. } => {
+                            // 若已选中容器，打开概览页
+                            self.set_detail_tab(ContainerDetailTab::Overview, cx);
+                        }
+                        _ => {
+                            self.select_row(&row.target, cx);
+                        }
+                    }
+                } else if let Some(first) = rows.first() {
+                    self.select_row(&first.target, cx);
+                }
+            }
+            // 'l'：快速切换至日志页签
+            "l" => {
+                if let Some(row) = find_selected_row(&rows, current_selected.as_deref())
+                    && matches!(row.target, RowTarget::Container { .. })
+                {
+                    self.set_detail_tab(ContainerDetailTab::Logs, cx);
+                }
+            }
+            // 's'：启停当前选中的容器或 Compose 项目
+            "s" => {
+                if let Some(row) = find_selected_row(&rows, current_selected.as_deref()) {
+                    match &row.target {
+                        RowTarget::Container { name, .. } => {
+                            let is_running = row.running == Some(true);
+                            let action = if is_running {
+                                ContainerLifecycleAction::Stop
+                            } else {
+                                ContainerLifecycleAction::Start
+                            };
+                            self.container_lifecycle(name.clone(), action, cx);
+                        }
+                        RowTarget::Compose(name) => {
+                            let is_running = row.running == Some(true);
+                            let action = if is_running {
+                                ComposeAction::Down
+                            } else {
+                                ComposeAction::Up
+                            };
+                            self.run_compose(name.clone(), action, cx);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // '/'：聚焦搜索框
+            "/" => {
+                let search = self.state.search.clone();
                 search.update(cx, |state, cx| state.focus(window, cx));
             }
+            _ => {}
         }
-        _ => {}
     }
 }
 

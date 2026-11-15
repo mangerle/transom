@@ -86,9 +86,9 @@ impl ContainerUiState {
     ///
     /// 设计原理（Why）：侧栏搜索框需要 `Window` 才能创建，因此不在 `Default`
     /// 里惰性构造，而是在启动时一次性建好；之后整窗复用同一实体。
-    pub(crate) fn new(
+    pub(crate) fn new<V: 'static>(
         window: &mut Window,
-        cx: &mut gpui_kit::Context<crate::app::AppShell>,
+        cx: &mut gpui_kit::Context<V>,
     ) -> Self {
         let sidebar = cx.new(|cx| super::super::ContainerSidebarView::new(window, cx));
         Self {

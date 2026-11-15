@@ -38,11 +38,12 @@ pub(crate) mod helpers;
 pub(crate) mod patch;
 pub(crate) mod web_link;
 
-pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
+pub(crate) use clone_modal::{GitCloneModalView, GitCloneTask};
 pub(crate) use conflict_modal::GitConflictModalView;
 pub(crate) use entity::{GitWorkspace, GitWorkspaceEvent};
-pub(crate) use form::{GitProjectDraft, GitProjectModal};
+pub(crate) use form::GitProjectDraft;
 pub(crate) use name_modal::{GitNameModalEvent, GitNameModalView, GitNamePurpose};
+pub(crate) use project_modal::GitProjectModalView;
 pub(crate) use push_modal::GitPushModalView;
 pub(crate) use rebase_modal::GitRebaseModalView;
 pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};

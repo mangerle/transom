@@ -160,9 +160,6 @@ impl AppShell {
                         crate::container::ShellRowAction::CloneContainer { id, name } => {
                             crate::container::clone_container(self, tab_id, &id, &name, window, cx);
                         }
-                        crate::container::ShellRowAction::EditComposeYaml(name) => {
-                            crate::container::edit_compose_yaml(self, tab_id, &name, window, cx);
-                        }
                     }
                 }
             }

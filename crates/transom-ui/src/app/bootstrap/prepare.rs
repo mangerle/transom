@@ -115,15 +115,7 @@ pub(super) fn assemble_state(
         monitor,
         editors,
         diff_viewer: None,
-        sftp_modals: SftpModals {
-            chmod: None,
-            confirm: None,
-            input: None,
-            properties: None,
-            filter: None,
-            sync: None,
-            search: None,
-        },
+        sftp_modals: SftpModals::default(),
         broadcast: BroadcastBarState {
             open: false,
             multiline: false,

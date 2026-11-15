@@ -152,7 +152,7 @@ fn render_git_sidebar_header(
             )
             .render()
             .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::clone_modal::open_git_clone_modal(this, window, cx);
+                crate::git::actions::modal_bridges::open_git_clone_modal(this, window, cx);
             })),
         )
         .child(
@@ -163,7 +163,7 @@ fn render_git_sidebar_header(
             )
             .render()
             .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::project_modal::open_git_project_modal(this, None, window, cx);
+                crate::git::actions::modal_bridges::open_git_project_modal(this, None, window, cx);
             })),
         )
         .into_any_element()
@@ -184,7 +184,7 @@ fn render_git_empty(p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
             )
             .primary()
             .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::project_modal::open_git_project_modal(this, None, window, cx);
+                crate::git::actions::modal_bridges::open_git_project_modal(this, None, window, cx);
             })),
         )
         .into_any_element()
@@ -390,7 +390,12 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
         UiIcon::ADD,
         move |_, window, cx| {
             app_add.update(cx, |this, cx| {
-                crate::git::project_modal::open_git_project_modal(this, Some(id), window, cx);
+                crate::git::actions::modal_bridges::open_git_project_modal(
+                    this,
+                    Some(id),
+                    window,
+                    cx,
+                );
             });
         },
     ))

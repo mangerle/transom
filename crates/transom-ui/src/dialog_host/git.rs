@@ -15,11 +15,11 @@ impl ModalKind {
     ) -> Option<bool> {
         match self {
             ModalKind::GitProject => {
-                crate::git::project_modal::close_git_project_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_project_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitClone => {
-                crate::git::clone_modal::close_git_clone_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_clone_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitWorktree => {
@@ -50,16 +50,16 @@ impl ModalKind {
     pub(super) fn git_commit(
         self,
         shell: &mut AppShell,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Option<()> {
         match self {
             ModalKind::GitProject => {
-                crate::git::project_modal::commit_git_project_modal(shell, cx);
+                crate::git::actions::modal_bridges::commit_git_project_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitClone => {
-                crate::git::clone_modal::start_git_clone(shell, window, cx);
+                crate::git::actions::modal_bridges::submit_git_clone_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitWorktree => {
@@ -87,50 +87,45 @@ impl ModalKind {
     }
 
     /// Git 弹窗初始焦点控件。
-    pub(super) fn git_focus_target(self, shell: &AppShell) -> Option<ModalFocus> {
-        let focus = match self {
-            ModalKind::GitProject => shell
-                .state
-                .modals
-                .git
-                .project
-                .as_ref()
-                .map(|modal| ModalFocus::Input(modal.picker.path.clone()))
-                .unwrap_or(ModalFocus::None),
-            ModalKind::GitClone => shell
-                .state
-                .modals
-                .git
-                .clone
-                .as_ref()
-                .map(|modal| ModalFocus::Input(modal.url.clone()))
-                .unwrap_or(ModalFocus::None),
-            ModalKind::GitWorktree
+    pub(super) fn git_focus_target(self, _shell: &AppShell) -> Option<ModalFocus> {
+        match self {
+            ModalKind::GitProject
+            | ModalKind::GitClone
+            | ModalKind::GitWorktree
             | ModalKind::GitName
             | ModalKind::GitRebase
             | ModalKind::GitPush
-            | ModalKind::GitConflict => ModalFocus::None,
-            _ => return None,
-        };
-        Some(focus)
+            | ModalKind::GitConflict => Some(ModalFocus::None),
+            _ => None,
+        }
     }
 
     /// Git 弹窗主体渲染分发。
     pub(super) fn render_git_dialog_body(
         self,
         shell: &AppShell,
-        app: &Entity<AppShell>,
-        window: &mut Window,
-        cx: &App,
-        p: &Palette,
+        _app: &Entity<AppShell>,
+        _window: &mut Window,
+        _cx: &App,
+        _p: &Palette,
     ) -> Option<AnyElement> {
         let element = match self {
-            ModalKind::GitProject => {
-                crate::git::project_modal::render_git_project_dialog_body(shell, app, window, cx, p)
-            }
-            ModalKind::GitClone => crate::git::clone_modal::view::render_git_clone_dialog_body(
-                shell, app, window, cx, p,
-            ),
+            ModalKind::GitProject => shell
+                .state
+                .modals
+                .git
+                .project
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::GitClone => shell
+                .state
+                .modals
+                .git
+                .clone
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitWorktree => shell
                 .state
                 .modals
