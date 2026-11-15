@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::git::GitWorkspace;
 use crate::git::actions::DiffTabCloseScope;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
@@ -25,7 +25,7 @@ use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{GitRequestId, TabId};
+use transom_core::GitRequestId;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -72,8 +72,7 @@ fn tab_basename(path: &str) -> String {
 /// 渲染顶部差异文件标签栏（支持横向滚动、重名目录消歧、中键关闭与右键批量关闭菜单）。
 pub(crate) fn render_diff_tab_bar(
     state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
     p: &Palette,
 ) -> Option<AnyElement> {
     if state.diff_tabs.is_empty() {
@@ -100,8 +99,7 @@ pub(crate) fn render_diff_tab_bar(
                     state.active_diff_tab == Some(idx),
                     tab_item,
                     display_title,
-                    app.clone(),
-                    tab_id,
+                    workspace.clone(),
                     p,
                 )
             },
@@ -116,16 +114,15 @@ fn render_single_diff_tab(
     is_active: bool,
     tab_item: &GitDiffState,
     display_title: String,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
     p: &Palette,
 ) -> AnyElement {
     let request_id: GitRequestId = tab_item.request_id;
-    let tab_app = app.clone();
-    let outer_tab_app = app.clone();
-    let middle_app = app.clone();
-    let close_app = app.clone();
-    let menu_app = app;
+    let tab_ws = workspace.clone();
+    let outer_tab_ws = workspace.clone();
+    let middle_ws = workspace.clone();
+    let close_ws = workspace.clone();
+    let menu_ws = workspace;
     let tooltip_text = rust_i18n::t!(
         "git.diff.tab_tooltip",
         path = tab_item.path,
@@ -155,28 +152,26 @@ fn render_single_diff_tab(
         .when(is_active, |el| el.child(underline_tab_active_line(p)))
         .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
             cx.stop_propagation();
-            middle_app.update(cx, |this, cx| {
-                crate::git::actions::git_close_diff_tab_by_request(this, tab_id, request_id, cx);
+            middle_ws.update(cx, |ws, cx| {
+                ws.close_diff_tab_by_request(request_id, cx);
             });
         })
         .on_click(move |_, _, cx| {
-            outer_tab_app.update(cx, |this, cx| {
-                crate::git::actions::git_select_diff_tab_by_request(this, tab_id, request_id, cx);
+            outer_tab_ws.update(cx, |ws, cx| {
+                ws.select_diff_tab_by_request(request_id, cx);
             });
         })
         .context_menu(move |menu, _window, _cx| {
-            let close_self = menu_app.clone();
-            let close_others = menu_app.clone();
-            let close_left = menu_app.clone();
-            let close_right = menu_app.clone();
-            let close_all = menu_app.clone();
+            let close_self = menu_ws.clone();
+            let close_others = menu_ws.clone();
+            let close_left = menu_ws.clone();
+            let close_right = menu_ws.clone();
+            let close_all = menu_ws.clone();
             menu.item(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_tab").to_string()).on_click(
                     move |_, _, cx| {
-                        close_self.update(cx, |this, cx| {
-                            crate::git::actions::git_close_diff_tab_by_request(
-                                this, tab_id, request_id, cx,
-                            );
+                        close_self.update(cx, |ws, cx| {
+                            ws.close_diff_tab_by_request(request_id, cx);
                         });
                     },
                 ),
@@ -185,10 +180,8 @@ fn render_single_diff_tab(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_other_tabs").to_string())
                     .disabled(total_tabs <= 1)
                     .on_click(move |_, _, cx| {
-                        close_others.update(cx, |this, cx| {
-                            crate::git::actions::git_close_diff_tabs_scope(
-                                this,
-                                tab_id,
+                        close_others.update(cx, |ws, cx| {
+                            ws.close_diff_tabs_scope(
                                 Some(request_id),
                                 DiffTabCloseScope::Other,
                                 cx,
@@ -200,14 +193,8 @@ fn render_single_diff_tab(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_left_tabs").to_string())
                     .disabled(idx == 0)
                     .on_click(move |_, _, cx| {
-                        close_left.update(cx, |this, cx| {
-                            crate::git::actions::git_close_diff_tabs_scope(
-                                this,
-                                tab_id,
-                                Some(request_id),
-                                DiffTabCloseScope::Left,
-                                cx,
-                            );
+                        close_left.update(cx, |ws, cx| {
+                            ws.close_diff_tabs_scope(Some(request_id), DiffTabCloseScope::Left, cx);
                         });
                     }),
             )
@@ -215,10 +202,8 @@ fn render_single_diff_tab(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_right_tabs").to_string())
                     .disabled(idx + 1 >= total_tabs)
                     .on_click(move |_, _, cx| {
-                        close_right.update(cx, |this, cx| {
-                            crate::git::actions::git_close_diff_tabs_scope(
-                                this,
-                                tab_id,
+                        close_right.update(cx, |ws, cx| {
+                            ws.close_diff_tabs_scope(
                                 Some(request_id),
                                 DiffTabCloseScope::Right,
                                 cx,
@@ -230,14 +215,8 @@ fn render_single_diff_tab(
             .item(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.close_all_tabs").to_string()).on_click(
                     move |_, _, cx| {
-                        close_all.update(cx, |this, cx| {
-                            crate::git::actions::git_close_diff_tabs_scope(
-                                this,
-                                tab_id,
-                                None,
-                                DiffTabCloseScope::All,
-                                cx,
-                            );
+                        close_all.update(cx, |ws, cx| {
+                            ws.close_diff_tabs_scope(None, DiffTabCloseScope::All, cx);
                         });
                     },
                 ),
@@ -264,10 +243,8 @@ fn render_single_diff_tab(
                 )
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
-                    tab_app.update(cx, |this, cx| {
-                        crate::git::actions::git_select_diff_tab_by_request(
-                            this, tab_id, request_id, cx,
-                        );
+                    tab_ws.update(cx, |ws, cx| {
+                        ws.select_diff_tab_by_request(request_id, cx);
                     });
                 }),
         )
@@ -281,10 +258,8 @@ fn render_single_diff_tab(
             .render()
             .on_click(move |_, _, cx| {
                 cx.stop_propagation();
-                close_app.update(cx, |this, cx| {
-                    crate::git::actions::git_close_diff_tab_by_request(
-                        this, tab_id, request_id, cx,
-                    );
+                close_ws.update(cx, |ws, cx| {
+                    ws.close_diff_tab_by_request(request_id, cx);
                 });
             }),
         )

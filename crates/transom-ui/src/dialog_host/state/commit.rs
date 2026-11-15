@@ -1,7 +1,7 @@
 //! 弹窗提交与焦点目标解析。
 
-use super::*;
 use super::super::body::ModalFocus;
+use super::*;
 
 impl ModalKind {
     /// 提交：等价于点主按钮。
@@ -69,10 +69,20 @@ impl ModalKind {
             ModalKind::SftpChmod => crate::sftp::save_sftp_chmod_modal(shell, window, cx),
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
-                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.properties = None, window, cx);
+                crate::app::dialog_host::close_sftp_modal(
+                    shell,
+                    |hub| hub.properties = None,
+                    window,
+                    cx,
+                );
             }
             ModalKind::SftpSearch => {
-                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.search = None, window, cx);
+                crate::app::dialog_host::close_sftp_modal(
+                    shell,
+                    |hub| hub.search = None,
+                    window,
+                    cx,
+                );
             }
             ModalKind::SftpFilter => crate::sftp::save_sftp_filter_modal(shell, window, cx),
             ModalKind::SftpSync => crate::sftp::start_sftp_sync(shell, window, cx),
@@ -195,8 +205,9 @@ impl ModalKind {
             }),
             ModalKind::EditorGotoLine => input_focus(shell, |state| {
                 state
-                    .sftp_modals
-                    .goto_line
+                    .modals
+                    .tools
+                    .editor_goto_line
                     .as_ref()
                     .map(|modal| modal.input.clone())
             }),

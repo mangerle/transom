@@ -31,10 +31,7 @@ pub fn list_row(id: impl Into<ElementId>, selected: bool, p: &Palette) -> Statef
 }
 
 /// 表头行：弱色小字与底部分割线，供设置表、审计表等复用。
-pub fn table_header(
-    children: impl IntoIterator<Item = AnyElement>,
-    p: &Palette,
-) -> AnyElement {
+pub fn table_header(children: impl IntoIterator<Item = AnyElement>, p: &Palette) -> AnyElement {
     h_flex()
         .w_full()
         .px(rems(space::SM))

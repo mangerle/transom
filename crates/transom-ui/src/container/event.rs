@@ -173,12 +173,12 @@ pub(crate) fn on_container_workspace_event(
 ) {
     match event {
         ContainerWorkspaceEvent::ToggleFullscreen => {
-            shell.state.containers.fullscreen =
-                if shell.state.containers.fullscreen == Some(tab_id) {
-                    None
-                } else {
-                    Some(tab_id)
-                };
+            shell.state.containers.fullscreen = if shell.state.containers.fullscreen == Some(tab_id)
+            {
+                None
+            } else {
+                Some(tab_id)
+            };
             cx.notify();
         }
         ContainerWorkspaceEvent::OpenSystemDf => {
@@ -250,7 +250,8 @@ pub(crate) fn on_container_workspace_event(
                     },
                 },
             );
-            shell.state
+            shell
+                .state
                 .set_forward_status(*ssh_tab_id, rule.id, ForwardState::Starting, None);
             shell.state.send_command(ForwardCommand::ForwardStart {
                 tab_id: *ssh_tab_id,
@@ -280,7 +281,8 @@ pub(crate) fn on_container_workspace_event(
         | ContainerWorkspaceEvent::SetDetailTab(_)
         | ContainerWorkspaceEvent::ShowToast { .. }
         | ContainerWorkspaceEvent::RunRowAction { .. } => {
-            shell.state
+            shell
+                .state
                 .window_requests
                 .push_container(tab_id, event.clone());
             cx.notify();

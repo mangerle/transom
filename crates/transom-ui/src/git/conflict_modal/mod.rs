@@ -79,8 +79,7 @@ pub(crate) fn open_git_conflict_modal(
     }
 
     let first_file = conflict_files[0].clone();
-    shell.state.modals.git.conflict =
-        Some(GitConflictModal::new(project.clone(), conflict_files));
+    shell.state.modals.git.conflict = Some(GitConflictModal::new(project.clone(), conflict_files));
 
     let request_id = GitRequestId::new();
     shell.send_command(GitCommand::LoadConflictSides {
@@ -251,11 +250,7 @@ fn render_conflict_header(
         )
 }
 
-fn render_conflict_toolbar(
-    modal: &GitConflictModal,
-    app: &Entity<AppShell>,
-    p: &Palette,
-) -> Div {
+fn render_conflict_toolbar(modal: &GitConflictModal, app: &Entity<AppShell>, p: &Palette) -> Div {
     let app_ours = app.clone();
     let app_theirs = app.clone();
     let app_mark = app.clone();
@@ -284,7 +279,7 @@ fn render_conflict_toolbar(
                         .label(rust_i18n::t!("git.conflict.accept_ours").to_string())
                         .disabled(is_busy)
                         .on_click(move |_, _, cx| {
-                            app_ours.update(cx, |this, cx| git_conflict_resolve_ours(this, cx));
+                            app_ours.update(cx, git_conflict_resolve_ours);
                         }),
                 )
                 .child(
@@ -295,8 +290,7 @@ fn render_conflict_toolbar(
                         .label(rust_i18n::t!("git.conflict.accept_theirs").to_string())
                         .disabled(is_busy)
                         .on_click(move |_, _, cx| {
-                            app_theirs
-                                .update(cx, |this, cx| git_conflict_resolve_theirs(this, cx));
+                            app_theirs.update(cx, git_conflict_resolve_theirs);
                         }),
                 )
                 .child(
@@ -307,7 +301,7 @@ fn render_conflict_toolbar(
                         .label(rust_i18n::t!("git.conflict.mark_resolved").to_string())
                         .disabled(is_busy)
                         .on_click(move |_, _, cx| {
-                            app_mark.update(cx, |this, cx| git_conflict_mark_resolved(this, cx));
+                            app_mark.update(cx, git_conflict_mark_resolved);
                         }),
                 ),
         )
@@ -346,7 +340,7 @@ fn render_conflict_footer(app: &Entity<AppShell>, p: &Palette) -> Div {
                 .small()
                 .label(rust_i18n::t!("common.close").to_string())
                 .on_click(move |_, _, cx| {
-                    app_close.update(cx, |this, cx| close_git_conflict_modal(this, cx));
+                    app_close.update(cx, close_git_conflict_modal);
                 }),
         )
 }

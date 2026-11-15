@@ -60,7 +60,7 @@ pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -
         rust_i18n::t!("activity.restore_default").to_string(),
         AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
-            app_restore.update(cx, |this, cx| crate::status_bar::restore_status_bar(this, cx));
+            app_restore.update(cx, crate::status_bar::restore_status_bar);
         },
     ))
 }

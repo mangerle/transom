@@ -2,9 +2,9 @@
 
 use super::iac::{IAC, IacParser, OPT_TTYPE, WILL};
 use super::stream::{READ_CHUNK, TelnetReader, TelnetWire, TelnetWriter, encoding_for};
+use parking_lot::Mutex;
 use std::io::{self, Cursor, Read, Write};
 use std::sync::Arc;
-use parking_lot::Mutex;
 use std::sync::atomic::AtomicBool;
 use transom_core::TextEncoding;
 
@@ -20,10 +20,7 @@ impl SharedSink {
 
 impl Write for SharedSink {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        self.0
-            .lock()
-            
-            .extend_from_slice(buffer);
+        self.0.lock().extend_from_slice(buffer);
         Ok(buffer.len())
     }
 
@@ -71,10 +68,7 @@ fn reader_strips_negotiation_and_decodes_gbk() {
     };
     let output = drain_reader(&mut reader).expect("读取不应失败");
     assert_eq!(String::from_utf8_lossy(&output), "登录");
-    let written = shared
-        .lock()
-        
-        .clone();
+    let written = shared.lock().clone();
     assert_eq!(written, vec![IAC, WILL, OPT_TTYPE]);
 }
 
@@ -130,10 +124,7 @@ fn writer_encodes_gbk() {
     writer
         .write_all("登录".as_bytes())
         .expect("连续写入不应失败");
-    let written = shared
-        .lock()
-        
-        .clone();
+    let written = shared.lock().clone();
     assert_eq!(
         written,
         vec![0xc3, 0xdc, 0xc2, 0xeb, 0xb5, 0xc7, 0xc2, 0xbc]
@@ -163,10 +154,7 @@ fn utf8_passthrough_only_escapes() {
         escaped: Vec::new(),
     };
     writer.write_all(b"ok\xff").expect("写入不应失败");
-    let written = shared
-        .lock()
-        
-        .clone();
+    let written = shared.lock().clone();
     assert_eq!(written, vec![b'o', b'k', IAC, IAC]);
 }
 

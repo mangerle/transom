@@ -10,8 +10,8 @@
 use super::LOG_TOOLBAR_HEIGHT;
 use super::files_tree::{FileTreeNode, FileTreeRenderParams, render_tree_nodes};
 use super::placeholder;
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled, v_resizable};
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -28,12 +28,12 @@ type State = crate::git::GitWorkspaceState;
 /// 渲染右侧面板（变更文件树 + 提交说明）。
 pub(crate) fn render_right_panel(
     state: &State,
-    app: Entity<AppShell>,
+    workspace: Entity<GitWorkspace>,
     tab_id: TabId,
     p: &Palette,
 ) -> AnyElement {
     let split = state.right_split.clone();
-    let files_part = render_files_section(state, app.clone(), tab_id, p);
+    let files_part = render_files_section(state, workspace, p);
     let details_part = render_details_section(state, p);
 
     v_flex()
@@ -61,12 +61,7 @@ pub(crate) fn render_right_panel(
 }
 
 /// 上半部分：变更文件清单与操作条。
-fn render_files_section(
-    state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
-    p: &Palette,
-) -> AnyElement {
+fn render_files_section(state: &State, workspace: Entity<GitWorkspace>, p: &Palette) -> AnyElement {
     let file_count = state.commit_files.len();
     let count_text = rust_i18n::t!("git.files.count", count = file_count).to_string();
 
@@ -87,15 +82,13 @@ fn render_files_section(
             nodes: &tree,
             depth: 0,
             active_path,
-            app: &app,
-            project: &state.project,
-            tab_id,
+            workspace: &workspace,
             collapsed_dirs: &state.collapsed_log_dirs,
             palette: p,
         })
     };
 
-    let toolbar_app = app.clone();
+    let toolbar_ws = workspace;
     let first_file_path = state.commit_files.first().map(|f| f.path.clone());
 
     let toolbar = h_flex()
@@ -126,16 +119,12 @@ fn render_files_section(
                 .accessibility_label(rust_i18n::t!("git.details.open_in_tab").to_string())
                 .tooltip(rust_i18n::t!("git.details.open_in_tab").to_string())
                 .on_click({
-                    let toolbar_app = toolbar_app.clone();
+                    let toolbar_ws = toolbar_ws.clone();
                     let first_path = first_file_path.clone();
                     move |_, _, cx| {
                         if let Some(path) = &first_path {
                             let path = path.clone();
-                            toolbar_app.update(cx, |this, cx| {
-                                crate::git::actions::git_diff_commit_file(
-                                    this, tab_id, &path, cx,
-                                );
-                            });
+                            toolbar_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
                         }
                     }
                 }),

@@ -64,7 +64,8 @@ pub(crate) fn toggle_recording(
         let res = terminal.update(cx, |term, _| term.start_recording(path, title));
         if let Err(e) = res {
             log::error!("启动终端录制失败: {e}");
-            shell.state
+            shell
+                .state
                 .set_error(rust_i18n::t!("recorder.start_failed").to_string());
         } else {
             shell.state.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
@@ -95,8 +96,7 @@ pub(crate) fn open_cast_player(
 ) {
     cx.spawn_in(window, async move |this, cx| {
         let parse_path = path.clone();
-        let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await
-        else {
+        let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await else {
             log::error!("解析会话录制文件的线程创建失败");
             let _ = this.update(cx, |this, cx| {
                 this.state
@@ -145,8 +145,7 @@ fn finish_open_cast_player(
         })
         .unwrap_or(file_name);
 
-    let tab_title =
-        rust_i18n::t!("recorder.player_tab_title", name = display_title).to_string();
+    let tab_title = rust_i18n::t!("recorder.player_tab_title", name = display_title).to_string();
 
     let mut profile = app_settings(cx).terminal_profile.clone();
     profile.palette = app_settings(cx).terminal_profile.palette.clone();

@@ -183,7 +183,12 @@ fn folder_field_mut(shell: &mut AppShell, host: GitHost) -> Option<&mut GitFolde
 }
 
 /// 展开或收起分组候选。
-fn git_folder_set_open(shell: &mut AppShell, host: GitHost, open: bool, cx: &mut Context<AppShell>) {
+fn git_folder_set_open(
+    shell: &mut AppShell,
+    host: GitHost,
+    open: bool,
+    cx: &mut Context<AppShell>,
+) {
     let Some(field) = folder_field_mut(shell, host) else {
         return;
     };

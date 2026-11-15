@@ -164,7 +164,9 @@ fn render_ready_diff(
                 .tooltip(label.clone())
                 .accessibility_label(label)
                 .on_click(move |_, _, cx| {
-                    next_app.update(cx, |shell, cx| crate::diff_viewer::step_diff_hunk(shell, true, cx));
+                    next_app.update(cx, |shell, cx| {
+                        crate::diff_viewer::step_diff_hunk(shell, true, cx)
+                    });
                 })
         })
         .flex_1()
@@ -246,7 +248,11 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        crate::diff_viewer::request_diff_merge(this, MergeDirection::RightToLeft, cx);
+                        crate::diff_viewer::request_diff_merge(
+                            this,
+                            MergeDirection::RightToLeft,
+                            cx,
+                        );
                     },
                 )),
         )
@@ -265,7 +271,11 @@ fn render_toolbar(viewer: &DiffViewerState, app: &Entity<AppShell>, p: &Palette)
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        crate::diff_viewer::request_diff_merge(this, MergeDirection::LeftToRight, cx);
+                        crate::diff_viewer::request_diff_merge(
+                            this,
+                            MergeDirection::LeftToRight,
+                            cx,
+                        );
                     },
                 )),
         )

@@ -43,27 +43,25 @@ mod view;
 
 pub(crate) use actions::ShellRowAction;
 pub(crate) use build_dialog::render_container_build_dialog_body;
-pub(crate) use create_dialog_view::{ContainerCreateDialogEvent, ContainerCreateDialogView};
-pub(crate) use events::dispatch_container_event;
-pub(crate) use list::handle_container_list_key;
-pub(crate) use port_forward::open_container_port_forward;
 pub(crate) use compose::{
     create_local_compose_with_content, edit_compose_yaml, import_local_compose,
 };
+pub(crate) use create_dialog_view::{ContainerCreateDialogEvent, ContainerCreateDialogView};
 pub(crate) use engines::{
     delete_container_profile, on_container_form_event, open_container_workspace_for_session,
     open_engine_workspace, open_new_container_in_folder,
 };
 pub(crate) use entity::ContainerWorkspace;
 pub(crate) use event::{ContainerWorkspaceEvent, on_container_workspace_event};
+pub(crate) use events::dispatch_container_event;
 pub(crate) use form::{
     ContainerFormEvent, ContainerFormFolders, ContainerFormView, ContainerRunFormEvent,
     ContainerRunFormView, clone_container, on_container_run_form_event, open_container_form,
     open_container_run_form, recreate_container,
 };
-pub(crate) use lifecycle::{on_container_create_event, prune_container_target};
-pub(crate) use sidebar_events::on_container_sidebar_event;
 pub(crate) use hub::render_container_hub_dialog_body;
+pub(crate) use lifecycle::{on_container_create_event, prune_container_target};
+pub(crate) use list::handle_container_list_key;
 pub(crate) use modals::{
     render_container_commit_dialog_body, render_container_confirm_dialog_body,
     render_container_export_config_dialog_body, render_container_file_new_dir_dialog_body,
@@ -72,6 +70,7 @@ pub(crate) use modals::{
     render_container_quadlet_dialog_body, render_container_rename_dialog_body,
     render_container_tag_dialog_body, render_container_update_dialog_body,
 };
+pub(crate) use port_forward::open_container_port_forward;
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use push_dialog::render_container_push_dialog_body;
@@ -79,6 +78,7 @@ pub(crate) use sidebar::{
     ContainerSidebarDrag, ContainerSidebarEvent, ContainerSidebarParams, ContainerSidebarTarget,
     ContainerSidebarView, render_container_sidebar, render_engine_folder_form_body,
 };
+pub(crate) use sidebar_events::on_container_sidebar_event;
 pub(crate) use system_df_dialog::render_container_system_df_dialog_body;
 pub(crate) use types::{
     ContainerBuildDialog, ContainerCommitState, ContainerConfirm, ContainerDetailTab,

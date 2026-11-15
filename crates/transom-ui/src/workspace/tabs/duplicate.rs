@@ -56,7 +56,8 @@ impl AppShell {
             .filter(|tab| tab.session_id == session_id)
             .map(|tab| tab.id)
             .collect();
-        if crate::editor::block_close_for_dirty_editors(self, 
+        if crate::editor::block_close_for_dirty_editors(
+            self,
             &removed_tabs,
             PendingEditorClose::Session(session_id),
             cx,

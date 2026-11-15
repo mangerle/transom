@@ -8,7 +8,11 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement};
 
-pub(super) fn render_conflict_body(modal: &GitConflictModal, app: &Entity<AppShell>, p: &Palette) -> Div {
+pub(super) fn render_conflict_body(
+    modal: &GitConflictModal,
+    app: &Entity<AppShell>,
+    p: &Palette,
+) -> Div {
     let file_list = render_conflict_file_list(modal, app, p);
     let diff_panels = render_conflict_3way_panels(modal, p);
 

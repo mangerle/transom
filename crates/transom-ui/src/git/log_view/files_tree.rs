@@ -6,8 +6,7 @@
 //! - 状态图标与文字统一采用 `git::change_accent_color` 语义色（修改蓝、新增绿、删除灰、冲突红），对齐 IDEA；
 //! - 目录可折叠；单击与双击文件都只更新右栏差异，不额外弹出对比框。
 
-use crate::app::AppShell;
-use crate::git::{change_accent_color, change_visual};
+use crate::git::{GitWorkspace, change_accent_color, change_visual};
 use crate::palette::Palette;
 use crate::theme::tokens::{control, size};
 use gpui_kit::base::h_flex;
@@ -15,7 +14,7 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::{BTreeMap, HashSet};
-use transom_core::{ChangeCode, CommitFile, GitProject, TabId};
+use transom_core::{ChangeCode, CommitFile};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::menus::render_file_tree_menu;
@@ -142,9 +141,7 @@ pub(crate) struct FileTreeRenderParams<'a> {
     pub nodes: &'a [FileTreeNode],
     pub depth: usize,
     pub active_path: Option<&'a str>,
-    pub app: &'a Entity<AppShell>,
-    pub project: &'a GitProject,
-    pub tab_id: TabId,
+    pub workspace: &'a Entity<GitWorkspace>,
     pub collapsed_dirs: &'a HashSet<String>,
     pub palette: &'a Palette,
 }
@@ -162,7 +159,7 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
             } => {
                 let expanded = !params.collapsed_dirs.contains(path);
                 let indent = params.depth as f32 * 14.0 + 4.0;
-                let toggle_app = params.app.clone();
+                let toggle_ws = params.workspace.clone();
                 let toggle_key = path.clone();
                 let dir_row = h_flex()
                     .id(ElementId::Name(format!("git-tree-dir-{path}").into()))
@@ -200,13 +197,8 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                             ),
                     )
                     .on_click(move |_, _, cx| {
-                        toggle_app.update(cx, |this, cx| {
-                            crate::git::actions::git_toggle_log_file_dir(
-                                this,
-                                params.tab_id,
-                                &toggle_key,
-                                cx,
-                            );
+                        toggle_ws.update(cx, |ws, cx| {
+                            ws.toggle_log_file_dir(&toggle_key, cx);
                         });
                     });
                 elements.push(dir_row.into_any_element());
@@ -228,9 +220,8 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                 let is_selected = params.active_path == Some(full_path.as_str());
                 let status_color = change_color(*change, params.palette);
 
-                let click_app = params.app.clone();
-                let menu_app = params.app.clone();
-                let menu_project = params.project.clone();
+                let click_ws = params.workspace.clone();
+                let menu_ws = params.workspace.clone();
                 let path_clone = full_path.clone();
                 let menu_path = full_path.clone();
 
@@ -284,23 +275,10 @@ pub(crate) fn render_tree_nodes(params: FileTreeRenderParams<'_>) -> Vec<AnyElem
                         if event.click_count() > 1 {
                             return;
                         }
-                        click_app.update(cx, |this, cx| {
-                            crate::git::actions::git_diff_commit_file(
-                                this,
-                                params.tab_id,
-                                &path_clone,
-                                cx,
-                            );
-                        });
+                        click_ws.update(cx, |ws, cx| ws.diff_commit_file(&path_clone, cx));
                     })
                     .context_menu(move |menu, _window, _cx| {
-                        render_file_tree_menu(
-                            menu,
-                            menu_app.clone(),
-                            menu_project.clone(),
-                            params.tab_id,
-                            menu_path.clone(),
-                        )
+                        render_file_tree_menu(menu, menu_ws.clone(), menu_path.clone())
                     });
 
                 elements.push(file_row.into_any_element());

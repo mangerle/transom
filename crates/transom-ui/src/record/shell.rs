@@ -40,7 +40,11 @@ pub(crate) fn on_replay_event(
 }
 
 /// 打开外部 `.cast` 文件并在独立播放器中打开。
-fn pick_and_play_external_cast(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+fn pick_and_play_external_cast(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(path) = rfd::FileDialog::new()
         .set_title(rust_i18n::t!("recorder.pick_replay_file").to_string())
         .add_filter("asciinema cast (*.cast)", &["cast"])
@@ -71,12 +75,16 @@ fn pick_and_replay_external_cast(
 }
 
 /// 执行指定文件的重放。
-fn execute_replay_file(_shell: &mut AppShell, tab_id: TabId, path: &Path, cx: &mut Context<AppShell>) {
+fn execute_replay_file(
+    _shell: &mut AppShell,
+    tab_id: TabId,
+    path: &Path,
+    cx: &mut Context<AppShell>,
+) {
     let path = path.to_path_buf();
     cx.spawn(async move |this, cx| {
         let parse_path = path.clone();
-        let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await
-        else {
+        let Some(parsed) = spawn_blocking_local(move || parse_cast_file(&parse_path)).await else {
             log::error!("解析回放脚本的线程创建失败");
             let _ = this.update(cx, |this, cx| {
                 this.state

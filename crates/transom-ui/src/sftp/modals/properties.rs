@@ -14,49 +14,49 @@ pub(crate) fn render_sftp_properties_body(
     let Some(modal) = shell.state.sftp_modals.properties.as_ref() else {
         return div().into_any_element();
     };
-        let scope = modal.scope.clone();
-        let properties = modal.properties.clone();
-        let name = properties.name.clone();
-        let path = properties.path.clone();
+    let scope = modal.scope.clone();
+    let properties = modal.properties.clone();
+    let name = properties.name.clone();
+    let path = properties.path.clone();
 
-        let rows = property_rows(&properties, p);
-        let content = v_flex().gap_1().children(rows);
+    let rows = property_rows(&properties, p);
+    let content = v_flex().gap_1().children(rows);
 
-        let footer = h_flex().gap_2().child(
-            Button::new("close-sftp-properties")
-                .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                .label(rust_i18n::t!("app.close").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    |this, _: &ClickEvent, window, cx| {
-                        this.state.sftp_modals.properties = None;
-                        crate::sftp::focus_active_sftp_panel(this, window, cx);
-                        cx.notify();
-                    },
-                )),
-        );
+    let footer = h_flex().gap_2().child(
+        Button::new("close-sftp-properties")
+            .ghost()
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
+            .label(rust_i18n::t!("app.close").to_string())
+            .on_click(crate::dialog_host::on_event(
+                app,
+                |this, _: &ClickEvent, window, cx| {
+                    this.state.sftp_modals.properties = None;
+                    crate::sftp::focus_active_sftp_panel(this, window, cx);
+                    cx.notify();
+                },
+            )),
+    );
 
-        let scope_label = if scope == "本地" {
-            rust_i18n::t!("sftp.local_title").to_string()
-        } else {
-            rust_i18n::t!("sftp.modals.scope_remote").to_string()
-        };
+    let scope_label = if scope == "本地" {
+        rust_i18n::t!("sftp.local_title").to_string()
+    } else {
+        rust_i18n::t!("sftp.modals.scope_remote").to_string()
+    };
 
-        crate::widgets::dialog_body(
-            "sftp-properties-modal",
-            rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
-            Some(
-                rust_i18n::t!(
-                    "sftp.properties.subtitle",
-                    scope = scope_label,
-                    path = path.as_str()
-                )
-                .to_string(),
-            ),
-            content,
-            Some(footer),
-        )
+    crate::widgets::dialog_body(
+        "sftp-properties-modal",
+        rust_i18n::t!("sftp.properties.title", name = name.as_str()).to_string(),
+        Some(
+            rust_i18n::t!(
+                "sftp.properties.subtitle",
+                scope = scope_label,
+                path = path.as_str()
+            )
+            .to_string(),
+        ),
+        content,
+        Some(footer),
+    )
 }
 
 /// 属性弹窗的全部字段行：名称、类型与可选的尺寸/权限/时间信息。

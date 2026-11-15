@@ -58,8 +58,9 @@ fn container_form_is_owned_by_entity() {
 /// 搁置项必须走控制平面：UI 不得直接构造 git 进程或读写搁置项存储。
 #[test]
 fn shelf_operations_use_command_bus() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/git/shelf/actions.rs");
-    let shelf = std::fs::read_to_string(&path).expect("读取 git/shelf.rs 失败");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/git/actions/commit_actions.rs");
+    let shelf = std::fs::read_to_string(&path).expect("读取 git/actions/commit_actions.rs 失败");
     for forbidden in ["transom_git::Repo", "transom_store::"] {
         assert!(
             !shelf.contains(forbidden),
@@ -123,7 +124,7 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/detail/image.rs",
         "src/container/detail/image_history.rs",
         "src/container/detail/raw_inspect.rs",
-        "src/container/detail.rs",
+        "src/container/detail/mod.rs",
         "src/container/detail/header.rs",
         "src/container/detail/tab_strip.rs",
         "src/container/detail/header_container.rs",
@@ -139,7 +140,7 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/detail/files/toolbar.rs",
         "src/container/actions/changes.rs",
         "src/container/logs_actions.rs",
-        "src/container/stats.rs",
+        "src/container/stats/mod.rs",
         "src/container/stats/toolbar.rs",
         "src/container/stats/ports.rs",
         "src/container/stats/processes.rs",
@@ -170,7 +171,7 @@ fn migrated_container_render_slices_do_not_return_to_shell() {
         "src/container/hub/dialog.rs",
         "src/container/hub/mod.rs",
         "src/container/view/mod.rs",
-        "src/container/sidebar.rs",
+        "src/container/sidebar/mod.rs",
         "src/container/sidebar/entity.rs",
         "src/container/sidebar/drag.rs",
         "src/container/sidebar/empty.rs",
@@ -386,7 +387,7 @@ fn sidebars_share_row_presentation_and_list_frame() {
     }
     for relative in [
         "src/sidebar/mod.rs",
-        "src/container/sidebar.rs",
+        "src/container/sidebar/mod.rs",
         "src/git/sidebar/mod.rs",
     ] {
         let content = std::fs::read_to_string(root.join(relative)).expect("读取侧栏列表失败");
@@ -420,5 +421,49 @@ fn container_detail_tab_icons_share_selected_tint() {
         content.contains("action_button_with_icon_tint")
             && content.contains("selected.then_some(p.list_active_border)"),
         "容器详情页签选中态必须统一传入选中的强调色"
+    );
+}
+
+/// Git 工作区主视图与子视图已完成向 `Entity<GitWorkspace>` 迁移，不得再依赖 `AppShell`。
+#[test]
+fn git_workspace_views_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for dir in [
+        "src/git/log_view",
+        "src/git/diff_view",
+        "src/git/commit_page",
+        "src/git/commit_modal",
+        "src/git/shelf",
+    ] {
+        for entry in walkdir_like(&root.join(dir)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            if content.contains("AppShell") {
+                offenders.push(entry.display().to_string());
+            }
+        }
+    }
+    for file in [
+        "src/git/stash.rs",
+        "src/git/workspace.rs",
+        "src/git/bottom_log.rs",
+    ] {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content.contains("AppShell") {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下 Git 工作区视图文件仍包含 AppShell 耦合：\n{}",
+        offenders.join("\n")
     );
 }

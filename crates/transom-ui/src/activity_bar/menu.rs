@@ -40,7 +40,7 @@ pub(super) fn activity_context_menu(
             rust_i18n::t!("activity.restore_default").to_string(),
             AppIcon::Ui(UiIcon::UNDO),
             move |_, _, cx| {
-                app_restore.update(cx, |this, cx| crate::activity_bar::restore_activity_bar(this, cx));
+                app_restore.update(cx, crate::activity_bar::restore_activity_bar);
             },
         ))
 }
@@ -52,7 +52,7 @@ pub(super) fn activity_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>)
         rust_i18n::t!("activity.restore_default").to_string(),
         AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
-            app_restore.update(cx, |this, cx| crate::activity_bar::restore_activity_bar(this, cx));
+            app_restore.update(cx, crate::activity_bar::restore_activity_bar);
         },
     ))
 }

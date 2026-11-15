@@ -199,7 +199,9 @@ impl AppShell {
                     )
                 }
                 SidebarSection::Git => crate::git::sidebar::render_git_sidebar(self, window, cx, p),
-                SidebarSection::CloudSync => crate::cloud_sync::render_cloud_sync_sidebar(self, window, cx, p),
+                SidebarSection::CloudSync => {
+                    crate::cloud_sync::render_cloud_sync_sidebar(self, window, cx, p)
+                }
                 SidebarSection::Tabs if self.show_vertical_tabs_panel(app_settings(cx)) => {
                     self.render_vertical_tabs_panel(p, cx)
                 }
@@ -252,7 +254,7 @@ impl AppShell {
                         .size(px(plan.sftp_width.min(plan.sftp_max_width)))
                         .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
-                        .child(crate::sftp::render_sftp_panel_element(self, )),
+                        .child(crate::sftp::render_sftp_panel_element(self)),
                 );
                 panels_before_drawer += 1;
             }
@@ -276,7 +278,7 @@ impl AppShell {
                         .size(px(plan.sftp_width.min(plan.sftp_max_width)))
                         .size_range(px(plan.sftp_min_width)..px(plan.sftp_max_width))
                         .fixed()
-                        .child(crate::sftp::render_sftp_panel_element(self, )),
+                        .child(crate::sftp::render_sftp_panel_element(self)),
                 );
                 panels_before_drawer += 1;
             }

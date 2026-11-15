@@ -71,7 +71,11 @@ pub(crate) struct HostKeyConfirmState {
 
 /// 记录最近打开的会话 ID，并异步落盘保存。
 /// 从最近打开会话记录中移除指定会话，并异步落盘保存。
-pub(crate) fn remove_recent_session(shell: &mut AppShell, session_id: SessionId, cx: &mut Context<AppShell>) {
+pub(crate) fn remove_recent_session(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    cx: &mut Context<AppShell>,
+) {
     let before_len = app_settings(cx).window.recent_sessions.len();
     app_settings_mut(cx)
         .window
@@ -107,7 +111,8 @@ pub(crate) fn connect_session(
 
     let tab_id = TabId::new();
     shell.state.workspace.create_group(tab_id, session_id);
-    shell.state
+    shell
+        .state
         .workspace
         .tabs
         .push(TerminalTab::pending(tab_id, session.clone()));
@@ -216,7 +221,8 @@ pub(crate) fn start_connection(
     reset_tab_connection(shell, tab_id, connection_id);
 
     if !connection_supported(&session) {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("error.configuration").to_string());
         return;
     }
@@ -271,7 +277,8 @@ pub(crate) fn start_connection(
             if let Some(error) = error {
                 this.state.set_error(error);
             }
-            crate::connection::send_connect(this, 
+            crate::connection::send_connect(
+                this,
                 tab_id,
                 connection_id,
                 session,
@@ -315,7 +322,11 @@ pub(crate) fn send_connect(
     cx.notify();
 }
 
-pub(crate) fn record_recent_session(shell: &mut AppShell, session_id: SessionId, cx: &mut Context<AppShell>) {
+pub(crate) fn record_recent_session(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    cx: &mut Context<AppShell>,
+) {
     app_settings_mut(cx)
         .window
         .recent_sessions

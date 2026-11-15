@@ -14,12 +14,12 @@ mod tabs;
 use hunk_gutter::attach_hunk_actions;
 use menus::{DiffMoreMenuParams, render_settings_menu};
 
-use crate::app::AppShell;
 use crate::diff_pane::{
     DiffSearchBarProps, OptionsUpdater, render_change_nav_with_handlers, render_diff_body,
     render_diff_search_bar, render_option_controls,
 };
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::git::GitWorkspace;
 use crate::git::WORKSPACE_HEADER_HEIGHT;
 use crate::git::types::GitWorkspaceState as State;
 use crate::keymap::{DIFF_VIEW_CONTEXT, DiffFindInView, DiffNextChange, DiffPrevChange};
@@ -32,41 +32,35 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::TabId;
 use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 渲染 Git 差异面板。
-pub(crate) fn render(
-    state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
-    p: &Palette,
-) -> AnyElement {
+pub(crate) fn render(state: &State, workspace: Entity<GitWorkspace>, p: &Palette) -> AnyElement {
     let Some(diff) = state.active_diff() else {
         return placeholder(rust_i18n::t!("git.diff.none").to_string(), p);
     };
     let options = state.diff_options;
-    let tab_bar = tabs::render_diff_tab_bar(state, app.clone(), tab_id, p);
+    let tab_bar = tabs::render_diff_tab_bar(state, workspace.clone(), p);
 
     let total_tabs = state.diff_tabs.len();
     let current_tab_idx = state.active_diff_tab.unwrap_or(0);
-    let prev_app = app.clone();
-    let next_app = app.clone();
-    let opt_app = app.clone();
-    let prev_change_app = app.clone();
-    let next_change_app = app.clone();
-    let refresh_app = app.clone();
-    let open_app = app.clone();
-    let search_toggle_app = app.clone();
-    let search_prev_app = app.clone();
-    let search_next_app = app.clone();
-    let search_close_app = app.clone();
-    let kbd_prev_app = app.clone();
-    let kbd_next_app = app.clone();
-    let kbd_find_app = app.clone();
+    let prev_ws = workspace.clone();
+    let next_ws = workspace.clone();
+    let opt_ws = workspace.clone();
+    let prev_change_ws = workspace.clone();
+    let next_change_ws = workspace.clone();
+    let refresh_ws = workspace.clone();
+    let open_ws = workspace.clone();
+    let search_toggle_ws = workspace.clone();
+    let search_prev_ws = workspace.clone();
+    let search_next_ws = workspace.clone();
+    let search_close_ws = workspace.clone();
+    let kbd_prev_ws = workspace.clone();
+    let kbd_next_ws = workspace.clone();
+    let kbd_find_ws = workspace.clone();
     let on_update: OptionsUpdater = Rc::new(move |updater, _window, cx| {
-        opt_app.update(cx, |this, cx| {
-            crate::git::actions::git_update_diff_options(this, tab_id, updater, cx);
+        opt_ws.update(cx, |ws, cx| {
+            ws.update_diff_options(updater, cx);
         });
     });
 
@@ -113,13 +107,13 @@ pub(crate) fn render(
             "git-diff",
             nav_disabled,
             Rc::new(move |_, cx| {
-                prev_change_app.update(cx, |this, cx| {
-                    crate::git::actions::git_step_diff_change(this, tab_id, false, cx);
+                prev_change_ws.update(cx, |ws, cx| {
+                    ws.step_diff_change(false, cx);
                 });
             }),
             Rc::new(move |_, cx| {
-                next_change_app.update(cx, |this, cx| {
-                    crate::git::actions::git_step_diff_change(this, tab_id, true, cx);
+                next_change_ws.update(cx, |ws, cx| {
+                    ws.step_diff_change(true, cx);
                 });
             }),
         ))
@@ -134,13 +128,8 @@ pub(crate) fn render(
                 .disabled(current_tab_idx == 0)
                 .on_click(move |_, _, cx| {
                     if current_tab_idx > 0 {
-                        prev_app.update(cx, |this, cx| {
-                            crate::git::actions::git_select_diff_tab(
-                                this,
-                                tab_id,
-                                current_tab_idx - 1,
-                                cx,
-                            );
+                        prev_ws.update(cx, |ws, cx| {
+                            ws.select_diff_tab(current_tab_idx - 1, cx);
                         });
                     }
                 }),
@@ -161,13 +150,8 @@ pub(crate) fn render(
                 .disabled(total_tabs <= 1 || current_tab_idx + 1 >= total_tabs)
                 .on_click(move |_, _, cx| {
                     if current_tab_idx + 1 < total_tabs {
-                        next_app.update(cx, |this, cx| {
-                            crate::git::actions::git_select_diff_tab(
-                                this,
-                                tab_id,
-                                current_tab_idx + 1,
-                                cx,
-                            );
+                        next_ws.update(cx, |ws, cx| {
+                            ws.select_diff_tab(current_tab_idx + 1, cx);
                         });
                     }
                 }),
@@ -186,8 +170,8 @@ pub(crate) fn render(
                 .accessibility_label(rust_i18n::t!("git.diff.search_toggle").to_string())
                 .tooltip(rust_i18n::t!("git.diff.search_toggle").to_string())
                 .on_click(move |_, window, cx| {
-                    search_toggle_app.update(cx, |this, cx| {
-                        crate::git::actions::git_toggle_diff_search(this, tab_id, window, cx);
+                    search_toggle_ws.update(cx, |ws, cx| {
+                        ws.toggle_diff_search(window, cx);
                     });
                 }),
         )
@@ -199,8 +183,8 @@ pub(crate) fn render(
                 .accessibility_label(rust_i18n::t!("git.diff.refresh").to_string())
                 .tooltip(rust_i18n::t!("git.diff.refresh").to_string())
                 .on_click(move |_, _, cx| {
-                    refresh_app.update(cx, |this, cx| {
-                        crate::git::actions::git_refresh_active_diff(this, tab_id, cx);
+                    refresh_ws.update(cx, |ws, cx| {
+                        ws.refresh_active_diff(cx);
                     });
                 }),
         )
@@ -212,14 +196,11 @@ pub(crate) fn render(
                 .accessibility_label(rust_i18n::t!("git.diff.open_source").to_string())
                 .tooltip(rust_i18n::t!("git.diff.open_source").to_string())
                 .on_click(move |_, _, cx| {
-                    open_app.update(cx, |this, cx| {
-                        crate::git::actions::git_open_diff_source(this, tab_id, cx);
-                    });
+                    open_ws.read(cx).open_diff_source();
                 }),
         )
         .child(render_settings_menu(DiffMoreMenuParams {
-            app: app.clone(),
-            tab_id,
+            workspace: workspace.clone(),
             active_request_id: diff.request_id,
             total_tabs,
             collapse_unchanged: options.collapse_unchanged,
@@ -271,8 +252,7 @@ pub(crate) fn render(
                             .decorations(state.diff_search.build_decorations(p)),
                         diff,
                         state.status.as_ref(),
-                        app.clone(),
-                        tab_id,
+                        workspace,
                     );
                     v_flex()
                         .flex_1()
@@ -291,18 +271,18 @@ pub(crate) fn render(
         state: &state.diff_search,
         p,
         on_prev: Rc::new(move |_, cx| {
-            search_prev_app.update(cx, |this, cx| {
-                crate::git::actions::git_step_diff_search(this, tab_id, false, cx);
+            search_prev_ws.update(cx, |ws, cx| {
+                ws.step_diff_search(false, cx);
             });
         }),
         on_next: Rc::new(move |_, cx| {
-            search_next_app.update(cx, |this, cx| {
-                crate::git::actions::git_step_diff_search(this, tab_id, true, cx);
+            search_next_ws.update(cx, |ws, cx| {
+                ws.step_diff_search(true, cx);
             });
         }),
         on_close: Rc::new(move |_, cx| {
-            search_close_app.update(cx, |this, cx| {
-                crate::git::actions::git_close_diff_search(this, tab_id, cx);
+            search_close_ws.update(cx, |ws, cx| {
+                ws.close_diff_search(cx);
             });
         }),
     });
@@ -311,18 +291,18 @@ pub(crate) fn render(
         .id("git-diff-view-pane")
         .key_context(DIFF_VIEW_CONTEXT)
         .on_action(move |_: &DiffPrevChange, _, cx| {
-            kbd_prev_app.update(cx, |this, cx| {
-                crate::git::actions::git_step_diff_change(this, tab_id, false, cx);
+            kbd_prev_ws.update(cx, |ws, cx| {
+                ws.step_diff_change(false, cx);
             });
         })
         .on_action(move |_: &DiffNextChange, _, cx| {
-            kbd_next_app.update(cx, |this, cx| {
-                crate::git::actions::git_step_diff_change(this, tab_id, true, cx);
+            kbd_next_ws.update(cx, |ws, cx| {
+                ws.step_diff_change(true, cx);
             });
         })
         .on_action(move |_: &DiffFindInView, window, cx| {
-            kbd_find_app.update(cx, |this, cx| {
-                crate::git::actions::git_open_diff_search(this, tab_id, window, cx);
+            kbd_find_ws.update(cx, |ws, cx| {
+                ws.open_diff_search(window, cx);
             });
         })
         .flex_1()

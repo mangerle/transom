@@ -38,8 +38,7 @@ pub(crate) fn apply_shortcut_settings(shell: &mut AppShell, cx: &mut Context<App
     let previous = std::mem::take(&mut shell.state.shortcut_recording.applied_keys);
     let suppression = keymap::suppression_bindings(&previous, cx);
     let bindings = keymap::bindings(&app_settings(cx).shortcuts, cx);
-    let reserved =
-        keymap::reserved_keystrokes(&app_settings(cx).shortcuts, cx.platform_info().os);
+    let reserved = keymap::reserved_keystrokes(&app_settings(cx).shortcuts, cx.platform_info().os);
     shell.state.shortcut_recording.applied_keys =
         keymap::effective_key_strings(&app_settings(cx).shortcuts, cx.platform_info().os);
     cx.bind_keys(suppression);
@@ -75,9 +74,8 @@ fn on_shortcut_capture_key(
             ) {
                 let name = rust_i18n::t!(conflict.label_key).to_string();
                 if let Some(capture) = shell.state.shortcut_recording.capture.as_mut() {
-                    capture.error = Some(
-                        rust_i18n::t!("settings.shortcut_conflict", name = name).to_string(),
-                    );
+                    capture.error =
+                        Some(rust_i18n::t!("settings.shortcut_conflict", name = name).to_string());
                 }
             } else {
                 app_settings_mut(cx)
@@ -85,8 +83,7 @@ fn on_shortcut_capture_key(
                     .bindings
                     .insert(id.to_string(), vec![candidate]);
                 shell.state.shortcut_recording.capture = None;
-                shell.state.status =
-                    Some(rust_i18n::t!("settings.shortcut_recorded").to_string());
+                shell.state.status = Some(rust_i18n::t!("settings.shortcut_recorded").to_string());
             }
         }
         Err(issue) => {
@@ -128,8 +125,7 @@ pub(crate) fn render_shortcut_capture_body(
 
     let header = DialogHeader::new()
         .child(
-            DialogTitle::new()
-                .child(rust_i18n::t!("settings.shortcut_capture_title").to_string()),
+            DialogTitle::new().child(rust_i18n::t!("settings.shortcut_capture_title").to_string()),
         )
         .child(DialogDescription::new().child(action));
 
@@ -157,10 +153,7 @@ pub(crate) fn render_shortcut_capture_body(
         .gap_3()
         .track_focus(&focus)
         .key_context(keymap::OVERLAY_CONTEXT)
-        .on_key_down(crate::dialog_host::on_event(
-            app,
-            on_shortcut_capture_key,
-        ))
+        .on_key_down(crate::dialog_host::on_event(app, on_shortcut_capture_key))
         .child(header)
         .child(content)
         .child(footer);

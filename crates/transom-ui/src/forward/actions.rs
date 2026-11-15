@@ -112,7 +112,8 @@ pub(crate) fn auto_start_forwards(
             );
             continue;
         }
-        shell.state
+        shell
+            .state
             .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
         shell.state.send_command(ForwardCommand::ForwardStart {
             tab_id,
@@ -123,7 +124,11 @@ pub(crate) fn auto_start_forwards(
     cx.notify();
 }
 
-pub(crate) fn toggle_forward_panel(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn toggle_forward_panel(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(tab_id) = shell.state.workspace.active_tab else {
         return;
     };
@@ -141,7 +146,8 @@ pub(crate) fn toggle_forward_panel(shell: &mut AppShell, window: &mut Window, cx
         shell.state.workspace.tabs[index].session.connection,
         Connection::Ssh(_)
     ) {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("error.forward_requires_ssh").to_string());
         cx.notify();
         return;
@@ -150,13 +156,13 @@ pub(crate) fn toggle_forward_panel(shell: &mut AppShell, window: &mut Window, cx
         shell.state.workspace.tabs[index].status,
         TabStatus::Connected
     ) {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("error.forward_failed").to_string());
         cx.notify();
         return;
     }
-    let (name, bind_host, bind_port, target_host, target_port) =
-        forward_form_inputs(window, cx);
+    let (name, bind_host, bind_port, target_host, target_port) = forward_form_inputs(window, cx);
     let view = cx.new(|_| {
         super::ForwardView::new(
             ForwardPanelState {
@@ -177,7 +183,8 @@ pub(crate) fn toggle_forward_panel(shell: &mut AppShell, window: &mut Window, cx
             on_forward_panel_event(shell, event, cx);
         },
     );
-    shell.state
+    shell
+        .state
         .tasks
         .subscriptions
         .forward
@@ -225,7 +232,8 @@ pub(crate) fn submit_forward_rule(
         return;
     }
 
-    shell.state
+    shell
+        .state
         .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
     shell.state.send_command(ForwardCommand::ForwardStart {
         tab_id,
@@ -283,7 +291,8 @@ pub(crate) fn start_forward_rule(
         rule.enabled = true;
     }
     shell.state.persist_catalog();
-    shell.state
+    shell
+        .state
         .set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
     shell.state.send_command(ForwardCommand::ForwardStart {
         tab_id,
@@ -316,7 +325,8 @@ pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppSh
         }
         shell.state.persist_catalog();
     }
-    shell.state
+    shell
+        .state
         .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
     shell.state.send_command(ForwardCommand::ForwardStart {
         tab_id,
@@ -355,7 +365,8 @@ pub(crate) fn stop_forward_rule(
         rule.enabled = false;
     }
     shell.state.persist_catalog();
-    shell.state
+    shell
+        .state
         .set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
     shell.state.send_command(ForwardCommand::ForwardStop {
         tab_id,
@@ -378,7 +389,8 @@ pub(crate) fn delete_forward_rule(
     let session_id = tab.session_id;
     if let (Some(connection_id), Some(status)) = (
         connection_id,
-        shell.state
+        shell
+            .state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.session_pane())

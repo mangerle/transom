@@ -108,66 +108,66 @@ fn render_git_sidebar_header(
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-        h_flex()
-            .h(rems(size::TAB_BAR_HEIGHT))
-            .px(rems(space::MD))
-            .gap(rems(space::XS))
-            .items_center()
-            .border_color(p.divider(p.sidebar_border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .flex_1()
-                    .child(rust_i18n::t!("git.sidebar.title").to_string()),
+    h_flex()
+        .h(rems(size::TAB_BAR_HEIGHT))
+        .px(rems(space::MD))
+        .gap(rems(space::XS))
+        .items_center()
+        .border_color(p.divider(p.sidebar_border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .flex_1()
+                .child(rust_i18n::t!("git.sidebar.title").to_string()),
+        )
+        .child(
+            IconButton::new(
+                "git-sidebar-new-folder",
+                UiIcon::NEW_FOLDER,
+                rust_i18n::t!("git.sidebar.new_folder").to_string(),
             )
-            .child(
-                IconButton::new(
-                    "git-sidebar-new-folder",
-                    UiIcon::NEW_FOLDER,
-                    rust_i18n::t!("git.sidebar.new_folder").to_string(),
-                )
-                .render()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    crate::git::name_modal::open_git_folder_modal(this, window, cx);
-                })),
+            .render()
+            .on_click(cx.listener(|this, _, window, cx| {
+                crate::git::name_modal::open_git_folder_modal(this, window, cx);
+            })),
+        )
+        .child(
+            IconButton::new(
+                "git-sidebar-refresh",
+                UiIcon::REFRESH,
+                rust_i18n::t!("git.sidebar.refresh").to_string(),
             )
-            .child(
-                IconButton::new(
-                    "git-sidebar-refresh",
-                    UiIcon::REFRESH,
-                    rust_i18n::t!("git.sidebar.refresh").to_string(),
-                )
-                .render()
-                .on_click(cx.listener(|this, _, _window, cx| {
-                    crate::git::actions::refresh_all_git_projects(this, cx);
-                })),
+            .render()
+            .on_click(cx.listener(|this, _, _window, cx| {
+                crate::git::actions::refresh_all_git_projects(this, cx);
+            })),
+        )
+        .child(
+            IconButton::new(
+                "git-sidebar-clone",
+                UiIcon::FETCH,
+                rust_i18n::t!("git.clone.title").to_string(),
             )
-            .child(
-                IconButton::new(
-                    "git-sidebar-clone",
-                    UiIcon::FETCH,
-                    rust_i18n::t!("git.clone.title").to_string(),
-                )
-                .render()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    crate::git::clone_modal::open_git_clone_modal(this, window, cx);
-                })),
+            .render()
+            .on_click(cx.listener(|this, _, window, cx| {
+                crate::git::clone_modal::open_git_clone_modal(this, window, cx);
+            })),
+        )
+        .child(
+            IconButton::new(
+                "git-sidebar-add",
+                UiIcon::ADD,
+                rust_i18n::t!("git.sidebar.add").to_string(),
             )
-            .child(
-                IconButton::new(
-                    "git-sidebar-add",
-                    UiIcon::ADD,
-                    rust_i18n::t!("git.sidebar.add").to_string(),
-                )
-                .render()
-                .on_click(cx.listener(|this, _, window, cx| {
-                    crate::git::project_modal::open_git_project_modal(this, None, window, cx);
-                })),
-            )
-            .into_any_element()
-    }
+            .render()
+            .on_click(cx.listener(|this, _, window, cx| {
+                crate::git::project_modal::open_git_project_modal(this, None, window, cx);
+            })),
+        )
+        .into_any_element()
+}
 
 fn render_git_empty(p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
     v_flex()
@@ -256,7 +256,7 @@ fn render_git_sidebar_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu
         rust_i18n::t!("git.sidebar.refresh_all").to_string(),
         UiIcon::REFRESH,
         move |_, _, cx| {
-            app_refresh.update(cx, |this, cx| crate::git::actions::refresh_all_git_projects(this, cx));
+            app_refresh.update(cx, crate::git::actions::refresh_all_git_projects);
         },
     ))
     .item(menu_item(
@@ -296,7 +296,9 @@ fn render_git_project_menu(
                 let Some(project) = found else {
                     return;
                 };
-                app_open.update(cx, |this, cx| crate::git::actions::open_git_tab(this, project, window, cx));
+                app_open.update(cx, |this, cx| {
+                    crate::git::actions::open_git_tab(this, project, window, cx)
+                });
             },
         ))
         .item(menu_item(
@@ -371,7 +373,9 @@ fn render_git_project_menu(
         rust_i18n::t!("git.menu.remove").to_string(),
         UiIcon::DELETE,
         move |_, _, cx| {
-            app_remove.update(cx, |this, cx| crate::git::actions::remove_git_project(this, id, cx));
+            app_remove.update(cx, |this, cx| {
+                crate::git::actions::remove_git_project(this, id, cx)
+            });
         },
     ))
 }

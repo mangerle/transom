@@ -369,9 +369,7 @@ fn render_rebase_step_row(
                 .on_click({
                     let app = app.clone();
                     move |_, _, cx| {
-                        app.update(cx, |this, cx| {
-                            git_rebase_cycle_by_oid(this, &cycle_oid, cx)
-                        });
+                        app.update(cx, |this, cx| git_rebase_cycle_by_oid(this, &cycle_oid, cx));
                     }
                 }),
         )

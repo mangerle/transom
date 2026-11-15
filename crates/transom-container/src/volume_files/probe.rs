@@ -44,6 +44,8 @@ impl Drop for TemporaryTargetGuard<'_> {
     fn drop(&mut self) {
         if let Some(id) = self.container_id.take() {
             let api = self.api.clone();
+            // 同步 Drop 无法 `.await`：正常路径由 `dismiss().await` 回收；仅在提前返回或
+            // 任务取消时派生异步兜底任务删除临时探针容器，防止宿主机残留孤儿容器。
             tokio::spawn(async move {
                 cleanup_temporary(&api, &id).await;
             });

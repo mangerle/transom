@@ -347,4 +347,3 @@ fn inline_test_module_is_ignored_but_following_code_is_scanned() {
         "内联测试模块之后的生产代码必须继续参与扫描"
     );
 }
-

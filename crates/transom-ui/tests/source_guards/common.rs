@@ -34,7 +34,6 @@ fn source_guard_paths_use_forward_slashes() {
     );
 }
 
-
 pub(crate) fn ui_source_files() -> Vec<(String, String)> {
     let mut out = Vec::new();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -98,4 +97,3 @@ pub(crate) fn impl_blocks<'a>(content: &'a str, header: &str) -> Vec<&'a str> {
     }
     blocks
 }
-

@@ -2,21 +2,20 @@
 //!
 //! 设计原理（Why）：
 //! - 遵循 IDEA 标签项的右键菜单分组口径；
-//! - 贯穿确定性 `GitProject` 与 `TabId`，彻底根除跨标签页盲查项目失败导致的点击静默失效；
+//! - 动作直接落在所属 `Entity<GitWorkspace>` 上，跨窗口动作经实体事件上报，彻底解耦外壳；
 //! - 参数收敛为专用目标结构体，符合复杂度控制与参数对象规范。
 
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
+use crate::git::actions::GitHistoryAction;
 use crate::widgets::menu_item;
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
-use transom_core::{GitProject, LogScope, TabId};
+use transom_core::LogScope;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
 /// 标签菜单目标数据。
 pub(crate) struct TagMenuTarget {
-    pub(crate) project: GitProject,
-    pub(crate) tab_id: TabId,
     pub(crate) tag: String,
     pub(crate) current_branch: Option<String>,
 }
@@ -24,31 +23,22 @@ pub(crate) struct TagMenuTarget {
 /// 标签右键上下文菜单（对齐 IDEA 标签菜单）。
 pub(crate) fn render_tag_menu(
     menu: PopupMenu,
-    app: Entity<AppShell>,
+    workspace: Entity<GitWorkspace>,
     target: TagMenuTarget,
 ) -> PopupMenu {
     let TagMenuTarget {
-        project,
-        tab_id,
         tag,
         current_branch,
     } = target;
 
     let cur = current_branch.unwrap_or_else(|| "main".to_string());
-    let app_checkout = app.clone();
-    let app_new_branch = app.clone();
-    let app_merge = app.clone();
-    let app_worktree = app.clone();
-    let app_push = app.clone();
-    let app_delete = app.clone();
-    let app_diff = app;
-
-    let project_checkout = project.clone();
-    let project_new_branch = project.clone();
-    let project_merge = project.clone();
-    let project_worktree = project.clone();
-    let project_push = project.clone();
-    let project_delete = project;
+    let ws_checkout = workspace.clone();
+    let ws_new_branch = workspace.clone();
+    let ws_merge = workspace.clone();
+    let ws_worktree = workspace.clone();
+    let ws_push = workspace.clone();
+    let ws_delete = workspace.clone();
+    let ws_diff = workspace;
 
     let name_checkout = tag.clone();
     let name_new_branch = tag.clone();
@@ -65,24 +55,16 @@ pub(crate) fn render_tag_menu(
             AppIcon::Ui(UiIcon::RIGHT),
             move |_, _, cx| {
                 let name = name_checkout.clone();
-                let project = project_checkout.clone();
-                app_checkout.update(cx, |this, cx| {
-                    crate::git::actions::git_checkout_project_ref(this, &project, &name, cx);
-                });
+                ws_checkout.update(cx, |ws, cx| ws.checkout_ref(&name, cx));
             },
         ))
         // 2. 从 '{tag}' 新建分支...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_branch_from_ref", branch = tag.as_str()).to_string(),
             AppIcon::Ui(UiIcon::VCS),
-            move |_, window, cx| {
+            move |_, _, cx| {
                 let start = name_new_branch.clone();
-                let project = project_new_branch.clone();
-                app_new_branch.update(cx, |this, cx| {
-                    crate::git::actions::git_create_project_branch_from(
-                        this, &project, &start, window, cx,
-                    );
-                });
+                ws_new_branch.update(cx, |ws, cx| ws.create_branch_from(Some(start), cx));
             },
         ))
         // 3. 显示与工作树的差异
@@ -91,9 +73,7 @@ pub(crate) fn render_tag_menu(
             AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let target = name_diff.clone();
-                app_diff.update(cx, |this, cx| {
-                    crate::git::actions::git_set_log_scope(this, tab_id, LogScope::Ref(target), cx);
-                });
+                ws_diff.update(cx, |ws, cx| ws.set_log_scope(LogScope::Ref(target), cx));
             },
         ))
         // 4. 将 '{tag}' 合并到 '{current}' 中
@@ -107,14 +87,8 @@ pub(crate) fn render_tag_menu(
             AppIcon::Ui(UiIcon::MERGE),
             move |_, _, cx| {
                 let reference = name_merge.clone();
-                let project = project_merge.clone();
-                app_merge.update(cx, |this, cx| {
-                    crate::git::actions::git_history_on_project(
-                        this,
-                        &project,
-                        crate::git::actions::GitHistoryAction::Merge(reference),
-                        cx,
-                    );
+                ws_merge.update(cx, |ws, cx| {
+                    ws.history_action(GitHistoryAction::Merge(reference), cx);
                 });
             },
         ))
@@ -122,14 +96,9 @@ pub(crate) fn render_tag_menu(
         .item(menu_item(
             rust_i18n::t!("git.menu.new_worktree_from_ref", branch = tag.as_str()).to_string(),
             AppIcon::Ui(UiIcon::FOLDER),
-            move |_, window, cx| {
+            move |_, _, cx| {
                 let branch = name_worktree.clone();
-                let project = project_worktree.clone();
-                app_worktree.update(cx, |this, cx| {
-                    crate::git::worktree_modal::open_git_worktree_modal(
-                        this, project, &branch, window, cx,
-                    );
-                });
+                ws_worktree.update(cx, |ws, cx| ws.open_worktree_modal(branch, cx));
             },
         ))
         // 6. 推送到 origin
@@ -138,14 +107,8 @@ pub(crate) fn render_tag_menu(
             AppIcon::Ui(UiIcon::UPLOAD),
             move |_, _, cx| {
                 let name = name_push.clone();
-                let project = project_push.clone();
-                app_push.update(cx, |this, cx| {
-                    crate::git::actions::git_push_project(
-                        this,
-                        &project,
-                        Some(format!("refs/tags/{}", name)),
-                        cx,
-                    );
+                ws_push.update(cx, |ws, cx| {
+                    ws.push_branch(Some(format!("refs/tags/{name}")), cx);
                 });
             },
         ))
@@ -155,10 +118,7 @@ pub(crate) fn render_tag_menu(
             AppIcon::Ui(UiIcon::DELETE),
             move |_, _, cx| {
                 let name = name_delete.clone();
-                let project = project_delete.clone();
-                app_delete.update(cx, |this, cx| {
-                    crate::git::actions::git_delete_project_ref(this, &project, &name, cx);
-                });
+                ws_delete.update(cx, |ws, cx| ws.delete_ref(&name, cx));
             },
         ))
 }

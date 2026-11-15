@@ -22,7 +22,9 @@ pub(crate) fn render_sftp_hover_preview(
     cx: &App,
 ) -> Option<AnyElement> {
     let tab_id = shell.state.workspace.active_tab?;
-    let preview = crate::sftp::sftp_state(shell, tab_id, cx)?.hover_preview.as_ref()?;
+    let preview = crate::sftp::sftp_state(shell, tab_id, cx)?
+        .hover_preview
+        .as_ref()?;
     if matches!(preview.content, PreviewContent::Pending) {
         return None;
     }

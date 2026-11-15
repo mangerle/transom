@@ -40,7 +40,7 @@ pub(crate) mod web_link;
 
 pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
 pub(crate) use conflict_modal::GitConflictModal;
-pub(crate) use entity::GitWorkspace;
+pub(crate) use entity::{GitWorkspace, GitWorkspaceEvent};
 pub(crate) use form::{GitProjectDraft, GitProjectModal};
 pub(crate) use name_modal::{GitNameModal, GitNamePurpose};
 pub(crate) use push_modal::GitPushModal;

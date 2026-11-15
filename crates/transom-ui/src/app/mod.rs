@@ -37,8 +37,6 @@ pub(crate) mod editor;
 pub(crate) mod forward;
 #[path = "../git/mod.rs"]
 pub(crate) mod git;
-#[path = "../identity/mod.rs"]
-pub(crate) mod identity;
 #[path = "../keys/mod.rs"]
 pub(crate) mod keys;
 #[path = "../known_hosts_modal.rs"]
@@ -79,8 +77,6 @@ pub(crate) mod terminal_copy_mode;
 pub(crate) mod terminal_search;
 #[path = "../tiling/mod.rs"]
 pub(crate) mod tiling;
-#[path = "../trigger_panel/mod.rs"]
-pub(crate) mod trigger_panel;
 #[path = "../window_state.rs"]
 pub(crate) mod window_state;
 #[path = "../workspace/mod.rs"]
@@ -90,6 +86,7 @@ pub(crate) mod zmodem;
 
 mod backup_prompt;
 mod bootstrap;
+mod container_requests;
 pub(crate) mod event_handlers;
 mod event_terminal_ready;
 pub(crate) mod events;
@@ -386,7 +383,9 @@ impl AppShell {
                 }
             }
             StartupTabs::EmptyWorkspace => {}
-            StartupTabs::NewLocalTerminal => crate::connection::open_local_terminal(self, window, cx),
+            StartupTabs::NewLocalTerminal => {
+                crate::connection::open_local_terminal(self, window, cx)
+            }
         }
     }
 

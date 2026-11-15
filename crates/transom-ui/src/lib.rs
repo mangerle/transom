@@ -22,11 +22,13 @@ mod diff_pane;
 mod divider;
 mod format;
 mod i18n;
+pub(crate) mod identity;
 mod keymap;
 mod palette;
 mod pane_tree;
 mod registry_secrets;
 mod theme;
+pub(crate) mod trigger_panel;
 mod widgets;
 mod window_appearance;
 
@@ -34,10 +36,9 @@ mod window_appearance;
 // 对 crate 其它模块保持私有。这里重导出旧路径，避免大面积改写 `crate::sftp`
 // 之类的引用；模块的真实父级仍是 `app`，因此不会绕过状态封装。
 pub(crate) use app::{
-    activity_bar, audit_viewer, clipboard_prompt, cloud_sync, connection, container,
-    dialog_host, diff_viewer, editor, forward, git, identity, keys, monitor, notify, record,
-    session_appearance, session_form, settings, sftp, sidebar, snippets, status_bar, tiling,
-    trigger_panel, workspace, zmodem,
+    activity_bar, audit_viewer, clipboard_prompt, cloud_sync, connection, container, dialog_host,
+    diff_viewer, editor, forward, git, keys, monitor, notify, record, session_appearance,
+    session_form, settings, sftp, sidebar, snippets, status_bar, tiling, workspace, zmodem,
 };
 
 pub(crate) use app::AppShell;

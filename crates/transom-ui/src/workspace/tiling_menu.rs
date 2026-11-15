@@ -55,7 +55,8 @@ pub(super) fn build_tiling_layout_submenu(
         })
         .on_click(move |_, window, cx| {
             auto_app.update(cx, |this, cx| {
-                crate::app::tiling::apply_tiling_layout_for(this, 
+                crate::app::tiling::apply_tiling_layout_for(
+                    this,
                     auto_groups.clone(),
                     TilingLayoutChoice::Auto,
                     window,
@@ -195,7 +196,8 @@ fn render_cell(
             })
             .on_click(move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    crate::app::tiling::apply_tiling_layout_for(this, 
+                    crate::app::tiling::apply_tiling_layout_for(
+                        this,
                         groups.clone(),
                         TilingLayoutChoice::Grid { rows, cols },
                         window,

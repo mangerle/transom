@@ -5,7 +5,7 @@
 //! 单击与双击统一在右侧差异区打开比对，不再弹出独立差异弹窗。
 
 use super::{ChangeGroup, check_box, check_placeholder, split_path};
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::git::actions::GitDiffRequest;
 use crate::git::{change_accent_color, primary_record, untracked_visual};
 use crate::palette::Palette;
@@ -16,7 +16,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::HashSet;
-use transom_core::{GitAction, GitProject, GitSide, StatusEntry};
+use transom_core::{GitAction, GitSide, StatusEntry};
 use transom_ui_icons::UiIcon;
 use transom_ui_icons::{AppIcon, AppIconElement};
 
@@ -45,10 +45,10 @@ pub(crate) fn worktree_diff_request(group: ChangeGroup, path: String) -> GitDiff
     }
 }
 
-/// 文件行的展示参数：项目、条目、分组、勾选集合与缩进一次传齐，
+/// 文件行的展示参数：工作区、条目、分组、勾选集合与缩进一次传齐，
 /// 平铺入参超过 7 个，收成参数对象。
 pub(crate) struct GitFileRowProps<'a> {
-    pub(crate) project: &'a GitProject,
+    pub(crate) workspace: &'a Entity<GitWorkspace>,
     pub(crate) entry: &'a StatusEntry,
     pub(crate) group: ChangeGroup,
     pub(crate) checked: &'a HashSet<String>,
@@ -58,212 +58,183 @@ pub(crate) struct GitFileRowProps<'a> {
 }
 
 /// 一行文件：勾选 + 图标 + 语义着色文件名 + 灰色目录后缀。
-pub(crate) fn git_file_row(
-    props: &GitFileRowProps<'_>,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-        let project = props.project;
-        let entry = props.entry;
-        let group = props.group;
-        let checked = props.checked;
-        let indent = props.indent;
-        let selected = props.selected;
-        let path = entry.path.clone();
-        let visual = if group == ChangeGroup::Untracked {
-            untracked_visual()
-        } else {
-            primary_record(&entry.record)
-        };
-        let is_checked = checked.contains(&path);
-        let element_id = format!("git-row-{}-{path}", group.key());
-        let check_id = format!("{element_id}-check");
-        let old_path = entry.old_path.clone();
-        let app: Entity<AppShell> = cx.entity().clone();
+pub(crate) fn git_file_row(props: &GitFileRowProps<'_>, p: &Palette) -> AnyElement {
+    let workspace = props.workspace;
+    let entry = props.entry;
+    let group = props.group;
+    let checked = props.checked;
+    let indent = props.indent;
+    let selected = props.selected;
+    let path = entry.path.clone();
+    let visual = if group == ChangeGroup::Untracked {
+        untracked_visual()
+    } else {
+        primary_record(&entry.record)
+    };
+    let is_checked = checked.contains(&path);
+    let element_id = format!("git-row-{}-{path}", group.key());
+    let check_id = format!("{element_id}-check");
+    let old_path = entry.old_path.clone();
 
-        let check_project = project.clone();
-        let check_path = path.clone();
-        let menu_path = path.clone();
-        let (file_name, dir_prefix) = split_path(&path);
-        let tooltip_path = path.clone();
+    let check_ws = workspace.clone();
+    let check_path = path.clone();
+    let menu_ws = workspace.clone();
+    let menu_path = path.clone();
+    let (file_name, dir_prefix) = split_path(&path);
+    let tooltip_path = path.clone();
 
-        let mut row = h_flex()
-            .id(ElementId::Name(element_id.into()))
-            .h(px(24.0))
-            .pl(px(indent))
-            .pr_2()
-            .gap_2()
-            .items_center()
-            .overflow_hidden()
-            .cursor_pointer()
-            .hover(|style| style.bg(p.list_hover))
-            .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx));
-        if selected {
-            // 当前右侧正在比对的文件：常驻激活底色，与悬停区分。
-            row = row.bg(p.list_active);
-        }
-        // 忽略组的文件行只读：没有勾选框、差异按钮和右键动作，名称置灰。
-        if group.actionable() {
-            row = row.child(
+    let mut row = h_flex()
+        .id(ElementId::Name(element_id.into()))
+        .h(px(24.0))
+        .pl(px(indent))
+        .pr_2()
+        .gap_2()
+        .items_center()
+        .overflow_hidden()
+        .cursor_pointer()
+        .hover(|style| style.bg(p.list_hover))
+        .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx));
+    if selected {
+        // 当前右侧正在比对的文件：常驻激活底色，与悬停区分。
+        row = row.bg(p.list_active);
+    }
+    // 忽略组的文件行只读：没有勾选框、差异按钮和右键动作，名称置灰。
+    if group.actionable() {
+        row = row.child(
+            div()
+                .id(ElementId::Name(check_id.into()))
+                .flex_none()
+                .child(check_box(is_checked, p))
+                .on_click(move |_, _window, cx| {
+                    cx.stop_propagation();
+                    check_ws.update(cx, |ws, cx| ws.toggle_checked(&check_path, cx));
+                }),
+        );
+    } else {
+        row = row.child(check_placeholder());
+    }
+    row = row
+        .child(
+            AppIconElement::new(AppIcon::for_file(&path))
+                .with_rems(rems(crate::theme::tokens::control::ICON)),
+        )
+        .child(
+            div()
+                .text_sm()
+                .flex_none()
+                .max_w(px(220.0))
+                .overflow_hidden()
+                .truncate()
+                .text_color(if group.actionable() {
+                    change_accent_color(visual.accent, p)
+                } else {
+                    p.muted_foreground
+                })
+                .child(file_name),
+        )
+        .when(props.show_dir_prefix && !dir_prefix.is_empty(), |el| {
+            el.child(
                 div()
-                    .id(ElementId::Name(check_id.into()))
-                    .flex_none()
-                    .child(check_box(is_checked, p))
-                    .on_click(cx.listener(move |this, _, _window, cx| {
-                        cx.stop_propagation();
-                        crate::git::helpers::toggle_git_checked(this, &check_project, &check_path, cx);
-                    })),
-            );
-        } else {
-            row = row.child(check_placeholder());
-        }
-        row = row
-            .child(
-                AppIconElement::new(AppIcon::for_file(&path))
-                    .with_rems(rems(crate::theme::tokens::control::ICON)),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .flex_none()
-                    .max_w(px(220.0))
+                    .flex_1()
+                    .min_w_0()
                     .overflow_hidden()
                     .truncate()
-                    .text_color(if group.actionable() {
-                        change_accent_color(visual.accent, p)
-                    } else {
-                        p.muted_foreground
-                    })
-                    .child(file_name),
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(dir_prefix),
             )
-            .when(props.show_dir_prefix && !dir_prefix.is_empty(), |el| {
-                el.child(
+        })
+        .child(
+            old_path
+                .map(|old| {
                     div()
-                        .flex_1()
-                        .min_w_0()
+                        .max_w(px(140.0))
                         .overflow_hidden()
                         .truncate()
                         .text_xs()
                         .text_color(p.muted_foreground)
-                        .child(dir_prefix),
-                )
-            })
-            .child(
-                old_path
-                    .map(|old| {
-                        div()
-                            .max_w(px(140.0))
-                            .overflow_hidden()
-                            .truncate()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(old)
-                            .into_any_element()
-                    })
-                    .unwrap_or_else(|| div().into_any_element()),
-            );
-        if group.actionable() {
-            let click_project = project.clone();
-            let click_path = path.clone();
-            row = row.on_click(cx.listener(move |this, event: &ClickEvent, _window, cx| {
-                // 双击的第一次点击已经完成同一动作；忽略后续点击，避免重复发差异请求。
-                if event.click_count() > 1 {
-                    return;
-                }
-                crate::git::actions::git_open_worktree_diff(this, &click_project, group, click_path.clone(), cx);
-            }));
-        }
-        if group.actionable() {
-            let menu_project = project.clone();
-            row.context_menu(move |menu, _window, _cx| {
-                render_file_menu(menu, app.clone(), &menu_project, group, menu_path.clone())
-            })
-            .into_any_element()
-        } else {
-            row.into_any_element()
-        }
+                        .child(old)
+                        .into_any_element()
+                })
+                .unwrap_or_else(|| div().into_any_element()),
+        );
+    if group.actionable() {
+        let click_ws = workspace.clone();
+        let click_path = path.clone();
+        row = row.on_click(move |event: &ClickEvent, _window, cx| {
+            // 双击的第一次点击已经完成同一动作；忽略后续点击，避免重复发差异请求。
+            if event.click_count() > 1 {
+                return;
+            }
+            let path = click_path.clone();
+            click_ws.update(cx, |ws, cx| ws.open_worktree_diff(group, path, cx));
+        });
+    }
+    if group.actionable() {
+        row.context_menu(move |menu, _window, _cx| {
+            render_file_menu(menu, menu_ws.clone(), group, menu_path.clone())
+        })
+        .into_any_element()
+    } else {
+        row.into_any_element()
+    }
 }
 
 /// 文件行右键菜单。
 fn render_file_menu(
     menu: PopupMenu,
-    app: Entity<AppShell>,
-    project: &GitProject,
+    workspace: Entity<GitWorkspace>,
     group: ChangeGroup,
     path: String,
 ) -> PopupMenu {
     let mut menu = menu;
     if group != ChangeGroup::Staged {
-        let app_stage = app.clone();
-        let stage_project = project.clone();
+        let ws_stage = workspace.clone();
         let stage_path = path.clone();
         menu = menu.item(menu_item(
             rust_i18n::t!("git.menu.stage").to_string(),
             AppIcon::Ui(UiIcon::ADD),
             move |_, _, cx| {
-                run_paths(
-                    &app_stage,
-                    &stage_project,
-                    GitAction::Stage,
-                    &stage_path,
-                    cx,
-                );
+                run_paths(&ws_stage, GitAction::Stage, &stage_path, cx);
             },
         ));
     } else {
-        let app_unstage = app.clone();
-        let unstage_project = project.clone();
+        let ws_unstage = workspace.clone();
         let unstage_path = path.clone();
         menu = menu.item(menu_item(
             rust_i18n::t!("git.menu.unstage").to_string(),
             AppIcon::Ui(UiIcon::REMOVE),
             move |_, _, cx| {
-                run_paths(
-                    &app_unstage,
-                    &unstage_project,
-                    GitAction::Unstage,
-                    &unstage_path,
-                    cx,
-                );
+                run_paths(&ws_unstage, GitAction::Unstage, &unstage_path, cx);
             },
         ));
     }
-    let app_discard = app.clone();
-    let discard_project = project.clone();
+    let ws_discard = workspace.clone();
     let discard_path = path.clone();
     let discard_label = if group == ChangeGroup::Untracked {
         rust_i18n::t!("git.menu.delete").to_string()
     } else {
         rust_i18n::t!("git.menu.discard").to_string()
     };
-    let diff_app = app.clone();
-    let diff_project = project.clone();
+    let diff_ws = workspace.clone();
     let diff_path = path.clone();
-    let copy_app = app.clone();
-    let copy_path = path.clone();
-    let refresh_app = app.clone();
-    let refresh_project = project.clone();
-    let conflict_app = app.clone();
-    let conflict_project = project.clone();
+    let copy_ws = workspace.clone();
+    let copy_path = path;
+    let refresh_ws = workspace.clone();
+    let conflict_ws = workspace;
     let mut menu = menu.item(menu_item(
         rust_i18n::t!("git.conflict.resolve_menu").to_string(),
         AppIcon::Ui(UiIcon::MERGE),
         move |_, _, cx| {
-            let p = conflict_project.clone();
-            conflict_app.update(cx, |this, cx| {
-                crate::git::conflict_modal::open_git_conflict_modal(this, &p, cx);
-            });
+            conflict_ws.update(cx, |ws, cx| ws.open_conflict_modal(cx));
         },
     ));
     menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.show_diff").to_string(),
         AppIcon::Ui(UiIcon::DIFF),
         move |_, _, cx| {
-            let project = diff_project.clone();
             let path = diff_path.clone();
-            diff_app.update(cx, |this, cx| {
-                crate::git::actions::git_open_worktree_diff(this, &project, group, path, cx);
-            });
+            diff_ws.update(cx, |ws, cx| ws.open_worktree_diff(group, path, cx));
         },
     ));
     menu = menu.item(menu_item(
@@ -275,42 +246,33 @@ fn render_file_menu(
             } else {
                 GitAction::Discard
             };
-            run_paths(&app_discard, &discard_project, action, &discard_path, cx);
+            run_paths(&ws_discard, action, &discard_path, cx);
         },
     ));
     menu = menu.item(menu_item(
         rust_i18n::t!("git.menu.copy_path").to_string(),
         AppIcon::Ui(UiIcon::COPY),
         move |_, _, cx| {
-            copy_app.update(cx, |this, cx| {
-                crate::git::helpers::write_clipboard(this, &copy_path, cx);
-            });
+            copy_ws.update(cx, |ws, cx| ws.copy_to_clipboard(&copy_path, cx));
         },
     ));
     menu.item(menu_item(
         rust_i18n::t!("git.menu.refresh").to_string(),
         AppIcon::Ui(UiIcon::REFRESH),
         move |_, _, cx| {
-            let project = refresh_project.clone();
-            refresh_app.update(cx, |this, cx| {
-                crate::git::actions::git_refresh(this, &project, cx);
+            refresh_ws.update(cx, |ws, cx| {
+                ws.refresh();
+                cx.notify();
             });
         },
     ))
 }
 
-/// 菜单动作统一走「按路径批量执行」（直接操作确定的项目仓库）。
-fn run_paths(
-    app: &Entity<AppShell>,
-    project: &GitProject,
-    action: GitAction,
-    path: &str,
-    cx: &mut App,
-) {
+/// 菜单动作统一走「按路径批量执行」。
+fn run_paths(workspace: &Entity<GitWorkspace>, action: GitAction, path: &str, cx: &mut App) {
     let path = path.to_string();
-    let project = project.clone();
-    app.update(cx, |this, cx| {
-        crate::git::actions::git_run_paths(this, &project, action, vec![path], cx);
+    workspace.update(cx, |ws, cx| {
+        ws.run_paths(action, vec![path], cx);
     });
 }
 

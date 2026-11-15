@@ -18,7 +18,9 @@ pub(super) fn on_container_action_finished(
     };
     let mut refresh = false;
     let toast = match &error {
-        Some(error) => label.map(|label| (toast_failed(Some(&label), &localized_error(error)), false)),
+        Some(error) => {
+            label.map(|label| (toast_failed(Some(&label), &localized_error(error)), false))
+        }
         None => {
             refresh = true;
             label.map(|label| (toast_succeeded(&label), true))

@@ -307,7 +307,9 @@ fn build_new_session_menu(
             rust_i18n::t!("app.new_local").to_string(),
             AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, window, cx| {
-                local_app.update(cx, |this, cx| crate::connection::open_local_terminal(this, window, cx));
+                local_app.update(cx, |this, cx| {
+                    crate::connection::open_local_terminal(this, window, cx)
+                });
             },
         ))
         .item(
@@ -357,7 +359,9 @@ fn session_menu_item(entry: &NewSessionEntry, app: &Entity<AppShell>) -> PopupMe
     let app = app.clone();
     let session_id = entry.session_id;
     crate::widgets::menu_item(entry.label.clone(), entry.icon, move |_, window, cx| {
-        app.update(cx, |this, cx| crate::connection::connect_session(this, session_id, window, cx));
+        app.update(cx, |this, cx| {
+            crate::connection::connect_session(this, session_id, window, cx)
+        });
     })
 }
 

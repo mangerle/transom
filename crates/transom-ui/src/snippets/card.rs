@@ -36,7 +36,9 @@ fn snippets_form_button(
     let app = app.clone();
     button.on_click(move |_, window, cx| {
         let existing = existing.clone();
-        app.update(cx, |this, cx| crate::app::snippets::open_snippet_form(this, window, cx, existing));
+        app.update(cx, |this, cx| {
+            crate::app::snippets::open_snippet_form(this, window, cx, existing)
+        });
     })
 }
 

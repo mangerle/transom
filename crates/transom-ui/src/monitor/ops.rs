@@ -63,7 +63,11 @@ pub(crate) fn on_monitor_panel_event(
 }
 
 /// 活动栏入口：打开/关闭监控抽屉，打开时立即拉取一轮进程快照。
-pub(crate) fn toggle_monitor(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn toggle_monitor(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let open = !shell.state.monitor.read(cx).is_open();
     shell.state.monitor.update(cx, |view, _| {
         view.set_open(open);
@@ -95,8 +99,16 @@ pub(crate) fn toggle_monitor(shell: &mut AppShell, window: &mut Window, cx: &mut
                 crate::connection::open_local_terminal(shell, window, cx);
             }
         }
-        crate::app::monitor::sample_processes(shell, shell.state.monitor.read(cx).processes_collapsed(), cx);
-        crate::app::monitor::ensure_monitor_task(shell, shell.state.monitor.read(cx).interval_mode().interval(), cx);
+        crate::app::monitor::sample_processes(
+            shell,
+            shell.state.monitor.read(cx).processes_collapsed(),
+            cx,
+        );
+        crate::app::monitor::ensure_monitor_task(
+            shell,
+            shell.state.monitor.read(cx).interval_mode().interval(),
+            cx,
+        );
     }
     cx.notify();
 }
@@ -113,10 +125,7 @@ pub(crate) fn ensure_monitor_task(
     shell.state.tasks.background.monitor = Some(cx.spawn(async move |this, cx| {
         loop {
             cx.background_executor().timer(interval).await;
-            if this
-                .update(cx, |this, cx| sample_processes_if_open(this, cx))
-                .is_err()
-            {
+            if this.update(cx, sample_processes_if_open).is_err() {
                 break;
             }
         }
@@ -152,7 +161,11 @@ pub(crate) fn set_monitor_interval_mode(
         .update(cx, |view, _| view.set_interval_mode(mode))
     {
         shell.state.tasks.background.monitor = None;
-        crate::app::monitor::ensure_monitor_task(shell, shell.state.monitor.read(cx).interval_mode().interval(), cx);
+        crate::app::monitor::ensure_monitor_task(
+            shell,
+            shell.state.monitor.read(cx).interval_mode().interval(),
+            cx,
+        );
         cx.notify();
     }
 }
@@ -161,7 +174,11 @@ fn sample_processes_if_open(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     if !shell.state.monitor.read(cx).is_open() {
         return;
     }
-    crate::app::monitor::sample_processes(shell, shell.state.monitor.read(cx).processes_collapsed(), cx);
+    crate::app::monitor::sample_processes(
+        shell,
+        shell.state.monitor.read(cx).processes_collapsed(),
+        cx,
+    );
 }
 
 /// 采样进程列表：卡片折叠时只取总数维持摘要计数，展开时拉全量明细。
@@ -226,20 +243,33 @@ pub(crate) fn send_terminal_input(shell: &mut AppShell, cmd: &str, cx: &mut Cont
 }
 
 /// 在当前终端中追踪指定进程（自动输入 htop 或 top）。
-pub(crate) fn trace_process_in_terminal(shell: &mut AppShell, pid: u32, cx: &mut Context<AppShell>) {
+pub(crate) fn trace_process_in_terminal(
+    shell: &mut AppShell,
+    pid: u32,
+    cx: &mut Context<AppShell>,
+) {
     let cmd = format!("htop -p {pid} 2>/dev/null || top -p {pid}\r");
     crate::app::monitor::send_terminal_input(shell, &cmd, cx);
 }
 
 /// 在终端中重启崩溃的 Systemd 服务。
-pub(crate) fn restart_systemd_service(shell: &mut AppShell, unit: &str, cx: &mut Context<AppShell>) {
+pub(crate) fn restart_systemd_service(
+    shell: &mut AppShell,
+    unit: &str,
+    cx: &mut Context<AppShell>,
+) {
     let cmd = format!("systemctl restart {unit}\r");
     crate::app::monitor::send_terminal_input(shell, &cmd, cx);
 }
 
 /// 当前活动标签的进程采样目标；只有 SSH 与本地终端支持。
 /// 安全终止进程（对核心系统进程施加保护拦截）。
-pub(crate) fn send_kill_process(shell: &mut AppShell, pid: u32, force: bool, cx: &mut Context<AppShell>) {
+pub(crate) fn send_kill_process(
+    shell: &mut AppShell,
+    pid: u32,
+    force: bool,
+    cx: &mut Context<AppShell>,
+) {
     let Some((tab_id, connection_id)) = shell.state.active_monitor_target() else {
         return;
     };
@@ -262,7 +292,8 @@ fn on_processes_sampled(
     if shell.state.active_monitor_target() != Some((tab_id, connection_id)) {
         return;
     }
-    shell.state
+    shell
+        .state
         .monitor
         .update(cx, |view, _| view.set_processes(processes));
     cx.notify();
@@ -278,7 +309,8 @@ fn on_process_count_sampled(
     if shell.state.active_monitor_target() != Some((tab_id, connection_id)) {
         return;
     }
-    shell.state
+    shell
+        .state
         .monitor
         .update(cx, |view, _| view.set_process_total(count));
     cx.notify();
@@ -318,7 +350,8 @@ fn on_process_killed(
             });
         }
         None => {
-            shell.state
+            shell
+                .state
                 .monitor
                 .update(cx, |view, _| view.set_error(None));
             shell.state.status = Some(rust_i18n::t!("monitor.kill_sent", pid = pid).to_string());
@@ -399,7 +432,11 @@ pub(crate) fn apply_monitor_drawer_width(
 }
 
 /// 将监控抽屉脱离为全屏独立的 Workspace Tab。
-pub(crate) fn maximize_monitor_to_tab(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn maximize_monitor_to_tab(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     // 1. 寻找当前关联的主机会话 TabId
     let active_tab_id = shell.state.workspace.active_tab;
     let target_tab_id = active_tab_id
@@ -414,7 +451,8 @@ pub(crate) fn maximize_monitor_to_tab(shell: &mut AppShell, window: &mut Window,
             }
         })
         .or_else(|| {
-            shell.state
+            shell
+                .state
                 .workspace
                 .tabs
                 .iter()
@@ -460,7 +498,8 @@ pub(crate) fn maximize_monitor_to_tab(shell: &mut AppShell, window: &mut Window,
         target_connection_id,
     );
 
-    shell.state
+    shell
+        .state
         .workspace
         .create_group(monitor_tab_id, target_session_id);
     shell.state.workspace.tabs.push(new_tab);

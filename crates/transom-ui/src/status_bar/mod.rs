@@ -50,13 +50,20 @@ struct StatusBarEntries {
 
 /// 渲染底栏。`divider_x` 为分界线横坐标，`0` 表示侧栏已隐藏、整条不分段。
 /// 状态栏左侧会话作用域入口：片段、广播、录制与 ZMODEM 徽章。
-fn status_bar_entries(shell: &mut AppShell, cx: &mut Context<AppShell>, p: &Palette) -> StatusBarEntries {
+fn status_bar_entries(
+    shell: &mut AppShell,
+    cx: &mut Context<AppShell>,
+    p: &Palette,
+) -> StatusBarEntries {
     // 三个入口都直接作用于当前终端。容器管理、录像回放与主机监控标签没有
     // 可输入终端，保留入口只会产生无响应点击，所以按活动标签能力显隐。
     let terminal_scoped = shell.state.active_tab_has_terminal();
-    let snippets_entry = terminal_scoped.then(|| crate::app::snippets::render_snippets_popover(shell, p, cx));
-    let broadcast_entry = terminal_scoped.then(|| crate::app::broadcast::render_broadcast_trigger(shell, cx));
-    let recording_badge = terminal_scoped.then(|| crate::record::render_recording_badge(shell, p, cx));
+    let snippets_entry =
+        terminal_scoped.then(|| crate::app::snippets::render_snippets_popover(shell, p, cx));
+    let broadcast_entry =
+        terminal_scoped.then(|| crate::app::broadcast::render_broadcast_trigger(shell, cx));
+    let recording_badge =
+        terminal_scoped.then(|| crate::record::render_recording_badge(shell, p, cx));
     let zmodem = shell
         .state
         .workspace
@@ -126,7 +133,10 @@ pub(crate) fn render_status_bar(
             .tooltip(tooltip_text.to_string())
             .on_click(move |_, _, cx| {
                 app_entity.update(cx, |this, cx| {
-                    crate::git::bottom_log::toggle_git_bottom_log(this, id, cx);
+                    if let Some(ws) = this.state.git_workspace(id) {
+                        ws.update(cx, |ws, cx| ws.toggle_bottom_log(cx));
+                    }
+                    cx.notify();
                 });
             });
         if is_open {
@@ -197,8 +207,8 @@ pub(crate) fn refresh_status_metrics(shell: &mut AppShell, cx: &mut Context<AppS
         .and_then(|tab_id| shell.state.workspace.tab(tab_id));
     let traffic = tab.and_then(|tab| tab.network_traffic());
     let stats = tab.and_then(|tab| tab.system_stats());
-    let is_ssh = tab
-        .is_some_and(|tab| matches!(tab.session.connection, transom_core::Connection::Ssh(_)));
+    let is_ssh =
+        tab.is_some_and(|tab| matches!(tab.session.connection, transom_core::Connection::Ssh(_)));
     let status = shell.state.status.as_deref();
     // 先借用比较：未变化时不构造快照，避免每帧克隆系统名与流量样本。
     if shell
@@ -234,9 +244,7 @@ fn render_connection_pill(shell: &AppShell, p: &Palette) -> AnyElement {
                 rust_i18n::t!("status.connecting").to_string(),
             ),
             TabStatus::Connected => (p.success, rust_i18n::t!("status.connected").to_string()),
-            TabStatus::Disconnected => {
-                (p.danger, rust_i18n::t!("status.disconnected").to_string())
-            }
+            TabStatus::Disconnected => (p.danger, rust_i18n::t!("status.disconnected").to_string()),
             TabStatus::Failed(_) => (p.danger, rust_i18n::t!("status.failed").to_string()),
         };
         (color, format!("{}: {}", tab.display_name(), text))

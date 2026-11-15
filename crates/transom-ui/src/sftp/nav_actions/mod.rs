@@ -5,6 +5,7 @@
 //! - 核心优势：集中封装向底层通信通道投递 SftpOperation 的接口，保障状态同步一致性。
 
 mod init;
+mod panel_events;
 pub(crate) use init::{
     attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp, toggle_sftp,
 };

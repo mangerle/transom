@@ -9,14 +9,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::git::types::{GitDiffState, HunkActionCapability};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::diff::{Diff, DiffGutterMarker, DiffLinePosition};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::{AnyElement, ElementId, Entity, IntoElement, ParentElement, SharedString, div};
-use transom_core::{GitAction, RepoStatus, TabId};
+use transom_core::{GitAction, RepoStatus};
 use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 当当前差异对比支持块级写操作时，向 `Diff` 控件注入槽位按钮与补丁应用回调。
@@ -24,8 +24,7 @@ pub(super) fn attach_hunk_actions(
     diff_widget: Diff,
     diff: &GitDiffState,
     status: Option<&RepoStatus>,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
 ) -> Diff {
     let capability = diff.hunk_capability(status);
     if capability == HunkActionCapability::None {
@@ -55,10 +54,10 @@ pub(super) fn attach_hunk_actions(
             };
             match capability {
                 HunkActionCapability::Unstaged => {
-                    render_unstaged_hunk_button(marker.id().clone(), patch, app.clone(), tab_id)
+                    render_unstaged_hunk_button(marker.id().clone(), patch, workspace.clone())
                 }
                 HunkActionCapability::Staged => {
-                    render_staged_hunk_button(marker.id().clone(), patch, app.clone(), tab_id)
+                    render_staged_hunk_button(marker.id().clone(), patch, workspace.clone())
                 }
                 HunkActionCapability::None => div().into_any_element(),
             }
@@ -69,14 +68,13 @@ pub(super) fn attach_hunk_actions(
 fn render_unstaged_hunk_button(
     id: ElementId,
     patch: String,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
 ) -> AnyElement {
     let tooltip = rust_i18n::t!("git.diff.hunk_actions").to_string();
     let stage_patch = patch.clone();
     let revert_patch = patch;
-    let stage_app = app.clone();
-    let revert_app = app;
+    let stage_ws = workspace.clone();
+    let revert_ws = workspace;
     Button::new(id)
         .ghost()
         .xsmall()
@@ -86,22 +84,14 @@ fn render_unstaged_hunk_button(
         .dropdown_menu(move |menu, _window, _cx| {
             let s_patch = stage_patch.clone();
             let r_patch = revert_patch.clone();
-            let s_app = stage_app.clone();
-            let r_app = revert_app.clone();
+            let s_ws = stage_ws.clone();
+            let r_ws = revert_ws.clone();
             menu.item(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.stage_hunk").to_string()).on_click(
                     move |_, _, cx| {
                         let patch = s_patch.clone();
-                        s_app.update(cx, |this, cx| {
-                            crate::git::actions::git_apply_hunk_patch(
-                                this,
-                                tab_id,
-                                GitAction::StageHunk,
-                                patch,
-                                true,
-                                false,
-                                cx,
-                            );
+                        s_ws.update(cx, |ws, cx| {
+                            ws.apply_hunk_patch(GitAction::StageHunk, patch, true, false, cx);
                         });
                     },
                 ),
@@ -110,16 +100,8 @@ fn render_unstaged_hunk_button(
                 PopupMenuItem::new(rust_i18n::t!("git.diff.revert_hunk").to_string()).on_click(
                     move |_, _, cx| {
                         let patch = r_patch.clone();
-                        r_app.update(cx, |this, cx| {
-                            crate::git::actions::git_apply_hunk_patch(
-                                this,
-                                tab_id,
-                                GitAction::RevertHunk,
-                                patch,
-                                false,
-                                true,
-                                cx,
-                            );
+                        r_ws.update(cx, |ws, cx| {
+                            ws.apply_hunk_patch(GitAction::RevertHunk, patch, false, true, cx);
                         });
                     },
                 ),
@@ -131,8 +113,7 @@ fn render_unstaged_hunk_button(
 fn render_staged_hunk_button(
     id: ElementId,
     patch: String,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
 ) -> AnyElement {
     let tooltip = rust_i18n::t!("git.diff.unstage_hunk").to_string();
     Button::new(id)
@@ -143,16 +124,8 @@ fn render_staged_hunk_button(
         .tooltip(tooltip)
         .on_click(move |_, _, cx| {
             let patch = patch.clone();
-            app.update(cx, |this, cx| {
-                crate::git::actions::git_apply_hunk_patch(
-                    this,
-                    tab_id,
-                    GitAction::UnstageHunk,
-                    patch,
-                    true,
-                    true,
-                    cx,
-                );
+            workspace.update(cx, |ws, cx| {
+                ws.apply_hunk_patch(GitAction::UnstageHunk, patch, true, true, cx);
             });
         })
         .into_any_element()

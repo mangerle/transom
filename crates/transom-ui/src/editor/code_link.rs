@@ -30,8 +30,8 @@ pub(crate) fn open_terminal_code_location(
     else {
         return;
     };
-    let remote_dir = crate::sftp::sftp_state(shell, tab_id, cx)
-        .map(|panel| panel.remote.path.clone());
+    let remote_dir =
+        crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| panel.remote.path.clone());
     let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
         shell.state.status =
             Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
@@ -50,7 +50,8 @@ pub(crate) fn open_terminal_code_location(
         }
         return;
     };
-    crate::editor::open_remote_code_location(shell, 
+    crate::editor::open_remote_code_location(
+        shell,
         RemoteCodeLocation {
             tab_id,
             connection_id,

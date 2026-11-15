@@ -88,7 +88,8 @@ pub(crate) fn apply_snippet(
 ) {
     let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
         // 徽标在场时状态文字没有显示位置，这里改用错误通知，避免点了没反应。
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("snippets.no_terminal").to_string());
         cx.notify();
         return;
@@ -100,7 +101,8 @@ pub(crate) fn apply_snippet(
     };
     let sent = terminal.update(cx, |view, cx| view.send_text(&text, cx));
     if !sent {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("snippets.send_failed").to_string());
     } else if !execute {
         shell.set_transient_status(rust_i18n::t!("snippets.filled"), cx);
@@ -119,7 +121,8 @@ pub(crate) fn open_snippet_form(
     existing: Option<Snippet>,
 ) {
     if existing.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("snippets.too_many").to_string());
         cx.notify();
         return;
@@ -133,8 +136,7 @@ pub(crate) fn open_snippet_form(
     });
     name_input.update(cx, |state, cx| state.set_value(name, window, cx));
     let command_input = cx.new(|cx| {
-        InputState::new(window, cx)
-            .placeholder(rust_i18n::t!("snippets.command_hint").to_string())
+        InputState::new(window, cx).placeholder(rust_i18n::t!("snippets.command_hint").to_string())
     });
     command_input.update(cx, |state, cx| state.set_value(command, window, cx));
     let focus = name_input.read(cx).focus_handle(cx);
@@ -315,7 +317,9 @@ pub(crate) fn render_snippet_form_body(
                 .label(rust_i18n::t!("common.cancel").to_string())
                 .on_click(crate::dialog_host::on_event(
                     app,
-                    |this, _: &ClickEvent, _, cx| crate::app::snippets::close_snippet_form(this, cx),
+                    |this, _: &ClickEvent, _, cx| {
+                        crate::app::snippets::close_snippet_form(this, cx)
+                    },
                 )),
         )
         .child(

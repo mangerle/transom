@@ -25,39 +25,39 @@ pub(crate) fn render_sftp_sync_body(
     let Some(modal) = shell.state.sftp_modals.sync.as_ref() else {
         return div().into_any_element();
     };
-        let scanning = modal.scanning;
-        let error = modal.error.clone();
-        let local_root = modal.local_root.display().to_string();
-        let remote_root = modal.remote_root.clone();
-        let entries = modal.entries.clone();
-        let selected = modal.selected.clone();
+    let scanning = modal.scanning;
+    let error = modal.error.clone();
+    let local_root = modal.local_root.display().to_string();
+    let remote_root = modal.remote_root.clone();
+    let entries = modal.entries.clone();
+    let selected = modal.selected.clone();
 
-        let selected_count = selected.iter().filter(|checked| **checked).count();
-        let diff_count = entries.len();
-        let has_error = error.is_some();
-        let can_start = !scanning && !has_error && diff_count > 0;
+    let selected_count = selected.iter().filter(|checked| **checked).count();
+    let diff_count = entries.len();
+    let has_error = error.is_some();
+    let can_start = !scanning && !has_error && diff_count > 0;
 
-        let content = match sync_status_panel(modal, app, p) {
-            Some(status) => status,
-            None => sync_diff_list(modal, app, p),
-        };
+    let content = match sync_status_panel(modal, app, p) {
+        Some(status) => status,
+        None => sync_diff_list(modal, app, p),
+    };
 
-        let footer = sync_footer(modal, app, can_start, selected_count, p);
+    let footer = sync_footer(modal, app, can_start, selected_count, p);
 
-        crate::widgets::dialog_body(
-            "sftp-sync-modal",
-            rust_i18n::t!("sftp.sync.title").to_string(),
-            Some(
-                rust_i18n::t!(
-                    "sftp.sync.subtitle",
-                    local = local_root.as_str(),
-                    remote = remote_root.as_str()
-                )
-                .to_string(),
-            ),
-            content,
-            Some(footer),
-        )
+    crate::widgets::dialog_body(
+        "sftp-sync-modal",
+        rust_i18n::t!("sftp.sync.title").to_string(),
+        Some(
+            rust_i18n::t!(
+                "sftp.sync.subtitle",
+                local = local_root.as_str(),
+                remote = remote_root.as_str()
+            )
+            .to_string(),
+        ),
+        content,
+        Some(footer),
+    )
 }
 
 /// 扫描中/错误/无差异三种状态；返回 `None` 表示应渲染差异列表。
@@ -202,7 +202,9 @@ fn sync_diff_list(
                                 .on_change(crate::dialog_host::on_event(
                                     &list_app,
                                     move |this, checked: &bool, _, cx| {
-                                        crate::sftp::sftp_toggle_sync_entry(this, index, *checked, cx);
+                                        crate::sftp::sftp_toggle_sync_entry(
+                                            this, index, *checked, cx,
+                                        );
                                     },
                                 )),
                         );

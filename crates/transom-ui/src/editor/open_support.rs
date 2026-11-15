@@ -20,7 +20,8 @@ pub(crate) fn request_remote_text_read(
     let op_id = params.op_id;
     let max_bytes = app_settings(cx).sftp.edit_max_bytes;
     if crate::editor::send_editor_read(shell, params, max_bytes).is_err() {
-        crate::editor::fail_editor_panel_by_op(shell, 
+        crate::editor::fail_editor_panel_by_op(
+            shell,
             op_id,
             rust_i18n::t!("editor.error_read_dispatch").to_string(),
             cx,

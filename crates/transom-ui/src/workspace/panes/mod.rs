@@ -290,7 +290,18 @@ impl AppShell {
             &self.state.workspace.tabs[index].content,
             crate::app::TabContent::Git(_)
         ) {
-            return crate::git::workspace::render_git_tab(self, tab_id, window, cx, p);
+            let Some(workspace) = self.state.git_workspace(tab_id) else {
+                return div().into_any_element();
+            };
+            let project_id = workspace.read(cx).state.project.id;
+            let badge = self
+                .state
+                .git
+                .badges
+                .get(&project_id)
+                .cloned()
+                .unwrap_or_default();
+            return crate::git::workspace::render_git_tab(workspace, badge, window, cx, p);
         }
         if let Some(terminal) = self.state.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
@@ -344,7 +355,12 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::app::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
+                        crate::app::split::split_active_pane(
+                            this,
+                            SplitAxis::Horizontal,
+                            window,
+                            cx,
+                        );
                     });
                 }
             },
@@ -395,7 +411,9 @@ fn pane_context_menu(
                 AppIcon::Domain(DomainIcon::CONTAINER),
                 move |_, window, cx| {
                     container_app.update(cx, |this, cx| {
-                        crate::container::open_container_workspace_for_session(this, session_id, window, cx);
+                        crate::container::open_container_workspace_for_session(
+                            this, session_id, window, cx,
+                        );
                     });
                 },
             ));
@@ -403,6 +421,5 @@ fn pane_context_menu(
 
     menu
 }
-
 
 mod container_tab;

@@ -149,7 +149,7 @@ pub(in crate::app::dialog_host) fn sftp_sync_open(shell: &AppShell, _: &App) -> 
 }
 
 pub(in crate::app::dialog_host) fn editor_goto_line_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.sftp_modals.goto_line.is_some()
+    shell.state.modals.tools.editor_goto_line.is_some()
 }
 
 pub(in crate::app::dialog_host) fn diff_viewer_open(shell: &AppShell, _: &App) -> bool {

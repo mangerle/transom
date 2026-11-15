@@ -100,7 +100,11 @@ impl Render for SftpPanelView {
 ///
 /// 与旧 `tab.sftp()` 的差别：状态存放在实体里，读取需要 `cx`；
 /// 返回值借用 `cx`，调用方必须在借用结束后再修改外壳。
-pub(crate) fn sftp_state<'a>(shell: &AppShell, tab_id: TabId, cx: &'a App) -> Option<&'a SftpPanelState> {
+pub(crate) fn sftp_state<'a>(
+    shell: &AppShell,
+    tab_id: TabId,
+    cx: &'a App,
+) -> Option<&'a SftpPanelState> {
     let view = shell.state.sftp_view(tab_id)?;
     Some(view.read(cx).state())
 }

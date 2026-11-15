@@ -15,9 +15,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::ImageSearchResult;
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 /// 镜像详情视图的数据参数。
 pub(crate) struct HubImageDetailParams<'a> {
@@ -44,33 +42,43 @@ where
     FPull: Fn(&str, &mut Window, &mut App) + 'static + Clone,
     FCopy: Fn(&str, &mut Window, &mut App) + 'static + Clone,
 {
-    let HubImageDetailParams {
-        item,
-        active_tag,
-        pull_reference,
-        tags,
-        tags_loading,
-        tags_error,
-        custom_tag_input,
-        copy_toast,
-    } = params;
-    let name = item.name.clone();
-    let desc = if item.description.is_empty() {
-        rust_i18n::t!("container.hub.no_description").to_string()
-    } else {
-        item.description.clone()
-    };
-    let stars_str = format_star_count(item.star_count);
-    let is_official = item.is_official;
-    let is_automated = item.is_automated;
-    let current_tag = active_tag.to_string();
+    let nav_bar = render_hub_nav_bar(
+        params.pull_reference,
+        params.copy_toast,
+        on_back,
+        on_copy_cmd,
+        p,
+    );
+    let header_card = render_hub_header_card(params.item, p);
+    let custom_tag_row = render_hub_custom_tag_row(params.custom_tag_input, on_pull.clone(), p);
+    let tags_section = render_hub_tags_section(&params, on_pull, p);
 
+    v_flex()
+        .w_full()
+        .gap_3()
+        .child(nav_bar)
+        .child(header_card)
+        .child(custom_tag_row)
+        .child(tags_section)
+        .into_any_element()
+}
+
+/// 渲染顶部返回导航与 CLI 复制栏。
+fn render_hub_nav_bar<FBack, FCopy>(
+    pull_reference: &str,
+    copy_toast: bool,
+    on_back: FBack,
+    on_copy_cmd: FCopy,
+    p: &Palette,
+) -> AnyElement
+where
+    FBack: Fn(&mut Window, &mut App) + 'static + Clone,
+    FCopy: Fn(&str, &mut Window, &mut App) + 'static + Clone,
+{
     let cli_cmd = format!("docker pull {pull_reference}");
     let cmd_for_copy = cli_cmd.clone();
-    let on_copy = on_copy_cmd.clone();
 
-    // 1. 顶部返回导航栏
-    let nav_bar = h_flex()
+    h_flex()
         .w_full()
         .justify_between()
         .items_center()
@@ -115,13 +123,24 @@ where
                     )
                     .ghost()
                     .on_click(move |_, window, cx| {
-                        on_copy(&cmd_for_copy, window, cx);
+                        on_copy_cmd(&cmd_for_copy, window, cx);
                     }),
                 ),
-        );
+        )
+        .into_any_element()
+}
 
-    // 2. 镜像核心元数据 Header
-    let header_card = h_flex()
+/// 渲染镜像核心元数据 Header 卡片。
+fn render_hub_header_card(item: &ImageSearchResult, p: &Palette) -> AnyElement {
+    let desc = if item.description.is_empty() {
+        rust_i18n::t!("container.hub.no_description").to_string()
+    } else {
+        item.description.clone()
+    };
+    let stars_str = format_star_count(item.star_count);
+    let is_official = item.is_official;
+
+    h_flex()
         .w_full()
         .gap_3()
         .p_3()
@@ -170,7 +189,7 @@ where
                                 .text_base()
                                 .font_weight(FontWeight::BOLD)
                                 .text_color(p.foreground)
-                                .child(name.clone()),
+                                .child(item.name.clone()),
                         )
                         .when(is_official, |this| {
                             this.child(
@@ -199,7 +218,7 @@ where
                                     ),
                             )
                         })
-                        .when(is_automated, |this| {
+                        .when(item.is_automated, |this| {
                             this.child(
                                 div()
                                     .px_1p5()
@@ -234,56 +253,70 @@ where
                         ),
                 )
                 .child(div().text_xs().text_color(p.muted_foreground).child(desc)),
-        );
+        )
+        .into_any_element()
+}
 
-    // 3. 自定义版本标签快速拉取栏
-    let custom_pull_fn = on_pull.clone();
-    let custom_tag_row = if let Some(input) = custom_tag_input {
-        let input_ent = input.clone();
-        h_flex()
-            .w_full()
-            .gap_2()
-            .p_2p5()
-            .rounded(p.radius.md)
-            .bg(p.surface.ghost)
-            .border_1()
-            .border_color(p.stroke.subtle)
-            .items_center()
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(p.foreground)
-                    .child(rust_i18n::t!("container.hub.custom_tag").to_string()),
-            )
-            .child(h_flex().flex_1().child(Input::new(input).small()))
-            .child(
-                action_button(
-                    "hub-detail-pull-custom-btn",
-                    UiIcon::DOWNLOAD,
-                    rust_i18n::t!("container.hub.pull_selected").to_string(),
-                )
-                .primary()
-                .on_click(move |_, window, cx| {
-                    let custom_val = input_ent.read(cx).value().trim().to_string();
-                    let tag_to_pull = if custom_val.is_empty() {
-                        "latest".to_string()
-                    } else {
-                        custom_val
-                    };
-                    custom_pull_fn(&tag_to_pull, window, cx);
-                }),
-            )
-            .into_any_element()
-    } else {
-        div().into_any_element()
+/// 渲染自定义版本标签快速拉取栏。
+fn render_hub_custom_tag_row<FPull>(
+    custom_tag_input: Option<&Entity<gpui_kit::component::input::InputState>>,
+    on_pull: FPull,
+    p: &Palette,
+) -> AnyElement
+where
+    FPull: Fn(&str, &mut Window, &mut App) + 'static + Clone,
+{
+    let Some(input) = custom_tag_input else {
+        return div().into_any_element();
     };
+    let input_ent = input.clone();
+    h_flex()
+        .w_full()
+        .gap_2()
+        .p_2p5()
+        .rounded(p.radius.md)
+        .bg(p.surface.ghost)
+        .border_1()
+        .border_color(p.stroke.subtle)
+        .items_center()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
+                .child(rust_i18n::t!("container.hub.custom_tag").to_string()),
+        )
+        .child(h_flex().flex_1().child(Input::new(input).small()))
+        .child(
+            action_button(
+                "hub-detail-pull-custom-btn",
+                UiIcon::DOWNLOAD,
+                rust_i18n::t!("container.hub.pull_selected").to_string(),
+            )
+            .primary()
+            .on_click(move |_, window, cx| {
+                let custom_val = input_ent.read(cx).value().trim().to_string();
+                let tag_to_pull = if custom_val.is_empty() {
+                    "latest".to_string()
+                } else {
+                    custom_val
+                };
+                on_pull(&tag_to_pull, window, cx);
+            }),
+        )
+        .into_any_element()
+}
 
-    // 4. 常用版本标签列表 (Tags Table)
-    let mut tags_list = v_flex().gap_1p5().w_full();
-
-    // 列表表头
-    tags_list = tags_list.child(
+/// 渲染常用版本标签表格区块。
+fn render_hub_tags_section<FPull>(
+    params: &HubImageDetailParams<'_>,
+    on_pull: FPull,
+    p: &Palette,
+) -> AnyElement
+where
+    FPull: Fn(&str, &mut Window, &mut App) + 'static + Clone,
+{
+    let mut tags_list = v_flex().gap_1p5().w_full().child(
         h_flex()
             .w_full()
             .px_2()
@@ -315,8 +348,7 @@ where
             ),
     );
 
-    // 渲染各版本行
-    if tags_loading {
+    if params.tags_loading {
         tags_list = tags_list.child(
             h_flex()
                 .w_full()
@@ -335,7 +367,7 @@ where
                         .child(rust_i18n::t!("container.hub.tags_loading").to_string()),
                 ),
         );
-    } else if let Some(error) = tags_error {
+    } else if let Some(error) = params.tags_error {
         tags_list = tags_list.child(
             div()
                 .w_full()
@@ -346,7 +378,7 @@ where
                 .text_color(p.danger)
                 .child(error.to_string()),
         );
-    } else if tags.is_empty() {
+    } else if params.tags.is_empty() {
         tags_list = tags_list.child(
             div()
                 .w_full()
@@ -356,89 +388,87 @@ where
                 .child(rust_i18n::t!("container.hub.tags_empty").to_string()),
         );
     } else {
-        for tag in tags {
-            let tag_name = tag.clone();
-            let is_current = current_tag == *tag;
-            let row_pull_fn = on_pull.clone();
-            let pull_val = tag_name.clone();
-
-            let row = h_flex()
-                .w_full()
-                .px_2()
-                .py_2()
-                .rounded(p.radius.sm)
-                .bg(if is_current {
-                    p.primary.opacity(0.08)
-                } else {
-                    p.muted.opacity(0.02)
-                })
-                .hover(|s| s.bg(p.muted.opacity(0.06)))
-                .border_1()
-                .border_color(if is_current {
-                    p.primary.opacity(0.25)
-                } else {
-                    p.border.opacity(0.10)
-                })
-                .items_center()
-                .child(
-                    div()
-                        .w(px(180.0))
-                        .text_xs()
-                        .font_family(p.mono_font_family.clone())
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(p.foreground)
-                        .child(tag_name.clone()),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.hub.tags_source").to_string()),
-                )
-                .child(
-                    div()
-                        .w(px(140.0))
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child("—"),
-                )
-                .child(
-                    h_flex().w(px(80.0)).justify_end().child(
-                        action_button(
-                            ElementId::Name(format!("hub-tag-row-pull-{}", tag).into()),
-                            UiIcon::DOWNLOAD,
-                            rust_i18n::t!("container.hub.pull").to_string(),
-                        )
-                        .secondary()
-                        .on_click(move |_, window, cx| {
-                            row_pull_fn(&pull_val, window, cx);
-                        }),
-                    ),
-                );
-
-            tags_list = tags_list.child(row);
+        for tag in params.tags {
+            let is_current = params.active_tag == *tag;
+            tags_list = tags_list.child(render_hub_tag_row(tag, is_current, on_pull.clone(), p));
         }
     }
 
     v_flex()
         .w_full()
-        .gap_3()
-        .child(nav_bar)
-        .child(header_card)
-        .child(custom_tag_row)
+        .gap_1p5()
         .child(
-            v_flex()
-                .w_full()
-                .gap_1p5()
-                .child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(p.foreground)
-                        .child(rust_i18n::t!("container.hub.tags_title").to_string()),
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
+                .child(rust_i18n::t!("container.hub.tags_title").to_string()),
+        )
+        .child(tags_list)
+        .into_any_element()
+}
+
+/// 渲染单个镜像版本标签行。
+fn render_hub_tag_row<FPull>(tag: &str, is_current: bool, on_pull: FPull, p: &Palette) -> AnyElement
+where
+    FPull: Fn(&str, &mut Window, &mut App) + 'static + Clone,
+{
+    let tag_name = tag.to_string();
+    let pull_val = tag_name.clone();
+
+    h_flex()
+        .w_full()
+        .px_2()
+        .py_2()
+        .rounded(p.radius.sm)
+        .bg(if is_current {
+            p.primary.opacity(0.08)
+        } else {
+            p.muted.opacity(0.02)
+        })
+        .hover(|s| s.bg(p.muted.opacity(0.06)))
+        .border_1()
+        .border_color(if is_current {
+            p.primary.opacity(0.25)
+        } else {
+            p.border.opacity(0.10)
+        })
+        .items_center()
+        .child(
+            div()
+                .w(px(180.0))
+                .text_xs()
+                .font_family(p.mono_font_family.clone())
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
+                .child(tag_name),
+        )
+        .child(
+            div()
+                .flex_1()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.hub.tags_source").to_string()),
+        )
+        .child(
+            div()
+                .w(px(140.0))
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child("—"),
+        )
+        .child(
+            h_flex().w(px(80.0)).justify_end().child(
+                action_button(
+                    ElementId::Name(format!("hub-tag-row-pull-{tag}").into()),
+                    UiIcon::DOWNLOAD,
+                    rust_i18n::t!("container.hub.pull").to_string(),
                 )
-                .child(tags_list),
+                .secondary()
+                .on_click(move |_, window, cx| {
+                    on_pull(&pull_val, window, cx);
+                }),
+            ),
         )
         .into_any_element()
 }

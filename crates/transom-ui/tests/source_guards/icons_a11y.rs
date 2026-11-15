@@ -9,7 +9,7 @@ fn large_lists_use_virtualization() {
     for (relative, required) in [
         ("src/git/log_view/log_table.rs", "v_virtual_list"),
         // Git Diff 与 SFTP 远程编辑器统一委托给基于 gpui_kit 虚拟列表底座的 diff_pane
-        ("src/git/diff_view.rs", "render_diff_body("),
+        ("src/git/diff_view/mod.rs", "render_diff_body("),
         ("src/editor/diff.rs", "render_diff_body("),
         ("src/diff_pane/controls.rs", "Diff::new("),
         ("src/container/list/render.rs", "v_virtual_list"),
@@ -54,7 +54,7 @@ fn git_log_file_rows_keep_single_click_behavior() {
         "日志文件树不得在双击时打开独立差异弹窗"
     );
     assert!(
-        content.contains("git_diff_commit_file"),
+        content.contains("diff_commit_file"),
         "日志文件树点击必须走右栏差异选择路径"
     );
 }
@@ -118,14 +118,14 @@ fn git_first_phase_uses_new_ui_icons() {
         "src/git/commit_box.rs",
         "src/git/sidebar/mod.rs",
         "src/git/sidebar/rows.rs",
-        "src/git/log_view.rs",
+        "src/git/log_view/mod.rs",
         "src/git/log_view/ref_toolbar.rs",
         "src/git/log_view/log_refs.rs",
         "src/git/log_view/log_details.rs",
         "src/git/log_view/files_tree.rs",
         "src/git/log_view/branch_tree/view.rs",
         "src/git/log_view/worktrees_group.rs",
-        "src/git/diff_view.rs",
+        "src/git/diff_view/mod.rs",
         "src/git/diff_view/tabs.rs",
         "src/git/diff_view/menus.rs",
     ] {
@@ -220,7 +220,7 @@ fn git_identity_uses_one_icon() {
         "src/settings/mod.rs",
         "src/settings/modal.rs",
         "src/git/log_view/branch_tree/view.rs",
-        "src/git/log_view.rs",
+        "src/git/log_view/mod.rs",
         "src/git/workspace.rs",
         "src/git/sidebar/rows.rs",
         "src/workspace/tab_presentation.rs",
@@ -242,7 +242,6 @@ fn git_identity_uses_one_icon() {
         "远端分支必须使用统一 VCS 图标"
     );
 }
-
 
 #[test]
 fn mutable_list_identities_use_business_ids() {
@@ -408,4 +407,3 @@ fn menu_items_use_widget_constructor() {
         offenders.join("\n")
     );
 }
-

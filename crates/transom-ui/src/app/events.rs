@@ -75,14 +75,18 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let should_notify = match event {
-            SftpAppEvent::SftpListing { .. } => crate::sftp::on_sftp_listing(self, event, window, cx),
+            SftpAppEvent::SftpListing { .. } => {
+                crate::sftp::on_sftp_listing(self, event, window, cx)
+            }
             SftpAppEvent::SftpProgress { .. } => crate::sftp::on_sftp_progress(self, event, cx),
             SftpAppEvent::SftpVerifying { .. } => crate::sftp::on_sftp_verifying(self, event, cx),
             SftpAppEvent::SftpRetrying { .. } => crate::sftp::on_sftp_retrying(self, event, cx),
             SftpAppEvent::SftpFinished { .. } => crate::sftp::on_sftp_finished(self, event, cx),
             SftpAppEvent::SftpMetadata { .. } => crate::sftp::on_sftp_metadata(self, event, cx),
             SftpAppEvent::SftpPreview { .. } => crate::sftp::on_sftp_preview(self, event, cx),
-            SftpAppEvent::SftpPreviewFailed { .. } => crate::sftp::on_sftp_preview_failed(self, event, cx),
+            SftpAppEvent::SftpPreviewFailed { .. } => {
+                crate::sftp::on_sftp_preview_failed(self, event, cx)
+            }
             SftpAppEvent::SftpTextRead {
                 op_id,
                 content,
@@ -107,7 +111,8 @@ impl AppShell {
                 // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
                 let code = error.code;
                 let message = localized_error(&error);
-                if !crate::diff_viewer::diff_handle_remote_failure(self, op_id, &message, false, cx) {
+                if !crate::diff_viewer::diff_handle_remote_failure(self, op_id, &message, false, cx)
+                {
                     crate::editor::note_editor_text_failed(self, op_id, message, code, window, cx);
                 }
                 true
@@ -115,7 +120,8 @@ impl AppShell {
             SftpAppEvent::SftpTextConflict { op_id, error, .. } => {
                 // 版本指纹拦截不是普通失败：面板要弹出三选一冲突横幅。
                 let message = localized_error(&error);
-                if !crate::diff_viewer::diff_handle_remote_failure(self, op_id, &message, true, cx) {
+                if !crate::diff_viewer::diff_handle_remote_failure(self, op_id, &message, true, cx)
+                {
                     crate::editor::note_editor_text_conflict(self, op_id, message, cx);
                 }
                 true
@@ -280,7 +286,12 @@ impl AppShell {
                 self.set_transient_status(rust_i18n::t!("status.copied"), cx);
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
-                crate::app::clipboard_prompt::request_clipboard_permission(self, tab_id, text.clone(), cx);
+                crate::app::clipboard_prompt::request_clipboard_permission(
+                    self,
+                    tab_id,
+                    text.clone(),
+                    cx,
+                );
             }
             TerminalEvent::CopyModeChanged { active } => {
                 // 提示只在本次进入时写入；退出时只清理自己写的那条，避免覆盖
@@ -311,13 +322,22 @@ impl AppShell {
                 exit_code,
                 duration_ms,
             } => {
-                crate::app::notify::on_command_finished(self, tab_id, *exit_code, *duration_ms, window, cx);
+                crate::app::notify::on_command_finished(
+                    self,
+                    tab_id,
+                    *exit_code,
+                    *duration_ms,
+                    window,
+                    cx,
+                );
             }
             TerminalEvent::DesktopNotification { title, body } => {
                 crate::app::notify::on_desktop_notification(self, title, body, cx);
             }
             TerminalEvent::OpenCodeLocation { path, line, column } => {
-                crate::editor::open_terminal_code_location(self, tab_id, path, *line, *column, window, cx);
+                crate::editor::open_terminal_code_location(
+                    self, tab_id, path, *line, *column, window, cx,
+                );
             }
             TerminalEvent::TriggerFired { rule_name, action } => match action {
                 transom_core::TriggerAction::AutoResponse(reply) => {

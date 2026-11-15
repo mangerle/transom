@@ -104,9 +104,13 @@ pub(crate) fn render_sidebar(
                             SidebarRow::Folder(row) => {
                                 Some(crate::sidebar::render_folder_row(this, row, &p, cx))
                             }
-                            SidebarRow::Session(row) => {
-                                Some(crate::sidebar::render_session_row(this, row, active_session, &p, cx))
-                            }
+                            SidebarRow::Session(row) => Some(crate::sidebar::render_session_row(
+                                this,
+                                row,
+                                active_session,
+                                &p,
+                                cx,
+                            )),
                         }
                     })
                     .collect()
@@ -220,16 +224,21 @@ fn render_sidebar_header(shell: &AppShell, p: &Palette, cx: &mut Context<AppShel
 }
 
 /// 批量选择状态条：已选数量、全选与批量编辑入口。
-fn render_batch_selection_bar(shell: &AppShell, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+fn render_batch_selection_bar(
+    shell: &AppShell,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
     let selected_count = shell.state.sidebar.selected_sessions.len();
     h_flex()
         .w_full()
         .justify_between()
         .items_center()
         .child(
-            div().text_xs().text_color(p.muted_foreground).child(
-                rust_i18n::t!("batch.selected_count", count = selected_count).to_string(),
-            ),
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("batch.selected_count", count = selected_count).to_string()),
         )
         .child(
             h_flex()

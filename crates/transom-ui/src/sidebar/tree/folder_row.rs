@@ -52,7 +52,12 @@ pub(crate) fn render_folder_row(
             move |drag: &SidebarDrag, window, cx| {
                 let drag = *drag;
                 app.update(cx, |this, cx| {
-                    crate::sidebar::handle_sidebar_drop(this, drag, SidebarTarget::Folder(folder_id), cx);
+                    crate::sidebar::handle_sidebar_drop(
+                        this,
+                        drag,
+                        SidebarTarget::Folder(folder_id),
+                        cx,
+                    );
                     window.refresh();
                 });
             }

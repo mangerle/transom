@@ -23,7 +23,7 @@ pub(crate) fn finish_cloud_sync_pull(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let safety_path = write_sync_safety_copy(shell, );
+    let safety_path = write_sync_safety_copy(shell);
     if let Some(path) = &safety_path {
         log::info!("下载合并前已保存本机安全副本，路径: {}", path.display());
     }
@@ -49,7 +49,8 @@ pub(crate) fn finish_cloud_sync_pull(
             })
             .await;
         let _ = this.update(cx, |this, cx| {
-            apply_cloud_sync_pull(this, 
+            apply_cloud_sync_pull(
+                this,
                 CloudPullApply {
                     remote_catalog,
                     secrets,
@@ -68,8 +69,7 @@ pub(crate) fn finish_cloud_sync_pull(
 /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
 fn write_sync_safety_copy(shell: &AppShell) -> Option<PathBuf> {
     let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let path =
-        transom_platform::paths::config_dir().join(format!("sync-safety-{timestamp}.json"));
+    let path = transom_platform::paths::config_dir().join(format!("sync-safety-{timestamp}.json"));
     let options = BackupExportOptions::default();
     match shell
         .state
@@ -106,13 +106,12 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
             &remote_catalog,
             MergePreference::Remote,
         ),
-        CloudPullMode::ForceRemote => {
-            (remote_catalog, transom_core::SyncMergeReport::default())
-        }
+        CloudPullMode::ForceRemote => (remote_catalog, transom_core::SyncMergeReport::default()),
     };
     shell.state.catalog = catalog;
     let saved = shell.state.persist_catalog();
-    shell.state
+    shell
+        .state
         .cloud_sync
         .scheduler
         .mark_catalog_synced(shell.state.catalog_revision);
@@ -145,8 +144,7 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
     };
     if report.conflicts > 0 {
         message.push(' ');
-        message
-            .push_str(rust_i18n::t!("sync.merge_conflicts", count = report.conflicts).as_ref());
+        message.push_str(rust_i18n::t!("sync.merge_conflicts", count = report.conflicts).as_ref());
     }
     message.push_str(&secret_restore_note(secrets));
     if let Some(path) = safety_path {

@@ -6,8 +6,8 @@ mod changes;
 mod image_archive;
 mod refresh;
 mod requests;
-mod volume_archive;
 mod row_actions;
+mod volume_archive;
 
 pub(crate) use row_actions::ShellRowAction;
 
@@ -297,4 +297,3 @@ impl ContainerWorkspace {
         cx.notify();
     }
 }
-

@@ -5,192 +5,83 @@
 //! 已迁到 `GitWorkspace::load_log`，外壳只负责定位实体与在实体更新后请求重绘。
 
 use crate::app::AppShell;
+use crate::git::commit_modal::ChangeGroup;
+use crate::git::commit_modal::dir_tree::{build_dir_tree, collect_dir_keys};
 use crate::git::types::GitDiffRequest;
+use crate::git::{GitWorkspace, GitWorkspaceEvent};
 use gpui_kit::*;
-use transom_core::{GitAction, GitCommand, GitProject, GitRequestId, GitSide, TabId};
+use transom_core::{
+    ChangeCode, GitAction, GitCommand, GitRequestId, GitSide, LogScope, StatusEntry, StatusRecord,
+    TabId,
+};
 
-/// 分页加载提交历史；`skip` 为 0 时整页替换，否则追加（下拉加载）。
-pub(crate) fn git_load_log(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    skip: usize,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let sent = workspace.update(cx, |workspace, _| workspace.load_log(skip));
-    if !sent {
-        shell
-            .state
-            .set_error(rust_i18n::t!("error.command_queue_full").to_string());
+impl GitWorkspace {
+    /// 分页加载提交历史并上报队列满错误；`skip` 为 0 时整页替换，否则追加。
+    pub(crate) fn load_log_notified(&mut self, skip: usize, cx: &mut Context<Self>) {
+        if !self.load_log(skip) {
+            cx.emit(GitWorkspaceEvent::Error(
+                rust_i18n::t!("error.command_queue_full").to_string(),
+            ));
+        }
+        cx.notify();
     }
-    cx.notify();
-}
 
-/// 读取输入框里的过滤条件并重查日志。
-pub(crate) fn git_apply_filter_inputs(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let (search, author) = {
-        let state = &workspace.read(cx).state;
-        (
-            state.search_input.read(cx).value().trim().to_string(),
-            state.author_input.read(cx).value().trim().to_string(),
-        )
-    };
-    workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.query.search = (!search.is_empty()).then_some(search);
-        state.query.author = (!author.is_empty()).then_some(author);
-        state.log.scope = state.query.scope.clone();
-    });
-    cx.notify();
-    git_load_log(shell, tab_id, 0, cx);
-}
+    /// 读取输入框里的过滤条件并重查日志。
+    pub(crate) fn apply_filter_inputs(&mut self, cx: &mut Context<Self>) {
+        let search = self.state.search_input.read(cx).value().trim().to_string();
+        let author = self.state.author_input.read(cx).value().trim().to_string();
+        self.state.query.search = (!search.is_empty()).then_some(search);
+        self.state.query.author = (!author.is_empty()).then_some(author);
+        self.state.log.scope = self.state.query.scope.clone();
+        self.load_log_notified(0, cx);
+    }
 
-/// 切换正则 / 大小写开关后立刻重查。
-pub(crate) fn git_toggle_filter_flag(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    regex: bool,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let query = &mut workspace.state.query;
+    /// 切换正则 / 大小写开关后立刻重查。
+    pub(crate) fn toggle_filter_flag(&mut self, regex: bool, cx: &mut Context<Self>) {
+        let query = &mut self.state.query;
         if regex {
             query.regex = !query.regex;
         } else {
             query.case_sensitive = !query.case_sensitive;
         }
-    });
-    cx.notify();
-    git_apply_filter_inputs(shell, tab_id, cx);
-}
-
-/// 选择日志范围（当前分支 / 全部引用 / 具体引用）。
-pub(crate) fn git_set_log_scope(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    scope: transom_core::LogScope,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.query.scope = scope;
-        state.log.scope = state.query.scope.clone();
-    });
-    cx.notify();
-    git_load_log(shell, tab_id, 0, cx);
-}
-
-/// 选择日期范围。
-pub(crate) fn git_set_log_dates(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    since: Option<String>,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        workspace.state.query.since = since;
-    });
-    cx.notify();
-    git_load_log(shell, tab_id, 0, cx);
-}
-
-/// 按路径过滤历史。
-pub(crate) fn git_set_log_path(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    path: Option<String>,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        workspace.state.query.paths = path.into_iter().collect();
-    });
-    cx.notify();
-    git_load_log(shell, tab_id, 0, cx);
-}
-
-/// 改一个差异显示选项并同步/重算当前差异。
-pub(crate) fn git_update_diff_options(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    update: impl FnOnce(&mut crate::git::types::GitDiffOptions),
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let old_ignore = workspace.update(cx, |workspace, _| {
-        let old_ignore = workspace.state.diff_options.ignore_whitespace;
-        update(&mut workspace.state.diff_options);
-        old_ignore
-    });
-    crate::git::actions::git_apply_diff_options_change(shell, tab_id, old_ignore, cx);
-}
-
-/// 切换改动树的「平铺 / 按目录」分组依据。
-pub(crate) fn git_toggle_group_by_directory(
-    shell: &mut AppShell,
-    project: &GitProject,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.group_by_directory = !state.group_by_directory;
-    });
-    cx.notify();
-}
-
-/// 全部展开：清空分组与目录的折叠集合。
-pub(crate) fn git_expand_all_groups(
-    shell: &mut AppShell,
-    project: &GitProject,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
-        workspace.update(cx, |workspace, _| {
-            let state = &mut workspace.state;
-            state.collapsed_groups.clear();
-            state.collapsed_dirs.clear();
-        });
+        self.apply_filter_inputs(cx);
     }
-    cx.notify();
-}
 
-/// 全部收起：收起所有分组；按目录模式下把当前每个目录也收起。
-pub(crate) fn git_collapse_all_groups(
-    shell: &mut AppShell,
-    project: &GitProject,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        use crate::git::commit_modal::ChangeGroup;
+    /// 选择日志范围（当前分支 / 全部引用 / 具体引用）。
+    pub(crate) fn set_log_scope(&mut self, scope: LogScope, cx: &mut Context<Self>) {
+        self.state.query.scope = scope;
+        self.state.log.scope = self.state.query.scope.clone();
+        self.load_log_notified(0, cx);
+    }
+
+    /// 选择日期范围。
+    pub(crate) fn set_log_dates(&mut self, since: Option<String>, cx: &mut Context<Self>) {
+        self.state.query.since = since;
+        self.load_log_notified(0, cx);
+    }
+
+    /// 按路径过滤历史。
+    pub(crate) fn set_log_path(&mut self, path: Option<String>, cx: &mut Context<Self>) {
+        self.state.query.paths = path.into_iter().collect();
+        self.load_log_notified(0, cx);
+    }
+
+    /// 切换改动树的「平铺 / 按目录」分组依据。
+    pub(crate) fn toggle_group_by_directory(&mut self, cx: &mut Context<Self>) {
+        self.state.group_by_directory = !self.state.group_by_directory;
+        cx.notify();
+    }
+
+    /// 全部展开：清空分组与目录的折叠集合。
+    pub(crate) fn expand_all_groups(&mut self, cx: &mut Context<Self>) {
+        self.state.collapsed_groups.clear();
+        self.state.collapsed_dirs.clear();
+        cx.notify();
+    }
+
+    /// 全部收起：收起所有分组；按目录模式下把当前每个目录也收起。
+    pub(crate) fn collapse_all_groups(&mut self, cx: &mut Context<Self>) {
+        let state = &mut self.state;
         for group in [
             ChangeGroup::Staged,
             ChangeGroup::Unstaged,
@@ -203,22 +94,21 @@ pub(crate) fn git_collapse_all_groups(
         if state.group_by_directory
             && let Some(status) = state.status.as_ref()
         {
-            use crate::git::commit_modal::dir_tree::{build_dir_tree, collect_dir_keys};
-            let mut grouped: [Vec<transom_core::StatusEntry>; 4] = Default::default();
+            let mut grouped: [Vec<StatusEntry>; 4] = Default::default();
             for entry in &status.entries {
                 let group = match entry.record {
-                    transom_core::StatusRecord::Tracked { index, worktree } => {
-                        if index != transom_core::ChangeCode::Unmodified {
+                    StatusRecord::Tracked { index, worktree } => {
+                        if index != ChangeCode::Unmodified {
                             Some(0)
-                        } else if worktree != transom_core::ChangeCode::Unmodified {
+                        } else if worktree != ChangeCode::Unmodified {
                             Some(1)
                         } else {
                             None
                         }
                     }
-                    transom_core::StatusRecord::Conflict => Some(0),
-                    transom_core::StatusRecord::Untracked => Some(2),
-                    transom_core::StatusRecord::Ignored => Some(3),
+                    StatusRecord::Conflict => Some(0),
+                    StatusRecord::Untracked => Some(2),
+                    StatusRecord::Ignored => Some(3),
                 };
                 if let Some(idx) = group {
                     grouped[idx].push(entry.clone());
@@ -239,80 +129,44 @@ pub(crate) fn git_collapse_all_groups(
                 }
             }
         }
-    });
-    cx.notify();
-}
+        cx.notify();
+    }
 
-/// 折叠 / 展开按目录模式下的一个目录。
-pub(crate) fn git_toggle_dir(
-    shell: &mut AppShell,
-    project: &GitProject,
-    key: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let collapsed_dirs = &mut workspace.state.collapsed_dirs;
+    /// 折叠 / 展开按目录模式下的一个目录。
+    pub(crate) fn toggle_dir(&mut self, key: &str, cx: &mut Context<Self>) {
+        let collapsed_dirs = &mut self.state.collapsed_dirs;
         if !collapsed_dirs.insert(key.to_string()) {
             collapsed_dirs.remove(key);
         }
-    });
-    cx.notify();
-}
+        cx.notify();
+    }
 
-/// 折叠或展开日志右侧变更文件树中的目录。
-pub(crate) fn git_toggle_log_file_dir(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    key: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let collapsed_dirs = &mut workspace.state.collapsed_log_dirs;
+    /// 折叠或展开日志右侧变更文件树中的目录。
+    pub(crate) fn toggle_log_file_dir(&mut self, key: &str, cx: &mut Context<Self>) {
+        let collapsed_dirs = &mut self.state.collapsed_log_dirs;
         if !collapsed_dirs.insert(key.to_string()) {
             collapsed_dirs.remove(key);
         }
-    });
-    cx.notify();
-}
+        cx.notify();
+    }
 
-/// 折叠 / 展开改动树的一个分组。
-pub(crate) fn git_toggle_group(
-    shell: &mut AppShell,
-    project: &GitProject,
-    key: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let collapsed_groups = &mut workspace.state.collapsed_groups;
+    /// 折叠 / 展开改动树的一个分组。
+    pub(crate) fn toggle_group(&mut self, key: &str, cx: &mut Context<Self>) {
+        let collapsed_groups = &mut self.state.collapsed_groups;
         if !collapsed_groups.insert(key.to_string()) {
             collapsed_groups.remove(key);
         }
-    });
-    cx.notify();
-}
+        cx.notify();
+    }
 
-/// 分组头勾选：整组全选 / 全不选。
-pub(crate) fn git_set_group_checked(
-    shell: &mut AppShell,
-    project: &GitProject,
-    paths: &[String],
-    checked: bool,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let checked_set = &mut workspace.state.checked;
+    /// 分组头勾选：整组全选 / 全不选。
+    pub(crate) fn set_group_checked(
+        &mut self,
+        paths: &[String],
+        checked: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let checked_set = &mut self.state.checked;
         for path in paths {
             if checked {
                 checked_set.insert(path.clone());
@@ -320,44 +174,51 @@ pub(crate) fn git_set_group_checked(
                 checked_set.remove(path);
             }
         }
-    });
-    cx.notify();
-}
-
-/// 暂存 / 取消暂存 / 丢弃 / 删除未跟踪。
-pub(crate) fn git_run_paths(
-    shell: &mut AppShell,
-    project: &GitProject,
-    action: GitAction,
-    paths: Vec<String>,
-    cx: &mut Context<AppShell>,
-) {
-    if paths.is_empty() {
-        return;
+        cx.notify();
     }
-    let command = match action {
-        GitAction::Stage => GitCommand::Stage {
-            project: project.clone(),
-            paths,
-        },
-        GitAction::Unstage => GitCommand::Unstage {
-            project: project.clone(),
-            paths,
-        },
-        GitAction::Discard => GitCommand::Discard {
-            project: project.clone(),
-            paths,
-        },
-        GitAction::DeleteUntracked => GitCommand::DeleteUntracked {
-            project: project.clone(),
-            paths,
-        },
-        other => {
-            log::error!("按路径批量执行的 Git 动作不匹配，动作: {other:?}");
+
+    /// 暂存 / 取消暂存 / 丢弃 / 删除未跟踪。
+    pub(crate) fn run_paths(
+        &mut self,
+        action: GitAction,
+        paths: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
             return;
         }
+        let project = self.state.project.clone();
+        let command = match action {
+            GitAction::Stage => GitCommand::Stage { project, paths },
+            GitAction::Unstage => GitCommand::Unstage { project, paths },
+            GitAction::Discard => GitCommand::Discard { project, paths },
+            GitAction::DeleteUntracked => GitCommand::DeleteUntracked { project, paths },
+            other => {
+                log::error!("按路径批量执行的 Git 动作不匹配，动作: {other:?}");
+                return;
+            }
+        };
+        self.send(command);
+        cx.notify();
+    }
+}
+
+/// 分页加载提交历史；`skip` 为 0 时整页替换，否则追加（下拉加载）。
+pub(crate) fn git_load_log(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    skip: usize,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(workspace) = shell.state.git_workspace(tab_id) else {
+        return;
     };
-    shell.send_command(command);
+    let sent = workspace.update(cx, |workspace, _| workspace.load_log(skip));
+    if !sent {
+        shell
+            .state
+            .set_error(rust_i18n::t!("error.command_queue_full").to_string());
+    }
     cx.notify();
 }
 

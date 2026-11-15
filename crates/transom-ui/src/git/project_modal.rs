@@ -127,27 +127,28 @@ pub(crate) fn render_git_project_dialog_body(
     let error = modal.picker.error.clone();
     let path_value = modal.picker.path.read(cx).value().trim().to_string();
     let folders = super::folder_field::git_folder_names(shell);
-        let folder = modal.folder.clone();
-        let icon_choice = modal.icon;
-        let color_choice = modal.color;
-        let init_if_missing = modal.init_if_missing;
+    let folder = modal.folder.clone();
+    let icon_choice = modal.icon;
+    let color_choice = modal.color;
+    let init_if_missing = modal.init_if_missing;
 
-        let status_line = if let Some(info) = &detected {
-            format!(
-                "{} · {}",
-                rust_i18n::t!("git.project.is_repo"),
-                info.toplevel.display()
-            )
-        } else if probing {
-            rust_i18n::t!("git.project.probing").to_string()
-        } else if path_value.is_empty() {
-            rust_i18n::t!("git.project.hint").to_string()
-        } else {
-            rust_i18n::t!("git.project.not_repo").to_string()
-        };
-        let can_confirm = can_confirm_project(&path_value, probing, error.is_some());
+    let status_line = if let Some(info) = &detected {
+        format!(
+            "{} · {}",
+            rust_i18n::t!("git.project.is_repo"),
+            info.toplevel.display()
+        )
+    } else if probing {
+        rust_i18n::t!("git.project.probing").to_string()
+    } else if path_value.is_empty() {
+        rust_i18n::t!("git.project.hint").to_string()
+    } else {
+        rust_i18n::t!("git.project.not_repo").to_string()
+    };
+    let can_confirm = can_confirm_project(&path_value, probing, error.is_some());
 
-        let mut body = v_flex()
+    let mut body =
+        v_flex()
             .w_full()
             .gap_2()
             .child(render_git_browser(
@@ -273,46 +274,46 @@ pub(crate) fn render_git_project_dialog_body(
                             ),
                     ),
             );
-        body = body.when(error.is_some(), |el| {
-            el.child(
-                div()
-                    .text_xs()
-                    .text_color(p.danger)
-                    .child(error.unwrap_or_default()),
-            )
-        });
-
-        let footer = h_flex()
-            .w_full()
-            .gap_2()
-            .justify_end()
-            .child(crate::widgets::dialog_cancel_button(
-                "git-project-cancel",
-                rust_i18n::t!("git.project.cancel").to_string(),
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                    close_git_project_modal(this, cx);
-                }),
-            ))
-            .child(
-                crate::widgets::dialog_confirm_button(
-                    "git-project-confirm",
-                    rust_i18n::t!("git.name.confirm").to_string(),
-                    None,
-                    crate::widgets::DialogConfirmKind::Primary,
-                    crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                        commit_git_project_modal(this, cx);
-                    }),
-                )
-                .disabled(!can_confirm),
-            );
-
-        crate::widgets::dialog_body(
-            "git-project-dialog",
-            rust_i18n::t!("git.project.title").to_string(),
-            None,
-            body,
-            Some(footer),
+    body = body.when(error.is_some(), |el| {
+        el.child(
+            div()
+                .text_xs()
+                .text_color(p.danger)
+                .child(error.unwrap_or_default()),
         )
+    });
+
+    let footer = h_flex()
+        .w_full()
+        .gap_2()
+        .justify_end()
+        .child(crate::widgets::dialog_cancel_button(
+            "git-project-cancel",
+            rust_i18n::t!("git.project.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                close_git_project_modal(this, cx);
+            }),
+        ))
+        .child(
+            crate::widgets::dialog_confirm_button(
+                "git-project-confirm",
+                rust_i18n::t!("git.name.confirm").to_string(),
+                None,
+                crate::widgets::DialogConfirmKind::Primary,
+                crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
+                    commit_git_project_modal(this, cx);
+                }),
+            )
+            .disabled(!can_confirm),
+        );
+
+    crate::widgets::dialog_body(
+        "git-project-dialog",
+        rust_i18n::t!("git.project.title").to_string(),
+        None,
+        body,
+        Some(footer),
+    )
 }
 
 /// 对当前输入路径发起仓库探测。
@@ -338,11 +339,7 @@ pub(crate) fn probe_git_project_dir(shell: &mut AppShell, cx: &mut Context<AppSh
 }
 
 /// 对普通目录执行 `git init`，成功后按同一份草稿加入列表。
-fn init_git_project_dir(
-    shell: &mut AppShell,
-    draft: GitProjectDraft,
-    cx: &mut Context<AppShell>,
-) {
+fn init_git_project_dir(shell: &mut AppShell, draft: GitProjectDraft, cx: &mut Context<AppShell>) {
     let request_id = GitRequestId::new();
     let path = draft.path.clone();
     if let Some(modal) = shell.state.modals.git.project.as_mut() {

@@ -87,6 +87,8 @@ pub(crate) struct ToolModals {
     pub(crate) run_form: Entity<ContainerRunFormView>,
     /// 拉取/新建弹窗实体；附加输入、错误提示与提交动作归实体。
     pub(crate) create_dialog: Entity<ContainerCreateDialogView>,
+    /// 内置编辑器「跳转到行」模态状态。
+    pub(crate) editor_goto_line: Option<crate::editor::EditorGotoLineModalState>,
 }
 
 /// Git 仓库管理、克隆与分支操作类弹窗。
@@ -164,6 +166,7 @@ impl ModalHub {
                 container_form: tools.container_form,
                 run_form: tools.run_form,
                 create_dialog: tools.create_dialog,
+                editor_goto_line: None,
             },
             git: GitModals::new(),
             settings,

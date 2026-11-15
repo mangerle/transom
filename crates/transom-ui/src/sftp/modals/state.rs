@@ -2,14 +2,6 @@
 
 use super::common::*;
 
-/// 编辑器"跳转到行"弹窗的状态。
-pub(crate) struct EditorGotoLineModalState {
-    pub(crate) editor: Entity<EditorState>,
-    pub(crate) input: Entity<InputState>,
-    pub(crate) error: Option<String>,
-    pub(crate) _enter_sub: Subscription,
-}
-
 /// 待用户确认的破坏性操作。
 pub(crate) enum SftpPendingDelete {
     Local {
@@ -41,7 +33,6 @@ pub(crate) struct SftpModals {
     pub(crate) properties: Option<SftpPropertiesModalState>,
     pub(crate) filter: Option<SftpFilterModalState>,
     pub(crate) sync: Option<SftpSyncModalState>,
-    pub(crate) goto_line: Option<EditorGotoLineModalState>,
     pub(crate) confirm: Option<SftpConfirmModalState>,
     pub(crate) search: Option<crate::sftp::search_modal::SftpSearchModalState>,
 }

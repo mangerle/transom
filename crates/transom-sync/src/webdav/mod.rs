@@ -8,14 +8,13 @@
 //! - Digest 只支持 `auth` qop 与 MD5/SHA-256 系列，不支持需要正文摘要的
 //!   `auth-int`；遇到该能力时返回明确错误，而不是发送无法验证的请求。
 
-
 mod digest;
 #[cfg(test)]
 mod tests;
 
-use digest::{DigestState, digest_challenge, digest_uri, next_cnonce};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use digest::{DigestState, digest_challenge, digest_uri, next_cnonce};
 use parking_lot::Mutex;
 use reqwest::header::AUTHORIZATION;
 use transom_core::{AppError, CloudSyncTarget, ErrorCode, SYNC_OBJECT_NAME};
@@ -36,7 +35,6 @@ pub struct WebDavTarget {
     /// 供错误信息定位的服务器主机名（不含凭据）。
     host: String,
 }
-
 
 impl WebDavTarget {
     /// 构造 WebDAV 目标。

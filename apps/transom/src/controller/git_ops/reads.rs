@@ -13,6 +13,31 @@ pub(super) fn handle_read_command(
     command: &GitCommand,
 ) -> bool {
     match command {
+        GitCommand::Refresh { .. }
+        | GitCommand::LoadLog { .. }
+        | GitCommand::LoadCommitFiles { .. }
+        | GitCommand::LoadOutgoingCommits { .. }
+        | GitCommand::LoadRefs { .. }
+        | GitCommand::LoadDiff { .. } => handle_status_and_log(state, ctx, command),
+        GitCommand::Probe { .. }
+        | GitCommand::ListWorktrees { .. }
+        | GitCommand::RebaseTodo { .. }
+        | GitCommand::ListStashes { .. }
+        | GitCommand::ListStashFiles { .. }
+        | GitCommand::ResolveCommitUrl { .. }
+        | GitCommand::LoadConflictSides { .. }
+        | GitCommand::Cancel { .. } => handle_repo_queries(state, ctx, command),
+        _ => false,
+    }
+}
+
+/// 处理状态、提交日志、引用与差异查询。
+fn handle_status_and_log(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: &GitCommand,
+) -> bool {
+    match command {
         GitCommand::Refresh { project } => {
             let project_id = project.id;
             let project = project.clone();
@@ -153,6 +178,17 @@ pub(super) fn handle_read_command(
             });
             true
         }
+        _ => false,
+    }
+}
+
+/// 处理仓库探测、工作树、变基待办、暂存栈、冲突与请求取消命令。
+fn handle_repo_queries(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: &GitCommand,
+) -> bool {
+    match command {
         GitCommand::Probe { request_id, path } => {
             let request_id = *request_id;
             let path = path.clone();

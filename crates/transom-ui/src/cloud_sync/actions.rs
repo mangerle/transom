@@ -7,7 +7,11 @@ use crate::app::update_app_settings;
 use transom_core::{CloudPullMode, CloudPushMode, SyncOperation, SyncTrigger};
 
 /// 设置页的“立即测试”：先保存当前凭据与拓扑，再执行只读探测。
-pub(crate) fn start_cloud_sync_test(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn start_cloud_sync_test(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(settings) = manual_sync_settings(shell, window, cx) else {
         return;
     };
@@ -15,7 +19,11 @@ pub(crate) fn start_cloud_sync_test(shell: &mut AppShell, window: &mut Window, c
 }
 
 /// 设置页或侧边栏的“检查状态”。
-pub(crate) fn start_cloud_sync_check(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn start_cloud_sync_check(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(settings) = manual_sync_settings(shell, window, cx) else {
         return;
     };
@@ -23,31 +31,53 @@ pub(crate) fn start_cloud_sync_check(shell: &mut AppShell, window: &mut Window, 
 }
 
 /// 立即上传：常规模式会把远端合并结果回填本地。
-pub(crate) fn start_cloud_sync_push(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn start_cloud_sync_push(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(settings) = manual_sync_settings(shell, window, cx) else {
         return;
     };
-    crate::cloud_sync::dispatch_cloud_sync_push(shell, settings, SyncTrigger::Manual, CloudPushMode::Merge, cx);
+    crate::cloud_sync::dispatch_cloud_sync_push(
+        shell,
+        settings,
+        SyncTrigger::Manual,
+        CloudPushMode::Merge,
+        cx,
+    );
 }
 
 /// 立即下载：常规模式把远端变化合并到本地。
-pub(crate) fn start_cloud_sync_pull(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn start_cloud_sync_pull(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(settings) = manual_sync_settings(shell, window, cx) else {
         return;
     };
-    crate::cloud_sync::dispatch_cloud_sync_pull(shell, settings, SyncTrigger::Manual, CloudPullMode::Merge, cx);
+    crate::cloud_sync::dispatch_cloud_sync_pull(
+        shell,
+        settings,
+        SyncTrigger::Manual,
+        CloudPullMode::Merge,
+        cx,
+    );
 }
 
 /// 冲突处理：以当前本机目录覆盖远端。
 pub(crate) fn start_cloud_sync_force_push(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     let settings = app_settings(cx).sync.clone();
     if !settings.endpoint_enabled() {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
         cx.notify();
         return;
     }
-    crate::cloud_sync::dispatch_cloud_sync_push(shell, 
+    crate::cloud_sync::dispatch_cloud_sync_push(
+        shell,
         settings,
         SyncTrigger::ConflictResolution,
         CloudPushMode::ForceLocal,
@@ -59,12 +89,14 @@ pub(crate) fn start_cloud_sync_force_push(shell: &mut AppShell, cx: &mut Context
 pub(crate) fn start_cloud_sync_force_pull(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     let settings = app_settings(cx).sync.clone();
     if !settings.endpoint_enabled() {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
         cx.notify();
         return;
     }
-    crate::cloud_sync::dispatch_cloud_sync_pull(shell, 
+    crate::cloud_sync::dispatch_cloud_sync_pull(
+        shell,
         settings,
         SyncTrigger::ConflictResolution,
         CloudPullMode::ForceRemote,
@@ -73,7 +105,11 @@ pub(crate) fn start_cloud_sync_force_pull(shell: &mut AppShell, cx: &mut Context
 }
 
 /// 启动或定时触发的 Git 同步。
-pub(crate) fn start_git_sync(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn start_git_sync(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let draft = shell.state.modals.settings.read(cx).state().clone();
     if let Err(error) = crate::settings::sync_form::persist_sync_credentials(
         &draft,
@@ -87,7 +123,8 @@ pub(crate) fn start_git_sync(shell: &mut AppShell, window: &mut Window, cx: &mut
     }
     let settings = crate::settings::sync_form::collect_sync_settings(&draft, cx);
     if !settings.git_enabled() {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("sync.git_no_config").to_string());
         cx.notify();
         return;
@@ -116,7 +153,8 @@ fn send_git_sync(
         .git
         .as_ref()
         .map_or_else(|| "git".to_string(), |_| "git".to_string());
-    begin_sync_operation(shell, 
+    begin_sync_operation(
+        shell,
         SyncOperation::Git,
         trigger,
         provider,
@@ -128,7 +166,8 @@ fn send_git_sync(
         catalog,
         trigger,
     }) {
-        crate::cloud_sync::finish_sync_failure(shell, 
+        crate::cloud_sync::finish_sync_failure(
+            shell,
             SyncOperation::Git,
             trigger,
             "git",
@@ -157,13 +196,15 @@ fn manual_sync_settings(
     }
     let settings = crate::settings::sync_form::collect_sync_settings(&draft, cx);
     if !settings.enabled {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("sync.disabled_action").to_string());
         cx.notify();
         return None;
     }
     if !settings.has_endpoint() {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("sync.error_no_endpoint").to_string());
         cx.notify();
         return None;
@@ -181,7 +222,8 @@ pub(crate) fn dispatch_cloud_sync_check(
     cx: &mut Context<AppShell>,
 ) {
     let provider = provider_key(&settings);
-    begin_sync_operation(shell, 
+    begin_sync_operation(
+        shell,
         SyncOperation::Check,
         trigger,
         provider,
@@ -193,7 +235,8 @@ pub(crate) fn dispatch_cloud_sync_check(
         catalog,
         trigger,
     }) {
-        crate::cloud_sync::finish_sync_failure(shell, 
+        crate::cloud_sync::finish_sync_failure(
+            shell,
             SyncOperation::Check,
             trigger,
             &provider_key(&app_settings(cx).sync),
@@ -210,7 +253,8 @@ pub(crate) fn dispatch_cloud_sync_test(
     cx: &mut Context<AppShell>,
 ) {
     let provider = provider_key(&settings);
-    begin_sync_operation(shell, 
+    begin_sync_operation(
+        shell,
         SyncOperation::TestConnection,
         trigger,
         provider,
@@ -220,7 +264,8 @@ pub(crate) fn dispatch_cloud_sync_test(
         .state
         .send_command(SyncCommand::CloudSyncTest { settings, trigger })
     {
-        crate::cloud_sync::finish_sync_failure(shell, 
+        crate::cloud_sync::finish_sync_failure(
+            shell,
             SyncOperation::TestConnection,
             trigger,
             &provider_key(&app_settings(cx).sync),
@@ -238,7 +283,8 @@ pub(crate) fn dispatch_cloud_sync_push(
     cx: &mut Context<AppShell>,
 ) {
     let provider = provider_key(&settings);
-    begin_sync_operation(shell, 
+    begin_sync_operation(
+        shell,
         SyncOperation::Push,
         trigger,
         provider,
@@ -251,7 +297,8 @@ pub(crate) fn dispatch_cloud_sync_push(
         trigger,
         mode,
     }) {
-        crate::cloud_sync::finish_sync_failure(shell, 
+        crate::cloud_sync::finish_sync_failure(
+            shell,
             SyncOperation::Push,
             trigger,
             &provider_key(&app_settings(cx).sync),
@@ -269,7 +316,8 @@ pub(crate) fn dispatch_cloud_sync_pull(
     cx: &mut Context<AppShell>,
 ) {
     let provider = provider_key(&settings);
-    begin_sync_operation(shell, 
+    begin_sync_operation(
+        shell,
         SyncOperation::Pull,
         trigger,
         provider,
@@ -280,7 +328,8 @@ pub(crate) fn dispatch_cloud_sync_pull(
         trigger,
         mode,
     }) {
-        crate::cloud_sync::finish_sync_failure(shell, 
+        crate::cloud_sync::finish_sync_failure(
+            shell,
             SyncOperation::Pull,
             trigger,
             &provider_key(&app_settings(cx).sync),
@@ -297,7 +346,8 @@ fn begin_sync_operation(
     _provider: String,
     message: String,
 ) {
-    shell.state
+    shell
+        .state
         .cloud_sync
         .begin(operation, trigger, message.clone());
     shell.state.status = Some(message);
@@ -312,17 +362,20 @@ pub(crate) fn finish_sync_failure(
     message: String,
 ) {
     shell.state.set_error(message.clone());
-    let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-        operation,
-        trigger,
-        status: SyncHistoryStatus::Failed,
-        provider,
-        duration_ms: 0,
-        sessions: 0,
-        folders: 0,
-        bytes: 0,
-        message,
-    });
+    let entry = crate::cloud_sync::record_sync_history(
+        shell,
+        SyncHistoryRecord {
+            operation,
+            trigger,
+            status: SyncHistoryStatus::Failed,
+            provider,
+            duration_ms: 0,
+            sessions: 0,
+            folders: 0,
+            bytes: 0,
+            message,
+        },
+    );
     shell.state.cloud_sync.finish(entry);
     shell.state.status = shell.state.cloud_sync.message.clone();
 }

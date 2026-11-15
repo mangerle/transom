@@ -96,7 +96,11 @@ fn complete_transfer_task(
 }
 
 /// SFTP 传输完成：落定任务状态、刷新受影响的目录并派发桌面通知。
-pub(crate) fn on_sftp_finished(shell: &mut AppShell, event: SftpAppEvent, cx: &mut Context<AppShell>) -> bool {
+pub(crate) fn on_sftp_finished(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpFinished {
         tab_id,
         connection_id,
@@ -108,7 +112,8 @@ pub(crate) fn on_sftp_finished(shell: &mut AppShell, event: SftpAppEvent, cx: &m
     else {
         return true;
     };
-    let outcome = apply_sftp_finish(shell, 
+    let outcome = apply_sftp_finish(
+        shell,
         SftpFinishInput {
             tab_id,
             connection_id,
@@ -182,7 +187,9 @@ fn apply_sftp_finish(
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.connection_id);
-    if let Some(mut panel) = crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx) {
+    if let Some(mut panel) =
+        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
+    {
         let completion = panel
             .state
             .queue
@@ -243,7 +250,11 @@ fn apply_sftp_finish(
 }
 
 /// SFTP 失败：同步模态失败自行重绘并返回；传输失败落定任务并通知。
-pub(crate) fn on_sftp_failed(shell: &mut AppShell, event: SftpAppEvent, cx: &mut Context<AppShell>) -> bool {
+pub(crate) fn on_sftp_failed(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpFailed {
         tab_id,
         connection_id,
@@ -269,7 +280,9 @@ pub(crate) fn on_sftp_failed(shell: &mut AppShell, event: SftpAppEvent, cx: &mut
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.connection_id);
-    if let Some(mut panel) = crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx) {
+    if let Some(mut panel) =
+        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
+    {
         let err_msg = localized_error(&error);
         let mut failed_transfer = false;
         if let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id) {

@@ -72,11 +72,7 @@ pub fn setting_frame(content: AnyElement, p: &Palette) -> AnyElement {
 }
 
 /// 带分割线的输入行：输入框与其说明同属一行。
-pub fn setting_field_row(
-    field: AnyElement,
-    note: Option<String>,
-    p: &Palette,
-) -> AnyElement {
+pub fn setting_field_row(field: AnyElement, note: Option<String>, p: &Palette) -> AnyElement {
     let inner = v_flex()
         .w_full()
         .gap(rems(space::MD))

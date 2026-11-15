@@ -140,12 +140,12 @@ impl ModalKind {
             ModalKind::GitProject => {
                 crate::git::project_modal::render_git_project_dialog_body(shell, app, window, cx, p)
             }
-            ModalKind::GitClone => {
-                crate::git::clone_modal::view::render_git_clone_dialog_body(shell, app, window, cx, p)
-            }
-            ModalKind::GitWorktree => {
-                crate::git::worktree_modal::render_git_worktree_dialog_body(shell, app, window, cx, p)
-            }
+            ModalKind::GitClone => crate::git::clone_modal::view::render_git_clone_dialog_body(
+                shell, app, window, cx, p,
+            ),
+            ModalKind::GitWorktree => crate::git::worktree_modal::render_git_worktree_dialog_body(
+                shell, app, window, cx, p,
+            ),
             ModalKind::GitName => {
                 crate::git::name_modal::render_git_name_dialog_body(shell, app, cx, p)
             }
@@ -155,9 +155,9 @@ impl ModalKind {
             ModalKind::GitPush => {
                 crate::git::push_modal::render_git_push_dialog_body(shell, app, window, cx, p)
             }
-            ModalKind::GitConflict => {
-                crate::git::conflict_modal::render_git_conflict_dialog_body(shell, app, window, cx, p)
-            }
+            ModalKind::GitConflict => crate::git::conflict_modal::render_git_conflict_dialog_body(
+                shell, app, window, cx, p,
+            ),
             _ => return None,
         };
         Some(element)

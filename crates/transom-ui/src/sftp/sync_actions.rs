@@ -68,7 +68,11 @@ impl SftpPanelView {
     }
 }
 
-pub(crate) fn sftp_open_sync_modal(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+pub(crate) fn sftp_open_sync_modal(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    cx: &mut Context<AppShell>,
+) {
     if let Some(view) = shell.state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.open_sync_modal(cx));
     }
@@ -96,7 +100,11 @@ pub(crate) fn sftp_toggle_sync_entry(
 }
 
 /// 全选/全不选可同步项；类型冲突始终保持不可选。
-pub(crate) fn sftp_select_all_sync(shell: &mut AppShell, selected: bool, cx: &mut Context<AppShell>) {
+pub(crate) fn sftp_select_all_sync(
+    shell: &mut AppShell,
+    selected: bool,
+    cx: &mut Context<AppShell>,
+) {
     let Some(modal) = shell.state.sftp_modals.sync.as_mut() else {
         return;
     };
@@ -109,7 +117,11 @@ pub(crate) fn sftp_select_all_sync(shell: &mut AppShell, selected: bool, cx: &mu
 }
 
 /// 将勾选的差异项打包成一个同步任务入队并启动队列。
-pub(crate) fn start_sftp_sync(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn start_sftp_sync(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let verify = app_settings(cx).sftp.verify_after_transfer;
     let Some(mut modal) = shell.state.sftp_modals.sync.take() else {
         return;

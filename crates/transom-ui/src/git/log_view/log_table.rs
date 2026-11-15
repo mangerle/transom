@@ -7,7 +7,6 @@
 use super::log_refs::ref_chip;
 use super::menus::{CommitMenuTarget, render_commit_menu};
 use super::{placeholder, placeholder_colored};
-use crate::app::AppShell;
 use crate::git::GitWorkspace;
 use crate::git::graph_paint::{self, GraphCell};
 use crate::git::relative_time;
@@ -22,7 +21,6 @@ use gpui_kit::component::scroll::Scrollbar;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::rc::Rc;
-use transom_core::{GitProject, TabId};
 use transom_git::GraphRow;
 
 type State = crate::git::GitWorkspaceState;
@@ -39,8 +37,6 @@ const TIME_WIDTH: f32 = 112.0;
 pub(crate) fn render_log_table(
     workspace: Entity<GitWorkspace>,
     state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
     p: &Palette,
 ) -> AnyElement {
     let entries_len = state.log.entries.len();
@@ -59,10 +55,9 @@ pub(crate) fn render_log_table(
         transom_core::HeadState::OnBranch(name) => Some(name.clone()),
         _ => None,
     });
+    let menu_ws = workspace.clone();
     let list = build_log_list(LogListContext {
         workspace,
-        app: app.clone(),
-        tab_id,
         entries_len,
         lane_count,
         selected: state.selected_commit,
@@ -84,16 +79,12 @@ pub(crate) fn render_log_table(
         .child(list)
         .context_menu(move |mut menu, _window, _cx| {
             for column in [LogColumn::Author, LogColumn::Time] {
-                let item_app = app.clone();
+                let item_ws = menu_ws.clone();
                 menu = menu.item(
                     PopupMenuItem::new(rust_i18n::t!(column.i18n_key()).to_string())
                         .checked(column.is_shown(&context_columns))
                         .on_click(move |_, _, cx| {
-                            item_app.update(cx, |this, cx| {
-                                crate::git::actions::git_toggle_log_column(
-                                    this, tab_id, column, cx,
-                                );
-                            });
+                            item_ws.update(cx, |ws, cx| ws.toggle_log_column(column, cx));
                         }),
                 );
             }
@@ -109,8 +100,6 @@ pub(crate) fn render_log_table(
 #[derive(Clone)]
 struct LogListContext {
     workspace: Entity<GitWorkspace>,
-    app: Entity<AppShell>,
-    tab_id: TabId,
     entries_len: usize,
     lane_count: usize,
     selected: Option<usize>,
@@ -127,7 +116,7 @@ fn build_log_list(context: LogListContext) -> AnyElement {
     let item_sizes = Rc::new(vec![size(px(0.0), px(ROW_HEIGHT)); item_count]);
     let scroll = context.scroll.clone();
     let list = v_virtual_list(
-        context.app.clone(),
+        context.workspace.clone(),
         ElementId::Name("git-log-virtual-list".into()),
         item_sizes,
         move |_app, range, _window, cx| {
@@ -154,8 +143,7 @@ fn render_log_list_item(context: &LogListContext, index: usize, cx: &App) -> Opt
         if !context.has_more {
             return None;
         }
-        let app = context.app.clone();
-        let tab_id = context.tab_id;
+        let ws = context.workspace.clone();
         return Some(
             h_flex()
                 .justify_center()
@@ -166,9 +154,7 @@ fn render_log_list_item(context: &LogListContext, index: usize, cx: &App) -> Opt
                         .xsmall()
                         .label(rust_i18n::t!("git.log.load_more").to_string())
                         .on_click(move |_, _, cx| {
-                            app.update(cx, |this, cx| {
-                                crate::git::actions::git_load_more_log(this, tab_id, cx);
-                            });
+                            ws.update(cx, |ws, cx| ws.load_more_log(cx));
                         }),
                 )
                 .into_any_element(),
@@ -179,7 +165,6 @@ fn render_log_list_item(context: &LogListContext, index: usize, cx: &App) -> Opt
     let state = &workspace.state;
     let entry = state.log.entries.get(index)?;
     let shape = RowShape {
-        project: state.project.clone(),
         cell: GraphCell::at(&state.log.rows, index),
         lanes: context.lane_count,
         selected: context.selected == Some(index),
@@ -190,10 +175,9 @@ fn render_log_list_item(context: &LogListContext, index: usize, cx: &App) -> Opt
         current_branch: context.current_branch.clone(),
     };
     Some(render_commit_row(
-        context.tab_id,
         entry,
         &shape,
-        &context.app,
+        &context.workspace,
         &context.palette,
     ))
 }
@@ -217,7 +201,6 @@ fn graph_lane_count(rows: &[GraphRow]) -> usize {
 /// 一行的图形态：泳道数据 + 本页列数 + 是否选中 + 列开关 + 头指针态。
 #[derive(Clone)]
 struct RowShape {
-    project: GitProject,
     cell: GraphCell,
     lanes: usize,
     selected: bool,
@@ -234,19 +217,17 @@ struct RowShape {
 
 /// 一行提交。
 fn render_commit_row(
-    tab_id: TabId,
     entry: &transom_core::CommitEntry,
     shape: &RowShape,
-    app: &Entity<AppShell>,
+    workspace: &Entity<GitWorkspace>,
     p: &Palette,
 ) -> AnyElement {
     let (cell, lane_count, selected, columns) =
         (&shape.cell, shape.lanes, shape.selected, shape.columns);
     // 菜单闭包要活过本次渲染，需要的字段一律先取成局部值。
-    let project = shape.project.clone();
     let can_fold = shape.can_fold;
-    let select_app = app.clone();
-    let menu_app = app.clone();
+    let select_ws = workspace.clone();
+    let menu_ws = workspace.clone();
     let oid = entry.oid.clone();
     let select_oid = oid.clone();
     let parents = entry.parents.clone();
@@ -311,17 +292,13 @@ fn render_commit_row(
             )
         })
         .on_click(move |_, _, cx| {
-            select_app.update(cx, |this, cx| {
-                crate::git::actions::git_select_commit_by_oid(this, tab_id, &select_oid, cx);
-            });
+            select_ws.update(cx, |ws, cx| ws.select_commit_by_oid(&select_oid, cx));
         })
         .context_menu(move |menu, _window, _cx| {
             render_commit_menu(
                 menu,
-                menu_app.clone(),
+                menu_ws.clone(),
                 CommitMenuTarget {
-                    project: project.clone(),
-                    tab_id,
                     oid: oid.clone(),
                     parents: parents.clone(),
                     on_branch,

@@ -53,11 +53,7 @@ impl ContainerWorkspace {
     }
 
     /// 从本地 Tar 压缩包还原到数据卷中（若目标卷未指定，默认采用文件名作为卷名）。
-    pub(crate) fn restore_volume(
-        &mut self,
-        target_volume: Option<String>,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn restore_volume(&mut self, target_volume: Option<String>, cx: &mut Context<Self>) {
         let Some(local_path) = rfd::FileDialog::new()
             .add_filter("Tar Archive", &["tar", "tar.gz", "tgz"])
             .pick_file()

@@ -20,7 +20,9 @@ pub(crate) fn build_local_terminal_menu(
         rust_i18n::t!("app.local_shell_default").to_string(),
         AppIcon::Domain(DomainIcon::TERMINAL),
         move |_, window, cx| {
-            default_app.update(cx, |this, cx| crate::connection::open_local_terminal(this, window, cx));
+            default_app.update(cx, |this, cx| {
+                crate::connection::open_local_terminal(this, window, cx)
+            });
         },
     ));
     menu = menu.item(PopupMenuItem::separator());

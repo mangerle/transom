@@ -94,7 +94,12 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::app::audit_viewer::open_audit_viewer_for_tab(this, active_pane, window, cx);
+                        crate::app::audit_viewer::open_audit_viewer_for_tab(
+                            this,
+                            active_pane,
+                            window,
+                            cx,
+                        );
                     });
                 }
             },
@@ -134,7 +139,9 @@ pub(crate) fn build_tab_context_menu(
             AppIcon::Domain(DomainIcon::CONTAINER),
             move |_, window, cx| {
                 container_app.update(cx, |this, cx| {
-                    crate::container::open_container_workspace_for_session(this, session_id, window, cx);
+                    crate::container::open_container_workspace_for_session(
+                        this, session_id, window, cx,
+                    );
                 });
             },
         ));
@@ -174,7 +181,12 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        crate::app::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
+                        crate::app::split::split_active_pane(
+                            this,
+                            SplitAxis::Horizontal,
+                            window,
+                            cx,
+                        );
                     });
                 }
             },
@@ -245,7 +257,13 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::app::tiling::tile_tab(this, group_id, SplitAxis::Horizontal, window, cx);
+                        crate::app::tiling::tile_tab(
+                            this,
+                            group_id,
+                            SplitAxis::Horizontal,
+                            window,
+                            cx,
+                        );
                     });
                 }
             }),
@@ -260,7 +278,13 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::app::tiling::tile_tab(this, group_id, SplitAxis::Vertical, window, cx);
+                        crate::app::tiling::tile_tab(
+                            this,
+                            group_id,
+                            SplitAxis::Vertical,
+                            window,
+                            cx,
+                        );
                     });
                 }
             }),
@@ -273,7 +297,12 @@ pub(crate) fn build_tab_context_menu(
             AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(group) = crate::app::tiling::add_groups_to_tiling(this, set_id, groups.clone(), window) {
+                    if let Some(group) = crate::app::tiling::add_groups_to_tiling(
+                        this,
+                        set_id,
+                        groups.clone(),
+                        window,
+                    ) {
                         crate::app::tiling::activate_group(this, group, window, cx);
                         this.state.workspace.tab_selection.clear();
                     } else {
@@ -329,7 +358,9 @@ pub(crate) fn build_tab_context_menu(
             let app = app.clone();
             move |_, _window, cx| {
                 if let Some(id) = this_set_id {
-                    app.update(cx, |this, cx| crate::app::tiling::untile_tiling(this, id, cx));
+                    app.update(cx, |this, cx| {
+                        crate::app::tiling::untile_tiling(this, id, cx)
+                    });
                 }
             }
         }),

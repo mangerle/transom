@@ -4,7 +4,6 @@
 //! 超过七百行，四条命令分支之外还混着状态表管理）；拆到本模块后，主循环
 //! 只负责"收事件、委托处理、判定是否停机"，新增命令不再触碰循环本体。
 
-
 mod forward;
 mod host;
 mod sync;
@@ -17,9 +16,7 @@ use super::state::{ControllerCtx, ControllerState};
 use forward::handle_forward_command;
 use host::handle_host_command;
 use sync::handle_sync_command;
-use transom_core::{
-    AppCommand, ConnectParams, SftpCommand, TabId, TerminalCommand, ZmodemCommand,
-};
+use transom_core::{AppCommand, ConnectParams, SftpCommand, TabId, TerminalCommand, ZmodemCommand};
 use transom_zmodem::ZmodemConfig;
 
 /// 主循环的继续/停机判定。
@@ -146,7 +143,6 @@ fn handle_sftp_command(state: &mut ControllerState, ctx: &ControllerCtx, command
     }
 }
 
-
 fn handle_zmodem_command(state: &mut ControllerState, command: ZmodemCommand) {
     match command {
         ZmodemCommand::ZmodemUpload { tab_id, files } => {
@@ -191,9 +187,6 @@ fn start_connect(state: &mut ControllerState, dispatch: ConnectDispatch) {
         },
     );
 }
-
-/// 启动端口转发：建立有多次网络往返，移入任务执行；结果经 ForwardReady
-/// 回流提交，分发循环不再等待远端应答。
 
 /// 关闭标签：注销连接意图与全部附属任务，优雅断开远端。
 fn close_tab(state: &mut ControllerState, ctx: &ControllerCtx, tab_id: TabId) {

@@ -123,7 +123,6 @@ pub(super) fn assemble_state(
             properties: None,
             filter: None,
             sync: None,
-            goto_line: None,
             search: None,
         },
         broadcast: BroadcastBarState {

@@ -3,7 +3,7 @@
 use gpui_kit::base::{ColorTokens, RadiusTokens};
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::*;
-use transom_core::{DividerWidth};
+use transom_core::DividerWidth;
 
 /// 应用级表面语义令牌。
 ///
@@ -343,4 +343,3 @@ mod tests {
         assert_eq!(text.disabled, colors.muted_foreground.opacity(0.40));
     }
 }
-

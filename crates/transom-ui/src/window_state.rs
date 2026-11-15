@@ -7,7 +7,11 @@ use crate::app::{AppShell, TerminalTab};
 use gpui_kit::*;
 use transom_core::{Connection, SavedTabGroup, SavedTabTiling};
 
-pub(crate) fn save_window_state(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn save_window_state(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     // 全屏时的窗口几何是屏幕尺寸，写入设置会污染下次普通启动的窗口位置。
     if app_settings(cx).window.remember_window_bounds && !window.is_fullscreen() {
         let bounds = window.bounds();

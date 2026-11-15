@@ -48,7 +48,12 @@ pub(crate) fn on_connection_prompts_event(
 /// 授权位落在终端视图上（连接级），本次内容在这里直接写入：视图的授权方法
 /// 只改变后续请求的走向，不重复写剪贴板。终端可能已随标签关闭而消失，
 /// 此时仍写入本次内容与状态栏，不把一次已经获准的复制吞掉。
-fn apply_clipboard_allowed(shell: &mut AppShell, tab_id: TabId, text: &str, cx: &mut Context<AppShell>) {
+fn apply_clipboard_allowed(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    text: &str,
+    cx: &mut Context<AppShell>,
+) {
     let terminal = shell
         .state
         .workspace

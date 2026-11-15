@@ -73,7 +73,11 @@ pub(crate) fn on_container_sidebar_event(
 }
 
 /// 折叠/展开引擎分组并持久化。
-fn toggle_engine_folder(shell: &mut AppShell, folder_id: transom_core::FolderId, cx: &mut Context<AppShell>) {
+fn toggle_engine_folder(
+    shell: &mut AppShell,
+    folder_id: transom_core::FolderId,
+    cx: &mut Context<AppShell>,
+) {
     let collapsed = shell
         .state
         .catalog
@@ -187,11 +191,9 @@ fn apply_container_sidebar_drop(
             shell.state.catalog.move_engine_folder(folder_id, None)?;
             Ok(None)
         }
-        (
-            ContainerSidebarDrag::Engine(profile_id),
-            ContainerSidebarTarget::Folder(folder_id),
-        ) => {
-            shell.state
+        (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarTarget::Folder(folder_id)) => {
+            shell
+                .state
                 .catalog
                 .move_engine(profile_id, Some(folder_id))?;
             Ok(Some(folder_id))
@@ -200,15 +202,16 @@ fn apply_container_sidebar_drop(
             if moved == parent {
                 return Ok(Some(parent));
             }
-            shell.state.catalog.move_engine_folder(moved, Some(parent))?;
+            shell
+                .state
+                .catalog
+                .move_engine_folder(moved, Some(parent))?;
             Ok(Some(parent))
         }
         (drag, ContainerSidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
-            (
-                ContainerSidebarDrag::Engine(profile_id),
-                ContainerSidebarDrag::Engine(anchor_id),
-            ) => {
-                shell.state
+            (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarDrag::Engine(anchor_id)) => {
+                shell
+                    .state
                     .catalog
                     .reorder_engine(profile_id, anchor_id, side)?;
                 Ok(shell
@@ -219,11 +222,9 @@ fn apply_container_sidebar_drop(
                     .find(|profile| profile.id == anchor_id)
                     .and_then(|profile| profile.folder_id))
             }
-            (
-                ContainerSidebarDrag::Folder(folder_id),
-                ContainerSidebarDrag::Folder(anchor_id),
-            ) => {
-                shell.state
+            (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarDrag::Folder(anchor_id)) => {
+                shell
+                    .state
                     .catalog
                     .reorder_engine_folder(folder_id, anchor_id, side)?;
                 Ok(shell
@@ -232,19 +233,14 @@ fn apply_container_sidebar_drop(
                     .engine_folder(folder_id)
                     .and_then(|folder| folder.parent))
             }
-            (
-                ContainerSidebarDrag::Engine(profile_id),
-                ContainerSidebarDrag::Folder(anchor_id),
-            ) => {
-                shell.state
+            (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarDrag::Folder(anchor_id)) => {
+                shell
+                    .state
                     .catalog
                     .move_engine(profile_id, Some(anchor_id))?;
                 Ok(Some(anchor_id))
             }
-            (
-                ContainerSidebarDrag::Folder(folder_id),
-                ContainerSidebarDrag::Engine(anchor_id),
-            ) => {
+            (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarDrag::Engine(anchor_id)) => {
                 let parent = shell
                     .state
                     .catalog
@@ -260,7 +256,11 @@ fn apply_container_sidebar_drop(
 }
 
 /// 发起一次本机引擎发现。
-fn discover_engines(shell: &mut AppShell, sidebar: &Entity<ContainerSidebarView>, cx: &mut Context<AppShell>) {
+fn discover_engines(
+    shell: &mut AppShell,
+    sidebar: &Entity<ContainerSidebarView>,
+    cx: &mut Context<AppShell>,
+) {
     if sidebar.read(cx).state.discovering {
         return;
     }

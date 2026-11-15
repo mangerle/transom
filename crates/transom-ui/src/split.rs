@@ -26,13 +26,15 @@ pub(crate) fn split_active_pane(
         return;
     };
     if matches!(session.connection, Connection::Serial(_)) {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("error.serial_no_split").to_string());
         cx.notify();
         return;
     }
     if shell.state.workspace.groups[group_index].pane_count() >= MAX_PANES {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("error.too_many_panes", max = MAX_PANES).to_string());
         cx.notify();
         return;
@@ -49,7 +51,8 @@ pub(crate) fn split_active_pane(
     group.active_pane = pane_id;
     // 切分后新窗格接管焦点，若仍停留在原窗格的最大化上会把它藏起来。
     group.zoomed = None;
-    shell.state
+    shell
+        .state
         .workspace
         .tabs
         .push(TerminalTab::pending(pane_id, session.clone()));
@@ -124,19 +127,18 @@ pub(crate) fn detach_pane_to_tab(
     }
     // 摘出后的标签仍属于原会话：SSH 按会话序号继续排；本地终端每次都是
     // 新 Session，改按基础标题序号排，否则会与已有本地标签重名。
-    let Some((session_id, base_title, is_local)) =
-        shell.state.workspace.tab(tab_id).map(|tab| {
-            (
-                tab.session_id,
-                tab.session.name.clone(),
-                matches!(tab.session.connection, Connection::Local(_)),
-            )
-        })
-    else {
+    let Some((session_id, base_title, is_local)) = shell.state.workspace.tab(tab_id).map(|tab| {
+        (
+            tab.session_id,
+            tab.session.name.clone(),
+            matches!(tab.session.connection, Connection::Local(_)),
+        )
+    }) else {
         return;
     };
     if is_local {
-        shell.state
+        shell
+            .state
             .workspace
             .create_local_group(tab_id, session_id, &base_title);
     } else {

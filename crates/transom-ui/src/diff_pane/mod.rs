@@ -16,4 +16,4 @@ pub(crate) use controls::{
 };
 pub(crate) use hunk::PreparedHunk;
 pub(crate) use search::{DiffSearchBarProps, DiffSearchState, render_diff_search_bar};
-pub(crate) use types::{DiffViewOptions, IgnoreWhitespace};
+pub(crate) use types::{DiffViewOptions, IgnoreWhitespace, PreparedDiffDocument};

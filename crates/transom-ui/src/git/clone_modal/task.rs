@@ -195,7 +195,7 @@ pub(crate) fn render_git_clone_task(
                     .accessibility_label(rust_i18n::t!("git.clone.cancel").to_string())
                     .tooltip(rust_i18n::t!("git.clone.cancel").to_string())
                     .on_click(move |_, _, cx| {
-                        cancel_app.update(cx, |this, cx| git_cancel_clone_task(this, cx));
+                        cancel_app.update(cx, git_cancel_clone_task);
                     }),
             )
         })

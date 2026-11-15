@@ -6,7 +6,7 @@
 use crate::app::AppShell;
 use gpui_kit::*;
 use std::cmp::Ordering;
-use transom_core::{DropSide, GitFolder, GitFolderId, GitProject, GitProjectId, TabId};
+use transom_core::{DropSide, GitFolder, GitFolderId, GitProject, GitProjectId};
 
 // 排序与归组的公共约定（项目与分组共用，各自实现只差在"跟随父级"这一步）：
 // - 数组顺序就是显示顺序，也是落盘顺序，所以排序只需回答"落到哪一格"，
@@ -142,47 +142,6 @@ pub(crate) fn active_git_project_id(shell: &AppShell, cx: &App) -> Option<GitPro
         .state
         .git_workspace(tab_id)
         .map(|workspace| workspace.read(cx).state.project.id)
-}
-
-/// 取"当前上下文项目"：`Some(tab_id)` 时按标签定位，否则取第一个 Git 标签。
-///
-/// 右键菜单只带得动项目 id 之外的信息，这里退回"最近一个 Git 标签"，
-/// 与 IDEA 在工具窗口里对当前仓库执行动作的语义一致。
-pub(crate) fn git_project_of_tab(
-    shell: &AppShell,
-    tab_id: Option<TabId>,
-    cx: &App,
-) -> Option<GitProject> {
-    let workspace = match tab_id {
-        Some(tab_id) => shell.state.git_workspace(tab_id)?,
-        None => shell
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .rev()
-            .find_map(|tab| tab.git())?,
-    };
-    Some(workspace.read(cx).state.project.clone())
-}
-
-/// 切换一个文件的勾选态（提交面板的待提交集）。
-pub(crate) fn toggle_git_checked(
-    shell: &mut AppShell,
-    project: &GitProject,
-    path: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let checked = &mut workspace.state.checked;
-        if !checked.remove(path) {
-            checked.insert(path.to_string());
-        }
-    });
-    cx.notify();
 }
 
 /// 把文本写入系统剪贴板。

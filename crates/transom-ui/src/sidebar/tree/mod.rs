@@ -82,7 +82,11 @@ impl SidebarRow {
 }
 
 /// 折叠或展开文件夹，并持久化收纳状态。
-pub(crate) fn toggle_folder_collapsed(shell: &mut AppShell, id: FolderId, cx: &mut Context<AppShell>) {
+pub(crate) fn toggle_folder_collapsed(
+    shell: &mut AppShell,
+    id: FolderId,
+    cx: &mut Context<AppShell>,
+) {
     let collapsed = shell
         .state
         .catalog
@@ -147,7 +151,8 @@ fn apply_sidebar_drop(
             Ok(None)
         }
         (SidebarDrag::Session(session_id), SidebarTarget::Folder(folder_id)) => {
-            shell.state
+            shell
+                .state
                 .catalog
                 .move_session(session_id, Some(folder_id))?;
             Ok(Some(folder_id))
@@ -161,7 +166,8 @@ fn apply_sidebar_drop(
         }
         (drag, SidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
             (SidebarDrag::Session(session_id), SidebarDrag::Session(anchor_id)) => {
-                shell.state
+                shell
+                    .state
                     .catalog
                     .reorder_session(session_id, anchor_id, side)?;
                 Ok(shell
@@ -171,7 +177,8 @@ fn apply_sidebar_drop(
                     .map(|folder| folder.id))
             }
             (SidebarDrag::Folder(folder_id), SidebarDrag::Folder(anchor_id)) => {
-                shell.state
+                shell
+                    .state
                     .catalog
                     .reorder_folder(folder_id, anchor_id, side)?;
                 Ok(shell
@@ -181,7 +188,8 @@ fn apply_sidebar_drop(
                     .and_then(|folder| folder.parent))
             }
             (SidebarDrag::Session(session_id), SidebarDrag::Folder(anchor_id)) => {
-                shell.state
+                shell
+                    .state
                     .catalog
                     .move_session(session_id, Some(anchor_id))?;
                 Ok(Some(anchor_id))

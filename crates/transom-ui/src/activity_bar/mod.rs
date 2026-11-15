@@ -33,7 +33,12 @@ use transom_ui_icons::AppIconElement;
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 pub(crate) use menu::restore_activity_bar;
 
-fn activity_item_selected(shell: &AppShell, id: ActivityItemId, monitor_open: bool, cx: &App) -> bool {
+fn activity_item_selected(
+    shell: &AppShell,
+    id: ActivityItemId,
+    monitor_open: bool,
+    cx: &App,
+) -> bool {
     let section = shell
         .state
         .sidebar
@@ -239,7 +244,8 @@ fn activate_activity_item(
         ActivityItemId::Sftp => crate::sftp::toggle_sftp(shell, window, cx),
         ActivityItemId::Monitor => crate::app::monitor::toggle_monitor(shell, window, cx),
         ActivityItemId::Containers => {
-            shell.state
+            shell
+                .state
                 .sidebar
                 .toggle_section(SidebarSection::Containers);
             cx.notify();
@@ -247,7 +253,8 @@ fn activate_activity_item(
         ActivityItemId::Language => shell.toggle_language(cx),
         ActivityItemId::ImportSshConfig => crate::connection::import_ssh_config(shell, cx),
         ActivityItemId::KnownHosts => {
-            shell.state
+            shell
+                .state
                 .modals
                 .connection
                 .known_hosts

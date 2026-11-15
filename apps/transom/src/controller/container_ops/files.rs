@@ -4,6 +4,68 @@ use super::*;
 
 pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
     match command {
+        ContainerCommand::ListDir { .. }
+        | ContainerCommand::ListVolumeDir { .. }
+        | ContainerCommand::ReadFile { .. }
+        | ContainerCommand::ReadVolumeFile { .. }
+        | ContainerCommand::SaveFile { .. }
+        | ContainerCommand::SaveVolumeFile { .. } => {
+            handle_preview_and_save(state, ctx, command);
+        }
+        ContainerCommand::Download { .. }
+        | ContainerCommand::DownloadVolumeFile { .. }
+        | ContainerCommand::DownloadDirectory { .. }
+        | ContainerCommand::Upload { .. }
+        | ContainerCommand::UploadDirectory { .. } => {
+            handle_transfers(state, ctx, command);
+        }
+        ContainerCommand::RemovePath { .. }
+        | ContainerCommand::CopyPath { .. }
+        | ContainerCommand::ChmodPath { .. }
+        | ContainerCommand::ChownPath { .. }
+        | ContainerCommand::CreateDir { .. } => {
+            handle_path_mutations(state, ctx, command);
+        }
+        ContainerCommand::SaveImage { .. }
+        | ContainerCommand::LoadImage { .. }
+        | ContainerCommand::BackupVolume { .. }
+        | ContainerCommand::RestoreVolume { .. } => {
+            handle_archive_ops(state, ctx, command);
+        }
+        _ => {}
+    }
+}
+
+/// 构造统一的文件预览事件，容器与存储卷预览共用。
+fn build_file_preview_event(
+    request_id: ContainerRequestId,
+    path: String,
+    bytes: Vec<u8>,
+    truncated: bool,
+    size: u64,
+) -> ContainerAppEvent {
+    let binary = is_binary_preview(&bytes);
+    ContainerAppEvent::FilePreview {
+        request_id,
+        path,
+        content: if binary {
+            String::new()
+        } else {
+            String::from_utf8_lossy(&bytes).to_string()
+        },
+        truncated,
+        size,
+        binary,
+    }
+}
+
+/// 处理目录列举、文件预览与小文件保存命令。
+fn handle_preview_and_save(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::ListDir {
             tab_id,
             request_id,
@@ -24,7 +86,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     path: reply_path,
                     entries,
                 },
-            )
+            );
         }
         ContainerCommand::ListVolumeDir {
             tab_id,
@@ -46,7 +108,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     path: reply_path,
                     entries,
                 },
-            )
+            );
         }
         ContainerCommand::ReadFile {
             tab_id,
@@ -65,21 +127,9 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     transom_container::read_file(&engine, &container, &path, max_bytes).await
                 },
                 move |request_id, (bytes, truncated, size)| {
-                    let binary = is_binary_preview(&bytes);
-                    ContainerAppEvent::FilePreview {
-                        request_id,
-                        path: reply_path,
-                        content: if binary {
-                            String::new()
-                        } else {
-                            String::from_utf8_lossy(&bytes).to_string()
-                        },
-                        truncated,
-                        size,
-                        binary,
-                    }
+                    build_file_preview_event(request_id, reply_path, bytes, truncated, size)
                 },
-            )
+            );
         }
         ContainerCommand::ReadVolumeFile {
             tab_id,
@@ -98,22 +148,67 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     transom_container::read_volume_file(&engine, &volume, &path, max_bytes).await
                 },
                 move |request_id, (bytes, truncated, size)| {
-                    let binary = is_binary_preview(&bytes);
-                    ContainerAppEvent::FilePreview {
-                        request_id,
-                        path: reply_path,
-                        content: if binary {
-                            String::new()
-                        } else {
-                            String::from_utf8_lossy(&bytes).to_string()
-                        },
-                        truncated,
-                        size,
-                        binary,
-                    }
+                    build_file_preview_event(request_id, reply_path, bytes, truncated, size)
                 },
-            )
+            );
         }
+        ContainerCommand::SaveFile {
+            tab_id,
+            request_id,
+            container,
+            path,
+            content,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine| async move {
+                transom_container::write_file_bytes(
+                    &engine,
+                    &container,
+                    &path,
+                    content.into_bytes(),
+                )
+                .await
+            },
+            |request_id, _| ContainerAppEvent::ActionFinished {
+                request_id,
+                error: None,
+            },
+        ),
+        ContainerCommand::SaveVolumeFile {
+            tab_id,
+            request_id,
+            volume,
+            path,
+            content,
+        } => one_shot(
+            state,
+            ctx,
+            tab_id,
+            request_id,
+            move |engine| async move {
+                transom_container::write_volume_file_bytes(
+                    &engine,
+                    &volume,
+                    &path,
+                    content.into_bytes(),
+                )
+                .await
+            },
+            |request_id, _| ContainerAppEvent::ActionFinished {
+                request_id,
+                error: None,
+            },
+        ),
+        _ => {}
+    }
+}
+
+/// 处理容器与存储卷文件的上传/下载传输命令。
+fn handle_transfers(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
+    match command {
         ContainerCommand::Download {
             tab_id,
             request_id,
@@ -227,6 +322,17 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 .map(|_| ())
             },
         ),
+        _ => {}
+    }
+}
+
+/// 处理容器内路径删除、复制、改权与建目录命令。
+fn handle_path_mutations(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::RemovePath {
             tab_id,
             request_id,
@@ -318,56 +424,13 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 },
             );
         }
-        ContainerCommand::SaveFile {
-            tab_id,
-            request_id,
-            container,
-            path,
-            content,
-        } => one_shot(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine| async move {
-                transom_container::write_file_bytes(
-                    &engine,
-                    &container,
-                    &path,
-                    content.into_bytes(),
-                )
-                .await
-            },
-            |request_id, _| ContainerAppEvent::ActionFinished {
-                request_id,
-                error: None,
-            },
-        ),
-        ContainerCommand::SaveVolumeFile {
-            tab_id,
-            request_id,
-            volume,
-            path,
-            content,
-        } => one_shot(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine| async move {
-                transom_container::write_volume_file_bytes(
-                    &engine,
-                    &volume,
-                    &path,
-                    content.into_bytes(),
-                )
-                .await
-            },
-            |request_id, _| ContainerAppEvent::ActionFinished {
-                request_id,
-                error: None,
-            },
-        ),
+        _ => {}
+    }
+}
+
+/// 处理镜像归档导出/导入与存储卷备份/恢复命令。
+fn handle_archive_ops(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
+    match command {
         ContainerCommand::SaveImage {
             tab_id,
             request_id,

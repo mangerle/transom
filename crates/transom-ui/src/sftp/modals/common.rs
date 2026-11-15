@@ -14,7 +14,7 @@ pub(super) use gpui_kit::component::Selectable;
 pub(super) use gpui_kit::component::Sizable;
 pub(super) use gpui_kit::component::button::{Button, ButtonVariants};
 pub(super) use gpui_kit::component::checkbox::Checkbox;
-pub(super) use gpui_kit::component::input::{EditorState, Input, InputState, Textarea};
+pub(super) use gpui_kit::component::input::{Input, Textarea};
 pub(super) use gpui_kit::prelude::FluentBuilder;
 pub(super) use gpui_kit::*;
 pub(super) use std::path::PathBuf;

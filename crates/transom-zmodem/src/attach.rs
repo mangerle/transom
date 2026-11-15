@@ -12,9 +12,9 @@
 //! - 命令通道有界 4 且 `try_send` 快速失败：同标签连点两次上传只保留
 //!   第一个决策，绝不积压。
 
+use parking_lot::Mutex;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
-use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;

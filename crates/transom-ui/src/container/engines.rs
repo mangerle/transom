@@ -11,14 +11,13 @@ pub(crate) fn open_engine_workspace(
     cx: &mut Context<AppShell>,
 ) {
     if let Some(existing) =
-        shell.state
+        shell
+            .state
             .workspace
             .tabs
             .iter()
             .find_map(|tab| match &tab.session.connection {
-                Connection::ContainerEngine(existing) if existing.id == profile.id => {
-                    Some(tab.id)
-                }
+                Connection::ContainerEngine(existing) if existing.id == profile.id => Some(tab.id),
                 _ => None,
             })
     {
@@ -45,7 +44,8 @@ pub(crate) fn open_engine_workspace(
             crate::container::on_container_workspace_event(shell, tab_id, event, cx);
         },
     );
-    shell.state
+    shell
+        .state
         .tasks
         .subscriptions
         .container_workspaces
@@ -54,7 +54,8 @@ pub(crate) fn open_engine_workspace(
     shell.state.workspace.tabs.push(tab);
     shell.state.workspace.active_tab = Some(tab_id);
     shell.state.present_active_group();
-    shell.state
+    shell
+        .state
         .send_command(ContainerCommand::Connect { tab_id, profile });
     cx.notify();
 }
@@ -205,7 +206,8 @@ pub(crate) fn delete_container_profile(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state
+    shell
+        .state
         .catalog
         .engines
         .retain(|profile| profile.id != id);

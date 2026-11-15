@@ -19,7 +19,7 @@ mod group_menu;
 
 pub(crate) use file_row::{amend_file_row, worktree_diff_request};
 
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::h_flex;
@@ -29,130 +29,104 @@ use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::collections::HashSet;
-use transom_core::{CommitEntry, GitAction, GitProject, TabId};
+use transom_core::{CommitEntry, GitAction};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-/// 「修正」目标下拉按钮的渲染参数包。
-pub(crate) struct GitAmendTargetParams<'a> {
-    pub(crate) app: Entity<AppShell>,
-    pub(crate) tab_id: TabId,
-    pub(crate) project: &'a GitProject,
-    pub(crate) palette: &'a Palette,
-}
-
 /// 「修正」旁边的目标提交展示与选择：
 /// 只显示哈希，悬停显示完整说明，小倒三角点击下拉选择未推送到远端的本地提交。
 pub(crate) fn git_amend_target_button(
-    shell: &mut AppShell,
-    params: GitAmendTargetParams<'_>,
+    workspace: Entity<GitWorkspace>,
+    p: &Palette,
     cx: &App,
 ) -> AnyElement {
-    let GitAmendTargetParams {
-        app,
-        tab_id,
-        project,
-        palette: p,
-    } = params;
-    let (candidates, selected) =
-        if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
-                let state = &workspace.read(cx).state;
-                let ahead = state.status.as_ref().map(|s| s.ahead as usize).unwrap_or(0);
-                let has_upstream = state
-                    .status
-                    .as_ref()
-                    .and_then(|s| s.upstream.as_ref())
-                    .is_some();
-                let entries = &state.log.entries;
-                let list: Vec<CommitEntry> = if has_upstream {
-                    if ahead > 0 {
-                        entries.iter().take(ahead).cloned().collect()
-                    } else {
-                        entries.iter().take(1).cloned().collect()
-                    }
-                } else {
-                    entries.iter().take(20).cloned().collect()
-                };
-
-                let current = state
-                    .amend_target
-                    .as_ref()
-                    .and_then(|oid| list.iter().find(|e| &e.oid == oid))
-                    .or_else(|| list.first())
-                    .cloned();
-                (list, current)
+    let (candidates, selected) = {
+        let state = &workspace.read(cx).state;
+        let ahead = state.status.as_ref().map(|s| s.ahead as usize).unwrap_or(0);
+        let has_upstream = state
+            .status
+            .as_ref()
+            .and_then(|s| s.upstream.as_ref())
+            .is_some();
+        let entries = &state.log.entries;
+        let list: Vec<CommitEntry> = if has_upstream {
+            if ahead > 0 {
+                entries.iter().take(ahead).cloned().collect()
             } else {
-                (Vec::new(), None)
-            };
-
-        let Some(selected) = selected else {
-            return h_flex()
-                .gap_1()
-                .items_center()
-                .px_2()
-                .py_0p5()
-                .rounded(px(3.0))
-                .bg(p.muted)
-                .child(
-                    AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT))
-                        .xsmall()
-                        .text_color(p.muted_foreground),
-                )
-                .child(div().text_xs().text_color(p.muted_foreground).child("-"))
-                .into_any_element();
+                entries.iter().take(1).cloned().collect()
+            }
+        } else {
+            entries.iter().take(20).cloned().collect()
         };
 
-        let short_oid = selected.short_oid();
-        let tooltip = format!("{}  {}", short_oid, selected.subject);
-        let selected_oid = selected.oid.clone();
+        let current = state
+            .amend_target
+            .as_ref()
+            .and_then(|oid| list.iter().find(|e| &e.oid == oid))
+            .or_else(|| list.first())
+            .cloned();
+        (list, current)
+    };
 
-        Button::new("git-amend-target")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT)).small())
-            .label(short_oid)
-            .tooltip(tooltip)
-            .dropdown_menu(move |menu, _window, _cx| {
-                let mut menu = menu;
-                for item in &candidates {
-                    let item_app = app.clone();
-                    let item_oid = item.oid.clone();
-                    let is_active = item.oid == selected_oid;
-                    let label = format!("{}  {}", item.short_oid(), item.subject);
-                    menu = menu.item(menu_item(
-                        label,
-                        if is_active {
-                            AppIcon::Ui(UiIcon::CHECK)
-                        } else {
-                            AppIcon::Ui(UiIcon::SHOW)
-                        },
-                        move |_menu, window, cx| {
-                            let oid = item_oid.clone();
-                            item_app.update(cx, |this, cx| {
-                                crate::git::actions::git_select_amend_target(this, tab_id, oid, window, cx);
-                            });
-                        },
-                    ));
-                }
-                menu
-            })
-            .into_any_element()
-    }
+    let Some(selected) = selected else {
+        return h_flex()
+            .gap_1()
+            .items_center()
+            .px_2()
+            .py_0p5()
+            .rounded(px(3.0))
+            .bg(p.muted)
+            .child(
+                AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT))
+                    .xsmall()
+                    .text_color(p.muted_foreground),
+            )
+            .child(div().text_xs().text_color(p.muted_foreground).child("-"))
+            .into_any_element();
+    };
+
+    let short_oid = selected.short_oid();
+    let tooltip = format!("{}  {}", short_oid, selected.subject);
+    let selected_oid = selected.oid.clone();
+
+    Button::new("git-amend-target")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COMMIT)).small())
+        .label(short_oid)
+        .tooltip(tooltip)
+        .dropdown_menu(move |menu, _window, _cx| {
+            let mut menu = menu;
+            for item in &candidates {
+                let item_ws = workspace.clone();
+                let item_oid = item.oid.clone();
+                let is_active = item.oid == selected_oid;
+                let label = format!("{}  {}", item.short_oid(), item.subject);
+                menu = menu.item(menu_item(
+                    label,
+                    if is_active {
+                        AppIcon::Ui(UiIcon::CHECK)
+                    } else {
+                        AppIcon::Ui(UiIcon::SHOW)
+                    },
+                    move |_menu, window, cx| {
+                        let oid = item_oid.clone();
+                        item_ws.update(cx, |ws, cx| {
+                            ws.select_amend_target(oid, window, cx);
+                        });
+                    },
+                ));
+            }
+            menu
+        })
+        .into_any_element()
+}
 
 /// 「分组依据」菜单：平铺 / 按目录。
-///
-/// 菜单回调只拿得到 `&mut App`，因此这里显式带上 `Entity<AppShell>`：
-/// 与 `log_view` 的引用栏同一套写法，避免在渲染期持有可变借用。
-pub(crate) fn git_grouping_menu(
-    app: Entity<AppShell>,
-    project: GitProject,
-    by_directory: bool,
-) -> AnyElement {
-    let expand_app = app.clone();
-    let expand_project = project.clone();
-    let collapse_app = app.clone();
-    let collapse_project = project.clone();
+pub(crate) fn git_grouping_menu(workspace: Entity<GitWorkspace>, by_directory: bool) -> AnyElement {
+    let expand_ws = workspace.clone();
+    let collapse_ws = workspace.clone();
     Button::new("git-grouping")
         .ghost()
         .xsmall()
@@ -160,14 +134,10 @@ pub(crate) fn git_grouping_menu(
         .accessibility_label(rust_i18n::t!("git.group.by").to_string())
         .tooltip(rust_i18n::t!("git.group.by").to_string())
         .dropdown_menu(move |menu, _window, _cx| {
-            let flat_app = app.clone();
-            let flat_project = project.clone();
-            let dir_app = app.clone();
-            let dir_project = project.clone();
-            let expand_app = expand_app.clone();
-            let expand_project = expand_project.clone();
-            let collapse_app = collapse_app.clone();
-            let collapse_project = collapse_project.clone();
+            let flat_ws = workspace.clone();
+            let dir_ws = workspace.clone();
+            let expand_ws = expand_ws.clone();
+            let collapse_ws = collapse_ws.clone();
             menu.item(menu_item(
                 rust_i18n::t!("git.group.flat").to_string(),
                 if by_directory {
@@ -179,9 +149,8 @@ pub(crate) fn git_grouping_menu(
                     if !by_directory {
                         return;
                     }
-                    let target = flat_project.clone();
-                    flat_app.update(cx, |this, cx| {
-                        crate::git::actions::git_toggle_group_by_directory(this, &target, cx);
+                    flat_ws.update(cx, |ws, cx| {
+                        ws.toggle_group_by_directory(cx);
                     });
                 },
             ))
@@ -196,9 +165,8 @@ pub(crate) fn git_grouping_menu(
                     if by_directory {
                         return;
                     }
-                    let target = dir_project.clone();
-                    dir_app.update(cx, |this, cx| {
-                        crate::git::actions::git_toggle_group_by_directory(this, &target, cx);
+                    dir_ws.update(cx, |ws, cx| {
+                        ws.toggle_group_by_directory(cx);
                     });
                 },
             ))
@@ -207,9 +175,8 @@ pub(crate) fn git_grouping_menu(
                 rust_i18n::t!("git.group.expand_all").to_string(),
                 AppIcon::Ui(UiIcon::CHEVRON_DOWN),
                 move |_, _, cx| {
-                    let target = expand_project.clone();
-                    expand_app.update(cx, |this, cx| {
-                        crate::git::actions::git_expand_all_groups(this, &target, cx);
+                    expand_ws.update(cx, |ws, cx| {
+                        ws.expand_all_groups(cx);
                     });
                 },
             ))
@@ -217,9 +184,8 @@ pub(crate) fn git_grouping_menu(
                 rust_i18n::t!("git.group.collapse_all").to_string(),
                 AppIcon::Ui(UiIcon::CHEVRON_RIGHT),
                 move |_, _, cx| {
-                    let target = collapse_project.clone();
-                    collapse_app.update(cx, |this, cx| {
-                        crate::git::actions::git_collapse_all_groups(this, &target, cx);
+                    collapse_ws.update(cx, |ws, cx| {
+                        ws.collapse_all_groups(cx);
                     });
                 },
             ))

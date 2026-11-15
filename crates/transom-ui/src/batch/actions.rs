@@ -34,14 +34,19 @@ pub(crate) fn select_all_sessions(shell: &mut AppShell, cx: &mut Context<AppShel
     cx.notify();
 }
 
-pub(crate) fn open_batch_edit(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn open_batch_edit(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let selected_count = shell
         .state
         .sidebar
         .selected_sessions
         .iter()
         .filter(|id| {
-            shell.state
+            shell
+                .state
                 .catalog
                 .sessions
                 .iter()
@@ -144,9 +149,8 @@ pub(crate) fn save_batch_edit(shell: &mut AppShell, cx: &mut Context<AppShell>) 
     shell.state.sidebar.selection_mode = false;
     shell.state.sidebar.clear_selection();
     if saved {
-        shell.state.status = Some(
-            rust_i18n::t!("batch.updated", updated = updated, skipped = skipped).to_string(),
-        );
+        shell.state.status =
+            Some(rust_i18n::t!("batch.updated", updated = updated, skipped = skipped).to_string());
     }
     cx.notify();
 }

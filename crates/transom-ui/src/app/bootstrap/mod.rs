@@ -10,7 +10,6 @@ use crate::record::ReplayEvent;
 use crate::sidebar::SidebarSection;
 use std::sync::atomic::AtomicBool;
 
-
 mod prepare;
 use prepare::{BootstrapInputs, BootstrapState, assemble_state, prepare_bootstrap};
 
@@ -140,7 +139,9 @@ impl AppShell {
             if follows_system {
                 crate::theme::sync_with_system(window, cx);
                 if crate::settings::sync_terminal_palette(cx) {
-                    app_entity.update(cx, |shell, cx| crate::settings::apply_appearance_to_live_panes(shell, cx));
+                    app_entity.update(cx, |shell, cx| {
+                        crate::settings::apply_appearance_to_live_panes(shell, cx)
+                    });
                 }
             }
         })
@@ -175,7 +176,9 @@ impl AppShell {
         self.state.tasks.subscriptions.monitor = Some(monitor_subscription);
         let known_hosts_subscription = cx.subscribe(
             &self.state.modals.connection.known_hosts,
-            |shell, _, event: &KnownHostsEvent, cx| crate::app::known_hosts_modal::on_known_hosts_event(shell, event, cx),
+            |shell, _, event: &KnownHostsEvent, cx| {
+                crate::app::known_hosts_modal::on_known_hosts_event(shell, event, cx)
+            },
         );
         self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
         let connection_prompts_subscription = cx.subscribe(

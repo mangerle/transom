@@ -62,7 +62,8 @@ pub(crate) fn sftp_edit_remote_file_on(
 
     let (connection_id, file_name, permissions) = match gate {
         EditGate::Missing => {
-            crate::editor::editor_reject(shell, 
+            crate::editor::editor_reject(
+                shell,
                 tab_id,
                 connection_id,
                 rust_i18n::t!("sftp.select_file").to_string(),
@@ -72,7 +73,8 @@ pub(crate) fn sftp_edit_remote_file_on(
         }
         EditGate::IsDir => return,
         EditGate::TooLarge { name, size } => {
-            crate::editor::editor_reject(shell, 
+            crate::editor::editor_reject(
+                shell,
                 tab_id,
                 connection_id,
                 rust_i18n::t!(
@@ -93,7 +95,8 @@ pub(crate) fn sftp_edit_remote_file_on(
         } => (connection_id, name, permissions),
     };
 
-    crate::editor::open_remote_editor_panel(shell, 
+    crate::editor::open_remote_editor_panel(
+        shell,
         RemoteEditorOpen {
             tab_id,
             connection_id,

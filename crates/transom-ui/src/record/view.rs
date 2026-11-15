@@ -14,7 +14,11 @@ use transom_ui_icons::UiIcon;
 
 /// 渲染底栏录制指示器。
 /// 录制中的红色指示徽标：点击停止。
-fn render_recording_indicator(_shell: &mut AppShell, p: &Palette, cx: &mut Context<AppShell>) -> AnyElement {
+fn render_recording_indicator(
+    _shell: &mut AppShell,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
     let stop_tip = rust_i18n::t!("recorder.stop_btn").to_string();
     // 正在录制：使用 Tag::danger() 规范化徽标
     let tag = Tag::danger()

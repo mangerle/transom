@@ -11,6 +11,63 @@ pub(super) fn handle_write_command(
     command: GitCommand,
 ) {
     match command {
+        GitCommand::Stage { .. }
+        | GitCommand::StageAll { .. }
+        | GitCommand::Unstage { .. }
+        | GitCommand::Discard { .. }
+        | GitCommand::ApplyHunkPatch { .. }
+        | GitCommand::DeleteUntracked { .. }
+        | GitCommand::Commit { .. }
+        | GitCommand::CreatePatch { .. }
+        | GitCommand::ResolveConflictOurs { .. }
+        | GitCommand::ResolveConflictTheirs { .. }
+        | GitCommand::ResolveConflictMark { .. } => {
+            handle_working_tree_and_commit(state, ctx, command);
+        }
+        GitCommand::Checkout { .. }
+        | GitCommand::CreateBranch { .. }
+        | GitCommand::RenameBranch { .. }
+        | GitCommand::DeleteBranch { .. }
+        | GitCommand::CreateTag { .. }
+        | GitCommand::DeleteTag { .. }
+        | GitCommand::AddWorktree { .. }
+        | GitCommand::RemoveWorktree { .. }
+        | GitCommand::LockWorktree { .. }
+        | GitCommand::UnlockWorktree { .. } => {
+            handle_refs_and_worktrees(state, ctx, command);
+        }
+        GitCommand::Fetch { .. }
+        | GitCommand::Push { .. }
+        | GitCommand::PushUpTo { .. }
+        | GitCommand::Pull { .. }
+        | GitCommand::Init { .. } => {
+            handle_remote_and_init(state, ctx, command);
+        }
+        GitCommand::ResetTo { .. }
+        | GitCommand::Revert { .. }
+        | GitCommand::CherryPick { .. }
+        | GitCommand::Merge { .. }
+        | GitCommand::RebaseOnto { .. }
+        | GitCommand::RebaseAbort { .. }
+        | GitCommand::RebaseRun { .. }
+        | GitCommand::FoldTipIntoParent { .. }
+        | GitCommand::StashSave { .. }
+        | GitCommand::StashApply { .. }
+        | GitCommand::StashPop { .. }
+        | GitCommand::StashDrop { .. } => {
+            handle_history_and_stash(state, ctx, command);
+        }
+        _ => {}
+    }
+}
+
+/// 处理工作区暂存、提交、补丁与冲突解决命令。
+fn handle_working_tree_and_commit(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: GitCommand,
+) {
+    match command {
         GitCommand::Stage { project, paths } => {
             spawn_write(
                 state,
@@ -87,7 +144,61 @@ pub(super) fn handle_write_command(
                 },
             );
         }
+        GitCommand::CreatePatch { project, oid, path } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::CreatePatch,
+                move |repo| async move {
+                    let content = repo.commit_patch(&oid).await?;
+                    tokio::fs::write(&path, content).await.map_err(|source| {
+                        transom_git::GitError::Spawn {
+                            command: format!("写入补丁 {}", path.display()),
+                            source,
+                        }
+                    })
+                },
+            );
+        }
+        GitCommand::ResolveConflictOurs { project, paths } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::ResolveConflictOurs,
+                move |repo| async move { repo.resolve_ours(&paths).await },
+            );
+        }
+        GitCommand::ResolveConflictTheirs { project, paths } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::ResolveConflictTheirs,
+                move |repo| async move { repo.resolve_theirs(&paths).await },
+            );
+        }
+        GitCommand::ResolveConflictMark { project, paths } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::ResolveConflictMark,
+                move |repo| async move { repo.mark_resolved(&paths).await },
+            );
+        }
+        _ => {}
+    }
+}
 
+/// 处理分支、标签与工作树（Worktree）变更命令。
+fn handle_refs_and_worktrees(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: GitCommand,
+) {
+    match command {
         GitCommand::Checkout { project, target } => {
             spawn_write(
                 state,
@@ -177,6 +288,48 @@ pub(super) fn handle_write_command(
                 move |repo| async move { repo.add_worktree(&path, &branch, start.as_deref()).await },
             );
         }
+        GitCommand::RemoveWorktree {
+            project,
+            path,
+            force,
+        } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::RemoveWorktree,
+                move |repo| async move { repo.remove_worktree(&path, force).await },
+            );
+        }
+        GitCommand::LockWorktree {
+            project,
+            path,
+            reason,
+        } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::LockWorktree,
+                move |repo| async move { repo.lock_worktree(&path, reason.as_deref()).await },
+            );
+        }
+        GitCommand::UnlockWorktree { project, path } => {
+            spawn_write(
+                state,
+                ctx,
+                project,
+                GitAction::UnlockWorktree,
+                move |repo| async move { repo.unlock_worktree(&path).await },
+            );
+        }
+        _ => {}
+    }
+}
+
+/// 处理远端同步与仓库初始化命令。
+fn handle_remote_and_init(state: &mut ControllerState, ctx: &ControllerCtx, command: GitCommand) {
+    match command {
         GitCommand::Fetch { project } => {
             spawn_write(
                 state,
@@ -241,6 +394,13 @@ pub(super) fn handle_write_command(
                 );
             });
         }
+        _ => {}
+    }
+}
+
+/// 处理历史重写（Reset/Revert/CherryPick/Merge/Rebase）与暂存栈（Stash）命令。
+fn handle_history_and_stash(state: &mut ControllerState, ctx: &ControllerCtx, command: GitCommand) {
+    match command {
         GitCommand::ResetTo {
             project,
             target,
@@ -299,19 +459,6 @@ pub(super) fn handle_write_command(
                 move |repo| async move { repo.rebase_abort().await },
             );
         }
-        GitCommand::RemoveWorktree {
-            project,
-            path,
-            force,
-        } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::RemoveWorktree,
-                move |repo| async move { repo.remove_worktree(&path, force).await },
-            );
-        }
         GitCommand::RebaseRun {
             project,
             base,
@@ -333,28 +480,6 @@ pub(super) fn handle_write_command(
             spawn_write(state, ctx, project, action, move |repo| async move {
                 repo.fold_tip_into_parent(mode).await
             });
-        }
-        GitCommand::LockWorktree {
-            project,
-            path,
-            reason,
-        } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::LockWorktree,
-                move |repo| async move { repo.lock_worktree(&path, reason.as_deref()).await },
-            );
-        }
-        GitCommand::UnlockWorktree { project, path } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::UnlockWorktree,
-                move |repo| async move { repo.unlock_worktree(&path).await },
-            );
         }
         GitCommand::StashSave {
             project,
@@ -394,50 +519,6 @@ pub(super) fn handle_write_command(
                 project,
                 GitAction::StashDrop,
                 move |repo| async move { repo.stash_drop(&selector).await },
-            );
-        }
-        GitCommand::CreatePatch { project, oid, path } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::CreatePatch,
-                move |repo| async move {
-                    let content = repo.commit_patch(&oid).await?;
-                    tokio::fs::write(&path, content).await.map_err(|source| {
-                        transom_git::GitError::Spawn {
-                            command: format!("写入补丁 {}", path.display()),
-                            source,
-                        }
-                    })
-                },
-            );
-        }
-        GitCommand::ResolveConflictOurs { project, paths } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::ResolveConflictOurs,
-                move |repo| async move { repo.resolve_ours(&paths).await },
-            );
-        }
-        GitCommand::ResolveConflictTheirs { project, paths } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::ResolveConflictTheirs,
-                move |repo| async move { repo.resolve_theirs(&paths).await },
-            );
-        }
-        GitCommand::ResolveConflictMark { project, paths } => {
-            spawn_write(
-                state,
-                ctx,
-                project,
-                GitAction::ResolveConflictMark,
-                move |repo| async move { repo.mark_resolved(&paths).await },
             );
         }
         _ => {}

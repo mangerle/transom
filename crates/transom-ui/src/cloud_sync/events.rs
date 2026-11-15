@@ -45,7 +45,8 @@ fn handle_cloud_sync_checked(
     result: Result<SyncCheckReport, AppError>,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state
+    shell
+        .state
         .cloud_sync
         .scheduler
         .mark_check_finished(Instant::now());
@@ -68,23 +69,27 @@ fn handle_cloud_sync_checked(
                 SyncHistoryStatus::Success
             };
             let message = check_message(&report);
-            let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-                operation: SyncOperation::Check,
-                trigger: meta.trigger,
-                status,
-                provider: &report.provider,
-                duration_ms: meta.duration_ms,
-                sessions: report.local_summary.sessions,
-                folders: report.local_summary.folders,
-                bytes: 0,
-                message: message.clone(),
-            });
+            let entry = crate::cloud_sync::record_sync_history(
+                shell,
+                SyncHistoryRecord {
+                    operation: SyncOperation::Check,
+                    trigger: meta.trigger,
+                    status,
+                    provider: &report.provider,
+                    duration_ms: meta.duration_ms,
+                    sessions: report.local_summary.sessions,
+                    folders: report.local_summary.folders,
+                    bytes: 0,
+                    message: message.clone(),
+                },
+            );
             shell.state.cloud_sync.finish(entry);
             shell.state.status = Some(message);
             follow_up_after_check(shell, &report, meta.trigger, cx);
         }
         Err(error) => {
-            crate::cloud_sync::finish_sync_failure(shell, 
+            crate::cloud_sync::finish_sync_failure(
+                shell,
                 SyncOperation::Check,
                 meta.trigger,
                 &provider,
@@ -105,27 +110,29 @@ fn handle_cloud_sync_tested(
     match result {
         Ok(report) => {
             let message = if report.remote_present {
-                rust_i18n::t!("sync.test_remote_present", provider = report.provider)
-                    .to_string()
+                rust_i18n::t!("sync.test_remote_present", provider = report.provider).to_string()
             } else {
-                rust_i18n::t!("sync.test_remote_missing", provider = report.provider)
-                    .to_string()
+                rust_i18n::t!("sync.test_remote_missing", provider = report.provider).to_string()
             };
-            let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-                operation: SyncOperation::TestConnection,
-                trigger: meta.trigger,
-                status: SyncHistoryStatus::Success,
-                provider: &report.provider,
-                duration_ms: meta.duration_ms,
-                sessions: 0,
-                folders: 0,
-                bytes: 0,
-                message: message.clone(),
-            });
+            let entry = crate::cloud_sync::record_sync_history(
+                shell,
+                SyncHistoryRecord {
+                    operation: SyncOperation::TestConnection,
+                    trigger: meta.trigger,
+                    status: SyncHistoryStatus::Success,
+                    provider: &report.provider,
+                    duration_ms: meta.duration_ms,
+                    sessions: 0,
+                    folders: 0,
+                    bytes: 0,
+                    message: message.clone(),
+                },
+            );
             shell.state.cloud_sync.finish(entry);
             shell.state.status = Some(message);
         }
-        Err(error) => crate::cloud_sync::finish_sync_failure(shell, 
+        Err(error) => crate::cloud_sync::finish_sync_failure(
+            shell,
             SyncOperation::TestConnection,
             meta.trigger,
             &provider,
@@ -147,7 +154,8 @@ fn handle_cloud_sync_pushed(
             shell.state.catalog = report.catalog;
             shell.state.catalog.normalize();
             shell.state.persist_catalog();
-            shell.state
+            shell
+                .state
                 .cloud_sync
                 .scheduler
                 .mark_catalog_synced(shell.state.catalog_revision);
@@ -171,17 +179,20 @@ fn handle_cloud_sync_pushed(
                 kb = (bytes / 1024).max(1)
             )
             .to_string();
-            let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-                operation: SyncOperation::Push,
-                trigger: meta.trigger,
-                status: SyncHistoryStatus::Success,
-                provider: &provider,
-                duration_ms: meta.duration_ms,
-                sessions,
-                folders,
-                bytes,
-                message: message.clone(),
-            });
+            let entry = crate::cloud_sync::record_sync_history(
+                shell,
+                SyncHistoryRecord {
+                    operation: SyncOperation::Push,
+                    trigger: meta.trigger,
+                    status: SyncHistoryStatus::Success,
+                    provider: &provider,
+                    duration_ms: meta.duration_ms,
+                    sessions,
+                    folders,
+                    bytes,
+                    message: message.clone(),
+                },
+            );
             shell.state.cloud_sync.finish(entry);
             shell.state.status = Some(message);
         }
@@ -193,17 +204,20 @@ fn handle_cloud_sync_pushed(
             };
             let message = localized_error(&error);
             shell.state.set_error(message.clone());
-            let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-                operation: SyncOperation::Push,
-                trigger: meta.trigger,
-                status,
-                provider: &provider,
-                duration_ms: meta.duration_ms,
-                sessions: 0,
-                folders: 0,
-                bytes: 0,
-                message: message.clone(),
-            });
+            let entry = crate::cloud_sync::record_sync_history(
+                shell,
+                SyncHistoryRecord {
+                    operation: SyncOperation::Push,
+                    trigger: meta.trigger,
+                    status,
+                    provider: &provider,
+                    duration_ms: meta.duration_ms,
+                    sessions: 0,
+                    folders: 0,
+                    bytes: 0,
+                    message: message.clone(),
+                },
+            );
             shell.state.cloud_sync.finish(entry);
             shell.state.status = Some(message);
         }
@@ -229,17 +243,20 @@ fn handle_cloud_sync_pulled(
                     rust_i18n::t!("sync.pull_force_downloaded").to_string()
                 }
             };
-            let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-                operation: SyncOperation::Pull,
-                trigger: meta.trigger,
-                status: SyncHistoryStatus::Success,
-                provider: &provider,
-                duration_ms: meta.duration_ms,
-                sessions: summary.sessions,
-                folders: summary.folders,
-                bytes: report.bytes,
-                message: message.clone(),
-            });
+            let entry = crate::cloud_sync::record_sync_history(
+                shell,
+                SyncHistoryRecord {
+                    operation: SyncOperation::Pull,
+                    trigger: meta.trigger,
+                    status: SyncHistoryStatus::Success,
+                    provider: &provider,
+                    duration_ms: meta.duration_ms,
+                    sessions: summary.sessions,
+                    folders: summary.folders,
+                    bytes: report.bytes,
+                    message: message.clone(),
+                },
+            );
             shell.state.cloud_sync.finish(entry);
             shell.state.cloud_sync.conflict = None;
             shell.state.cloud_sync.begin(
@@ -251,7 +268,8 @@ fn handle_cloud_sync_pulled(
             crate::cloud_sync::finish_cloud_sync_pull(shell, report, mode, window, cx);
         }
         Err(error) => {
-            crate::cloud_sync::finish_sync_failure(shell, 
+            crate::cloud_sync::finish_sync_failure(
+                shell,
                 SyncOperation::Pull,
                 meta.trigger,
                 &provider,
@@ -295,22 +313,26 @@ fn handle_git_synced(
                 conflicts = report.conflicts
             )
             .to_string();
-            let entry = crate::cloud_sync::record_sync_history(shell, SyncHistoryRecord {
-                operation: SyncOperation::Git,
-                trigger: meta.trigger,
-                status: SyncHistoryStatus::Success,
-                provider: "git",
-                duration_ms: meta.duration_ms,
-                sessions: report.sessions_added + report.sessions_updated,
-                folders: report.folders_added + report.folders_updated,
-                bytes: result.bytes,
-                message: message.clone(),
-            });
+            let entry = crate::cloud_sync::record_sync_history(
+                shell,
+                SyncHistoryRecord {
+                    operation: SyncOperation::Git,
+                    trigger: meta.trigger,
+                    status: SyncHistoryStatus::Success,
+                    provider: "git",
+                    duration_ms: meta.duration_ms,
+                    sessions: report.sessions_added + report.sessions_updated,
+                    folders: report.folders_added + report.folders_updated,
+                    bytes: result.bytes,
+                    message: message.clone(),
+                },
+            );
             shell.state.cloud_sync.finish(entry);
             shell.state.status = Some(message);
         }
         Err(error) => {
-            crate::cloud_sync::finish_sync_failure(shell, 
+            crate::cloud_sync::finish_sync_failure(
+                shell,
                 SyncOperation::Git,
                 meta.trigger,
                 "git",
@@ -334,14 +356,26 @@ fn follow_up_after_check(
     let settings = app_settings(cx).sync.clone();
     match report.relation {
         SyncRelation::LocalAhead if settings.auto_push_on_change => {
-            crate::cloud_sync::dispatch_cloud_sync_push(shell, settings, trigger, CloudPushMode::Merge, cx);
+            crate::cloud_sync::dispatch_cloud_sync_push(
+                shell,
+                settings,
+                trigger,
+                CloudPushMode::Merge,
+                cx,
+            );
         }
         SyncRelation::RemoteAhead if settings.auto_pull_remote_changes => {
             if let Some(reason) = auto_pull_block_reason(shell, cx) {
                 shell.state.cloud_sync.message = Some(reason.clone());
                 shell.state.status = Some(reason);
             } else {
-                crate::cloud_sync::dispatch_cloud_sync_pull(shell, settings, trigger, CloudPullMode::Merge, cx);
+                crate::cloud_sync::dispatch_cloud_sync_pull(
+                    shell,
+                    settings,
+                    trigger,
+                    CloudPullMode::Merge,
+                    cx,
+                );
             }
         }
         SyncRelation::UpToDate

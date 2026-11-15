@@ -375,6 +375,5 @@ impl CloudSyncTarget for S3Target {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

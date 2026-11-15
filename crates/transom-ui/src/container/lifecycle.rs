@@ -133,9 +133,7 @@ pub(crate) fn prune_container_target(
     let command = match target {
         ContainerPruneTarget::Volumes => ContainerCommand::PruneVolumes { tab_id, request_id },
         ContainerPruneTarget::Images => ContainerCommand::PruneImages { tab_id, request_id },
-        ContainerPruneTarget::Networks => {
-            ContainerCommand::PruneNetworks { tab_id, request_id }
-        }
+        ContainerPruneTarget::Networks => ContainerCommand::PruneNetworks { tab_id, request_id },
     };
     if let Some(workspace) = shell.state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| {

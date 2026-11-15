@@ -88,14 +88,33 @@ impl ModalKind {
                     .update(cx, |view, cx| view.cancel_auth(cx));
                 true
             }
-            ModalKind::SftpInput => crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.input = None, window, cx),
-            ModalKind::SftpChmod => crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.chmod = None, window, cx),
-            ModalKind::SftpProperties => {
-                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.properties = None, window, cx)
+            ModalKind::SftpInput => {
+                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.input = None, window, cx)
             }
-            ModalKind::SftpFilter => crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.filter = None, window, cx),
-            ModalKind::SftpSearch => crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.search = None, window, cx),
-            ModalKind::SftpSync => crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.sync = None, window, cx),
+            ModalKind::SftpChmod => {
+                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.chmod = None, window, cx)
+            }
+            ModalKind::SftpProperties => crate::app::dialog_host::close_sftp_modal(
+                shell,
+                |hub| hub.properties = None,
+                window,
+                cx,
+            ),
+            ModalKind::SftpFilter => crate::app::dialog_host::close_sftp_modal(
+                shell,
+                |hub| hub.filter = None,
+                window,
+                cx,
+            ),
+            ModalKind::SftpSearch => crate::app::dialog_host::close_sftp_modal(
+                shell,
+                |hub| hub.search = None,
+                window,
+                cx,
+            ),
+            ModalKind::SftpSync => {
+                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.sync = None, window, cx)
+            }
             ModalKind::EditorGotoLine => {
                 crate::editor::cancel_editor_goto_line(shell, window, cx);
                 true
@@ -216,7 +235,6 @@ impl ModalKind {
             _ => true,
         }
     }
-
 }
 
 mod commit;

@@ -39,8 +39,8 @@ pub(crate) use diff::EditorDiffWriteSync;
 pub(crate) use entity::{EditorDiffSource, EditorPanelEvent, EditorPanels, on_editor_panel_event};
 pub(crate) use list::render_editor_list_popover;
 pub(crate) use navigate::{
-    cancel_editor_goto_line, commit_editor_goto_line, open_editor_goto_line,
-    render_editor_goto_line_body,
+    EditorGotoLineModalState, cancel_editor_goto_line, commit_editor_goto_line,
+    open_editor_goto_line, render_editor_goto_line_body,
 };
 pub(crate) use open::{
     RemoteEditorOpen, open_remote_editor_panel, sftp_edit_remote_file_on, spawn_new_editor_panel,

@@ -34,11 +34,7 @@ impl NoticeKind {
 }
 
 /// 渲染一条内联提示。
-pub fn notice(
-    kind: NoticeKind,
-    message: impl Into<SharedString>,
-    p: &Palette,
-) -> AnyElement {
+pub fn notice(kind: NoticeKind, message: impl Into<SharedString>, p: &Palette) -> AnyElement {
     let (accent, background, text) = match kind {
         NoticeKind::Success => (p.success, p.muted, p.foreground),
         NoticeKind::Error => (p.danger, p.tone.danger_subtle, p.danger),

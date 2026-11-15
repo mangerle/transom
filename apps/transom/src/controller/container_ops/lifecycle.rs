@@ -16,6 +16,62 @@ impl Drop for PullTaskGuard {
 
 pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
     match command {
+        ContainerCommand::RunCompose { .. }
+        | ContainerCommand::Lifecycle { .. }
+        | ContainerCommand::UpdateContainer { .. }
+        | ContainerCommand::CommitContainer { .. }
+        | ContainerCommand::Rename { .. }
+        | ContainerCommand::RenameContainer { .. }
+        | ContainerCommand::CreateContainer { .. }
+        | ContainerCommand::RecreateContainer { .. } => {
+            handle_compose_and_container(state, ctx, command);
+        }
+        ContainerCommand::PullImage { .. }
+        | ContainerCommand::PullImageTask { .. }
+        | ContainerCommand::CancelPullTask { .. }
+        | ContainerCommand::RemoveImage { .. }
+        | ContainerCommand::TagImage { .. }
+        | ContainerCommand::PushImage { .. }
+        | ContainerCommand::PushTaggedImage { .. }
+        | ContainerCommand::BuildImage { .. } => {
+            handle_image_ops(state, ctx, command);
+        }
+        ContainerCommand::CreateVolume { .. }
+        | ContainerCommand::RemoveVolume { .. }
+        | ContainerCommand::CreateNetwork { .. }
+        | ContainerCommand::RemoveNetwork { .. }
+        | ContainerCommand::ConnectNetwork { .. }
+        | ContainerCommand::DisconnectNetwork { .. } => {
+            handle_volume_and_network(state, ctx, command);
+        }
+        _ => {}
+    }
+}
+
+/// 构造统一的传输进度回调，避免 Pull/Push 重复编写相同闭包。
+fn make_transfer_progress(
+    event_tx: flume::Sender<transom_core::AppEvent>,
+    request_id: ContainerRequestId,
+) -> impl FnMut(u64, Option<u64>) {
+    move |current: u64, total: Option<u64>| {
+        let _ = event_tx.try_send(
+            ContainerAppEvent::TransferProgress {
+                request_id,
+                transferred: current,
+                total,
+            }
+            .into(),
+        );
+    }
+}
+
+/// 处理 Compose 编排与容器生命周期/创建/重建命令。
+fn handle_compose_and_container(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::RunCompose {
             tab_id,
             request_id,
@@ -98,6 +154,96 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 .await
                 .map(|_| ())
         }),
+        ContainerCommand::Rename {
+            tab_id,
+            request_id,
+            container,
+            from,
+            to,
+        } => {
+            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+                return;
+            };
+            let event_tx = ctx.event_tx.clone();
+            spawn_long(
+                state,
+                ctx,
+                tab_id,
+                request_id,
+                Arc::clone(&cancel),
+                async move {
+                    let error =
+                        transom_container::rename_path(&engine, &container, &from, &to, &cancel)
+                            .await
+                            .err()
+                            .map(AppError::from);
+                    send_event(
+                        &event_tx,
+                        ContainerAppEvent::TransferFinished { request_id, error },
+                    )
+                    .await;
+                },
+            );
+        }
+        ContainerCommand::RenameContainer {
+            tab_id,
+            request_id,
+            container,
+            name,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            engine.rename_container(&container, &name).await
+        }),
+        ContainerCommand::CreateContainer {
+            tab_id,
+            request_id,
+            spec,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            let id = engine.create_container(&spec).await?;
+            // 创建后立刻启动：界面这一项的语义是「运行」，不是「创建了个停着的容器」。
+            engine
+                .lifecycle(&id, ContainerLifecycleAction::Start)
+                .await
+                .inspect(|_| {
+                    log::info!("容器已创建并启动，镜像: {}，新容器: {}", spec.image, id)
+                })?;
+            Ok(())
+        }),
+        ContainerCommand::RecreateContainer {
+            tab_id,
+            request_id,
+            old_container_id,
+            spec,
+        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
+            // 1. 强制移除原容器（force: true 会自动处理停止状态，并保留外部挂载卷）
+            let _ = engine
+                .lifecycle(
+                    &old_container_id,
+                    ContainerLifecycleAction::Remove { force: true },
+                )
+                .await;
+            // 2. 以新配置创建容器
+            let id = engine.create_container(&spec).await?;
+            // 3. 启动新容器
+            engine
+                .lifecycle(&id, ContainerLifecycleAction::Start)
+                .await
+                .inspect(|_| {
+                    log::info!(
+                        "容器已就地重建并启动，原ID: {}，镜像: {}，新容器: {}",
+                        old_container_id,
+                        spec.image,
+                        id
+                    )
+                })?;
+            Ok(())
+        }),
+        _ => {}
+    }
+}
+
+/// 处理镜像拉取、推送、标签、删除与构建命令。
+fn handle_image_ops(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
+    match command {
         ContainerCommand::PullImage {
             tab_id,
             request_id,
@@ -108,16 +254,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             };
             let event_tx = ctx.event_tx.clone();
             spawn_long(state, ctx, tab_id, request_id, cancel, async move {
-                let mut progress = |current: u64, total: Option<u64>| {
-                    let _ = event_tx.try_send(
-                        ContainerAppEvent::TransferProgress {
-                            request_id,
-                            transferred: current,
-                            total,
-                        }
-                        .into(),
-                    );
-                };
+                let mut progress = make_transfer_progress(event_tx.clone(), request_id);
                 let error = engine
                     .pull_image(&reference, &mut progress)
                     .await
@@ -135,80 +272,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             task_id,
             reference,
             auth,
-        } => {
-            let Some(engine) = state
-                .container_workspaces
-                .get(&tab_id)
-                .map(|w| w.engine.clone())
-            else {
-                let _ = ctx.event_tx.try_send(
-                    ContainerAppEvent::PullTaskFinished {
-                        task_id,
-                        error: Some(AppError::with_detail(
-                            ErrorCode::ContainerUnavailable,
-                            "工作区未连接",
-                        )),
-                    }
-                    .into(),
-                );
-                return;
-            };
-            let cancel = ctx.container.register_task_cancel(&task_id);
-            let event_tx = ctx.event_tx.clone();
-            let internal_tx = ctx.internal_tx.clone();
-            let container_service = Arc::clone(&ctx.container);
-            let tid = task_id.clone();
-            let handle_task_id = task_id.clone();
-            let handle = tokio::spawn(async move {
-                let _guard = PullTaskGuard {
-                    service: Arc::clone(&container_service),
-                    task_id: tid.clone(),
-                };
-                let mut layers_map: std::collections::HashMap<
-                    String,
-                    transom_core::ImageLayerProgress,
-                > = std::collections::HashMap::with_capacity(16);
-                let mut progress =
-                    |status: String, layer_opt: Option<transom_core::ImageLayerProgress>| {
-                        if let Some(layer) = layer_opt {
-                            layers_map.insert(layer.id.clone(), layer);
-                        }
-                        let layers: Vec<transom_core::ImageLayerProgress> =
-                            layers_map.values().cloned().collect();
-                        let _ = event_tx.try_send(
-                            ContainerAppEvent::PullTaskProgress {
-                                task_id: tid.clone(),
-                                status,
-                                layers,
-                            }
-                            .into(),
-                        );
-                    };
-                let error = engine
-                    .pull_image_task(&reference, auth.as_ref(), cancel, &mut progress)
-                    .await
-                    .err()
-                    .map(AppError::from);
-                let _ = event_tx.try_send(
-                    ContainerAppEvent::PullTaskFinished {
-                        task_id: tid.clone(),
-                        error,
-                    }
-                    .into(),
-                );
-                let _ = internal_tx
-                    .send_async(Internal::ContainerPullTaskFinished {
-                        tab_id,
-                        task_id: tid,
-                    })
-                    .await;
-            });
-            if let Some(workspace) = state.container_workspaces.get_mut(&tab_id) {
-                workspace.insert_pull_task(handle_task_id, handle);
-            } else {
-                handle.abort();
-            }
-        }
+        } => spawn_pull_image_task(state, ctx, tab_id, task_id, reference, auth),
         ContainerCommand::CancelPullTask { tab_id: _, task_id } => {
             ctx.container.cancel_task(&task_id);
         }
@@ -241,16 +305,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             };
             let event_tx = ctx.event_tx.clone();
             spawn_long(state, ctx, tab_id, request_id, cancel, async move {
-                let mut progress = |current: u64, total: Option<u64>| {
-                    let _ = event_tx.try_send(
-                        ContainerAppEvent::TransferProgress {
-                            request_id,
-                            transferred: current,
-                            total,
-                        }
-                        .into(),
-                    );
-                };
+                let mut progress = make_transfer_progress(event_tx.clone(), request_id);
                 let error = engine
                     .push_image(&image, tag.as_deref(), auth.as_ref(), &mut progress)
                     .await
@@ -276,16 +331,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             };
             let event_tx = ctx.event_tx.clone();
             spawn_long(state, ctx, tab_id, request_id, cancel, async move {
-                let mut progress = |current: u64, total: Option<u64>| {
-                    let _ = event_tx.try_send(
-                        ContainerAppEvent::TransferProgress {
-                            request_id,
-                            transferred: current,
-                            total,
-                        }
-                        .into(),
-                    );
-                };
+                let mut progress = make_transfer_progress(event_tx.clone(), request_id);
                 // 打标签与推送必须在同一任务里顺序执行；拆成两条命令会让 push
                 // 抢在 tag 完成前到达引擎，目标标签不存在时随机失败。
                 let error = match engine.tag_image(&source_image, &repo, tag.as_deref()).await {
@@ -307,58 +353,155 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             tab_id,
             request_id,
             spec,
-        } => {
-            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
-                return;
-            };
-            let event_tx = ctx.event_tx.clone();
-            let cancel_for_build = std::sync::Arc::clone(&cancel);
-            spawn_long(state, ctx, tab_id, request_id, cancel, async move {
-                // 构建输出可能逐行高频到达；合并成 64KiB/100ms 的小批次再进事件总线。
-                const BUILD_BATCH_BYTES: usize = 64 * 1024;
-                const BUILD_BATCH_INTERVAL: std::time::Duration =
-                    std::time::Duration::from_millis(100);
-                let mut pending = String::new();
-                let mut last_flush = tokio::time::Instant::now();
-                let mut progress = |line: String| {
-                    pending.push_str(&line);
-                    pending.push('\n');
-                    if pending.len() >= BUILD_BATCH_BYTES
-                        || last_flush.elapsed() >= BUILD_BATCH_INTERVAL
-                    {
-                        let batch = std::mem::take(&mut pending);
-                        let _ = event_tx.try_send(
-                            ContainerAppEvent::BuildProgress {
-                                request_id,
-                                line: batch,
-                            }
-                            .into(),
-                        );
-                        last_flush = tokio::time::Instant::now();
-                    }
-                };
-                let error = engine
-                    .build_image(&spec, &cancel_for_build, &mut progress)
-                    .await
-                    .err()
-                    .map(AppError::from);
-                drop(progress);
-                if !pending.is_empty() {
-                    let _ = event_tx.try_send(
-                        ContainerAppEvent::BuildProgress {
-                            request_id,
-                            line: pending,
-                        }
-                        .into(),
-                    );
+        } => spawn_build_image(state, ctx, tab_id, request_id, spec),
+        _ => {}
+    }
+}
+
+/// 启动带分层进度上报的镜像拉取后台任务。
+fn spawn_pull_image_task(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    tab_id: TabId,
+    task_id: String,
+    reference: String,
+    auth: Option<transom_core::ContainerRegistryAuth>,
+) {
+    let Some(engine) = state
+        .container_workspaces
+        .get(&tab_id)
+        .map(|w| w.engine.clone())
+    else {
+        let _ = ctx.event_tx.try_send(
+            ContainerAppEvent::PullTaskFinished {
+                task_id,
+                error: Some(AppError::with_detail(
+                    ErrorCode::ContainerUnavailable,
+                    "工作区未连接",
+                )),
+            }
+            .into(),
+        );
+        return;
+    };
+    let cancel = ctx.container.register_task_cancel(&task_id);
+    let event_tx = ctx.event_tx.clone();
+    let internal_tx = ctx.internal_tx.clone();
+    let container_service = Arc::clone(&ctx.container);
+    let tid = task_id.clone();
+    let handle_task_id = task_id.clone();
+    let handle = tokio::spawn(async move {
+        let _guard = PullTaskGuard {
+            service: Arc::clone(&container_service),
+            task_id: tid.clone(),
+        };
+        let mut layers_map: std::collections::HashMap<String, transom_core::ImageLayerProgress> =
+            std::collections::HashMap::with_capacity(16);
+        let mut progress = |status: String, layer_opt: Option<transom_core::ImageLayerProgress>| {
+            if let Some(layer) = layer_opt {
+                layers_map.insert(layer.id.clone(), layer);
+            }
+            let layers: Vec<transom_core::ImageLayerProgress> =
+                layers_map.values().cloned().collect();
+            let _ = event_tx.try_send(
+                ContainerAppEvent::PullTaskProgress {
+                    task_id: tid.clone(),
+                    status,
+                    layers,
                 }
-                send_event(
-                    &event_tx,
-                    ContainerAppEvent::ActionFinished { request_id, error },
-                )
-                .await;
-            });
+                .into(),
+            );
+        };
+        let error = engine
+            .pull_image_task(&reference, auth.as_ref(), cancel, &mut progress)
+            .await
+            .err()
+            .map(AppError::from);
+        let _ = event_tx.try_send(
+            ContainerAppEvent::PullTaskFinished {
+                task_id: tid.clone(),
+                error,
+            }
+            .into(),
+        );
+        let _ = internal_tx
+            .send_async(Internal::ContainerPullTaskFinished {
+                tab_id,
+                task_id: tid,
+            })
+            .await;
+    });
+    if let Some(workspace) = state.container_workspaces.get_mut(&tab_id) {
+        workspace.insert_pull_task(handle_task_id, handle);
+    } else {
+        handle.abort();
+    }
+}
+
+/// 启动镜像构建任务，并将高频日志输出按 64KiB/100ms 批量合流上报。
+fn spawn_build_image(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    tab_id: TabId,
+    request_id: ContainerRequestId,
+    spec: transom_core::ContainerBuildSpec,
+) {
+    let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
+        return;
+    };
+    let event_tx = ctx.event_tx.clone();
+    let cancel_for_build = Arc::clone(&cancel);
+    spawn_long(state, ctx, tab_id, request_id, cancel, async move {
+        // 构建输出可能逐行高频到达；合并成 64KiB/100ms 的小批次再进事件总线。
+        const BUILD_BATCH_BYTES: usize = 64 * 1024;
+        const BUILD_BATCH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+        let mut pending = String::new();
+        let mut last_flush = tokio::time::Instant::now();
+        let mut progress = |line: String| {
+            pending.push_str(&line);
+            pending.push('\n');
+            if pending.len() >= BUILD_BATCH_BYTES || last_flush.elapsed() >= BUILD_BATCH_INTERVAL {
+                let batch = std::mem::take(&mut pending);
+                let _ = event_tx.try_send(
+                    ContainerAppEvent::BuildProgress {
+                        request_id,
+                        line: batch,
+                    }
+                    .into(),
+                );
+                last_flush = tokio::time::Instant::now();
+            }
+        };
+        let error = engine
+            .build_image(&spec, &cancel_for_build, &mut progress)
+            .await
+            .err()
+            .map(AppError::from);
+        drop(progress);
+        if !pending.is_empty() {
+            let _ = event_tx.try_send(
+                ContainerAppEvent::BuildProgress {
+                    request_id,
+                    line: pending,
+                }
+                .into(),
+            );
         }
+        send_event(
+            &event_tx,
+            ContainerAppEvent::ActionFinished { request_id, error },
+        )
+        .await;
+    });
+}
+
+/// 处理存储卷与网络创建/连接/删除命令。
+fn handle_volume_and_network(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::CreateVolume {
             tab_id,
             request_id,
@@ -406,95 +549,6 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
             engine.disconnect_network(&network, &container, force).await
         }),
-        ContainerCommand::Rename {
-            tab_id,
-            request_id,
-            container,
-            from,
-            to,
-        } => {
-            let Some((engine, cancel)) = register_long_task(state, ctx, tab_id, request_id) else {
-                return;
-            };
-            let event_tx = ctx.event_tx.clone();
-            spawn_long(
-                state,
-                ctx,
-                tab_id,
-                request_id,
-                Arc::clone(&cancel),
-                async move {
-                    let error =
-                        transom_container::rename_path(&engine, &container, &from, &to, &cancel)
-                            .await
-                            .err()
-                            .map(AppError::from);
-                    send_event(
-                        &event_tx,
-                        ContainerAppEvent::TransferFinished { request_id, error },
-                    )
-                    .await;
-                },
-            );
-        }
-        ContainerCommand::RenameContainer {
-            tab_id,
-            request_id,
-            container,
-            name,
-        } => run_action(state, ctx, tab_id, request_id, move |engine| async move {
-            engine.rename_container(&container, &name).await
-        }),
-        ContainerCommand::CreateContainer {
-            tab_id,
-            request_id,
-            spec,
-        } => {
-            let action = move |engine: Engine| async move {
-                let id = engine.create_container(&spec).await?;
-                // 创建后立刻启动：界面这一项的语义是「运行」，不是「创建了个停着的容器」。
-                engine
-                    .lifecycle(&id, ContainerLifecycleAction::Start)
-                    .await
-                    .inspect(|_| {
-                        log::info!("容器已创建并启动，镜像: {}，新容器: {}", spec.image, id)
-                    })?;
-                Ok(())
-            };
-            run_action(state, ctx, tab_id, request_id, action);
-        }
-        ContainerCommand::RecreateContainer {
-            tab_id,
-            request_id,
-            old_container_id,
-            spec,
-        } => {
-            let action = move |engine: Engine| async move {
-                // 1. 强制移除原容器（force: true 会自动处理停止状态，并保留外部挂载卷）
-                let _ = engine
-                    .lifecycle(
-                        &old_container_id,
-                        ContainerLifecycleAction::Remove { force: true },
-                    )
-                    .await;
-                // 3. 以新配置创建容器
-                let id = engine.create_container(&spec).await?;
-                // 4. 启动新容器
-                engine
-                    .lifecycle(&id, ContainerLifecycleAction::Start)
-                    .await
-                    .inspect(|_| {
-                        log::info!(
-                            "容器已就地重建并启动，原ID: {}，镜像: {}，新容器: {}",
-                            old_container_id,
-                            spec.image,
-                            id
-                        )
-                    })?;
-                Ok(())
-            };
-            run_action(state, ctx, tab_id, request_id, action);
-        }
         _ => {}
     }
 }

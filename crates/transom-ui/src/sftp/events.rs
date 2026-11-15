@@ -30,7 +30,8 @@ pub(crate) fn on_sftp_listing(
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.connection_id)
-        && let Some(mut panel) = crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
+        && let Some(mut panel) =
+            crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
     {
         if let Some(target) = panel
             .state
@@ -76,7 +77,11 @@ pub(crate) fn on_sftp_listing(
 /// SFTP 进度：高频可覆盖样本，只更新数据；仅可见标签自行触发重绘。
 ///
 /// 返回 `false`：重绘由本方法条件决定（见内联注释），调用方不再统一 notify。
-pub(crate) fn on_sftp_progress(shell: &mut AppShell, event: SftpAppEvent, cx: &mut Context<AppShell>) -> bool {
+pub(crate) fn on_sftp_progress(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpProgress {
         tab_id,
         connection_id,
@@ -90,7 +95,8 @@ pub(crate) fn on_sftp_progress(shell: &mut AppShell, event: SftpAppEvent, cx: &m
         return true;
     };
     let mut applied = false;
-    if let Some(mut panel) = crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
+    if let Some(mut panel) =
+        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
         && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
     {
         task.transferred = transferred;
@@ -129,7 +135,8 @@ pub(crate) fn on_sftp_verifying(
     else {
         return true;
     };
-    if let Some(mut panel) = crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
+    if let Some(mut panel) =
+        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
         && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
     {
         task.status = TransferStatus::Verifying;
@@ -150,7 +157,11 @@ pub(crate) fn on_sftp_verifying(
 /// 设计原理（Why）：界面在这里只反映“从头重传”这一事实，不自行决定是否
 /// 重传——控制层已经把所有目标端内容丢掉重新写入，界面若继续显示“校验中”
 /// 或保留旧进度，会让用户看到一条与事实相反的队列。
-pub(crate) fn on_sftp_retrying(shell: &mut AppShell, event: SftpAppEvent, cx: &mut Context<AppShell>) -> bool {
+pub(crate) fn on_sftp_retrying(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpRetrying {
         tab_id,
         connection_id,
@@ -161,7 +172,8 @@ pub(crate) fn on_sftp_retrying(shell: &mut AppShell, event: SftpAppEvent, cx: &m
         return true;
     };
     log::warn!("传输校验不一致，开始从头覆盖重传，任务: {op_id}，原因: {reason}");
-    if let Some(mut panel) = crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
+    if let Some(mut panel) =
+        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
         && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
     {
         task.plan_restart();
@@ -180,7 +192,11 @@ pub(crate) fn on_sftp_retrying(shell: &mut AppShell, event: SftpAppEvent, cx: &m
 }
 
 /// SFTP 属性响应：迟到的响应（标签已关闭）直接忽略且不重绘。
-pub(crate) fn on_sftp_metadata(shell: &mut AppShell, event: SftpAppEvent, cx: &mut Context<AppShell>) -> bool {
+pub(crate) fn on_sftp_metadata(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpMetadata {
         tab_id,
         connection_id,
@@ -190,9 +206,7 @@ pub(crate) fn on_sftp_metadata(shell: &mut AppShell, event: SftpAppEvent, cx: &m
     else {
         return true;
     };
-    if crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
-        .is_none()
-    {
+    if crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx).is_none() {
         // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
         return false;
     }
@@ -205,7 +219,11 @@ pub(crate) fn on_sftp_metadata(shell: &mut AppShell, event: SftpAppEvent, cx: &m
 }
 
 /// SFTP 预览成功：交给预览响应处理统一落位。
-pub(crate) fn on_sftp_preview(shell: &mut AppShell, event: SftpAppEvent, cx: &mut Context<AppShell>) -> bool {
+pub(crate) fn on_sftp_preview(
+    shell: &mut AppShell,
+    event: SftpAppEvent,
+    cx: &mut Context<AppShell>,
+) -> bool {
     let SftpAppEvent::SftpPreview {
         tab_id,
         connection_id,
@@ -216,7 +234,8 @@ pub(crate) fn on_sftp_preview(shell: &mut AppShell, event: SftpAppEvent, cx: &mu
     else {
         return true;
     };
-    crate::sftp::handle_sftp_preview(shell, 
+    crate::sftp::handle_sftp_preview(
+        shell,
         SftpPreviewResponse {
             tab_id,
             connection_id,
@@ -243,7 +262,8 @@ pub(crate) fn on_sftp_preview_failed(
     else {
         return true;
     };
-    crate::sftp::handle_sftp_preview(shell, 
+    crate::sftp::handle_sftp_preview(
+        shell,
         SftpPreviewResponse {
             tab_id,
             connection_id,

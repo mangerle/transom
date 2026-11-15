@@ -14,14 +14,21 @@
 
 use crate::app::AppShell;
 use crate::palette::{Palette, sftp_text_input};
-use crate::sftp::EditorGotoLineModalState;
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::input::{EditorState, Input, InputEvent, Position, RopeExt};
+use gpui_kit::component::input::{EditorState, Input, InputEvent, InputState, Position, RopeExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
+
+/// 编辑器"跳转到行"弹窗的状态。
+pub(crate) struct EditorGotoLineModalState {
+    pub(crate) editor: Entity<EditorState>,
+    pub(crate) input: Entity<InputState>,
+    pub(crate) error: Option<String>,
+    pub(crate) _enter_sub: Subscription,
+}
 
 /// 把编辑器光标移到 1 基的行列位置，展开被折叠的行并收敛越界值。
 ///
@@ -57,13 +64,12 @@ pub(crate) fn open_editor_goto_line(
     let input = sftp_text_input(window, cx, "", &rust_i18n::t!("editor.goto_placeholder"));
     input.update(cx, |state, cx| state.focus(window, cx));
     // 输入框内按回车直接确认：订阅句柄随模态存亡，关闭模态即退订。
-    let enter_sub =
-        cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
-            if matches!(event, InputEvent::PressEnter { .. }) {
-                crate::editor::commit_editor_goto_line(this, window, cx);
-            }
-        });
-    shell.state.sftp_modals.goto_line = Some(EditorGotoLineModalState {
+    let enter_sub = cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
+        if matches!(event, InputEvent::PressEnter { .. }) {
+            crate::editor::commit_editor_goto_line(this, window, cx);
+        }
+    });
+    shell.state.modals.tools.editor_goto_line = Some(EditorGotoLineModalState {
         editor,
         input,
         error: None,
@@ -73,11 +79,16 @@ pub(crate) fn open_editor_goto_line(
 }
 
 /// 关闭跳转模态并把焦点还给编辑器。
-pub(crate) fn cancel_editor_goto_line(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn cancel_editor_goto_line(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let editor = shell
         .state
-        .sftp_modals
-        .goto_line
+        .modals
+        .tools
+        .editor_goto_line
         .take()
         .map(|modal| modal.editor);
     if let Some(editor) = editor {
@@ -87,21 +98,25 @@ pub(crate) fn cancel_editor_goto_line(shell: &mut AppShell, window: &mut Window,
 }
 
 /// 确认跳转：解析行号，越界收敛到 [1, 总行数]，展开遮挡折叠后移动光标。
-pub(crate) fn commit_editor_goto_line(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
-    let Some(modal) = shell.state.sftp_modals.goto_line.as_ref() else {
+pub(crate) fn commit_editor_goto_line(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(modal) = shell.state.modals.tools.editor_goto_line.as_ref() else {
         return;
     };
     let editor = modal.editor.clone();
     let raw = modal.input.read(cx).value().trim().to_string();
     let Some(line) = raw.parse::<usize>().ok().filter(|line| *line >= 1) else {
-        if let Some(modal) = shell.state.sftp_modals.goto_line.as_mut() {
+        if let Some(modal) = shell.state.modals.tools.editor_goto_line.as_mut() {
             modal.error = Some(rust_i18n::t!("editor.goto_error").to_string());
         }
         cx.notify();
         return;
     };
     apply_editor_goto(&editor, line as u32, None, window, cx);
-    shell.state.sftp_modals.goto_line = None;
+    shell.state.modals.tools.editor_goto_line = None;
     cx.notify();
 }
 
@@ -112,7 +127,7 @@ pub(crate) fn render_editor_goto_line_body(
     cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(modal) = shell.state.sftp_modals.goto_line.as_ref() else {
+    let Some(modal) = shell.state.modals.tools.editor_goto_line.as_ref() else {
         return div().into_any_element();
     };
     let editor = modal.editor.clone();

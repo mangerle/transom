@@ -11,40 +11,40 @@ pub(crate) fn render_sftp_confirm_body(
     let Some(modal) = shell.state.sftp_modals.confirm.as_ref() else {
         return div().into_any_element();
     };
-        let title = modal.title.clone();
-        let description = modal.description.clone();
+    let title = modal.title.clone();
+    let description = modal.description.clone();
 
-        let content = div()
-            .text_sm()
-            .text_color(p.muted_foreground)
-            .child(description);
-        let cancel = crate::widgets::dialog_cancel_button(
-            "cancel-sftp-delete",
-            rust_i18n::t!("common.cancel").to_string(),
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                this.state.sftp_modals.confirm = None;
-                crate::sftp::focus_active_sftp_panel(this, window, cx);
-                cx.notify();
-            }),
-        );
-        let confirm = crate::widgets::dialog_confirm_button(
-            "confirm-sftp-delete",
-            rust_i18n::t!("common.confirm_delete").to_string(),
-            None,
-            crate::widgets::DialogConfirmKind::Danger,
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                crate::sftp::sftp_confirm_delete(this, cx);
-                crate::sftp::focus_active_sftp_panel(this, window, cx);
-            }),
-        );
-        let footer =
-            crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
+    let content = div()
+        .text_sm()
+        .text_color(p.muted_foreground)
+        .child(description);
+    let cancel = crate::widgets::dialog_cancel_button(
+        "cancel-sftp-delete",
+        rust_i18n::t!("common.cancel").to_string(),
+        crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+            this.state.sftp_modals.confirm = None;
+            crate::sftp::focus_active_sftp_panel(this, window, cx);
+            cx.notify();
+        }),
+    );
+    let confirm = crate::widgets::dialog_confirm_button(
+        "confirm-sftp-delete",
+        rust_i18n::t!("common.confirm_delete").to_string(),
+        None,
+        crate::widgets::DialogConfirmKind::Danger,
+        crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+            crate::sftp::sftp_confirm_delete(this, cx);
+            crate::sftp::focus_active_sftp_panel(this, window, cx);
+        }),
+    );
+    let footer =
+        crate::widgets::dialog_actions([cancel.into_any_element(), confirm.into_any_element()]);
 
-        crate::widgets::dialog_body(
-            "sftp-confirm-modal",
-            title,
-            None::<String>,
-            content,
-            Some(footer),
-        )
+    crate::widgets::dialog_body(
+        "sftp-confirm-modal",
+        title,
+        None::<String>,
+        content,
+        Some(footer),
+    )
 }

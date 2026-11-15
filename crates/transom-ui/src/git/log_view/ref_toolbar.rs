@@ -5,13 +5,13 @@
 //! 引用，而不是另建一份容易与日志范围脱节的选中状态。
 
 use super::current_head_name;
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
-use transom_core::{BranchEntry, LogScope, RefKind, TabId, TagEntry};
+use transom_core::{BranchEntry, LogScope, RefKind, TagEntry};
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
@@ -30,32 +30,24 @@ struct RefToolbarTarget {
 /// 渲染引用栏左侧动作条。
 pub(crate) fn render_refs_action_bar(
     state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
     p: &Palette,
 ) -> AnyElement {
     let target = selected_target(state);
-    let new_branch_start = target
-        .as_ref()
-        .map(|target| target.name.clone())
-        .unwrap_or_else(|| "HEAD".to_string());
+    let new_branch_start = target.as_ref().map(|target| target.name.clone());
     let can_update = target.as_ref().is_some_and(|target| target.updatable);
     let can_delete = target.as_ref().is_some_and(|target| target.deletable);
     let delete_name = target.as_ref().map(|target| target.name.clone());
-    let project = state.project.clone();
-    let refresh_project = project.clone();
-    let fetch_project = project.clone();
-    let pull_project = project.clone();
 
-    let hide_app = app.clone();
-    let new_app = app.clone();
-    let update_app = app.clone();
-    let delete_app = app.clone();
-    let fetch_app = app.clone();
-    let refresh_app = app.clone();
-    let settings_app = app.clone();
-    let expand_app = app.clone();
-    let collapse_app = app.clone();
+    let hide_ws = workspace.clone();
+    let new_ws = workspace.clone();
+    let update_ws = workspace.clone();
+    let delete_ws = workspace.clone();
+    let fetch_ws = workspace.clone();
+    let refresh_ws = workspace.clone();
+    let settings_ws = workspace.clone();
+    let expand_ws = workspace.clone();
+    let collapse_ws = workspace;
 
     v_flex()
         .w(px(26.0))
@@ -74,9 +66,7 @@ pub(crate) fn render_refs_action_bar(
                 rust_i18n::t!("git.refs.hide").to_string(),
             )
             .on_click(move |_, _, cx| {
-                hide_app.update(cx, |this, cx| {
-                    crate::git::actions::git_toggle_refs_panel(this, tab_id, cx);
-                });
+                hide_ws.update(cx, |ws, cx| ws.toggle_refs_panel(cx));
             }),
         )
         .child(toolbar_separator(p))
@@ -86,11 +76,9 @@ pub(crate) fn render_refs_action_bar(
                 UiIcon::ADD,
                 rust_i18n::t!("git.refs.new_branch").to_string(),
             )
-            .on_click(move |_, window, cx| {
+            .on_click(move |_, _, cx| {
                 let start = new_branch_start.clone();
-                new_app.update(cx, |this, cx| {
-                    crate::git::actions::git_create_branch_from(this, &start, window, cx);
-                });
+                new_ws.update(cx, |ws, cx| ws.create_branch_from(start, cx));
             }),
         )
         .child(
@@ -101,14 +89,7 @@ pub(crate) fn render_refs_action_bar(
             )
             .disabled(!can_update)
             .on_click(move |_, _, cx| {
-                update_app.update(cx, |this, cx| {
-                    crate::git::actions::git_remote_action(
-                        this,
-                        &pull_project,
-                        crate::git::actions::GitRemoteAction::Pull { rebase: false },
-                        cx,
-                    );
-                });
+                update_ws.update(cx, |ws, cx| ws.pull(false, cx));
             }),
         )
         .child(
@@ -122,9 +103,7 @@ pub(crate) fn render_refs_action_bar(
                 let Some(name) = delete_name.as_ref() else {
                     return;
                 };
-                delete_app.update(cx, |this, cx| {
-                    crate::git::actions::git_delete_project_ref(this, &project, name, cx);
-                });
+                delete_ws.update(cx, |ws, cx| ws.delete_ref(name, cx));
             }),
         )
         .child(
@@ -134,14 +113,7 @@ pub(crate) fn render_refs_action_bar(
                 rust_i18n::t!("git.toolbar.fetch").to_string(),
             )
             .on_click(move |_, _, cx| {
-                fetch_app.update(cx, |this, cx| {
-                    crate::git::actions::git_remote_action(
-                        this,
-                        &fetch_project,
-                        crate::git::actions::GitRemoteAction::Fetch,
-                        cx,
-                    );
-                });
+                fetch_ws.update(cx, |ws, cx| ws.fetch(cx));
             }),
         )
         .child(
@@ -151,9 +123,9 @@ pub(crate) fn render_refs_action_bar(
                 rust_i18n::t!("git.menu.refresh").to_string(),
             )
             .on_click(move |_, _, cx| {
-                refresh_app.update(cx, |this, cx| {
-                    crate::git::actions::git_refresh(this, &refresh_project, cx);
-                    crate::git::actions::git_load_log(this, tab_id, 0, cx);
+                refresh_ws.update(cx, |ws, cx| {
+                    ws.refresh();
+                    ws.load_log_notified(0, cx);
                 });
             }),
         )
@@ -164,10 +136,8 @@ pub(crate) fn render_refs_action_bar(
                 UiIcon::SETTINGS,
                 rust_i18n::t!("git.refs.settings").to_string(),
             )
-            .on_click(move |_, window, cx| {
-                settings_app.update(cx, |this, cx| {
-                    crate::git::actions::open_git_settings(this, window, cx);
-                });
+            .on_click(move |_, _, cx| {
+                settings_ws.update(cx, |ws, cx| ws.open_settings(cx));
             }),
         )
         .child(
@@ -177,9 +147,7 @@ pub(crate) fn render_refs_action_bar(
                 rust_i18n::t!("git.group.expand_all").to_string(),
             )
             .on_click(move |_, _, cx| {
-                expand_app.update(cx, |this, cx| {
-                    crate::git::actions::git_set_all_ref_groups_expanded(this, true, cx);
-                });
+                expand_ws.update(cx, |ws, cx| ws.set_all_ref_groups_expanded(true, cx));
             }),
         )
         .child(
@@ -189,9 +157,7 @@ pub(crate) fn render_refs_action_bar(
                 rust_i18n::t!("git.group.collapse_all").to_string(),
             )
             .on_click(move |_, _, cx| {
-                collapse_app.update(cx, |this, cx| {
-                    crate::git::actions::git_set_all_ref_groups_expanded(this, false, cx);
-                });
+                collapse_ws.update(cx, |ws, cx| ws.set_all_ref_groups_expanded(false, cx));
             }),
         )
         .into_any_element()

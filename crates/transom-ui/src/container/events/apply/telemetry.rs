@@ -1,7 +1,7 @@
 //! 日志、统计与文件事件写回实体的具名方法。
 
-use super::PullFinishedOutcome;
 use super::super::super::*;
+use super::PullFinishedOutcome;
 
 impl ContainerWorkspace {
     /// 追加一段日志；请求已被替换时丢弃。

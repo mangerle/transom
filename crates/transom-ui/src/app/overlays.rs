@@ -107,12 +107,16 @@ impl AppShell {
             overlays.push(preview);
         }
         if self.state.modals.tools.show_quick_open {
-            overlays.push(crate::app::command_palette::render_command_palette_modal(self, window, cx, &p));
+            overlays.push(crate::app::command_palette::render_command_palette_modal(
+                self, window, cx, &p,
+            ));
         }
         if let Some(tab_id) = self.state.containers.fullscreen {
             overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
         }
-        if let Some(clone_task) = crate::git::clone_modal::render_git_clone_task(self, window, cx, &p) {
+        if let Some(clone_task) =
+            crate::git::clone_modal::render_git_clone_task(self, window, cx, &p)
+        {
             overlays.push(clone_task);
         }
         overlays

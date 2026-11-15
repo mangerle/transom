@@ -12,7 +12,11 @@ use transom_core::AppSettings;
 /// 将调整意图（`pending_width_adjustment`）记录在面板状态中，由渲染周期的本方法
 /// 一次性执行 `resize_panel` 并清空。
 /// 消费后不再对面板施加持续的每帧硬性重置，从而完全保留用户手动拖拽调整面板宽度的能力。
-pub(crate) fn sync_sftp_panel_width(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn sync_sftp_panel_width(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(tab_id) = shell.state.workspace.active_tab else {
         return;
     };

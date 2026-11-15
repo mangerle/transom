@@ -398,7 +398,11 @@ impl SftpPanelView {
     }
 }
 
-pub(crate) fn dismiss_sftp_hover_preview(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+pub(crate) fn dismiss_sftp_hover_preview(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    cx: &mut Context<AppShell>,
+) {
     if let Some(view) = shell.state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
     }
@@ -411,9 +415,7 @@ pub(crate) fn handle_sftp_preview(
 ) {
     let tab_id = response.tab_id;
     let connection_id = response.connection_id;
-    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx)
-        .is_none()
-    {
+    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx).is_none() {
         return;
     }
     if let Some(view) = shell.state.sftp_view(tab_id) {

@@ -142,7 +142,9 @@ fn session_context_menu(
                 AppIcon::Domain(DomainIcon::CONTAINER),
                 move |_, window, cx| {
                     container_app.update(cx, |this, cx| {
-                        crate::container::open_container_workspace_for_session(this, session_id, window, cx);
+                        crate::container::open_container_workspace_for_session(
+                            this, session_id, window, cx,
+                        );
                     });
                 },
             ));
@@ -155,7 +157,8 @@ fn session_context_menu(
                     let app = app.clone();
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
-                            crate::sidebar::handle_sidebar_drop(this, 
+                            crate::sidebar::handle_sidebar_drop(
+                                this,
                                 SidebarDrag::Session(session_id),
                                 SidebarTarget::Root,
                                 cx,
@@ -197,7 +200,9 @@ fn session_context_menu(
                     let app = app.clone();
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            crate::app::audit_viewer::open_audit_viewer_for_session(this, session_id, window, cx);
+                            crate::app::audit_viewer::open_audit_viewer_for_session(
+                                this, session_id, window, cx,
+                            );
                         });
                     }
                 },

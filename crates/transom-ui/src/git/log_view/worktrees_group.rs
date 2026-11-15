@@ -4,7 +4,7 @@
 //! - 将工作树分组视图从引用栏中解耦，使 `log_refs.rs` 和本文件生产代码均严格保持在 500 行以内；
 //! - 明确支持工作树路径展示、锁定状态标识、快速切换以及右键加锁/解锁/删除。
 
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use crate::widgets::{MenuItem, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
@@ -18,7 +18,7 @@ type State = crate::git::GitWorkspaceState;
 
 /// 工作树分组：一行一个工作树，右键可锁定或删除。
 pub(crate) fn render_worktree_group(
-    app: &Entity<AppShell>,
+    workspace: &Entity<GitWorkspace>,
     state: &State,
     p: &Palette,
 ) -> AnyElement {
@@ -54,8 +54,8 @@ pub(crate) fn render_worktree_group(
         let is_main = worktree.path == state.project.path || worktree.bare;
         let locked = worktree.locked;
         let path_text = worktree.path.display().to_string();
-        let item_app = app.clone();
-        let menu_app = app.clone();
+        let item_ws = workspace.clone();
+        let menu_ws = workspace.clone();
         let remove_path = path_text.clone();
         let lock_path = path_text.clone();
         block = block.child(
@@ -101,23 +101,18 @@ pub(crate) fn render_worktree_group(
                         }),
                 )
                 .on_click({
-                    let open_app = item_app.clone();
+                    let open_ws = item_ws.clone();
                     let open_path = path_text.clone();
                     move |_, _, cx| {
                         let path = open_path.clone();
-                        open_app.update(cx, |this, cx| {
-                            crate::git::actions::git_open_worktree_path(this, &path, cx);
-                        });
+                        open_ws.update(cx, |ws, cx| ws.open_worktree_path(path, cx));
                     }
                 })
                 .context_menu({
-                    let menu_project = state.project.clone();
                     move |menu, _window, _cx| {
-                        let lock_app = menu_app.clone();
-                        let lock_project = menu_project.clone();
+                        let lock_ws = menu_ws.clone();
                         let lock_owned = lock_path.clone();
-                        let remove_app = menu_app.clone();
-                        let remove_project = menu_project.clone();
+                        let remove_ws = menu_ws.clone();
                         let remove_owned = remove_path.clone();
                         let toggle_key = if locked {
                             "git.menu.unlock_worktree"
@@ -129,11 +124,8 @@ pub(crate) fn render_worktree_group(
                             UiIcon::LOCKED,
                             move |_, _, cx| {
                                 let path = lock_owned.clone();
-                                let project = lock_project.clone();
-                                lock_app.update(cx, |this, cx| {
-                                    crate::git::actions::git_set_project_worktree_locked(
-                                        this, &project, path, !locked, cx,
-                                    );
+                                lock_ws.update(cx, |ws, cx| {
+                                    ws.set_worktree_locked(path, !locked, cx);
                                 });
                             },
                         ))
@@ -146,11 +138,8 @@ pub(crate) fn render_worktree_group(
                             .disabled(is_main || locked)
                             .render(move |_, _, cx| {
                                 let path = remove_owned.clone();
-                                let project = remove_project.clone();
-                                remove_app.update(cx, |this, cx| {
-                                    crate::git::actions::git_remove_worktree(
-                                        this, &project, path, false, cx,
-                                    );
+                                remove_ws.update(cx, |ws, cx| {
+                                    ws.remove_worktree(path, false, cx);
                                 });
                             }),
                         )

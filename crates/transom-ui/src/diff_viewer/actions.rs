@@ -20,7 +20,8 @@ pub(crate) fn open_local_diff_with_target(
     } = target;
     let max_bytes = MAX_DIFF_BYTES;
     let op_id = TransferId::new();
-    let view = install_diff_viewer(shell, 
+    let view = install_diff_viewer(
+        shell,
         DiffViewerState::new(
             tab_id,
             Some(connection_id),
@@ -155,19 +156,18 @@ fn install_diff_viewer(
         )
     });
     shell.state.diff_viewer = Some(view.clone());
-    let subscription =
-        cx.subscribe(
-            &view,
-            |shell, _view, event: &DiffViewerEvent, cx| match event {
-                DiffViewerEvent::Changed => cx.notify(),
-                DiffViewerEvent::RemoteEntryUpdated {
-                    tab_id,
-                    path,
-                    size,
-                    modified,
-                } => update_diff_remote_entry(shell, *tab_id, path, *size, *modified, cx),
-            },
-        );
+    let subscription = cx.subscribe(
+        &view,
+        |shell, _view, event: &DiffViewerEvent, cx| match event {
+            DiffViewerEvent::Changed => cx.notify(),
+            DiffViewerEvent::RemoteEntryUpdated {
+                tab_id,
+                path,
+                size,
+                modified,
+            } => update_diff_remote_entry(shell, *tab_id, path, *size, *modified, cx),
+        },
+    );
     shell.state.tasks.subscriptions.diff_viewer = Some(subscription);
     view
 }
@@ -264,7 +264,11 @@ pub(crate) fn step_diff_hunk(shell: &mut AppShell, forward: bool, cx: &mut Conte
 }
 
 /// 适配对比工具栏：请求合并。
-pub(crate) fn request_diff_merge(shell: &mut AppShell, direction: MergeDirection, cx: &mut Context<AppShell>) {
+pub(crate) fn request_diff_merge(
+    shell: &mut AppShell,
+    direction: MergeDirection,
+    cx: &mut Context<AppShell>,
+) {
     let Some(view) = shell.state.diff_viewer.clone() else {
         return;
     };

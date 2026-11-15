@@ -2,22 +2,20 @@
 //!
 //! 设计原理（Why）：
 //! - 遵循 IDEA 本地分支项的右键菜单分组口径；
-//! - 贯穿确定性 `GitProject` 与 `TabId`，彻底根除跨标签页盲查项目失败导致的点击静默失效；
+//! - 动作直接落在所属 `Entity<GitWorkspace>` 上，跨窗口动作经实体事件上报，彻底解耦外壳；
 //! - 参数收敛为专用目标结构体，符合复杂度控制与参数对象规范。
 
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::widgets::menu_item;
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{GitProject, LogScope, TabId};
+use transom_core::LogScope;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
 /// 本地分支菜单目标数据。
 pub(crate) struct LocalBranchMenuTarget {
-    pub(crate) project: GitProject,
-    pub(crate) tab_id: TabId,
     pub(crate) branch: String,
     pub(crate) current_branch: Option<String>,
     pub(crate) upstream: Option<String>,
@@ -27,33 +25,24 @@ pub(crate) struct LocalBranchMenuTarget {
 /// 本地分支右键上下文菜单（对齐 IDEA 本地分支菜单）。
 pub(crate) fn render_local_branch_menu(
     menu: PopupMenu,
-    app: Entity<AppShell>,
+    workspace: Entity<GitWorkspace>,
     target: LocalBranchMenuTarget,
 ) -> PopupMenu {
     let LocalBranchMenuTarget {
-        project,
-        tab_id,
         branch,
         current_branch,
         upstream,
         is_current,
     } = target;
 
-    let app_new_branch = app.clone();
-    let app_worktree = app.clone();
-    let app_pull = app.clone();
-    let app_push = app.clone();
-    let app_rename = app.clone();
-    let app_delete = app.clone();
-    let app_diff = app.clone();
-    let app_upstream = app;
-
-    let project_new_branch = project.clone();
-    let project_worktree = project.clone();
-    let project_pull = project.clone();
-    let project_push = project.clone();
-    let project_rename = project.clone();
-    let project_delete = project;
+    let ws_new_branch = workspace.clone();
+    let ws_worktree = workspace.clone();
+    let ws_pull = workspace.clone();
+    let ws_push = workspace.clone();
+    let ws_rename = workspace.clone();
+    let ws_delete = workspace.clone();
+    let ws_diff = workspace.clone();
+    let ws_upstream = workspace;
 
     let name_new_branch = branch.clone();
     let name_worktree = branch.clone();
@@ -75,14 +64,9 @@ pub(crate) fn render_local_branch_menu(
         .item(menu_item(
             rust_i18n::t!("git.menu.new_branch_from_ref", branch = branch.as_str()).to_string(),
             AppIcon::Ui(UiIcon::VCS),
-            move |_, window, cx| {
+            move |_, _, cx| {
                 let start = name_new_branch.clone();
-                let project = project_new_branch.clone();
-                app_new_branch.update(cx, |this, cx| {
-                    crate::git::actions::git_create_project_branch_from(
-                        this, &project, &start, window, cx,
-                    );
-                });
+                ws_new_branch.update(cx, |ws, cx| ws.create_branch_from(Some(start), cx));
             },
         ))
         // 2. 显示与工作树的差异
@@ -91,23 +75,16 @@ pub(crate) fn render_local_branch_menu(
             AppIcon::Ui(UiIcon::DIFF),
             move |_, _, cx| {
                 let target = name_diff.clone();
-                app_diff.update(cx, |this, cx| {
-                    crate::git::actions::git_set_log_scope(this, tab_id, LogScope::Ref(target), cx);
-                });
+                ws_diff.update(cx, |ws, cx| ws.set_log_scope(LogScope::Ref(target), cx));
             },
         ))
         // 3. 从 '{branch}' 新建工作树...
         .item(menu_item(
             rust_i18n::t!("git.menu.new_worktree_from_ref", branch = branch.as_str()).to_string(),
             AppIcon::Ui(UiIcon::FOLDER),
-            move |_, window, cx| {
+            move |_, _, cx| {
                 let start = name_worktree.clone();
-                let project = project_worktree.clone();
-                app_worktree.update(cx, |this, cx| {
-                    crate::git::worktree_modal::open_git_worktree_modal(
-                        this, project, &start, window, cx,
-                    );
-                });
+                ws_worktree.update(cx, |ws, cx| ws.open_worktree_modal(start, cx));
             },
         ))
         .item(PopupMenuItem::separator())
@@ -116,10 +93,7 @@ pub(crate) fn render_local_branch_menu(
             rust_i18n::t!("git.menu.update").to_string(),
             AppIcon::Ui(UiIcon::REFRESH),
             move |_, _, cx| {
-                let project = project_pull.clone();
-                app_pull.update(cx, |this, cx| {
-                    crate::git::actions::git_pull_project(this, &project, false, cx);
-                });
+                ws_pull.update(cx, |ws, cx| ws.pull(false, cx));
             },
         ))
         // 5. 推送...
@@ -128,10 +102,7 @@ pub(crate) fn render_local_branch_menu(
             AppIcon::Ui(UiIcon::UPLOAD),
             move |_, _, cx| {
                 let target = name_push.clone();
-                let project = project_push.clone();
-                app_push.update(cx, |this, cx| {
-                    crate::git::actions::git_push_project(this, &project, Some(target), cx);
-                });
+                ws_push.update(cx, |ws, cx| ws.push_branch(Some(target), cx));
             },
         ))
         // 6. 跟踪的分支 '{upstream}'
@@ -144,9 +115,7 @@ pub(crate) fn render_local_branch_menu(
             AppIcon::Ui(UiIcon::VCS),
             move |_, _, cx| {
                 let target = upstream_click.clone();
-                app_upstream.update(cx, |this, cx| {
-                    crate::git::actions::git_set_log_scope(this, tab_id, LogScope::Ref(target), cx);
-                });
+                ws_upstream.update(cx, |ws, cx| ws.set_log_scope(LogScope::Ref(target), cx));
             },
         ))
         .item(PopupMenuItem::separator())
@@ -154,19 +123,9 @@ pub(crate) fn render_local_branch_menu(
         .item(menu_item(
             rust_i18n::t!("git.menu.rename_branch").to_string(),
             AppIcon::Ui(UiIcon::EDIT),
-            move |_, window, cx| {
+            move |_, _, cx| {
                 let old = name_rename.clone();
-                let project = project_rename.clone();
-                app_rename.update(cx, |this, cx| {
-                    crate::git::name_modal::open_git_name_modal(
-                        this,
-                        &project,
-                        crate::git::GitNamePurpose::RenameBranch { old: old.clone() },
-                        old,
-                        window,
-                        cx,
-                    );
-                });
+                ws_rename.update(cx, |ws, cx| ws.rename_branch(old, cx));
             },
         ))
         // 8. 删除（仅非当前检出分支允许删除）
@@ -176,10 +135,7 @@ pub(crate) fn render_local_branch_menu(
                 AppIcon::Ui(UiIcon::DELETE),
                 move |_, _, cx| {
                     let name = name_delete.clone();
-                    let project = project_delete.clone();
-                    app_delete.update(cx, |this, cx| {
-                        crate::git::actions::git_delete_project_ref(this, &project, &name, cx);
-                    });
+                    ws_delete.update(cx, |ws, cx| ws.delete_ref(&name, cx));
                 },
             ))
         })

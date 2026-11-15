@@ -1,10 +1,10 @@
 //! Telnet 线路写出端与读写 I/O 适配器。
 
 use super::iac::{IacParser, escape_iac};
+use parking_lot::{Mutex, MutexGuard};
 use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use parking_lot::{Mutex, MutexGuard};
 use std::time::Duration;
 use transom_core::{TerminalIo, TextEncoding};
 

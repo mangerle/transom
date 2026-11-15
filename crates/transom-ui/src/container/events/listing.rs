@@ -48,9 +48,7 @@ pub(super) fn handle_listing_event(
         ContainerAppEvent::ImageInspected {
             request_id,
             details,
-        } => apply_by_request(shell, request_id, cx, |w| {
-            w.apply_image_inspected(*details)
-        }),
+        } => apply_by_request(shell, request_id, cx, |w| w.apply_image_inspected(*details)),
         ContainerAppEvent::VolumesListed {
             request_id,
             volumes,
@@ -64,9 +62,7 @@ pub(super) fn handle_listing_event(
         ContainerAppEvent::NetworksListed {
             request_id,
             networks,
-        } => apply_by_request(shell, request_id, cx, |w| {
-            w.apply_networks_listed(networks)
-        }),
+        } => apply_by_request(shell, request_id, cx, |w| w.apply_networks_listed(networks)),
         ContainerAppEvent::NetworkInspected {
             request_id,
             details,

@@ -289,7 +289,6 @@ pub(super) fn stage_label(stage: UpdateStage) -> String {
     rust_i18n::t!(key).to_string()
 }
 
-
-mod view;
 #[cfg(test)]
 mod tests;
+mod view;

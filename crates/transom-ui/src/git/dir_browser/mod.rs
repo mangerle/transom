@@ -186,11 +186,7 @@ pub(crate) fn git_refresh_browser(
 }
 
 /// 切换是否显示隐藏条目：口径变了，所有缓存都要作废。
-pub(crate) fn git_toggle_hidden(
-    shell: &mut AppShell,
-    target: GitHost,
-    cx: &mut Context<AppShell>,
-) {
+pub(crate) fn git_toggle_hidden(shell: &mut AppShell, target: GitHost, cx: &mut Context<AppShell>) {
     let Some(picker) = picker_mut(shell, target) else {
         return;
     };
@@ -320,9 +316,7 @@ pub(crate) fn git_commit_dir_draft(
     window
         .spawn(cx, async move |cx| {
             let created = executor
-                .spawn(async move {
-                    std::fs::create_dir_all(&created_path).map(|()| created_path)
-                })
+                .spawn(async move { std::fs::create_dir_all(&created_path).map(|()| created_path) })
                 .await;
             let _ = cx.update(|window, app| match created {
                 Ok(path) => {

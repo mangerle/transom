@@ -15,8 +15,9 @@
 //!   核查要在一屏里滚半个文件，拆开也让每一类的改动只碰一个文件。对外仍从这里
 //!   再导出，调用方的引用路径不变。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::git::GitWorkspace;
+use crate::git::actions::GitHistoryAction;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::h_flex;
@@ -27,7 +28,7 @@ use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{HeadState, TabId};
+use transom_core::HeadState;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -58,8 +59,7 @@ pub(crate) const LOG_TOOLBAR_HEIGHT: f32 = crate::theme::tokens::size::PANE_HEAD
 /// 分支 / 用户 / 日期 / 路径下拉）。
 pub(crate) fn render_filter_bar(
     state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
     p: &Palette,
 ) -> AnyElement {
     let branch_names: Vec<String> = state
@@ -88,8 +88,8 @@ pub(crate) fn render_filter_bar(
     let author_state = state.author_input.clone();
     let regex_tooltip = rust_i18n::t!("git.filter.regex_tooltip").to_string();
     let case_tooltip = rust_i18n::t!("git.filter.case_tooltip").to_string();
-    let regex_app = app.clone();
-    let case_app = app.clone();
+    let regex_ws = workspace.clone();
+    let case_ws = workspace.clone();
     let search_suffix = h_flex()
         .gap_0p5()
         .items_center()
@@ -103,9 +103,7 @@ pub(crate) fn render_filter_bar(
                 .tooltip(regex_tooltip)
                 .when(state.query.regex, |btn| btn.secondary())
                 .on_click(move |_, _, cx| {
-                    regex_app.update(cx, |this, cx| {
-                        crate::git::actions::git_toggle_filter_flag(this, tab_id, true, cx);
-                    });
+                    regex_ws.update(cx, |ws, cx| ws.toggle_filter_flag(true, cx));
                 }),
         )
         .child(
@@ -118,9 +116,7 @@ pub(crate) fn render_filter_bar(
                 .tooltip(case_tooltip)
                 .when(state.query.case_sensitive, |btn| btn.secondary())
                 .on_click(move |_, _, cx| {
-                    case_app.update(cx, |this, cx| {
-                        crate::git::actions::git_toggle_filter_flag(this, tab_id, false, cx);
-                    });
+                    case_ws.update(cx, |ws, cx| ws.toggle_filter_flag(false, cx));
                 }),
         );
     h_flex()
@@ -147,23 +143,18 @@ pub(crate) fn render_filter_bar(
                 .child(AppIconElement::new(UiIcon::VCS).small())
                 .label(scope_label)
                 .dropdown_menu({
-                    let menu_app = app.clone();
+                    let menu_ws = workspace.clone();
                     let menu_branches = branch_names.clone();
                     move |menu, _window, _cx| {
-                        let current_app = menu_app.clone();
+                        let current_ws = menu_ws.clone();
                         let branch_names = menu_branches.clone();
                         let mut menu = menu
                             .item(menu_item(
                                 rust_i18n::t!("git.scope.current").to_string(),
                                 UiIcon::VCS,
                                 move |_, _, cx| {
-                                    current_app.update(cx, |this, cx| {
-                                        crate::git::actions::git_set_log_scope(
-                                            this,
-                                            tab_id,
-                                            transom_core::LogScope::CurrentBranch,
-                                            cx,
-                                        );
+                                    current_ws.update(cx, |ws, cx| {
+                                        ws.set_log_scope(transom_core::LogScope::CurrentBranch, cx);
                                     });
                                 },
                             ))
@@ -171,32 +162,22 @@ pub(crate) fn render_filter_bar(
                                 rust_i18n::t!("git.scope.all").to_string(),
                                 UiIcon::VCS,
                                 {
-                                    let all_app = menu_app.clone();
+                                    let all_ws = menu_ws.clone();
                                     move |_, _, cx| {
-                                        all_app.update(cx, |this, cx| {
-                                            crate::git::actions::git_set_log_scope(
-                                                this,
-                                                tab_id,
-                                                transom_core::LogScope::AllRefs,
-                                                cx,
-                                            );
+                                        all_ws.update(cx, |ws, cx| {
+                                            ws.set_log_scope(transom_core::LogScope::AllRefs, cx);
                                         });
                                     }
                                 },
                             ))
                             .item(PopupMenuItem::separator());
                         for name in branch_names {
-                            let item_app = menu_app.clone();
+                            let item_ws = menu_ws.clone();
                             menu =
                                 menu.item(menu_item(name.clone(), UiIcon::VCS, move |_, _, cx| {
                                     let name = name.clone();
-                                    item_app.update(cx, |this, cx| {
-                                        crate::git::actions::git_set_log_scope(
-                                            this,
-                                            tab_id,
-                                            transom_core::LogScope::Ref(name),
-                                            cx,
-                                        );
+                                    item_ws.update(cx, |ws, cx| {
+                                        ws.set_log_scope(transom_core::LogScope::Ref(name), cx);
                                     });
                                 }));
                         }
@@ -212,8 +193,8 @@ pub(crate) fn render_filter_bar(
                 .child(AppIconElement::new(UiIcon::HISTORY))
                 .label(date_label)
                 .dropdown_menu({
-                    let date_app = app.clone();
-                    move |menu, _window, _cx| render_date_menu(menu, date_app.clone(), tab_id)
+                    let date_ws = workspace.clone();
+                    move |menu, _window, _cx| render_date_menu(menu, date_ws.clone())
                 }),
         )
         .child(
@@ -229,11 +210,9 @@ pub(crate) fn render_filter_bar(
                 ))
                 .label(path_label)
                 .dropdown_menu({
-                    let path_app = app.clone();
+                    let path_ws = workspace.clone();
                     let paths = state.tracked_paths.clone();
-                    move |menu, _window, _cx| {
-                        render_path_menu(menu, path_app.clone(), tab_id, paths.clone())
-                    }
+                    move |menu, _window, _cx| render_path_menu(menu, path_ws.clone(), paths.clone())
                 }),
         )
         .child(
@@ -244,14 +223,10 @@ pub(crate) fn render_filter_bar(
                 .accessibility_label(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .tooltip(rust_i18n::t!("git.menu.rebase_abort").to_string())
                 .on_click({
-                    let abort_app = app.clone();
+                    let abort_ws = workspace.clone();
                     move |_, _, cx| {
-                        abort_app.update(cx, |this, cx| {
-                            crate::git::actions::git_history_on_current(
-                                this,
-                                crate::git::actions::GitHistoryAction::RebaseAbort,
-                                cx,
-                            );
+                        abort_ws.update(cx, |ws, cx| {
+                            ws.history_action(GitHistoryAction::RebaseAbort, cx);
                         });
                     }
                 }),
@@ -263,11 +238,9 @@ pub(crate) fn render_filter_bar(
                 .child(AppIconElement::new(UiIcon::SEARCH))
                 .accessibility_label("Apply filter")
                 .on_click({
-                    let apply_app = app.clone();
+                    let apply_ws = workspace;
                     move |_, _, cx| {
-                        apply_app.update(cx, |this, cx| {
-                            crate::git::actions::git_apply_filter_inputs(this, tab_id, cx);
-                        });
+                        apply_ws.update(cx, |ws, cx| ws.apply_filter_inputs(cx));
                     }
                 }),
         )

@@ -35,7 +35,13 @@ pub(crate) fn rename_git_folder(
     name: String,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(folder) = shell.state.git.folders.iter_mut().find(|item| item.id == id) else {
+    let Some(folder) = shell
+        .state
+        .git
+        .folders
+        .iter_mut()
+        .find(|item| item.id == id)
+    else {
         return;
     };
     folder.name = name;
@@ -43,11 +49,7 @@ pub(crate) fn rename_git_folder(
 }
 
 /// 删除分组：组内项目退回根层，磁盘上的仓库一个都不动。
-pub(crate) fn delete_git_folder(
-    shell: &mut AppShell,
-    id: GitFolderId,
-    cx: &mut Context<AppShell>,
-) {
+pub(crate) fn delete_git_folder(shell: &mut AppShell, id: GitFolderId, cx: &mut Context<AppShell>) {
     crate::git::helpers::delete_git_folder(
         &mut shell.state.git.projects,
         &mut shell.state.git.folders,
@@ -62,7 +64,13 @@ pub(crate) fn toggle_git_folder_collapsed(
     id: GitFolderId,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(folder) = shell.state.git.folders.iter_mut().find(|item| item.id == id) else {
+    let Some(folder) = shell
+        .state
+        .git
+        .folders
+        .iter_mut()
+        .find(|item| item.id == id)
+    else {
         return;
     };
     folder.collapsed = !folder.collapsed;

@@ -173,8 +173,7 @@ pub(crate) fn render_cloud_sync_sidebar(
                 Button::new("cloud-sync-test")
                     .small()
                     .child(
-                        AppIconElement::new(AppIcon::Custom(CustomIcon::CONNECTION_TEST))
-                            .small(),
+                        AppIconElement::new(AppIcon::Custom(CustomIcon::CONNECTION_TEST)).small(),
                     )
                     .label(rust_i18n::t!("sync.test").to_string())
                     .disabled(running || !enabled)
@@ -215,8 +214,7 @@ pub(crate) fn render_cloud_sync_sidebar(
     );
     let actions = actions.into_any_element();
 
-    let conflict_card =
-        conflict.map(|conflict| render_conflict_card(p, &conflict, running, cx));
+    let conflict_card = conflict.map(|conflict| render_conflict_card(p, &conflict, running, cx));
 
     let filter_options = [
         (SyncHistoryFilter::All, rust_i18n::t!("sync.history_all")),
@@ -339,7 +337,10 @@ pub(crate) fn render_cloud_sync_sidebar(
 
 /// 显示云同步侧边栏；活动栏点击统一走这里，保持收起再展开行为一致。
 pub(crate) fn toggle_cloud_sync_sidebar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.sidebar.toggle_section(SidebarSection::CloudSync);
+    shell
+        .state
+        .sidebar
+        .toggle_section(SidebarSection::CloudSync);
     cx.notify();
 }
 

@@ -12,7 +12,11 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
 /// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
-pub(crate) fn on_known_hosts_event(shell: &mut AppShell, event: &KnownHostsEvent, cx: &mut Context<AppShell>) {
+pub(crate) fn on_known_hosts_event(
+    shell: &mut AppShell,
+    event: &KnownHostsEvent,
+    cx: &mut Context<AppShell>,
+) {
     match event {
         KnownHostsEvent::Removed { error: Some(error) } => {
             shell.state.set_error(localized_error(error))

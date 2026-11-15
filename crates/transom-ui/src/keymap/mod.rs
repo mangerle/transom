@@ -110,10 +110,10 @@ pub(crate) struct ShortcutSpec {
 
 mod specs;
 
-pub(crate) use specs::{spec_by_id, specs};
+use specs::SPECS;
 #[cfg(test)]
 use specs::load_key_binding;
-use specs::SPECS;
+pub(crate) use specs::{spec_by_id, specs};
 
 /// 生成全部应用键位：用户可改键的动作（含面板专属上下文）+ 固定的 SFTP 键位
 /// + 弹窗栈内多行输入框的提交键位。

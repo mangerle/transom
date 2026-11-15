@@ -419,7 +419,7 @@ fn session_form_is_owned_by_entity() {
             "会话表单保存/删除必须走 SessionFormEvent：{forbidden}"
         );
     }
-    let view = std::fs::read_to_string(root.join("src/session_form/view.rs"))
+    let view = std::fs::read_to_string(root.join("src/session_form/view/mod.rs"))
         .expect("读取会话表单视图失败");
     assert!(
         !view.contains("render_session_form_body"),
@@ -466,4 +466,3 @@ fn replay_modal_is_owned_by_entity() {
         "ReplayModalView 必须存在于 record/entity.rs"
     );
 }
-

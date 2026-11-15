@@ -154,71 +154,71 @@ pub(crate) fn render_sftp_search_body(
         return div().into_any_element();
     };
 
-        let is_searching = modal.is_searching;
-        let results = modal.results.clone();
-        let target_connection = modal.connection_id;
+    let is_searching = modal.is_searching;
+    let results = modal.results.clone();
+    let target_connection = modal.connection_id;
 
-        let header = render_search_header(modal, app, p);
+    let header = render_search_header(modal, app, p);
 
-        let mut results_container = v_flex()
-            .id("sftp-search-results-list")
-            .gap_1()
-            .w_full()
-            .h(px(280.0))
-            .overflow_y_scrollbar();
+    let mut results_container = v_flex()
+        .id("sftp-search-results-list")
+        .gap_1()
+        .w_full()
+        .h(px(280.0))
+        .overflow_y_scrollbar();
 
-        if is_searching {
-            results_container = results_container.child(
-                div()
-                    .p_4()
-                    .text_sm()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("sftp.search.searching_hint").to_string()),
-            );
-        } else if results.is_empty() {
-            results_container = results_container.child(
-                div()
-                    .p_4()
-                    .text_sm()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("sftp.search.no_results").to_string()),
-            );
-        } else {
-            for (idx, item) in results.into_iter().enumerate() {
-                results_container = results_container.child(search_result_row(SearchResultRow {
-                    idx,
-                    item: &item,
-                    tab_id: modal.tab_id,
-                    connection_id: target_connection,
-                    app,
-                    p,
-                }));
-            }
-        }
-
-        let content = v_flex().gap_3().child(header).child(results_container);
-
-        let footer = h_flex().gap_2().child(
-            Button::new("close-sftp-search")
-                .ghost()
-                .label(rust_i18n::t!("app.close").to_string())
-                .on_click(crate::dialog_host::on_event(
-                    app,
-                    |this, _: &ClickEvent, window, cx| {
-                        this.state.sftp_modals.search = None;
-                        crate::sftp::focus_active_sftp_panel(this, window, cx);
-                        cx.notify();
-                    },
-                )),
+    if is_searching {
+        results_container = results_container.child(
+            div()
+                .p_4()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("sftp.search.searching_hint").to_string()),
         );
+    } else if results.is_empty() {
+        results_container = results_container.child(
+            div()
+                .p_4()
+                .text_sm()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("sftp.search.no_results").to_string()),
+        );
+    } else {
+        for (idx, item) in results.into_iter().enumerate() {
+            results_container = results_container.child(search_result_row(SearchResultRow {
+                idx,
+                item: &item,
+                tab_id: modal.tab_id,
+                connection_id: target_connection,
+                app,
+                p,
+            }));
+        }
+    }
 
-        crate::widgets::dialog_body(
-            "sftp-search-modal",
-            rust_i18n::t!("sftp.search.title").to_string(),
-            None::<String>,
-            content,
-            Some(footer),
-        )
+    let content = v_flex().gap_3().child(header).child(results_container);
+
+    let footer = h_flex().gap_2().child(
+        Button::new("close-sftp-search")
+            .ghost()
+            .label(rust_i18n::t!("app.close").to_string())
+            .on_click(crate::dialog_host::on_event(
+                app,
+                |this, _: &ClickEvent, window, cx| {
+                    this.state.sftp_modals.search = None;
+                    crate::sftp::focus_active_sftp_panel(this, window, cx);
+                    cx.notify();
+                },
+            )),
+    );
+
+    crate::widgets::dialog_body(
+        "sftp-search-modal",
+        rust_i18n::t!("sftp.search.title").to_string(),
+        None::<String>,
+        content,
+        Some(footer),
+    )
 }
 
 /// 检索弹窗头部：根路径、输入框、检索按钮、模式开关与错误提示。
@@ -371,7 +371,13 @@ fn search_result_row(row: SearchResultRow<'_>) -> AnyElement {
                 this.state.sftp_modals.search = None;
                 let dir = parent_remote(&target_path);
                 if let Some(connection_id) = connection_id {
-                    crate::sftp::request_sftp_list_for_connection(this, tab_id, connection_id, dir, cx);
+                    crate::sftp::request_sftp_list_for_connection(
+                        this,
+                        tab_id,
+                        connection_id,
+                        dir,
+                        cx,
+                    );
                 } else {
                     crate::sftp::request_sftp_list(this, tab_id, dir, cx);
                 }

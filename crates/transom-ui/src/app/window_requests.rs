@@ -10,6 +10,7 @@
 
 use crate::container::ContainerWorkspaceEvent;
 use crate::editor::EditorPanelEvent;
+use crate::git::GitWorkspaceEvent;
 use crate::monitor::MonitorPanelEvent;
 use crate::settings::SettingsRequest;
 use crate::sftp::SftpPanelEvent;
@@ -28,6 +29,8 @@ pub(crate) enum WindowRequest {
     },
     /// 容器侧栏动作：侧栏是单例实体，事件自带全部数据。
     ContainerSidebar(crate::container::ContainerSidebarEvent),
+    /// Git 工作区窗口级动作。
+    Git(GitWorkspaceEvent),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -63,6 +66,10 @@ impl WindowRequests {
         event: crate::container::ContainerSidebarEvent,
     ) {
         self.items.push(WindowRequest::ContainerSidebar(event));
+    }
+
+    pub(crate) fn push_git(&mut self, event: GitWorkspaceEvent) {
+        self.items.push(WindowRequest::Git(event));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

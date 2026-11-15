@@ -144,7 +144,12 @@ impl AppShell {
             return;
         };
         let panes = self.state.workspace.groups[index].pane_ids();
-        if crate::editor::block_close_for_dirty_editors(self, &panes, PendingEditorClose::Group(group_id), cx) {
+        if crate::editor::block_close_for_dirty_editors(
+            self,
+            &panes,
+            PendingEditorClose::Group(group_id),
+            cx,
+        ) {
             return;
         }
         let tiled_focus = self
@@ -214,7 +219,8 @@ impl AppShell {
             self.close_group(group_id, window, cx);
             return;
         }
-        if crate::editor::block_close_for_dirty_editors(self, 
+        if crate::editor::block_close_for_dirty_editors(
+            self,
             std::slice::from_ref(&tab_id),
             PendingEditorClose::Pane(tab_id),
             cx,

@@ -332,7 +332,9 @@ impl ModalKind {
             ModalKind::AuthPrompt | ModalKind::HostKeyConfirm | ModalKind::ClipboardPrompt => {
                 div().into_any_element()
             }
-            ModalKind::ForwardConfirm => crate::forward::render_forward_confirm_body(shell, app, cx, p),
+            ModalKind::ForwardConfirm => {
+                crate::forward::render_forward_confirm_body(shell, app, cx, p)
+            }
             ModalKind::SftpInput => crate::sftp::render_sftp_input_body(shell, app, cx, p),
             ModalKind::SftpChmod => crate::sftp::render_sftp_chmod_body(shell, app, cx, p),
             ModalKind::SftpProperties => {
@@ -341,7 +343,9 @@ impl ModalKind {
             ModalKind::SftpFilter => crate::sftp::render_sftp_filter_body(shell, app, cx, p),
             ModalKind::SftpSearch => crate::sftp::render_sftp_search_body(shell, app, cx, p),
             ModalKind::SftpSync => crate::sftp::render_sftp_sync_body(shell, app, cx, p),
-            ModalKind::EditorGotoLine => crate::editor::render_editor_goto_line_body(shell, app, cx, p),
+            ModalKind::EditorGotoLine => {
+                crate::editor::render_editor_goto_line_body(shell, app, cx, p)
+            }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerForm => div().into_any_element(),
             ModalKind::ContainerFolderForm => {
@@ -383,9 +387,15 @@ impl ModalKind {
             ModalKind::ContainerPods | ModalKind::ContainerQuadlet => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::SessionForm => div().into_any_element(),
-            ModalKind::FolderForm => crate::sidebar::render_folder_form_body(shell, app, window, cx, p),
-            ModalKind::BatchEdit => crate::app::batch::render_batch_edit_body(shell, app, window, cx, p),
-            ModalKind::SnippetForm => crate::app::snippets::render_snippet_form_body(shell, app, window, cx, p),
+            ModalKind::FolderForm => {
+                crate::sidebar::render_folder_form_body(shell, app, window, cx, p)
+            }
+            ModalKind::BatchEdit => {
+                crate::app::batch::render_batch_edit_body(shell, app, window, cx, p)
+            }
+            ModalKind::SnippetForm => {
+                crate::app::snippets::render_snippet_form_body(shell, app, window, cx, p)
+            }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::KnownHosts => div().into_any_element(),
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
@@ -400,8 +410,12 @@ impl ModalKind {
                 // 由 [`Self::render_body`] 的专用分支处理，这里不会走到。
                 div().into_any_element()
             }
-            ModalKind::ShortcutCapture => crate::app::shortcuts::render_shortcut_capture_body(shell, app, window, cx, p),
-            ModalKind::DiffViewer => crate::diff_viewer::render_diff_viewer_body(shell, app, window, cx, p),
+            ModalKind::ShortcutCapture => {
+                crate::app::shortcuts::render_shortcut_capture_body(shell, app, window, cx, p)
+            }
+            ModalKind::DiffViewer => {
+                crate::diff_viewer::render_diff_viewer_body(shell, app, window, cx, p)
+            }
             _ => div().into_any_element(),
         }
     }

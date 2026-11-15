@@ -86,7 +86,11 @@ fn desired_modal_stack(shell: &AppShell, cx: &App) -> Vec<ModalKind> {
 /// 拖放与异步回调等二十多处，逐个补开关必然漏；渲染是唯一的汇聚点。
 /// 为什么要 `defer`：`open_dialog` 会移交焦点并通知组件层，在渲染过程中
 /// 改这些状态会踩借用与重入，延到绘制之后再执行。
-pub(crate) fn reconcile_dialogs(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn reconcile_dialogs(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let desired = desired_modal_stack(shell, cx);
     let actual: Vec<ModalKind> = shell
         .state
@@ -144,7 +148,12 @@ pub(crate) fn reconcile_dialogs(shell: &mut AppShell, window: &mut Window, cx: &
 }
 
 /// 压入一层弹窗：外壳只负责容器属性，内容交给弹窗体。
-fn push_dialog(shell: &mut AppShell, kind: ModalKind, window: &mut Window, cx: &mut Context<AppShell>) {
+fn push_dialog(
+    shell: &mut AppShell,
+    kind: ModalKind,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(body) = shell
         .state
         .open_modals

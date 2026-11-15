@@ -4,9 +4,9 @@ use gpui_kit::component::Root;
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, Modifiers,
-    MouseButton, ParentElement, Pixels, Render, Size, Styled, TestAppContext,
-    VisualTestContext, Window, div, init, point, px,
+    AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, Modifiers, MouseButton,
+    ParentElement, Pixels, Render, Size, Styled, TestAppContext, VisualTestContext, Window, div,
+    init, point, px,
 };
 use std::cell::{Cell, OnceCell};
 use std::rc::Rc;
@@ -137,12 +137,7 @@ fn with_probe(
     side_left: bool,
     sftp_open: bool,
     forwards_open: bool,
-    scenario: impl FnOnce(
-        &mut VisualTestContext,
-        &Entity<SlotProbe>,
-        &Rc<Cell<bool>>,
-        &Rc<Cell<bool>>,
-    ),
+    scenario: impl FnOnce(&mut VisualTestContext, &Entity<SlotProbe>, &Rc<Cell<bool>>, &Rc<Cell<bool>>),
 ) {
     let mut app = TestAppContext::single();
     app.update(|cx| {
@@ -228,9 +223,7 @@ fn drag_after_sidebar_collapsed_follows_pointer() {
         false,
         |cx, probe, visible, _sftp_open| {
             assert!((width(cx, "sftp") - SFTP_WIDTH).abs() < 1.0);
-            assert!(
-                (width(cx, "main") - (WINDOW_WIDTH - SIDEBAR_WIDTH - SFTP_WIDTH)).abs() < 1.0
-            );
+            assert!((width(cx, "main") - (WINDOW_WIDTH - SIDEBAR_WIDTH - SFTP_WIDTH)).abs() < 1.0);
 
             toggle(probe, cx, || visible.set(false));
             draw_until_settled(cx);
@@ -253,8 +246,7 @@ fn drag_after_sidebar_collapsed_follows_pointer() {
                 "展开侧栏不应改变 SFTP 宽度：拖动后 {sftp_after_drag}，展开后 {sftp_after_restore}"
             );
             assert!(
-                (width(cx, "main") - (WINDOW_WIDTH - SIDEBAR_WIDTH - sftp_after_drag)).abs()
-                    < 1.0
+                (width(cx, "main") - (WINDOW_WIDTH - SIDEBAR_WIDTH - sftp_after_drag)).abs() < 1.0
             );
         },
     );

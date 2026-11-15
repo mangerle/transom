@@ -20,7 +20,8 @@ use transom_ui_icons::UiIcon;
 
 /// 当前活动窗格的 SFTP 面板元素：实体实现 `Render`，外壳只负责挂载。
 pub(crate) fn render_sftp_panel_element(shell: &AppShell) -> AnyElement {
-    shell.state
+    shell
+        .state
         .workspace
         .active_tab
         .and_then(|tab_id| shell.state.sftp_view(tab_id))

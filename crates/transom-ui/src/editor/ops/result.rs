@@ -426,7 +426,8 @@ pub(super) fn dispatch_sudo_probe(
 ) {
     let op_id = request.op_id;
     if super::save::send_sudo_probe(shell, &request).is_err() {
-        shell.state
+        shell
+            .state
             .editors
             .update(cx, |panels, cx| panels.fail_sudo_probe_dispatch(op_id, cx));
     }
@@ -439,7 +440,8 @@ pub(crate) fn fail_editor_panel_by_op(
     message: String,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state
+    shell
+        .state
         .editors
         .update(cx, |panels, cx| panels.fail_by_op(op_id, message, cx));
 }

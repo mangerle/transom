@@ -14,53 +14,53 @@ pub(crate) fn render_sftp_chmod_body(
     let Some(modal) = shell.state.sftp_modals.chmod.as_ref() else {
         return div().into_any_element();
     };
-        let file_name = modal.file_name.clone();
-        let remote_path = modal.remote_path.clone();
-        let perms = modal.permissions & 0o777;
-        let octal_input = modal.octal_input.clone();
-        let error = modal.error.clone();
+    let file_name = modal.file_name.clone();
+    let remote_path = modal.remote_path.clone();
+    let perms = modal.permissions & 0o777;
+    let octal_input = modal.octal_input.clone();
+    let error = modal.error.clone();
 
-        let grid = chmod_grid(perms, app, p);
+    let grid = chmod_grid(perms, app, p);
 
-        let content = v_flex()
-            .gap_3()
-            .child(grid)
-            .child(chmod_octal_row(perms, &octal_input, app, p))
-            .when_some(error, |this, err| {
-                this.child(div().text_xs().text_color(p.danger).child(err))
-            });
+    let content = v_flex()
+        .gap_3()
+        .child(grid)
+        .child(chmod_octal_row(perms, &octal_input, app, p))
+        .when_some(error, |this, err| {
+            this.child(div().text_xs().text_color(p.danger).child(err))
+        });
 
-        let footer = h_flex()
-            .gap_2()
-            .child(crate::widgets::dialog_cancel_button(
-                "cancel-sftp-chmod",
-                rust_i18n::t!("common.cancel").to_string(),
-                crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
-                    this.state.sftp_modals.chmod = None;
-                    crate::sftp::focus_active_sftp_panel(this, window, cx);
-                    cx.notify();
-                }),
-            ))
-            .child(
-                Button::new("save-sftp-chmod")
-                    .primary()
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-                    .label(rust_i18n::t!("sftp.chmod.apply").to_string())
-                    .on_click(crate::dialog_host::on_event(
-                        app,
-                        |this, _: &ClickEvent, window, cx| {
-                            crate::sftp::save_sftp_chmod_modal(this, window, cx);
-                        },
-                    )),
-            );
+    let footer = h_flex()
+        .gap_2()
+        .child(crate::widgets::dialog_cancel_button(
+            "cancel-sftp-chmod",
+            rust_i18n::t!("common.cancel").to_string(),
+            crate::dialog_host::on_event(app, |this, _: &ClickEvent, window, cx| {
+                this.state.sftp_modals.chmod = None;
+                crate::sftp::focus_active_sftp_panel(this, window, cx);
+                cx.notify();
+            }),
+        ))
+        .child(
+            Button::new("save-sftp-chmod")
+                .primary()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
+                .label(rust_i18n::t!("sftp.chmod.apply").to_string())
+                .on_click(crate::dialog_host::on_event(
+                    app,
+                    |this, _: &ClickEvent, window, cx| {
+                        crate::sftp::save_sftp_chmod_modal(this, window, cx);
+                    },
+                )),
+        );
 
-        crate::widgets::dialog_body(
-            "sftp-chmod-modal",
-            rust_i18n::t!("sftp.chmod.title", name = file_name.as_str()).to_string(),
-            Some(rust_i18n::t!("sftp.chmod.remote_path", path = remote_path.as_str()).to_string()),
-            content,
-            Some(footer),
-        )
+    crate::widgets::dialog_body(
+        "sftp-chmod-modal",
+        rust_i18n::t!("sftp.chmod.title", name = file_name.as_str()).to_string(),
+        Some(rust_i18n::t!("sftp.chmod.remote_path", path = remote_path.as_str()).to_string()),
+        content,
+        Some(footer),
+    )
 }
 
 /// 八进制输入、等价的 rwx 文案与四个常用预设。

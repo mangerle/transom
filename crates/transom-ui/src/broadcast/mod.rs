@@ -108,7 +108,11 @@ impl AppState {
     }
 }
 
-pub(crate) fn toggle_broadcast_bar(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn toggle_broadcast_bar(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     if shell.state.broadcast.open {
         close_broadcast_bar(shell, window, cx);
     } else {
@@ -127,7 +131,8 @@ fn open_broadcast_bar(shell: &mut AppShell, window: &mut Window, cx: &mut Contex
         state.set_value("", window, cx);
         state.focus(window, cx);
     });
-    shell.state
+    shell
+        .state
         .broadcast
         .textarea
         .update(cx, |state, cx| state.set_value("", window, cx));
@@ -177,7 +182,10 @@ pub(crate) fn toggle_broadcast_multiline(
 
 /// 把当前输入发送到所有已选目标；单行补回车，多行按粘贴语义整段发送。
 /// 读取广播文本并收敛目标集；空文本或无有效目标时返回 None。
-fn prepare_broadcast(shell: &mut AppShell, cx: &mut Context<AppShell>) -> Option<(String, Vec<TabId>)> {
+fn prepare_broadcast(
+    shell: &mut AppShell,
+    cx: &mut Context<AppShell>,
+) -> Option<(String, Vec<TabId>)> {
     let raw = if shell.state.broadcast.multiline {
         shell.state.broadcast.textarea.read(cx).value().to_string()
     } else {
@@ -196,7 +204,8 @@ fn prepare_broadcast(shell: &mut AppShell, cx: &mut Context<AppShell>) -> Option
         .filter_map(|group_id| shell.state.workspace.group(group_id))
         .flat_map(|group| group.pane_ids())
         .collect();
-    shell.state
+    shell
+        .state
         .broadcast
         .targets
         .retain(|id| allowed.contains(id));
@@ -210,7 +219,11 @@ fn prepare_broadcast(shell: &mut AppShell, cx: &mut Context<AppShell>) -> Option
     Some((text, targets))
 }
 
-pub(crate) fn broadcast_send(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn broadcast_send(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     if !shell.state.broadcast.open {
         return;
     }
@@ -240,7 +253,8 @@ pub(crate) fn broadcast_send(shell: &mut AppShell, window: &mut Window, cx: &mut
         }
     }
     if failed > 0 {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("broadcast.send_failed").to_string());
     }
     // 命令内容可能含敏感信息，只记录目标数量与失败数，绝不落盘正文。
@@ -250,21 +264,25 @@ pub(crate) fn broadcast_send(shell: &mut AppShell, window: &mut Window, cx: &mut
         failed
     );
 
-    shell.state
+    shell
+        .state
         .broadcast
         .input
         .update(cx, |state, cx| state.set_value("", window, cx));
-    shell.state
+    shell
+        .state
         .broadcast
         .textarea
         .update(cx, |state, cx| state.set_value("", window, cx));
     if multiline {
-        shell.state
+        shell
+            .state
             .broadcast
             .textarea
             .update(cx, |state, cx| state.focus(window, cx));
     } else {
-        shell.state
+        shell
+            .state
             .broadcast
             .input
             .update(cx, |state, cx| state.focus(window, cx));
@@ -329,7 +347,10 @@ fn broadcast_target_rows(shell: &AppShell, p: &Palette) -> Vec<BroadcastTargetRo
 }
 
 /// 状态栏快捷命令旁的广播入口。
-pub(crate) fn render_broadcast_trigger(shell: &mut AppShell, cx: &mut Context<AppShell>) -> AnyElement {
+pub(crate) fn render_broadcast_trigger(
+    shell: &mut AppShell,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
     Button::new("broadcast-trigger")
         .ghost()
         .xsmall()
@@ -344,7 +365,11 @@ pub(crate) fn render_broadcast_trigger(shell: &mut AppShell, cx: &mut Context<Ap
 }
 
 /// 广播目标选择浮层：触发按钮与目标行列表。
-fn render_broadcast_targets(shell: &AppShell, cx: &mut Context<AppShell>, p: &Palette) -> AnyElement {
+fn render_broadcast_targets(
+    shell: &AppShell,
+    cx: &mut Context<AppShell>,
+    p: &Palette,
+) -> AnyElement {
     let target_trigger = Button::new("broadcast-targets-trigger")
         .ghost()
         .xsmall()

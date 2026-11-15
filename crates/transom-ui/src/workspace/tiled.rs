@@ -217,7 +217,9 @@ impl AppShell {
                     let app = app.clone();
                     menu = menu.item(PopupMenuItem::new(title).on_click(move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            crate::app::tiling::fill_tiling_slot(this, tiling_id, slot, group_id, window, cx);
+                            crate::app::tiling::fill_tiling_slot(
+                                this, tiling_id, slot, group_id, window, cx,
+                            );
                         });
                     }));
                 }

@@ -8,7 +8,6 @@ use crate::model::git::{
     GitSide, LogQuery,
 };
 
-
 /// Git 领域命令：全部发往控制器派发的后台任务。
 pub enum GitCommand {
     /// 更新控制平面使用的 Git 可执行文件与提交作者配置。

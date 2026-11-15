@@ -12,14 +12,22 @@ use gpui_kit::*;
 use transom_core::AppError;
 
 /// 打开密钥生成与管理向导。
-pub(crate) fn open_key_wizard(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn open_key_wizard(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let view = shell.state.modals.tools.key_wizard.clone();
     view.update(cx, |view, cx| view.open(window, cx));
     cx.notify();
 }
 
 /// 消费向导实体上报的状态栏提示与错误。
-pub(crate) fn on_key_wizard_event(shell: &mut AppShell, event: &KeyWizardEvent, cx: &mut Context<AppShell>) {
+pub(crate) fn on_key_wizard_event(
+    shell: &mut AppShell,
+    event: &KeyWizardEvent,
+    cx: &mut Context<AppShell>,
+) {
     match event {
         KeyWizardEvent::Status(message) => shell.state.status = Some(message.clone()),
         KeyWizardEvent::Error(message) => shell.state.set_error(message.clone()),
@@ -40,9 +48,8 @@ pub(crate) fn handle_public_key_deployed(
     match &error {
         Some(error) => shell.state.set_error(localized_error(error)),
         None => {
-            shell.state.status = Some(
-                rust_i18n::t!("keys.deployed_status", key = key_name.as_str()).to_string(),
-            );
+            shell.state.status =
+                Some(rust_i18n::t!("keys.deployed_status", key = key_name.as_str()).to_string());
         }
     }
     let view = shell.state.modals.tools.key_wizard.clone();

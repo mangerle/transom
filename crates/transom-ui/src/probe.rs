@@ -89,7 +89,11 @@ impl AppState {
 }
 
 /// 会话行按钮入口：只拨测这一台。
-pub(crate) fn probe_session(shell: &mut AppShell, session_id: SessionId, cx: &mut Context<AppShell>) {
+pub(crate) fn probe_session(
+    shell: &mut AppShell,
+    session_id: SessionId,
+    cx: &mut Context<AppShell>,
+) {
     dispatch_probes(shell, &[session_id], cx);
 }
 
@@ -129,7 +133,8 @@ fn dispatch_probes(shell: &mut AppShell, targets: &[SessionId], cx: &mut Context
             "批量拨测没有可探测的网络主机，请求会话数: {}",
             requested.len()
         );
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("probe.no_target").to_string());
         cx.notify();
         return;
@@ -207,7 +212,12 @@ fn set_probe_badge(
 ) {
     // 先摘掉旧的到期句柄：dropping `Task` 即取消任务，新一批结果必须活满
     // 自己的 TTL，不能被上一批的定时器抹掉。
-    shell.state.tasks.background.probe_expiry.remove(&session_id);
+    shell
+        .state
+        .tasks
+        .background
+        .probe_expiry
+        .remove(&session_id);
     shell.state.probe_badges.insert(session_id, badge);
     if let Some(ttl) = ttl {
         let task = cx.spawn(async move |this, cx| {
@@ -218,7 +228,8 @@ fn set_probe_badge(
                 cx.notify();
             });
         });
-        shell.state
+        shell
+            .state
             .tasks
             .background
             .probe_expiry

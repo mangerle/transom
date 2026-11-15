@@ -166,10 +166,13 @@ pub(crate) fn tile_tab(
     };
     match previous {
         StripEntry::Tiled { id, .. } => {
-            if let Some(group) = crate::app::tiling::add_groups_to_tiling(shell, id, vec![target], window) {
+            if let Some(group) =
+                crate::app::tiling::add_groups_to_tiling(shell, id, vec![target], window)
+            {
                 crate::app::tiling::activate_group(shell, group, window, cx);
             } else {
-                shell.state
+                shell
+                    .state
                     .set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS));
                 cx.notify();
             }
@@ -219,7 +222,8 @@ pub(crate) fn close_tiling_groups(
     let panes: Vec<TabId> = groups
         .iter()
         .filter_map(|group_id| {
-            shell.state
+            shell
+                .state
                 .workspace
                 .groups
                 .iter()
@@ -227,7 +231,8 @@ pub(crate) fn close_tiling_groups(
         })
         .flat_map(|group| group.pane_ids())
         .collect();
-    if crate::editor::block_close_for_dirty_editors(shell, 
+    if crate::editor::block_close_for_dirty_editors(
+        shell,
         &panes,
         PendingEditorClose::Tiling(groups.clone()),
         cx,
@@ -250,7 +255,8 @@ pub(crate) fn close_tiling_groups(
 /// 退出指定并排组，只改变显示方式：组内标签都保持打开与连接。
 pub(crate) fn untile_tiling(shell: &mut AppShell, id: TilingId, cx: &mut Context<AppShell>) {
     let before = shell.state.workspace.tiled_sets.len();
-    shell.state
+    shell
+        .state
         .workspace
         .tiled_sets
         .retain(|tiled| tiled.id != id);
@@ -301,7 +307,11 @@ pub(crate) fn focus_neighbor_tile(
 }
 
 /// Ctrl/Cmd+点击标签：整组加入或移出多选集合。
-pub(crate) fn toggle_tab_selection(shell: &mut AppShell, groups: &[GroupId], cx: &mut Context<AppShell>) {
+pub(crate) fn toggle_tab_selection(
+    shell: &mut AppShell,
+    groups: &[GroupId],
+    cx: &mut Context<AppShell>,
+) {
     if groups.is_empty() {
         return;
     }
@@ -338,7 +348,8 @@ pub(crate) fn apply_tiling_layout_for(
     let groups: Vec<GroupId> = groups
         .into_iter()
         .filter(|group| {
-            shell.state
+            shell
+                .state
                 .workspace
                 .groups
                 .iter()
@@ -349,7 +360,8 @@ pub(crate) fn apply_tiling_layout_for(
         return;
     }
     if groups.len() > MAX_TILING_SLOTS {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("tiling.too_many", max = MAX_TILING_SLOTS).to_string());
         cx.notify();
         return;
@@ -440,7 +452,8 @@ pub(crate) fn add_groups_to_tiling(
     let groups: Vec<GroupId> = groups
         .into_iter()
         .filter(|group| {
-            shell.state
+            shell
+                .state
                 .workspace
                 .groups
                 .iter()

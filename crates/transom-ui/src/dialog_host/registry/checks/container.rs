@@ -86,8 +86,7 @@ pub(in crate::app::dialog_host) fn container_create_values(
 }
 
 pub(in crate::app::dialog_host) fn container_confirm_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.confirm.is_some())
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.confirm.is_some()).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_rename_open(shell: &AppShell, cx: &App) -> bool {
@@ -106,8 +105,7 @@ pub(in crate::app::dialog_host) fn container_rename_values(
 }
 
 pub(in crate::app::dialog_host) fn container_tag_image_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.tag_image.is_some())
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.tag_image.is_some()).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_tag_image_values(
@@ -183,8 +181,7 @@ pub(in crate::app::dialog_host) fn container_export_config_open(
     shell: &AppShell,
     cx: &App,
 ) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.export_config.is_some())
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.export_config.is_some()).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_file_rename_open(shell: &AppShell, cx: &App) -> bool {
@@ -204,9 +201,9 @@ pub(in crate::app::dialog_host) fn container_file_rename_values(
 
 pub(in crate::app::dialog_host) fn container_file_new_dir_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| {
-            ws.files.new_dir_open && ws.files.new_dir_input.is_some()
-        })
-        .is_some()
+        ws.files.new_dir_open && ws.files.new_dir_input.is_some()
+    })
+    .is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_file_new_dir_values(
@@ -220,13 +217,11 @@ pub(in crate::app::dialog_host) fn container_file_new_dir_values(
 }
 
 pub(in crate::app::dialog_host) fn container_hub_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.hub_dialog.is_some())
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.hub_dialog.is_some()).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_push_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.push_dialog.is_some())
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.push_dialog.is_some()).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_push_values(
@@ -245,13 +240,11 @@ pub(in crate::app::dialog_host) fn container_push_values(
 }
 
 pub(in crate::app::dialog_host) fn container_system_df_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.system_df_dialog_open)
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.system_df_dialog_open).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_build_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.build_dialog.is_some())
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.build_dialog.is_some()).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_build_values(
@@ -292,11 +285,9 @@ pub(in crate::app::dialog_host) fn container_forward_values(
 }
 
 pub(in crate::app::dialog_host) fn container_pods_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.pods_dialog_open)
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.pods_dialog_open).is_some()
 }
 
 pub(in crate::app::dialog_host) fn container_quadlet_open(shell: &AppShell, cx: &App) -> bool {
-    crate::container::find_container_modal_tab(shell, cx, |ws| ws.quadlets_dialog_open)
-        .is_some()
+    crate::container::find_container_modal_tab(shell, cx, |ws| ws.quadlets_dialog_open).is_some()
 }

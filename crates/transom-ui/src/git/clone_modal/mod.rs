@@ -117,11 +117,7 @@ pub(crate) fn open_git_clone_modal(
 }
 
 /// 当 URL 变更时自动推导目标目录并写入路径输入框。
-fn sync_clone_auto_dest(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
+fn sync_clone_auto_dest(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
     let Some(modal) = shell.state.modals.git.clone.as_mut() else {
         return;
     };

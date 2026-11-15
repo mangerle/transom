@@ -10,7 +10,11 @@ use std::path::PathBuf;
 use transom_core::{SftpOperation, TabId};
 
 /// 提交当前打开的 SFTP 输入模态对话框，执行创建文件夹、新建文件编辑、重命名或软链接。
-pub(crate) fn commit_sftp_input_modal(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn commit_sftp_input_modal(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     let Some(modal) = shell.state.sftp_modals.input.take() else {
         return;
     };
@@ -30,11 +34,13 @@ pub(crate) fn commit_sftp_input_modal(shell: &mut AppShell, window: &mut Window,
         Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
         None => SftpRemotePaneRef::Main,
     };
-    let scope = super::super::remote_actions::remote_pane_scope(shell, tab_id, target, cx)
-        .map(|scope| SftpInputScope {
-            connection_id: scope.connection_id,
-            base_path: scope.pane.path.clone(),
-            entries: scope.pane.entries.clone(),
+    let scope =
+        super::super::remote_actions::remote_pane_scope(shell, tab_id, target, cx).map(|scope| {
+            SftpInputScope {
+                connection_id: scope.connection_id,
+                base_path: scope.pane.path.clone(),
+                entries: scope.pane.entries.clone(),
+            }
         });
 
     // 新建文件在通用校验后直接分流：同名目录报错回填，同名文件交给打开
@@ -118,9 +124,17 @@ fn commit_new_remote_file(
             fail_sftp_input(shell, modal, message, window, cx);
         }
         Some(false) => {
-            crate::editor::sftp_edit_remote_file_on(shell, tab_id, scope.connection_id, path, window, cx);
+            crate::editor::sftp_edit_remote_file_on(
+                shell,
+                tab_id,
+                scope.connection_id,
+                path,
+                window,
+                cx,
+            );
         }
-        None => crate::editor::spawn_new_editor_panel(shell, 
+        None => crate::editor::spawn_new_editor_panel(
+            shell,
             tab_id,
             scope.connection_id,
             path,
@@ -139,8 +153,8 @@ fn commit_local_input(
     tab_id: TabId,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(local_path) = crate::sftp::sftp_state(shell, tab_id, cx)
-        .map(|panel| panel.local.path.clone())
+    let Some(local_path) =
+        crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| panel.local.path.clone())
     else {
         return;
     };
@@ -158,7 +172,8 @@ fn commit_local_input(
             cx.notify();
             return;
         };
-        spawn_local_fs(shell, 
+        spawn_local_fs(
+            shell,
             tab_id,
             LocalFsOp::Rename(old_path.clone(), parent.join(name)),
             cx,

@@ -53,6 +53,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) forward: HashMap<transom_core::TabId, Subscription>,
     /// 容器工作区发往外壳的意图事件：一个标签一份订阅，按标签回收。
     pub(crate) container_workspaces: HashMap<TabId, Subscription>,
+    /// Git 工作区发往外壳的意图事件：一个标签一份订阅，按标签回收。
+    pub(crate) git_workspaces: HashMap<TabId, Subscription>,
     /// 容器引擎侧栏发往外壳的意图事件：侧栏是单例实体。
     pub(crate) container_sidebar: Option<Subscription>,
     pub(crate) settings: Option<Subscription>,
@@ -89,6 +91,7 @@ impl PanelSubscriptions {
             monitor: None,
             forward: HashMap::new(),
             container_workspaces: HashMap::new(),
+            git_workspaces: HashMap::new(),
             container_sidebar: None,
             settings: None,
             session_form: None,
@@ -114,6 +117,12 @@ impl PanelSubscriptions {
     /// 集中在这里按 `TabId` 回收即可，避免某个关闭入口漏掉后订阅一直留在映射里。
     pub(crate) fn prune_container_workspaces(&mut self, alive: &[TabId]) {
         self.container_workspaces
+            .retain(|tab_id, _| alive.contains(tab_id));
+    }
+
+    /// 丢弃已关闭标签的 Git 工作区事件订阅。
+    pub(crate) fn prune_git_workspaces(&mut self, alive: &[TabId]) {
+        self.git_workspaces
             .retain(|tab_id, _| alive.contains(tab_id));
     }
 }

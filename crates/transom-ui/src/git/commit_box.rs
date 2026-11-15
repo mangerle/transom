@@ -4,7 +4,7 @@
 //! - 将提交输入表单与改动树分层解耦，保持 `commit_page.rs` 紧凑且单文件不超 500 行；
 //! - 输入框自适应父面板高度，配合外部 `v_resizable` 实现上下自由拖拽伸缩。
 
-use crate::app::AppShell;
+use super::GitWorkspace;
 use crate::palette::Palette;
 use crate::widgets::menu_item;
 use gpui_kit::base::{h_flex, v_flex};
@@ -13,12 +13,11 @@ use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::*;
-use transom_core::TabId;
 use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 提交输入表单属性包。
 pub(crate) struct CommitBoxProps<'a> {
-    pub(crate) tab_id: TabId,
+    pub(crate) workspace: Entity<GitWorkspace>,
     pub(crate) amend_toggle: AnyElement,
     pub(crate) amend_target: AnyElement,
     pub(crate) checked_count: usize,
@@ -27,138 +26,132 @@ pub(crate) struct CommitBoxProps<'a> {
 }
 
 /// 渲染提交说明与动作面板（可作为上下切分的下半部分）。
-pub(super) fn render_commit_box(
-    shell: &mut AppShell,
-    props: CommitBoxProps<'_>,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> AnyElement {
-    let tab_id = props.tab_id;
+pub(super) fn render_commit_box(props: CommitBoxProps<'_>, p: &Palette, cx: &App) -> AnyElement {
     let submitting = props.submitting;
 
-    let history: Vec<String> = shell
+    let history: Vec<String> = props
+        .workspace
+        .read(cx)
         .state
-        .git_workspace(tab_id)
-            .map(|workspace| {
-                let state = &workspace.read(cx).state;
-                state
-                    .log
-                    .entries
-                    .iter()
-                    .map(|e| e.subject.clone())
-                    .filter(|subj| !subj.trim().is_empty())
-                    .fold(Vec::new(), |mut acc, item| {
-                        if !acc.contains(&item) && acc.len() < 10 {
-                            acc.push(item);
-                        }
-                        acc
-                    })
-            })
-            .unwrap_or_default();
+        .log
+        .entries
+        .iter()
+        .map(|e| e.subject.clone())
+        .filter(|subj| !subj.trim().is_empty())
+        .fold(Vec::new(), |mut acc, item| {
+            if !acc.contains(&item) && acc.len() < 10 {
+                acc.push(item);
+            }
+            acc
+        });
 
-        let recent_btn = Button::new("git-commit-recent-messages")
-            .ghost()
-            .xsmall()
-            .child(AppIconElement::new(UiIcon::HISTORY))
-            .accessibility_label(rust_i18n::t!("git.commit.recent_messages").to_string())
-            .tooltip(rust_i18n::t!("git.commit.recent_messages").to_string())
-            .dropdown_menu({
-                let message_input = props.message.clone();
-                move |mut menu, _window, _cx| {
-                    if history.is_empty() {
-                        menu = menu.item(
-                            PopupMenuItem::new(
-                                rust_i18n::t!("git.commit.no_recent_messages").to_string(),
-                            )
-                            .disabled(true),
-                        );
-                    } else {
-                        for text in &history {
-                            let text_clone = text.clone();
-                            let input = message_input.clone();
-                            menu = menu.item(menu_item(
-                                text.clone(),
-                                UiIcon::HISTORY,
-                                move |_event, window, cx| {
-                                    input.update(cx, |input, cx| {
-                                        input.set_value(&text_clone, window, cx);
-                                    });
-                                },
-                            ));
-                        }
+    let ws_submit = props.workspace.clone();
+    let ws_submit_push = props.workspace.clone();
+    let ws_settings = props.workspace;
+
+    let recent_btn = Button::new("git-commit-recent-messages")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(UiIcon::HISTORY))
+        .accessibility_label(rust_i18n::t!("git.commit.recent_messages").to_string())
+        .tooltip(rust_i18n::t!("git.commit.recent_messages").to_string())
+        .dropdown_menu({
+            let message_input = props.message.clone();
+            move |mut menu, _window, _cx| {
+                if history.is_empty() {
+                    menu = menu.item(
+                        PopupMenuItem::new(
+                            rust_i18n::t!("git.commit.no_recent_messages").to_string(),
+                        )
+                        .disabled(true),
+                    );
+                } else {
+                    for text in &history {
+                        let text_clone = text.clone();
+                        let input = message_input.clone();
+                        menu = menu.item(menu_item(
+                            text.clone(),
+                            UiIcon::HISTORY,
+                            move |_event, window, cx| {
+                                input.update(cx, |input, cx| {
+                                    input.set_value(&text_clone, window, cx);
+                                });
+                            },
+                        ));
                     }
-                    menu
                 }
-            });
+                menu
+            }
+        });
 
-        v_flex()
-            .w_full()
-            .h_full()
-            .p_2()
-            .gap_2()
-            .border_color(p.divider(p.border))
-            .border_t_1()
-            .child(
-                h_flex()
-                    .w_full()
-                    .gap_2()
-                    .items_center()
-                    .child(props.amend_toggle)
-                    .child(props.amend_target)
-                    .child(div().flex_1())
-                    .child(recent_btn)
-                    .child(
-                        div().text_xs().text_color(p.primary).child(
-                            rust_i18n::t!("git.commit.checked_count", count = props.checked_count)
-                                .to_string(),
-                        ),
+    v_flex()
+        .w_full()
+        .h_full()
+        .p_2()
+        .gap_2()
+        .border_color(p.divider(p.border))
+        .border_t_1()
+        .child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .child(props.amend_toggle)
+                .child(props.amend_target)
+                .child(div().flex_1())
+                .child(recent_btn)
+                .child(
+                    div().text_xs().text_color(p.primary).child(
+                        rust_i18n::t!("git.commit.checked_count", count = props.checked_count)
+                            .to_string(),
                     ),
-            )
-            .child(
-                div()
-                    .w_full()
-                    .flex_1()
-                    .min_h(px(80.0))
-                    .child(Textarea::new(props.message).size_full()),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        Button::new("git-commit-submit")
-                            .primary()
-                            .small()
-                            .label(rust_i18n::t!("git.commit.submit").to_string())
-                            .disabled(submitting)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                crate::git::actions::submit_git_commit(this, tab_id, false, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("git-commit-and-push")
-                            .primary()
-                            .small()
-                            .child(AppIconElement::new(UiIcon::PUSH))
-                            .label(rust_i18n::t!("git.commit.and_push").to_string())
-                            .disabled(submitting)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                crate::git::actions::submit_git_commit(this, tab_id, true, cx);
-                            })),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        Button::new("git-commit-settings")
-                            .ghost()
-                            .small()
-                            .child(AppIconElement::new(UiIcon::SETTINGS))
-                            .accessibility_label(rust_i18n::t!("git.commit.settings").to_string())
-                            .tooltip(rust_i18n::t!("git.commit.settings").to_string())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                crate::git::actions::open_git_settings(this, window, cx);
-                            })),
-                    ),
-            )
-            .into_any_element()
+                ),
+        )
+        .child(
+            div()
+                .w_full()
+                .flex_1()
+                .min_h(px(80.0))
+                .child(Textarea::new(props.message).size_full()),
+        )
+        .child(
+            h_flex()
+                .w_full()
+                .gap_2()
+                .items_center()
+                .child(
+                    Button::new("git-commit-submit")
+                        .primary()
+                        .small()
+                        .label(rust_i18n::t!("git.commit.submit").to_string())
+                        .disabled(submitting)
+                        .on_click(move |_, _, cx| {
+                            ws_submit.update(cx, |ws, cx| ws.submit_commit(false, cx));
+                        }),
+                )
+                .child(
+                    Button::new("git-commit-and-push")
+                        .primary()
+                        .small()
+                        .child(AppIconElement::new(UiIcon::PUSH))
+                        .label(rust_i18n::t!("git.commit.and_push").to_string())
+                        .disabled(submitting)
+                        .on_click(move |_, _, cx| {
+                            ws_submit_push.update(cx, |ws, cx| ws.submit_commit(true, cx));
+                        }),
+                )
+                .child(div().flex_1())
+                .child(
+                    Button::new("git-commit-settings")
+                        .ghost()
+                        .small()
+                        .child(AppIconElement::new(UiIcon::SETTINGS))
+                        .accessibility_label(rust_i18n::t!("git.commit.settings").to_string())
+                        .tooltip(rust_i18n::t!("git.commit.settings").to_string())
+                        .on_click(move |_, _, cx| {
+                            ws_settings.update(cx, |ws, cx| ws.open_settings(cx));
+                        }),
+                ),
+        )
+        .into_any_element()
 }

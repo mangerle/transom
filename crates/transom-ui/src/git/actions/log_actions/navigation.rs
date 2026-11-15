@@ -1,152 +1,102 @@
 //! Git 日志引用面板、跳转与分页加载动作。
 
 use super::*;
+use crate::git::types::{LogColumn, LogJump};
 
-/// 展开 / 收起左侧引用栏。
-pub(crate) fn git_toggle_refs_panel(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.refs_panel = !state.refs_panel;
-    });
-    cx.notify();
-}
-
-/// 折叠 / 展开引用栏的一个分组。
-pub(crate) fn toggle_git_refs_group(
-    shell: &mut AppShell,
-    key: &str,
-    default_expanded: bool,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(tab_id) = active_git_tab(shell) else {
-        return;
-    };
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let expanded = &mut workspace.state.refs_expanded;
+impl GitWorkspace {
+    /// 折叠 / 展开引用栏的一个分组。
+    pub(crate) fn toggle_refs_group(
+        &mut self,
+        key: &str,
+        default_expanded: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let expanded = &mut self.state.refs_expanded;
         let current = expanded.get(key).copied().unwrap_or(default_expanded);
         expanded.insert(key.to_string(), !current);
-    });
-    cx.notify();
-}
+        cx.notify();
+    }
 
-/// 一次性展开或收起引用栏的四个引用分组。
-pub(crate) fn git_set_all_ref_groups_expanded(
-    shell: &mut AppShell,
-    expanded: bool,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(tab_id) = active_git_tab(shell) else {
-        return;
-    };
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        let refs_expanded = &mut workspace.state.refs_expanded;
+    /// 一次性展开或收起引用栏的四个引用分组。
+    pub(crate) fn set_all_ref_groups_expanded(&mut self, expanded: bool, cx: &mut Context<Self>) {
         for key in ["HEAD", "git.refs.local", "git.refs.remote", "git.refs.tags"] {
-            refs_expanded.insert(key.to_string(), expanded);
+            self.state.refs_expanded.insert(key.to_string(), expanded);
         }
-    });
-    cx.notify();
-}
-
-/// 当前活动标签若为 Git 标签则返回它，否则退回最后一个 Git 标签。
-pub(crate) fn active_git_tab(shell: &AppShell) -> Option<TabId> {
-    if let Some(tab_id) = shell.state.workspace.active_tab
-        && shell.state.git_workspace(tab_id).is_some()
-    {
-        return Some(tab_id);
+        cx.notify();
     }
-    shell
-        .state
-        .workspace
-        .tabs
-        .iter()
-        .rev()
-        .find(|tab| tab.is_git())
-        .map(|tab| tab.id)
-}
 
-/// 切换日志表的一列显示（表头右键菜单）。
-pub(crate) fn git_toggle_log_column(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    column: crate::git::types::LogColumn,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.update(cx, |workspace, _| {
-        column.flip(&mut workspace.state.log.columns);
-    });
-    cx.notify();
-}
-
-/// 转到父提交 / 子提交（IDEA 提交右键菜单的两条跳转）。
-///
-/// 设计原理（Why）：先按已加载的页就地解析，命中立刻选中；没命中才把目标
-/// 挂到 `log.jump` 上交给分页续找。跳转与分页共用同一条落地路径，
-/// 避免出现「一处能翻到、另一处永远找不到」。
-pub(crate) fn git_jump_commit(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    jump: crate::git::types::LogJump,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let landed = {
-        let state = &workspace.read(cx).state;
-        jump.resolve(&state.log.entries)
-    };
-    if let Some(index) = landed {
-        git_select_commit_by_index(shell, tab_id, index, cx);
-        return;
+    /// 切换日志表的一列显示（表头右键菜单）。
+    pub(crate) fn toggle_log_column(&mut self, column: LogColumn, cx: &mut Context<Self>) {
+        column.flip(&mut self.state.log.columns);
+        cx.notify();
     }
-    let paging = workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.log.jump = Some(jump);
-        state.log.has_more && !state.log.loading
-    });
-    if paging {
-        git_load_more_log(shell, tab_id, cx);
-        return;
-    }
-    shell.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);
-    cx.notify();
-}
 
-/// 按提交 OID 选择提交；刷新或插入新提交后仍指向同一条记录。
-pub(crate) fn git_select_commit_by_oid(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    oid: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let index = workspace
-        .read(cx)
-        .state
-        .log
-        .entries
-        .iter()
-        .position(|entry| entry.oid == oid);
-    if let Some(index) = index {
-        git_select_commit_by_index(shell, tab_id, index, cx);
+    /// 转到父提交 / 子提交（IDEA 提交右键菜单的两条跳转）。
+    pub(crate) fn jump_commit(&mut self, jump: LogJump, cx: &mut Context<Self>) {
+        if let Some(index) = jump.resolve(&self.state.log.entries) {
+            self.select_commit_by_index(index, cx);
+            return;
+        }
+        self.state.log.jump = Some(jump);
+        if self.state.log.has_more && !self.state.log.loading {
+            self.load_more_log(cx);
+            return;
+        }
+        cx.emit(GitWorkspaceEvent::TransientStatus(
+            rust_i18n::t!("git.log.jump_missing").to_string(),
+        ));
+        cx.notify();
+    }
+
+    /// 按提交 OID 选择提交；刷新或插入新提交后仍指向同一条记录。
+    pub(crate) fn select_commit_by_oid(&mut self, oid: &str, cx: &mut Context<Self>) {
+        if let Some(index) = self.state.log.entries.iter().position(|e| e.oid == oid) {
+            self.select_commit_by_index(index, cx);
+        }
+    }
+
+    /// 选中一条提交（渲染层按行号回调）。
+    pub(crate) fn select_commit_by_index(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(oid) = self.state.log.entries.get(index).map(|e| e.oid.clone()) else {
+            return;
+        };
+        self.state.selected_commit = Some(index);
+        self.state.collapsed_log_dirs.clear();
+        self.state.commit_files = Vec::new();
+        self.state.commit_files_loading = true;
+        self.state.diff = None;
+        let request_id = GitRequestId::new();
+        self.state.pending.push(request_id);
+        let project = self.state.project.clone();
+        self.send(GitCommand::LoadCommitFiles {
+            project,
+            request_id,
+            oid,
+        });
+        cx.notify();
+    }
+
+    /// 加载更多历史（追加页）。
+    pub(crate) fn load_more_log(&mut self, cx: &mut Context<Self>) {
+        let len = self.state.log.entries.len();
+        self.load_log_notified(len, cx);
+    }
+
+    /// 提交清单里点一个文件：与该提交的第一父比较。
+    pub(crate) fn diff_commit_file(&mut self, path: &str, cx: &mut Context<Self>) {
+        let Some(oid) = self.state.selected_entry().map(|entry| entry.oid.clone()) else {
+            return;
+        };
+        self.open_diff(
+            GitDiffRequest {
+                path: path.to_string(),
+                old: GitSide::Commit(format!("{oid}^1")),
+                new: GitSide::Commit(oid),
+                left_label: rust_i18n::t!("git.diff.parent").to_string(),
+                right_label: rust_i18n::t!("git.diff.commit").to_string(),
+            },
+            cx,
+        );
     }
 }
 
@@ -190,11 +140,7 @@ pub(crate) fn git_select_commit_by_index(
 }
 
 /// 加载更多历史（追加页）。
-pub(crate) fn git_load_more_log(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    cx: &mut Context<AppShell>,
-) {
+pub(crate) fn git_load_more_log(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
     let Some(workspace) = shell.state.git_workspace(tab_id) else {
         return;
     };
@@ -220,16 +166,16 @@ pub(crate) fn git_diff_commit_file(
     else {
         return;
     };
-    crate::git::actions::git_open_diff(
-        shell,
-        tab_id,
-        GitDiffRequest {
-            path: path.to_string(),
-            old: GitSide::Commit(format!("{oid}^1")),
-            new: GitSide::Commit(oid),
-            left_label: rust_i18n::t!("git.diff.parent").to_string(),
-            right_label: rust_i18n::t!("git.diff.commit").to_string(),
-        },
-        cx,
-    );
+    workspace.update(cx, |ws, cx| {
+        ws.open_diff(
+            GitDiffRequest {
+                path: path.to_string(),
+                old: GitSide::Commit(format!("{oid}^1")),
+                new: GitSide::Commit(oid),
+                left_label: rust_i18n::t!("git.diff.parent").to_string(),
+                right_label: rust_i18n::t!("git.diff.commit").to_string(),
+            },
+            cx,
+        );
+    });
 }

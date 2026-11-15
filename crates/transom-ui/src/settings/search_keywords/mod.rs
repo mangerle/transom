@@ -169,6 +169,7 @@ impl GroupSearch {
 /// 表本身在 [`table`] 模块里维护，单独成文件只为控制单文件长度；方法仍是
 /// [`GroupSearch`] 的一部分，归属不因拆分而改变。
 mod table;
+mod table_workspace;
 
 #[cfg(test)]
 mod tests {

@@ -5,163 +5,127 @@
 //! - 顶部提供类似 IDE Tool Window 风格的标题与 Tab 项（含当前分支名称），以及收起/关闭控制；
 //! - 主体复用 `render_git_log_view`，完整呈现引用树、提交图列表与提交详情三栏，避免代码重复。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
-use transom_core::{HeadState, TabId};
+use transom_core::HeadState;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
-/// 切换底部 Git 提交记录面板展开/收起。
-pub(crate) fn toggle_git_bottom_log(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let (is_open, project) = workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.bottom_log_open = !state.bottom_log_open;
-        (state.bottom_log_open, state.project.clone())
-    });
-    if is_open {
-        crate::git::actions::git_refresh(shell, &project, cx);
-        crate::git::actions::git_load_log(shell, tab_id, 0, cx);
-    }
-    cx.notify();
-}
-
 /// 渲染底部 Git 提交记录抽屉面板（向上占用一部分空间，对齐 IDEA 底部 Git 工具窗口风格）。
 pub(crate) fn render_git_bottom_log_panel(
-    shell: &AppShell,
-    tab_id: TabId,
-    app: Entity<AppShell>,
+    workspace: Entity<GitWorkspace>,
+    fallback_branch: Option<String>,
     p: &Palette,
     cx: &App,
 ) -> AnyElement {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return div().into_any_element();
-    };
     let branch = {
         let state = &workspace.read(cx).state;
         match state.status.as_ref().map(|s| &s.head) {
             Some(HeadState::OnBranch(name)) | Some(HeadState::Initial { branch: name }) => {
                 Some(name.clone())
             }
-            _ => shell
-                .state
-                .git
-                .badges
-                .get(&state.project.id)
-                .and_then(|b| b.branch.clone()),
+            _ => fallback_branch,
         }
     };
-        let tab_title = match branch {
-            Some(name) if !name.is_empty() => {
-                rust_i18n::t!("git.view.log_with_branch", branch = name.as_str()).to_string()
-            }
-            _ => rust_i18n::t!("git.view.log").to_string(),
-        };
-        let close_app = app.clone();
+    let tab_title = match branch {
+        Some(name) if !name.is_empty() => {
+            rust_i18n::t!("git.view.log_with_branch", branch = name.as_str()).to_string()
+        }
+        _ => rust_i18n::t!("git.view.log").to_string(),
+    };
+    let ws_collapse = workspace.clone();
+    let ws_close = workspace.clone();
 
-        let header = h_flex()
-            .w_full()
-            .h(px(26.0))
-            .flex_none()
-            .bg(p.background)
-            .border_color(p.divider(p.border))
-            .divider_edge(DividerEdge::Bottom, p.divider_width)
-            .items_center()
-            .px_2()
-            .justify_between()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(p.muted_foreground)
-                            .child("Git"),
-                    )
-                    .child(
-                        h_flex()
-                            .items_center()
-                            .gap_1()
-                            .px_2()
-                            .py_0p5()
-                            .rounded(px(3.0))
-                            .bg(p.background)
-                            .border_color(p.primary)
-                            .border_b_2()
-                            .text_xs()
-                            .child(
-                                AppIconElement::new(UiIcon::VCS)
-                                    .xsmall()
-                                    .text_color(p.primary),
-                            )
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(p.foreground)
-                                    .child(tab_title),
-                            ),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_1()
-                    .items_center()
-                    .child(
-                        Button::new("git-bottom-log-collapse")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(UiIcon::CHEVRON_DOWN))
-                            .accessibility_label(rust_i18n::t!("git.view.collapse_log").to_string())
-                            .tooltip(rust_i18n::t!("git.view.collapse_log").to_string())
-                            .on_click({
-                                let close_app = close_app.clone();
-                                move |_, _, cx| {
-                                    close_app.update(cx, |this, cx| {
-                                        toggle_git_bottom_log(this, tab_id, cx);
-                                    });
-                                }
-                            }),
-                    )
-                    .child(
-                        Button::new("git-bottom-log-close")
-                            .ghost()
-                            .xsmall()
-                            .child(AppIconElement::new(UiIcon::CLOSE))
-                            .accessibility_label(rust_i18n::t!("common.close").to_string())
-                            .tooltip(rust_i18n::t!("common.close").to_string())
-                            .on_click(move |_, _, cx| {
-                                close_app.update(cx, |this, cx| {
-                                    toggle_git_bottom_log(this, tab_id, cx);
-                                });
-                            }),
-                    ),
-            );
+    let header = h_flex()
+        .w_full()
+        .h(px(26.0))
+        .flex_none()
+        .bg(p.background)
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .items_center()
+        .px_2()
+        .justify_between()
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(p.muted_foreground)
+                        .child("Git"),
+                )
+                .child(
+                    h_flex()
+                        .items_center()
+                        .gap_1()
+                        .px_2()
+                        .py_0p5()
+                        .rounded(px(3.0))
+                        .bg(p.background)
+                        .border_color(p.primary)
+                        .border_b_2()
+                        .text_xs()
+                        .child(
+                            AppIconElement::new(UiIcon::VCS)
+                                .xsmall()
+                                .text_color(p.primary),
+                        )
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.foreground)
+                                .child(tab_title),
+                        ),
+                ),
+        )
+        .child(
+            h_flex()
+                .gap_1()
+                .items_center()
+                .child(
+                    Button::new("git-bottom-log-collapse")
+                        .ghost()
+                        .xsmall()
+                        .child(AppIconElement::new(UiIcon::CHEVRON_DOWN))
+                        .accessibility_label(rust_i18n::t!("git.view.collapse_log").to_string())
+                        .tooltip(rust_i18n::t!("git.view.collapse_log").to_string())
+                        .on_click(move |_, _, cx| {
+                            ws_collapse.update(cx, |ws, cx| ws.toggle_bottom_log(cx));
+                        }),
+                )
+                .child(
+                    Button::new("git-bottom-log-close")
+                        .ghost()
+                        .xsmall()
+                        .child(AppIconElement::new(UiIcon::CLOSE))
+                        .accessibility_label(rust_i18n::t!("common.close").to_string())
+                        .tooltip(rust_i18n::t!("common.close").to_string())
+                        .on_click(move |_, _, cx| {
+                            ws_close.update(cx, |ws, cx| ws.toggle_bottom_log(cx));
+                        }),
+                ),
+        );
 
-        v_flex()
-            .w_full()
-            .h_full()
-            .min_h_0()
-            .overflow_hidden()
-            .bg(p.background)
-            .child(header)
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(super::workspace::render_git_log_view(shell, tab_id, app, p, cx)),
-            )
-            .into_any_element()
+    v_flex()
+        .w_full()
+        .h_full()
+        .min_h_0()
+        .overflow_hidden()
+        .bg(p.background)
+        .child(header)
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .child(super::workspace::render_git_log_view(workspace, p, cx)),
+        )
+        .into_any_element()
 }

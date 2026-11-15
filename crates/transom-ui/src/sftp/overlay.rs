@@ -109,8 +109,8 @@ pub(crate) fn show_drop_overlay(shell: &mut AppShell, tab_id: TabId, cx: &mut Co
 
 /// 队列状态变化后同步浮层：面板展开即退出，繁忙则常驻，排空则起停留定时器。
 pub(crate) fn sync_drop_overlay(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
-    let Some((open, busy, visible, has_settle_task)) =
-        crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| {
+    let Some((open, busy, visible, has_settle_task)) = crate::sftp::sftp_state(shell, tab_id, cx)
+        .map(|panel| {
             (
                 panel.open,
                 panel.queue.tasks.iter().any(is_busy),
@@ -161,7 +161,11 @@ pub(crate) fn sync_drop_overlay(shell: &mut AppShell, tab_id: TabId, cx: &mut Co
 /// 进度事件驱动的刷新：更新速率，并且只在窗格正被渲染时触发重绘。
 ///
 /// 进度事件是高频信号，后台标签的浮层不值得整帧重绘外壳。
-pub(crate) fn note_drop_overlay_progress(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+pub(crate) fn note_drop_overlay_progress(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    cx: &mut Context<AppShell>,
+) {
     if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx)
         && !panel.state.open
         && panel.state.queue.drop_overlay.visible
@@ -325,7 +329,8 @@ pub(crate) fn render_drop_overlay(
         None => format!(" · {} · {}", format_size(done_bytes), format_rate(speed)),
     };
 
-    let header = render_overlay_header(shell, 
+    let header = render_overlay_header(
+        shell,
         OverlayHeader {
             tab_id,
             expanded,

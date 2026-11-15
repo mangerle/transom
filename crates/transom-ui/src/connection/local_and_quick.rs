@@ -25,10 +25,15 @@ pub(crate) fn on_quick_open(
     crate::connection::toggle_quick_open(shell, window, cx);
 }
 
-pub(crate) fn toggle_quick_open(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn toggle_quick_open(
+    shell: &mut AppShell,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     shell.state.modals.tools.show_quick_open = !shell.state.modals.tools.show_quick_open;
     if shell.state.modals.tools.show_quick_open {
-        shell.state
+        shell
+            .state
             .modals
             .tools
             .quick_open_state
@@ -40,7 +45,11 @@ pub(crate) fn toggle_quick_open(shell: &mut AppShell, window: &mut Window, cx: &
     cx.notify();
 }
 
-pub(crate) fn open_local_terminal(shell: &mut AppShell, _window: &mut Window, cx: &mut Context<AppShell>) {
+pub(crate) fn open_local_terminal(
+    shell: &mut AppShell,
+    _window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     crate::connection::spawn_local_command(shell, None, None, cx);
 }
 
@@ -160,7 +169,8 @@ pub(crate) fn connect_quick_host(shell: &mut AppShell, host: &str, cx: &mut Cont
     };
     let tab_id = TabId::new();
     shell.state.workspace.create_group(tab_id, session.id);
-    shell.state
+    shell
+        .state
         .workspace
         .tabs
         .push(TerminalTab::pending(tab_id, session.clone()));
@@ -180,7 +190,9 @@ pub(crate) fn handle_deep_link(
     window.activate_window();
     match request {
         DeepLinkRequest::Ssh { url } => crate::connection::connect_quick_host(shell, &url, cx),
-        DeepLinkRequest::Dir { path } => crate::connection::spawn_local_terminal(shell, Some(path), cx),
+        DeepLinkRequest::Dir { path } => {
+            crate::connection::spawn_local_terminal(shell, Some(path), cx)
+        }
         DeepLinkRequest::Exec { command, dir } => {
             crate::connection::spawn_local_command(shell, Some(command), dir, cx);
         }
@@ -189,7 +201,11 @@ pub(crate) fn handle_deep_link(
 }
 
 /// 记录一条采集到的命令：更新内存快照并后台落盘。
-pub(crate) fn record_history_command(shell: &mut AppShell, command: &str, cx: &mut Context<AppShell>) {
+pub(crate) fn record_history_command(
+    shell: &mut AppShell,
+    command: &str,
+    cx: &mut Context<AppShell>,
+) {
     if !app_settings(cx).history.enabled {
         return;
     }
@@ -223,14 +239,16 @@ pub(crate) fn import_ssh_config(shell: &mut AppShell, cx: &mut Context<AppShell>
         directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));
 
     let Some(path) = ssh_config_path else {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("app.import_none").to_string());
         cx.notify();
         return;
     };
 
     if !path.exists() {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("app.import_none").to_string());
         cx.notify();
         return;
@@ -258,7 +276,8 @@ pub(crate) fn import_ssh_config(shell: &mut AppShell, cx: &mut Context<AppShell>
 fn finish_import_ssh_config(shell: &mut AppShell, content: String, cx: &mut Context<AppShell>) {
     let parsed = parse_ssh_config(&content);
     if parsed.is_empty() {
-        shell.state
+        shell
+            .state
             .set_error(rust_i18n::t!("app.import_none").to_string());
         cx.notify();
         return;

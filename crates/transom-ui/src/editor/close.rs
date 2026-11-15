@@ -82,7 +82,12 @@ pub(crate) fn prune_tab_diff_overlay(shell: &mut AppShell, cx: &App) {
         return;
     };
     let tab_id = view.read(cx).state.tab_id;
-    let alive = shell.state.workspace.tabs.iter().any(|tab| tab.id == tab_id);
+    let alive = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .any(|tab| tab.id == tab_id);
     if !alive {
         shell.state.diff_viewer = None;
         shell.state.tasks.subscriptions.diff_viewer = None;
@@ -96,14 +101,23 @@ pub(crate) fn prune_tab_diff_overlay(shell: &mut AppShell, cx: &App) {
 /// 留在映射里就是泄漏。集中在一处裁剪比在每条关闭路径里分别点名更可靠，
 /// 订阅句柄随面板一起析构退订，不会留下向已死实体投递的事件。
 pub(crate) fn prune_tab_overlays(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let alive: Vec<TabId> = shell.state.workspace.tabs.iter().map(|tab| tab.id).collect();
-    shell.state
+    let alive: Vec<TabId> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .map(|tab| tab.id)
+        .collect();
+    shell
+        .state
         .editors
         .update(cx, |panels, _| panels.prune_dead_tabs(&alive));
-    shell.state
+    shell
+        .state
         .tasks
         .subscriptions
         .prune_container_workspaces(&alive);
+    shell.state.tasks.subscriptions.prune_git_workspaces(&alive);
     crate::editor::prune_tab_diff_overlay(shell, cx);
 }
 
@@ -114,7 +128,8 @@ pub(crate) fn block_close_for_dirty_editors(
     intent: PendingEditorClose,
     cx: &mut Context<AppShell>,
 ) -> bool {
-    shell.state
+    shell
+        .state
         .editors
         .update(cx, |panels, cx| panels.block_close(tab_ids, intent, cx))
 }
@@ -175,7 +190,8 @@ pub(crate) fn try_finish_pending_close(
 }
 
 fn clear_editor_pending_close(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state
+    shell
+        .state
         .editors
         .update(cx, |panels, _| panels.clear_pending_close());
 }
@@ -203,7 +219,8 @@ fn tabs_for_pending_close(shell: &AppShell, intent: &PendingEditorClose) -> Vec<
         PendingEditorClose::Tiling(groups) => groups
             .iter()
             .filter_map(|group_id| {
-                shell.state
+                shell
+                    .state
                     .workspace
                     .groups
                     .iter()

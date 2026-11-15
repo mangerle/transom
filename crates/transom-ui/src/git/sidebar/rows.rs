@@ -36,65 +36,65 @@ pub(super) fn render_git_folder_row(
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-        let folder_id = row.id;
-        let app_entity = cx.entity().clone();
-        // 遮罩与菜单都要握住面板句柄，各自留一份：闭包会移走它。
-        let overlay_app = app_entity.clone();
-        let anchor = GitSidebarDrag::Folder(folder_id);
-        let label = row.name.clone();
+    let folder_id = row.id;
+    let app_entity = cx.entity().clone();
+    // 遮罩与菜单都要握住面板句柄，各自留一份：闭包会移走它。
+    let overlay_app = app_entity.clone();
+    let anchor = GitSidebarDrag::Folder(folder_id);
+    let label = row.name.clone();
 
-        let element = div()
-            .id(ElementId::Name(format!("git-folder-{folder_id}").into()))
-            .w_full()
-            .h(ROW_HEIGHT)
-            .pl(px(INDENT_BASE))
-            .pr(px(4.0))
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                crate::git::actions::toggle_git_folder_collapsed(this, folder_id, cx);
-            }))
-            .on_drag(anchor, move |_, _, _, cx| {
-                cx.new(|_| GitDragPreview::new(label.clone(), UiIcon::FOLDER.into()))
-            })
-            .context_menu(move |menu, _window, _cx| {
-                render_git_folder_menu(menu, app_entity.clone(), folder_id)
-            });
+    let element = div()
+        .id(ElementId::Name(format!("git-folder-{folder_id}").into()))
+        .w_full()
+        .h(ROW_HEIGHT)
+        .pl(px(INDENT_BASE))
+        .pr(px(4.0))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        .on_click(cx.listener(move |this, _, _, cx| {
+            crate::git::actions::toggle_git_folder_collapsed(this, folder_id, cx);
+        }))
+        .on_drag(anchor, move |_, _, _, cx| {
+            cx.new(|_| GitDragPreview::new(label.clone(), UiIcon::FOLDER.into()))
+        })
+        .context_menu(move |menu, _window, _cx| {
+            render_git_folder_menu(menu, app_entity.clone(), folder_id)
+        });
 
-        let into_bg = p.drop_target;
-        let mut band = sidebar_group_row_band(
-            ElementId::Name(format!("git-folder-band-{folder_id}").into()),
-            p,
-        )
-        .drag_over::<GitSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
-        .child(
-            AppIconElement::new(if row.collapsed {
-                UiIcon::CHEVRON_RIGHT
-            } else {
-                UiIcon::CHEVRON_DOWN
-            })
-            .with_rems(ROW_CHEVRON_SIZE),
-        )
-        .child(AppIconElement::new(UiIcon::FOLDER).with_rems(ROW_ICON_SIZE))
-        .child(
-            div()
-                .flex_1()
-                .overflow_hidden()
-                .text_sm()
-                .font_weight(FontWeight::SEMIBOLD)
-                .truncate()
-                .child(row.name.clone()),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.text.muted)
-                .child(row.project_count.to_string()),
-        );
-        band = band.child(reorder_overlay(&overlay_app, anchor, true, p));
-        element.child(band).into_any_element()
-    }
+    let into_bg = p.drop_target;
+    let mut band = sidebar_group_row_band(
+        ElementId::Name(format!("git-folder-band-{folder_id}").into()),
+        p,
+    )
+    .drag_over::<GitSidebarDrag>(move |style, _, _, _| style.bg(into_bg))
+    .child(
+        AppIconElement::new(if row.collapsed {
+            UiIcon::CHEVRON_RIGHT
+        } else {
+            UiIcon::CHEVRON_DOWN
+        })
+        .with_rems(ROW_CHEVRON_SIZE),
+    )
+    .child(AppIconElement::new(UiIcon::FOLDER).with_rems(ROW_ICON_SIZE))
+    .child(
+        div()
+            .flex_1()
+            .overflow_hidden()
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .truncate()
+            .child(row.name.clone()),
+    )
+    .child(
+        div()
+            .text_xs()
+            .text_color(p.text.muted)
+            .child(row.project_count.to_string()),
+    );
+    band = band.child(reorder_overlay(&overlay_app, anchor, true, p));
+    element.child(band).into_any_element()
+}
 
 /// 渲染一个项目行：活动底色、拖拽源与上下半区落点。
 ///
@@ -111,117 +111,117 @@ pub(super) fn render_git_project_row(
     let project = &row.project;
     let id = project.id;
     let badge = shell.state.git.badges.get(&id).cloned().unwrap_or_default();
-        let name = project.display_name();
-        let active_branch = shell
-            .state
-            .git_workspace_of_project(id, cx)
-            .and_then(|workspace| {
-                let state = &workspace.read(cx).state;
-                state.status.as_ref().and_then(|status| match &status.head {
-                    transom_core::HeadState::OnBranch(name) => Some(name.clone()),
-                    transom_core::HeadState::Initial { branch } => Some(branch.clone()),
-                    transom_core::HeadState::Detached => status
-                        .oid
-                        .as_deref()
-                        .map(|oid| oid.chars().take(7).collect()),
-                })
-            });
-
-        let branch = badge.branch.clone().or(active_branch).unwrap_or_else(|| {
-            if badge.error.is_some() {
-                rust_i18n::t!("git.sidebar.unavailable").to_string()
-            } else if badge.loading {
-                rust_i18n::t!("git.sidebar.loading").to_string()
-            } else {
-                "-".to_string()
-            }
-        });
-        let app_entity = cx.entity().clone();
-        let menu_app = app_entity.clone();
-        let menu_folders = folders.to_vec();
-        let project_for_click = project.clone();
-        let drag_label = name.clone();
-        let icon_name = UiIcon::VCS.into();
-
-        let element = div()
-            .id(ElementId::Name(format!("git-project-{id}").into()))
-            .w_full()
-            .h(ROW_HEIGHT)
-            .pl(px(
-                INDENT_BASE + if row.in_folder { INDENT_STEP } else { 0.0 }
-            ))
-            .pr(px(4.0))
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                if event.click_count() >= 2 {
-                    crate::git::actions::open_git_tab(this, project_for_click.clone(), window, cx);
-                } else {
-                    crate::git::actions::select_git_project(this, id, cx);
-                }
-            }))
-            .on_drag(GitSidebarDrag::Project(id), move |_, _, _, cx| {
-                cx.new(|_| GitDragPreview::new(drag_label.clone(), icon_name))
+    let name = project.display_name();
+    let active_branch = shell
+        .state
+        .git_workspace_of_project(id, cx)
+        .and_then(|workspace| {
+            let state = &workspace.read(cx).state;
+            state.status.as_ref().and_then(|status| match &status.head {
+                transom_core::HeadState::OnBranch(name) => Some(name.clone()),
+                transom_core::HeadState::Initial { branch } => Some(branch.clone()),
+                transom_core::HeadState::Detached => status
+                    .oid
+                    .as_deref()
+                    .map(|oid| oid.chars().take(7).collect()),
             })
-            .context_menu(move |menu, _window, _cx| {
-                render_git_project_menu(menu, menu_app.clone(), id, menu_folders.clone())
-            });
+        });
 
-        let mut band = sidebar_row_band(
-            ElementId::Name(format!("git-project-band-{id}").into()),
-            row_state,
-            p,
-        )
-        .child(
-            AppIconElement::new(icon_name)
-                .with_rems(ROW_ICON_SIZE)
-                .text_color(
-                    session_color(project.color)
-                        .unwrap_or_else(|| state_icon_color(&badge, row_state, p)),
-                ),
-        )
-        .child(
-            v_flex()
-                .flex_1()
-                .overflow_hidden()
-                .child(
-                    div()
-                        .text_sm()
-                        .line_height(px(17.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .truncate()
-                        .child(name),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .line_height(px(14.0))
-                        .truncate()
-                        .text_color(if badge.error.is_some() {
-                            p.danger
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(branch),
-                ),
-        );
-        if badge.dirty > 0 {
-            // 计数只用弱色：语义色留给行首图标，两处同时上色会把一行变成告警条。
-            band = band.child(
+    let branch = badge.branch.clone().or(active_branch).unwrap_or_else(|| {
+        if badge.error.is_some() {
+            rust_i18n::t!("git.sidebar.unavailable").to_string()
+        } else if badge.loading {
+            rust_i18n::t!("git.sidebar.loading").to_string()
+        } else {
+            "-".to_string()
+        }
+    });
+    let app_entity = cx.entity().clone();
+    let menu_app = app_entity.clone();
+    let menu_folders = folders.to_vec();
+    let project_for_click = project.clone();
+    let drag_label = name.clone();
+    let icon_name = UiIcon::VCS.into();
+
+    let element = div()
+        .id(ElementId::Name(format!("git-project-{id}").into()))
+        .w_full()
+        .h(ROW_HEIGHT)
+        .pl(px(
+            INDENT_BASE + if row.in_folder { INDENT_STEP } else { 0.0 }
+        ))
+        .pr(px(4.0))
+        .flex()
+        .items_center()
+        .cursor_pointer()
+        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+            if event.click_count() >= 2 {
+                crate::git::actions::open_git_tab(this, project_for_click.clone(), window, cx);
+            } else {
+                crate::git::actions::select_git_project(this, id, cx);
+            }
+        }))
+        .on_drag(GitSidebarDrag::Project(id), move |_, _, _, cx| {
+            cx.new(|_| GitDragPreview::new(drag_label.clone(), icon_name))
+        })
+        .context_menu(move |menu, _window, _cx| {
+            render_git_project_menu(menu, menu_app.clone(), id, menu_folders.clone())
+        });
+
+    let mut band = sidebar_row_band(
+        ElementId::Name(format!("git-project-band-{id}").into()),
+        row_state,
+        p,
+    )
+    .child(
+        AppIconElement::new(icon_name)
+            .with_rems(ROW_ICON_SIZE)
+            .text_color(
+                session_color(project.color)
+                    .unwrap_or_else(|| state_icon_color(&badge, row_state, p)),
+            ),
+    )
+    .child(
+        v_flex()
+            .flex_1()
+            .overflow_hidden()
+            .child(
+                div()
+                    .text_sm()
+                    .line_height(px(17.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .truncate()
+                    .child(name),
+            )
+            .child(
                 div()
                     .text_xs()
-                    .text_color(p.text.muted)
-                    .child(badge.dirty.to_string()),
-            );
-        }
-        let band = band.child(reorder_overlay(
-            &app_entity,
-            GitSidebarDrag::Project(id),
-            false,
-            p,
-        ));
-        element.child(band).into_any_element()
+                    .line_height(px(14.0))
+                    .truncate()
+                    .text_color(if badge.error.is_some() {
+                        p.danger
+                    } else {
+                        p.muted_foreground
+                    })
+                    .child(branch),
+            ),
+    );
+    if badge.dirty > 0 {
+        // 计数只用弱色：语义色留给行首图标，两处同时上色会把一行变成告警条。
+        band = band.child(
+            div()
+                .text_xs()
+                .text_color(p.text.muted)
+                .child(badge.dirty.to_string()),
+        );
+    }
+    let band = band.child(reorder_overlay(
+        &app_entity,
+        GitSidebarDrag::Project(id),
+        false,
+        p,
+    ));
+    element.child(band).into_any_element()
 }
 
 /// 行首图标的状态色：读不到仓库标红，刷新中标灰，有改动标警示，活动行跟随激活前景色。

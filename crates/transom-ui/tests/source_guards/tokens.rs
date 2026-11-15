@@ -203,8 +203,8 @@ fn feedback_uses_theme_and_progress_components() {
 #[test]
 fn selection_and_command_semantics_are_explicit() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let auth =
-        std::fs::read_to_string(root.join("src/session_form/ssh.rs")).expect("读取 SSH 表单失败");
+    let auth = std::fs::read_to_string(root.join("src/session_form/ssh/mod.rs"))
+        .expect("读取 SSH 表单失败");
     assert!(auth.contains("ButtonGroup::new(\"auth-methods\")"));
     let forward =
         std::fs::read_to_string(root.join("src/forward/view.rs")).expect("读取转发视图失败");
@@ -262,4 +262,3 @@ fn render_effects_are_deferred() {
         );
     }
 }
-

@@ -9,13 +9,13 @@ use super::super::menus::{
     render_remote_branch_menu, render_tag_menu,
 };
 use super::model::{RefGroup, RefNode, RefNodeKind, build_nodes};
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{LogScope, TabId};
+use transom_core::LogScope;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
@@ -24,8 +24,7 @@ type State = crate::git::GitWorkspaceState;
 /// 渲染一个引用分组及其树内容。
 pub(crate) fn render_ref_group(
     state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
     group: RefGroup,
     query: &str,
     p: &Palette,
@@ -38,7 +37,7 @@ pub(crate) fn render_ref_group(
             .copied()
             .unwrap_or_else(|| group.default_expanded());
     let nodes = build_nodes(state, group, query);
-    let header_app = app.clone();
+    let header_ws = workspace.clone();
     let header_key = group.key();
     let default_expanded = group.default_expanded();
     let title = group.title();
@@ -63,19 +62,14 @@ pub(crate) fn render_ref_group(
             )
             .child(div().child(title))
             .on_click(move |_, _, cx| {
-                header_app.update(cx, |this, cx| {
-                    crate::git::actions::toggle_git_refs_group(
-                        this,
-                        header_key,
-                        default_expanded,
-                        cx,
-                    );
+                header_ws.update(cx, |ws, cx| {
+                    ws.toggle_refs_group(header_key, default_expanded, cx);
                 });
             }),
     );
     if expanded {
         for node in &nodes {
-            block = block.child(render_node(state, &app, tab_id, node, 1, searching, p));
+            block = block.child(render_node(state, &workspace, node, 1, searching, p));
         }
     }
     block.into_any_element()
@@ -84,24 +78,22 @@ pub(crate) fn render_ref_group(
 /// 递归渲染树节点。
 fn render_node(
     state: &State,
-    app: &Entity<AppShell>,
-    tab_id: TabId,
+    workspace: &Entity<GitWorkspace>,
     node: &RefNode,
     depth: usize,
     searching: bool,
     p: &Palette,
 ) -> AnyElement {
     if node.kind == RefNodeKind::Folder {
-        return render_folder_node(state, app, tab_id, node, depth, searching, p);
+        return render_folder_node(state, workspace, node, depth, searching, p);
     }
-    render_branch_node(state, app, tab_id, node, depth, p)
+    render_branch_node(state, workspace, node, depth, p)
 }
 
 /// 渲染可折叠的文件夹节点。
 fn render_folder_node(
     state: &State,
-    app: &Entity<AppShell>,
-    tab_id: TabId,
+    workspace: &Entity<GitWorkspace>,
     node: &RefNode,
     depth: usize,
     searching: bool,
@@ -113,7 +105,7 @@ fn render_folder_node(
             .get(&node.key)
             .copied()
             .unwrap_or(node.default_expanded);
-    let toggle_app = app.clone();
+    let toggle_ws = workspace.clone();
     let toggle_key = node.key.clone();
     let default_expanded = node.default_expanded;
     let mut block = v_flex().child(
@@ -151,13 +143,8 @@ fn render_folder_node(
                     .child(node.label.clone()),
             )
             .on_click(move |_, _, cx| {
-                toggle_app.update(cx, |this, cx| {
-                    crate::git::actions::toggle_git_refs_group(
-                        this,
-                        &toggle_key,
-                        default_expanded,
-                        cx,
-                    );
+                toggle_ws.update(cx, |ws, cx| {
+                    ws.toggle_refs_group(&toggle_key, default_expanded, cx);
                 });
             }),
     );
@@ -165,8 +152,7 @@ fn render_folder_node(
         for child in &node.children {
             block = block.child(render_node(
                 state,
-                app,
-                tab_id,
+                workspace,
                 child,
                 depth + 1,
                 searching,
@@ -180,8 +166,7 @@ fn render_folder_node(
 /// 渲染分支或标签叶子节点。
 fn render_branch_node(
     state: &State,
-    app: &Entity<AppShell>,
-    tab_id: TabId,
+    workspace: &Entity<GitWorkspace>,
     node: &RefNode,
     depth: usize,
     p: &Palette,
@@ -209,10 +194,9 @@ fn render_branch_node(
     } else {
         LogScope::Ref(name.clone())
     };
-    let click_app = app.clone();
-    let menu_app = app.clone();
+    let click_ws = workspace.clone();
+    let menu_ws = workspace.clone();
     let menu_name = name.clone();
-    let menu_project = state.project.clone();
     let menu_current = current_branch.clone();
     let menu_is_current = node.kind == RefNodeKind::Head || node.current;
     let menu_kind = node.kind;
@@ -263,17 +247,13 @@ fn render_branch_node(
         })
         .on_click(move |_, _, cx| {
             let scope = target_scope.clone();
-            click_app.update(cx, |this, cx| {
-                crate::git::actions::git_set_log_scope(this, tab_id, scope, cx);
-            });
+            click_ws.update(cx, |ws, cx| ws.set_log_scope(scope, cx));
         })
         .context_menu(move |menu, _window, _cx| match menu_kind {
             RefNodeKind::Head | RefNodeKind::LocalBranch => render_local_branch_menu(
                 menu,
-                menu_app.clone(),
+                menu_ws.clone(),
                 LocalBranchMenuTarget {
-                    project: menu_project.clone(),
-                    tab_id,
                     branch: menu_name.clone(),
                     current_branch: menu_current.clone(),
                     upstream: upstream.clone(),
@@ -282,20 +262,16 @@ fn render_branch_node(
             ),
             RefNodeKind::RemoteBranch => render_remote_branch_menu(
                 menu,
-                menu_app.clone(),
+                menu_ws.clone(),
                 RemoteBranchMenuTarget {
-                    project: menu_project.clone(),
-                    tab_id,
                     remote_branch: menu_name.clone(),
                     current_branch: menu_current.clone(),
                 },
             ),
             RefNodeKind::Tag => render_tag_menu(
                 menu,
-                menu_app.clone(),
+                menu_ws.clone(),
                 TagMenuTarget {
-                    project: menu_project.clone(),
-                    tab_id,
                     tag: menu_name.clone(),
                     current_branch: menu_current.clone(),
                 },

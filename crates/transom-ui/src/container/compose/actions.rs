@@ -107,7 +107,11 @@ pub(crate) fn create_local_compose_with_content(
 }
 
 /// 导入外部 YAML 到托管目录，再启动为独立项目。
-pub(crate) fn import_local_compose(_shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
+pub(crate) fn import_local_compose(
+    _shell: &mut AppShell,
+    tab_id: TabId,
+    cx: &mut Context<AppShell>,
+) {
     let Some(source) = rfd::FileDialog::new()
         .add_filter("Compose YAML", &["yaml", "yml"])
         .pick_file()

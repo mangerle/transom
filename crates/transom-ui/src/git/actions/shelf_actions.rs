@@ -4,56 +4,10 @@
 //! 搁置是栈里的快照，交互上都需要展开/刷新这类列表动作，放一起成模块。
 
 use crate::app::AppShell;
-use crate::git::GitCommitTab;
 use gpui_kit::*;
-use transom_core::{GitAction, GitCommand, GitProject, GitRequestId, GitSide, TabId};
+use transom_core::{GitCommand, GitProject, GitRequestId};
 
-use super::{GitDiffRequest, GitRefAction};
-
-/// 在提交页左栏切换「提交 / 搁置 / 贮藏」；首次进入分别拉取对应列表。
-///
-/// 搁置列表与贮藏列表都走命令总线：磁盘读取在控制器里完成，界面只登记
-/// 请求号并等待对应事件落地。
-pub(crate) fn git_set_commit_tab(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    tab: GitCommitTab,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let command = workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        if state.commit_tab == tab {
-            return None;
-        }
-        state.commit_tab = tab;
-        match tab {
-            GitCommitTab::Shelf => {
-                let request_id = GitRequestId::new();
-                state.pending.push(request_id);
-                Some(GitCommand::LoadShelves {
-                    project: state.project.clone(),
-                    request_id,
-                })
-            }
-            GitCommitTab::Stash => {
-                let request_id = GitRequestId::new();
-                state.pending.push(request_id);
-                Some(GitCommand::ListStashes {
-                    project: state.project.clone(),
-                    request_id,
-                })
-            }
-            GitCommitTab::Commit => None,
-        }
-    });
-    if let Some(command) = command {
-        shell.send_command(command);
-    }
-    cx.notify();
-}
+use super::GitRefAction;
 
 /// 拉取工作树列表。
 pub(crate) fn git_reload_worktrees(
@@ -116,51 +70,8 @@ pub(crate) fn git_create_worktree(
     );
 }
 
-/// 锁定或解锁指定项目下的一个工作树。
-pub(crate) fn git_set_project_worktree_locked(
-    shell: &mut AppShell,
-    project: &GitProject,
-    path: String,
-    locked: bool,
-    cx: &mut Context<AppShell>,
-) {
-    shell.send_command(if locked {
-        GitCommand::LockWorktree {
-            project: project.clone(),
-            path,
-            reason: None,
-        }
-    } else {
-        GitCommand::UnlockWorktree {
-            project: project.clone(),
-            path,
-        }
-    });
-    cx.notify();
-}
-
-/// 删除工作树。
-pub(crate) fn git_remove_worktree(
-    shell: &mut AppShell,
-    project: &GitProject,
-    path: String,
-    force: bool,
-    cx: &mut Context<AppShell>,
-) {
-    shell.send_command(GitCommand::RemoveWorktree {
-        project: project.clone(),
-        path,
-        force,
-    });
-    cx.notify();
-}
-
 /// 把一个工作树目录加进项目列表（IDEA 里点工作树就是切过去看）。
-pub(crate) fn git_open_worktree_path(
-    shell: &mut AppShell,
-    path: &str,
-    cx: &mut Context<AppShell>,
-) {
+pub(crate) fn git_open_worktree_path(shell: &mut AppShell, path: &str, cx: &mut Context<AppShell>) {
     let target = std::path::PathBuf::from(path);
     if let Some(project) = shell
         .state
@@ -178,120 +89,4 @@ pub(crate) fn git_open_worktree_path(
         return;
     }
     crate::git::actions::add_git_project(shell, super::super::GitProjectDraft::new(target), cx);
-}
-
-/// 新建搁置项。
-pub(crate) fn git_stash_save(
-    shell: &mut AppShell,
-    project: &GitProject,
-    message: String,
-    include_untracked: bool,
-    cx: &mut Context<AppShell>,
-) {
-    shell.send_command(GitCommand::StashSave {
-        project: project.clone(),
-        message,
-        include_untracked,
-    });
-    cx.notify();
-}
-
-/// 搁置项动作：应用 / 弹出 / 丢弃。
-pub(crate) fn git_stash_action(
-    shell: &mut AppShell,
-    project: &GitProject,
-    action: GitAction,
-    selector: String,
-    cx: &mut Context<AppShell>,
-) {
-    let command = match action {
-        GitAction::StashApply => GitCommand::StashApply {
-            project: project.clone(),
-            selector,
-        },
-        GitAction::StashPop => GitCommand::StashPop {
-            project: project.clone(),
-            selector,
-        },
-        GitAction::StashDrop => GitCommand::StashDrop {
-            project: project.clone(),
-            selector,
-        },
-        other => {
-            log::error!("非预期的搁置动作: {other:?}");
-            return;
-        }
-    };
-    shell.send_command(command);
-    cx.notify();
-}
-
-/// 展开/收起一条搁置项的文件清单。
-///
-/// 为什么每次展开都重新读而不缓存：搁置栈的编号会随删除整体前移，
-/// `stash@{0}` 前后两秒可能指向不同条目，缓存省一次子进程却会读到过期清单；
-/// 展开是一次点击的成本，不做这个优化。
-pub(crate) fn git_toggle_stash_files(
-    shell: &mut AppShell,
-    project: &GitProject,
-    selector: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
-        return;
-    };
-    let request = workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        let opening = state.expanded_stash.as_deref() != Some(selector);
-        state.expanded_stash = opening.then(|| selector.to_string());
-        state.stash_files.clear();
-        state.stash_files_loading = false;
-        if !opening {
-            return None;
-        }
-        let request_id = GitRequestId::new();
-        state.pending.push(request_id);
-        state.stash_files_loading = true;
-        Some(request_id)
-    });
-    let Some(request_id) = request else {
-        cx.notify();
-        return;
-    };
-    shell.send_command(GitCommand::ListStashFiles {
-        project: project.clone(),
-        request_id,
-        selector: selector.to_string(),
-    });
-    cx.notify();
-}
-
-/// 打开某个搁置项里一个文件的差异：搁置前的基线对搁置后的内容。
-///
-/// 未跟踪条目住在第三个父提交（`stash@{n}^3`）里，用普通侧去取会两边都空，
-/// 所以按 `untracked` 标记选侧。
-pub(crate) fn git_open_stash_diff(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    selector: &str,
-    file: &transom_core::StashFile,
-    cx: &mut Context<AppShell>,
-) {
-    let stashed = if file.untracked {
-        format!("{selector}^3")
-    } else {
-        selector.to_string()
-    };
-    super::diff_actions::git_open_diff(
-        shell,
-        tab_id,
-        GitDiffRequest {
-            path: file.path.clone(),
-            old: GitSide::Commit(format!("{selector}^")),
-            new: GitSide::Commit(stashed),
-            left_label: rust_i18n::t!("git.diff.baseline").to_string(),
-            right_label: rust_i18n::t!("git.diff.stashed").to_string(),
-        },
-        cx,
-    );
 }

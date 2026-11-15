@@ -373,4 +373,3 @@ pub(crate) fn specs() -> &'static [ShortcutSpec] {
 pub(crate) fn spec_by_id(id: &str) -> Option<&'static ShortcutSpec> {
     SPECS.iter().find(|spec| spec.id == id)
 }
-

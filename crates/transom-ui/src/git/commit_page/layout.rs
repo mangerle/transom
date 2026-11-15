@@ -2,15 +2,16 @@
 
 use super::*;
 use gpui_kit::component::resizable::ResizableState;
+use transom_core::TabId;
 
 pub(super) fn render_commit_page_split(
-    shell: &mut AppShell,
+    workspace: Entity<GitWorkspace>,
     tab_id: TabId,
     tabs: impl IntoElement,
     content: impl IntoElement,
     split: Entity<ResizableState>,
     p: &Palette,
-    cx: &mut Context<AppShell>,
+    cx: &App,
 ) -> AnyElement {
     let left = v_flex()
         .w_full()
@@ -20,19 +21,17 @@ pub(super) fn render_commit_page_split(
         .child(tabs)
         .child(content);
 
-    // 右栏每次重新借一次状态：左栏构建期间要 `&mut AppShell`。
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return left.into_any_element();
-    };
     let right = {
         let state = &workspace.read(cx).state;
         v_flex()
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .child(diff_view::render(state, cx.entity(), tab_id, p))
+            .child(diff_view::render(state, workspace.clone(), p))
     };
 
+    let prev_ws = workspace.clone();
+    let next_ws = workspace;
     let left_panel = resizable_panel()
         .size(px(COMMIT_PANEL_WIDTH))
         .size_range(px(COMMIT_PANEL_RANGE.0)..px(COMMIT_PANEL_RANGE.1))
@@ -43,16 +42,12 @@ pub(super) fn render_commit_page_split(
         .min_h_0()
         .size_full()
         .key_context(crate::keymap::GIT_WORKSPACE_CONTEXT)
-        .on_action(
-            cx.listener(move |this, _: &crate::keymap::DiffPrevChange, _, cx| {
-                crate::git::actions::git_step_diff_change(this, tab_id, false, cx);
-            }),
-        )
-        .on_action(
-            cx.listener(move |this, _: &crate::keymap::DiffNextChange, _, cx| {
-                crate::git::actions::git_step_diff_change(this, tab_id, true, cx);
-            }),
-        )
+        .on_action(move |_: &crate::keymap::DiffPrevChange, _, cx| {
+            prev_ws.update(cx, |ws, cx| ws.step_diff_change(false, cx));
+        })
+        .on_action(move |_: &crate::keymap::DiffNextChange, _, cx| {
+            next_ws.update(cx, |ws, cx| ws.step_diff_change(true, cx));
+        })
         .child(
             h_resizable(ElementId::Name(format!("git-commit-split-{tab_id}").into()))
                 .with_state(&split)

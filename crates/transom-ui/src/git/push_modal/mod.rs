@@ -237,11 +237,7 @@ pub(super) fn git_select_push_commit(
 }
 
 /// 提交的文件清单加载完成落地。
-pub(crate) fn git_apply_push_commit_files(
-    shell: &mut AppShell,
-    oid: &str,
-    files: Vec<CommitFile>,
-) {
+pub(crate) fn git_apply_push_commit_files(shell: &mut AppShell, oid: &str, files: Vec<CommitFile>) {
     let Some(modal) = shell.state.modals.git.push.as_mut() else {
         return;
     };

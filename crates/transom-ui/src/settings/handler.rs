@@ -13,7 +13,11 @@ use gpui_kit::*;
 use transom_terminal::TerminalView;
 
 /// 设置实体发出的跨域意图。
-pub(crate) fn on_settings_event(shell: &mut AppShell, event: &SettingsEvent, cx: &mut Context<AppShell>) {
+pub(crate) fn on_settings_event(
+    shell: &mut AppShell,
+    event: &SettingsEvent,
+    cx: &mut Context<AppShell>,
+) {
     match event {
         SettingsEvent::Saved(settings) => on_settings_saved(shell, settings, cx),
         SettingsEvent::Cancelled | SettingsEvent::ProfilePreview => {
@@ -33,13 +37,15 @@ pub(crate) fn on_settings_event(shell: &mut AppShell, event: &SettingsEvent, cx:
             crate::app::monitor::set_monitor_interval_mode(shell, *mode, cx);
         }
         SettingsEvent::MonitorSectionsChanged(collapse) => {
-            shell.state
+            shell
+                .state
                 .monitor
                 .update(cx, |view, _| view.state.collapse = *collapse);
             cx.notify();
         }
         SettingsEvent::MonitorDrawerWidthChanged(width) => {
-            shell.state
+            shell
+                .state
                 .monitor
                 .update(cx, |view, _| view.set_drawer_width(*width));
             cx.notify();
@@ -97,7 +103,8 @@ pub(crate) fn on_settings_event(shell: &mut AppShell, event: &SettingsEvent, cx:
         SettingsEvent::RestartForUpdate => {
             // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
             // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
-            shell.state
+            shell
+                .state
                 .restart_requested
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             cx.quit();
@@ -106,7 +113,11 @@ pub(crate) fn on_settings_event(shell: &mut AppShell, event: &SettingsEvent, cx:
 }
 
 /// 设置保存后：应用外观、快捷键、块视图与触发器快照。
-fn on_settings_saved(shell: &mut AppShell, settings: &transom_core::AppSettings, cx: &mut Context<AppShell>) {
+fn on_settings_saved(
+    shell: &mut AppShell,
+    settings: &transom_core::AppSettings,
+    cx: &mut Context<AppShell>,
+) {
     crate::settings::apply_appearance_to_live_panes(shell, cx);
     crate::app::shortcuts::apply_shortcut_settings(shell, cx);
     crate::settings::apply_block_view_settings(shell, cx);
@@ -156,11 +167,21 @@ pub(crate) fn handle_settings_request(
         }
         SettingsRequest::OpenBackupImport => shell.open_backup_import(window, cx),
         SettingsRequest::OpenBackupExport => shell.open_backup_export(window, cx),
-        SettingsRequest::OpenAuditViewer => crate::app::audit_viewer::open_audit_viewer(shell, None, window, cx),
-        SettingsRequest::CloudSyncCheck => crate::cloud_sync::start_cloud_sync_check(shell, window, cx),
-        SettingsRequest::CloudSyncTest => crate::cloud_sync::start_cloud_sync_test(shell, window, cx),
-        SettingsRequest::CloudSyncPush => crate::cloud_sync::start_cloud_sync_push(shell, window, cx),
-        SettingsRequest::CloudSyncPull => crate::cloud_sync::start_cloud_sync_pull(shell, window, cx),
+        SettingsRequest::OpenAuditViewer => {
+            crate::app::audit_viewer::open_audit_viewer(shell, None, window, cx)
+        }
+        SettingsRequest::CloudSyncCheck => {
+            crate::cloud_sync::start_cloud_sync_check(shell, window, cx)
+        }
+        SettingsRequest::CloudSyncTest => {
+            crate::cloud_sync::start_cloud_sync_test(shell, window, cx)
+        }
+        SettingsRequest::CloudSyncPush => {
+            crate::cloud_sync::start_cloud_sync_push(shell, window, cx)
+        }
+        SettingsRequest::CloudSyncPull => {
+            crate::cloud_sync::start_cloud_sync_pull(shell, window, cx)
+        }
         SettingsRequest::GitSyncNow => crate::cloud_sync::start_git_sync(shell, window, cx),
     }
 }

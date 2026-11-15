@@ -31,7 +31,6 @@ pub(super) async fn handle_forward_command(
     }
 }
 
-
 async fn handle_forward_start(
     state: &mut ControllerState,
     ctx: &ControllerCtx,

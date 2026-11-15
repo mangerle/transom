@@ -123,12 +123,15 @@ pub(crate) fn render_command_palette_modal(
     };
 
     let muted = p.muted_foreground;
-    let mut command = palette_command(shell, PaletteCommandInput {
-        app: app_entity,
-        targets,
-        placeholder,
-        muted,
-    });
+    let mut command = palette_command(
+        shell,
+        PaletteCommandInput {
+            app: app_entity,
+            targets,
+            placeholder,
+            muted,
+        },
+    );
 
     for group in model.groups {
         command = command.group(group);
@@ -168,7 +171,8 @@ fn apply_ui_theme_choice(shell: &mut AppShell, name: &str, cx: &mut Context<AppS
         ThemeMode::Dark => UiThemeMode::Dark,
         ThemeMode::Light => UiThemeMode::Light,
     };
-    crate::settings::update_appearance(shell, 
+    crate::settings::update_appearance(
+        shell,
         |appearance| {
             appearance.ui_theme = name.to_string();
             appearance.mode = mode;

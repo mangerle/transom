@@ -6,13 +6,13 @@
 use super::branch_tree::{RefGroup, render_ref_group};
 use super::ref_toolbar::render_refs_action_bar;
 use super::worktrees_group::render_worktree_group;
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_core::{RefKind, TabId};
+use transom_core::RefKind;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
@@ -23,8 +23,7 @@ use gpui_kit::component::input::Input;
 /// 左栏引用树（对齐 IDEA 结构：左侧动作条 + 顶部搜索过滤 + 带角标的树）。
 pub(crate) fn render_refs_panel(
     state: &State,
-    app: Entity<AppShell>,
-    tab_id: TabId,
+    workspace: Entity<GitWorkspace>,
     p: &Palette,
     cx: &App,
 ) -> AnyElement {
@@ -36,7 +35,7 @@ pub(crate) fn render_refs_panel(
         .to_lowercase();
     let search_input = state.refs_search_input.clone();
     // 1. 左侧垂直微型动作条（对齐 IDEA 左侧窄条）
-    let action_bar = render_refs_action_bar(state, app.clone(), tab_id, p);
+    let action_bar = render_refs_action_bar(state, workspace.clone(), p);
 
     // 2. 右侧树形内容与搜索输入框
     let tree_content = v_flex()
@@ -65,37 +64,33 @@ pub(crate) fn render_refs_panel(
                 .gap_0p5()
                 .child(render_ref_group(
                     state,
-                    app.clone(),
-                    tab_id,
+                    workspace.clone(),
                     RefGroup::Head,
                     &query,
                     p,
                 ))
                 .child(render_ref_group(
                     state,
-                    app.clone(),
-                    tab_id,
+                    workspace.clone(),
                     RefGroup::Local,
                     &query,
                     p,
                 ))
                 .child(render_ref_group(
                     state,
-                    app.clone(),
-                    tab_id,
+                    workspace.clone(),
                     RefGroup::Remote,
                     &query,
                     p,
                 ))
                 .child(render_ref_group(
                     state,
-                    app.clone(),
-                    tab_id,
+                    workspace.clone(),
                     RefGroup::Tags,
                     &query,
                     p,
                 ))
-                .child(render_worktree_group(&app, state, p)),
+                .child(render_worktree_group(&workspace, state, p)),
         );
 
     h_flex()

@@ -1,12 +1,12 @@
 //! AppShell 顶层布局渲染。
 
-use crate::workspace::render::{StatusBarLayoutInput, WorkspaceGroupInput};
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keymap;
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, size};
+use crate::workspace::render::{StatusBarLayoutInput, WorkspaceGroupInput};
 use gpui_kit::base::h_flex;
 use gpui_kit::*;
 
@@ -172,9 +172,10 @@ impl Render for AppShell {
         // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
         // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
         let rem = window.rem_size();
-        let top_bar = (!self.state.immersive).then(|| crate::app::chrome::render_top_bar(self, window, cx, &p));
-        let activity_bar =
-            (!self.state.immersive).then(|| crate::activity_bar::render_activity_bar(self, window, cx, &p));
+        let top_bar = (!self.state.immersive)
+            .then(|| crate::app::chrome::render_top_bar(self, window, cx, &p));
+        let activity_bar = (!self.state.immersive)
+            .then(|| crate::activity_bar::render_activity_bar(self, window, cx, &p));
 
         let workspace = self.render_workspace_body(
             cx,
