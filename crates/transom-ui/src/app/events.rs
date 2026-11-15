@@ -285,7 +285,7 @@ impl AppShell {
                 self.set_transient_status(rust_i18n::t!("status.copied"), cx);
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
-                crate::clipboard_prompt::request_clipboard_permission(
+                crate::connection::request_clipboard_permission(
                     self,
                     tab_id,
                     text.clone(),
@@ -357,4 +357,21 @@ impl AppShell {
         }
         cx.notify();
     }
+}
+
+/// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
+pub(crate) fn on_known_hosts_event(
+    shell: &mut AppShell,
+    event: &crate::keys::KnownHostsEvent,
+    cx: &mut Context<AppShell>,
+) {
+    match event {
+        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => {
+            shell.state.set_error(crate::palette::localized_error(error))
+        }
+        crate::keys::KnownHostsEvent::Removed { error: None } => {
+            shell.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
+        }
+    }
+    cx.notify();
 }

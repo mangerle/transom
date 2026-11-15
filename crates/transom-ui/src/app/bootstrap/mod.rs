@@ -177,7 +177,7 @@ impl AppShell {
         let known_hosts_subscription = cx.subscribe(
             &self.state.modals.connection.known_hosts,
             |shell, _, event: &KnownHostsEvent, cx| {
-                crate::known_hosts_modal::on_known_hosts_event(shell, event, cx)
+                crate::app::events::on_known_hosts_event(shell, event, cx)
             },
         );
         self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);

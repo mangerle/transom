@@ -17,8 +17,8 @@ pub(crate) use local_and_quick::{
 };
 pub(crate) use local_shell_menu::build_local_terminal_menu;
 pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
-pub(crate) use prompts_shell::on_connection_prompts_event;
-pub(crate) use prompts_view::{ConnectionPromptsEvent, ConnectionPromptsView};
+pub(crate) use prompts_shell::{on_connection_prompts_event, request_clipboard_permission};
+pub(crate) use prompts_view::{ClipboardWritePrompt, ConnectionPromptsEvent, ConnectionPromptsView};
 pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;

@@ -175,8 +175,16 @@ impl AppShell {
         view.update(cx, |view, cx| view.open(init, window, cx));
         self.prefill_secrets(&view, window, cx);
         if is_serial {
-            crate::session_serial::refresh_serial_ports(self, window, cx);
+            self.refresh_serial_ports(window, cx);
         }
+    }
+
+    /// 重新枚举系统串口并写回当前会话表单。
+    fn refresh_serial_ports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let result = self.state.services.serial_ports.list();
+        let view = self.state.modals.session.form.clone();
+        view.update(cx, |view, cx| view.apply_serial_ports(result, window, cx));
+        cx.notify();
     }
 
     /// 把编辑中会话已保存在钥匙串里的凭据填回表单输入框。
@@ -240,7 +248,7 @@ impl AppShell {
                 view.update(cx, |view, cx| view.set_folder_open(false, cx));
             }
             crate::session_form::SessionFormEvent::RefreshSerialPorts => {
-                crate::session_serial::refresh_serial_ports(self, window, cx);
+                self.refresh_serial_ports(window, cx);
             }
             crate::session_form::SessionFormEvent::SaveIdentity { built } => {
                 self.apply_session_form_save_identity(built, cx);

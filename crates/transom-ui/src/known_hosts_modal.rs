@@ -1,32 +1,14 @@
 //! 已知主机指纹管理弹窗：实体渲染与外壳的事件消费。
 
-use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
-use crate::keys::{KnownHostsEvent, KnownHostsView};
-use crate::palette::{Palette, localized_error};
+use crate::keys::KnownHostsView;
+use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
-
-/// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
-pub(crate) fn on_known_hosts_event(
-    shell: &mut AppShell,
-    event: &KnownHostsEvent,
-    cx: &mut Context<AppShell>,
-) {
-    match event {
-        KnownHostsEvent::Removed { error: Some(error) } => {
-            shell.state.set_error(localized_error(error))
-        }
-        KnownHostsEvent::Removed { error: None } => {
-            shell.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
-        }
-    }
-    cx.notify();
-}
 
 impl KnownHostsView {
     /// 弹窗主体：记录列表、搜索框与关闭按钮。

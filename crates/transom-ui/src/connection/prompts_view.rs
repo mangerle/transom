@@ -16,10 +16,18 @@
 //! `connection/prompts_render.rs`，本文件只承载状态与动作。
 
 use super::{AuthPromptState, HostKeyConfirmState};
-use crate::clipboard_prompt::ClipboardWritePrompt;
 use gpui_kit::*;
 use transom_core::{ConnectionId, SecretKind, SessionId, TabId};
 use zeroize::Zeroizing;
+
+/// 一次等待用户裁决的 OSC 52 写请求。
+pub(crate) struct ClipboardWritePrompt {
+    /// 发起请求的窗格；授权与落盘都作用于它。
+    pub(crate) tab_id: TabId,
+    /// 会话名，用于让用户确认来源。
+    pub(crate) session_name: String,
+    pub(crate) text: String,
+}
 
 /// 连接确认弹窗交给外壳处理的意图。
 ///
