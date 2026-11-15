@@ -611,3 +611,44 @@ fn git_modals_and_browser_have_no_app_shell() {
         offenders.join("\n")
     );
 }
+
+/// 容器工作区弹窗必须收敛在 `ContainerWorkspaceModals` 子状态中，且 `dialog_host` 不得逐字段探测。
+#[test]
+fn container_workspace_modals_are_grouped_and_dispatched_uniformly() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let state_src = std::fs::read_to_string(root.join("src/container/types/workspace/state.rs"))
+        .expect("读取 workspace/state.rs 失败");
+    assert!(
+        state_src.contains("pub(crate) modals: ContainerWorkspaceModals"),
+        "ContainerWorkspaceState 必须通过 modals: ContainerWorkspaceModals 聚合工作区弹窗"
+    );
+    for forbidden in [
+        "pub(crate) confirm:",
+        "pub(crate) rename_container:",
+        "pub(crate) update_container:",
+        "pub(crate) tag_image:",
+        "pub(crate) connect_network:",
+        "pub(crate) export_config:",
+        "pub(crate) commit_container:",
+        "pub(crate) hub_dialog:",
+        "pub(crate) push_dialog:",
+        "pub(crate) build_dialog:",
+        "pub(crate) forward_dialog:",
+        "pub(crate) system_df_dialog_open:",
+        "pub(crate) pods_dialog_open:",
+        "pub(crate) quadlets_dialog_open:",
+    ] {
+        assert!(
+            !state_src.contains(forbidden),
+            "弹窗字段不得重新平铺在 ContainerWorkspaceState：{forbidden}"
+        );
+    }
+
+    let checks_src =
+        std::fs::read_to_string(root.join("src/dialog_host/registry/checks/container.rs"))
+            .expect("读取 checks/container.rs 失败");
+    assert!(
+        !checks_src.contains("find_container_modal_tab"),
+        "dialog_host/registry/checks/container.rs 不得逐个枚举工作区弹窗，应由 ContainerWorkspaceModal 统一接管"
+    );
+}

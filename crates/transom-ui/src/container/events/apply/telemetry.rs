@@ -134,7 +134,7 @@ impl ContainerWorkspace {
         self.state.notice = line.lines().last().map(str::to_string);
         if let Some(build) = self
             .state
-            .build_dialog
+            .modals.build_dialog
             .as_mut()
             .filter(|build| build.request_id == Some(request_id))
         {

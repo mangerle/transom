@@ -22,7 +22,7 @@ pub(crate) fn render_container_export_config_dialog_body(
     state: &ContainerWorkspaceState,
     p: &Palette,
 ) -> AnyElement {
-    let Some((name, run_cmd, compose_yaml, is_compose)) = state.export_config.clone() else {
+    let Some((name, run_cmd, compose_yaml, is_compose)) = state.modals.export_config.clone() else {
         return div().into_any_element();
     };
 

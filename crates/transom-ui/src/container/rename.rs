@@ -12,13 +12,13 @@ impl ContainerWorkspace {
         cx: &mut Context<Self>,
     ) {
         let input = cx.new(|cx| InputState::new(window, cx).default_value(current));
-        self.state.rename_container = Some((id, input));
+        self.state.modals.rename_container = Some((id, input));
         cx.notify();
     }
 
     /// 取消改名：丢弃本次打开期的输入控件。
     pub(crate) fn cancel_container_rename(&mut self, cx: &mut Context<Self>) {
-        self.state.rename_container = None;
+        self.state.modals.rename_container = None;
         cx.notify();
     }
 
@@ -28,7 +28,7 @@ impl ContainerWorkspace {
     /// [`ContainerWorkspaceEvent::ShowToast`] 交给外壳；成功投递命令后立即清空
     /// 改名状态，弹窗随之关闭，结果事件只负责收尾忙碌状态与刷新。
     pub(crate) fn submit_container_rename(&mut self, cx: &mut Context<Self>) {
-        let Some((id, input)) = self.state.rename_container.clone() else {
+        let Some((id, input)) = self.state.modals.rename_container.clone() else {
             return;
         };
         let name = input.read(cx).value().trim().to_string();
@@ -46,7 +46,7 @@ impl ContainerWorkspace {
         }
         let request_id = ContainerRequestId::new();
         self.state.busy = true;
-        self.state.rename_container = None;
+        self.state.modals.rename_container = None;
         self.send_tracked(
             request_id,
             ContainerCommand::RenameContainer {

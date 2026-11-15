@@ -80,7 +80,7 @@ pub(crate) fn open_container_port_forward(
 impl ContainerWorkspace {
     /// 用外壳注入的候选会话与输入控件打开端口转发弹窗。
     fn open_forward_dialog(&mut self, params: ContainerForwardOpenParams, cx: &mut Context<Self>) {
-        self.state.forward_dialog = Some(ContainerForwardDialog {
+        self.state.modals.forward_dialog = Some(ContainerForwardDialog {
             container_name: params.container_name,
             private_port: params.private_port,
             published_port: params.published_port,
@@ -94,13 +94,13 @@ impl ContainerWorkspace {
 
     /// 取消端口转发弹窗。
     pub(crate) fn cancel_container_port_forward(&mut self, cx: &mut Context<Self>) {
-        self.state.forward_dialog = None;
+        self.state.modals.forward_dialog = None;
         cx.notify();
     }
 
     /// 切换端口转发目标 SSH 会话。
     pub(crate) fn select_forward_ssh_session(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(dialog) = self.state.forward_dialog.as_mut() else {
+        let Some(dialog) = self.state.modals.forward_dialog.as_mut() else {
             return;
         };
         if index >= dialog.ssh_sessions.len() {
@@ -115,7 +115,7 @@ impl ContainerWorkspace {
     /// 校验失败只写实体 notice（渲染帧统一转成通知），不关闭弹窗；成功后
     /// 关闭弹窗并发出启动事件，由外壳写入转发状态并投递命令。
     pub(crate) fn submit_container_port_forward(&mut self, cx: &mut Context<Self>) {
-        let Some(dialog) = self.state.forward_dialog.as_ref() else {
+        let Some(dialog) = self.state.modals.forward_dialog.as_ref() else {
             return;
         };
         let ssh_sessions = dialog.ssh_sessions.clone();
@@ -161,7 +161,7 @@ impl ContainerWorkspace {
         let target_port = forward_target_port(private_port, published_port);
         let rule_name = format!("{container_name}:{private_port}");
 
-        self.state.forward_dialog = None;
+        self.state.modals.forward_dialog = None;
         self.state.notice = Some(
             rust_i18n::t!(
                 "container.forward.success",

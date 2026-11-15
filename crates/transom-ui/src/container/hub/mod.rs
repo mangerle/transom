@@ -46,7 +46,7 @@ impl ContainerWorkspace {
             }
         });
 
-        self.state.hub_dialog = Some(ContainerHubDialog {
+        self.state.modals.hub_dialog = Some(ContainerHubDialog {
             search_input,
             selected_registry_id: default_reg,
             results: Vec::new(),
@@ -68,13 +68,13 @@ impl ContainerWorkspace {
 
     /// 关闭镜像中心弹窗。
     pub(crate) fn close_hub_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.hub_dialog = None;
+        self.state.modals.hub_dialog = None;
         cx.notify();
     }
 
     /// 切换当前搜索使用的镜像仓库源。
     pub(crate) fn select_hub_registry(&mut self, registry_id: String, cx: &mut Context<Self>) {
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             hub.selected_registry_id = registry_id;
         }
         cx.notify();
@@ -92,7 +92,7 @@ impl ContainerWorkspace {
     ) {
         let Some(input) = self
             .state
-            .hub_dialog
+            .modals.hub_dialog
             .as_ref()
             .map(|hub| hub.search_input.clone())
         else {
@@ -104,7 +104,7 @@ impl ContainerWorkspace {
 
     /// 发起远端镜像搜索请求，支持从 `mysql:8.0` 等精准输入中自动提取预选 Tag。
     pub(crate) fn execute_hub_search(&mut self, cx: &mut Context<Self>) {
-        let Some(hub) = self.state.hub_dialog.as_ref() else {
+        let Some(hub) = self.state.modals.hub_dialog.as_ref() else {
             return;
         };
         let raw_input = hub.search_input.read(cx).value().trim().to_string();
@@ -122,7 +122,7 @@ impl ContainerWorkspace {
         let (term, tag_hint) = tags::parse_search_term_and_tag(&raw_input);
 
         let request_id = ContainerRequestId::new();
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             hub.searching = true;
             hub.search_error = None;
             hub.search_request = Some(request_id);
@@ -157,7 +157,7 @@ impl ContainerWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(hub) = self.state.hub_dialog.as_ref() else {
+        let Some(hub) = self.state.modals.hub_dialog.as_ref() else {
             return;
         };
         let current_tag = hub
@@ -180,7 +180,7 @@ impl ContainerWorkspace {
 
         let request_id = ContainerRequestId::new();
         let repository = item.name.clone();
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             hub.selected_detail = Some(item);
             hub.custom_tag_input = Some(custom_input);
             hub.copy_toast = false;
@@ -203,7 +203,7 @@ impl ContainerWorkspace {
 
     /// 从镜像详情页返回搜索结果列表。
     pub(crate) fn back_to_hub_results(&mut self, cx: &mut Context<Self>) {
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             hub.selected_detail = None;
             hub.custom_tag_input = None;
             hub.copy_toast = false;
@@ -222,7 +222,7 @@ impl ContainerWorkspace {
         tag: String,
         cx: &mut Context<Self>,
     ) {
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             hub.selected_tags.insert(image_name, tag);
         }
         cx.notify();
@@ -230,7 +230,7 @@ impl ContainerWorkspace {
 
     /// 记录「Docker 命令已复制」提示。
     pub(crate) fn mark_hub_copy_toast(&mut self, cx: &mut Context<Self>) {
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             hub.copy_toast = true;
         }
         cx.notify();
@@ -291,7 +291,7 @@ impl ContainerWorkspace {
         request_id: ContainerRequestId,
         results: Vec<ImageSearchResult>,
     ) -> bool {
-        let Some(hub) = self.state.hub_dialog.as_mut() else {
+        let Some(hub) = self.state.modals.hub_dialog.as_mut() else {
             return false;
         };
         if hub.search_request != Some(request_id) {
@@ -310,7 +310,7 @@ impl ContainerWorkspace {
         request_id: ContainerRequestId,
         tags: Vec<String>,
     ) -> bool {
-        let Some(hub) = self.state.hub_dialog.as_mut() else {
+        let Some(hub) = self.state.modals.hub_dialog.as_mut() else {
             return false;
         };
         if hub.tags_request != Some(request_id) {

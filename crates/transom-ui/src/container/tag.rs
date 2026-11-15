@@ -23,13 +23,13 @@ impl ContainerWorkspace {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.tag.placeholder").to_string())
         });
-        self.state.tag_image = Some((image, input));
+        self.state.modals.tag_image = Some((image, input));
         cx.notify();
     }
 
     /// 取消镜像打标签。
     pub(crate) fn cancel_image_tag(&mut self, cx: &mut Context<Self>) {
-        self.state.tag_image = None;
+        self.state.modals.tag_image = None;
         cx.notify();
     }
 
@@ -39,7 +39,7 @@ impl ContainerWorkspace {
     /// [`ContainerWorkspaceEvent::ShowToast`] 交给外壳；成功投递命令后立即清空
     /// 打标签状态，弹窗随之关闭。
     pub(crate) fn submit_image_tag(&mut self, cx: &mut Context<Self>) {
-        let Some((image, input)) = self.state.tag_image.clone() else {
+        let Some((image, input)) = self.state.modals.tag_image.clone() else {
             return;
         };
 
@@ -63,7 +63,7 @@ impl ContainerWorkspace {
 
         let request_id = ContainerRequestId::new();
         self.state.busy = true;
-        self.state.tag_image = None;
+        self.state.modals.tag_image = None;
         self.send_tracked(
             request_id,
             ContainerCommand::TagImage {

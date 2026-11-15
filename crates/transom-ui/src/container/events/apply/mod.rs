@@ -216,8 +216,8 @@ impl ContainerWorkspace {
         error: Option<&AppError>,
     ) -> Option<Entity<gpui_kit::component::input::TextareaState>> {
         self.state.busy = false;
-        self.state.confirm = None;
-        self.state.rename_container = None;
+        self.state.modals.confirm = None;
+        self.state.modals.rename_container = None;
         self.state.notice = None;
         if self.state.pods_action_request == Some(request_id) {
             self.state.pods_action_request = None;
@@ -233,7 +233,7 @@ impl ContainerWorkspace {
                 self.state.quadlets_error = Some(localized_error(err));
             }
         }
-        if let Some(build) = self.state.build_dialog.as_mut()
+        if let Some(build) = self.state.modals.build_dialog.as_mut()
             && build.request_id == Some(request_id)
         {
             build.building = false;
@@ -327,7 +327,7 @@ impl ContainerWorkspace {
             self.state.changes_request = None;
             self.state.changes_loading = false;
         }
-        if let Some(hub) = self.state.hub_dialog.as_mut() {
+        if let Some(hub) = self.state.modals.hub_dialog.as_mut() {
             if hub.search_request == Some(request_id) {
                 hub.searching = false;
                 hub.search_request = None;

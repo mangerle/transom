@@ -21,19 +21,19 @@ impl ContainerWorkspace {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("container.network_connect.placeholder").to_string())
         });
-        self.state.connect_network = Some((network, input));
+        self.state.modals.connect_network = Some((network, input));
         cx.notify();
     }
 
     /// 取消网络连接容器。
     pub(crate) fn cancel_network_connect(&mut self, cx: &mut Context<Self>) {
-        self.state.connect_network = None;
+        self.state.modals.connect_network = None;
         cx.notify();
     }
 
     /// 提交将容器连入当前网络。
     pub(crate) fn submit_network_connect(&mut self, cx: &mut Context<Self>) {
-        let Some((network, input)) = self.state.connect_network.clone() else {
+        let Some((network, input)) = self.state.modals.connect_network.clone() else {
             return;
         };
 
@@ -50,7 +50,7 @@ impl ContainerWorkspace {
         let container = trimmed.to_string();
         let request_id = ContainerRequestId::new();
         self.state.busy = true;
-        self.state.connect_network = None;
+        self.state.modals.connect_network = None;
         self.send_tracked(
             request_id,
             ContainerCommand::ConnectNetwork {

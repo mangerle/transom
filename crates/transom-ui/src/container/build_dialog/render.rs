@@ -22,7 +22,7 @@ pub(crate) fn render_container_build_dialog_body(
     cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(build) = state.build_dialog.as_ref() else {
+    let Some(build) = state.modals.build_dialog.as_ref() else {
         return div().into_any_element();
     };
 

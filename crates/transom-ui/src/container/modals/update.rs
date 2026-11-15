@@ -20,7 +20,7 @@ pub(crate) fn render_container_update_dialog_body(
     state: &ContainerWorkspaceState,
     p: &Palette,
 ) -> AnyElement {
-    let Some((_, mem_input, cpu_input)) = state.update_container.clone() else {
+    let Some((_, mem_input, cpu_input)) = state.modals.update_container.clone() else {
         return div().into_any_element();
     };
 

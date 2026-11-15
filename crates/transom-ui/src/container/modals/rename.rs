@@ -20,7 +20,7 @@ pub(crate) fn render_container_rename_dialog_body(
     state: &ContainerWorkspaceState,
     _p: &Palette,
 ) -> AnyElement {
-    let Some((_, input)) = state.rename_container.clone() else {
+    let Some((_, input)) = state.modals.rename_container.clone() else {
         return div().into_any_element();
     };
 

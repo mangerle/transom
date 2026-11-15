@@ -28,13 +28,13 @@ impl ContainerWorkspace {
                 rust_i18n::t!("container.update_resources.cpu_placeholder").to_string(),
             )
         });
-        self.state.update_container = Some((name, mem_input, cpu_input));
+        self.state.modals.update_container = Some((name, mem_input, cpu_input));
         cx.notify();
     }
 
     /// 取消容器资源更新。
     pub(crate) fn cancel_container_update(&mut self, cx: &mut Context<Self>) {
-        self.state.update_container = None;
+        self.state.modals.update_container = None;
         cx.notify();
     }
 
@@ -43,7 +43,7 @@ impl ContainerWorkspace {
     /// 空白输入表示不限制对应资源；无法解析的值同样按「不限制」处理，
     /// 与迁移前的宽松口径一致。解析完成后关闭弹窗并投递更新命令。
     pub(crate) fn submit_container_update(&mut self, cx: &mut Context<Self>) {
-        let Some((name, mem_input, cpu_input)) = self.state.update_container.clone() else {
+        let Some((name, mem_input, cpu_input)) = self.state.modals.update_container.clone() else {
             return;
         };
 

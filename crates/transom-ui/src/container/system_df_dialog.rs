@@ -17,7 +17,7 @@ use transom_ui_icons::UiIcon;
 impl ContainerWorkspace {
     /// 打开全局存储分析与空间体检弹窗。
     pub(crate) fn open_system_df_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.system_df_dialog_open = true;
+        self.state.modals.system_df_dialog_open = true;
         let needs_fetch = self.state.system_df.is_none() && !self.state.system_df_loading;
         if needs_fetch {
             self.refresh_system_df(cx);
@@ -27,7 +27,7 @@ impl ContainerWorkspace {
 
     /// 关闭全局存储分析弹窗。
     pub(crate) fn close_system_df_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.system_df_dialog_open = false;
+        self.state.modals.system_df_dialog_open = false;
         cx.notify();
     }
 

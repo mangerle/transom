@@ -24,7 +24,7 @@ pub(crate) fn delete_button(
     .on_click(move |_, _, cx| {
         let confirm = confirm.clone();
         view.update(cx, |workspace, cx| {
-            workspace.state.confirm = Some(confirm);
+            workspace.state.modals.confirm = Some(confirm);
             cx.notify();
         });
     })

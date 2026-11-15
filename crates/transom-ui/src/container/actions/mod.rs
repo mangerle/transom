@@ -46,7 +46,7 @@ impl ContainerWorkspace {
         self.state.stats_processes_loading = false;
         self.state.files = ContainerFilesState::default();
         self.state.detail_tab = ContainerDetailTab::Overview;
-        self.state.confirm = None;
+        self.state.modals.confirm = None;
         self.state.notice = None;
         self.send_tracked(
             request_id,

@@ -159,7 +159,7 @@ impl ContainerWorkspace {
 
     /// 取消当前分类里的删除确认。
     pub(crate) fn cancel_container_confirm(&mut self, cx: &mut Context<Self>) {
-        self.state.confirm = None;
+        self.state.modals.confirm = None;
         cx.notify();
     }
 
@@ -169,7 +169,7 @@ impl ContainerWorkspace {
     /// 实体，确认后的分派不再经外壳转手。Compose 项目先按名称从当前列表取快照，
     /// 找不到说明列表已刷新，本次确认失效；与原外壳行为一致，此时不改弹窗状态。
     pub(crate) fn apply_container_confirm(&mut self, cx: &mut Context<Self>) {
-        let Some(confirm) = self.state.confirm.clone() else {
+        let Some(confirm) = self.state.modals.confirm.clone() else {
             return;
         };
         let request_id = ContainerRequestId::new();
@@ -202,7 +202,7 @@ impl ContainerWorkspace {
             return;
         };
         self.state.busy = true;
-        self.state.confirm = None;
+        self.state.modals.confirm = None;
         self.send_tracked(request_id, command);
         cx.notify();
     }

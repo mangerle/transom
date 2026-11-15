@@ -72,7 +72,7 @@ impl ContainerWorkspace {
             }
         });
 
-        self.state.build_dialog = Some(ContainerBuildDialog {
+        self.state.modals.build_dialog = Some(ContainerBuildDialog {
             context_path,
             dockerfile,
             tag,
@@ -105,7 +105,7 @@ impl ContainerWorkspace {
         let path_str = folder.display().to_string();
         let Some(input) = self
             .state
-            .build_dialog
+            .modals.build_dialog
             .as_ref()
             .map(|build| build.context_path.clone())
         else {
@@ -119,13 +119,13 @@ impl ContainerWorkspace {
 
     /// 关闭构建弹窗。
     pub(crate) fn close_build_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.build_dialog = None;
+        self.state.modals.build_dialog = None;
         cx.notify();
     }
 
     /// 切换「不使用缓存」选项。
     pub(crate) fn toggle_build_no_cache(&mut self, cx: &mut Context<Self>) {
-        if let Some(build) = self.state.build_dialog.as_mut() {
+        if let Some(build) = self.state.modals.build_dialog.as_mut() {
             build.no_cache = !build.no_cache;
         }
         cx.notify();
@@ -136,7 +136,7 @@ impl ContainerWorkspace {
     /// 校验失败时就地写回错误并保持弹窗；成功后标记构建中、清空旧日志并
     /// 投递命令，流式日志与结果事件由外壳转发回实体。
     pub(crate) fn submit_build_dialog(&mut self, cx: &mut Context<Self>) {
-        let Some(build) = self.state.build_dialog.as_ref() else {
+        let Some(build) = self.state.modals.build_dialog.as_ref() else {
             return;
         };
         if build.building {
@@ -175,7 +175,7 @@ impl ContainerWorkspace {
         };
 
         let request_id = ContainerRequestId::new();
-        let Some(no_cache) = self.state.build_dialog.as_mut().map(|build| {
+        let Some(no_cache) = self.state.modals.build_dialog.as_mut().map(|build| {
             build.building = true;
             build.request_id = Some(request_id);
             build.error = None;
@@ -209,7 +209,7 @@ impl ContainerWorkspace {
 
     /// 写入构建弹窗错误并触发重绘。
     fn set_build_error(&mut self, error: String, cx: &mut Context<Self>) {
-        if let Some(build) = self.state.build_dialog.as_mut() {
+        if let Some(build) = self.state.modals.build_dialog.as_mut() {
             build.error = Some(error);
         }
         cx.notify();

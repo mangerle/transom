@@ -20,7 +20,7 @@ pub(crate) fn render_container_tag_dialog_body(
     state: &ContainerWorkspaceState,
     _p: &Palette,
 ) -> AnyElement {
-    let Some((_, input)) = state.tag_image.clone() else {
+    let Some((_, input)) = state.modals.tag_image.clone() else {
         return div().into_any_element();
     };
 

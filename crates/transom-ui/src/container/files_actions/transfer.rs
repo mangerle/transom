@@ -104,7 +104,7 @@ impl ContainerWorkspace {
         };
         let is_dir = local_path.is_dir();
         if overwrite {
-            self.state.confirm = Some(ContainerConfirm::UploadOverwrite {
+            self.state.modals.confirm = Some(ContainerConfirm::UploadOverwrite {
                 path: target,
                 local_path,
                 directory: is_dir,

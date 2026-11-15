@@ -62,7 +62,7 @@ impl ContainerWorkspace {
                     RowTarget::Compose(_) => None,
                 };
                 if let Some(confirm) = confirm {
-                    self.state.confirm = Some(confirm);
+                    self.state.modals.confirm = Some(confirm);
                     cx.notify();
                 }
             }

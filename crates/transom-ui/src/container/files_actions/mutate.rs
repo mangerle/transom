@@ -10,7 +10,7 @@ impl ContainerWorkspace {
         recursive: bool,
         cx: &mut Context<Self>,
     ) {
-        self.state.confirm = Some(ContainerConfirm::FilePath { path, recursive });
+        self.state.modals.confirm = Some(ContainerConfirm::FilePath { path, recursive });
         cx.notify();
     }
 

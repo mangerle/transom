@@ -20,7 +20,7 @@ pub(crate) fn render_container_network_connect_dialog_body(
     state: &ContainerWorkspaceState,
     _p: &Palette,
 ) -> AnyElement {
-    let Some((_, input)) = state.connect_network.clone() else {
+    let Some((_, input)) = state.modals.connect_network.clone() else {
         return div().into_any_element();
     };
 

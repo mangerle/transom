@@ -253,7 +253,7 @@ pub(super) fn container_header_actions(
                     PopupMenuItem::new(rust_i18n::t!("common.delete").to_string()).on_click(
                         move |_, _, cx| {
                             delete_view.update(cx, |workspace, cx| {
-                                workspace.state.confirm =
+                                workspace.state.modals.confirm =
                                     Some(ContainerConfirm::Container(delete_name.clone()));
                                 cx.notify();
                             });

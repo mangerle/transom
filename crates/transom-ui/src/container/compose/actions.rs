@@ -20,7 +20,7 @@ impl ContainerWorkspace {
         cx: &mut Context<Self>,
     ) {
         if action.is_dangerous() {
-            self.state.confirm = Some(ContainerConfirm::Compose(name));
+            self.state.modals.confirm = Some(ContainerConfirm::Compose(name));
             cx.notify();
             return;
         }

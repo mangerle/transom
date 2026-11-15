@@ -33,7 +33,7 @@ pub(crate) fn render_container_hub_dialog_body(
     cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(hub) = state.hub_dialog.as_ref() else {
+    let Some(hub) = state.modals.hub_dialog.as_ref() else {
         return div().into_any_element();
     };
 

@@ -6,8 +6,13 @@
 use super::*;
 
 impl ModalKind {
-    /// 该弹窗此刻是否应当存在；判定函数由注册表按种类提供。
+    /// 该弹窗此刻是否应当存在；容器工作区弹窗由 [`ContainerWorkspaceModal`] 统一接管，
+    /// 其余种类由注册表按种类提供。
     pub(super) fn is_open(self, shell: &AppShell, cx: &App) -> bool {
+        if let Some(modal) = self.as_container_modal() {
+            return crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
+                .is_some();
+        }
         (super::registry::entry(self).is_open)(shell, cx)
     }
 
@@ -24,6 +29,11 @@ impl ModalKind {
 
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
+        if let Some(modal) = self.as_container_modal() {
+            return crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
+                .map(|(_, ws)| modal.text_values(&ws.read(cx).state, cx))
+                .unwrap_or_default();
+        }
         (super::registry::entry(self).field_values)(shell, cx)
     }
 

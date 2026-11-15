@@ -39,7 +39,7 @@ impl ContainerWorkspace {
                 .placeholder(rust_i18n::t!("container.commit.comment_placeholder").to_string())
         });
 
-        self.state.commit_container = Some(ContainerCommitState {
+        self.state.modals.commit_container = Some(ContainerCommitState {
             container,
             repo: repo_input,
             tag: tag_input,
@@ -50,7 +50,7 @@ impl ContainerWorkspace {
 
     /// 取消容器提交。
     pub(crate) fn cancel_container_commit(&mut self, cx: &mut Context<Self>) {
-        self.state.commit_container = None;
+        self.state.modals.commit_container = None;
         cx.notify();
     }
 
@@ -59,7 +59,7 @@ impl ContainerWorkspace {
     /// 仓库名为空时保持弹窗打开并提示；成功后关闭弹窗并投递命令，
     /// 结果事件只负责收尾忙碌状态与刷新。
     pub(crate) fn submit_container_commit(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.state.commit_container.clone() else {
+        let Some(state) = self.state.modals.commit_container.clone() else {
             return;
         };
         let container = state.container;
@@ -81,7 +81,7 @@ impl ContainerWorkspace {
 
         let request_id = ContainerRequestId::new();
         self.state.busy = true;
-        self.state.commit_container = None;
+        self.state.modals.commit_container = None;
         self.send_tracked(
             request_id,
             ContainerCommand::CommitContainer {

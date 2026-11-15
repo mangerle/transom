@@ -21,7 +21,7 @@ pub(crate) fn render_container_confirm_dialog_body(
     state: &ContainerWorkspaceState,
     p: &Palette,
 ) -> AnyElement {
-    let Some(confirm) = state.confirm.clone() else {
+    let Some(confirm) = state.modals.confirm.clone() else {
         return div().into_any_element();
     };
 

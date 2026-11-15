@@ -2,10 +2,12 @@
 //!
 //! 主体状态在 state.rs，文件操作弹窗与确认弹窗类型分别放在 prompt/panel。
 
+mod modals;
 mod panel;
 mod prompt;
 mod state;
 
+pub(crate) use modals::ContainerWorkspaceModals;
 pub(crate) use panel::{ContainerCommitState, ContainerConfirm};
 pub(crate) use prompt::ContainerFilePrompt;
 pub(crate) use state::ContainerWorkspaceState;

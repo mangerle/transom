@@ -90,58 +90,35 @@ pub(crate) struct ContainerWorkspaceState {
     pub(crate) changes_request: Option<ContainerRequestId>,
     pub(crate) changes_search: Entity<InputState>,
     pub(crate) _changes_search_subscription: Subscription,
-    /// 容器改名条：容器 ID 与输入框；`None` 表示不显示。
-    pub(crate) rename_container: Option<(String, Entity<InputState>)>,
-    /// 容器配置更新条：容器名与 (内存MB输入框, CPU输入框)；`None` 表示不显示。
-    pub(crate) update_container: Option<(String, Entity<InputState>, Entity<InputState>)>,
-    /// 镜像打标签条：镜像 ID 与新 tag 输入框；`None` 表示不显示。
-    pub(crate) tag_image: Option<(String, Entity<InputState>)>,
-    /// 网络连接容器条：网络 ID 与待连接容器名输入框；`None` 表示不显示。
-    pub(crate) connect_network: Option<(String, Entity<InputState>)>,
-    /// 容器配置导出条：(容器名, run命令, compose YAML, 是否展示compose)；`None` 表示不显示。
-    pub(crate) export_config: Option<(String, String, String, bool)>,
-    /// 容器提交镜像条；`None` 表示不显示。
-    pub(crate) commit_container: Option<ContainerCommitState>,
+    /// 工作区持有的局部弹窗状态集合。
+    pub(crate) modals: ContainerWorkspaceModals,
     /// 跨分类跳转时待选中的容器名：容器列表到达后再选中。
     pub(crate) pending_select: Option<String>,
-    /// 待确认的删除动作。
-    pub(crate) confirm: Option<ContainerConfirm>,
-    /// 已按下一次「清理」、等待第二次确认的目标。
     /// 镜像下载管理器：有界队列与分层进度。
     pub(crate) pull_manager: crate::container::pull_manager::ImagePullManager,
     /// 下载管理抽屉是否展开。
     pub(crate) pull_drawer_open: bool,
-    /// 镜像市场探索弹窗状态。
-    pub(crate) hub_dialog: Option<ContainerHubDialog>,
-    /// 镜像推送到远端仓库弹窗状态。
-    pub(crate) push_dialog: Option<ContainerPushDialog>,
-    /// 从 Dockerfile 构建镜像弹窗状态。
-    pub(crate) build_dialog: Option<ContainerBuildDialog>,
-    /// 容器端口建立本地端口转发弹窗状态。
-    pub(crate) forward_dialog: Option<ContainerForwardDialog>,
+    /// 已按下一次「清理」、等待第二次确认的目标。
     pub(crate) prune_armed: Option<ContainerPruneTarget>,
     /// 系统全局磁盘用量分析数据。
     pub(crate) system_df: Option<transom_core::ContainerSystemDiskUsage>,
     pub(crate) system_df_loading: bool,
     pub(crate) system_df_request: Option<ContainerRequestId>,
-    pub(crate) system_df_dialog_open: bool,
     pub(crate) system_prune_all: bool,
     pub(crate) system_prune_volumes: bool,
     pub(crate) system_prune_running: bool,
-    /// Podman Pod 列表弹窗与数据。
+    /// Podman Pod 列表数据。
     pub(crate) pods: Vec<transom_core::ContainerPodSummary>,
     pub(crate) pods_loading: bool,
     pub(crate) pods_error: Option<String>,
     pub(crate) pods_request: Option<ContainerRequestId>,
-    pub(crate) pods_dialog_open: bool,
     pub(crate) pods_action_request: Option<ContainerRequestId>,
-    /// Quadlet 单元弹窗与数据。
+    /// Quadlet 单元列表数据。
     pub(crate) quadlets: Vec<transom_core::ContainerQuadletUnit>,
     pub(crate) quadlets_loading: bool,
     pub(crate) quadlets_error: Option<String>,
     pub(crate) quadlets_request: Option<ContainerRequestId>,
     pub(crate) quadlets_action_request: Option<ContainerRequestId>,
-    pub(crate) quadlets_dialog_open: bool,
     /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
     pub(crate) compose_yaml_editor:
         Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
@@ -272,12 +249,7 @@ impl ContainerWorkspaceState {
             stats_processes_collapsed: false,
             terminal: None,
             terminal_request: None,
-            rename_container: None,
-            update_container: None,
-            tag_image: None,
-            connect_network: None,
-            export_config: None,
-            commit_container: None,
+            modals: ContainerWorkspaceModals::default(),
             pending_select: None,
             files: ContainerFilesState {
                 preview_binary: false,
@@ -285,18 +257,12 @@ impl ContainerWorkspaceState {
                 new_dir_input: None,
                 ..ContainerFilesState::default()
             },
-            confirm: None,
             pull_manager: crate::container::pull_manager::ImagePullManager::new(),
             pull_drawer_open: false,
-            hub_dialog: None,
-            push_dialog: None,
-            build_dialog: None,
-            forward_dialog: None,
             prune_armed: None,
             system_df: None,
             system_df_loading: false,
             system_df_request: None,
-            system_df_dialog_open: false,
             system_prune_all: false,
             system_prune_volumes: false,
             system_prune_running: false,
@@ -304,14 +270,12 @@ impl ContainerWorkspaceState {
             pods_loading: false,
             pods_error: None,
             pods_request: None,
-            pods_dialog_open: false,
             pods_action_request: None,
             quadlets: Vec::new(),
             quadlets_loading: false,
             quadlets_error: None,
             quadlets_request: None,
             quadlets_action_request: None,
-            quadlets_dialog_open: false,
             compose_yaml_editor: None,
             compose_yaml_loading: None,
             compose_dependencies: HashMap::new(),
@@ -427,11 +391,8 @@ impl ContainerWorkspaceState {
         self.stats_processes.clear();
         self.stats_processes_error = None;
         self.stats_processes_loading = false;
-        self.confirm = None;
+        self.modals.clear_on_section_change();
         self.prune_armed = None;
-        self.rename_container = None;
-        self.export_config = None;
-        self.commit_container = None;
         self.compose_hovered_service = None;
         self.compose_dependencies.clear();
         if !ContainerSortKey::for_section(section).contains(&self.sort_key) {

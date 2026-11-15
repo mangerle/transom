@@ -9,7 +9,7 @@ use super::*;
 impl ContainerWorkspace {
     /// 打开 Pod 弹窗并拉取列表；仅 Podman CLI 连接可用。
     pub(crate) fn open_pods_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.pods_dialog_open = true;
+        self.state.modals.pods_dialog_open = true;
         self.state.pods = Vec::new();
         self.state.pods_error = None;
         self.state.pods_loading = true;
@@ -19,7 +19,7 @@ impl ContainerWorkspace {
 
     /// 关闭 Pod 弹窗；在途列表请求结果到达后会被丢弃。
     pub(crate) fn close_pods_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.pods_dialog_open = false;
+        self.state.modals.pods_dialog_open = false;
         self.state.pods_request = None;
         self.state.pods_action_request = None;
         self.state.pods_loading = false;
@@ -28,7 +28,7 @@ impl ContainerWorkspace {
 
     /// 刷新 Pod 列表；已有在途请求时直接复用。
     pub(crate) fn refresh_pods(&mut self, cx: &mut Context<Self>) {
-        if !self.state.pods_dialog_open || self.state.pods_request.is_some() {
+        if !self.state.modals.pods_dialog_open || self.state.pods_request.is_some() {
             return;
         }
         let request_id = ContainerRequestId::new();
@@ -79,7 +79,7 @@ impl ContainerWorkspace {
         request_id: ContainerRequestId,
         pods: Vec<transom_core::ContainerPodSummary>,
     ) -> bool {
-        if self.state.pods_request != Some(request_id) || !self.state.pods_dialog_open {
+        if self.state.pods_request != Some(request_id) || !self.state.modals.pods_dialog_open {
             return false;
         }
         self.state.pods = pods;

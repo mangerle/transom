@@ -8,7 +8,7 @@ use super::*;
 impl ContainerWorkspace {
     /// 打开 Quadlet 弹窗并扫描宿主单元。
     pub(crate) fn open_quadlets_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.quadlets_dialog_open = true;
+        self.state.modals.quadlets_dialog_open = true;
         self.state.quadlets = Vec::new();
         self.state.quadlets_error = None;
         self.state.quadlets_loading = true;
@@ -18,7 +18,7 @@ impl ContainerWorkspace {
 
     /// 关闭 Quadlet 弹窗；在途请求结果到达后会被丢弃。
     pub(crate) fn close_quadlets_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.quadlets_dialog_open = false;
+        self.state.modals.quadlets_dialog_open = false;
         self.state.quadlets_request = None;
         self.state.quadlets_action_request = None;
         self.state.quadlets_loading = false;
@@ -27,7 +27,7 @@ impl ContainerWorkspace {
 
     /// 刷新 Quadlet 单元列表；已有在途请求时直接复用。
     pub(crate) fn refresh_quadlets(&mut self, cx: &mut Context<Self>) {
-        if !self.state.quadlets_dialog_open || self.state.quadlets_request.is_some() {
+        if !self.state.modals.quadlets_dialog_open || self.state.quadlets_request.is_some() {
             return;
         }
         let request_id = ContainerRequestId::new();
@@ -78,7 +78,7 @@ impl ContainerWorkspace {
         request_id: ContainerRequestId,
         units: Vec<transom_core::ContainerQuadletUnit>,
     ) -> bool {
-        if self.state.quadlets_request != Some(request_id) || !self.state.quadlets_dialog_open {
+        if self.state.quadlets_request != Some(request_id) || !self.state.modals.quadlets_dialog_open {
             return false;
         }
         self.state.quadlets = units;

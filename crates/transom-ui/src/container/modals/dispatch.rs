@@ -50,55 +50,57 @@ pub(crate) enum ContainerWorkspaceModal {
 impl ContainerWorkspaceModal {
     /// 判断指定弹窗在当前工作区状态中是否处于打开态。
     pub(crate) fn is_open(self, state: &ContainerWorkspaceState) -> bool {
+        let m = &state.modals;
         match self {
-            Self::Confirm => state.confirm.is_some(),
-            Self::Rename => state.rename_container.is_some(),
-            Self::TagImage => state.tag_image.is_some(),
-            Self::Commit => state.commit_container.is_some(),
-            Self::Update => state.update_container.is_some(),
-            Self::NetworkConnect => state.connect_network.is_some(),
-            Self::ExportConfig => state.export_config.is_some(),
+            Self::Confirm => m.confirm.is_some(),
+            Self::Rename => m.rename_container.is_some(),
+            Self::TagImage => m.tag_image.is_some(),
+            Self::Commit => m.commit_container.is_some(),
+            Self::Update => m.update_container.is_some(),
+            Self::NetworkConnect => m.connect_network.is_some(),
+            Self::ExportConfig => m.export_config.is_some(),
             Self::FileRename => state.files.prompt_input.is_some(),
             Self::FileNewDir => state.files.new_dir_open && state.files.new_dir_input.is_some(),
-            Self::Hub => state.hub_dialog.is_some(),
-            Self::Push => state.push_dialog.is_some(),
-            Self::SystemDf => state.system_df_dialog_open,
-            Self::Build => state.build_dialog.is_some(),
-            Self::Forward => state.forward_dialog.is_some(),
-            Self::Pods => state.pods_dialog_open,
-            Self::Quadlet => state.quadlets_dialog_open,
+            Self::Hub => m.hub_dialog.is_some(),
+            Self::Push => m.push_dialog.is_some(),
+            Self::SystemDf => m.system_df_dialog_open,
+            Self::Build => m.build_dialog.is_some(),
+            Self::Forward => m.forward_dialog.is_some(),
+            Self::Pods => m.pods_dialog_open,
+            Self::Quadlet => m.quadlets_dialog_open,
         }
     }
 
     /// 返回弹窗首帧应聚焦的输入控件；无输入框的展示类弹窗返回 `None`。
     pub(crate) fn focus_input(self, state: &ContainerWorkspaceState) -> Option<Entity<InputState>> {
+        let m = &state.modals;
         match self {
-            Self::Rename => state
+            Self::Rename => m
                 .rename_container
                 .as_ref()
                 .map(|(_, input)| input.clone()),
-            Self::TagImage => state.tag_image.as_ref().map(|(_, input)| input.clone()),
-            Self::Commit => state
+            Self::TagImage => m.tag_image.as_ref().map(|(_, input)| input.clone()),
+            Self::Commit => m
                 .commit_container
                 .as_ref()
                 .map(|commit| commit.repo.clone()),
-            Self::Update => state.update_container.as_ref().map(|(_, mem, _)| mem.clone()),
-            Self::NetworkConnect => state
+            Self::Update => m.update_container.as_ref().map(|(_, mem, _)| mem.clone()),
+            Self::NetworkConnect => m
                 .connect_network
                 .as_ref()
                 .map(|(_, input)| input.clone()),
             Self::FileRename => state.files.prompt_input.clone(),
             Self::FileNewDir => state.files.new_dir_input.clone(),
-            Self::Hub => state.hub_dialog.as_ref().map(|hub| hub.search_input.clone()),
-            Self::Push => state
+            Self::Hub => m.hub_dialog.as_ref().map(|hub| hub.search_input.clone()),
+            Self::Push => m
                 .push_dialog
                 .as_ref()
                 .map(|push| push.target_repo.clone()),
-            Self::Build => state
+            Self::Build => m
                 .build_dialog
                 .as_ref()
                 .map(|build| build.context_path.clone()),
-            Self::Forward => state
+            Self::Forward => m
                 .forward_dialog
                 .as_ref()
                 .map(|fwd| fwd.local_port_input.clone()),
@@ -107,6 +109,99 @@ impl ContainerWorkspaceModal {
             | Self::SystemDf
             | Self::Pods
             | Self::Quadlet => None,
+        }
+    }
+
+    /// 采集该弹窗内全部文本输入当前值，供宿主脏检查判断是否有未保存改动。
+    pub(crate) fn text_values(self, state: &ContainerWorkspaceState, cx: &App) -> Vec<String> {
+        let m = &state.modals;
+        match self {
+            Self::Rename => m
+                .rename_container
+                .as_ref()
+                .map(|(_, input)| vec![input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            Self::TagImage => m
+                .tag_image
+                .as_ref()
+                .map(|(_, input)| vec![input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            Self::Commit => m
+                .commit_container
+                .as_ref()
+                .map(|commit| {
+                    vec![
+                        commit.repo.read(cx).value().to_string(),
+                        commit.tag.read(cx).value().to_string(),
+                        commit.comment.read(cx).value().to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            Self::Update => m
+                .update_container
+                .as_ref()
+                .map(|(_, mem, cpu)| {
+                    vec![
+                        mem.read(cx).value().to_string(),
+                        cpu.read(cx).value().to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            Self::NetworkConnect => m
+                .connect_network
+                .as_ref()
+                .map(|(_, input)| vec![input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            Self::FileRename => state
+                .files
+                .prompt_input
+                .as_ref()
+                .map(|input| vec![input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            Self::FileNewDir => state
+                .files
+                .new_dir_input
+                .as_ref()
+                .map(|input| vec![input.read(cx).value().to_string()])
+                .unwrap_or_default(),
+            Self::Push => m
+                .push_dialog
+                .as_ref()
+                .map(|push| {
+                    vec![
+                        push.target_repo.read(cx).value().to_string(),
+                        push.target_tag.read(cx).value().to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            Self::Build => m
+                .build_dialog
+                .as_ref()
+                .map(|build| {
+                    vec![
+                        build.context_path.read(cx).value().to_string(),
+                        build.dockerfile.read(cx).value().to_string(),
+                        build.tag.read(cx).value().to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            Self::Forward => m
+                .forward_dialog
+                .as_ref()
+                .map(|fwd| {
+                    vec![
+                        fwd.local_port_input.read(cx).value().to_string(),
+                        fwd.target_host_input.read(cx).value().to_string(),
+                        fwd.selected_ssh_index.to_string(),
+                    ]
+                })
+                .unwrap_or_default(),
+            Self::Confirm
+            | Self::ExportConfig
+            | Self::Hub
+            | Self::SystemDf
+            | Self::Pods
+            | Self::Quadlet => Vec::new(),
         }
     }
 

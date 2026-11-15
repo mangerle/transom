@@ -20,7 +20,7 @@ pub(crate) fn render_container_commit_dialog_body(
     state: &ContainerWorkspaceState,
     p: &Palette,
 ) -> AnyElement {
-    let Some(commit) = state.commit_container.clone() else {
+    let Some(commit) = state.modals.commit_container.clone() else {
         return div().into_any_element();
     };
     let repo_input = commit.repo;

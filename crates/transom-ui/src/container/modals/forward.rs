@@ -25,7 +25,7 @@ pub(crate) fn render_container_forward_dialog_body(
     state: &ContainerWorkspaceState,
     p: &Palette,
 ) -> AnyElement {
-    let Some(dialog) = state.forward_dialog.as_ref() else {
+    let Some(dialog) = state.modals.forward_dialog.as_ref() else {
         return div().into_any_element();
     };
 

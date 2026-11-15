@@ -21,13 +21,13 @@ impl ContainerWorkspace {
         };
         let run_cmd = transom_core::generate_docker_run(details);
         let compose_yaml = transom_core::generate_docker_compose(details);
-        self.state.export_config = Some((name, run_cmd, compose_yaml, false));
+        self.state.modals.export_config = Some((name, run_cmd, compose_yaml, false));
         cx.notify();
     }
 
     /// 关闭导出弹窗。
     pub(crate) fn cancel_container_export(&mut self, cx: &mut Context<Self>) {
-        self.state.export_config = None;
+        self.state.modals.export_config = None;
         cx.notify();
     }
 
@@ -37,7 +37,7 @@ impl ContainerWorkspace {
         is_compose: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some((_, _, _, current)) = self.state.export_config.as_mut() {
+        if let Some((_, _, _, current)) = self.state.modals.export_config.as_mut() {
             *current = is_compose;
         }
         cx.notify();

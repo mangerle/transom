@@ -77,7 +77,7 @@ impl ContainerWorkspace {
             }
         });
 
-        self.state.push_dialog = Some(ContainerPushDialog {
+        self.state.modals.push_dialog = Some(ContainerPushDialog {
             image_id,
             source_tag,
             selected_registry_id: default_reg.id,
@@ -91,7 +91,7 @@ impl ContainerWorkspace {
 
     /// 关闭推送弹窗。
     pub(crate) fn cancel_push_dialog(&mut self, cx: &mut Context<Self>) {
-        self.state.push_dialog = None;
+        self.state.modals.push_dialog = None;
         cx.notify();
     }
 
@@ -100,7 +100,7 @@ impl ContainerWorkspace {
     /// 目标仓库或标签为空时保持弹窗打开并就地显示错误；成功后关闭弹窗、
     /// 记录进行中的通知并投递「打标签 + 推送」命令。
     pub(crate) fn submit_push_dialog(&mut self, cx: &mut Context<Self>) {
-        let Some(push) = self.state.push_dialog.as_ref() else {
+        let Some(push) = self.state.modals.push_dialog.as_ref() else {
             return;
         };
         let image_id = push.image_id.clone();
@@ -115,7 +115,7 @@ impl ContainerWorkspace {
             .unwrap_or_else(ContainerRegistry::docker_hub);
 
         if repo.is_empty() || tag.is_empty() {
-            if let Some(push) = self.state.push_dialog.as_mut() {
+            if let Some(push) = self.state.modals.push_dialog.as_mut() {
                 push.error =
                     Some(rust_i18n::t!("container.push.repo_and_tag_required").to_string());
             }
@@ -142,7 +142,7 @@ impl ContainerWorkspace {
             },
         );
 
-        self.state.push_dialog = None;
+        self.state.modals.push_dialog = None;
         self.state.notice = Some(
             rust_i18n::t!("container.push.pushing_notice", reference = target_full_ref).to_string(),
         );
@@ -160,7 +160,7 @@ pub(crate) fn render_container_push_dialog_body(
     registries: &[ContainerRegistry],
     p: &Palette,
 ) -> AnyElement {
-    let Some(push) = state.push_dialog.as_ref() else {
+    let Some(push) = state.modals.push_dialog.as_ref() else {
         return div().into_any_element();
     };
 
@@ -362,7 +362,7 @@ impl ContainerWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(push) = self.state.push_dialog.as_mut() else {
+        let Some(push) = self.state.modals.push_dialog.as_mut() else {
             return;
         };
         push.selected_registry_id = registry.id.clone();
