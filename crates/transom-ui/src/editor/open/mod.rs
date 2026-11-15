@@ -24,22 +24,15 @@ use super::panel::{
     EditorPanelState, EditorPhase, PANEL_HEIGHT, PANEL_WIDTH, PendingGoto, caret_of,
     cascade_origin, editor_language_token,
 };
-use crate::app::AppShell;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
-
-mod panel;
-
-pub(crate) use self::panel::{
-    RemoteEditorOpen, open_remote_editor_panel, sftp_edit_remote_file_on, spawn_new_editor_panel,
-};
 
 /// 编辑入口的准入判定结果。
 ///
 /// 把"能不能开"与"怎么报错"分开：判定只读一次目录项，报错统一落到该栏错误位，
 /// 避免一条提示语为了冒泡而把整条调用链改成 `Result`。
-enum EditGate {
+pub(in crate::editor) enum EditGate {
     /// 目录项缺失（列表已刷新或路径不合法）。
     Missing,
     /// 目标是目录。

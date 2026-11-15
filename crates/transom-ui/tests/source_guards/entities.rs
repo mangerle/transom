@@ -598,3 +598,30 @@ fn workspace_tabs_have_no_app_shell() {
         offenders.join("\n")
     );
 }
+
+/// 编辑器子系统已完成实体化与单一桥接收口：`src/editor/` 下只允许 `bridge/` 模块接触 AppShell。
+#[test]
+fn editor_domain_modules_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/editor");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let norm = normalized_path(&entry);
+        if norm.contains("/editor/bridge/") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.contains("AppShell") {
+            offenders.push(norm);
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "编辑器领域模块不得依赖 AppShell（应全部收口至 editor/bridge）：\n{}",
+        offenders.join("\n")
+    );
+}

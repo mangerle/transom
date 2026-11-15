@@ -10,9 +10,9 @@
 
 mod actions;
 mod banner;
+mod bridge;
 mod close;
 mod code_link;
-mod code_open;
 mod decorations;
 mod diff;
 mod diff_search;
@@ -28,26 +28,17 @@ mod panel;
 mod status;
 mod view;
 
-pub(crate) use close::{
-    PendingEditorClose, block_close_for_dirty_editors, defer_editor_close_resume,
-    prune_tab_diff_overlay, prune_tab_overlays, resume_pending_editor_close,
-    try_finish_pending_close,
+pub(crate) use bridge::{
+    RemoteEditorOpen, block_close_for_dirty_editors, cancel_editor_goto_line,
+    commit_editor_goto_line, defer_editor_close_resume, note_editor_text_conflict,
+    note_editor_text_failed, on_editor_text_written, on_sudo_probed, open_editor_goto_line,
+    open_remote_editor_panel, open_terminal_code_location, prune_tab_overlays,
+    render_editor_goto_line_body, sftp_edit_remote_file_on, spawn_new_editor_panel,
+    submit_sudo_editor_write,
 };
-pub(crate) use code_link::open_terminal_code_location;
-pub(crate) use code_open::{RemoteCodeLocation, open_remote_code_location};
+pub(crate) use close::PendingEditorClose;
 pub(crate) use diff::EditorDiffWriteSync;
 pub(crate) use entity::{EditorDiffSource, EditorPanelEvent, EditorPanels};
 pub(crate) use list::render_editor_list_popover;
-pub(crate) use navigate::{
-    EditorGotoLineModalState, cancel_editor_goto_line, commit_editor_goto_line,
-    open_editor_goto_line, render_editor_goto_line_body,
-};
-pub(crate) use open::{
-    RemoteEditorOpen, open_remote_editor_panel, sftp_edit_remote_file_on, spawn_new_editor_panel,
-};
-pub(crate) use open_support::{request_remote_text_read, send_editor_read};
-pub(crate) use ops::{
-    editor_reject, fail_editor_panel_by_op, note_editor_text_conflict, note_editor_text_failed,
-    on_editor_text_written, on_sudo_probed, submit_sudo_editor_write,
-};
+pub(crate) use navigate::EditorGotoLineModalState;
 pub(crate) use panel::{caret_of, editor_language_token};
