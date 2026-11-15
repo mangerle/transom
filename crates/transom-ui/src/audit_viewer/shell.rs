@@ -54,9 +54,9 @@ pub(crate) fn open_audit_viewer_for_tab(
         .tab(tab_id)
         .map(|tab| tab.session.clone());
     if let Some(s) = session {
-        crate::app::audit_viewer::open_audit_viewer(shell, Some(&s), window, cx);
+        crate::audit_viewer::open_audit_viewer(shell, Some(&s), window, cx);
     } else {
-        crate::app::audit_viewer::open_audit_viewer(shell, None, window, cx);
+        crate::audit_viewer::open_audit_viewer(shell, None, window, cx);
     }
 }
 
@@ -75,9 +75,9 @@ pub(crate) fn open_audit_viewer_for_session(
         .find(|session| session.id == session_id)
         .cloned();
     if let Some(s) = session {
-        crate::app::audit_viewer::open_audit_viewer(shell, Some(&s), window, cx);
+        crate::audit_viewer::open_audit_viewer(shell, Some(&s), window, cx);
     } else {
-        crate::app::audit_viewer::open_audit_viewer(shell, None, window, cx);
+        crate::audit_viewer::open_audit_viewer(shell, None, window, cx);
     }
 }
 

@@ -52,6 +52,29 @@ impl ModalKind {
             return handled;
         }
         match self {
+            ModalKind::SftpConfirm
+            | ModalKind::HostKeyConfirm
+            | ModalKind::ClipboardPrompt
+            | ModalKind::ForwardConfirm
+            | ModalKind::AuthPrompt
+            | ModalKind::SftpInput
+            | ModalKind::SftpChmod
+            | ModalKind::SftpProperties
+            | ModalKind::SftpFilter
+            | ModalKind::SftpSearch
+            | ModalKind::SftpSync => self.cancel_prompt_or_sftp(shell, window, cx),
+            _ => self.cancel_tools_and_session(shell, window, cx),
+        }
+    }
+
+    /// 取消连接鉴权提示与 SFTP 弹窗。
+    fn cancel_prompt_or_sftp(
+        self,
+        shell: &mut AppShell,
+        window: &mut Window,
+        cx: &mut Context<AppShell>,
+    ) -> bool {
+        match self {
             ModalKind::SftpConfirm => {
                 shell.state.sftp_modals.confirm = None;
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
@@ -89,32 +112,35 @@ impl ModalKind {
                 true
             }
             ModalKind::SftpInput => {
-                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.input = None, window, cx)
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.input = None, window, cx)
             }
             ModalKind::SftpChmod => {
-                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.chmod = None, window, cx)
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.chmod = None, window, cx)
             }
-            ModalKind::SftpProperties => crate::app::dialog_host::close_sftp_modal(
-                shell,
-                |hub| hub.properties = None,
-                window,
-                cx,
-            ),
-            ModalKind::SftpFilter => crate::app::dialog_host::close_sftp_modal(
-                shell,
-                |hub| hub.filter = None,
-                window,
-                cx,
-            ),
-            ModalKind::SftpSearch => crate::app::dialog_host::close_sftp_modal(
-                shell,
-                |hub| hub.search = None,
-                window,
-                cx,
-            ),
+            ModalKind::SftpProperties => {
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.properties = None, window, cx)
+            }
+            ModalKind::SftpFilter => {
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.filter = None, window, cx)
+            }
+            ModalKind::SftpSearch => {
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.search = None, window, cx)
+            }
             ModalKind::SftpSync => {
-                crate::app::dialog_host::close_sftp_modal(shell, |hub| hub.sync = None, window, cx)
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.sync = None, window, cx)
             }
+            _ => true,
+        }
+    }
+
+    /// 取消编辑器、容器表单、会话与工具弹窗。
+    fn cancel_tools_and_session(
+        self,
+        shell: &mut AppShell,
+        window: &mut Window,
+        cx: &mut Context<AppShell>,
+    ) -> bool {
+        match self {
             ModalKind::EditorGotoLine => {
                 crate::editor::cancel_editor_goto_line(shell, window, cx);
                 true

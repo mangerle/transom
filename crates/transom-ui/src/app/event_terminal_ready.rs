@@ -171,10 +171,10 @@ impl AppShell {
         if still_active {
             window.focus(&focus_handle, cx);
         }
-        crate::app::startup::schedule_startup_commands(self, tab_id, connection_id, window, cx);
+        crate::startup::schedule_startup_commands(self, tab_id, connection_id, window, cx);
         crate::forward::auto_start_forwards(self, tab_id, connection_id, session_id, cx);
         if still_active && self.state.monitor.read(cx).is_open() {
-            crate::app::monitor::sample_processes(
+            crate::monitor::sample_processes(
                 self,
                 self.state.monitor.read(cx).processes_collapsed(),
                 cx,

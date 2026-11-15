@@ -175,7 +175,7 @@ impl AppShell {
         view.update(cx, |view, cx| view.open(init, window, cx));
         self.prefill_secrets(&view, window, cx);
         if is_serial {
-            crate::app::session_serial::refresh_serial_ports(self, window, cx);
+            crate::session_serial::refresh_serial_ports(self, window, cx);
         }
     }
 
@@ -240,7 +240,7 @@ impl AppShell {
                 view.update(cx, |view, cx| view.set_folder_open(false, cx));
             }
             crate::session_form::SessionFormEvent::RefreshSerialPorts => {
-                crate::app::session_serial::refresh_serial_ports(self, window, cx);
+                crate::session_serial::refresh_serial_ports(self, window, cx);
             }
             crate::session_form::SessionFormEvent::SaveIdentity { built } => {
                 self.apply_session_form_save_identity(built, cx);

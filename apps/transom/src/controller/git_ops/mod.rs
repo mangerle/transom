@@ -20,6 +20,7 @@ mod clone_op;
 mod reads;
 mod runner;
 mod shelf;
+mod write_refs;
 mod writes;
 
 use super::state::{ControllerCtx, ControllerState};

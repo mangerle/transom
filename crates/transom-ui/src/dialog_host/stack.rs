@@ -212,7 +212,7 @@ fn push_dialog(
                 .close_button(true)
                 // 容器遮罩按 `window_paddings` 内缩定位：客户端装饰下实测内缩
                 // 20px，会把压暗层上沿留在自绘顶栏中部。压暗改由宿主画满窗面，
-                // 见 `crate::app::dialog_host::dialog_dim`。
+                // 见 `crate::dialog_host::dialog_dim`。
                 .overlay(false)
                 .overlay_closable(false)
                 .entrance(DialogEntrance::None)

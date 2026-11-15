@@ -107,7 +107,7 @@ impl AppShell {
             overlays.push(preview);
         }
         if self.state.modals.tools.show_quick_open {
-            overlays.push(crate::app::command_palette::render_command_palette_modal(
+            overlays.push(crate::command_palette::render_command_palette_modal(
                 self, window, cx, &p,
             ));
         }

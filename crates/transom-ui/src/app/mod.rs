@@ -1,89 +1,5 @@
 //! GPUI 顶层应用外壳状态与生命周期主入口。
 
-// 功能模块的真实父模块是 `app`，文件仍留在原目录。
-//
-// 设计原理（Why）：AppShell 的字段只应对应用外壳及其功能模块可见。
-// 若把功能模块继续挂在 crate 根，它们与 AppShell 是兄弟模块，只能通过
-// `pub(crate)` 字段访问状态，封装形同虚设。用 `#[path]` 把模块挂到 `app`
-// 之下后，字段可以收成模块私有，同时不必搬动文件；crate 根再重导出旧路径，
-// 现有 `crate::sftp` / `crate::settings` 引用无需批量改写。
-#[path = "../activity_bar/mod.rs"]
-pub(crate) mod activity_bar;
-#[path = "../audit_viewer/mod.rs"]
-pub(crate) mod audit_viewer;
-#[path = "../batch/mod.rs"]
-pub(crate) mod batch;
-#[path = "../broadcast/mod.rs"]
-pub(crate) mod broadcast;
-#[path = "../chrome.rs"]
-pub(crate) mod chrome;
-#[path = "../clipboard_prompt.rs"]
-pub(crate) mod clipboard_prompt;
-#[path = "../cloud_sync/mod.rs"]
-pub(crate) mod cloud_sync;
-#[path = "../command_palette/mod.rs"]
-pub(crate) mod command_palette;
-#[path = "../connection/mod.rs"]
-pub(crate) mod connection;
-#[path = "../container/mod.rs"]
-pub(crate) mod container;
-#[path = "../dialog_host/mod.rs"]
-pub(crate) mod dialog_host;
-#[path = "../diff_viewer/mod.rs"]
-pub(crate) mod diff_viewer;
-#[path = "../editor/mod.rs"]
-pub(crate) mod editor;
-#[path = "../forward/mod.rs"]
-pub(crate) mod forward;
-#[path = "../git/mod.rs"]
-pub(crate) mod git;
-#[path = "../keys/mod.rs"]
-pub(crate) mod keys;
-#[path = "../known_hosts_modal.rs"]
-mod known_hosts_modal;
-#[path = "../monitor/mod.rs"]
-pub(crate) mod monitor;
-#[path = "../notify.rs"]
-pub(crate) mod notify;
-#[path = "../probe.rs"]
-pub(crate) mod probe;
-#[path = "../record/mod.rs"]
-pub(crate) mod record;
-#[path = "../session_appearance.rs"]
-pub(crate) mod session_appearance;
-#[path = "../session_form/mod.rs"]
-pub(crate) mod session_form;
-#[path = "../session_serial.rs"]
-pub(crate) mod session_serial;
-#[path = "../settings/mod.rs"]
-pub(crate) mod settings;
-#[path = "../sftp/mod.rs"]
-pub(crate) mod sftp;
-#[path = "../shortcuts.rs"]
-pub(crate) mod shortcuts;
-#[path = "../sidebar/mod.rs"]
-pub(crate) mod sidebar;
-#[path = "../snippets/mod.rs"]
-pub(crate) mod snippets;
-#[path = "../split.rs"]
-pub(crate) mod split;
-#[path = "../startup.rs"]
-pub(crate) mod startup;
-#[path = "../status_bar/mod.rs"]
-pub(crate) mod status_bar;
-#[path = "../terminal_copy_mode.rs"]
-pub(crate) mod terminal_copy_mode;
-#[path = "../terminal_search.rs"]
-pub(crate) mod terminal_search;
-#[path = "../tiling/mod.rs"]
-pub(crate) mod tiling;
-#[path = "../window_state.rs"]
-pub(crate) mod window_state;
-#[path = "../workspace/mod.rs"]
-pub(crate) mod workspace;
-#[path = "../zmodem.rs"]
-pub(crate) mod zmodem;
-
 mod backup_prompt;
 mod bootstrap;
 mod container_requests;
@@ -114,17 +30,17 @@ pub(crate) use secret_prefill::prefill_secret_fields;
 pub(crate) use state::AppState;
 pub(crate) use task_hub::TaskHub;
 
-use self::broadcast::BroadcastBarState;
-use self::cloud_sync::GitSyncScheduler;
-use self::editor::EditorPanels;
-use self::sftp::SftpModals;
-use self::sidebar::SidebarState;
-use self::snippets::SnippetPanelState;
-use self::workspace::WorkspaceState;
 use crate::UiServices;
+use crate::broadcast::BroadcastBarState;
+use crate::cloud_sync::GitSyncScheduler;
+use crate::editor::EditorPanels;
 use crate::keymap;
 use crate::keymap::ShortcutRecordingState;
 use crate::palette::localized_error;
+use crate::sftp::SftpModals;
+use crate::sidebar::SidebarState;
+use crate::snippets::SnippetPanelState;
+use crate::workspace::WorkspaceState;
 use gpui_kit::component::WindowExt;
 use gpui_kit::component::command::CommandState;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
@@ -153,7 +69,7 @@ pub(crate) fn command_send_error_text(error: flume::TrySendError<AppCommand>) ->
 
 pub(crate) struct AppShell {
     /// 全部应用状态集中存放；外壳只负责渲染、事件路由与生命周期。
-    state: AppState,
+    pub(crate) state: AppState,
 }
 
 /// 提示通知的类型标记：只用于给 `Notification::id1` 与 `remove_notification1`

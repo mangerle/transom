@@ -42,11 +42,11 @@ pub(crate) use clone_modal::{GitCloneModal, GitCloneTask};
 pub(crate) use conflict_modal::GitConflictModalView;
 pub(crate) use entity::{GitWorkspace, GitWorkspaceEvent};
 pub(crate) use form::{GitProjectDraft, GitProjectModal};
-pub(crate) use name_modal::{GitNameModal, GitNamePurpose};
+pub(crate) use name_modal::{GitNameModalEvent, GitNameModalView, GitNamePurpose};
 pub(crate) use push_modal::GitPushModalView;
 pub(crate) use rebase_modal::GitRebaseModalView;
 pub(crate) use types::{GitCommitTab, GitHub, GitWorkspaceState};
-pub(crate) use worktree_modal::GitWorktreeModal;
+pub(crate) use worktree_modal::{GitWorktreeModalEvent, GitWorktreeModalView};
 
 use crate::palette::Palette;
 use crate::theme::tokens::size;

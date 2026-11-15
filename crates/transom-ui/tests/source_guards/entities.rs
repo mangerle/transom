@@ -21,7 +21,7 @@ fn app_shell_keeps_single_state_field() {
         .collect();
     assert_eq!(
         fields,
-        vec!["state: AppState,"],
+        vec!["pub(crate) state: AppState,"],
         "AppShell 只允许持有 state 一个字段，新增状态请放进 AppState 或 feature 结构体"
     );
 }

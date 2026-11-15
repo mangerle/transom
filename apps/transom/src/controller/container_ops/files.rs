@@ -17,7 +17,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         | ContainerCommand::DownloadDirectory { .. }
         | ContainerCommand::Upload { .. }
         | ContainerCommand::UploadDirectory { .. } => {
-            handle_transfers(state, ctx, command);
+            super::file_transfers::handle_transfers(state, ctx, command);
         }
         ContainerCommand::RemovePath { .. }
         | ContainerCommand::CopyPath { .. }
@@ -30,7 +30,7 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
         | ContainerCommand::LoadImage { .. }
         | ContainerCommand::BackupVolume { .. }
         | ContainerCommand::RestoreVolume { .. } => {
-            handle_archive_ops(state, ctx, command);
+            super::file_transfers::handle_archive_ops(state, ctx, command);
         }
         _ => {}
     }
@@ -207,126 +207,6 @@ fn handle_preview_and_save(
 }
 
 /// 处理容器与存储卷文件的上传/下载传输命令。
-fn handle_transfers(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
-    match command {
-        ContainerCommand::Download {
-            tab_id,
-            request_id,
-            container,
-            path,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::download(
-                    &engine,
-                    &container,
-                    &path,
-                    &local_path,
-                    cancel,
-                    progress,
-                )
-                .await
-                .map(|_| ())
-            },
-        ),
-        ContainerCommand::DownloadVolumeFile {
-            tab_id,
-            request_id,
-            volume,
-            path,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::download_volume_file(
-                    &engine,
-                    &volume,
-                    &path,
-                    &local_path,
-                    cancel,
-                    progress,
-                )
-                .await
-                .map(|_| ())
-            },
-        ),
-        ContainerCommand::DownloadDirectory {
-            tab_id,
-            request_id,
-            container,
-            path,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::download_directory(
-                    &engine,
-                    &container,
-                    &path,
-                    &local_path,
-                    cancel,
-                    progress,
-                )
-                .await
-                .map(|_| ())
-            },
-        ),
-        ContainerCommand::Upload {
-            tab_id,
-            request_id,
-            container,
-            path,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::upload(&engine, &container, &path, &local_path, cancel, progress)
-                    .await
-                    .map(|_| ())
-            },
-        ),
-        ContainerCommand::UploadDirectory {
-            tab_id,
-            request_id,
-            container,
-            path,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::upload_directory(
-                    &engine,
-                    &container,
-                    &path,
-                    &local_path,
-                    cancel,
-                    progress,
-                )
-                .await
-                .map(|_| ())
-            },
-        ),
-        _ => {}
-    }
-}
-
-/// 处理容器内路径删除、复制、改权与建目录命令。
 fn handle_path_mutations(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
@@ -429,76 +309,6 @@ fn handle_path_mutations(
 }
 
 /// 处理镜像归档导出/导入与存储卷备份/恢复命令。
-fn handle_archive_ops(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
-    match command {
-        ContainerCommand::SaveImage {
-            tab_id,
-            request_id,
-            image,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::save_image(&engine, &image, &local_path, cancel, progress)
-                    .await
-                    .map(|_| ())
-            },
-        ),
-        ContainerCommand::LoadImage {
-            tab_id,
-            request_id,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::load_image(&engine, &local_path, cancel, progress)
-                    .await
-                    .map(|_| ())
-            },
-        ),
-        ContainerCommand::BackupVolume {
-            tab_id,
-            request_id,
-            volume,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::backup_volume(&engine, &volume, &local_path, cancel, progress)
-                    .await
-                    .map(|_| ())
-            },
-        ),
-        ContainerCommand::RestoreVolume {
-            tab_id,
-            request_id,
-            volume,
-            local_path,
-        } => transfer(
-            state,
-            ctx,
-            tab_id,
-            request_id,
-            move |engine, cancel, progress| async move {
-                transom_container::restore_volume(&engine, &volume, &local_path, cancel, progress)
-                    .await
-                    .map(|_| ())
-            },
-        ),
-        _ => {}
-    }
-}
-
-/// 判断预览内容是否为二进制：非法 UTF-8 或包含 NUL 都不允许进入文本编辑。
 fn is_binary_preview(bytes: &[u8]) -> bool {
     std::str::from_utf8(bytes).is_err() || bytes.contains(&0)
 }

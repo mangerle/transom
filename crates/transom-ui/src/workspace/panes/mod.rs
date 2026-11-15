@@ -355,12 +355,7 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::app::split::split_active_pane(
-                            this,
-                            SplitAxis::Horizontal,
-                            window,
-                            cx,
-                        );
+                        crate::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
                     });
                 }
             },
@@ -373,7 +368,7 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::app::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
+                        crate::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
                     });
                 }
             },
@@ -384,7 +379,7 @@ fn pane_context_menu(
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
                     this.activate_tab(tab_id, window, cx);
-                    crate::app::split::toggle_zoom_pane(this, tab_id, cx);
+                    crate::split::toggle_zoom_pane(this, tab_id, cx);
                 });
             }
         }))
@@ -396,7 +391,7 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::app::split::detach_pane_to_tab(this, tab_id, window, cx);
+                        crate::split::detach_pane_to_tab(this, tab_id, window, cx);
                     });
                 }
             },

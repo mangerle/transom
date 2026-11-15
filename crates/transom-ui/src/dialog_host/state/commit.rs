@@ -69,7 +69,7 @@ impl ModalKind {
             ModalKind::SftpChmod => crate::sftp::save_sftp_chmod_modal(shell, window, cx),
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
-                crate::app::dialog_host::close_sftp_modal(
+                crate::dialog_host::close_sftp_modal(
                     shell,
                     |hub| hub.properties = None,
                     window,
@@ -77,12 +77,7 @@ impl ModalKind {
                 );
             }
             ModalKind::SftpSearch => {
-                crate::app::dialog_host::close_sftp_modal(
-                    shell,
-                    |hub| hub.search = None,
-                    window,
-                    cx,
-                );
+                crate::dialog_host::close_sftp_modal(shell, |hub| hub.search = None, window, cx);
             }
             ModalKind::SftpFilter => crate::sftp::save_sftp_filter_modal(shell, window, cx),
             ModalKind::SftpSync => crate::sftp::start_sftp_sync(shell, window, cx),
@@ -127,8 +122,8 @@ impl ModalKind {
                     .update(cx, |view, cx| view.save(cx));
             }
             ModalKind::FolderForm => crate::sidebar::save_folder_form(shell, cx),
-            ModalKind::BatchEdit => crate::app::batch::save_batch_edit(shell, cx),
-            ModalKind::SnippetForm => crate::app::snippets::save_snippet_form(shell, cx),
+            ModalKind::BatchEdit => crate::batch::save_batch_edit(shell, cx),
+            ModalKind::SnippetForm => crate::snippets::save_snippet_form(shell, cx),
             ModalKind::BackupPrompt => {
                 shell
                     .state

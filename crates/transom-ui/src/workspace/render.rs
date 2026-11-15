@@ -9,35 +9,36 @@ use crate::sftp::SftpPanelState;
 use crate::sidebar::{SidebarSection, SidebarSlotLayout, sync_sidebar_slot};
 use crate::theme::tokens::{rem_px, size};
 use gpui_kit::base::{ResizablePanel, ResizablePanelGroup, h_resizable};
-use gpui_kit::component::resizable::resizable_panel;
+use gpui_kit::component::resizable::{ResizableState, resizable_panel};
+use gpui_kit::*;
 
 /// 外层布局的派生尺寸与可见性：把窗口宽度、侧栏实测宽度与面板折叠状态
 /// 折算成 resizable 面板需要的像素值。
-pub(in crate::app) struct WorkspaceChromeLayout {
-    pub(in crate::app) show_sftp: bool,
-    pub(in crate::app) show_forwards: bool,
-    pub(in crate::app) sftp_width: f32,
-    pub(in crate::app) sftp_min_width: f32,
-    pub(in crate::app) sftp_max_width: f32,
-    pub(in crate::app) side_left: bool,
+pub(crate) struct WorkspaceChromeLayout {
+    pub(crate) show_sftp: bool,
+    pub(crate) show_forwards: bool,
+    pub(crate) sftp_width: f32,
+    pub(crate) sftp_min_width: f32,
+    pub(crate) sftp_max_width: f32,
+    pub(crate) side_left: bool,
 }
 
 /// 工作区分组构建输入：布局计划、侧栏面板与尺寸状态。
-pub(in crate::app) struct WorkspaceGroupInput<'a> {
-    pub(in crate::app) resizable_id: &'static str,
-    pub(in crate::app) plan: &'a WorkspaceChromeLayout,
-    pub(in crate::app) sidebar_panel: ResizablePanel,
-    pub(in crate::app) panels_state: &'a Entity<ResizableState>,
-    pub(in crate::app) p: &'a Palette,
-    pub(in crate::app) rem: Pixels,
+pub(crate) struct WorkspaceGroupInput<'a> {
+    pub(crate) resizable_id: &'static str,
+    pub(crate) plan: &'a WorkspaceChromeLayout,
+    pub(crate) sidebar_panel: ResizablePanel,
+    pub(crate) panels_state: &'a Entity<ResizableState>,
+    pub(crate) p: &'a Palette,
+    pub(crate) rem: Pixels,
 }
 
 /// 工作区状态栏布局输入：宽度切分所需的调色板、密度与侧栏宽度。
-pub(in crate::app) struct StatusBarLayoutInput<'a> {
-    pub(in crate::app) p: &'a Palette,
-    pub(in crate::app) rem: Pixels,
-    pub(in crate::app) sidebar_visible: bool,
-    pub(in crate::app) sidebar_width: f32,
+pub(crate) struct StatusBarLayoutInput<'a> {
+    pub(crate) p: &'a Palette,
+    pub(crate) rem: Pixels,
+    pub(crate) sidebar_visible: bool,
+    pub(crate) sidebar_width: f32,
 }
 
 impl AppShell {
@@ -47,7 +48,7 @@ impl AppShell {
     /// 0 号面板不再参与布局与测量，尺寸表却留着收起前的宽度；停靠侧切换还会
     /// 换成另一份分栏状态。这里在构建分组之前把槽位修正到与布局一致，
     /// 否则随后拖动任意分隔条都会用过期宽度计算差值，表现为面板跳动。
-    pub(in crate::app) fn sync_sidebar_panel_slot(
+    pub(crate) fn sync_sidebar_panel_slot(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -97,7 +98,7 @@ impl AppShell {
     ///
     /// `sidebar_width` 由 [`Self::sync_sidebar_panel_slot`] 给出，与侧栏面板
     /// 实际占位一致；不再从尺寸表反查，避免过渡帧读到旧宽度。
-    pub(in crate::app) fn plan_workspace_layout(
+    pub(crate) fn plan_workspace_layout(
         &self,
         window: &Window,
         cx: &App,
@@ -157,7 +158,7 @@ impl AppShell {
     }
 
     /// 左侧槽位面板：纵向标签或会话树，折叠时仅隐藏不退出分组。
-    pub(in crate::app) fn build_sidebar_panel(
+    pub(crate) fn build_sidebar_panel(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -215,7 +216,7 @@ impl AppShell {
     }
 
     /// 工作区可拖拽分组：侧栏、主面板、SFTP/转发与监控抽屉。
-    pub(in crate::app) fn build_resizable_group(
+    pub(crate) fn build_resizable_group(
         &mut self,
         input: WorkspaceGroupInput<'_>,
         window: &mut Window,
@@ -318,7 +319,7 @@ impl AppShell {
     /// 抽屉关闭时它没有槽位，最后一项是 SFTP 或主面板；只有确认尺寸表已经包含
     /// 抽屉槽位，最后一项才能当抽屉宽度回写。否则打开抽屉的第一帧会拿相邻面板
     /// 的宽度当抽屉宽度，抽屉先按错误宽度出现一帧再跳回来。
-    pub(in crate::app) fn monitor_drawer_width(
+    pub(crate) fn monitor_drawer_width(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,

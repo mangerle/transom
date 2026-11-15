@@ -393,3 +393,6 @@ pub(crate) fn close_git_push_modal(shell: &mut AppShell, cx: &mut Context<AppShe
     shell.state.tasks.subscriptions.git_push_modal = None;
     cx.notify();
 }
+
+mod lightweight;
+pub(crate) use lightweight::*;

@@ -184,7 +184,7 @@ pub(crate) fn try_finish_pending_close(
         PendingEditorClose::Pane(tab_id) => shell.close_pane(tab_id, window, cx),
         PendingEditorClose::Session(session_id) => shell.delete_session_by_id(session_id, cx),
         PendingEditorClose::Tiling(groups) => {
-            crate::app::tiling::close_tiling_groups(shell, groups, window, cx);
+            crate::tiling::close_tiling_groups(shell, groups, window, cx);
         }
     }
 }

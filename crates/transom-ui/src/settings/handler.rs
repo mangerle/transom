@@ -34,7 +34,7 @@ pub(crate) fn on_settings_event(
             shell.set_sftp_panel_side(*side, cx);
         }
         SettingsEvent::MonitorIntervalChanged(mode) => {
-            crate::app::monitor::set_monitor_interval_mode(shell, *mode, cx);
+            crate::monitor::set_monitor_interval_mode(shell, *mode, cx);
         }
         SettingsEvent::MonitorSectionsChanged(collapse) => {
             shell
@@ -119,7 +119,7 @@ fn on_settings_saved(
     cx: &mut Context<AppShell>,
 ) {
     crate::settings::apply_appearance_to_live_panes(shell, cx);
-    crate::app::shortcuts::apply_shortcut_settings(shell, cx);
+    crate::shortcuts::apply_shortcut_settings(shell, cx);
     crate::settings::apply_block_view_settings(shell, cx);
     apply_triggers_to_terminals(shell, &settings.triggers, cx);
     // Git 可执行文件与提交作者是进程级配置：界面只投递意图，写入权归控制平面。
@@ -163,12 +163,12 @@ pub(crate) fn handle_settings_request(
 ) {
     match request {
         SettingsRequest::OpenShortcutCapture(id) => {
-            crate::app::shortcuts::open_shortcut_capture(shell, id, window, cx);
+            crate::shortcuts::open_shortcut_capture(shell, id, window, cx);
         }
         SettingsRequest::OpenBackupImport => shell.open_backup_import(window, cx),
         SettingsRequest::OpenBackupExport => shell.open_backup_export(window, cx),
         SettingsRequest::OpenAuditViewer => {
-            crate::app::audit_viewer::open_audit_viewer(shell, None, window, cx)
+            crate::audit_viewer::open_audit_viewer(shell, None, window, cx)
         }
         SettingsRequest::CloudSyncCheck => {
             crate::cloud_sync::start_cloud_sync_check(shell, window, cx)

@@ -184,10 +184,10 @@ fn focus_neighbor_pane(
         .focus_neighbor(active_pane, direction)
     else {
         // 组内该方向已到头：并排视图下再尝试跨到相邻格，单标签视图则保持不动。
-        crate::app::tiling::focus_neighbor_tile(shell, direction, window, cx);
+        crate::tiling::focus_neighbor_tile(shell, direction, window, cx);
         return;
     };
-    crate::app::split::select_pane(shell, next, window, cx);
+    crate::split::select_pane(shell, next, window, cx);
 }
 
 pub(crate) fn on_split_right(
@@ -196,7 +196,7 @@ pub(crate) fn on_split_right(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::app::split::split_active_pane(shell, SplitAxis::Horizontal, window, cx);
+    crate::split::split_active_pane(shell, SplitAxis::Horizontal, window, cx);
 }
 
 pub(crate) fn on_split_down(
@@ -205,7 +205,7 @@ pub(crate) fn on_split_down(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::app::split::split_active_pane(shell, SplitAxis::Vertical, window, cx);
+    crate::split::split_active_pane(shell, SplitAxis::Vertical, window, cx);
 }
 
 pub(crate) fn on_close_pane(
@@ -225,7 +225,7 @@ pub(crate) fn on_toggle_split_axis(
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::app::split::toggle_split_axis(shell, cx);
+    crate::split::toggle_split_axis(shell, cx);
 }
 
 pub(crate) fn on_zoom_pane(
@@ -235,7 +235,7 @@ pub(crate) fn on_zoom_pane(
     cx: &mut Context<AppShell>,
 ) {
     if let Some(pane) = shell.state.workspace.active_tab {
-        crate::app::split::toggle_zoom_pane(shell, pane, cx);
+        crate::split::toggle_zoom_pane(shell, pane, cx);
     }
 }
 

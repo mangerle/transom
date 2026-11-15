@@ -191,21 +191,21 @@ impl AppShell {
                 connection_id,
                 processes,
             } => {
-                crate::app::monitor::monitor_sampled(self, tab_id, connection_id, processes, cx);
+                crate::monitor::monitor_sampled(self, tab_id, connection_id, processes, cx);
             }
             HostAppEvent::ProcessCountSampled {
                 tab_id,
                 connection_id,
                 count,
             } => {
-                crate::app::monitor::monitor_count_sampled(self, tab_id, connection_id, count, cx);
+                crate::monitor::monitor_count_sampled(self, tab_id, connection_id, count, cx);
             }
             HostAppEvent::ProcessesSampleFailed {
                 tab_id,
                 connection_id,
                 error,
             } => {
-                crate::app::monitor::monitor_failed(self, tab_id, connection_id, error, cx);
+                crate::monitor::monitor_failed(self, tab_id, connection_id, error, cx);
             }
             HostAppEvent::ProcessKilled {
                 tab_id,
@@ -213,7 +213,7 @@ impl AppShell {
                 pid,
                 error,
             } => {
-                crate::app::monitor::monitor_killed(self, tab_id, connection_id, pid, error, cx);
+                crate::monitor::monitor_killed(self, tab_id, connection_id, pid, error, cx);
             }
             HostAppEvent::PublicKeyDeployed {
                 tab_id: _,
@@ -221,14 +221,14 @@ impl AppShell {
                 key_name,
                 error,
             } => {
-                crate::app::keys::handle_public_key_deployed(self, key_name, error, cx);
+                crate::keys::handle_public_key_deployed(self, key_name, error, cx);
                 cx.notify();
             }
             HostAppEvent::HostActionResult {
                 session_id,
                 outcome,
             } => {
-                crate::app::probe::handle_probe_result(self, session_id, outcome, cx);
+                crate::probe::handle_probe_result(self, session_id, outcome, cx);
             }
         }
     }
@@ -250,7 +250,7 @@ impl AppShell {
             connection_id: _,
             event,
         } = event;
-        crate::app::zmodem::handle_zmodem_event(self, tab_id, event, cx);
+        crate::zmodem::handle_zmodem_event(self, tab_id, event, cx);
     }
 
     pub(crate) fn handle_terminal_event(
@@ -286,7 +286,7 @@ impl AppShell {
                 self.set_transient_status(rust_i18n::t!("status.copied"), cx);
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
-                crate::app::clipboard_prompt::request_clipboard_permission(
+                crate::clipboard_prompt::request_clipboard_permission(
                     self,
                     tab_id,
                     text.clone(),
@@ -322,7 +322,7 @@ impl AppShell {
                 exit_code,
                 duration_ms,
             } => {
-                crate::app::notify::on_command_finished(
+                crate::notify::on_command_finished(
                     self,
                     tab_id,
                     *exit_code,
@@ -332,7 +332,7 @@ impl AppShell {
                 );
             }
             TerminalEvent::DesktopNotification { title, body } => {
-                crate::app::notify::on_desktop_notification(self, title, body, cx);
+                crate::notify::on_desktop_notification(self, title, body, cx);
             }
             TerminalEvent::OpenCodeLocation { path, line, column } => {
                 crate::editor::open_terminal_code_location(

@@ -61,7 +61,7 @@ pub(crate) fn on_toggle_snippets(
     _: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::app::snippets::toggle_snippets_panel(shell, cx);
+    crate::snippets::toggle_snippets_panel(shell, cx);
 }
 
 /// 打开/关闭快捷命令卡片。显隐属运行期（与侧边栏、沉浸模式同一口径），不落盘。
@@ -317,9 +317,7 @@ pub(crate) fn render_snippet_form_body(
                 .label(rust_i18n::t!("common.cancel").to_string())
                 .on_click(crate::dialog_host::on_event(
                     app,
-                    |this, _: &ClickEvent, _, cx| {
-                        crate::app::snippets::close_snippet_form(this, cx)
-                    },
+                    |this, _: &ClickEvent, _, cx| crate::snippets::close_snippet_form(this, cx),
                 )),
         )
         .child(
@@ -329,7 +327,7 @@ pub(crate) fn render_snippet_form_body(
                 .label(rust_i18n::t!("common.save").to_string())
                 .on_click(crate::dialog_host::on_event(
                     app,
-                    |this, _: &ClickEvent, _, cx| crate::app::snippets::save_snippet_form(this, cx),
+                    |this, _: &ClickEvent, _, cx| crate::snippets::save_snippet_form(this, cx),
                 )),
         );
     crate::widgets::dialog_body("snippet-form", title, None::<String>, content, Some(footer))

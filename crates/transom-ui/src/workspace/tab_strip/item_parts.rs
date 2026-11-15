@@ -92,7 +92,7 @@ pub(super) fn render_pane_badge(
                             let app = app_entity.clone();
                             move |_, window, cx| {
                                 app.update(cx, |this, cx| {
-                                    crate::app::split::select_pane(this, tab_id, window, cx);
+                                    crate::split::select_pane(this, tab_id, window, cx);
                                 });
                             }
                         }),
@@ -108,7 +108,7 @@ pub(super) fn render_pane_badge(
                                 let app = app_entity.clone();
                                 move |_, _window, cx| {
                                     app.update(cx, |this, cx| {
-                                        crate::app::split::toggle_zoom_pane(this, active_pane, cx)
+                                        crate::split::toggle_zoom_pane(this, active_pane, cx)
                                     });
                                 }
                             },
@@ -156,7 +156,7 @@ pub(crate) fn render_tab_close_button(
                 AppIcon::Ui(UiIcon::DELETE),
                 move |_, window, cx| {
                     close_all.update(cx, |this, cx| {
-                        crate::app::tiling::close_tiling_group(this, tiling_id, window, cx);
+                        crate::tiling::close_tiling_group(this, tiling_id, window, cx);
                     });
                 },
             ))

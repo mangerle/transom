@@ -248,7 +248,7 @@ fn apply_palette_target(
                 .cloned();
             if let Some(snippet) = snippet {
                 let execute = app_settings(cx).snippets.execute_directly;
-                crate::app::snippets::apply_snippet(shell, &snippet, execute, cx);
+                crate::snippets::apply_snippet(shell, &snippet, execute, cx);
             }
         }
         Some(PaletteTarget::Container {

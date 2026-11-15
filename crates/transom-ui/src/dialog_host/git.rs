@@ -23,11 +23,11 @@ impl ModalKind {
                 Some(true)
             }
             ModalKind::GitWorktree => {
-                crate::git::worktree_modal::close_git_worktree_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_worktree_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitName => {
-                crate::git::name_modal::close_git_name_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_name_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitRebase => {
@@ -63,11 +63,11 @@ impl ModalKind {
                 Some(())
             }
             ModalKind::GitWorktree => {
-                crate::git::worktree_modal::commit_git_worktree(shell, cx);
+                crate::git::actions::modal_bridges::submit_git_worktree_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitName => {
-                crate::git::name_modal::submit_git_name(shell, cx);
+                crate::git::actions::modal_bridges::submit_git_name_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitRebase => {
@@ -105,23 +105,11 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| ModalFocus::Input(modal.url.clone()))
                 .unwrap_or(ModalFocus::None),
-            ModalKind::GitWorktree => shell
-                .state
-                .modals
-                .git
-                .worktree
-                .as_ref()
-                .map(|modal| ModalFocus::Input(modal.branch.clone()))
-                .unwrap_or(ModalFocus::None),
-            ModalKind::GitName => shell
-                .state
-                .modals
-                .git
-                .name
-                .as_ref()
-                .map(|modal| ModalFocus::Input(modal.input.clone()))
-                .unwrap_or(ModalFocus::None),
-            ModalKind::GitRebase | ModalKind::GitPush | ModalKind::GitConflict => ModalFocus::None,
+            ModalKind::GitWorktree
+            | ModalKind::GitName
+            | ModalKind::GitRebase
+            | ModalKind::GitPush
+            | ModalKind::GitConflict => ModalFocus::None,
             _ => return None,
         };
         Some(focus)
@@ -143,12 +131,22 @@ impl ModalKind {
             ModalKind::GitClone => crate::git::clone_modal::view::render_git_clone_dialog_body(
                 shell, app, window, cx, p,
             ),
-            ModalKind::GitWorktree => crate::git::worktree_modal::render_git_worktree_dialog_body(
-                shell, app, window, cx, p,
-            ),
-            ModalKind::GitName => {
-                crate::git::name_modal::render_git_name_dialog_body(shell, app, cx, p)
-            }
+            ModalKind::GitWorktree => shell
+                .state
+                .modals
+                .git
+                .worktree
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::GitName => shell
+                .state
+                .modals
+                .git
+                .name
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitRebase => shell
                 .state
                 .modals

@@ -10,9 +10,9 @@
 //! 备份、审计查看器、密钥向导、会话回放、会话表单与连接确认弹窗已经独立为实体，
 //! 本容器正逐步退化为“实体句柄集合”。
 
-use super::batch::BatchEditForm;
 use crate::audit_viewer::AuditViewerView;
 use crate::backup::BackupPromptView;
+use crate::batch::BatchEditForm;
 use crate::connection::{ConnectionPromptsView, PendingCredential};
 use crate::container::{ContainerCreateDialogView, ContainerFormView, ContainerRunFormView};
 use crate::keys::{KeyWizardView, KnownHostsView};
@@ -95,8 +95,8 @@ pub(crate) struct ToolModals {
 pub(crate) struct GitModals {
     pub(crate) project: Option<crate::git::GitProjectModal>,
     pub(crate) clone: Option<crate::git::GitCloneModal>,
-    pub(crate) worktree: Option<crate::git::GitWorktreeModal>,
-    pub(crate) name: Option<crate::git::GitNameModal>,
+    pub(crate) worktree: Option<Entity<crate::git::GitWorktreeModalView>>,
+    pub(crate) name: Option<Entity<crate::git::GitNameModalView>>,
     pub(crate) rebase: Option<Entity<crate::git::GitRebaseModalView>>,
     pub(crate) push: Option<Entity<crate::git::GitPushModalView>>,
     pub(crate) conflict: Option<Entity<crate::git::GitConflictModalView>>,

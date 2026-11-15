@@ -104,6 +104,8 @@ pub(super) async fn adopt_connection<J>(
         )
         .await;
     let internal_tx = internal_tx.clone();
+    // 断线哨兵任务：生命周期由 `setup.join`（底层传输退出）与 `internal_tx`
+    // （控制平面事件循环关闭）双重有界约束，会话结束或停机时必然自然退出。
     tokio::spawn(async move {
         let _ = setup.join.await;
         let _ = internal_tx

@@ -79,7 +79,62 @@ pub(crate) fn render_cloud_sync_sidebar(
         })
         .unwrap_or_else(|| rust_i18n::t!("sync.never").to_string());
 
-    let header = v_flex()
+    let header = render_cloud_sync_header(
+        p,
+        state_color,
+        state_label,
+        provider,
+        &last_success,
+        &settings.device_name,
+        message,
+    );
+    let actions = render_cloud_sync_actions(p, git_active, running, enabled, cx);
+    let conflict_card = conflict.map(|conflict| render_conflict_card(p, &conflict, running, cx));
+    let (filters, rows) =
+        render_cloud_sync_history_section(p, history, &expanded, filter, limit, cx);
+
+    v_flex()
+        .size_full()
+        .overflow_hidden()
+        .bg(p.background)
+        .text_color(p.foreground)
+        .child(header)
+        .child(actions)
+        .when_some(conflict_card, |this, card| this.child(card))
+        .when(!enabled, |this| {
+            this.child(
+                div().p_3().child(
+                    Button::new("cloud-sync-open-settings-disabled")
+                        .small()
+                        .label(rust_i18n::t!("sync.configure_now").to_string())
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.open_settings_modal(None, window, cx);
+                        })),
+                ),
+            )
+        })
+        .child(filters)
+        .child(
+            div()
+                .id("cloud-sync-history-list")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scrollbar()
+                .child(rows),
+        )
+        .into_any_element()
+}
+
+fn render_cloud_sync_header(
+    p: &Palette,
+    state_color: Hsla,
+    state_label: String,
+    provider: String,
+    last_success: &str,
+    device_name: &str,
+    message: Option<String>,
+) -> AnyElement {
+    v_flex()
         .w_full()
         .gap_2()
         .p_3()
@@ -121,10 +176,7 @@ pub(crate) fn render_cloud_sync_sidebar(
             div()
                 .text_xs()
                 .text_color(p.muted_foreground)
-                .child(rust_i18n::t!(
-                    "sync.device_value",
-                    name = settings.device_name
-                )),
+                .child(rust_i18n::t!("sync.device_value", name = device_name)),
         )
         .when_some(
             message.filter(|message| !message.trim().is_empty()),
@@ -137,8 +189,17 @@ pub(crate) fn render_cloud_sync_sidebar(
                         .child(message),
                 )
             },
-        );
+        )
+        .into_any_element()
+}
 
+fn render_cloud_sync_actions(
+    p: &Palette,
+    git_active: bool,
+    running: bool,
+    enabled: bool,
+    cx: &mut Context<AppShell>,
+) -> AnyElement {
     let mut actions = h_flex()
         .w_full()
         .flex_wrap()
@@ -202,20 +263,28 @@ pub(crate) fn render_cloud_sync_sidebar(
                     })),
             );
     }
-    actions = actions.child(
-        Button::new("cloud-sync-settings")
-            .small()
-            .ghost()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::SETTINGS)).small())
-            .label(rust_i18n::t!("settings.title").to_string())
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.open_settings_modal(None, window, cx);
-            })),
-    );
-    let actions = actions.into_any_element();
+    actions
+        .child(
+            Button::new("cloud-sync-settings")
+                .small()
+                .ghost()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::SETTINGS)).small())
+                .label(rust_i18n::t!("settings.title").to_string())
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_settings_modal(None, window, cx);
+                })),
+        )
+        .into_any_element()
+}
 
-    let conflict_card = conflict.map(|conflict| render_conflict_card(p, &conflict, running, cx));
-
+fn render_cloud_sync_history_section(
+    p: &Palette,
+    history: Vec<SyncHistoryEntry>,
+    expanded: &std::collections::HashSet<String>,
+    filter: SyncHistoryFilter,
+    limit: usize,
+    cx: &mut Context<AppShell>,
+) -> (AnyElement, AnyElement) {
     let filter_options = [
         (SyncHistoryFilter::All, rust_i18n::t!("sync.history_all")),
         (
@@ -301,38 +370,10 @@ pub(crate) fn render_cloud_sync_sidebar(
                     cx.notify();
                 }))
                 .into_any_element()
-        }));
+        }))
+        .into_any_element();
 
-    v_flex()
-        .size_full()
-        .overflow_hidden()
-        .bg(p.background)
-        .text_color(p.foreground)
-        .child(header)
-        .child(actions)
-        .when_some(conflict_card, |this, card| this.child(card))
-        .when(!enabled, |this| {
-            this.child(
-                div().p_3().child(
-                    Button::new("cloud-sync-open-settings-disabled")
-                        .small()
-                        .label(rust_i18n::t!("sync.configure_now").to_string())
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.open_settings_modal(None, window, cx);
-                        })),
-                ),
-            )
-        })
-        .child(filters)
-        .child(
-            div()
-                .id("cloud-sync-history-list")
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scrollbar()
-                .child(rows),
-        )
-        .into_any_element()
+    (filters, rows.into_any_element())
 }
 
 /// 显示云同步侧边栏；活动栏点击统一走这里，保持收起再展开行为一致。

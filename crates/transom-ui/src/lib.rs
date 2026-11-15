@@ -32,17 +32,47 @@ pub(crate) mod trigger_panel;
 mod widgets;
 mod window_appearance;
 
-// 功能模块统一挂在 `app` 之下：AppShell 的字段对其后代模块可见，
-// 对 crate 其它模块保持私有。这里重导出旧路径，避免大面积改写 `crate::sftp`
-// 之类的引用；模块的真实父级仍是 `app`，因此不会绕过状态封装。
-pub(crate) use app::{
-    activity_bar, audit_viewer, clipboard_prompt, cloud_sync, connection, container, dialog_host,
-    diff_viewer, editor, forward, git, keys, monitor, notify, record, session_appearance,
-    session_form, settings, sftp, sidebar, snippets, status_bar, tiling, workspace, zmodem,
-};
+pub(crate) mod activity_bar;
+pub(crate) mod audit_viewer;
+pub(crate) mod batch;
+pub(crate) mod broadcast;
+pub(crate) mod chrome;
+pub(crate) mod clipboard_prompt;
+pub(crate) mod cloud_sync;
+pub(crate) mod command_palette;
+pub(crate) mod connection;
+pub(crate) mod container;
+pub(crate) mod dialog_host;
+pub(crate) mod diff_viewer;
+pub(crate) mod editor;
+pub(crate) mod forward;
+pub(crate) mod git;
+pub(crate) mod keys;
+pub(crate) mod known_hosts_modal;
+pub(crate) mod monitor;
+pub(crate) mod notify;
+pub(crate) mod probe;
+pub(crate) mod record;
+pub(crate) mod session_appearance;
+pub(crate) mod session_form;
+pub(crate) mod session_serial;
+pub(crate) mod settings;
+pub(crate) mod sftp;
+pub(crate) mod shortcuts;
+pub(crate) mod sidebar;
+pub(crate) mod snippets;
+pub(crate) mod split;
+pub(crate) mod startup;
+pub(crate) mod status_bar;
+pub(crate) mod terminal_copy_mode;
+pub(crate) mod terminal_search;
+pub(crate) mod tiling;
+pub(crate) mod window_state;
+pub(crate) mod workspace;
+pub(crate) mod zmodem;
 
 pub(crate) use app::AppShell;
-pub use app::workspace::WorkspaceState;
+pub use workspace::WorkspaceState;
 
 use app_assets::AppAssets;
 use gpui_kit::component as gpui_component;

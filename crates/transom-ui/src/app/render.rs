@@ -140,24 +140,24 @@ impl AppShell {
             .on_action(cx.listener(crate::sftp::on_toggle_sftp))
             .on_action(cx.listener(crate::forward::on_toggle_forward))
             .on_action(cx.listener(Self::on_toggle_immersive))
-            .on_action(cx.listener(crate::app::terminal_search::on_search_buffer))
-            .on_action(cx.listener(crate::app::terminal_copy_mode::on_toggle_copy_mode))
-            .on_action(cx.listener(crate::app::terminal_search::on_toggle_block_view))
-            .on_action(cx.listener(crate::app::terminal_search::on_prev_prompt))
-            .on_action(cx.listener(crate::app::terminal_search::on_next_prompt))
-            .on_action(cx.listener(crate::app::snippets::on_toggle_snippets))
-            .on_action(cx.listener(crate::app::split::on_split_right))
-            .on_action(cx.listener(crate::app::split::on_split_down))
-            .on_action(cx.listener(crate::app::split::on_close_pane))
-            .on_action(cx.listener(crate::app::split::on_toggle_split_axis))
-            .on_action(cx.listener(crate::app::split::on_zoom_pane))
-            .on_action(cx.listener(crate::app::split::on_focus_pane_left))
-            .on_action(cx.listener(crate::app::split::on_focus_pane_right))
-            .on_action(cx.listener(crate::app::split::on_focus_pane_up))
-            .on_action(cx.listener(crate::app::split::on_focus_pane_down))
+            .on_action(cx.listener(crate::terminal_search::on_search_buffer))
+            .on_action(cx.listener(crate::terminal_copy_mode::on_toggle_copy_mode))
+            .on_action(cx.listener(crate::terminal_search::on_toggle_block_view))
+            .on_action(cx.listener(crate::terminal_search::on_prev_prompt))
+            .on_action(cx.listener(crate::terminal_search::on_next_prompt))
+            .on_action(cx.listener(crate::snippets::on_toggle_snippets))
+            .on_action(cx.listener(crate::split::on_split_right))
+            .on_action(cx.listener(crate::split::on_split_down))
+            .on_action(cx.listener(crate::split::on_close_pane))
+            .on_action(cx.listener(crate::split::on_toggle_split_axis))
+            .on_action(cx.listener(crate::split::on_zoom_pane))
+            .on_action(cx.listener(crate::split::on_focus_pane_left))
+            .on_action(cx.listener(crate::split::on_focus_pane_right))
+            .on_action(cx.listener(crate::split::on_focus_pane_up))
+            .on_action(cx.listener(crate::split::on_focus_pane_down))
             // Esc 的传输取消监听：键盘事件沿焦点路径回溯，终端（焦点方）
             // 先收到并向远端写一次转义序列，再由根节点截获成取消命令。
-            .on_key_down(cx.listener(crate::app::zmodem::on_zmodem_cancel_key))
+            .on_key_down(cx.listener(crate::zmodem::on_zmodem_cancel_key))
         // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
         // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
         // 元素级监听收不到这些事件。追踪器随编辑面板实体渲染挂载，
@@ -172,8 +172,8 @@ impl Render for AppShell {
         // 布局算术与 resizable 面板只接受 px：结构件常量以 rem 表达，这里统一
         // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
         let rem = window.rem_size();
-        let top_bar = (!self.state.immersive)
-            .then(|| crate::app::chrome::render_top_bar(self, window, cx, &p));
+        let top_bar =
+            (!self.state.immersive).then(|| crate::chrome::render_top_bar(self, window, cx, &p));
         let activity_bar = (!self.state.immersive)
             .then(|| crate::activity_bar::render_activity_bar(self, window, cx, &p));
 
@@ -209,7 +209,7 @@ impl Render for AppShell {
         root = root.child(self.state.editors.clone());
         // 弹窗栈的压暗层铺在编辑面板之上：弹窗本体由组件库在窗口根上渲染，
         // 层序天然更高，这里只需要把窗面压暗并阻断下层命中。
-        root = root.children(crate::app::dialog_host::dialog_dim(self, &p));
+        root = root.children(crate::dialog_host::dialog_dim(self, &p));
         root.children(overlays)
     }
 }

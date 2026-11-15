@@ -34,7 +34,7 @@ pub(crate) fn render_top_bar(
         .pl_2()
         .on_close_window(move |_, window, cx| {
             app_entity.update(cx, |this, cx| {
-                crate::app::window_state::close_app(this, window, cx);
+                crate::window_state::close_app(this, window, cx);
             });
         })
         .child(

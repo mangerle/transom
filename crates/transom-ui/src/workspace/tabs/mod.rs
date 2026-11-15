@@ -12,9 +12,9 @@ mod session_ops;
 #[cfg(test)]
 mod tests;
 
-use crate::app::workspace::WorkspaceState;
 use crate::app::{AppShell, AppState, TabContent, TabGroup, TabStatus, TerminalTab};
 use crate::pane_tree::LayoutNode;
+use crate::workspace::WorkspaceState;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SavedTabGroup, Session, SessionId, TabId};
 
@@ -261,7 +261,7 @@ impl AppShell {
                         .monitor
                         .update(cx, |view, _| view.reset_history());
                     let collapsed = shell.state.monitor.read(cx).processes_collapsed();
-                    crate::app::monitor::sample_processes(shell, collapsed, cx);
+                    crate::monitor::sample_processes(shell, collapsed, cx);
                 }
             });
         });

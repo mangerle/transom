@@ -187,7 +187,7 @@ fn render_sidebar_header(shell: &AppShell, p: &Palette, cx: &mut Context<AppShel
                         tooltip: rust_i18n::t!("batch.select_mode").to_string(),
                         active: shell.state.sidebar.selection_mode,
                         on_click: cx.listener(|this, _, _, cx| {
-                            crate::app::batch::toggle_selection_mode(this, cx);
+                            crate::batch::toggle_selection_mode(this, cx);
                         }),
                     },
                     p,
@@ -249,7 +249,7 @@ fn render_batch_selection_bar(
                         .xsmall()
                         .label(rust_i18n::t!("batch.select_all").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
-                            crate::app::batch::select_all_sessions(this, cx);
+                            crate::batch::select_all_sessions(this, cx);
                         })),
                 )
                 .child(
@@ -258,7 +258,7 @@ fn render_batch_selection_bar(
                         .xsmall()
                         .label(rust_i18n::t!("batch.edit").to_string())
                         .on_click(cx.listener(|this, _, window, cx| {
-                            crate::app::batch::open_batch_edit(this, window, cx);
+                            crate::batch::open_batch_edit(this, window, cx);
                         })),
                 ),
         )

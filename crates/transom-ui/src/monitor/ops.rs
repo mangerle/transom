@@ -1,9 +1,7 @@
 //! 监控看板的采样生命周期、轮询调度与进程信号发送。
 
 use super::types::SampleIntervalMode;
-use crate::app::app_settings;
-use crate::app::update_app_settings;
-use crate::app::{AppShell, AppState, TabContent, TerminalTab};
+use crate::app::{AppShell, AppState, app_settings, update_app_settings};
 use gpui_kit::{Context, Window};
 use transom_core::{AppError, ConnectionId, HostCommand, ProcessInfo, TabId};
 
@@ -36,22 +34,22 @@ pub(crate) fn on_monitor_panel_event(
             collapse,
             expanded_processes,
         } => {
-            crate::app::monitor::after_monitor_collapse(shell, *collapse, *expanded_processes, cx);
+            crate::monitor::after_monitor_collapse(shell, *collapse, *expanded_processes, cx);
         }
         MonitorPanelEvent::RestartSampling(interval) => {
-            crate::app::monitor::restart_monitor_task(shell, *interval, cx);
+            crate::monitor::restart_monitor_task(shell, *interval, cx);
         }
         MonitorPanelEvent::SampleProcesses { collapsed } => {
-            crate::app::monitor::sample_processes(shell, *collapsed, cx);
+            crate::monitor::sample_processes(shell, *collapsed, cx);
         }
         MonitorPanelEvent::TraceProcess(pid) => {
-            crate::app::monitor::trace_process_in_terminal(shell, *pid, cx);
+            crate::monitor::trace_process_in_terminal(shell, *pid, cx);
         }
         MonitorPanelEvent::KillProcess { pid, force } => {
-            crate::app::monitor::send_kill_process(shell, *pid, *force, cx);
+            crate::monitor::send_kill_process(shell, *pid, *force, cx);
         }
         MonitorPanelEvent::RestartService(unit) => {
-            crate::app::monitor::restart_systemd_service(shell, unit, cx);
+            crate::monitor::restart_systemd_service(shell, unit, cx);
         }
         MonitorPanelEvent::DrawerWidthChanged(_)
         | MonitorPanelEvent::MaximizeToTab
@@ -99,12 +97,12 @@ pub(crate) fn toggle_monitor(
                 crate::connection::open_local_terminal(shell, window, cx);
             }
         }
-        crate::app::monitor::sample_processes(
+        crate::monitor::sample_processes(
             shell,
             shell.state.monitor.read(cx).processes_collapsed(),
             cx,
         );
-        crate::app::monitor::ensure_monitor_task(
+        crate::monitor::ensure_monitor_task(
             shell,
             shell.state.monitor.read(cx).interval_mode().interval(),
             cx,
@@ -142,14 +140,14 @@ pub(crate) fn restart_monitor_task(
     cx: &mut Context<AppShell>,
 ) {
     shell.state.tasks.background.monitor = None;
-    crate::app::monitor::ensure_monitor_task(shell, interval, cx);
+    crate::monitor::ensure_monitor_task(shell, interval, cx);
     cx.notify();
 }
 
 /// 切换采样频率档位（1s/3s/10s），并重启轮询任务。
 ///
 /// 仅用于面板之外（设置页）的调用点；面板内点击走
-/// [`crate::app::monitor::restart_monitor_task`]。
+/// [`crate::monitor::restart_monitor_task`]。
 pub(crate) fn set_monitor_interval_mode(
     shell: &mut AppShell,
     mode: SampleIntervalMode,
@@ -161,7 +159,7 @@ pub(crate) fn set_monitor_interval_mode(
         .update(cx, |view, _| view.set_interval_mode(mode))
     {
         shell.state.tasks.background.monitor = None;
-        crate::app::monitor::ensure_monitor_task(
+        crate::monitor::ensure_monitor_task(
             shell,
             shell.state.monitor.read(cx).interval_mode().interval(),
             cx,
@@ -174,7 +172,7 @@ fn sample_processes_if_open(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     if !shell.state.monitor.read(cx).is_open() {
         return;
     }
-    crate::app::monitor::sample_processes(
+    crate::monitor::sample_processes(
         shell,
         shell.state.monitor.read(cx).processes_collapsed(),
         cx,
@@ -225,7 +223,7 @@ pub(crate) fn after_monitor_collapse(
     if expanded_processes {
         // 刚展开进程卡片，按“未折叠”采样全量明细；这里不能再读面板实体，
         // 面板的点击回调执行期间它正被租借。
-        crate::app::monitor::sample_processes(shell, false, cx);
+        crate::monitor::sample_processes(shell, false, cx);
     }
     cx.notify();
 }
@@ -249,7 +247,7 @@ pub(crate) fn trace_process_in_terminal(
     cx: &mut Context<AppShell>,
 ) {
     let cmd = format!("htop -p {pid} 2>/dev/null || top -p {pid}\r");
-    crate::app::monitor::send_terminal_input(shell, &cmd, cx);
+    crate::monitor::send_terminal_input(shell, &cmd, cx);
 }
 
 /// 在终端中重启崩溃的 Systemd 服务。
@@ -259,7 +257,7 @@ pub(crate) fn restart_systemd_service(
     cx: &mut Context<AppShell>,
 ) {
     let cmd = format!("systemctl restart {unit}\r");
-    crate::app::monitor::send_terminal_input(shell, &cmd, cx);
+    crate::monitor::send_terminal_input(shell, &cmd, cx);
 }
 
 /// 当前活动标签的进程采样目标；只有 SSH 与本地终端支持。
@@ -355,7 +353,7 @@ fn on_process_killed(
                 .monitor
                 .update(cx, |view, _| view.set_error(None));
             shell.state.status = Some(rust_i18n::t!("monitor.kill_sent", pid = pid).to_string());
-            crate::app::monitor::sample_processes(shell, false, cx);
+            crate::monitor::sample_processes(shell, false, cx);
         }
     }
     cx.notify();
@@ -402,126 +400,4 @@ pub(crate) fn monitor_killed(
     cx: &mut Context<AppShell>,
 ) {
     on_process_killed(shell, tab_id, connection_id, pid, error, cx);
-}
-
-/// 面板已改好宽度后，外壳侧同步持久化并让分栏重新分配尺寸。
-///
-/// 宽度状态由面板写入（见 `MonitorView::set_drawer_width`）；面板点击回调
-/// 执行期间实体被租借，这里只做设置落盘与 `ResizableState` 调整。
-pub(crate) fn apply_monitor_drawer_width(
-    shell: &mut AppShell,
-    new_width: f32,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    update_app_settings(cx, |s| s.monitor.drawer_width = new_width);
-    shell.persist_layout_settings(cx);
-    let panels_state = if app_settings(cx).window.sftp_panel_side.is_left() {
-        &shell.state.workspace_panels_left
-    } else {
-        &shell.state.workspace_panels
-    };
-    let panel_count = panels_state.read(cx).sizes().len();
-    if panel_count > 0 {
-        let monitor_ix = panel_count - 1;
-        panels_state.update(cx, |state, cx| {
-            state.resize_panel(monitor_ix, gpui_kit::px(new_width), window, cx);
-        });
-    }
-    cx.notify();
-}
-
-/// 将监控抽屉脱离为全屏独立的 Workspace Tab。
-pub(crate) fn maximize_monitor_to_tab(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    // 1. 寻找当前关联的主机会话 TabId
-    let active_tab_id = shell.state.workspace.active_tab;
-    let target_tab_id = active_tab_id
-        .and_then(|id| shell.state.workspace.tab(id))
-        .and_then(|tab| {
-            if let TabContent::Monitor(tid) = tab.content {
-                Some(tid)
-            } else if !tab.is_player() {
-                Some(tab.id)
-            } else {
-                None
-            }
-        })
-        .or_else(|| {
-            shell
-                .state
-                .workspace
-                .tabs
-                .iter()
-                .find(|tab| !tab.is_player() && !tab.is_monitor())
-                .map(|tab| tab.id)
-        });
-
-    let Some(target_tab_id) = target_tab_id else {
-        return;
-    };
-
-    // 2. 如果已经存在针对该 target_tab_id 的监控 Tab，直接切过去
-    if let Some(existing) = shell.state.workspace.tabs.iter().find(|t| {
-        if let TabContent::Monitor(tid) = t.content {
-            tid == target_tab_id
-        } else {
-            false
-        }
-    }) {
-        let existing_id = existing.id;
-        shell.activate_tab(existing_id, window, cx);
-        cx.notify();
-        return;
-    }
-
-    // 3. 构建全屏监控独立标签页
-    let Some(target_tab) = shell.state.workspace.tab(target_tab_id) else {
-        return;
-    };
-    let target_title = target_tab.display_name();
-    let target_session = target_tab.session.clone();
-    let target_connection_id = target_tab.connection_id;
-    let target_session_id = target_tab.session_id;
-
-    let monitor_tab_id = TabId::new();
-    let tab_title = rust_i18n::t!("monitor.view.tab_name", host = &target_title).to_string();
-
-    let new_tab = TerminalTab::monitor_tab(
-        monitor_tab_id,
-        target_session,
-        tab_title,
-        target_tab_id,
-        target_connection_id,
-    );
-
-    shell
-        .state
-        .workspace
-        .create_group(monitor_tab_id, target_session_id);
-    shell.state.workspace.tabs.push(new_tab);
-    shell.activate_tab(monitor_tab_id, window, cx);
-    cx.notify();
-}
-
-/// 将全屏监控独立标签页收回并停靠为右侧抽屉。
-pub(crate) fn dock_monitor_to_drawer(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    target_tab_id: TabId,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    // 抽屉的开合由面板在调用前写好；这里只做标签切换与关闭。
-    // 2. 切回原会话标签页
-    if shell.state.workspace.tab(target_tab_id).is_some() {
-        shell.activate_tab(target_tab_id, window, cx);
-    }
-
-    // 3. 关闭全屏监控 Tab
-    shell.close_pane(tab_id, window, cx);
-    cx.notify();
 }

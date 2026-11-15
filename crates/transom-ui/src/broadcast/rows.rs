@@ -61,9 +61,7 @@ pub(super) fn render_target_rows(
                         .label(row.title)
                         .on_click(move |&checked, _window, cx| {
                             app.update(cx, |this, cx| {
-                                crate::app::broadcast::set_broadcast_target(
-                                    this, tab_id, checked, cx,
-                                );
+                                crate::broadcast::set_broadcast_target(this, tab_id, checked, cx);
                             });
                         }),
                 ),

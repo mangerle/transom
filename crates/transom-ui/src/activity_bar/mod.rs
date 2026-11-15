@@ -242,7 +242,7 @@ fn activate_activity_item(
         ActivityItemId::QuickOpen => crate::connection::toggle_quick_open(shell, window, cx),
         ActivityItemId::Forwards => crate::forward::toggle_forward_panel(shell, window, cx),
         ActivityItemId::Sftp => crate::sftp::toggle_sftp(shell, window, cx),
-        ActivityItemId::Monitor => crate::app::monitor::toggle_monitor(shell, window, cx),
+        ActivityItemId::Monitor => crate::monitor::toggle_monitor(shell, window, cx),
         ActivityItemId::Containers => {
             shell
                 .state
@@ -260,7 +260,7 @@ fn activate_activity_item(
                 .known_hosts
                 .update(cx, |view, cx| view.open(cx));
         }
-        ActivityItemId::Keys => crate::app::keys::open_key_wizard(shell, window, cx),
+        ActivityItemId::Keys => crate::keys::open_key_wizard(shell, window, cx),
         ActivityItemId::Settings => shell.open_settings_modal(None, window, cx),
         ActivityItemId::Git => crate::git::actions::toggle_git_sidebar(shell, cx),
         ActivityItemId::CloudSync => crate::cloud_sync::toggle_cloud_sync_sidebar(shell, cx),

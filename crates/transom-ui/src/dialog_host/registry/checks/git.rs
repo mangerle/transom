@@ -2,11 +2,11 @@
 use crate::app::AppShell;
 use gpui_kit::App;
 
-pub(in crate::app::dialog_host) fn git_project_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_project_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.project.is_some()
 }
 
-pub(in crate::app::dialog_host) fn git_project_values(shell: &AppShell, cx: &App) -> Vec<String> {
+pub(in crate::dialog_host) fn git_project_values(shell: &AppShell, cx: &App) -> Vec<String> {
     shell
         .state
         .modals
@@ -17,11 +17,11 @@ pub(in crate::app::dialog_host) fn git_project_values(shell: &AppShell, cx: &App
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn git_clone_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_clone_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.clone.is_some()
 }
 
-pub(in crate::app::dialog_host) fn git_clone_values(shell: &AppShell, cx: &App) -> Vec<String> {
+pub(in crate::dialog_host) fn git_clone_values(shell: &AppShell, cx: &App) -> Vec<String> {
     shell
         .state
         .modals
@@ -37,11 +37,11 @@ pub(in crate::app::dialog_host) fn git_clone_values(shell: &AppShell, cx: &App) 
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn git_worktree_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_worktree_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.worktree.is_some()
 }
 
-pub(in crate::app::dialog_host) fn git_worktree_values(shell: &AppShell, cx: &App) -> Vec<String> {
+pub(in crate::dialog_host) fn git_worktree_values(shell: &AppShell, cx: &App) -> Vec<String> {
     shell
         .state
         .modals
@@ -49,6 +49,7 @@ pub(in crate::app::dialog_host) fn git_worktree_values(shell: &AppShell, cx: &Ap
         .worktree
         .as_ref()
         .map(|modal| {
+            let modal = modal.read(cx);
             vec![
                 modal.branch.read(cx).value().to_string(),
                 modal.path.read(cx).value().to_string(),
@@ -57,29 +58,29 @@ pub(in crate::app::dialog_host) fn git_worktree_values(shell: &AppShell, cx: &Ap
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn git_name_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_name_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.name.is_some()
 }
 
-pub(in crate::app::dialog_host) fn git_name_values(shell: &AppShell, cx: &App) -> Vec<String> {
+pub(in crate::dialog_host) fn git_name_values(shell: &AppShell, cx: &App) -> Vec<String> {
     shell
         .state
         .modals
         .git
         .name
         .as_ref()
-        .map(|modal| vec![modal.input.read(cx).value().to_string()])
+        .map(|modal| vec![modal.read(cx).input.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn git_rebase_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_rebase_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.rebase.is_some()
 }
 
-pub(in crate::app::dialog_host) fn git_push_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_push_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.push.is_some()
 }
 
-pub(in crate::app::dialog_host) fn git_conflict_open(shell: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn git_conflict_open(shell: &AppShell, _: &App) -> bool {
     shell.state.modals.git.conflict.is_some()
 }

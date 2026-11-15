@@ -10,7 +10,9 @@
 //! - 关闭工作区或标签时统一中止长任务并清理取消标志，不留脱缰任务。
 
 mod engine;
+mod file_transfers;
 mod files;
+mod image_ops;
 mod lifecycle;
 mod pods;
 mod quadlet;

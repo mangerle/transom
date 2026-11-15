@@ -39,23 +39,14 @@ pub(crate) fn build_tab_context_menu(
     app_entity: &Entity<AppShell>,
     params: TabContextMenuParams,
 ) -> PopupMenu {
-    let TabContextMenuParams {
-        active_pane,
-        session_id,
-        is_local,
-        pane_count,
-        tile_enabled,
-        group_id,
-        this_set_id,
-        show_add_to_tiling,
-        menu_selection,
-        show_multi_tile,
-        palette,
-        entry_selected,
-        touched_sets_count,
-        selected_singles_count,
-        host,
-    } = params;
+    let active_pane = params.active_pane;
+    let session_id = params.session_id;
+    let is_local = params.is_local;
+    let pane_count = params.pane_count;
+    let group_id = params.group_id;
+    let this_set_id = params.this_set_id;
+    let palette = params.palette.clone();
+    let host = params.host.clone();
     let app = app_entity.clone();
     let mut menu = menu
         .item(crate::widgets::menu_item(
@@ -94,7 +85,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::app::audit_viewer::open_audit_viewer_for_tab(
+                        crate::audit_viewer::open_audit_viewer_for_tab(
                             this,
                             active_pane,
                             window,
@@ -105,8 +96,28 @@ pub(crate) fn build_tab_context_menu(
             },
         ));
 
-    // 只有真有对端的会话才给这一项：本地终端与串口连地址都没有，宁可不显示，
-    // 也不给一个复制出空串的按钮。
+    // 若会话为 SSH 连接，提供一键直通其远端 Docker 工作区的捷径
+    let is_ssh = app_entity
+        .read(cx)
+        .state
+        .catalog
+        .sessions
+        .iter()
+        .any(|s| s.id == session_id && matches!(s.connection, Connection::Ssh(_)));
+    menu = append_session_menu_items(menu, app_entity, session_id, active_pane, host, is_ssh);
+    menu = append_split_menu_items(menu, app_entity, active_pane, pane_count);
+    menu = append_tiling_menu_items(menu, &params, app_entity, &palette, window, cx);
+    append_close_menu_items(menu, app_entity, group_id, active_pane, this_set_id)
+}
+
+fn append_session_menu_items(
+    mut menu: PopupMenu,
+    app: &Entity<AppShell>,
+    session_id: transom_core::SessionId,
+    active_pane: TabId,
+    host: Option<String>,
+    is_ssh: bool,
+) -> PopupMenu {
     if let Some(host) = host {
         let copy_app = app.clone();
         menu = menu.item(crate::widgets::menu_item(
@@ -124,14 +135,6 @@ pub(crate) fn build_tab_context_menu(
         ));
     }
 
-    // 若会话为 SSH 连接，提供一键直通其远端 Docker 工作区的捷径
-    let is_ssh = app_entity
-        .read(cx)
-        .state
-        .catalog
-        .sessions
-        .iter()
-        .any(|s| s.id == session_id && matches!(s.connection, Connection::Ssh(_)));
     if is_ssh {
         let container_app = app.clone();
         menu = menu.item(crate::widgets::menu_item(
@@ -147,31 +150,39 @@ pub(crate) fn build_tab_context_menu(
         ));
     }
 
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("recorder.toggle_recording").to_string(),
+        AppIcon::Domain(DomainIcon::MONITOR),
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    crate::record::toggle_recording(this, active_pane, window, cx);
+                });
+            }
+        },
+    ))
+    .item(crate::widgets::menu_item(
+        rust_i18n::t!("recorder.replay_menu").to_string(),
+        AppIcon::Ui(UiIcon::RUN),
+        {
+            let app = app.clone();
+            move |_, window, cx| {
+                app.update(cx, |this, cx| {
+                    crate::record::open_replay_modal(this, active_pane, window, cx);
+                });
+            }
+        },
+    ))
+}
+
+fn append_split_menu_items(
+    mut menu: PopupMenu,
+    app: &Entity<AppShell>,
+    active_pane: TabId,
+    pane_count: usize,
+) -> PopupMenu {
     menu = menu
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("recorder.toggle_recording").to_string(),
-            AppIcon::Domain(DomainIcon::MONITOR),
-            {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        crate::record::toggle_recording(this, active_pane, window, cx);
-                    });
-                }
-            },
-        ))
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("recorder.replay_menu").to_string(),
-            AppIcon::Ui(UiIcon::RUN),
-            {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        crate::record::open_replay_modal(this, active_pane, window, cx);
-                    });
-                }
-            },
-        ))
         .item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.split_right").to_string(),
@@ -181,12 +192,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        crate::app::split::split_active_pane(
-                            this,
-                            SplitAxis::Horizontal,
-                            window,
-                            cx,
-                        );
+                        crate::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
                     });
                 }
             },
@@ -199,7 +205,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        crate::app::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
+                        crate::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
                     });
                 }
             },
@@ -214,7 +220,7 @@ pub(crate) fn build_tab_context_menu(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             this.activate_tab(active_pane, window, cx);
-                            crate::app::split::toggle_split_axis(this, cx);
+                            crate::split::toggle_split_axis(this, cx);
                         });
                     }
                 },
@@ -227,7 +233,7 @@ pub(crate) fn build_tab_context_menu(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             this.activate_tab(active_pane, window, cx);
-                            crate::app::split::detach_pane_to_tab(this, active_pane, window, cx);
+                            crate::split::detach_pane_to_tab(this, active_pane, window, cx);
                         });
                     }
                 },
@@ -245,6 +251,20 @@ pub(crate) fn build_tab_context_menu(
                 },
             ));
     }
+    menu
+}
+
+fn append_tiling_menu_items(
+    mut menu: PopupMenu,
+    params: &TabContextMenuParams,
+    app: &Entity<AppShell>,
+    palette: &Palette,
+    window: &mut Window,
+    cx: &mut Context<PopupMenu>,
+) -> PopupMenu {
+    let group_id = params.group_id;
+    let this_set_id = params.this_set_id;
+    let tile_enabled = params.tile_enabled;
     menu = menu
         .item(PopupMenuItem::separator())
         .item(
@@ -257,13 +277,7 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::app::tiling::tile_tab(
-                            this,
-                            group_id,
-                            SplitAxis::Horizontal,
-                            window,
-                            cx,
-                        );
+                        crate::tiling::tile_tab(this, group_id, SplitAxis::Horizontal, window, cx);
                     });
                 }
             }),
@@ -278,32 +292,25 @@ pub(crate) fn build_tab_context_menu(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::app::tiling::tile_tab(
-                            this,
-                            group_id,
-                            SplitAxis::Vertical,
-                            window,
-                            cx,
-                        );
+                        crate::tiling::tile_tab(this, group_id, SplitAxis::Vertical, window, cx);
                     });
                 }
             }),
         );
-    if show_add_to_tiling && let Some(set_id) = this_set_id {
-        let groups = menu_selection.clone();
+    if params.show_add_to_tiling
+        && let Some(set_id) = this_set_id
+    {
+        let groups = params.menu_selection.clone();
         let app = app.clone();
         menu = menu.item(crate::widgets::menu_item(
             rust_i18n::t!("menu.add_to_tiling", count = groups.len()).to_string(),
             AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(group) = crate::app::tiling::add_groups_to_tiling(
-                        this,
-                        set_id,
-                        groups.clone(),
-                        window,
-                    ) {
-                        crate::app::tiling::activate_group(this, group, window, cx);
+                    if let Some(group) =
+                        crate::tiling::add_groups_to_tiling(this, set_id, groups.clone(), window)
+                    {
+                        crate::tiling::activate_group(this, group, window, cx);
                         this.state.workspace.tab_selection.clear();
                     } else {
                         this.state.set_error(
@@ -315,8 +322,8 @@ pub(crate) fn build_tab_context_menu(
             },
         ));
     }
-    if show_multi_tile {
-        let groups = menu_selection.clone();
+    if params.show_multi_tile {
+        let groups = params.menu_selection.clone();
         let app = app.clone();
         let palette = palette.clone();
         menu = menu.submenu_with_icon(
@@ -336,19 +343,20 @@ pub(crate) fn build_tab_context_menu(
             },
         );
     }
-    if entry_selected && touched_sets_count > 1 && selected_singles_count > 0 {
+    if params.entry_selected && params.touched_sets_count > 1 && params.selected_singles_count > 0 {
         // 选中跨了多张并排网格：没有唯一落点，置灰而不是隐藏，
         // 让用户知道功能存在但当前选择不明确。
         menu = menu.item(
             crate::widgets::MenuItem::new(
-                rust_i18n::t!("menu.tile_selected", count = selected_singles_count).to_string(),
+                rust_i18n::t!("menu.tile_selected", count = params.selected_singles_count)
+                    .to_string(),
                 AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             )
             .disabled(true)
             .render(|_, _, _| {}),
         );
     }
-    menu = menu.item(
+    menu.item(
         crate::widgets::MenuItem::new(
             rust_i18n::t!("menu.untile").to_string(),
             AppIcon::Ui(UiIcon::RESTORE),
@@ -358,13 +366,20 @@ pub(crate) fn build_tab_context_menu(
             let app = app.clone();
             move |_, _window, cx| {
                 if let Some(id) = this_set_id {
-                    app.update(cx, |this, cx| {
-                        crate::app::tiling::untile_tiling(this, id, cx)
-                    });
+                    app.update(cx, |this, cx| crate::tiling::untile_tiling(this, id, cx));
                 }
             }
         }),
-    );
+    )
+}
+
+fn append_close_menu_items(
+    menu: PopupMenu,
+    app: &Entity<AppShell>,
+    group_id: GroupId,
+    active_pane: TabId,
+    this_set_id: Option<crate::tiling::TilingId>,
+) -> PopupMenu {
     menu.item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.close_tab").to_string(),
@@ -389,7 +404,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     if let Some(id) = this_set_id {
                         app.update(cx, |this, cx| {
-                            crate::app::tiling::close_tiling_group(this, id, window, cx);
+                            crate::tiling::close_tiling_group(this, id, window, cx);
                         });
                     }
                 }

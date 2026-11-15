@@ -359,7 +359,7 @@ pub(crate) fn render_broadcast_trigger(
         .accessibility_label(rust_i18n::t!("broadcast.title").to_string())
         .tooltip(rust_i18n::t!("broadcast.title").to_string())
         .on_click(cx.listener(|this, _, window, cx| {
-            crate::app::broadcast::toggle_broadcast_bar(this, window, cx);
+            crate::broadcast::toggle_broadcast_bar(this, window, cx);
         }))
         .into_any_element()
 }
@@ -443,7 +443,7 @@ pub(crate) fn render_broadcast_bar(
             rust_i18n::t!("broadcast.expand").to_string()
         })
         .on_click(cx.listener(|this, _, window, cx| {
-            crate::app::broadcast::toggle_broadcast_multiline(this, window, cx);
+            crate::broadcast::toggle_broadcast_multiline(this, window, cx);
         }));
 
     if multiline {

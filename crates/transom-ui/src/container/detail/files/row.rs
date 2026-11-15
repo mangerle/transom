@@ -4,6 +4,7 @@ use super::super::*;
 use crate::container::ContainerWorkspace;
 use crate::theme::tokens::{control, size};
 use crate::widgets::{IconButton, IconButtonSize};
+use gpui_kit::component::menu::PopupMenu;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(super) fn render_entry_row(
@@ -162,147 +163,125 @@ pub(super) fn render_entry_row(
     let menu_view = view.clone();
     let menu_path = entry_path.clone();
     row.context_menu(move |menu, _, _| {
-        let mut menu = menu;
-        if is_dir {
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.open").to_string(),
-                AppIcon::Ui(UiIcon::FOLDER),
-                move |_, _, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.load_container_dir(path.clone(), cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.download_directory").to_string(),
-                AppIcon::Ui(UiIcon::DOWNLOAD),
-                move |_, _, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.download_container_directory(path.clone(), cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.copy_to").to_string(),
-                AppIcon::Ui(UiIcon::COPY),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_copy(path.clone(), window, cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.chmod").to_string(),
-                AppIcon::Ui(UiIcon::LOCKED),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_chmod(path.clone(), window, cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.chown").to_string(),
-                AppIcon::Ui(UiIcon::LOCKED),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_chown(path.clone(), window, cx);
-                    });
-                },
-            ));
-        } else {
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.preview").to_string(),
-                AppIcon::Ui(UiIcon::DIFF),
-                move |_, _, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.preview_container_file(path.clone(), cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.download").to_string(),
-                AppIcon::Ui(UiIcon::DOWNLOAD),
-                move |_, _, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.download_container_file(path.clone(), cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.copy_to").to_string(),
-                AppIcon::Ui(UiIcon::COPY),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_copy(path.clone(), window, cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.chmod").to_string(),
-                AppIcon::Ui(UiIcon::LOCKED),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_chmod(path.clone(), window, cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.chown").to_string(),
-                AppIcon::Ui(UiIcon::LOCKED),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_chown(path.clone(), window, cx);
-                    });
-                },
-            ));
-        }
-        if !readonly {
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu.item(crate::widgets::menu_item(
-                rust_i18n::t!("container.files.rename").to_string(),
-                AppIcon::Ui(UiIcon::EDIT),
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_rename(path.clone(), window, cx);
-                    });
-                },
-            ));
-            let view = menu_view.clone();
-            let path = menu_path.clone();
-            menu = menu
-                .item(PopupMenuItem::separator())
-                .item(crate::widgets::menu_item(
-                    rust_i18n::t!("common.delete").to_string(),
-                    AppIcon::Ui(UiIcon::DELETE),
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.request_remove_container_path(path.clone(), is_dir, cx);
-                        });
-                    },
-                ));
-        }
-        menu
+        append_entry_context_menu(menu, &menu_view, &menu_path, is_dir, readonly)
     })
     .into_any_element()
+}
+
+fn append_entry_context_menu(
+    mut menu: PopupMenu,
+    menu_view: &Entity<ContainerWorkspace>,
+    menu_path: &str,
+    is_dir: bool,
+    readonly: bool,
+) -> PopupMenu {
+    if is_dir {
+        let view = menu_view.clone();
+        let path = menu_path.to_string();
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("container.files.open").to_string(),
+            AppIcon::Ui(UiIcon::FOLDER),
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.load_container_dir(path.clone(), cx);
+                });
+            },
+        ));
+        let view = menu_view.clone();
+        let path = menu_path.to_string();
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("container.files.download_directory").to_string(),
+            AppIcon::Ui(UiIcon::DOWNLOAD),
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.download_container_directory(path.clone(), cx);
+                });
+            },
+        ));
+    } else {
+        let view = menu_view.clone();
+        let path = menu_path.to_string();
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("container.files.preview").to_string(),
+            AppIcon::Ui(UiIcon::DIFF),
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.preview_container_file(path.clone(), cx);
+                });
+            },
+        ));
+        let view = menu_view.clone();
+        let path = menu_path.to_string();
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("container.files.download").to_string(),
+            AppIcon::Ui(UiIcon::DOWNLOAD),
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.download_container_file(path.clone(), cx);
+                });
+            },
+        ));
+    }
+
+    let view = menu_view.clone();
+    let path = menu_path.to_string();
+    menu = menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("container.files.copy_to").to_string(),
+        AppIcon::Ui(UiIcon::COPY),
+        move |_, window, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.begin_container_file_copy(path.clone(), window, cx);
+            });
+        },
+    ));
+    let view = menu_view.clone();
+    let path = menu_path.to_string();
+    menu = menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("container.files.chmod").to_string(),
+        AppIcon::Ui(UiIcon::LOCKED),
+        move |_, window, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.begin_container_file_chmod(path.clone(), window, cx);
+            });
+        },
+    ));
+    let view = menu_view.clone();
+    let path = menu_path.to_string();
+    menu = menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("container.files.chown").to_string(),
+        AppIcon::Ui(UiIcon::LOCKED),
+        move |_, window, cx| {
+            view.update(cx, |workspace, cx| {
+                workspace.begin_container_file_chown(path.clone(), window, cx);
+            });
+        },
+    ));
+
+    if !readonly {
+        let view = menu_view.clone();
+        let path = menu_path.to_string();
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("container.files.rename").to_string(),
+            AppIcon::Ui(UiIcon::EDIT),
+            move |_, window, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.begin_container_file_rename(path.clone(), window, cx);
+                });
+            },
+        ));
+        let view = menu_view.clone();
+        let path = menu_path.to_string();
+        menu = menu
+            .item(PopupMenuItem::separator())
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("common.delete").to_string(),
+                AppIcon::Ui(UiIcon::DELETE),
+                move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.request_remove_container_path(path.clone(), is_dir, cx);
+                    });
+                },
+            ));
+    }
+    menu
 }

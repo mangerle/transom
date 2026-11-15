@@ -61,7 +61,7 @@ impl AppShell {
         main = main.child(content);
         // 广播条贴在终端区底部、状态栏之上；只对当前具备可输入终端的标签显示。
         if self.state.broadcast.open && self.state.active_tab_has_terminal() {
-            main = main.child(crate::app::broadcast::render_broadcast_bar(self, cx, p));
+            main = main.child(crate::broadcast::render_broadcast_bar(self, cx, p));
         }
         main.into_any_element()
     }

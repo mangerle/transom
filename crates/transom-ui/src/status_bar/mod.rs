@@ -59,16 +59,16 @@ fn status_bar_entries(
     // 可输入终端，保留入口只会产生无响应点击，所以按活动标签能力显隐。
     let terminal_scoped = shell.state.active_tab_has_terminal();
     let snippets_entry =
-        terminal_scoped.then(|| crate::app::snippets::render_snippets_popover(shell, p, cx));
+        terminal_scoped.then(|| crate::snippets::render_snippets_popover(shell, p, cx));
     let broadcast_entry =
-        terminal_scoped.then(|| crate::app::broadcast::render_broadcast_trigger(shell, cx));
+        terminal_scoped.then(|| crate::broadcast::render_broadcast_trigger(shell, cx));
     let recording_badge =
         terminal_scoped.then(|| crate::record::render_recording_badge(shell, p, cx));
     let zmodem = shell
         .state
         .workspace
         .active_tab
-        .and_then(|tab_id| crate::app::zmodem::render_zmodem_badge(shell, tab_id, p, cx));
+        .and_then(|tab_id| crate::zmodem::render_zmodem_badge(shell, tab_id, p, cx));
     StatusBarEntries {
         snippets: snippets_entry,
         broadcast: broadcast_entry,

@@ -67,7 +67,7 @@ fn session_band(
             .checked(is_selected)
             .on_click(cx.listener(move |this, &checked, _, cx| {
                 cx.stop_propagation();
-                crate::app::batch::toggle_session_selection(this, session_id, checked, cx);
+                crate::batch::toggle_session_selection(this, session_id, checked, cx);
             })),
         );
     }
@@ -200,7 +200,7 @@ fn session_context_menu(
                     let app = app.clone();
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            crate::app::audit_viewer::open_audit_viewer_for_session(
+                            crate::audit_viewer::open_audit_viewer_for_session(
                                 this, session_id, window, cx,
                             );
                         });
@@ -277,7 +277,7 @@ fn session_probe_parts(
         .state
         .probe_badges
         .get(&session_id)
-        .map(|badge| crate::app::probe::render_probe_badge(session_id, badge, p));
+        .map(|badge| crate::probe::render_probe_badge(session_id, badge, p));
     // 本地 Shell 与串口没有可拨测的网络地址，按钮也不画：点了只会弹一句
     // "没有可拨测主机"，不如根本不给出这个动作。
     let probe_button = HostAction::probe_for(session).map(|_| {
@@ -294,7 +294,7 @@ fn session_probe_parts(
                 on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
                     // 拨测这一台不该同时选中这一行，更不该触发双击连接。
                     cx.stop_propagation();
-                    crate::app::probe::probe_session(this, session_id, cx);
+                    crate::probe::probe_session(this, session_id, cx);
                 }),
             },
             p,
@@ -359,7 +359,7 @@ fn session_row_click(
 ) {
     if shell.state.sidebar.selection_mode {
         let selected = shell.state.sidebar.selected_sessions.contains(&session_id);
-        crate::app::batch::toggle_session_selection(shell, session_id, !selected, cx);
+        crate::batch::toggle_session_selection(shell, session_id, !selected, cx);
     } else if event.click_count() >= 2 {
         crate::connection::connect_session(shell, session_id, window, cx);
         // 连接入口在会话树，连接完成后用户要看的是终端列表：

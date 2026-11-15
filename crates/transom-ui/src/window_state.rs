@@ -100,7 +100,7 @@ pub(crate) fn close_app(shell: &mut AppShell, window: &mut Window, cx: &mut Cont
         shell.state.workspace.tabs.len(),
         shell.state.workspace.groups.len()
     );
-    crate::app::window_state::save_window_state(shell, window, cx);
+    crate::window_state::save_window_state(shell, window, cx);
     cx.quit();
 }
 

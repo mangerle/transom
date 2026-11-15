@@ -170,14 +170,14 @@ impl AppShell {
         let monitor_subscription = cx.subscribe(
             &self.state.monitor,
             |shell, _view, event: &crate::monitor::MonitorPanelEvent, cx| {
-                crate::app::monitor::on_monitor_panel_event(shell, event, cx);
+                crate::monitor::on_monitor_panel_event(shell, event, cx);
             },
         );
         self.state.tasks.subscriptions.monitor = Some(monitor_subscription);
         let known_hosts_subscription = cx.subscribe(
             &self.state.modals.connection.known_hosts,
             |shell, _, event: &KnownHostsEvent, cx| {
-                crate::app::known_hosts_modal::on_known_hosts_event(shell, event, cx)
+                crate::known_hosts_modal::on_known_hosts_event(shell, event, cx)
             },
         );
         self.state.tasks.subscriptions.known_hosts = Some(known_hosts_subscription);
@@ -191,7 +191,7 @@ impl AppShell {
         let key_wizard_subscription = cx.subscribe(
             &self.state.modals.tools.key_wizard,
             |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {
-                crate::app::keys::on_key_wizard_event(shell, event, cx);
+                crate::keys::on_key_wizard_event(shell, event, cx);
             },
         );
         self.state.tasks.subscriptions.key_wizard = Some(key_wizard_subscription);
@@ -206,7 +206,7 @@ impl AppShell {
             &self.state.modals.tools.audit_viewer,
             window,
             |shell, _view, event: &AuditViewerEvent, window, cx| {
-                crate::app::audit_viewer::on_audit_viewer_event(shell, event, window, cx);
+                crate::audit_viewer::on_audit_viewer_event(shell, event, window, cx);
             },
         );
         self.state.tasks.subscriptions.audit_viewer = Some(audit_subscription);
@@ -302,7 +302,7 @@ impl AppShell {
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
-                    crate::app::broadcast::broadcast_send(this, window, cx);
+                    crate::broadcast::broadcast_send(this, window, cx);
                 }
             },
         )
@@ -312,7 +312,7 @@ impl AppShell {
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
-                    crate::app::broadcast::broadcast_send(this, window, cx);
+                    crate::broadcast::broadcast_send(this, window, cx);
                 }
             },
         )

@@ -85,7 +85,7 @@ pub(crate) fn selection_model(
 mod tests {
     use super::selection_model;
     use crate::app::TabGroup;
-    use crate::app::workspace::WorkspaceState;
+    use crate::workspace::WorkspaceState;
     use transom_core::{GroupId, SessionId, TabId};
 
     fn workspace_with_groups(count: usize) -> (WorkspaceState, Vec<GroupId>) {

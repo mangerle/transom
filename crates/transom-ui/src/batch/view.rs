@@ -78,7 +78,7 @@ pub(crate) fn render_batch_edit_body(
             None,
             crate::widgets::DialogConfirmKind::Primary,
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                crate::app::batch::save_batch_edit(this, cx);
+                crate::batch::save_batch_edit(this, cx);
             }),
         ));
 

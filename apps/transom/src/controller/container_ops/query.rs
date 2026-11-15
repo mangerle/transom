@@ -4,6 +4,39 @@ use super::*;
 
 pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: ContainerCommand) {
     match command {
+        ContainerCommand::ListContainers { .. }
+        | ContainerCommand::InspectContainer { .. }
+        | ContainerCommand::DiffContainer { .. }
+        | ContainerCommand::ListImages { .. }
+        | ContainerCommand::InspectImage { .. }
+        | ContainerCommand::ListVolumes { .. }
+        | ContainerCommand::InspectVolume { .. }
+        | ContainerCommand::ListNetworks { .. }
+        | ContainerCommand::InspectNetwork { .. } => {
+            handle_resource_queries(state, ctx, command);
+        }
+        ContainerCommand::ListComposeProjects { .. }
+        | ContainerCommand::PruneVolumes { .. }
+        | ContainerCommand::PruneImages { .. }
+        | ContainerCommand::PruneNetworks { .. }
+        | ContainerCommand::SystemDf { .. }
+        | ContainerCommand::SystemPrune { .. } => {
+            handle_system_queries(state, ctx, command);
+        }
+        ContainerCommand::SearchImages { .. } | ContainerCommand::ListImageTags { .. } => {
+            handle_registry_queries(state, ctx, command);
+        }
+        _ => {}
+    }
+}
+
+/// 处理容器、镜像、卷与网络的列表及详情查询。
+fn handle_resource_queries(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::ListContainers { tab_id, request_id } => one_shot(
             state,
             ctx,
@@ -124,6 +157,17 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                 details: Box::new(details),
             },
         ),
+        _ => {}
+    }
+}
+
+/// 处理编排项目、磁盘占用与资源清理（Prune）查询。
+fn handle_system_queries(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::ListComposeProjects { tab_id, request_id } => one_shot(
             state,
             ctx,
@@ -180,6 +224,17 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
             move |engine| async move { engine.system_prune(all, volumes).await },
             |request_id, report| ContainerAppEvent::SystemPruned { request_id, report },
         ),
+        _ => {}
+    }
+}
+
+/// 处理镜像仓库搜索与标签列表查询。
+fn handle_registry_queries(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    command: ContainerCommand,
+) {
+    match command {
         ContainerCommand::SearchImages {
             tab_id,
             request_id,

@@ -143,22 +143,16 @@ impl AppShell {
         use crate::monitor::MonitorPanelEvent;
         match request {
             MonitorPanelEvent::DrawerWidthChanged(width) => {
-                crate::app::monitor::apply_monitor_drawer_width(self, width, window, cx);
+                crate::monitor::apply_monitor_drawer_width(self, width, window, cx);
             }
             MonitorPanelEvent::MaximizeToTab => {
-                crate::app::monitor::maximize_monitor_to_tab(self, window, cx);
+                crate::monitor::maximize_monitor_to_tab(self, window, cx);
             }
             MonitorPanelEvent::DockToDrawer {
                 tab_id,
                 target_tab_id,
             } => {
-                crate::app::monitor::dock_monitor_to_drawer(
-                    self,
-                    tab_id,
-                    target_tab_id,
-                    window,
-                    cx,
-                );
+                crate::monitor::dock_monitor_to_drawer(self, tab_id, target_tab_id, window, cx);
             }
             MonitorPanelEvent::ClosePane { tab_id } => {
                 self.close_pane(tab_id, window, cx);
@@ -256,7 +250,7 @@ impl AppShell {
                         purpose,
                         initial,
                     } => {
-                        crate::git::name_modal::open_git_name_modal(
+                        crate::git::actions::modal_bridges::open_git_name_modal(
                             self,
                             project,
                             purpose.clone(),
@@ -266,7 +260,7 @@ impl AppShell {
                         );
                     }
                     crate::git::GitWorkspaceEvent::OpenWorktreeModal { project, start } => {
-                        crate::git::worktree_modal::open_git_worktree_modal(
+                        crate::git::actions::modal_bridges::open_git_worktree_modal(
                             self,
                             project.clone(),
                             start,
@@ -280,7 +274,7 @@ impl AppShell {
         }
     }
 
-    pub(super) fn forward_view_element(&self, _cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn forward_view_element(&self, _cx: &mut Context<Self>) -> AnyElement {
         match self
             .state
             .workspace
@@ -306,7 +300,7 @@ impl AppShell {
         cx.defer_in(window, |this, window, cx| {
             this.state.frame_effects_scheduled = false;
             this.run_frame_effects(window, cx);
-            crate::app::dialog_host::reconcile_dialogs(this, window, cx);
+            crate::dialog_host::reconcile_dialogs(this, window, cx);
             let pending_errors = this.state.pending_notices.drain();
             for message in pending_errors {
                 window.push_notification(Notification::error(message).autohide(false), cx);

@@ -198,7 +198,7 @@ impl AppShell {
         if self.state.workspace.groups.is_empty()
             && app_settings(cx).window.close_window_on_all_tabs_closed
         {
-            crate::app::window_state::close_app(self, window, cx);
+            crate::window_state::close_app(self, window, cx);
             return;
         }
         cx.notify();
@@ -269,7 +269,7 @@ impl AppShell {
                 .and_then(|tiled| tiled.focused_group()),
         };
         if let Some(group) = target {
-            crate::app::tiling::activate_group(self, group, window, cx);
+            crate::tiling::activate_group(self, group, window, cx);
         }
     }
 

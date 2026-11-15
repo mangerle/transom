@@ -81,6 +81,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) git_rebase_modal: Option<Subscription>,
     pub(crate) git_conflict_modal: Option<Subscription>,
     pub(crate) git_push_modal: Option<Subscription>,
+    pub(crate) git_name_modal: Option<Subscription>,
+    pub(crate) git_worktree_modal: Option<Subscription>,
     /// 订阅本身即生命周期守卫，无需读取。
     pub(crate) _status_metrics: Option<Subscription>,
     pub(crate) _git_focus: Option<Subscription>,
@@ -111,6 +113,8 @@ impl PanelSubscriptions {
             git_rebase_modal: None,
             git_conflict_modal: None,
             git_push_modal: None,
+            git_name_modal: None,
+            git_worktree_modal: None,
             _status_metrics: None,
             _git_focus: None,
         }

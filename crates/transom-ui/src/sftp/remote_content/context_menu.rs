@@ -95,16 +95,30 @@ pub(crate) fn build_remote_context_menu(
             ));
     }
 
-    let p_dl = entry_path.clone();
-    let p_edit = entry_path.clone();
-    let p_cp = entry_path.clone();
-    let p_sym = entry_path.clone();
-    let p_prop = entry_path.clone();
-    let p_exec = entry_path.clone();
-    let p_chmod = entry_path.clone();
-    let p_ren = entry_path.clone();
-    let p_del = entry_path.clone();
-    let p_side_copy = entry_path.clone();
+    let m = append_archive_and_transfer_items(
+        menu,
+        &app,
+        tab_id,
+        target,
+        &entry_path,
+        is_dir,
+        has_main_remote,
+    );
+    append_file_action_items(m, &app, tab_id, target, &entry_path)
+}
+
+fn append_archive_and_transfer_items(
+    menu: PopupMenu,
+    app: &Entity<SftpPanelView>,
+    _tab_id: TabId,
+    target: SftpRemotePaneRef,
+    entry_path: &str,
+    is_dir: bool,
+    has_main_remote: bool,
+) -> PopupMenu {
+    let p_dl = entry_path.to_string();
+    let p_edit = entry_path.to_string();
+    let p_side_copy = entry_path.to_string();
 
     let mut m = menu.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.download").to_string(),
@@ -136,9 +150,9 @@ pub(crate) fn build_remote_context_menu(
         ));
     }
 
-    if !is_dir && is_archive_name(&entry_path) {
-        let p_extract = entry_path.clone();
-        let p_extract_new = entry_path.clone();
+    if !is_dir && is_archive_name(entry_path) {
+        let p_extract = entry_path.to_string();
+        let p_extract_new = entry_path.to_string();
         m = m
             .item(crate::widgets::menu_item(
                 rust_i18n::t!("sftp.menu.extract_here").to_string(),
@@ -177,8 +191,8 @@ pub(crate) fn build_remote_context_menu(
             ));
     }
 
-    let p_archive_gz = entry_path.clone();
-    let p_archive_zip = entry_path.clone();
+    let p_archive_gz = entry_path.to_string();
+    let p_archive_zip = entry_path.to_string();
     m = m
         .item(crate::widgets::menu_item(
             rust_i18n::t!("sftp.menu.compress_tar_gz").to_string(),
@@ -188,8 +202,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         let mut sources = Vec::new();
-                        if let Some(panel) = Some(&this.state)
-                            && let Some(pane) = panel.remote_pane(target)
+                        if let Some(pane) = this.state.remote_pane(target)
                             && pane.selection.contains(&p_archive_gz)
                         {
                             sources = pane.selection.iter().cloned().collect();
@@ -211,8 +224,7 @@ pub(crate) fn build_remote_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         let mut sources = Vec::new();
-                        if let Some(panel) = Some(&this.state)
-                            && let Some(pane) = panel.remote_pane(target)
+                        if let Some(pane) = this.state.remote_pane(target)
                             && pane.selection.contains(&p_archive_zip)
                         {
                             sources = pane.selection.iter().cloned().collect();
@@ -243,7 +255,25 @@ pub(crate) fn build_remote_context_menu(
         ));
     }
 
-    m.item(crate::widgets::menu_item(
+    m
+}
+
+fn append_file_action_items(
+    menu: PopupMenu,
+    app: &Entity<SftpPanelView>,
+    tab_id: TabId,
+    target: SftpRemotePaneRef,
+    entry_path: &str,
+) -> PopupMenu {
+    let p_cp = entry_path.to_string();
+    let p_sym = entry_path.to_string();
+    let p_prop = entry_path.to_string();
+    let p_exec = entry_path.to_string();
+    let p_chmod = entry_path.to_string();
+    let p_ren = entry_path.to_string();
+    let p_del = entry_path.to_string();
+
+    menu.item(crate::widgets::menu_item(
         rust_i18n::t!("sftp.menu.copy_abs_path").to_string(),
         AppIcon::Ui(UiIcon::COPY),
         {
@@ -251,11 +281,9 @@ pub(crate) fn build_remote_context_menu(
             move |_, _, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(p_cp.clone()));
                 app.update(cx, |this, cx| {
-                    if let Some(panel) = Some(&mut this.state) {
-                        panel.set_status(
-                            rust_i18n::t!("sftp.menu.remote_path_copied", path = p_cp).to_string(),
-                        );
-                    }
+                    this.state.set_status(
+                        rust_i18n::t!("sftp.menu.remote_path_copied", path = p_cp).to_string(),
+                    );
                     cx.notify();
                 });
             }

@@ -8,6 +8,7 @@
 //! - 提供单任务中断取消与一键清理已完成任务，避免内存与状态列表无限膨胀。
 
 use super::*;
+use crate::container::pull_manager::ImagePullTask;
 use crate::palette::Palette;
 use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
@@ -42,7 +43,69 @@ pub(crate) fn render_pull_drawer(
     let has_finished = tasks.iter().any(|task| task.state.is_finished());
 
     // 头部统计与操作
-    let header = h_flex()
+    let header = render_pull_drawer_header(view, pulling_count, queued_count, has_finished, p);
+
+    // 任务列表
+    let list: AnyElement = if tasks.is_empty() {
+        v_flex()
+            .size_full()
+            .h(px(160.0))
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .child(
+                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
+                    .with_size(px(24.0))
+                    .text_color(p.muted_foreground),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("container.pull_manager.empty_tasks").to_string()),
+            )
+            .into_any_element()
+    } else {
+        let mut items = v_flex().gap_2().w_full().p_2();
+        for task in tasks.iter().rev() {
+            items = items.child(render_pull_task_card(view, task, p));
+        }
+
+        div()
+            .id("pull-drawer-scroll")
+            .w_full()
+            .max_h(px(320.0))
+            .overflow_y_scroll()
+            .child(items)
+            .into_any_element()
+    };
+
+    // 浮动抽屉容器
+    div()
+        .id("container-pull-drawer-container")
+        .absolute()
+        .right(px(16.0))
+        .bottom(px(16.0))
+        .w(px(420.0))
+        .rounded(p.radius.lg)
+        .shadow_lg()
+        .border_1()
+        .border_color(p.border)
+        .bg(p.background)
+        .overflow_hidden()
+        .child(header)
+        .child(list)
+        .into_any_element()
+}
+
+fn render_pull_drawer_header(
+    view: &Entity<ContainerWorkspace>,
+    pulling_count: usize,
+    queued_count: usize,
+    has_finished: bool,
+    p: &Palette,
+) -> AnyElement {
+    h_flex()
         .w_full()
         .px_3()
         .py_2()
@@ -120,226 +183,177 @@ pub(crate) fn render_pull_drawer(
                         }
                     }),
                 ),
-        );
+        )
+        .into_any_element()
+}
 
-    // 任务列表
-    let list: AnyElement = if tasks.is_empty() {
-        v_flex()
-            .size_full()
-            .h(px(160.0))
-            .items_center()
-            .justify_center()
-            .gap_2()
-            .child(
-                AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
-                    .with_size(px(24.0))
-                    .text_color(p.muted_foreground),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("container.pull_manager.empty_tasks").to_string()),
-            )
-            .into_any_element()
-    } else {
-        let mut items = v_flex().gap_2().w_full().p_2();
-        for task in tasks.iter().rev() {
-            let task_id = task.id.clone();
-            let reference = task.reference.clone();
-            let reg_name = task.registry_name.clone();
-            let state = task.state.clone();
-            let status_line = task.status_line.clone();
-            let ratio = task.progress_ratio();
-            let is_active = state.is_active();
+fn render_pull_task_card(
+    view: &Entity<ContainerWorkspace>,
+    task: &ImagePullTask,
+    p: &Palette,
+) -> AnyElement {
+    let task_id = task.id.clone();
+    let reference = task.reference.clone();
+    let reg_name = task.registry_name.clone();
+    let state = task.state.clone();
+    let status_line = task.status_line.clone();
+    let ratio = task.progress_ratio();
+    let is_active = state.is_active();
 
-            let (state_color, state_label) = match &state {
-                PullTaskState::Queued => (p.warning, state.label()),
-                PullTaskState::Pulling => (
-                    p.primary,
-                    ratio
-                        .map(|r| {
-                            rust_i18n::t!(
-                                "container.pull_manager.downloading_percent",
-                                percent = format!("{:>3.0}", r * 100.0)
-                            )
-                            .to_string()
-                        })
-                        .unwrap_or_else(|| state.label()),
-                ),
-                PullTaskState::Success => (p.success, state.label()),
-                PullTaskState::Failed(_) => (p.danger, state.label()),
-                PullTaskState::Cancelled => (p.muted_foreground, state.label()),
-            };
-
-            let is_finished = state.is_finished();
-            let mut card = v_flex()
-                .w_full()
-                .p_2p5()
-                .gap_1p5()
-                .rounded(px(10.0))
-                .bg(p.surface.ghost);
-
-            // 完成态平滑淡出：正常显示为弱化半透明，鼠标悬停时完全聚焦
-            if is_finished {
-                card = card.opacity(0.55).hover(|s| s.opacity(1.0));
-            }
-
-            card = card.child(
-                h_flex()
-                    .w_full()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(p.foreground)
-                                    .truncate()
-                                    .child(reference),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .px_1p5()
-                                    .py_0p5()
-                                    .rounded(p.radius.sm)
-                                    .bg(p.muted.opacity(0.5))
-                                    .text_color(p.muted_foreground)
-                                    .child(reg_name),
-                            ),
+    let (state_color, state_label) = match &state {
+        PullTaskState::Queued => (p.warning, state.label()),
+        PullTaskState::Pulling => (
+            p.primary,
+            ratio
+                .map(|r| {
+                    rust_i18n::t!(
+                        "container.pull_manager.downloading_percent",
+                        percent = format!("{:>3.0}", r * 100.0)
                     )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_family(p.mono_font_family.clone())
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(state_color)
-                                    .child(state_label),
-                            )
-                            .child(if is_active {
-                                let cancel_task_id = task_id.clone();
-                                Button::new(ElementId::Name(
-                                    format!("pull-cancel-{}", cancel_task_id).into(),
-                                ))
-                                .danger()
-                                .xsmall()
-                                .label(rust_i18n::t!("container.pull_manager.cancel").to_string())
-                                .on_click({
-                                    let view = view.clone();
-                                    let cancel_task_id = cancel_task_id.clone();
-                                    move |_, _, cx| {
-                                        view.update(cx, |workspace, cx| {
-                                            let next_cmd = workspace
-                                                .state
-                                                .pull_manager
-                                                .cancel_task(&cancel_task_id);
-                                            // 发送取消中断指令
-                                            workspace.send(ContainerCommand::CancelPullTask {
-                                                tab_id: workspace.tab_id,
-                                                task_id: cancel_task_id.clone(),
-                                            });
-                                            // 调度下一个任务
-                                            if let Some((next_id, next_tab, next_ref, next_auth)) =
-                                                next_cmd
-                                            {
-                                                workspace.send(ContainerCommand::PullImageTask {
-                                                    tab_id: next_tab,
-                                                    task_id: next_id,
-                                                    reference: next_ref,
-                                                    auth: next_auth,
-                                                });
-                                            }
-                                            cx.notify();
-                                        });
-                                    }
-                                })
-                            } else {
-                                let remove_task_id = task_id.clone();
-                                IconButton::new(
-                                    ElementId::Name(
-                                        format!("pull-remove-{}", remove_task_id).into(),
-                                    ),
-                                    UiIcon::DELETE,
-                                    "Remove pull task",
-                                )
-                                .size(IconButtonSize::RowAction)
-                                .show_tooltip(false)
-                                .render()
-                                .on_click({
-                                    let view = view.clone();
-                                    let remove_task_id = remove_task_id.clone();
-                                    move |_, _, cx| {
-                                        view.update(cx, |workspace, cx| {
-                                            workspace
-                                                .state
-                                                .pull_manager
-                                                .remove_task(&remove_task_id);
-                                            cx.notify();
-                                        });
-                                    }
-                                })
-                            }),
-                    ),
-            );
-
-            // 胶囊进度条与分层状态渲染
-            if state == PullTaskState::Pulling {
-                let progress_val = ratio.unwrap_or(0.0).clamp(0.0, 1.0);
-                card = card.child(
-                    v_flex()
-                        .w_full()
-                        .gap_1()
-                        .child(capsule_progress_bar(progress_val, p.primary))
-                        .when(!status_line.is_empty(), |this| {
-                            this.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .truncate()
-                                    .child(status_line),
-                            )
-                        }),
-                );
-            }
-
-            items = items.child(card);
-        }
-
-        div()
-            .id("pull-drawer-scroll")
-            .w_full()
-            .max_h(px(320.0))
-            .overflow_y_scroll()
-            .child(items)
-            .into_any_element()
+                    .to_string()
+                })
+                .unwrap_or_else(|| state.label()),
+        ),
+        PullTaskState::Success => (p.success, state.label()),
+        PullTaskState::Failed(_) => (p.danger, state.label()),
+        PullTaskState::Cancelled => (p.muted_foreground, state.label()),
     };
 
-    // 浮动抽屉容器
-    div()
-        .id("container-pull-drawer-container")
-        .absolute()
-        .right(px(16.0))
-        .bottom(px(16.0))
-        .w(px(420.0))
-        .rounded(p.radius.lg)
-        .shadow_lg()
-        .border_1()
-        .border_color(p.border)
-        .bg(p.background)
-        .overflow_hidden()
-        .child(header)
-        .child(list)
+    let is_finished = state.is_finished();
+    let mut card = v_flex()
+        .w_full()
+        .p_2p5()
+        .gap_1p5()
+        .rounded(px(10.0))
+        .bg(p.surface.ghost);
+
+    // 完成态平滑淡出：正常显示为弱化半透明，鼠标悬停时完全聚焦
+    if is_finished {
+        card = card.opacity(0.55).hover(|s| s.opacity(1.0));
+    }
+
+    let action_btn: AnyElement = if is_active {
+        let cancel_task_id = task_id.clone();
+        Button::new(ElementId::Name(
+            format!("pull-cancel-{}", cancel_task_id).into(),
+        ))
+        .danger()
+        .xsmall()
+        .label(rust_i18n::t!("container.pull_manager.cancel").to_string())
+        .on_click({
+            let view = view.clone();
+            let cancel_task_id = cancel_task_id.clone();
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    let next_cmd = workspace.state.pull_manager.cancel_task(&cancel_task_id);
+                    // 发送取消中断指令
+                    workspace.send(ContainerCommand::CancelPullTask {
+                        tab_id: workspace.tab_id,
+                        task_id: cancel_task_id.clone(),
+                    });
+                    // 调度下一个任务
+                    if let Some((next_id, next_tab, next_ref, next_auth)) = next_cmd {
+                        workspace.send(ContainerCommand::PullImageTask {
+                            tab_id: next_tab,
+                            task_id: next_id,
+                            reference: next_ref,
+                            auth: next_auth,
+                        });
+                    }
+                    cx.notify();
+                });
+            }
+        })
         .into_any_element()
+    } else {
+        let remove_task_id = task_id;
+        IconButton::new(
+            ElementId::Name(format!("pull-remove-{}", remove_task_id).into()),
+            UiIcon::DELETE,
+            "Remove pull task",
+        )
+        .size(IconButtonSize::RowAction)
+        .show_tooltip(false)
+        .render()
+        .on_click({
+            let view = view.clone();
+            let remove_task_id = remove_task_id.clone();
+            move |_, _, cx| {
+                view.update(cx, |workspace, cx| {
+                    workspace.state.pull_manager.remove_task(&remove_task_id);
+                    cx.notify();
+                });
+            }
+        })
+        .into_any_element()
+    };
+
+    card = card.child(
+        h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(p.foreground)
+                            .truncate()
+                            .child(reference),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded(p.radius.sm)
+                            .bg(p.muted.opacity(0.5))
+                            .text_color(p.muted_foreground)
+                            .child(reg_name),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_family(p.mono_font_family.clone())
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(state_color)
+                            .child(state_label),
+                    )
+                    .child(action_btn),
+            ),
+    );
+
+    // 胶囊进度条与分层状态渲染
+    if state == PullTaskState::Pulling {
+        let progress_val = ratio.unwrap_or(0.0).clamp(0.0, 1.0);
+        card = card.child(
+            v_flex()
+                .w_full()
+                .gap_1()
+                .child(capsule_progress_bar(progress_val, p.primary))
+                .when(!status_line.is_empty(), |this| {
+                    this.child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .truncate()
+                            .child(status_line),
+                    )
+                }),
+        );
+    }
+
+    card.into_any_element()
 }
 
 /// 胶囊进度条：6px 高度、全圆角、8% 弱色轨道底。

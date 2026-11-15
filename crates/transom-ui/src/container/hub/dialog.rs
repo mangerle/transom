@@ -64,85 +64,174 @@ pub(crate) fn render_container_hub_dialog_body(
 
     // 如果用户正在查看镜像详情视图。
     if let Some(detail_item) = selected_detail {
-        let item_name = detail_item.name.clone();
-        let active_tag = selected_tags
-            .get(&item_name)
-            .cloned()
-            .unwrap_or_else(|| "latest".to_string());
-        let pull_reference = current_registry.qualify_reference(&item_name, &active_tag);
-
-        let view_back = view.clone();
-        let view_pull = view.clone();
-        let view_copy = view.clone();
-        let registry_pull = current_registry.clone();
-
-        let detail_body = render_hub_image_detail(
-            super::detail::HubImageDetailParams {
-                item: &detail_item,
-                active_tag: &active_tag,
-                pull_reference: &pull_reference,
-                tags: &hub_tags,
-                tags_loading,
-                tags_error: tags_error.as_deref(),
-                custom_tag_input,
-                copy_toast,
-            },
-            move |_, cx| {
-                view_back.update(cx, |workspace, cx| workspace.back_to_hub_results(cx));
-            },
-            move |tag_to_pull, _window, cx| {
-                let repository = item_name.clone();
-                let registry = registry_pull.clone();
-                let tag = tag_to_pull.to_string();
-                view_pull.update(cx, move |workspace, cx| {
-                    workspace.enqueue_image_pull(repository, tag, registry, cx);
-                });
-            },
-            move |cmd, _, cx| {
-                let cmd = cmd.to_string();
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd));
-                view_copy.update(cx, |workspace, cx| workspace.mark_hub_copy_toast(cx));
-            },
+        return render_hub_detail_panel(
+            view,
+            header,
+            detail_item,
+            current_registry,
+            &selected_tags,
+            &hub_tags,
+            tags_loading,
+            tags_error.as_deref(),
+            custom_tag_input,
+            copy_toast,
             p,
         );
-
-        let view_close = view.clone();
-        let footer = view::render_hub_footer(
-            move |_, cx| {
-                view_close.update(cx, |workspace, cx| workspace.close_hub_dialog(cx));
-            },
-            p,
-        );
-
-        return v_flex()
-            .w_full()
-            .gap_3()
-            .child(header)
-            .child(
-                div()
-                    .id("container-hub-detail-scroll")
-                    .w_full()
-                    .max_h(px(480.0))
-                    .overflow_y_scroll()
-                    .child(detail_body),
-            )
-            .child(footer)
-            .into_any_element();
     }
 
-    // 2. 搜索栏与仓库切换。
+    let search_bar = render_hub_search_bar(
+        view,
+        &registries,
+        &selected_reg_id,
+        &current_registry_name,
+        &search_input,
+        searching,
+    );
+
+    let view_chip = view.clone();
+    let chips_bar = view::render_popular_chips(
+        move |tag, window, cx| {
+            let tag = tag.to_string();
+            view_chip.update(cx, move |workspace, cx| {
+                workspace.search_hub_for_term(tag, window, cx);
+            });
+        },
+        p,
+    );
+
+    let content = render_hub_results_body(
+        view,
+        searching,
+        search_error,
+        results,
+        &input_val,
+        &current_registry,
+        &current_registry_name,
+        &selected_tags,
+        p,
+    );
+
+    let view_close = view.clone();
+    let footer = view::render_hub_footer(
+        move |_, cx| {
+            view_close.update(cx, |workspace, cx| workspace.close_hub_dialog(cx));
+        },
+        p,
+    );
+
+    v_flex()
+        .w_full()
+        .gap_3()
+        .child(header)
+        .child(search_bar)
+        .child(chips_bar)
+        .child(content)
+        .child(footer)
+        .into_any_element()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_hub_detail_panel(
+    view: &Entity<ContainerWorkspace>,
+    header: AnyElement,
+    detail_item: transom_core::ImageSearchResult,
+    current_registry: ContainerRegistry,
+    selected_tags: &std::collections::HashMap<String, String>,
+    hub_tags: &[String],
+    tags_loading: bool,
+    tags_error: Option<&str>,
+    custom_tag_input: Option<&Entity<gpui_kit::component::input::InputState>>,
+    copy_toast: bool,
+    p: &Palette,
+) -> AnyElement {
+    let item_name = detail_item.name.clone();
+    let active_tag = selected_tags
+        .get(&item_name)
+        .cloned()
+        .unwrap_or_else(|| "latest".to_string());
+    let pull_reference = current_registry.qualify_reference(&item_name, &active_tag);
+
+    let view_back = view.clone();
+    let view_pull = view.clone();
+    let view_copy = view.clone();
+    let registry_pull = current_registry.clone();
+
+    let detail_body = render_hub_image_detail(
+        super::detail::HubImageDetailParams {
+            item: &detail_item,
+            active_tag: &active_tag,
+            pull_reference: &pull_reference,
+            tags: hub_tags,
+            tags_loading,
+            tags_error,
+            custom_tag_input,
+            copy_toast,
+        },
+        move |_, cx| {
+            view_back.update(cx, |workspace, cx| workspace.back_to_hub_results(cx));
+        },
+        move |tag_to_pull, _window, cx| {
+            let repository = item_name.clone();
+            let registry = registry_pull.clone();
+            let tag = tag_to_pull.to_string();
+            view_pull.update(cx, move |workspace, cx| {
+                workspace.enqueue_image_pull(repository, tag, registry, cx);
+            });
+        },
+        move |cmd, _, cx| {
+            let cmd = cmd.to_string();
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(cmd));
+            view_copy.update(cx, |workspace, cx| workspace.mark_hub_copy_toast(cx));
+        },
+        p,
+    );
+
+    let view_close = view.clone();
+    let footer = view::render_hub_footer(
+        move |_, cx| {
+            view_close.update(cx, |workspace, cx| workspace.close_hub_dialog(cx));
+        },
+        p,
+    );
+
+    v_flex()
+        .w_full()
+        .gap_3()
+        .child(header)
+        .child(
+            div()
+                .id("container-hub-detail-scroll")
+                .w_full()
+                .max_h(px(480.0))
+                .overflow_y_scroll()
+                .child(detail_body),
+        )
+        .child(footer)
+        .into_any_element()
+}
+
+fn render_hub_search_bar(
+    view: &Entity<ContainerWorkspace>,
+    registries: &[ContainerRegistry],
+    selected_reg_id: &str,
+    current_registry_name: &str,
+    search_input: &Entity<gpui_kit::component::input::InputState>,
+    searching: bool,
+) -> AnyElement {
+    let registries_owned = registries.to_vec();
+    let selected_reg_id_owned = selected_reg_id.to_string();
     let view_menu = view.clone();
     let reg_menu = dropdown_trigger(
         "container-hub-registry-select",
-        current_registry_name.clone(),
+        current_registry_name.to_string(),
         AppIcon::Ui(UiIcon::CHEVRON_DOWN),
         None,
         move |menu, _, _| {
             let mut menu = menu;
-            for registry in &registries {
+            for registry in &registries_owned {
                 let view_item = view_menu.clone();
                 let reg_id = registry.id.clone();
-                let selected = registry.id == selected_reg_id;
+                let selected = registry.id == selected_reg_id_owned;
                 menu = menu.item(
                     PopupMenuItem::new(registry.name.clone())
                         .checked(selected)
@@ -159,12 +248,12 @@ pub(crate) fn render_container_hub_dialog_body(
     );
 
     let view_search = view.clone();
-    let search_bar = h_flex()
+    h_flex()
         .w_full()
         .gap_2()
         .items_center()
         .child(reg_menu)
-        .child(Input::new(&search_input).flex_1().min_w_0())
+        .child(Input::new(search_input).flex_1().min_w_0())
         .child(
             action_button(
                 "container-hub-search-btn",
@@ -183,23 +272,24 @@ pub(crate) fn render_container_hub_dialog_body(
             .on_click(move |_, _, cx| {
                 view_search.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
             }),
-        );
+        )
+        .into_any_element()
+}
 
-    // 3. 热门推荐芯片。
-    let view_chip = view.clone();
-    let chips_bar = view::render_popular_chips(
-        move |tag, window, cx| {
-            let tag = tag.to_string();
-            view_chip.update(cx, move |workspace, cx| {
-                workspace.search_hub_for_term(tag, window, cx);
-            });
-        },
-        p,
-    );
-
-    // 4. 内容主体分流。
-    let content: AnyElement = if searching {
-        v_flex()
+#[allow(clippy::too_many_arguments)]
+fn render_hub_results_body(
+    view: &Entity<ContainerWorkspace>,
+    searching: bool,
+    search_error: Option<String>,
+    results: Vec<transom_core::ImageSearchResult>,
+    input_val: &str,
+    current_registry: &ContainerRegistry,
+    current_registry_name: &str,
+    selected_tags: &std::collections::HashMap<String, String>,
+    p: &Palette,
+) -> AnyElement {
+    if searching {
+        return v_flex()
             .size_full()
             .h(px(320.0))
             .items_center()
@@ -226,10 +316,12 @@ pub(crate) fn render_container_hub_dialog_body(
                     .text_color(p.foreground)
                     .child(rust_i18n::t!("container.hub.searching_hint").to_string()),
             )
-            .into_any_element()
-    } else if let Some(err) = search_error {
+            .into_any_element();
+    }
+
+    if let Some(err) = search_error {
         let view_retry = view.clone();
-        v_flex()
+        return v_flex()
             .size_full()
             .h(px(260.0))
             .items_center()
@@ -266,9 +358,11 @@ pub(crate) fn render_container_hub_dialog_body(
                     view_retry.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
                 }),
             )
-            .into_any_element()
-    } else if results.is_empty() {
-        if input_val.is_empty() {
+            .into_any_element();
+    }
+
+    if results.is_empty() {
+        return if input_val.is_empty() {
             view::render_hub_welcome_guide(p)
         } else {
             v_flex()
@@ -305,83 +399,63 @@ pub(crate) fn render_container_hub_dialog_body(
                         .child(rust_i18n::t!("container.hub.empty_hint").to_string()),
                 )
                 .into_any_element()
-        }
-    } else {
-        let mut list = v_flex().gap_2().w_full().p_1();
-        let results_header =
-            view::render_hub_results_header(results.len(), &current_registry_name, p);
-        list = list.child(results_header);
+        };
+    }
 
-        for item in results {
-            let img_name = item.name.clone();
-            let registry = current_registry.clone();
-            let active_tag = selected_tags
-                .get(&img_name)
-                .cloned()
-                .unwrap_or_else(|| "latest".to_string());
+    let mut list = v_flex().gap_2().w_full().p_1();
+    let results_header = view::render_hub_results_header(results.len(), current_registry_name, p);
+    list = list.child(results_header);
 
-            let view_pull = view.clone();
-            let view_tag = view.clone();
-            let view_detail = view.clone();
-            let item_clone = item.clone();
-            let item_for_tag = img_name.clone();
-            let item_for_pull = img_name.clone();
+    for item in results {
+        let img_name = item.name.clone();
+        let registry = current_registry.clone();
+        let active_tag = selected_tags
+            .get(&img_name)
+            .cloned()
+            .unwrap_or_else(|| "latest".to_string());
 
-            let card = render_hub_result_card(
-                &item,
-                &active_tag,
-                move |tag_to_pull, _window, cx| {
-                    let repository = item_for_pull.clone();
-                    let registry = registry.clone();
-                    let tag = tag_to_pull.to_string();
-                    view_pull.update(cx, move |workspace, cx| {
-                        workspace.enqueue_image_pull(repository, tag, registry, cx);
-                    });
-                },
-                move |new_tag, _, cx| {
-                    let img = item_for_tag.clone();
-                    let tag = new_tag.to_string();
-                    view_tag.update(cx, move |workspace, cx| {
-                        workspace.set_hub_selected_tag(img, tag, cx);
-                    });
-                },
-                move |window, cx| {
-                    let it = item_clone.clone();
-                    view_detail.update(cx, move |workspace, cx| {
-                        workspace.select_hub_image_detail(it, window, cx);
-                    });
-                },
-                p,
-            );
+        let view_pull = view.clone();
+        let view_tag = view.clone();
+        let view_detail = view.clone();
+        let item_clone = item.clone();
+        let item_for_tag = img_name.clone();
+        let item_for_pull = img_name.clone();
 
-            list = list.child(card);
-        }
+        let card = render_hub_result_card(
+            &item,
+            &active_tag,
+            move |tag_to_pull, _window, cx| {
+                let repository = item_for_pull.clone();
+                let registry = registry.clone();
+                let tag = tag_to_pull.to_string();
+                view_pull.update(cx, move |workspace, cx| {
+                    workspace.enqueue_image_pull(repository, tag, registry, cx);
+                });
+            },
+            move |new_tag, _, cx| {
+                let img = item_for_tag.clone();
+                let tag = new_tag.to_string();
+                view_tag.update(cx, move |workspace, cx| {
+                    workspace.set_hub_selected_tag(img, tag, cx);
+                });
+            },
+            move |window, cx| {
+                let it = item_clone.clone();
+                view_detail.update(cx, move |workspace, cx| {
+                    workspace.select_hub_image_detail(it, window, cx);
+                });
+            },
+            p,
+        );
 
-        div()
-            .id("container-hub-scroll")
-            .w_full()
-            .max_h(px(460.0))
-            .overflow_y_scroll()
-            .child(list)
-            .into_any_element()
-    };
+        list = list.child(card);
+    }
 
-    // 5. 底部 Footer。
-    let view_close = view.clone();
-    let footer = view::render_hub_footer(
-        move |_, cx| {
-            view_close.update(cx, |workspace, cx| workspace.close_hub_dialog(cx));
-        },
-        p,
-    );
-
-    v_flex()
+    div()
+        .id("container-hub-scroll")
         .w_full()
-        .gap_3()
-        .child(header)
-        .child(search_bar)
-        .child(chips_bar)
-        .child(content)
-        .child(footer)
+        .max_h(px(460.0))
+        .overflow_y_scroll()
+        .child(list)
         .into_any_element()
 }

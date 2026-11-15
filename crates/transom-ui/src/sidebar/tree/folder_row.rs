@@ -118,7 +118,7 @@ fn folder_band(
             on_click: cx.listener(move |this, _: &ClickEvent, _window, cx| {
                 // 点按钮不该顺带折叠/展开这个分组。
                 cx.stop_propagation();
-                crate::app::probe::probe_folder(this, folder_id, cx);
+                crate::probe::probe_folder(this, folder_id, cx);
             }),
         },
         p,

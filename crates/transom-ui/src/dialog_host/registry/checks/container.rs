@@ -2,14 +2,11 @@
 use crate::app::AppShell;
 use gpui_kit::App;
 
-pub(in crate::app::dialog_host) fn container_form_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_form_open(shell: &AppShell, cx: &App) -> bool {
     shell.state.modals.tools.container_form.read(cx).is_open()
 }
 
-pub(in crate::app::dialog_host) fn container_form_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_form_values(shell: &AppShell, cx: &App) -> Vec<String> {
     shell
         .state
         .modals
@@ -19,7 +16,7 @@ pub(in crate::app::dialog_host) fn container_form_values(
         .text_values(cx)
 }
 
-pub(in crate::app::dialog_host) fn container_folder_form_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_folder_form_open(shell: &AppShell, cx: &App) -> bool {
     shell
         .state
         .containers
@@ -30,7 +27,7 @@ pub(in crate::app::dialog_host) fn container_folder_form_open(shell: &AppShell, 
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_folder_form_values(
+pub(in crate::dialog_host) fn container_folder_form_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
@@ -46,25 +43,19 @@ pub(in crate::app::dialog_host) fn container_folder_form_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_run_form_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_run_form_open(shell: &AppShell, cx: &App) -> bool {
     shell.state.modals.tools.run_form.read(cx).is_open()
 }
 
-pub(in crate::app::dialog_host) fn container_run_form_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_run_form_values(shell: &AppShell, cx: &App) -> Vec<String> {
     shell.state.modals.tools.run_form.read(cx).text_values(cx)
 }
 
-pub(in crate::app::dialog_host) fn container_create_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_create_open(shell: &AppShell, cx: &App) -> bool {
     shell.state.modals.tools.create_dialog.read(cx).is_open()
 }
 
-pub(in crate::app::dialog_host) fn container_create_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_create_values(shell: &AppShell, cx: &App) -> Vec<String> {
     let view = shell.state.modals.tools.create_dialog.read(cx);
     let Some(dialog) = view.state() else {
         return Vec::new();
@@ -85,30 +76,27 @@ pub(in crate::app::dialog_host) fn container_create_values(
     values
 }
 
-pub(in crate::app::dialog_host) fn container_confirm_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_confirm_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.confirm.is_some()).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_rename_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_rename_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.rename_container.is_some())
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_rename_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_rename_values(shell: &AppShell, cx: &App) -> Vec<String> {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.rename_container.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.rename_container.as_ref())
         .map(|(_, input)| vec![input.read(cx).value().to_string()])
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_tag_image_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_tag_image_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.tag_image.is_some()).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_tag_image_values(
+pub(in crate::dialog_host) fn container_tag_image_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
@@ -118,15 +106,12 @@ pub(in crate::app::dialog_host) fn container_tag_image_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_commit_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_commit_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.commit_container.is_some())
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_commit_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_commit_values(shell: &AppShell, cx: &App) -> Vec<String> {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.commit_container.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.commit_container.as_ref())
         .map(|state| {
@@ -139,15 +124,12 @@ pub(in crate::app::dialog_host) fn container_commit_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_update_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_update_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.update_container.is_some())
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_update_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_update_values(shell: &AppShell, cx: &App) -> Vec<String> {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.update_container.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.update_container.as_ref())
         .map(|(_, mem, cpu)| {
@@ -159,15 +141,12 @@ pub(in crate::app::dialog_host) fn container_update_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_network_connect_open(
-    shell: &AppShell,
-    cx: &App,
-) -> bool {
+pub(in crate::dialog_host) fn container_network_connect_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.connect_network.is_some())
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_network_connect_values(
+pub(in crate::dialog_host) fn container_network_connect_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
@@ -177,19 +156,16 @@ pub(in crate::app::dialog_host) fn container_network_connect_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_export_config_open(
-    shell: &AppShell,
-    cx: &App,
-) -> bool {
+pub(in crate::dialog_host) fn container_export_config_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.export_config.is_some()).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_file_rename_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_file_rename_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.files.prompt_input.is_some())
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_file_rename_values(
+pub(in crate::dialog_host) fn container_file_rename_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
@@ -199,14 +175,14 @@ pub(in crate::app::dialog_host) fn container_file_rename_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_file_new_dir_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_file_new_dir_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| {
         ws.files.new_dir_open && ws.files.new_dir_input.is_some()
     })
     .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_file_new_dir_values(
+pub(in crate::dialog_host) fn container_file_new_dir_values(
     shell: &AppShell,
     cx: &App,
 ) -> Vec<String> {
@@ -216,18 +192,15 @@ pub(in crate::app::dialog_host) fn container_file_new_dir_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_hub_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_hub_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.hub_dialog.is_some()).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_push_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_push_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.push_dialog.is_some()).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_push_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_push_values(shell: &AppShell, cx: &App) -> Vec<String> {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.push_dialog.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.push_dialog.as_ref())
         .map(|push| {
@@ -239,18 +212,15 @@ pub(in crate::app::dialog_host) fn container_push_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_system_df_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_system_df_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.system_df_dialog_open).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_build_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_build_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.build_dialog.is_some()).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_build_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_build_values(shell: &AppShell, cx: &App) -> Vec<String> {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.build_dialog.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.build_dialog.as_ref())
         .map(|build| {
@@ -263,15 +233,12 @@ pub(in crate::app::dialog_host) fn container_build_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_forward_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_forward_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.forward_dialog.is_some())
         .is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_forward_values(
-    shell: &AppShell,
-    cx: &App,
-) -> Vec<String> {
+pub(in crate::dialog_host) fn container_forward_values(shell: &AppShell, cx: &App) -> Vec<String> {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.forward_dialog.is_some())
         .and_then(|(_, ws)| ws.read(cx).state.forward_dialog.as_ref())
         .map(|fwd| {
@@ -284,10 +251,10 @@ pub(in crate::app::dialog_host) fn container_forward_values(
         .unwrap_or_default()
 }
 
-pub(in crate::app::dialog_host) fn container_pods_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_pods_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.pods_dialog_open).is_some()
 }
 
-pub(in crate::app::dialog_host) fn container_quadlet_open(shell: &AppShell, cx: &App) -> bool {
+pub(in crate::dialog_host) fn container_quadlet_open(shell: &AppShell, cx: &App) -> bool {
     crate::container::find_container_modal_tab(shell, cx, |ws| ws.quadlets_dialog_open).is_some()
 }

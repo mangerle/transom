@@ -130,7 +130,7 @@ fn render_git_sidebar_header(
             )
             .render()
             .on_click(cx.listener(|this, _, window, cx| {
-                crate::git::name_modal::open_git_folder_modal(this, window, cx);
+                crate::git::actions::modal_bridges::open_git_folder_modal(this, window, cx);
             })),
         )
         .child(
@@ -264,7 +264,7 @@ fn render_git_sidebar_menu(menu: PopupMenu, app: &Entity<AppShell>) -> PopupMenu
         UiIcon::ADD,
         move |_, window, cx| {
             app_folder.update(cx, |this, cx| {
-                crate::git::name_modal::open_git_folder_modal(this, window, cx);
+                crate::git::actions::modal_bridges::open_git_folder_modal(this, window, cx);
             });
         },
     ))
@@ -399,7 +399,9 @@ fn render_git_folder_menu(menu: PopupMenu, app: Entity<AppShell>, id: GitFolderI
         UiIcon::FOLDER,
         move |_, window, cx| {
             app_rename.update(cx, |this, cx| {
-                crate::git::name_modal::open_git_rename_folder_modal(this, id, window, cx);
+                crate::git::actions::modal_bridges::open_git_rename_folder_modal(
+                    this, id, window, cx,
+                );
             });
         },
     ))

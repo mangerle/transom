@@ -172,6 +172,7 @@ impl ModalKind {
 
 mod body;
 mod container;
+mod container_views;
 mod git;
 mod registry;
 mod stack;
@@ -390,11 +391,9 @@ impl ModalKind {
             ModalKind::FolderForm => {
                 crate::sidebar::render_folder_form_body(shell, app, window, cx, p)
             }
-            ModalKind::BatchEdit => {
-                crate::app::batch::render_batch_edit_body(shell, app, window, cx, p)
-            }
+            ModalKind::BatchEdit => crate::batch::render_batch_edit_body(shell, app, window, cx, p),
             ModalKind::SnippetForm => {
-                crate::app::snippets::render_snippet_form_body(shell, app, window, cx, p)
+                crate::snippets::render_snippet_form_body(shell, app, window, cx, p)
             }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::KnownHosts => div().into_any_element(),
@@ -411,7 +410,7 @@ impl ModalKind {
                 div().into_any_element()
             }
             ModalKind::ShortcutCapture => {
-                crate::app::shortcuts::render_shortcut_capture_body(shell, app, window, cx, p)
+                crate::shortcuts::render_shortcut_capture_body(shell, app, window, cx, p)
             }
             ModalKind::DiffViewer => {
                 crate::diff_viewer::render_diff_viewer_body(shell, app, window, cx, p)
