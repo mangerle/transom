@@ -5,7 +5,7 @@
 //! `&[KeyTarget]` 注入，实体不在渲染中反查外壳。
 
 use super::entity::KeyWizardView;
-use super::keygen::{KeyAlgorithm, PublicKeyInfo};
+use transom_crypto::ssh_keys::{KeyAlgorithm, PublicKeyInfo};
 use super::state::{KeyTarget, KeyWizardState};
 use crate::palette::Palette;
 use gpui_kit::base::{Disableable, Selectable, h_flex, v_flex};

@@ -40,11 +40,12 @@ impl ModalKind {
     ) -> bool {
         if self.is_dirty(shell, cx) {
             // 拦截必须可见：文案说明为什么按了没反应，行为与提示一致。
-            shell.state.dialog_hint = Some(rust_i18n::t!("dialog.dirty_block_hint").to_string());
+            shell.state.feedback.dialog_hint =
+                Some(rust_i18n::t!("dialog.dirty_block_hint").to_string());
             cx.notify();
             return false;
         }
-        shell.state.dialog_hint = None;
+        shell.state.feedback.dialog_hint = None;
         if let Some(handled) = self.container_cancel(shell, cx) {
             return handled;
         }

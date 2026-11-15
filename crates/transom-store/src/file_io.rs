@@ -162,6 +162,77 @@ fn write_error(path: &Path, error: std::io::Error) -> AppError {
     )
 }
 
+/// 有限大小 UTF-8 文本读取与基线比对原子替换的错误分类。
+#[derive(Debug)]
+pub enum LocalTextError {
+    Metadata(std::io::Error),
+    NotAFile,
+    TooLarge { limit: u64 },
+    TooLargeDuringRead,
+    Read(std::io::Error),
+    NotUtf8,
+    Modified,
+    NoParent,
+    BadPath,
+    TempWrite { path: PathBuf, error: std::io::Error },
+    SetPermissions { path: PathBuf, error: std::io::Error },
+    Replace(std::io::Error),
+}
+
+/// 读取带大小上限的本地 UTF-8 文本文件。
+pub fn read_utf8_limited(path: &Path, max_bytes: u64) -> Result<String, LocalTextError> {
+    let meta = fs::metadata(path).map_err(LocalTextError::Metadata)?;
+    if !meta.is_file() {
+        return Err(LocalTextError::NotAFile);
+    }
+    if meta.len() > max_bytes {
+        return Err(LocalTextError::TooLarge { limit: max_bytes });
+    }
+    let bytes = fs::read(path).map_err(LocalTextError::Read)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(LocalTextError::TooLargeDuringRead);
+    }
+    String::from_utf8(bytes).map_err(|_| LocalTextError::NotUtf8)
+}
+
+/// 校验基线未变化后原子替换本地文本文件，并保留原文件权限位。
+pub fn write_utf8_checked_replace(
+    path: &Path,
+    expected: &str,
+    text: &str,
+    max_bytes: u64,
+) -> Result<(), LocalTextError> {
+    let current = read_utf8_limited(path, max_bytes)?;
+    if current != expected {
+        return Err(LocalTextError::Modified);
+    }
+    let meta = fs::metadata(path).map_err(LocalTextError::Metadata)?;
+    if path.parent().is_none() {
+        return Err(LocalTextError::NoParent);
+    }
+    if path.file_name().is_none() {
+        return Err(LocalTextError::BadPath);
+    }
+    let temp = temp_sibling(path);
+    let result = (|| {
+        fs::write(&temp, text).map_err(|error| LocalTextError::TempWrite {
+            path: temp.clone(),
+            error,
+        })?;
+        fs::set_permissions(&temp, meta.permissions()).map_err(|error| {
+            LocalTextError::SetPermissions {
+                path: temp.clone(),
+                error,
+            }
+        })?;
+        transom_platform::filesystem::replace_file(&temp, path).map_err(LocalTextError::Replace)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

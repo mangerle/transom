@@ -94,11 +94,13 @@ pub(crate) fn render_diff_tab_bar(
         .children(state.diff_tabs.iter().zip(titles).enumerate().map(
             |(idx, (tab_item, display_title))| {
                 render_single_diff_tab(
-                    idx,
-                    total_tabs,
-                    state.active_diff_tab == Some(idx),
-                    tab_item,
-                    display_title,
+                    DiffTabItemParams {
+                        idx,
+                        total_tabs,
+                        is_active: state.active_diff_tab == Some(idx),
+                        tab_item,
+                        display_title,
+                    },
                     workspace.clone(),
                     p,
                 )
@@ -107,16 +109,26 @@ pub(crate) fn render_diff_tab_bar(
     Some(bar.into_any_element())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn render_single_diff_tab(
+struct DiffTabItemParams<'a> {
     idx: usize,
     total_tabs: usize,
     is_active: bool,
-    tab_item: &GitDiffState,
+    tab_item: &'a GitDiffState,
     display_title: String,
+}
+
+fn render_single_diff_tab(
+    params: DiffTabItemParams<'_>,
     workspace: Entity<GitWorkspace>,
     p: &Palette,
 ) -> AnyElement {
+    let DiffTabItemParams {
+        idx,
+        total_tabs,
+        is_active,
+        tab_item,
+        display_title,
+    } = params;
     let request_id: GitRequestId = tab_item.request_id;
     let tab_ws = workspace.clone();
     let outer_tab_ws = workspace.clone();

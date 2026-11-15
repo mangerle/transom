@@ -32,7 +32,6 @@ pub(crate) use task_hub::TaskHub;
 
 use crate::UiServices;
 use crate::broadcast::BroadcastBarState;
-use crate::cloud_sync::GitSyncScheduler;
 use crate::editor::EditorPanels;
 use crate::keymap;
 use crate::keymap::ShortcutRecordingState;
@@ -91,14 +90,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let msg = message.into();
-        let now = std::time::Instant::now();
-        if let Some((last_msg, last_time)) = &self.state.last_toast
-            && last_msg == &msg
-            && now.duration_since(*last_time).as_millis() < 1200
-        {
+        if self.state.feedback.should_dedup_toast(&msg) {
             return;
         }
-        self.state.last_toast = Some((msg.clone(), now));
         let notification = if success {
             Notification::success(msg)
         } else {
@@ -115,14 +109,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let msg = message.into();
-        let now = std::time::Instant::now();
-        if let Some((last_msg, last_time)) = &self.state.last_toast
-            && last_msg == &msg
-            && now.duration_since(*last_time).as_millis() < 1200
-        {
+        if self.state.feedback.should_dedup_toast(&msg) {
             return;
         }
-        self.state.last_toast = Some((msg.clone(), now));
         self.push_toast(Notification::info(msg), window, cx);
     }
 
@@ -132,8 +121,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.toast_seq = self.state.toast_seq.wrapping_add(1);
-        let sequence = self.state.toast_seq;
+        self.state.feedback.toast_seq = self.state.feedback.toast_seq.wrapping_add(1);
+        let sequence = self.state.feedback.toast_seq;
         let key = format!("transom-toast-{sequence}");
         window.push_notification(
             notification.id1::<ToastMarker>(key.clone()).autohide(false),
@@ -179,14 +168,14 @@ impl AppShell {
     ) {
         let text = message.into();
         self.state.status = Some(text.clone());
-        self.state.status_seq = self.state.status_seq.wrapping_add(1);
-        let seq = self.state.status_seq;
+        self.state.feedback.status_seq = self.state.feedback.status_seq.wrapping_add(1);
+        let seq = self.state.feedback.status_seq;
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_secs(4))
                 .await;
             let _ = this.update(cx, |this, cx| {
-                if this.state.status_seq == seq
+                if this.state.feedback.status_seq == seq
                     && this.state.status.as_deref() == Some(text.as_str())
                 {
                     this.state.status = None;
@@ -309,13 +298,13 @@ impl AppShell {
     fn tick_container_cleanup(&mut self, cx: &mut Context<Self>) {
         const INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
         if !app_settings(cx).container_automation.auto_prune_enabled {
-            self.state.container_auto_prune_last = None;
+            self.state.automation.container_auto_prune_last = None;
             return;
         }
         let now = std::time::Instant::now();
-        let Some(last) = self.state.container_auto_prune_last else {
+        let Some(last) = self.state.automation.container_auto_prune_last else {
             // 首次启用只开始计时，不立即执行破坏性清理。
-            self.state.container_auto_prune_last = Some(now);
+            self.state.automation.container_auto_prune_last = Some(now);
             return;
         };
         if now.duration_since(last) < INTERVAL {
@@ -333,7 +322,7 @@ impl AppShell {
                     .then_some(tab.id)
             })
             .collect();
-        self.state.container_auto_prune_last = Some(now);
+        self.state.automation.container_auto_prune_last = Some(now);
         for tab_id in tabs {
             let workspace = self.state.container_workspace(tab_id);
             if let Some(workspace) = workspace {
@@ -349,7 +338,7 @@ impl AppShell {
             .git
             .as_ref()
             .map_or(0, |git| git.interval_minutes);
-        if self.state.git_sync_schedule.tick(interval) {
+        if self.state.automation.git_sync_schedule.tick(interval) {
             crate::cloud_sync::start_git_sync_scheduled(self, cx);
         }
     }

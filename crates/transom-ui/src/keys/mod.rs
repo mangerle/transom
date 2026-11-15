@@ -1,9 +1,7 @@
 //! 密钥生成与管理向导：实体、渲染、外壳职责与部署目标查询。
 
 mod entity;
-mod keygen;
 mod known_hosts_view;
-mod paths;
 mod render;
 mod shell;
 pub(crate) use shell::{handle_public_key_deployed, on_key_wizard_event, open_key_wizard};
@@ -11,7 +9,7 @@ mod state;
 
 pub(crate) use entity::{KeyWizardEvent, KeyWizardView};
 pub(crate) use known_hosts_view::{KnownHostsEvent, KnownHostsView};
-pub(crate) use paths::{default_ssh_dir, expand_home};
+pub(crate) use transom_platform::paths::{default_ssh_dir, expand_home};
 
 use crate::app::{AppState, TabStatus};
 use transom_core::Connection;

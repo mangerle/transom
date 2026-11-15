@@ -13,7 +13,7 @@ use super::detail::render_hub_image_detail;
 use super::view;
 use crate::app::app_settings;
 use crate::container::list::dropdown_trigger;
-use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
+use crate::container::{ContainerHubDialog, ContainerWorkspace, ContainerWorkspaceState};
 use crate::palette::Palette;
 use crate::widgets::action_button;
 use gpui_kit::base::{h_flex, v_flex};
@@ -37,55 +37,32 @@ pub(crate) fn render_container_hub_dialog_body(
         return div().into_any_element();
     };
 
-    let searching = hub.searching;
-    let search_error = hub.search_error.clone();
-    let results = hub.results.clone();
-    let selected_reg_id = hub.selected_registry_id.clone();
-    let registries = app_settings(cx).container_registries.clone();
-    let search_input = hub.search_input.clone();
+    let selected_reg_id = &hub.selected_registry_id;
+    let registries = &app_settings(cx).container_registries;
+    let search_input = &hub.search_input;
     let input_val = search_input.read(cx).value().trim().to_string();
-    let selected_detail = hub.selected_detail.clone();
-    let selected_tags = hub.selected_tags.clone();
-    let hub_tags = hub.tags.clone();
-    let tags_loading = hub.tags_loading;
-    let tags_error = hub.tags_error.clone();
-    let custom_tag_input = hub.custom_tag_input.as_ref();
-    let copy_toast = hub.copy_toast;
 
     let current_registry = registries
         .iter()
-        .find(|registry| registry.id == selected_reg_id)
+        .find(|registry| &registry.id == selected_reg_id)
         .cloned()
         .unwrap_or_else(ContainerRegistry::docker_hub);
-    let current_registry_name = current_registry.name.clone();
 
     // 1. 顶部 Header。
-    let header = view::render_hub_header(&current_registry_name, p);
+    let header = view::render_hub_header(&current_registry.name, p);
 
     // 如果用户正在查看镜像详情视图。
-    if let Some(detail_item) = selected_detail {
-        return render_hub_detail_panel(
-            view,
-            header,
-            detail_item,
-            current_registry,
-            &selected_tags,
-            &hub_tags,
-            tags_loading,
-            tags_error.as_deref(),
-            custom_tag_input,
-            copy_toast,
-            p,
-        );
+    if let Some(detail_item) = hub.selected_detail.as_ref() {
+        return render_hub_detail_panel(view, header, hub, detail_item, &current_registry, p);
     }
 
     let search_bar = render_hub_search_bar(
         view,
-        &registries,
-        &selected_reg_id,
-        &current_registry_name,
-        &search_input,
-        searching,
+        registries,
+        selected_reg_id,
+        &current_registry.name,
+        search_input,
+        hub.searching,
     );
 
     let view_chip = view.clone();
@@ -99,17 +76,7 @@ pub(crate) fn render_container_hub_dialog_body(
         p,
     );
 
-    let content = render_hub_results_body(
-        view,
-        searching,
-        search_error,
-        results,
-        &input_val,
-        &current_registry,
-        &current_registry_name,
-        &selected_tags,
-        p,
-    );
+    let content = render_hub_results_body(view, hub, &input_val, &current_registry, p);
 
     let view_close = view.clone();
     let footer = view::render_hub_footer(
@@ -130,22 +97,17 @@ pub(crate) fn render_container_hub_dialog_body(
         .into_any_element()
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_hub_detail_panel(
     view: &Entity<ContainerWorkspace>,
     header: AnyElement,
-    detail_item: transom_core::ImageSearchResult,
-    current_registry: ContainerRegistry,
-    selected_tags: &std::collections::HashMap<String, String>,
-    hub_tags: &[String],
-    tags_loading: bool,
-    tags_error: Option<&str>,
-    custom_tag_input: Option<&Entity<gpui_kit::component::input::InputState>>,
-    copy_toast: bool,
+    hub: &ContainerHubDialog,
+    detail_item: &transom_core::ImageSearchResult,
+    current_registry: &ContainerRegistry,
     p: &Palette,
 ) -> AnyElement {
     let item_name = detail_item.name.clone();
-    let active_tag = selected_tags
+    let active_tag = hub
+        .selected_tags
         .get(&item_name)
         .cloned()
         .unwrap_or_else(|| "latest".to_string());
@@ -158,14 +120,14 @@ fn render_hub_detail_panel(
 
     let detail_body = render_hub_image_detail(
         super::detail::HubImageDetailParams {
-            item: &detail_item,
+            item: detail_item,
             active_tag: &active_tag,
             pull_reference: &pull_reference,
-            tags: hub_tags,
-            tags_loading,
-            tags_error,
-            custom_tag_input,
-            copy_toast,
+            tags: &hub.tags,
+            tags_loading: hub.tags_loading,
+            tags_error: hub.tags_error.as_deref(),
+            custom_tag_input: hub.custom_tag_input.as_ref(),
+            copy_toast: hub.copy_toast,
         },
         move |_, cx| {
             view_back.update(cx, |workspace, cx| workspace.back_to_hub_results(cx));
@@ -276,19 +238,14 @@ fn render_hub_search_bar(
         .into_any_element()
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_hub_results_body(
     view: &Entity<ContainerWorkspace>,
-    searching: bool,
-    search_error: Option<String>,
-    results: Vec<transom_core::ImageSearchResult>,
+    hub: &ContainerHubDialog,
     input_val: &str,
     current_registry: &ContainerRegistry,
-    current_registry_name: &str,
-    selected_tags: &std::collections::HashMap<String, String>,
     p: &Palette,
 ) -> AnyElement {
-    if searching {
+    if hub.searching {
         return v_flex()
             .size_full()
             .h(px(320.0))
@@ -319,7 +276,7 @@ fn render_hub_results_body(
             .into_any_element();
     }
 
-    if let Some(err) = search_error {
+    if let Some(err) = hub.search_error.as_deref() {
         let view_retry = view.clone();
         return v_flex()
             .size_full()
@@ -346,7 +303,7 @@ fn render_hub_results_body(
                             .text_color(p.danger),
                     ),
             )
-            .child(div().text_sm().text_color(p.danger).child(err))
+            .child(div().text_sm().text_color(p.danger).child(err.to_string()))
             .child(
                 action_button(
                     "container-hub-retry-btn",
@@ -361,7 +318,7 @@ fn render_hub_results_body(
             .into_any_element();
     }
 
-    if results.is_empty() {
+    if hub.results.is_empty() {
         return if input_val.is_empty() {
             view::render_hub_welcome_guide(p)
         } else {
@@ -403,13 +360,15 @@ fn render_hub_results_body(
     }
 
     let mut list = v_flex().gap_2().w_full().p_1();
-    let results_header = view::render_hub_results_header(results.len(), current_registry_name, p);
+    let results_header =
+        view::render_hub_results_header(hub.results.len(), &current_registry.name, p);
     list = list.child(results_header);
 
-    for item in results {
+    for item in &hub.results {
         let img_name = item.name.clone();
         let registry = current_registry.clone();
-        let active_tag = selected_tags
+        let active_tag = hub
+            .selected_tags
             .get(&img_name)
             .cloned()
             .unwrap_or_else(|| "latest".to_string());
@@ -422,7 +381,7 @@ fn render_hub_results_body(
         let item_for_pull = img_name.clone();
 
         let card = render_hub_result_card(
-            &item,
+            item,
             &active_tag,
             move |tag_to_pull, _window, cx| {
                 let repository = item_for_pull.clone();

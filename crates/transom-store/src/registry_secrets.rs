@@ -11,10 +11,7 @@ use transom_core::{AppSettings, SecretKey, SecretStore};
 ///
 /// 返回 `true` 表示设置内容发生了需要落盘的变化（存在被迁移的旧明文密码）。
 /// 迁移失败只记录告警并保留内存中的密码，不阻断应用启动。
-pub(crate) fn hydrate_registry_passwords(
-    settings: &mut AppSettings,
-    store: &dyn SecretStore,
-) -> bool {
+pub fn hydrate_registry_passwords(settings: &mut AppSettings, store: &dyn SecretStore) -> bool {
     let mut settings_changed = false;
     for registry in &mut settings.container_registries {
         let key = SecretKey::registry_password(&registry.id);

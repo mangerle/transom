@@ -6,7 +6,7 @@
 //! 已知主机弹窗由 [`super::KnownHostsView`] 持有记录、搜索与删除；密钥向导
 //! 由 [`super::KeyWizardView`] 持有输入控件、公钥清单与在途生成任务。
 
-use super::keygen::{KeyAlgorithm, PublicKeyInfo};
+use transom_crypto::ssh_keys::{KeyAlgorithm, PublicKeyInfo};
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use std::path::PathBuf;

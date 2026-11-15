@@ -9,6 +9,10 @@
 pub mod backup;
 pub mod envelope;
 mod kdf;
+pub mod ssh_keys;
 
 pub use backup::{BackupFormat, decrypt_document, encrypt_document};
 pub use envelope::{is_envelope, open, seal};
+pub use ssh_keys::{
+    GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys,
+};

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 /// `~` 展开是会话表单与密钥向导共用的口径，绝对路径必须原样通过。
 #[test]
 fn expand_home_handles_tilde_and_absolute_paths() {
-    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    let home = transom_platform::paths::home_dir();
     let Some(home) = home else {
         // 拿不到家目录的环境属于可用降级：原样返回，不 panic。
         assert_eq!(expand_home("~/id_rsa"), PathBuf::from("~/id_rsa"));

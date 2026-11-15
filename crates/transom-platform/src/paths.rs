@@ -210,6 +210,38 @@ pub fn default_download_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// 返回当前用户家目录（无法获取时返回 `None`）。
+pub fn home_dir() -> Option<PathBuf> {
+    BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
+}
+
+/// 默认 OpenSSH 密钥目录（`~/.ssh`），无法定位家目录时退回相对 `.ssh`。
+pub fn default_ssh_dir() -> PathBuf {
+    home_dir()
+        .map(|home| home.join(".ssh"))
+        .unwrap_or_else(|| PathBuf::from(".ssh"))
+}
+
+/// 默认 OpenSSH 客户端配置文件路径（`~/.ssh/config`）。
+pub fn ssh_config_path() -> Option<PathBuf> {
+    home_dir().map(|home| home.join(".ssh").join("config"))
+}
+
+/// 展开 `~` 与 `~/` 前缀，方便按 OpenSSH/Shell 习惯解析用户输入的路径。
+pub fn expand_home(input: &str) -> PathBuf {
+    let input = input.trim();
+    let Some(home) = home_dir() else {
+        return PathBuf::from(input);
+    };
+    if input == "~" {
+        return home;
+    }
+    if let Some(rest) = input.strip_prefix("~/") {
+        return home.join(rest);
+    }
+    PathBuf::from(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

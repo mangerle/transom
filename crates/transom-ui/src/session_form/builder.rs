@@ -97,18 +97,7 @@ impl SessionForm {
         let working_dir = if dir_text.is_empty() {
             None
         } else {
-            let path = if let Some(stripped) = dir_text.strip_prefix("~/") {
-                directories::UserDirs::new()
-                    .map(|u| u.home_dir().join(stripped))
-                    .unwrap_or_else(|| PathBuf::from(&dir_text))
-            } else if dir_text == "~" {
-                directories::UserDirs::new()
-                    .map(|u| u.home_dir().to_path_buf())
-                    .unwrap_or_else(|| PathBuf::from(&dir_text))
-            } else {
-                PathBuf::from(&dir_text)
-            };
-            Some(path)
+            Some(transom_platform::paths::expand_home(&dir_text))
         };
         let shell_text = self.local_shell.read(cx).value().trim().to_string();
         let shell = (!shell_text.is_empty()).then_some(shell_text);

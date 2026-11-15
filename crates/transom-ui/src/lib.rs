@@ -26,7 +26,6 @@ pub(crate) mod identity;
 mod keymap;
 mod palette;
 mod pane_tree;
-mod registry_secrets;
 mod theme;
 pub(crate) mod trigger_panel;
 mod widgets;
@@ -61,6 +60,7 @@ pub(crate) mod sftp;
 pub(crate) mod shortcuts;
 pub(crate) mod sidebar;
 pub(crate) mod snippets;
+pub(crate) mod sparkline;
 pub(crate) mod split;
 pub(crate) mod startup;
 pub(crate) mod status_bar;
@@ -116,7 +116,7 @@ pub fn run(services: UiServices) -> bool {
     };
     // 旧版本把镜像仓库密码明文写在 settings.json；启动时迁移到钥匙串，
     // 并把清理后的设置重新落盘。失败只告警，不阻断应用启动。
-    if registry_secrets::hydrate_registry_passwords(&mut settings, services.secret_store.as_ref())
+    if transom_store::hydrate_registry_passwords(&mut settings, services.secret_store.as_ref())
         && let Err(error) = services.settings_store.save(&settings)
     {
         log::warn!("镜像仓库密码迁移后保存设置失败，原因: {error}");

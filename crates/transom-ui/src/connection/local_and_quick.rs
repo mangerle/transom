@@ -235,8 +235,7 @@ pub(crate) fn record_history_command(
 /// 读取放在阻塞线程池：家目录位于 NFS 或配置较大时，同步读会卡住 UI
 /// 线程；解析与目录合并仍在界面线程完成，保证状态只有一个写入点。
 pub(crate) fn import_ssh_config(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let ssh_config_path =
-        directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"));
+    let ssh_config_path = transom_platform::paths::ssh_config_path();
 
     let Some(path) = ssh_config_path else {
         shell

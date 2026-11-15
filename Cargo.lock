@@ -8869,10 +8869,14 @@ dependencies = [
  "base64 0.23.1",
  "chacha20poly1305",
  "getrandom 0.4.3",
+ "rand 0.10.3",
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "ssh-key",
+ "tempfile",
  "transom-core",
+ "transom-platform",
  "zeroize",
 ]
 
@@ -9008,7 +9012,6 @@ name = "transom-ui"
 version = "1.8.1"
 dependencies = [
  "chrono",
- "directories",
  "flume",
  "gpui-base",
  "gpui-component",
@@ -9018,7 +9021,6 @@ dependencies = [
  "log",
  "notify-rust",
  "parking_lot 0.13.0",
- "rand 0.10.3",
  "regex",
  "rfd",
  "rust-i18n",
@@ -9026,11 +9028,11 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "similar 3.2.1",
- "ssh-key",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "transom-core",
+ "transom-crypto",
  "transom-desktop",
  "transom-git",
  "transom-platform",

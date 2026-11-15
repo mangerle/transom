@@ -37,6 +37,57 @@ use std::sync::atomic::AtomicBool;
 use transom_core::{AppCommand, AppSettings, GitProjectId, SessionCatalog, SessionId, TabId};
 use transom_platform::shell::ShellOption;
 
+/// 后台定时自动化节拍状态。
+#[derive(Default)]
+pub(crate) struct AutomationState {
+    /// 定时 Git 同步的分钟节拍。
+    pub(crate) git_sync_schedule: GitSyncScheduler,
+    /// 上次容器自动清理时间；关闭自动化后清空，重新开启从头计时。
+    pub(crate) container_auto_prune_last: Option<std::time::Instant>,
+}
+
+/// 应用级界面反馈、通知队列与帧副作用调度状态。
+pub(crate) struct UiFeedbackState {
+    /// 底栏一次性提示的自增序号：定时器到期时只清除与自身匹配的那一条。
+    pub(crate) status_seq: u64,
+    /// 应用级错误通知的待发队列：写入与渲染解耦，逐帧统一投递。
+    pub(crate) pending_notices: PendingNotices,
+    /// 弹窗内的一次性提示：脏表单被拦下不关时，说明为什么按键没有反应。
+    pub(crate) dialog_hint: Option<String>,
+    /// 右上角操作结果提示的自增序号：用作通知 key，定时关闭时只关自己那一条。
+    pub(crate) toast_seq: u64,
+    /// 上一条 Toast 提示的内容与时间戳，用于短时间内的相同通知防抖去重。
+    pub(crate) last_toast: Option<(String, std::time::Instant)>,
+    /// 当前是否已安排绘制后的帧副作用，避免同一帧重复调度。
+    pub(crate) frame_effects_scheduled: bool,
+}
+
+impl UiFeedbackState {
+    pub(crate) fn new(pending_notices: PendingNotices) -> Self {
+        Self {
+            status_seq: 0,
+            pending_notices,
+            dialog_hint: None,
+            toast_seq: 0,
+            last_toast: None,
+            frame_effects_scheduled: false,
+        }
+    }
+
+    /// 检查短时间内是否刚弹出过相同 Toast，未重复则更新记录并返回 `false`。
+    pub(crate) fn should_dedup_toast(&mut self, msg: &str) -> bool {
+        let now = std::time::Instant::now();
+        if let Some((last_msg, last_time)) = &self.last_toast
+            && last_msg == msg
+            && now.duration_since(*last_time).as_millis() < 1200
+        {
+            return true;
+        }
+        self.last_toast = Some((msg.to_string(), now));
+        false
+    }
+}
+
 /// 应用运行期状态。
 pub(crate) struct AppState {
     pub(crate) services: UiServices,
@@ -60,14 +111,12 @@ pub(crate) struct AppState {
     pub(crate) modals: ModalHub,
     /// 统一纳管的应用外壳后台任务与事件订阅。
     pub(crate) tasks: TaskHub,
-    /// 定时 Git 同步的分钟节拍。
-    pub(crate) git_sync_schedule: GitSyncScheduler,
+    /// 后台定时自动化节拍状态（Git 自动同步、容器定时清理）。
+    pub(crate) automation: AutomationState,
     /// WebDAV/S3 云同步运行态、冲突与历史。
     pub(crate) cloud_sync: CloudSyncViewState,
     /// 有界云同步历史写线程；进程退出时由 RAII 停机。
     pub(crate) sync_history_writer: Option<SyncHistoryWriter>,
-    /// 上次容器自动清理时间；关闭自动化后清空，重新开启从头计时。
-    pub(crate) container_auto_prune_last: Option<std::time::Instant>,
     /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 共享给每个终端视图的历史查询回调。
@@ -90,12 +139,8 @@ pub(crate) struct AppState {
     pub(crate) broadcast: BroadcastBarState,
     /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
     pub(crate) status: Option<String>,
-    /// 底栏一次性提示的自增序号：定时器到期时只清除与自身匹配的那一条。
-    pub(crate) status_seq: u64,
     /// 会话目录与设置的覆盖式异步写盘通道。
     pub(crate) persistence: Persistence,
-    /// 应用级错误通知的待发队列：写入与渲染解耦，逐帧统一投递。
-    pub(crate) pending_notices: PendingNotices,
     /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
     pub(crate) immersive: bool,
     /// 各面板/实体上报的窗口动作；渲染期一次取空并执行。
@@ -108,14 +153,8 @@ pub(crate) struct AppState {
     pub(crate) shortcut_recording: ShortcutRecordingState,
     /// 组件库弹窗栈的影子记录：与容器实际栈同序，逐帧对账的依据。
     pub(crate) open_modals: OpenModals,
-    /// 弹窗内的一次性提示：脏表单被拦下不关时，说明为什么按键没有反应。
-    pub(crate) dialog_hint: Option<String>,
-    /// 右上角操作结果提示的自增序号：用作通知 key，定时关闭时只关自己那一条。
-    pub(crate) toast_seq: u64,
-    /// 上一条 Toast 提示的内容与时间戳，用于短时间内的相同通知防抖去重。
-    pub(crate) last_toast: Option<(String, std::time::Instant)>,
-    /// 当前是否已安排绘制后的帧副作用，避免同一帧重复调度。
-    pub(crate) frame_effects_scheduled: bool,
+    /// 应用级界面反馈、通知队列与帧副作用调度状态。
+    pub(crate) feedback: UiFeedbackState,
     /// 关于页请求"安装完成后立即重启"的跨层信号。
     ///
     /// 界面只置位并退出事件循环；真正拉起新进程必须等 `main` 完成控制器
@@ -177,7 +216,7 @@ impl AppState {
     /// 单槽暂存又会让同一帧内的多次失败互相覆盖。入队后由渲染统一投递，
     /// 既保留每条错误，也让渲染只负责取队列、不再承担“暂存”职责。
     pub(crate) fn set_error(&mut self, message: impl Into<String>) {
-        self.pending_notices.push(message);
+        self.feedback.pending_notices.push(message);
     }
 
     /// 持久化会话与文件夹目录。

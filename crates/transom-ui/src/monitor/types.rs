@@ -82,15 +82,8 @@ impl From<&transom_core::MonitorSettings> for MonitorSectionCollapse {
     }
 }
 
-/// 监控走势图渲染形态。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum SparklineChartType {
-    /// 平滑折线面积图（默认）。
-    #[default]
-    Line,
-    /// 紧凑柱状图。
-    Bar,
-}
+/// 监控走势图渲染形态（统一定义于 `crate::sparkline`）。
+pub(crate) use crate::sparkline::SparklineChartType;
 
 /// 监控看板的界面状态。
 pub(crate) struct MonitorState {
