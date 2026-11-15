@@ -1,57 +1,13 @@
-//! SFTP 传输队列调度、入队与批量控制。
+//! SFTP 传输队列调度辅助：连接归属解析与操作构造。
 //!
-//! 设计原理（Why）：
-//! - 实现初衷：负责 SFTP 传输队列的并发调度、任务分发与整列批量控制（暂停全部、恢复全部、取消全部）；
-//! - 核心优势：
-//!   1. 集中管理并发调度循环 `process_sftp_queue`；
-//!   2. 规范化整批操作日志与命令发送顺序。
+//! 设计原理（Why）：队列调度与任务控制已内聚到 `SftpPanelView` 实体（`entity/queue.rs` 与
+//! `entity/task_control.rs`），本模块仅保留纯函数式的任务到传输操作映射与端连接校验。
 
 mod download;
 pub(super) mod enqueue;
-mod task_control;
-pub(crate) use task_control::{
-    sftp_cancel_task, sftp_pause_task, sftp_remove_task, sftp_resume_task,
-};
 
-use crate::app::AppShell;
 use crate::sftp::{TransferKind, TransferTask};
-use gpui_kit::*;
-use std::path::PathBuf;
-use transom_core::{ConnectionId, SftpOperation, TabId, TransferDirection, TransferFilter};
-
-/// 把本地列选中的一组路径上传到标签页主远端当前目录。
-pub(crate) fn enqueue_uploads(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    paths: &[PathBuf],
-    cx: &mut Context<AppShell>,
-) -> Result<usize, String> {
-    let Some(view) = shell.state.sftp_view(tab_id) else {
-        return Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string());
-    };
-    view.update(cx, |view, cx| view.enqueue_uploads(tab_id, paths, cx))
-}
-
-/// 按并发上限启动待处理任务；调度本体在实体上，外壳只负责转发。
-pub(crate) fn process_sftp_queue(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.process_queue(tab_id, cx));
-    }
-}
-
-/// 暂停全部活动与排队任务；队列收起时由状态栏调用。
-pub(crate) fn sftp_pause_all(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.pause_all(tab_id, cx));
-    }
-}
-
-/// 取消全部活动、排队与暂停任务。
-pub(crate) fn sftp_cancel_all(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.cancel_all(tab_id, cx));
-    }
-}
+use transom_core::{ConnectionId, SftpOperation, TransferDirection, TransferFilter};
 
 /// 任务执行所需的远端连接；方向决定用哪一端，缺失即视为入队缺陷。
 ///

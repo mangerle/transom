@@ -177,10 +177,14 @@ fn handle_log_loaded(
     };
     cx.notify();
     if let Some(index) = landed {
-        crate::git::actions::git_select_commit_by_index(shell, tab_id, index, cx);
+        if let Some(workspace) = shell.state.git_workspace(tab_id) {
+            workspace.update(cx, |ws, cx| ws.select_commit_by_index(index, cx));
+        }
     } else if keep_waiting {
         // 目标行还没加载：顺着分页往下翻，翻到头或超页数上限才提示找不到。
-        crate::git::actions::git_load_more_log(shell, tab_id, cx);
+        if let Some(workspace) = shell.state.git_workspace(tab_id) {
+            workspace.update(cx, |ws, cx| ws.load_more_log(cx));
+        }
     } else if let Some(target) = jump {
         log::info!("Git 提交跳转未落地即停止，目标: {target:?}");
         shell.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);

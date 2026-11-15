@@ -49,7 +49,9 @@ pub(crate) fn sftp_confirm_delete(shell: &mut AppShell, cx: &mut Context<AppShel
     };
     match modal.action {
         SftpPendingDelete::Local { tab_id, paths } => {
-            crate::sftp::perform_sftp_local_delete(shell, tab_id, paths, cx);
+            if let Some(view) = shell.state.sftp_view(tab_id) {
+                view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
+            }
         }
         SftpPendingDelete::Remote {
             tab_id,

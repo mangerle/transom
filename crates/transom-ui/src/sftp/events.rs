@@ -143,12 +143,10 @@ pub(crate) fn on_sftp_verifying(
         task.speed_bps = None;
         task.eta_secs = None;
     }
-    super::status_message::set_sftp_transient_status(
-        shell,
-        tab_id,
-        rust_i18n::t!("sftp.verifying").to_string(),
-        cx,
-    );
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        let message = rust_i18n::t!("sftp.verifying").to_string();
+        view.update(cx, |view, cx| view.set_transient_status(message, cx));
+    }
     true
 }
 
@@ -182,12 +180,10 @@ pub(crate) fn on_sftp_retrying(
         task.eta_secs = None;
         panel.state.recompute_progress();
     }
-    super::status_message::set_sftp_transient_status(
-        shell,
-        tab_id,
-        rust_i18n::t!("sftp.retrying").to_string(),
-        cx,
-    );
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        let message = rust_i18n::t!("sftp.retrying").to_string();
+        view.update(cx, |view, cx| view.set_transient_status(message, cx));
+    }
     true
 }
 
@@ -214,7 +210,9 @@ pub(crate) fn on_sftp_metadata(
         scope: rust_i18n::t!("sftp.modals.scope_remote").to_string(),
         properties: remote_file_properties(&metadata),
     });
-    crate::sftp::process_sftp_queue(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.process_queue(tab_id, cx));
+    }
     true
 }
 
@@ -234,16 +232,20 @@ pub(crate) fn on_sftp_preview(
     else {
         return true;
     };
-    crate::sftp::handle_sftp_preview(
-        shell,
-        SftpPreviewResponse {
-            tab_id,
-            connection_id,
-            op_id,
-            result: Ok((bytes, truncated)),
-        },
-        cx,
-    );
+    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx).is_some()
+        && let Some(view) = shell.state.sftp_view(tab_id)
+    {
+        view.update(cx, |view, cx| {
+            view.handle_preview(
+                SftpPreviewResponse {
+                    tab_id,
+                    op_id,
+                    result: Ok((bytes, truncated)),
+                },
+                cx,
+            );
+        });
+    }
     true
 }
 
@@ -262,16 +264,20 @@ pub(crate) fn on_sftp_preview_failed(
     else {
         return true;
     };
-    crate::sftp::handle_sftp_preview(
-        shell,
-        SftpPreviewResponse {
-            tab_id,
-            connection_id,
-            op_id,
-            result: Err(error),
-        },
-        cx,
-    );
+    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx).is_some()
+        && let Some(view) = shell.state.sftp_view(tab_id)
+    {
+        view.update(cx, |view, cx| {
+            view.handle_preview(
+                SftpPreviewResponse {
+                    tab_id,
+                    op_id,
+                    result: Err(error),
+                },
+                cx,
+            );
+        });
+    }
     true
 }
 

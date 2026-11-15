@@ -49,8 +49,10 @@ pub(crate) fn open_local_file_panel(
         &inputs.local_path_input,
         window,
         move |this, _, event: &InputEvent, window, cx| {
-            if matches!(event, InputEvent::PressEnter { .. }) {
-                crate::sftp::sftp_local_enter_path(this, tab_id, window, cx);
+            if matches!(event, InputEvent::PressEnter { .. })
+                && let Some(view) = this.state.sftp_view(tab_id)
+            {
+                view.update(cx, |view, cx| view.local_enter_path(tab_id, window, cx));
             }
         },
     );
@@ -112,7 +114,9 @@ pub(crate) fn open_local_file_panel(
         return;
     }
     // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
-    crate::sftp::spawn_local_dir_refresh(shell, tab_id, None, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.spawn_local_dir_refresh(None, cx));
+    }
     cx.notify();
 }
 

@@ -2,7 +2,7 @@
 
 use super::width::COLLAPSED_COLUMN_WIDTH;
 use super::*;
-use crate::app::app_settings;
+use crate::app::{AppShell, app_settings};
 use crate::sftp::entity::SftpPanelView;
 use transom_core::AppSettings;
 

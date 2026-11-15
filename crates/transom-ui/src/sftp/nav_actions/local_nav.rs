@@ -4,7 +4,6 @@
 //! - 实现初衷：集中处理 SFTP 本地栏的路径跳转、双栏同步导航及在系统文件管理器中打开等操作；
 //! - 核心优势：纯粹的本地文件系统导航流，避免远端与本地混在一起。
 
-use crate::app::AppShell;
 use crate::sftp::entity::SftpPanelView;
 use crate::sftp::parent_remote;
 use gpui_kit::*;
@@ -155,22 +154,5 @@ impl SftpPanelView {
             .to_string(),
         );
         cx.notify();
-    }
-}
-
-pub(crate) fn sftp_local_refresh(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.local_refresh(cx));
-    }
-}
-
-pub(crate) fn sftp_local_enter_path(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.local_enter_path(tab_id, window, cx));
     }
 }

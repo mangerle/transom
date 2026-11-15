@@ -131,8 +131,10 @@ pub(crate) fn on_sftp_finished(
         notify_info,
         status_message,
     } = outcome;
-    if let Some(message) = status_message {
-        super::status_message::set_sftp_transient_status(shell, tab_id, message, cx);
+    if let Some(message) = status_message
+        && let Some(view) = shell.state.sftp_view(tab_id)
+    {
+        view.update(cx, |view, cx| view.set_transient_status(message, cx));
     }
     // 任务落定，浮层据此决定继续常驻还是进入 5 秒停留窗口。
     crate::sftp::sync_drop_overlay(shell, tab_id, cx);
@@ -150,8 +152,8 @@ pub(crate) fn on_sftp_finished(
             &format!("{file_name} ({})", format_size(bytes)),
         );
     }
-    if refresh_local {
-        crate::sftp::sftp_local_refresh(shell, tab_id, cx);
+    if refresh_local && let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.local_refresh(cx));
     }
     if let Some(path) = refresh {
         crate::sftp::request_sftp_list(shell, tab_id, path, cx);
@@ -159,7 +161,9 @@ pub(crate) fn on_sftp_finished(
     if let Some((target_conn, target_dir)) = refresh_side {
         crate::sftp::request_sftp_list_for_connection(shell, tab_id, target_conn, target_dir, cx);
     }
-    crate::sftp::process_sftp_queue(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.process_queue(tab_id, cx));
+    }
     true
 }
 
@@ -312,8 +316,10 @@ pub(crate) fn on_sftp_failed(
             pane.error = Some(err_msg);
         }
     }
-    if let Some(message) = queue_error {
-        super::status_message::set_sftp_transient_error(shell, tab_id, message, cx);
+    if let Some(message) = queue_error
+        && let Some(view) = shell.state.sftp_view(tab_id)
+    {
+        view.update(cx, |view, cx| view.set_transient_queue_error(message, cx));
     }
     crate::sftp::sync_drop_overlay(shell, tab_id, cx);
     if let Some((file_name, err_msg)) = failed_notify {
@@ -322,6 +328,8 @@ pub(crate) fn on_sftp_failed(
             &format!("{file_name}: {err_msg}"),
         );
     }
-    crate::sftp::process_sftp_queue(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.process_queue(tab_id, cx));
+    }
     true
 }

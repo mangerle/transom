@@ -10,7 +10,6 @@ pub(crate) use init::{
     attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp, toggle_sftp,
 };
 mod local_nav;
-pub(crate) use local_nav::{sftp_local_enter_path, sftp_local_refresh};
 
 use super::entity::SftpPanelView;
 use super::{SftpRemotePaneRef, normalize_local_cwd, normalize_remote_cwd};
@@ -175,7 +174,7 @@ pub(crate) fn request_sftp_list_pane(
     }) else {
         return;
     };
-    crate::sftp::dismiss_sftp_hover_preview(shell, tab_id, cx);
+    view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
     shell.state.send_command(SftpCommand::Sftp {
         tab_id,
         connection_id,
@@ -208,7 +207,7 @@ pub(crate) fn request_sftp_list(
     }) else {
         return;
     };
-    crate::sftp::dismiss_sftp_hover_preview(shell, tab_id, cx);
+    view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
     shell.state.send_command(SftpCommand::Sftp {
         tab_id,
         connection_id,

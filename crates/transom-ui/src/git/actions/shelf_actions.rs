@@ -1,92 +1,72 @@
-//! 工作树与搁置（stash）的动作。
+//! 工作树与搁置（stash）的实体内聚动作。
 //!
-//! 设计原理（Why）：两者都是「项目之外的对象」——工作树是另一个检出目录，
-//! 搁置是栈里的快照，交互上都需要展开/刷新这类列表动作，放一起成模块。
+//! 设计原理（Why）：工作树列表刷新与创建均属于特定 `GitWorkspace` 的领域行为，
+//! 直接通过实体自持的 `command_tx` 发送命令并在队列满时通过 `GitWorkspaceEvent::Error` 上报，
+//! 彻底剥离对全局主壳层的依赖。
 
-use crate::app::AppShell;
+use crate::git::{GitWorkspace, GitWorkspaceEvent};
 use gpui_kit::*;
-use transom_core::{GitCommand, GitProject, GitRequestId};
+use std::path::PathBuf;
+use transom_core::{GitCommand, GitRequestId};
 
-use super::GitRefAction;
-
-/// 拉取工作树列表。
-pub(crate) fn git_reload_worktrees(
-    shell: &mut AppShell,
-    project: &GitProject,
-    cx: &mut Context<AppShell>,
-) {
-    let request_id = GitRequestId::new();
-    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
-        workspace.update(cx, |workspace, _| {
-            workspace.state.pending.push(request_id);
-        });
-    }
-    shell.send_command(GitCommand::ListWorktrees {
-        project: project.clone(),
-        request_id,
-    });
-    cx.notify();
+/// 新建工作树的参数对象，避免方法参数平铺过多。
+pub(crate) struct CreateWorktreeParams {
+    /// 目标工作树目录（支持绝对路径或相对当前仓库父目录的路径）。
+    pub path: String,
+    /// 要检出或新建的分支名。
+    pub branch: String,
+    /// 可选起点引用。
+    pub start: Option<String>,
+    /// 创建成功后是否在项目列表自动打开该工作树。
+    pub checkout: bool,
 }
 
-/// 按对话框填好的参数新建工作树。
-pub(crate) fn git_create_worktree(
-    shell: &mut AppShell,
-    project: &GitProject,
-    path: String,
-    branch: String,
-    start: Option<String>,
-    checkout: bool,
-    cx: &mut Context<AppShell>,
-) {
-    // 目录可能是相对仓库父目录的简写：补成绝对路径再交给 git，
-    // 否则子进程的工作目录决定最终落点，用户看到的和实际创建的位置会偏。
-    let target = {
-        let candidate = std::path::PathBuf::from(&path);
-        if candidate.is_absolute() {
-            candidate
-        } else {
-            project
-                .path
-                .parent()
-                .map(|dir| dir.join(&candidate))
-                .unwrap_or(candidate)
+impl GitWorkspace {
+    /// 拉取当前项目的工作树列表。
+    pub(crate) fn reload_worktrees(&mut self, cx: &mut Context<Self>) {
+        let request_id = GitRequestId::new();
+        self.state.pending.push(request_id);
+        if !self.send(GitCommand::ListWorktrees {
+            project: self.state.project.clone(),
+            request_id,
+        }) {
+            cx.emit(GitWorkspaceEvent::Error(
+                rust_i18n::t!("error.command_queue_full").to_string(),
+            ));
         }
-    };
-    let text = target.display().to_string();
-    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
-        workspace.update(cx, |workspace, _| {
-            workspace.state.pending_worktree = Some((text.clone(), checkout));
-        });
+        cx.notify();
     }
-    super::ref_actions::git_ref_action(
-        shell,
-        project,
-        GitRefAction::NewWorktree {
+
+    /// 按对话框填好的参数新建工作树。
+    pub(crate) fn create_worktree(&mut self, params: CreateWorktreeParams, cx: &mut Context<Self>) {
+        // 目录可能是相对仓库父目录的简写：补成绝对路径再交给 git，
+        // 否则子进程的工作目录决定最终落点，用户看到的和实际创建的位置会偏。
+        let target = {
+            let candidate = PathBuf::from(&params.path);
+            if candidate.is_absolute() {
+                candidate
+            } else {
+                self.state
+                    .project
+                    .path
+                    .parent()
+                    .map(|dir| dir.join(&candidate))
+                    .unwrap_or(candidate)
+            }
+        };
+        let text = target.display().to_string();
+        self.state.pending_worktree = Some((text.clone(), params.checkout));
+        if !self.send(GitCommand::AddWorktree {
+            project: self.state.project.clone(),
             path: text,
-            branch,
-            start,
-        },
-        cx,
-    );
-}
-
-/// 把一个工作树目录加进项目列表（IDEA 里点工作树就是切过去看）。
-pub(crate) fn git_open_worktree_path(shell: &mut AppShell, path: &str, cx: &mut Context<AppShell>) {
-    let target = std::path::PathBuf::from(path);
-    if let Some(project) = shell
-        .state
-        .git
-        .projects
-        .iter()
-        .find(|item| item.path == target)
-        .cloned()
-    {
-        let tab_id = crate::git::actions::git_tab_for_project(shell, project.id, cx);
-        if let Some(tab_id) = tab_id {
-            let _ = tab_id;
+            branch: params.branch,
+            start: params.start,
+        }) {
+            self.state.pending_worktree = None;
+            cx.emit(GitWorkspaceEvent::Error(
+                rust_i18n::t!("error.command_queue_full").to_string(),
+            ));
         }
-        crate::git::actions::git_refresh(shell, &project, cx);
-        return;
+        cx.notify();
     }
-    crate::git::actions::add_git_project(shell, super::super::GitProjectDraft::new(target), cx);
 }

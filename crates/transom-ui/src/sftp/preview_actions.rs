@@ -11,7 +11,7 @@ use super::preview::{
     PreviewKey, PreviewKind, SftpHoverTarget, SftpPreviewResponse, SftpPreviewState,
     decode_preview_thumbnail, preview_kind, read_local_text_head, text_preview_lines,
 };
-use crate::app::{AppShell, command_send_error_text};
+use crate::app::command_send_error_text;
 use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::{Path, PathBuf};
@@ -272,7 +272,6 @@ impl SftpPanelView {
     pub(crate) fn handle_preview(&mut self, response: SftpPreviewResponse, cx: &mut Context<Self>) {
         let SftpPreviewResponse {
             tab_id,
-            connection_id: _,
             op_id,
             result,
         } = response;
@@ -395,30 +394,5 @@ impl SftpPanelView {
             Err(message) => PreviewContent::Error(message),
         };
         cx.notify();
-    }
-}
-
-pub(crate) fn dismiss_sftp_hover_preview(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
-    }
-}
-
-pub(crate) fn handle_sftp_preview(
-    shell: &mut AppShell,
-    response: SftpPreviewResponse,
-    cx: &mut Context<AppShell>,
-) {
-    let tab_id = response.tab_id;
-    let connection_id = response.connection_id;
-    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx).is_none() {
-        return;
-    }
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.handle_preview(response, cx));
     }
 }

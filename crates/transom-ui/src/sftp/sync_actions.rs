@@ -186,5 +186,7 @@ pub(crate) fn start_sftp_sync(
     }
     crate::sftp::focus_active_sftp_panel(shell, window, cx);
     cx.notify();
-    crate::sftp::process_sftp_queue(shell, tab_id, cx);
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| view.process_queue(tab_id, cx));
+    }
 }

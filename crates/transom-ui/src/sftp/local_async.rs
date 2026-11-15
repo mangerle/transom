@@ -5,13 +5,12 @@
 //!   可能挂起秒级甚至分钟级；这些调用出现在 UI 事件回调里会直接冻结整个
 //!   界面（GPUI 的渲染与事件分发共用主线程）；
 //! - 核心优势：阻塞段交给专用线程执行（缩略图解码等短任务仍走 gpui 后台
-//!   执行器，两者按预期耗时区分），完成后回到 `AppShell` 实体应用结果；
+//!   执行器，两者按预期耗时区分），完成后回到面板实体应用结果；
 //!   过期防护通过比对回填时的目录路径实现，导航离开后旧结果不会覆盖新目录；
 //! - 代价与局限：刷新从"同步可见"变为"异步落地"，期间面板短暂显示旧内容
 //!   （导航场景先清空条目给出即时反馈）；同一目录的并发刷新以后完成者胜出。
 
 use super::{SftpPanelView, list_local_dir};
-use crate::app::AppShell;
 use crate::app::spawn_blocking_local;
 use gpui_kit::*;
 use std::collections::BTreeSet;
@@ -144,31 +143,6 @@ impl SftpPanelView {
     }
 }
 
-/// 后台刷新本地目录。
-pub(crate) fn spawn_local_dir_refresh(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    select_after: Option<PathBuf>,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| {
-            view.spawn_local_dir_refresh(select_after, cx)
-        });
-    }
-}
-
-/// 执行已确认的本地删除。
-pub(crate) fn perform_sftp_local_delete(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    paths: Vec<PathBuf>,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
-    }
-}
 /// 本地批量删除的结果：成功数与逐项失败原因。
 struct LocalDeleteOutcome {
     deleted: usize,

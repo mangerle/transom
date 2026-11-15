@@ -392,8 +392,10 @@ fn apply_local_fs_outcome(
         }
         (outcome.select, outcome.reveal)
     };
-    if let Some(path) = select {
-        crate::sftp::spawn_local_dir_refresh(shell, tab_id, Some(path), cx);
+    if let Some(path) = select
+        && let Some(view) = shell.state.sftp_view(tab_id)
+    {
+        view.update(cx, |view, cx| view.spawn_local_dir_refresh(Some(path), cx));
     }
     if let Some(path) = reveal {
         crate::audit::reveal_in_file_manager(path);

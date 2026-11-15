@@ -470,3 +470,45 @@ fn git_workspace_views_have_no_app_shell() {
         offenders.join("\n")
     );
 }
+
+/// Git 工作区实体级动作（提交、差异、日志、引用、工作树等）禁止再依赖 `AppShell`。
+#[test]
+fn git_workspace_actions_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for dir in ["src/git/actions/log_actions"] {
+        for entry in walkdir_like(&root.join(dir)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            if content.contains("AppShell") {
+                offenders.push(entry.display().to_string());
+            }
+        }
+    }
+    for file in [
+        "src/git/actions/commit_actions.rs",
+        "src/git/actions/diff_actions.rs",
+        "src/git/actions/diff_nav.rs",
+        "src/git/actions/diff_search.rs",
+        "src/git/actions/workspace_refs.rs",
+        "src/git/actions/shelf_actions.rs",
+        "src/git/actions/ref_actions.rs",
+    ] {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content.contains("AppShell") {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下 Git 工作区动作文件仍包含 AppShell 耦合：\n{}",
+        offenders.join("\n")
+    );
+}

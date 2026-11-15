@@ -329,7 +329,9 @@ fn on_push_modal_event(
             cx.notify();
         }
         GitPushModalEvent::OpenFileDiff { tab_id, path } => {
-            crate::git::actions::git_diff_commit_file(shell, *tab_id, path, cx);
+            if let Some(workspace) = shell.state.git_workspace(*tab_id) {
+                workspace.update(cx, |ws, cx| ws.diff_commit_file(path, cx));
+            }
         }
         GitPushModalEvent::CopyOid(oid) => {
             crate::git::helpers::write_clipboard(shell, oid, cx);

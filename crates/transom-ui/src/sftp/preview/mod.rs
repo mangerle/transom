@@ -88,7 +88,6 @@ pub(crate) enum PreviewContent {
 /// 统一为参数对象后，事件分发处只需构造一次。
 pub(crate) struct SftpPreviewResponse {
     pub(crate) tab_id: TabId,
-    pub(crate) connection_id: ConnectionId,
     pub(crate) op_id: TransferId,
     pub(crate) result: Result<(Vec<u8>, bool), AppError>,
 }

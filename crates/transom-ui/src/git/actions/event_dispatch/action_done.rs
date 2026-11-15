@@ -1,6 +1,7 @@
 //! Git 写动作完成事件落地与状态快照刷新。
 
 use crate::app::AppShell;
+use crate::git::commit_modal::worktree_diff_request;
 use crate::git::types::first_worktree_diff;
 use crate::palette::localized_error;
 use gpui_kit::*;
@@ -71,7 +72,14 @@ pub(super) fn handle_git_action_done(
             .find(|item| item.id == project_id)
             .cloned();
         if let Some(project) = worktree_project {
-            super::super::git_reload_worktrees(shell, &project, cx);
+            if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
+                workspace.update(cx, |ws, cx| ws.reload_worktrees(cx));
+            } else {
+                shell.send_command(GitCommand::ListWorktrees {
+                    project,
+                    request_id: transom_core::GitRequestId::new(),
+                });
+            }
         }
     }
     // 写动作后一律刷新：索引与工作区都可能被 git 顺带改写（如提交后
@@ -96,8 +104,8 @@ pub(super) fn handle_git_action_done(
         if matches!(action, GitAction::RebaseRun) {
             crate::git::actions::modal_bridges::close_git_rebase_modal(shell, cx);
         }
-        if let Some(tab_id) = crate::git::actions::git_tab_for_project(shell, project_id, cx) {
-            crate::git::actions::git_load_log(shell, tab_id, 0, cx);
+        if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
         }
     }
     if matches!(action, GitAction::Push) {
@@ -141,7 +149,9 @@ pub(super) fn handle_git_action_done(
             });
         }
         if message.is_none() {
-            crate::git::actions::git_load_log(shell, tab_id, 0, cx);
+            if let Some(workspace) = shell.state.git_workspace(tab_id) {
+                workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
+            }
             if should_push
                 && let Some(project) = shell
                     .state
@@ -215,15 +225,11 @@ pub(super) fn apply_git_status(
             })
             .unwrap_or_default();
         if let Some((group, path)) = first
-            && let Some(project) = shell
-                .state
-                .git
-                .projects
-                .iter()
-                .find(|project| project.id == project_id)
-                .cloned()
+            && let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx)
         {
-            crate::git::actions::git_open_worktree_diff(shell, &project, group, path, cx);
+            workspace.update(cx, |ws, cx| {
+                ws.open_diff(worktree_diff_request(group, path), cx);
+            });
         } else if let Some(workspace) = shell.state.git_workspace(tab_id) {
             workspace.update(cx, |ws, cx| ws.refresh_active_worktree_diff(cx));
         }

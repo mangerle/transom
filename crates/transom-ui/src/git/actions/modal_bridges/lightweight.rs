@@ -169,15 +169,26 @@ pub(crate) fn open_git_worktree_modal(
                 checkout,
             } => {
                 close_git_worktree_modal(shell, cx);
-                crate::git::actions::git_create_worktree(
-                    shell,
-                    project,
-                    path.clone(),
-                    branch.clone(),
-                    Some(start.clone()),
-                    *checkout,
-                    cx,
-                );
+                if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
+                    workspace.update(cx, |ws, cx| {
+                        ws.create_worktree(
+                            crate::git::actions::CreateWorktreeParams {
+                                path: path.clone(),
+                                branch: branch.clone(),
+                                start: Some(start.clone()),
+                                checkout: *checkout,
+                            },
+                            cx,
+                        );
+                    });
+                } else {
+                    shell.send_command(GitCommand::AddWorktree {
+                        project: project.clone(),
+                        path: path.clone(),
+                        branch: branch.clone(),
+                        start: Some(start.clone()),
+                    });
+                }
             }
             crate::git::GitWorktreeModalEvent::Close => close_git_worktree_modal(shell, cx),
         },

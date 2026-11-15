@@ -9,7 +9,6 @@
 //!   这是"折叠条仍占本列位置"的结果。
 
 use super::state::SftpPanelState;
-use crate::app::AppShell;
 use crate::divider::h_resizable;
 use crate::palette::Palette;
 use gpui_kit::component::resizable::resizable_panel;

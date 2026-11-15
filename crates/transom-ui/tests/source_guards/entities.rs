@@ -466,3 +466,70 @@ fn replay_modal_is_owned_by_entity() {
         "ReplayModalView 必须存在于 record/entity.rs"
     );
 }
+
+/// SFTP 已内聚到实体与纯逻辑的动作模块禁止再依赖 `AppShell`。
+#[test]
+fn sftp_entity_actions_have_no_app_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for dir in ["src/sftp/queue_actions", "src/sftp/entity"] {
+        for entry in walkdir_like(&root.join(dir)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let rel = normalized_path(&entry);
+            // `entity/mod.rs` 仍保留外壳查表 helper，其余子模块必须零 AppShell。
+            if rel.ends_with("sftp/entity/mod.rs") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            if content.contains("AppShell") {
+                offenders.push(rel);
+            }
+        }
+    }
+    for file in [
+        "src/sftp/preview_actions.rs",
+        "src/sftp/local_async.rs",
+        "src/sftp/nav_actions/local_nav.rs",
+        "src/sftp/columns/mod.rs",
+    ] {
+        let path = root.join(file);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        if content.contains("AppShell") {
+            offenders.push(file.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "以下 SFTP 实体动作模块仍包含 AppShell 耦合：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// 工作区模块禁止再新增接收 `shell: &mut AppShell` 的自由函数。
+#[test]
+fn workspace_has_no_mut_shell_free_functions() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/workspace");
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.contains("shell: &mut AppShell") {
+            offenders.push(normalized_path(&entry));
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "工作区模块不得再使用 `shell: &mut AppShell` 自由函数：\n{}",
+        offenders.join("\n")
+    );
+}

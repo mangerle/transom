@@ -273,7 +273,9 @@ fn render_overlay_bulk_actions(
             .size(crate::widgets::IconButtonSize::Compact)
             .render()
             .on_click(cx.listener(move |this, _, _, cx| {
-                crate::sftp::sftp_pause_all(this, tab_id, cx);
+                if let Some(view) = this.state.sftp_view(tab_id) {
+                    view.update(cx, |view, cx| view.pause_all(tab_id, cx));
+                }
                 crate::sftp::sync_drop_overlay(this, tab_id, cx);
             })),
         )
@@ -286,7 +288,9 @@ fn render_overlay_bulk_actions(
             .size(crate::widgets::IconButtonSize::Compact)
             .render()
             .on_click(cx.listener(move |this, _, _, cx| {
-                crate::sftp::sftp_cancel_all(this, tab_id, cx);
+                if let Some(view) = this.state.sftp_view(tab_id) {
+                    view.update(cx, |view, cx| view.cancel_all(tab_id, cx));
+                }
                 crate::sftp::sync_drop_overlay(this, tab_id, cx);
             })),
         )
@@ -441,10 +445,14 @@ fn overlay_row(
                     .size(crate::widgets::IconButtonSize::Compact)
                     .render()
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        if paused {
-                            crate::sftp::sftp_resume_task(this, tab_id, task_id, cx);
-                        } else {
-                            crate::sftp::sftp_pause_task(this, tab_id, task_id, cx);
+                        if let Some(view) = this.state.sftp_view(tab_id) {
+                            view.update(cx, |view, cx| {
+                                if paused {
+                                    view.resume_task(tab_id, task_id, cx);
+                                } else {
+                                    view.pause_task(tab_id, task_id, cx);
+                                }
+                            });
                         }
                         crate::sftp::sync_drop_overlay(this, tab_id, cx);
                     })),
@@ -459,7 +467,9 @@ fn overlay_row(
                 .size(crate::widgets::IconButtonSize::Compact)
                 .render()
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    crate::sftp::sftp_cancel_task(this, tab_id, task_id, cx);
+                    if let Some(view) = this.state.sftp_view(tab_id) {
+                        view.update(cx, |view, cx| view.cancel_task(tab_id, task_id, cx));
+                    }
                     crate::sftp::sync_drop_overlay(this, tab_id, cx);
                 })),
             )
@@ -474,7 +484,9 @@ fn overlay_row(
                 .size(crate::widgets::IconButtonSize::Compact)
                 .render()
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    crate::sftp::sftp_remove_task(this, tab_id, task_id, cx);
+                    if let Some(view) = this.state.sftp_view(tab_id) {
+                        view.update(cx, |view, cx| view.remove_task(task_id, cx));
+                    }
                     crate::sftp::sync_drop_overlay(this, tab_id, cx);
                 })),
             )

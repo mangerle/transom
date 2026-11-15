@@ -217,8 +217,9 @@ impl AppShell {
     ) {
         if let Some(previous) = self.state.workspace.active_tab
             && previous != tab_id
+            && let Some(view) = self.state.sftp_view(previous)
         {
-            crate::sftp::dismiss_sftp_hover_preview(self, previous, cx);
+            view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
         }
         let group_id = self
             .state

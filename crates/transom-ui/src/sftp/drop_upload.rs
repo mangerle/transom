@@ -69,7 +69,11 @@ pub(crate) fn handle_dropped_files(
     if shell.state.sftp_view(tab_id).is_none() {
         crate::sftp::build_sftp_panel(shell, tab_id, index, false, window, cx);
     }
-    if let Err(message) = crate::sftp::enqueue_uploads(shell, tab_id, paths, cx) {
+    let upload_result = match shell.state.sftp_view(tab_id) {
+        Some(view) => view.update(cx, |view, cx| view.enqueue_uploads(tab_id, paths, cx)),
+        None => Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string()),
+    };
+    if let Err(message) = upload_result {
         shell.state.set_error(message);
         cx.notify();
         return;

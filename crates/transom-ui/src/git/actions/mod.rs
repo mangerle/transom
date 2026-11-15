@@ -14,7 +14,6 @@
 //!   并对外再导出各模块的类型：调用方的引用路径不因拆分而改变。
 
 use super::GitWorkspace;
-use super::commit_modal::{ChangeGroup, worktree_diff_request};
 use super::entity::GitWorkspaceEvent;
 use super::form::GitProjectDraft;
 use super::types::{GitBadge, GitWorkspaceState};
@@ -23,7 +22,8 @@ use crate::palette::localized_error;
 use crate::sidebar::SidebarSection;
 use gpui_kit::*;
 use transom_core::{
-    Connection, GitCommand, GitProject, GitProjectId, LocalConnection, Session, TabId,
+    Connection, GitCommand, GitProject, GitProjectId, GitRequestId, LocalConnection, Session,
+    TabId,
 };
 
 mod commit_actions;
@@ -36,12 +36,9 @@ mod event_dispatch;
 mod init_event;
 mod log_actions;
 pub(crate) mod modal_bridges;
-use log_actions::git_load_log;
-pub(crate) use log_actions::navigation::git_diff_commit_file;
-use log_actions::navigation::{git_load_more_log, git_select_commit_by_index};
 mod ref_actions;
 mod shelf_actions;
-pub(crate) use shelf_actions::{git_create_worktree, git_open_worktree_path, git_reload_worktrees};
+pub(crate) use shelf_actions::CreateWorktreeParams;
 mod sidebar_actions;
 mod workspace_refs;
 pub(crate) use sidebar_actions::{
@@ -51,7 +48,7 @@ pub(crate) use sidebar_actions::{
 
 // 统一收口对外导出的动作与事件分发自由函数，供 Git 各视图与主壳层按 `crate::git::actions::*` 调用。
 pub(crate) use super::types::{GitDiffRequest, first_worktree_diff};
-pub(crate) use ref_actions::{GitHistoryAction, GitRefAction, git_refresh_active_projects};
+pub(crate) use ref_actions::GitHistoryAction;
 
 /// 项目与分组一次落盘。
 ///
@@ -86,6 +83,11 @@ pub(crate) fn refresh_all_git_projects(shell: &mut AppShell, cx: &mut Context<Ap
     }
 }
 
+/// 刷新所有处于管理状态的 Git 项目状态（用于窗口重新聚焦时自动刷新）。
+pub(crate) fn git_refresh_active_projects(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+    refresh_all_git_projects(shell, cx);
+}
+
 /// 采集单个项目的状态快照（侧栏徽标与标签页共用同一条命令）。
 pub(crate) fn git_refresh(shell: &mut AppShell, project: &GitProject, cx: &mut Context<AppShell>) {
     let badge = shell.state.git.badges.entry(project.id).or_default();
@@ -97,24 +99,32 @@ pub(crate) fn git_refresh(shell: &mut AppShell, project: &GitProject, cx: &mut C
     shell.send_command(GitCommand::LoadRefs {
         project: project.clone(),
     });
-    shelf_actions::git_reload_worktrees(shell, project, cx);
+    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
+        workspace.update(cx, |ws, cx| ws.reload_worktrees(cx));
+    } else {
+        shell.send_command(GitCommand::ListWorktrees {
+            project: project.clone(),
+            request_id: GitRequestId::new(),
+        });
+    }
     cx.notify();
 }
 
-/// 打开某个改动行的差异（文件行按钮、行点击与首屏自动选中共用）。
-pub(crate) fn git_open_worktree_diff(
-    shell: &mut AppShell,
-    project: &GitProject,
-    group: ChangeGroup,
-    path: String,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) else {
+/// 把一个工作树目录加进项目列表（工作树视图点击即切换/导入）。
+fn git_open_worktree_path(shell: &mut AppShell, path: &str, cx: &mut Context<AppShell>) {
+    let target = std::path::PathBuf::from(path);
+    if let Some(project) = shell
+        .state
+        .git
+        .projects
+        .iter()
+        .find(|item| item.path == target)
+        .cloned()
+    {
+        git_refresh(shell, &project, cx);
         return;
-    };
-    workspace.update(cx, |ws, cx| {
-        ws.open_diff(worktree_diff_request(group, path), cx)
-    });
+    }
+    add_git_project(shell, super::GitProjectDraft::new(target), cx);
 }
 
 /// 打开（或聚焦）一个项目的 Git 标签页。
@@ -149,11 +159,11 @@ pub(crate) fn open_git_tab(
         .state
         .workspace
         .tabs
-        .push(TerminalTab::git_tab(tab_id, session, title, workspace));
+        .push(TerminalTab::git_tab(tab_id, session, title, workspace.clone()));
     shell.state.workspace.create_group(tab_id, session_id);
     shell.activate_tab(tab_id, window, cx);
     git_refresh(shell, &project, cx);
-    log_actions::git_load_log(shell, tab_id, 0, cx);
+    workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
     cx.notify();
 }
 

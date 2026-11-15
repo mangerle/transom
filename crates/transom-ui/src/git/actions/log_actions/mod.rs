@@ -1,10 +1,9 @@
 //! 日志视图的动作：过滤、分页、选行、跳转、列开关、分组勾选与差异打开。
 //!
 //! 设计原理（Why）：这些都是「只改视图状态 + 发读命令」的轻动作，放一处便于核对
-//! 借用边界（先取数据结束借用，再投递命令）与请求登记口径。日志分页的核心状态机
-//! 已迁到 `GitWorkspace::load_log`，外壳只负责定位实体与在实体更新后请求重绘。
+//! 借用边界（先取数据结束借用，再投递命令）与请求登记口径。日志动作已全部内聚到
+//! `GitWorkspace` 实体自身，通过事件总线向外通知状态或错误。
 
-use crate::app::AppShell;
 use crate::git::commit_modal::ChangeGroup;
 use crate::git::commit_modal::dir_tree::{build_dir_tree, collect_dir_keys};
 use crate::git::types::GitDiffRequest;
@@ -12,7 +11,6 @@ use crate::git::{GitWorkspace, GitWorkspaceEvent};
 use gpui_kit::*;
 use transom_core::{
     ChangeCode, GitAction, GitCommand, GitRequestId, GitSide, LogScope, StatusEntry, StatusRecord,
-    TabId,
 };
 
 impl GitWorkspace {
@@ -201,25 +199,6 @@ impl GitWorkspace {
         self.send(command);
         cx.notify();
     }
-}
-
-/// 分页加载提交历史；`skip` 为 0 时整页替换，否则追加（下拉加载）。
-pub(crate) fn git_load_log(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    skip: usize,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    let sent = workspace.update(cx, |workspace, _| workspace.load_log(skip));
-    if !sent {
-        shell
-            .state
-            .set_error(rust_i18n::t!("error.command_queue_full").to_string());
-    }
-    cx.notify();
 }
 
 pub(crate) mod navigation;
