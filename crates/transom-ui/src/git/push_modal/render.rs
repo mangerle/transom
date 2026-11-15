@@ -1,12 +1,5 @@
 //! Git 推送模态弹窗主渲染逻辑（双栏布局、目标分支标头与底栏安全选项）。
-//!
-//! 设计原理（Why）：
-//! - 全面贯彻 openidea / IntelliJ IDEA Git 推送模态交互标准；
-//! - 顶部明确标注本地到远端的分支映射；
-//! - 双栏左侧展示全部待推送提交历史（Outgoing Commits），右侧展示选中提交的作者详情与文件变更；
-//! - 底部包含标签策略（--follow-tags / --tags）、受保护分支防护的强制推送与跳过钩子选项。
 
-use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -14,26 +7,20 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::{PushTagsMode, TabId};
+use transom_core::PushTagsMode;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::views::{render_commit_detail_card, render_commit_row, render_file_row};
-use crate::git::GitPushModal;
+use super::{GitPushModalEvent, GitPushModalView, is_git_branch_protected};
 
 /// 渲染推送模态弹窗主体。
 pub(super) fn render_push_dialog(
-    shell: &AppShell,
-    app: &Entity<AppShell>,
+    modal: &GitPushModalView,
     _window: &mut Window,
-    cx: &App,
+    cx: &mut Context<GitPushModalView>,
     p: &Palette,
 ) -> AnyElement {
-    let Some(modal) = shell.state.modals.git.push.as_ref() else {
-        return div().into_any_element();
-    };
-
-    let is_protected = super::is_git_branch_protected(&modal.remote_branch, cx);
-    let tab_id = crate::git::actions::git_tab_for_project(shell, modal.project.id, cx);
+    let is_protected = is_git_branch_protected(&modal.remote_branch, cx);
 
     let mut container = v_flex()
         .w_full()
@@ -42,13 +29,13 @@ pub(super) fn render_push_dialog(
         container = container.child(render_push_error_banner(err, p));
     }
     container
-        .child(render_push_split_body(modal, tab_id, app, p))
-        .child(render_push_footer(modal, is_protected, app, p))
+        .child(render_push_split_body(modal, cx, p))
+        .child(render_push_footer(modal, is_protected, cx, p))
         .into_any_element()
 }
 
 /// 渲染顶部目标路径胶囊与提交计数栏。
-fn render_push_target_bar(modal: &GitPushModal, is_protected: bool, p: &Palette) -> AnyElement {
+fn render_push_target_bar(modal: &GitPushModalView, is_protected: bool, p: &Palette) -> AnyElement {
     let commits_count = modal.commits.len();
     h_flex()
         .w_full()
@@ -155,9 +142,8 @@ fn render_push_target_bar(modal: &GitPushModal, is_protected: bool, p: &Palette)
 
 /// 渲染双栏主体（左栏待推送提交列表，右栏提交详情与变更文件）。
 fn render_push_split_body(
-    modal: &GitPushModal,
-    tab_id: Option<TabId>,
-    app: &Entity<AppShell>,
+    modal: &GitPushModalView,
+    cx: &mut Context<GitPushModalView>,
     p: &Palette,
 ) -> AnyElement {
     let commits_list: Vec<AnyElement> = if modal.commits_loading {
@@ -176,7 +162,7 @@ fn render_push_split_body(
             .iter()
             .map(|commit| {
                 let is_selected = modal.selected_oid.as_deref() == Some(&commit.oid);
-                render_commit_row(commit, is_selected, app, p)
+                render_commit_row(commit, is_selected, cx, p)
             })
             .collect()
     };
@@ -185,7 +171,7 @@ fn render_push_split_body(
         .selected_oid
         .as_ref()
         .and_then(|oid| modal.commits.iter().find(|c| &c.oid == oid))
-        .map(|commit| render_commit_detail_card(commit, app, p));
+        .map(|commit| render_commit_detail_card(commit, cx, p));
 
     let files_list: Vec<AnyElement> = if modal.files_loading {
         vec![render_muted_placeholder(
@@ -201,7 +187,7 @@ fn render_push_split_body(
         modal
             .commit_files
             .iter()
-            .map(|file| render_file_row(file, tab_id, app, p))
+            .map(|file| render_file_row(file, modal.tab_id, cx, p))
             .collect()
     };
 
@@ -305,16 +291,11 @@ fn render_push_error_banner(err: &str, p: &Palette) -> AnyElement {
 
 /// 渲染底部选项与动作栏。
 fn render_push_footer(
-    modal: &GitPushModal,
+    modal: &GitPushModalView,
     is_protected: bool,
-    app: &Entity<AppShell>,
+    cx: &mut Context<GitPushModalView>,
     p: &Palette,
 ) -> AnyElement {
-    let app_tags = app.clone();
-    let app_force = app.clone();
-    let app_no_verify = app.clone();
-    let app_cancel = app.clone();
-    let app_submit = app.clone();
     let running = modal.running;
     let force = modal.force;
     let tags_mode = modal.tags_mode;
@@ -357,9 +338,9 @@ fn render_push_footer(
                         .text_color(p.muted_foreground)
                         .child(tags_label),
                 )
-                .on_click(move |_, _, cx| {
-                    app_tags.update(cx, super::git_cycle_push_tags_mode);
-                }),
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.cycle_tags_mode(cx);
+                })),
         )
         .child(
             h_flex()
@@ -386,11 +367,11 @@ fn render_push_footer(
                             format!("{} (--force-with-lease)", rust_i18n::t!("git.push.force"))
                         }),
                 )
-                .on_click(move |_, _, cx| {
+                .on_click(cx.listener(move |this, _, _, cx| {
                     if !is_protected {
-                        app_force.update(cx, super::git_toggle_push_force);
+                        this.toggle_force(cx);
                     }
-                }),
+                })),
         )
         .child(
             h_flex()
@@ -405,9 +386,9 @@ fn render_push_footer(
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("git.push.no_verify").to_string()),
                 )
-                .on_click(move |_, _, cx| {
-                    app_no_verify.update(cx, super::git_toggle_push_no_verify);
-                }),
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_no_verify(cx);
+                })),
         )
         .child(div().flex_1())
         .child(
@@ -415,9 +396,9 @@ fn render_push_footer(
                 .ghost()
                 .small()
                 .label(rust_i18n::t!("git.project.cancel").to_string())
-                .on_click(move |_, _, cx| {
-                    app_cancel.update(cx, super::close_git_push_modal);
-                }),
+                .on_click(cx.listener(|_, _, _, cx| {
+                    cx.emit(GitPushModalEvent::Close);
+                })),
         )
         .child(
             Button::new("git-push-submit")
@@ -432,9 +413,9 @@ fn render_push_footer(
                 } else {
                     rust_i18n::t!("git.menu.push").to_string()
                 })
-                .on_click(move |_, _, cx| {
-                    app_submit.update(cx, super::submit_git_push_modal);
-                }),
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.submit(cx);
+                })),
         )
         .into_any_element()
 }

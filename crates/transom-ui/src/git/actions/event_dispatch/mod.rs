@@ -108,8 +108,7 @@ pub(crate) fn dispatch_git_event(
                     workspace.state.drop_request(request_id);
                 });
             }
-            crate::git::rebase_modal::git_apply_rebase_todo(shell, &base, steps);
-            cx.notify();
+            crate::git::actions::modal_bridges::apply_git_rebase_todo(shell, &base, steps, cx);
         }
         GitAppEvent::CommitUrlLoaded {
             project_id,
@@ -144,7 +143,7 @@ pub(crate) fn dispatch_git_event(
                     }
                 });
             }
-            crate::git::push_modal::git_apply_push_commit_files(shell, &oid, files);
+            crate::git::actions::modal_bridges::apply_git_push_commit_files(shell, &oid, files, cx);
             cx.notify();
         }
         GitAppEvent::OutgoingCommitsLoaded {
@@ -159,7 +158,7 @@ pub(crate) fn dispatch_git_event(
                     workspace.state.drop_request(request_id);
                 });
             }
-            crate::git::push_modal::git_apply_outgoing_commits(
+            crate::git::actions::modal_bridges::apply_git_outgoing_commits(
                 shell,
                 project_id,
                 &branch,
@@ -443,14 +442,9 @@ pub(crate) fn dispatch_git_event(
             sides,
             ..
         } => {
-            if let Some(modal) = shell.state.modals.git.conflict.as_mut()
-                && modal.project.id == project_id
-                && modal.active_file().is_some_and(|f| f == path)
-            {
-                modal.sides = Some(*sides);
-                modal.loading = false;
-                cx.notify();
-            }
+            crate::git::actions::modal_bridges::apply_git_conflict_sides(
+                shell, project_id, &path, *sides, cx,
+            );
         }
     }
 }

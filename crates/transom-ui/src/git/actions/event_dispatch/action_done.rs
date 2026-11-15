@@ -19,7 +19,13 @@ pub(super) fn handle_git_action_done(
         Some(text) => {
             log::error!("Git 动作失败，动作: {action:?}，项目: {project_id}，原因: {text}");
             crate::git::patch::git_patch_failed(shell, project_id, action, cx);
-            crate::git::rebase_modal::git_rebase_failed(shell, project_id, action, text.clone());
+            crate::git::actions::modal_bridges::fail_git_rebase_modal(
+                shell,
+                project_id,
+                action,
+                text.clone(),
+                cx,
+            );
             shell.set_error(text.clone());
         }
         None => {
@@ -88,46 +94,31 @@ pub(super) fn handle_git_action_done(
         // 变基改写了整段历史：日志必须重取，否则界面还停在旧提交上。
         // 失败时不关对话框，用户要看到原因并可以改清单重试。
         if matches!(action, GitAction::RebaseRun) {
-            shell.state.modals.git.rebase = None;
+            crate::git::actions::modal_bridges::close_git_rebase_modal(shell, cx);
         }
         if let Some(tab_id) = crate::git::actions::git_tab_for_project(shell, project_id, cx) {
             crate::git::actions::git_load_log(shell, tab_id, 0, cx);
         }
     }
     if matches!(action, GitAction::Push) {
-        crate::git::push_modal::git_handle_push_result(shell, project_id, message.clone(), cx);
+        crate::git::actions::modal_bridges::handle_git_push_result(
+            shell,
+            project_id,
+            message.clone(),
+            cx,
+        );
     }
     if matches!(
         action,
         GitAction::ResolveConflictOurs
             | GitAction::ResolveConflictTheirs
             | GitAction::ResolveConflictMark
-    ) && let Some(modal) = shell.state.modals.git.conflict.as_mut()
-    {
-        modal.resolving = false;
-        if message.is_none() {
-            let idx = modal.selected_index;
-            if idx < modal.files.len() {
-                modal.files.remove(idx);
-            }
-            if modal.files.is_empty() {
-                shell.state.modals.git.conflict = None;
-            } else {
-                modal.selected_index = modal.selected_index.min(modal.files.len() - 1);
-                modal.loading = true;
-                modal.sides = None;
-                let next_file = modal.files[modal.selected_index].clone();
-                let project = modal.project.clone();
-                let req = transom_core::GitRequestId::new();
-                shell.send_command(GitCommand::LoadConflictSides {
-                    project,
-                    request_id: req,
-                    path: next_file,
-                });
-            }
-        } else {
-            modal.error = message.clone();
-        }
+    ) {
+        crate::git::actions::modal_bridges::handle_git_conflict_resolve_done(
+            shell,
+            message.clone(),
+            cx,
+        );
     }
     if matches!(action, GitAction::Commit)
         && let Some(tab_id) = crate::git::actions::git_tab_for_project(shell, project_id, cx)
@@ -162,7 +153,9 @@ pub(super) fn handle_git_action_done(
             {
                 let show_dialog = crate::app::app_settings(cx).git.push_dialog;
                 if show_dialog {
-                    crate::git::push_modal::open_git_push_modal(shell, &project, None, cx);
+                    crate::git::actions::modal_bridges::open_git_push_modal(
+                        shell, &project, None, cx,
+                    );
                 } else {
                     shell.send_command(GitCommand::Push {
                         project,

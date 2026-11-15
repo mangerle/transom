@@ -1,7 +1,6 @@
 //! 三方合并冲突解决器的文件清单与三方文本对比视图渲染。
 
-use super::GitConflictModal;
-use crate::app::AppShell;
+use super::GitConflictModalView;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::scroll::ScrollableElement;
@@ -9,11 +8,11 @@ use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement};
 
 pub(super) fn render_conflict_body(
-    modal: &GitConflictModal,
-    app: &Entity<AppShell>,
+    modal: &GitConflictModalView,
+    cx: &mut Context<GitConflictModalView>,
     p: &Palette,
 ) -> Div {
-    let file_list = render_conflict_file_list(modal, app, p);
+    let file_list = render_conflict_file_list(modal, cx, p);
     let diff_panels = render_conflict_3way_panels(modal, p);
 
     h_flex()
@@ -24,8 +23,11 @@ pub(super) fn render_conflict_body(
         .child(diff_panels)
 }
 
-fn render_conflict_file_list(modal: &GitConflictModal, app: &Entity<AppShell>, p: &Palette) -> Div {
-    let app_select = app.clone();
+fn render_conflict_file_list(
+    modal: &GitConflictModalView,
+    cx: &mut Context<GitConflictModalView>,
+    p: &Palette,
+) -> Div {
     let selected_idx = modal.selected_index;
 
     let items: Vec<AnyElement> = modal
@@ -33,7 +35,6 @@ fn render_conflict_file_list(modal: &GitConflictModal, app: &Entity<AppShell>, p
         .iter()
         .enumerate()
         .map(|(idx, path)| {
-            let app_item = app_select.clone();
             let is_selected = idx == selected_idx;
             let bg_color = if is_selected {
                 p.list_active
@@ -52,11 +53,9 @@ fn render_conflict_file_list(modal: &GitConflictModal, app: &Entity<AppShell>, p
                 .bg(bg_color)
                 .rounded(px(4.0))
                 .cursor_pointer()
-                .on_click(move |_, _, cx| {
-                    app_item.update(cx, |this, cx| {
-                        super::git_conflict_select_file(this, idx, cx);
-                    });
-                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.select_file(idx, cx);
+                }))
                 .child(
                     AppIconElement::new(AppIcon::for_file(path))
                         .with_rems(rems(crate::theme::tokens::control::ICON)),
@@ -100,7 +99,7 @@ fn render_conflict_file_list(modal: &GitConflictModal, app: &Entity<AppShell>, p
         )
 }
 
-fn render_conflict_3way_panels(modal: &GitConflictModal, p: &Palette) -> Div {
+fn render_conflict_3way_panels(modal: &GitConflictModalView, p: &Palette) -> Div {
     if modal.loading {
         return v_flex()
             .flex_1()

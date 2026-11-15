@@ -5,25 +5,22 @@
 //! - 遵循 openidea / IntelliJ IDEA 规范，双栏右侧提供完整提交说明卡片与改动文件列表；
 //! - 文件状态按语义色（A 绿、D 红、M 棕/黄、R 蓝）清晰区分，提升可读性。
 
-use crate::app::AppShell;
+use super::{GitPushModalEvent, GitPushModalView};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
 use transom_core::{ChangeCode, CommitEntry, CommitFile};
-use transom_ui_icons::AppIcon;
-use transom_ui_icons::AppIconElement;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 /// 渲染左栏单条待推送提交。
 pub(super) fn render_commit_row(
     commit: &CommitEntry,
     is_selected: bool,
-    app: &Entity<AppShell>,
+    cx: &mut Context<GitPushModalView>,
     p: &Palette,
 ) -> AnyElement {
     let oid_clone = commit.oid.clone();
-    let app_select = app.clone();
     let item_id = ElementId::Name(format!("push-commit-{}", commit.oid).into());
 
     h_flex()
@@ -92,24 +89,20 @@ pub(super) fn render_commit_row(
                         ),
                 ),
         )
-        .on_click(move |_, _, cx| {
-            let oid = oid_clone.clone();
-            app_select.update(cx, |this, cx| {
-                super::git_select_push_commit(this, oid, cx);
-            });
-        })
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.select_commit(oid_clone.clone(), cx);
+        }))
         .into_any_element()
 }
 
 /// 渲染右栏顶部选中的提交详情卡片（完整 Message 与作者信息）。
 pub(super) fn render_commit_detail_card(
     commit: &CommitEntry,
-    app: &Entity<AppShell>,
+    cx: &mut Context<GitPushModalView>,
     p: &Palette,
 ) -> AnyElement {
     let oid_full = commit.oid.clone();
     let oid_short = commit.short_oid().to_string();
-    let app_copy = app.clone();
 
     let full_message = if commit.body.is_empty() {
         commit.subject.clone()
@@ -161,12 +154,9 @@ pub(super) fn render_commit_detail_card(
                                 .text_color(p.muted_foreground)
                                 .child(oid_short),
                         )
-                        .on_click(move |_, _, cx| {
-                            let oid = oid_full.clone();
-                            app_copy.update(cx, |this, cx| {
-                                crate::git::helpers::write_clipboard(this, &oid, cx);
-                            });
-                        }),
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            cx.emit(GitPushModalEvent::CopyOid(oid_full.clone()));
+                        })),
                 ),
         )
         .child(
@@ -185,7 +175,7 @@ pub(super) fn render_commit_detail_card(
 pub(super) fn render_file_row(
     file: &CommitFile,
     tab_id: Option<transom_core::TabId>,
-    app: &Entity<AppShell>,
+    cx: &mut Context<GitPushModalView>,
     p: &Palette,
 ) -> AnyElement {
     let change = file.change;
@@ -199,7 +189,6 @@ pub(super) fn render_file_row(
     };
 
     let file_path = file.path.clone();
-    let app_diff = app.clone();
     let row_id = ElementId::Name(format!("push-file-{}", file.path).into());
 
     let (file_name, parent_dir) = match file.path.rsplit_once('/') {
@@ -240,13 +229,13 @@ pub(super) fn render_file_row(
                 .text_color(p.muted_foreground.opacity(0.75))
                 .child(parent_dir.to_string()),
         )
-        .on_click(move |_, _, cx| {
+        .on_click(cx.listener(move |_, _, _, cx| {
             if let Some(t_id) = tab_id {
-                let p_str = file_path.clone();
-                app_diff.update(cx, |this, cx| {
-                    crate::git::actions::git_diff_commit_file(this, t_id, &p_str, cx);
+                cx.emit(GitPushModalEvent::OpenFileDiff {
+                    tab_id: t_id,
+                    path: file_path.clone(),
                 });
             }
-        })
+        }))
         .into_any_element()
 }

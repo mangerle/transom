@@ -31,15 +31,15 @@ impl ModalKind {
                 Some(true)
             }
             ModalKind::GitRebase => {
-                crate::git::rebase_modal::git_close_rebase_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_rebase_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitPush => {
-                crate::git::push_modal::close_git_push_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_push_modal(shell, cx);
                 Some(true)
             }
             ModalKind::GitConflict => {
-                crate::git::conflict_modal::close_git_conflict_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_conflict_modal(shell, cx);
                 Some(true)
             }
             _ => None,
@@ -71,15 +71,15 @@ impl ModalKind {
                 Some(())
             }
             ModalKind::GitRebase => {
-                crate::git::rebase_modal::git_rebase_run(shell, cx);
+                crate::git::actions::modal_bridges::run_git_rebase_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitPush => {
-                crate::git::push_modal::submit_git_push_modal(shell, cx);
+                crate::git::actions::modal_bridges::submit_git_push_modal(shell, cx);
                 Some(())
             }
             ModalKind::GitConflict => {
-                crate::git::conflict_modal::close_git_conflict_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_conflict_modal(shell, cx);
                 Some(())
             }
             _ => None,
@@ -149,15 +149,30 @@ impl ModalKind {
             ModalKind::GitName => {
                 crate::git::name_modal::render_git_name_dialog_body(shell, app, cx, p)
             }
-            ModalKind::GitRebase => {
-                crate::git::rebase_modal::render_git_rebase_dialog_body(shell, app, window, cx, p)
-            }
-            ModalKind::GitPush => {
-                crate::git::push_modal::render_git_push_dialog_body(shell, app, window, cx, p)
-            }
-            ModalKind::GitConflict => crate::git::conflict_modal::render_git_conflict_dialog_body(
-                shell, app, window, cx, p,
-            ),
+            ModalKind::GitRebase => shell
+                .state
+                .modals
+                .git
+                .rebase
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::GitPush => shell
+                .state
+                .modals
+                .git
+                .push
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
+            ModalKind::GitConflict => shell
+                .state
+                .modals
+                .git
+                .conflict
+                .as_ref()
+                .map(|modal| modal.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
             _ => return None,
         };
         Some(element)

@@ -97,9 +97,9 @@ pub(crate) struct GitModals {
     pub(crate) clone: Option<crate::git::GitCloneModal>,
     pub(crate) worktree: Option<crate::git::GitWorktreeModal>,
     pub(crate) name: Option<crate::git::GitNameModal>,
-    pub(crate) rebase: Option<crate::git::GitRebaseModal>,
-    pub(crate) push: Option<crate::git::GitPushModal>,
-    pub(crate) conflict: Option<crate::git::GitConflictModal>,
+    pub(crate) rebase: Option<Entity<crate::git::GitRebaseModalView>>,
+    pub(crate) push: Option<Entity<crate::git::GitPushModalView>>,
+    pub(crate) conflict: Option<Entity<crate::git::GitConflictModalView>>,
 }
 
 impl GitModals {

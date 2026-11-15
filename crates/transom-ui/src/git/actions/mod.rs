@@ -35,6 +35,7 @@ mod diff_search;
 mod event_dispatch;
 mod init_event;
 mod log_actions;
+pub(crate) mod modal_bridges;
 use log_actions::git_load_log;
 pub(crate) use log_actions::navigation::git_diff_commit_file;
 use log_actions::navigation::{git_load_more_log, git_select_commit_by_index};
@@ -172,7 +173,7 @@ fn handle_git_workspace_event(
         }
         GitWorkspaceEvent::OpenPushModal { project, target } => {
             if crate::app::app_settings(cx).git.push_dialog {
-                crate::git::push_modal::open_git_push_modal(shell, project, target.clone(), cx);
+                modal_bridges::open_git_push_modal(shell, project, target.clone(), cx);
             } else {
                 let options = transom_core::GitPushOptions {
                     branch: target.clone(),
@@ -190,10 +191,10 @@ fn handle_git_workspace_event(
             cx.notify();
         }
         GitWorkspaceEvent::OpenRebaseModal { project, upstream } => {
-            crate::git::rebase_modal::git_open_rebase_modal(shell, project, upstream, cx);
+            modal_bridges::open_git_rebase_modal(shell, project, upstream, cx);
         }
         GitWorkspaceEvent::OpenConflictModal(project) => {
-            crate::git::conflict_modal::open_git_conflict_modal(shell, project, cx);
+            modal_bridges::open_git_conflict_modal(shell, project, cx);
         }
         GitWorkspaceEvent::OpenWorktreePath(path) => {
             git_open_worktree_path(shell, path, cx);

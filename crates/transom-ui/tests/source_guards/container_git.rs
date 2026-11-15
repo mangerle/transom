@@ -434,6 +434,8 @@ fn git_workspace_views_have_no_app_shell() {
         "src/git/diff_view",
         "src/git/commit_page",
         "src/git/commit_modal",
+        "src/git/conflict_modal",
+        "src/git/push_modal",
         "src/git/shelf",
     ] {
         for entry in walkdir_like(&root.join(dir)) {
@@ -450,6 +452,7 @@ fn git_workspace_views_have_no_app_shell() {
     }
     for file in [
         "src/git/stash.rs",
+        "src/git/rebase_modal.rs",
         "src/git/workspace.rs",
         "src/git/bottom_log.rs",
     ] {
