@@ -58,14 +58,7 @@ pub(crate) use form::{
 };
 pub(crate) use hub::render_container_hub_dialog_body;
 pub(crate) use lifecycle::on_container_create_event;
-pub(crate) use modals::{
-    render_container_commit_dialog_body, render_container_confirm_dialog_body,
-    render_container_export_config_dialog_body, render_container_file_new_dir_dialog_body,
-    render_container_file_rename_dialog_body, render_container_forward_dialog_body,
-    render_container_network_connect_dialog_body, render_container_pods_dialog_body,
-    render_container_quadlet_dialog_body, render_container_rename_dialog_body,
-    render_container_tag_dialog_body, render_container_update_dialog_body,
-};
+pub(crate) use modals::ContainerWorkspaceModal;
 pub(crate) use port_forward::open_container_port_forward;
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;

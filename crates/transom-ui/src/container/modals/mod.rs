@@ -5,6 +5,7 @@
 
 mod commit;
 mod confirm;
+mod dispatch;
 mod export;
 mod files;
 mod forward;
@@ -17,6 +18,7 @@ mod update;
 
 pub(crate) use commit::render_container_commit_dialog_body;
 pub(crate) use confirm::render_container_confirm_dialog_body;
+pub(crate) use dispatch::ContainerWorkspaceModal;
 pub(crate) use export::render_container_export_config_dialog_body;
 pub(crate) use files::{
     render_container_file_new_dir_dialog_body, render_container_file_rename_dialog_body,

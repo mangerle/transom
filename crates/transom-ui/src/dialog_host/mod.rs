@@ -172,7 +172,6 @@ impl ModalKind {
 
 mod body;
 mod container;
-mod container_views;
 mod git;
 mod registry;
 mod stack;
