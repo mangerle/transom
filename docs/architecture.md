@@ -172,7 +172,9 @@ Git 的标签页状态与动作已收进 `Entity<GitWorkspace>`，全局项目�
 SFTP 的读写结果与任务收尾由 `SftpPanelView` 具名方法落地，弹窗生命周期由
 `SftpModals` 管理；远端查找助手只接收 `WorkspaceState`。CloudSync 的运行状态、
 历史写盘器和拉取任务全部由 `CloudSyncView` 持有，动作经 `CloudSyncActions`
-窄上下文触发。
+窄上下文触发；检查、推送、拉取的事件结果由 `mark_check_finished`、
+`apply_push_success`、`apply_pull_success`、`set_message` 等实体方法落地，
+事件桥接不再直接写 `view.state`。
 
 ## 数据流
 

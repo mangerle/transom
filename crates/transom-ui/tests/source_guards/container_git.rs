@@ -1041,3 +1041,29 @@ fn git_shelf_results_applied_by_entity() {
         );
     }
 }
+
+/// 云同步事件结果必须由实体方法落地：调度节拍、冲突清理、历史与提示文案
+/// 不得在 events 桥接里直接写 `view.state`。
+#[test]
+fn cloud_sync_events_use_entity_methods() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let entity = std::fs::read_to_string(root.join("src/cloud_sync/entity.rs"))
+        .expect("读取 cloud_sync/entity.rs 失败");
+    for method in [
+        "fn mark_check_finished",
+        "fn apply_push_success",
+        "fn apply_pull_success",
+        "fn set_message",
+    ] {
+        assert!(
+            entity.contains(method),
+            "云同步结果必须由实体落地：{method}"
+        );
+    }
+    let bridge = std::fs::read_to_string(root.join("src/cloud_sync/events.rs"))
+        .expect("读取 cloud_sync/events.rs 失败");
+    assert!(
+        !bridge.contains("view.state."),
+        "cloud_sync/events.rs 不得直接写实体字段，应调用 CloudSyncView 方法"
+    );
+}

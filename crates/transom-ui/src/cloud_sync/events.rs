@@ -5,7 +5,6 @@ use super::common::*;
 use super::entity::SyncHistoryRecord;
 use super::history::SyncHistoryStatus;
 use crate::app::{AppState, TabContent, TabStatus, app_settings, update_app_settings};
-use std::time::Instant;
 use transom_core::{
     AppError, CloudPullMode, CloudPushMode, ErrorCode, GitSyncResult, SyncAppEvent,
     SyncCheckReport, SyncDocumentSummary, SyncEventMeta, SyncOperation, SyncPullReport,
@@ -46,9 +45,10 @@ fn handle_cloud_sync_checked(
     result: Result<SyncCheckReport, AppError>,
     cx: &mut Context<AppShell>,
 ) {
-    state.features.cloud_sync.update(cx, |view, _| {
-        view.state.scheduler.mark_check_finished(Instant::now());
-    });
+    state
+        .features
+        .cloud_sync
+        .update(cx, |view, _| view.mark_check_finished());
     let provider = provider_key(&app_settings(cx).sync);
     match result {
         Ok(report) => {
@@ -176,9 +176,7 @@ fn handle_cloud_sync_pushed(
             )
             .to_string();
             state.features.cloud_sync.update(cx, |view, cx| {
-                view.state.scheduler.mark_catalog_synced(catalog_revision);
-                view.state.conflict = None;
-                view.finish_success(
+                view.apply_push_success(
                     SyncHistoryRecord {
                         operation: SyncOperation::Push,
                         trigger: meta.trigger,
@@ -190,6 +188,7 @@ fn handle_cloud_sync_pushed(
                         bytes,
                         message: message.clone(),
                     },
+                    catalog_revision,
                     cx,
                 );
             });
@@ -244,7 +243,7 @@ fn handle_cloud_sync_pulled(
                 }
             };
             state.features.cloud_sync.update(cx, |view, cx| {
-                view.finish_success(
+                view.apply_pull_success(
                     SyncHistoryRecord {
                         operation: SyncOperation::Pull,
                         trigger: meta.trigger,
@@ -256,12 +255,6 @@ fn handle_cloud_sync_pulled(
                         bytes: report.bytes,
                         message: message.clone(),
                     },
-                    cx,
-                );
-                view.state.conflict = None;
-                view.begin_operation(
-                    SyncOperation::Pull,
-                    meta.trigger,
                     rust_i18n::t!("sync.pull_applying").to_string(),
                     cx,
                 );
@@ -369,7 +362,7 @@ fn follow_up_after_check(
         SyncRelation::RemoteAhead if settings.auto_pull_remote_changes => {
             if let Some(reason) = auto_pull_block_reason(state, cx) {
                 state.features.cloud_sync.update(cx, |view, cx| {
-                    view.state.message = Some(reason.clone());
+                    view.set_message(reason.clone());
                     cx.notify();
                 });
                 state.ui.status = Some(reason);

@@ -10,6 +10,7 @@ use super::history::{SyncHistoryEntry, SyncHistoryStatus, SyncHistoryWriter};
 use super::state::{CloudSyncViewState, SyncHistoryFilter};
 use crate::palette::Palette;
 use gpui_kit::*;
+use std::time::Instant;
 use transom_core::{SyncCheckReport, SyncOperation, SyncTrigger};
 
 /// 云同步侧栏操作意图。
@@ -163,6 +164,42 @@ impl CloudSyncView {
         self.state.finish(entry);
         cx.notify();
         self.state.message.clone()
+    }
+
+    /// 检查完成：记录节拍、落历史并按关系写入冲突状态。
+    pub(crate) fn mark_check_finished(&mut self) {
+        self.state.scheduler.mark_check_finished(Instant::now());
+    }
+
+    /// 推送成功：标记目录已同步、清理冲突并落历史。
+    pub(crate) fn apply_push_success(
+        &mut self,
+        record: SyncHistoryRecord<'_>,
+        catalog_revision: u64,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.scheduler.mark_catalog_synced(catalog_revision);
+        self.state.conflict = None;
+        self.finish_success(record, cx);
+    }
+
+    /// 拉取成功：清理冲突、落历史并进入应用阶段。
+    pub(crate) fn apply_pull_success(
+        &mut self,
+        record: SyncHistoryRecord<'_>,
+        applying_message: String,
+        cx: &mut Context<Self>,
+    ) {
+        let operation = record.operation;
+        let trigger = record.trigger;
+        self.state.conflict = None;
+        self.finish_success(record, cx);
+        self.begin_operation(operation, trigger, applying_message, cx);
+    }
+
+    /// 写入侧栏提示文案，供自动后续动作展示方向说明。
+    pub(crate) fn set_message(&mut self, message: impl Into<String>) {
+        self.state.message = Some(message.into());
     }
 
     pub(crate) fn apply_check_result(
