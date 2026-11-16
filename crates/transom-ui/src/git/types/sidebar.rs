@@ -60,7 +60,7 @@ impl GitHub {
     }
 
     /// 记录项目行的补初始化回执：清掉 loading，失败时写错误文案。
-    pub(crate) fn set_project_init_badge(
+    pub(crate) fn set_badge_result(
         &mut self,
         project_id: transom_core::GitProjectId,
         error: Option<&str>,

@@ -6,12 +6,139 @@
 
 use crate::git::commit_modal::ChangeGroup;
 use crate::git::commit_modal::dir_tree::{build_dir_tree, collect_dir_keys};
-use crate::git::types::GitDiffRequest;
+use crate::git::types::{GitDiffRequest, LogJump, MAX_JUMP_PAGES};
 use crate::git::{GitWorkspace, GitWorkspaceEvent};
 use gpui_kit::*;
 use transom_core::{
-    ChangeCode, GitAction, GitCommand, GitRequestId, GitSide, LogScope, StatusEntry, StatusRecord,
+    BranchEntry, ChangeCode, CommitFile, GitAction, GitCommand, GitRequestId, GitSide, LogPage,
+    LogScope, StatusEntry, StatusRecord, TagEntry,
 };
+
+/// 日志分页落地后桥接需要执行的后续动作。
+///
+/// 设计原理（Why）：把「是否落地、是否继续翻页、是否放弃跳转」的判定留在实体，
+/// 桥接只按结果接续 UI 动作；这样分页与跳转状态都只由实体持有。
+pub(crate) struct LogLoadedResolution {
+    /// 跳转目标已落地，给出其条目下标。
+    pub landed: Option<usize>,
+    /// 目标尚未出现且仍可继续翻页。
+    pub keep_waiting: bool,
+    /// 翻到页数上限仍未找到的目标，用于提示文案。
+    pub missing_jump: Option<LogJump>,
+}
+
+impl GitWorkspace {
+    /// 引用列表落地。
+    pub(crate) fn apply_refs_loaded(
+        &mut self,
+        branches: Vec<BranchEntry>,
+        tags: Vec<TagEntry>,
+        paths: Vec<String>,
+    ) {
+        let state = &mut self.state;
+        state.branches = branches;
+        state.tags = tags;
+        state.tracked_paths = paths;
+    }
+
+    /// 提交文件清单落地：按 amend 与普通提交分别登记并结束加载态。
+    pub(crate) fn apply_commit_files_loaded(
+        &mut self,
+        request_id: GitRequestId,
+        files: &[CommitFile],
+    ) {
+        let state = &mut self.state;
+        state.drop_request(request_id);
+        if state.amend_request == Some(request_id) {
+            state.amend_files = files.to_vec();
+            state.amend_files_loading = false;
+            state.amend_request = None;
+        } else {
+            state.commit_files = files.to_vec();
+            state.commit_files_loading = false;
+        }
+    }
+
+    /// 日志分页落地；旧请求或缺失请求返回 `None`。
+    pub(crate) fn apply_log_loaded(
+        &mut self,
+        request_id: GitRequestId,
+        page: LogPage,
+    ) -> Option<LogLoadedResolution> {
+        let state = &mut self.state;
+        state.drop_request(request_id);
+        let (held, appended) = state.log.request?;
+        if held != request_id {
+            // 迟到的旧请求：界面已经发起了新一轮加载，直接丢弃。
+            log::debug!("丢弃迟到的 Git 日志结果，请求: {request_id}");
+            return None;
+        }
+        state.log.request = None;
+        state.log.loading = false;
+        state.log.error = None;
+        let has_more = page.has_more;
+        if appended {
+            state.log.append_entries(&page.entries);
+        } else {
+            state.log.replace_entries(page.entries);
+        }
+        state.log.has_more = has_more;
+        let jump = state.log.jump.clone();
+        let landed = jump
+            .as_ref()
+            .and_then(|target| target.resolve(&state.log.entries));
+        let within_budget = state.log.jump_pages < MAX_JUMP_PAGES;
+        let keep_waiting =
+            landed.is_none() && jump.is_some() && state.log.has_more && within_budget;
+        if landed.is_some() {
+            state.log.jump = None;
+            state.log.jump_pages = 0;
+            return Some(LogLoadedResolution {
+                landed,
+                keep_waiting: false,
+                missing_jump: None,
+            });
+        }
+        if keep_waiting {
+            state.log.jump_pages += 1;
+            return Some(LogLoadedResolution {
+                landed: None,
+                keep_waiting: true,
+                missing_jump: None,
+            });
+        }
+        Some(LogLoadedResolution {
+            landed: None,
+            keep_waiting: false,
+            missing_jump: jump,
+        })
+    }
+
+    /// 读取失败落地：差异槽位、日志与提交清单加载态，以及未初始化标记。
+    pub(crate) fn apply_read_failure(
+        &mut self,
+        request_id: GitRequestId,
+        message: &str,
+        not_repo: bool,
+    ) {
+        self.diff_tasks.remove(&request_id);
+        let state = &mut self.state;
+        state.drop_request(request_id);
+        if state.apply_diff_failed(request_id, message) {
+            return;
+        }
+        state.log.loading = false;
+        state.log.error = Some(message.to_string());
+        state.commit_files_loading = false;
+        if not_repo {
+            // 不是仓库是「可以补初始化」的正常状态，不只是错误：
+            // 工作区据此显示初始化入口，而不是只剩一句红字。
+            state.not_repo = true;
+            state.status_loading = false;
+            state.status_error = Some(message.to_string());
+        }
+    }
+}
 
 impl GitWorkspace {
     /// 分页加载提交历史并上报队列满错误；`skip` 为 0 时整页替换，否则追加。

@@ -36,9 +36,8 @@ pub(super) fn apply_git_project_init_event(
                     workspace.apply_project_init_result(Some(&message));
                 });
             }
-            app_state.update_git_registry(cx, |git| {
-                git.set_project_init_badge(project_id, Some(&message))
-            });
+            app_state
+                .update_git_registry(cx, |git| git.set_badge_result(project_id, Some(&message)));
             app_state.set_error(message);
         }
         None => {
@@ -51,7 +50,7 @@ pub(super) fn apply_git_project_init_event(
                     workspace.apply_project_init_result(None);
                 });
             }
-            app_state.update_git_registry(cx, |git| git.set_project_init_badge(project_id, None));
+            app_state.update_git_registry(cx, |git| git.set_badge_result(project_id, None));
             if let Some(project) = project {
                 crate::git::actions::GitActions::new(app_state).git_refresh(&project, cx);
                 if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {

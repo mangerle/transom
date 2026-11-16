@@ -20,10 +20,7 @@ pub(super) fn handle_read_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.branches = branches;
-                    state.tags = tags;
-                    state.tracked_paths = paths;
+                    workspace.apply_refs_loaded(branches, tags, paths);
                 });
             }
             cx.notify();
@@ -63,16 +60,7 @@ pub(super) fn handle_read_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.drop_request(request_id);
-                    if state.amend_request == Some(request_id) {
-                        state.amend_files = files.clone();
-                        state.amend_files_loading = false;
-                        state.amend_request = None;
-                    } else {
-                        state.commit_files = files.clone();
-                        state.commit_files_loading = false;
-                    }
+                    workspace.apply_commit_files_loaded(request_id, &files);
                 });
             }
             crate::git::actions::modal_bridges::GitModalActions::new(app_state)
@@ -138,53 +126,23 @@ fn handle_log_loaded(
     let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) else {
         return;
     };
-    let Some((landed, keep_waiting, jump, tab_id)) = workspace.update(cx, |workspace, _| {
-        let state = &mut workspace.state;
-        state.drop_request(request_id);
-        let (held, appended) = state.log.request?;
-        if held != request_id {
-            // 迟到的旧请求：界面已经发起了新一轮加载，直接丢弃。
-            log::debug!("丢弃迟到的 Git 日志结果，请求: {request_id}");
-            return None;
-        }
-        state.log.request = None;
-        state.log.loading = false;
-        state.log.error = None;
-        let has_more = page.has_more;
-        if appended {
-            state.log.append_entries(&page.entries);
-        } else {
-            state.log.replace_entries(page.entries);
-        }
-        state.log.has_more = has_more;
-        let jump = state.log.jump.clone();
-        let landed = jump
-            .as_ref()
-            .and_then(|target| target.resolve(&state.log.entries));
-        let within_budget = state.log.jump_pages < crate::git::types::MAX_JUMP_PAGES;
-        let keep_waiting =
-            landed.is_none() && jump.is_some() && state.log.has_more && within_budget;
-        if landed.is_some() {
-            state.log.jump = None;
-            state.log.jump_pages = 0;
-        } else if keep_waiting {
-            state.log.jump_pages += 1;
-        }
-        Some((landed, keep_waiting, jump, workspace.tab_id))
+    let Some(resolution) = workspace.update(cx, |workspace, _| {
+        workspace.apply_log_loaded(request_id, page)
     }) else {
         return;
     };
+    let tab_id = workspace.read(cx).tab_id;
     cx.notify();
-    if let Some(index) = landed {
+    if let Some(index) = resolution.landed {
         if let Some(workspace) = app_state.git_workspace(tab_id) {
             workspace.update(cx, |ws, cx| ws.select_commit_by_index(index, cx));
         }
-    } else if keep_waiting {
+    } else if resolution.keep_waiting {
         // 目标行还没加载：顺着分页往下翻，翻到头或超页数上限才提示找不到。
         if let Some(workspace) = app_state.git_workspace(tab_id) {
             workspace.update(cx, |ws, cx| ws.load_more_log(cx));
         }
-    } else if let Some(target) = jump {
+    } else if let Some(target) = resolution.missing_jump {
         log::info!("Git 提交跳转未落地即停止，目标: {target:?}");
         app_state.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);
         cx.notify();
@@ -207,30 +165,10 @@ fn handle_read_failed(
     }
     if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
         workspace.update(cx, |workspace, _| {
-            workspace.diff_tasks.remove(&request_id);
-            let state = &mut workspace.state;
-            state.drop_request(request_id);
-            // 差异请求失败按 request_id 精确落到对应槽位与标签，避免误伤其他标签与日志状态
-            if state.apply_diff_failed(request_id, &message) {
-                return;
-            }
-            state.log.loading = false;
-            state.log.error = Some(message.clone());
-            state.commit_files_loading = false;
-            if not_repo {
-                // 不是仓库是「可以补初始化」的正常状态，不只是错误：
-                // 工作区据此显示初始化入口，而不是只剩一句红字。
-                state.not_repo = true;
-                state.status_loading = false;
-                state.status_error = Some(message.clone());
-            }
+            workspace.apply_read_failure(request_id, &message, not_repo);
         });
     }
-    app_state.update_git_registry(cx, |git| {
-        let badge = git.badges.entry(project_id).or_default();
-        badge.loading = false;
-        badge.error = Some(message.clone());
-    });
+    app_state.update_git_registry(cx, |git| git.set_badge_result(project_id, Some(&message)));
     if !not_repo {
         app_state.set_error(message);
     }

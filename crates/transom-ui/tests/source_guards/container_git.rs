@@ -911,7 +911,7 @@ fn git_init_result_applied_by_entities() {
     let sidebar = std::fs::read_to_string(root.join("src/git/types/sidebar.rs"))
         .expect("读取 git/types/sidebar.rs 失败");
     assert!(
-        sidebar.contains("fn take_project_init") && sidebar.contains("fn set_project_init_badge"),
+        sidebar.contains("fn take_project_init") && sidebar.contains("fn set_badge_result"),
         "Git 注册表必须自行管理补初始化请求与徽标"
     );
     let entity =
@@ -928,4 +928,38 @@ fn git_init_result_applied_by_entities() {
             && !bridge.contains("badge.loading"),
         "补初始化桥接不得直接改实体字段"
     );
+}
+
+/// Git 读取类结果必须由实体落地：引用、提交文件、日志分页与失败回执都不得
+/// 在事件桥接里直接改字段。
+#[test]
+fn git_read_results_applied_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let entity = std::fs::read_to_string(root.join("src/git/actions/log_actions/mod.rs"))
+        .expect("读取 git/actions/log_actions/mod.rs 失败");
+    for method in [
+        "fn apply_refs_loaded",
+        "fn apply_commit_files_loaded",
+        "fn apply_log_loaded",
+        "fn apply_read_failure",
+    ] {
+        assert!(
+            entity.contains(method),
+            "读取结果必须由 GitWorkspace 落地：{method}"
+        );
+    }
+    let bridge =
+        std::fs::read_to_string(root.join("src/git/actions/event_dispatch/read_events.rs"))
+            .expect("读取 git/actions/event_dispatch/read_events.rs 失败");
+    for forbidden in [
+        "state.log.loading",
+        "state.commit_files_loading",
+        "state.branches",
+        "badge.loading",
+    ] {
+        assert!(
+            !bridge.contains(forbidden),
+            "read_events 桥接不得直接改字段：{forbidden}"
+        );
+    }
 }
