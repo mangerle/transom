@@ -13,13 +13,11 @@ pub(super) fn apply_git_project_init_event(
     error: Option<AppError>,
     cx: &mut Context<AppShell>,
 ) {
-    let Some((pending_id, project_id)) = app_state.git_registry(cx).pending_project_init else {
+    let Some(project_id) =
+        app_state.update_git_registry(cx, |git| git.take_project_init(request_id))
+    else {
         return;
     };
-    if pending_id != request_id {
-        return;
-    }
-    app_state.update_git_registry(cx, |git| git.pending_project_init = None);
     let project = app_state
         .git_registry(cx)
         .projects
@@ -35,19 +33,11 @@ pub(super) fn apply_git_project_init_event(
             );
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.init_running = false;
-                    state.not_repo = true;
-                    state.status_loading = false;
-                    state.status_error = Some(message.clone());
-                    state.log.loading = false;
-                    state.log.error = Some(message.clone());
+                    workspace.apply_project_init_result(Some(&message));
                 });
             }
             app_state.update_git_registry(cx, |git| {
-                let badge = git.badges.entry(project_id).or_default();
-                badge.loading = false;
-                badge.error = Some(message.clone());
+                git.set_project_init_badge(project_id, Some(&message))
             });
             app_state.set_error(message);
         }
@@ -58,19 +48,10 @@ pub(super) fn apply_git_project_init_event(
             );
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.init_running = false;
-                    state.not_repo = false;
-                    state.status_error = None;
-                    state.log.loading = false;
-                    state.log.error = None;
+                    workspace.apply_project_init_result(None);
                 });
             }
-            app_state.update_git_registry(cx, |git| {
-                let badge = git.badges.entry(project_id).or_default();
-                badge.loading = false;
-                badge.error = None;
-            });
+            app_state.update_git_registry(cx, |git| git.set_project_init_badge(project_id, None));
             if let Some(project) = project {
                 crate::git::actions::GitActions::new(app_state).git_refresh(&project, cx);
                 if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {

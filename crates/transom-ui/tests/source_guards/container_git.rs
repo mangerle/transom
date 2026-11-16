@@ -902,3 +902,30 @@ fn editor_close_resolution_lives_on_entity() {
         "标签解析不得回退到 editor/bridge/lifecycle.rs"
     );
 }
+
+/// Git 补初始化回执必须由实体落地：注册表与徽标归 `GitHub`，标签页状态归
+/// `GitWorkspace`，桥接不得直接改字段。
+#[test]
+fn git_init_result_applied_by_entities() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let sidebar = std::fs::read_to_string(root.join("src/git/types/sidebar.rs"))
+        .expect("读取 git/types/sidebar.rs 失败");
+    assert!(
+        sidebar.contains("fn take_project_init") && sidebar.contains("fn set_project_init_badge"),
+        "Git 注册表必须自行管理补初始化请求与徽标"
+    );
+    let entity =
+        std::fs::read_to_string(root.join("src/git/entity.rs")).expect("读取 git/entity.rs 失败");
+    assert!(
+        entity.contains("fn apply_project_init_result"),
+        "GitWorkspace 必须自行应用补初始化结果"
+    );
+    let bridge = std::fs::read_to_string(root.join("src/git/actions/init_event.rs"))
+        .expect("读取 git/actions/init_event.rs 失败");
+    assert!(
+        !bridge.contains("state.init_running")
+            && !bridge.contains("state.not_repo")
+            && !bridge.contains("badge.loading"),
+        "补初始化桥接不得直接改实体字段"
+    );
+}

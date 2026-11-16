@@ -78,6 +78,21 @@ pub(crate) struct GitWorkspace {
 }
 
 impl GitWorkspace {
+    /// 应用仓库补初始化结果。
+    ///
+    /// 失败时把原因同时落到状态栏与日志区，并结束加载态；成功时清掉错误与
+    /// 未初始化标记，交由调用方继续触发刷新。这里只改本实体状态，不读外壳。
+    pub(crate) fn apply_project_init_result(&mut self, error: Option<&str>) {
+        let state = &mut self.state;
+        state.init_running = false;
+        state.not_repo = error.is_some();
+        state.status_error = error.map(str::to_string);
+        state.log.loading = false;
+        state.log.error = error.map(str::to_string);
+        if error.is_some() {
+            state.status_loading = false;
+        }
+    }
     /// 组装一个 Git 工作区实体。
     pub(crate) fn new(
         state: GitWorkspaceState,

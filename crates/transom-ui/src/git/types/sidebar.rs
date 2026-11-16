@@ -43,6 +43,32 @@ impl GitHub {
             auto_fetch_schedule: crate::cloud_sync::GitSyncScheduler::default(),
         }
     }
+
+    /// 取出与请求匹配的补初始化目标；没有在途请求或 id 不匹配时返回 None。
+    ///
+    /// 只读本注册表状态，不碰工作区与外壳；调用方拿到的项目 id 用于定位标签页。
+    pub(crate) fn take_project_init(
+        &mut self,
+        request_id: transom_core::GitRequestId,
+    ) -> Option<transom_core::GitProjectId> {
+        let (pending_id, project_id) = self.pending_project_init?;
+        if pending_id != request_id {
+            return None;
+        }
+        self.pending_project_init = None;
+        Some(project_id)
+    }
+
+    /// 记录项目行的补初始化回执：清掉 loading，失败时写错误文案。
+    pub(crate) fn set_project_init_badge(
+        &mut self,
+        project_id: transom_core::GitProjectId,
+        error: Option<&str>,
+    ) {
+        let badge = self.badges.entry(project_id).or_default();
+        badge.loading = false;
+        badge.error = error.map(str::to_string);
+    }
 }
 
 /// 侧栏行缓存的键：`GitProjectId` 的薄封装，避免直接依赖其可见性。

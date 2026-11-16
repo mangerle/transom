@@ -167,7 +167,7 @@ network、files、pods、quadlet、push、system_df、build、hub）的渲染改
 
 Git 的标签页状态与动作已收进 `Entity<GitWorkspace>`，全局项目列表、分组、徽标、
 克隆任务和自动抓取调度收进 `Entity<GitSidebarView>`；命令读写经实体通道执行。
-剩余 `git/actions/modal_bridges` 与事件分发是显式外壳桥接，不再直接持有全局状态字段。
+仓库补初始化的回执也由实体落地：`GitHub::take_project_init` / `set_project_init_badge` 管注册表与徽标，`GitWorkspace::apply_project_init_result` 管标签页状态，桥接只负责定位实体、转发日志与刷新。剩余 `git/actions/modal_bridges` 与事件分发是显式外壳桥接，不再直接持有全局状态字段。
 
 SFTP 的读写结果与任务收尾由 `SftpPanelView` 具名方法落地，弹窗生命周期由
 `SftpModals` 管理；远端查找助手只接收 `WorkspaceState`。CloudSync 的运行状态、
