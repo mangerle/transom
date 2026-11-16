@@ -1689,3 +1689,44 @@ fn system_df_dialog_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "磁盘看板主函数超过 80 行：{lines}");
 }
+
+/// SFTP 本地工具栏动作行必须拆分：主函数只组合快捷目录与各动作组。
+#[test]
+fn local_actions_row_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/sftp/local_pane_view/toolbar.rs"))
+        .expect("读取 sftp/local_pane_view/toolbar.rs 失败");
+    for helper in [
+        "fn local_quick_paths",
+        "fn local_transfer_buttons",
+        "fn local_create_buttons",
+        "fn local_file_edit_buttons",
+        "fn local_view_toggles",
+    ] {
+        assert!(source.contains(helper), "本地工具栏缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_local_actions_row")
+        .expect("缺少 render_local_actions_row");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_local_actions_row 超过 80 行：{lines}");
+}

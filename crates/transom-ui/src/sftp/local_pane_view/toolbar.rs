@@ -126,12 +126,31 @@ fn render_local_actions_row(
     cx: &mut Context<SftpPanelView>,
 ) -> AnyElement {
     let tab_id = props.tab_id;
-    let show_filter = props.show_filter;
-    let show_hidden = props.show_hidden;
     let quick_paths = props.quick_paths;
     let remote_available = props.remote_available;
     let diff_ready = props.diff_ready;
+    let show_filter = props.show_filter;
+    let show_hidden = props.show_hidden;
+    h_flex()
+        .gap_1()
+        .items_center()
+        .child(local_quick_paths(quick_paths, tab_id, p, cx))
+        .when(remote_available, |this| {
+            this.child(local_transfer_buttons(tab_id, diff_ready, cx))
+        })
+        .child(local_create_buttons(cx))
+        .child(local_file_edit_buttons(tab_id, cx))
+        .child(local_view_toggles(show_hidden, show_filter, cx))
+        .into_any_element()
+}
 
+/// 快捷目录按钮（主目录/桌面/下载）与分隔线。
+fn local_quick_paths(
+    quick_paths: &LocalQuickPaths,
+    tab_id: TabId,
+    p: &Palette,
+    cx: &mut Context<SftpPanelView>,
+) -> AnyElement {
     h_flex()
         .gap_1()
         .items_center()
@@ -171,78 +190,79 @@ fn render_local_actions_row(
                 .mx_1()
                 .color(p.sidebar_border),
         )
-        .when(remote_available, |this| {
-            this.child(
-                crate::widgets::IconButton::new(
-                    "local-action-upload",
-                    AppIcon::Ui(UiIcon::UPLOAD),
-                    rust_i18n::t!("sftp.upload").to_string(),
-                )
-                .size(crate::widgets::IconButtonSize::Regular)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.queue_upload(tab_id, cx);
-                })),
-            )
-            .child(
-                crate::widgets::IconButton::new(
-                    "local-diff-remote",
-                    AppIcon::Ui(UiIcon::DIFF),
-                    rust_i18n::t!("sftp.nav.diff_with_remote").to_string(),
-                )
-                .disabled(!diff_ready)
-                .size(crate::widgets::IconButtonSize::Regular)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.open_local_diff(cx);
-                })),
-            )
-        })
+        .into_any_element()
+}
+
+/// 上传与“与远端对比”按钮。
+fn local_transfer_buttons(
+    tab_id: TabId,
+    diff_ready: bool,
+    cx: &mut Context<SftpPanelView>,
+) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .items_center()
+        .child(local_action_button(
+            "local-action-upload",
+            AppIcon::Ui(UiIcon::UPLOAD),
+            rust_i18n::t!("sftp.upload").to_string(),
+            cx,
+            move |this, _window, cx| this.queue_upload(tab_id, cx),
+        ))
         .child(
             crate::widgets::IconButton::new(
-                "local-action-mkdir",
-                AppIcon::Ui(UiIcon::NEW_FOLDER),
-                rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
+                "local-diff-remote",
+                AppIcon::Ui(UiIcon::DIFF),
+                rust_i18n::t!("sftp.nav.diff_with_remote").to_string(),
             )
+            .disabled(!diff_ready)
             .size(crate::widgets::IconButtonSize::Regular)
             .render()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_local_mkdir_modal(window, cx);
-            })),
+            .on_click(cx.listener(|this, _, _, cx| this.open_local_diff(cx))),
         )
-        .child(
-            crate::widgets::IconButton::new(
-                "local-action-new-file",
-                AppIcon::Ui(UiIcon::ADD_FILE),
-                rust_i18n::t!("sftp.menu.new_local_file").to_string(),
-            )
-            .size(crate::widgets::IconButtonSize::Regular)
-            .render()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_local_new_file_modal(window, cx);
-            })),
-        )
-        .child(
-            crate::widgets::IconButton::new(
-                "local-action-rename",
-                AppIcon::Ui(UiIcon::EDIT),
-                rust_i18n::t!("sftp.rename").to_string(),
-            )
-            .size(crate::widgets::IconButtonSize::Regular)
-            .render()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_local_rename_modal(window, cx);
-            })),
-        )
-        .child(
-            crate::widgets::IconButton::new(
-                "local-action-edit",
-                AppIcon::Ui(UiIcon::REAL_INTENTION_BULB),
-                rust_i18n::t!("common.edit").to_string(),
-            )
-            .size(crate::widgets::IconButtonSize::Regular)
-            .render()
-            .on_click(cx.listener(move |this, _, _, cx| {
+        .into_any_element()
+}
+
+/// 新建目录、新建文件与重命名按钮。
+fn local_create_buttons(cx: &mut Context<SftpPanelView>) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .items_center()
+        .child(local_action_button(
+            "local-action-mkdir",
+            AppIcon::Ui(UiIcon::NEW_FOLDER),
+            rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
+            cx,
+            |this, window, cx| this.open_local_mkdir_modal(window, cx),
+        ))
+        .child(local_action_button(
+            "local-action-new-file",
+            AppIcon::Ui(UiIcon::ADD_FILE),
+            rust_i18n::t!("sftp.menu.new_local_file").to_string(),
+            cx,
+            |this, window, cx| this.open_local_new_file_modal(window, cx),
+        ))
+        .child(local_action_button(
+            "local-action-rename",
+            AppIcon::Ui(UiIcon::EDIT),
+            rust_i18n::t!("sftp.rename").to_string(),
+            cx,
+            |this, window, cx| this.open_local_rename_modal(window, cx),
+        ))
+        .into_any_element()
+}
+
+/// 编辑、属性、删除与打开文件管理器按钮。
+fn local_file_edit_buttons(tab_id: TabId, cx: &mut Context<SftpPanelView>) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .items_center()
+        .child(local_action_button(
+            "local-action-edit",
+            AppIcon::Ui(UiIcon::REAL_INTENTION_BULB),
+            rust_i18n::t!("common.edit").to_string(),
+            cx,
+            |this, _window, cx| {
                 let selected = this.state.local.selected.clone();
                 if let Some(target) = selected {
                     this.local_edit_file(target, cx);
@@ -252,17 +272,14 @@ fn render_local_actions_row(
                     );
                     cx.notify();
                 }
-            })),
-        )
-        .child(
-            crate::widgets::IconButton::new(
-                "local-action-properties",
-                AppIcon::Custom(CustomIcon::INFO),
-                rust_i18n::t!("sftp.menu.properties").to_string(),
-            )
-            .size(crate::widgets::IconButtonSize::Regular)
-            .render()
-            .on_click(cx.listener(move |this, _, _, cx| {
+            },
+        ))
+        .child(local_action_button(
+            "local-action-properties",
+            AppIcon::Custom(CustomIcon::INFO),
+            rust_i18n::t!("sftp.menu.properties").to_string(),
+            cx,
+            |this, _window, cx| {
                 let path = this
                     .state
                     .local
@@ -272,32 +289,34 @@ fn render_local_actions_row(
                 if let Some(target) = path {
                     this.show_local_properties(target, cx);
                 }
-            })),
-        )
-        .child(
-            crate::widgets::IconButton::new(
-                "local-action-delete",
-                AppIcon::Ui(UiIcon::DELETE),
-                rust_i18n::t!("sftp.delete").to_string(),
-            )
-            .size(crate::widgets::IconButtonSize::Regular)
-            .render()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.local_delete_selection(tab_id, cx);
-            })),
-        )
-        .child(
-            crate::widgets::IconButton::new(
-                "local-action-open-fm",
-                AppIcon::Ui(UiIcon::FOLDER),
-                rust_i18n::t!("sftp.menu.open_file_manager").to_string(),
-            )
-            .size(crate::widgets::IconButtonSize::Regular)
-            .render()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.local_open_file_manager(cx);
-            })),
-        )
+            },
+        ))
+        .child(local_action_button(
+            "local-action-delete",
+            AppIcon::Ui(UiIcon::DELETE),
+            rust_i18n::t!("sftp.delete").to_string(),
+            cx,
+            move |this, _window, cx| this.local_delete_selection(tab_id, cx),
+        ))
+        .child(local_action_button(
+            "local-action-open-fm",
+            AppIcon::Ui(UiIcon::FOLDER),
+            rust_i18n::t!("sftp.menu.open_file_manager").to_string(),
+            cx,
+            |this, _window, cx| this.local_open_file_manager(cx),
+        ))
+        .into_any_element()
+}
+
+/// 隐藏文件与过滤开关。
+fn local_view_toggles(
+    show_hidden: bool,
+    show_filter: bool,
+    cx: &mut Context<SftpPanelView>,
+) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .items_center()
         .child(
             crate::widgets::IconButton::new(
                 "local-toggle-hidden",
@@ -315,9 +334,7 @@ fn render_local_actions_row(
             .selected(show_hidden)
             .size(crate::widgets::IconButtonSize::Regular)
             .render()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.toggle_local_hidden(cx);
-            })),
+            .on_click(cx.listener(|this, _, _, cx| this.toggle_local_hidden(cx))),
         )
         .child(
             crate::widgets::IconButton::new(
@@ -328,10 +345,23 @@ fn render_local_actions_row(
             .selected(show_filter)
             .size(crate::widgets::IconButtonSize::Regular)
             .render()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.toggle_filter_local(window, cx);
-            })),
+            .on_click(cx.listener(|this, _, window, cx| this.toggle_filter_local(window, cx))),
         )
+        .into_any_element()
+}
+
+/// 统一工具栏动作按钮：图标、文案与点击回调。
+fn local_action_button(
+    id: &'static str,
+    icon: AppIcon,
+    tooltip: String,
+    cx: &mut Context<SftpPanelView>,
+    on_click: impl Fn(&mut SftpPanelView, &mut Window, &mut Context<SftpPanelView>) + 'static,
+) -> AnyElement {
+    crate::widgets::IconButton::new(id, icon, tooltip)
+        .size(crate::widgets::IconButtonSize::Regular)
+        .render()
+        .on_click(cx.listener(move |this, _, window, cx| on_click(this, window, cx)))
         .into_any_element()
 }
 
