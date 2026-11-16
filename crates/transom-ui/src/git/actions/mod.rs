@@ -201,7 +201,8 @@ fn handle_git_workspace_event(
         }
         GitWorkspaceEvent::OpenPushModal { project, target } => {
             if crate::app::app_settings(cx).git.push_dialog {
-                modal_bridges::open_git_push_modal(shell, project, target.clone(), cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .open_git_push_modal(project, target.clone(), cx);
             } else {
                 let options = transom_core::GitPushOptions {
                     branch: target.clone(),
@@ -219,10 +220,12 @@ fn handle_git_workspace_event(
             cx.notify();
         }
         GitWorkspaceEvent::OpenRebaseModal { project, upstream } => {
-            modal_bridges::open_git_rebase_modal(shell, project, upstream, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .open_git_rebase_modal(project, upstream, cx);
         }
         GitWorkspaceEvent::OpenConflictModal(project) => {
-            modal_bridges::open_git_conflict_modal(shell, project, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .open_git_conflict_modal(project, cx);
         }
         GitWorkspaceEvent::OpenWorktreePath(path) => {
             git_open_worktree_path(shell, path, cx);

@@ -31,15 +31,18 @@ impl ModalKind {
                 Some(true)
             }
             ModalKind::GitRebase => {
-                crate::git::actions::modal_bridges::close_git_rebase_modal(shell, cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .close_git_rebase_modal(cx);
                 Some(true)
             }
             ModalKind::GitPush => {
-                crate::git::actions::modal_bridges::close_git_push_modal(shell, cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .close_git_push_modal(cx);
                 Some(true)
             }
             ModalKind::GitConflict => {
-                crate::git::actions::modal_bridges::close_git_conflict_modal(shell, cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .close_git_conflict_modal(cx);
                 Some(true)
             }
             _ => None,
@@ -71,15 +74,18 @@ impl ModalKind {
                 Some(())
             }
             ModalKind::GitRebase => {
-                crate::git::actions::modal_bridges::run_git_rebase_modal(shell, cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .run_git_rebase_modal(cx);
                 Some(())
             }
             ModalKind::GitPush => {
-                crate::git::actions::modal_bridges::submit_git_push_modal(shell, cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .submit_git_push_modal(cx);
                 Some(())
             }
             ModalKind::GitConflict => {
-                crate::git::actions::modal_bridges::close_git_conflict_modal(shell, cx);
+                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                    .close_git_conflict_modal(cx);
                 Some(())
             }
             _ => None,

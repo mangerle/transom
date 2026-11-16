@@ -22,13 +22,8 @@ pub(super) fn handle_git_action_done(
             if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |ws, _| ws.clear_patch_on_failure(action));
             }
-            crate::git::actions::modal_bridges::fail_git_rebase_modal(
-                shell,
-                project_id,
-                action,
-                text.clone(),
-                cx,
-            );
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .fail_git_rebase_modal(project_id, action, text.clone(), cx);
             shell.set_error(text.clone());
         }
         None => {
@@ -107,19 +102,16 @@ pub(super) fn handle_git_action_done(
         // 变基改写了整段历史：日志必须重取，否则界面还停在旧提交上。
         // 失败时不关对话框，用户要看到原因并可以改清单重试。
         if matches!(action, GitAction::RebaseRun) {
-            crate::git::actions::modal_bridges::close_git_rebase_modal(shell, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .close_git_rebase_modal(cx);
         }
         if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
             workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
         }
     }
     if matches!(action, GitAction::Push) {
-        crate::git::actions::modal_bridges::handle_git_push_result(
-            shell,
-            project_id,
-            message.clone(),
-            cx,
-        );
+        crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+            .handle_git_push_result(project_id, message.clone(), cx);
     }
     if matches!(
         action,
@@ -127,11 +119,8 @@ pub(super) fn handle_git_action_done(
             | GitAction::ResolveConflictTheirs
             | GitAction::ResolveConflictMark
     ) {
-        crate::git::actions::modal_bridges::handle_git_conflict_resolve_done(
-            shell,
-            message.clone(),
-            cx,
-        );
+        crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+            .handle_git_conflict_resolve_done(message.clone(), cx);
     }
     if matches!(action, GitAction::Commit)
         && let Some(tab_id) = crate::git::actions::git_tab_for_project(shell, project_id, cx)
@@ -168,9 +157,8 @@ pub(super) fn handle_git_action_done(
             {
                 let show_dialog = crate::app::app_settings(cx).git.push_dialog;
                 if show_dialog {
-                    crate::git::actions::modal_bridges::open_git_push_modal(
-                        shell, &project, None, cx,
-                    );
+                    crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                        .open_git_push_modal(&project, None, cx);
                 } else {
                     shell.send_command(GitCommand::Push {
                         project,

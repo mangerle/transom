@@ -40,7 +40,8 @@ pub(super) fn handle_read_event(
             steps,
         } => {
             drop_workspace_request(shell, project_id, request_id, cx);
-            crate::git::actions::modal_bridges::apply_git_rebase_todo(shell, &base, steps, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .apply_git_rebase_todo(&base, steps, cx);
         }
         GitAppEvent::CommitUrlLoaded {
             project_id,
@@ -74,7 +75,8 @@ pub(super) fn handle_read_event(
                     }
                 });
             }
-            crate::git::actions::modal_bridges::apply_git_push_commit_files(shell, &oid, files, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .apply_git_push_commit_files(&oid, files, cx);
             cx.notify();
         }
         GitAppEvent::OutgoingCommitsLoaded {
@@ -85,14 +87,8 @@ pub(super) fn handle_read_event(
             commits,
         } => {
             drop_workspace_request(shell, project_id, request_id, cx);
-            crate::git::actions::modal_bridges::apply_git_outgoing_commits(
-                shell,
-                project_id,
-                &branch,
-                &remote_branch,
-                commits,
-                cx,
-            );
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .apply_git_outgoing_commits(project_id, &branch, &remote_branch, commits, cx);
             cx.notify();
         }
         GitAppEvent::DiffLoaded {

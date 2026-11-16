@@ -86,9 +86,8 @@ pub(crate) fn dispatch_git_event(
             sides,
             ..
         } => {
-            crate::git::actions::modal_bridges::apply_git_conflict_sides(
-                shell, project_id, &path, *sides, cx,
-            );
+            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                .apply_git_conflict_sides(project_id, &path, *sides, cx);
         }
     }
 }

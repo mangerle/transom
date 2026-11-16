@@ -12,6 +12,7 @@
 //! 字段仍是应用级共享状态，新增字段时必须评估是否真的属于全局状态；
 //! 功能模块之间仍共享同一份写入权限，后续按领域继续下沉到 feature 结构体。
 
+use super::AppShell;
 use super::modal_hub::ModalHub;
 use super::persistence::Persistence;
 use super::task_hub::TaskHub;
@@ -29,7 +30,7 @@ use crate::sidebar::SidebarState;
 use crate::workspace::WorkspaceState;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
-use gpui_kit::{App, Entity};
+use gpui_kit::{App, Context, Entity};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -197,6 +198,36 @@ impl AppState {
                 false
             }
         }
+    }
+
+    /// 设置会在固定时间后清除的底栏状态提示。
+    ///
+    /// 这是纯状态写入加定时清理的组合；实体和外壳只需传入文案，不持有
+    /// `AppShell`，跨域动作也因此可以在窄上下文中复用。
+    pub(crate) fn set_transient_status(
+        &mut self,
+        message: impl Into<String>,
+        cx: &mut Context<AppShell>,
+    ) {
+        let text = message.into();
+        self.ui.status = Some(text.clone());
+        self.ui.feedback.status_seq = self.ui.feedback.status_seq.wrapping_add(1);
+        let seq = self.ui.feedback.status_seq;
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(4))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.state.ui.feedback.status_seq == seq
+                    && this.state.ui.status.as_deref() == Some(text.as_str())
+                {
+                    this.state.ui.status = None;
+                    crate::status_bar::refresh_status_metrics(this, cx);
+                    cx.notify();
+                }
+            });
+        });
+        self.runtime.tasks.background.status_clear = Some(task);
     }
 
     /// 记录一条应用级错误，由下一次渲染统一转成通知。
