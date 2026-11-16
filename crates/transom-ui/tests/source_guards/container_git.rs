@@ -1896,3 +1896,44 @@ fn push_dialog_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "推送弹窗主函数超过 80 行：{lines}");
 }
+
+/// 容器变更页必须拆分：主函数只做筛选、快照与组装，不超过 80 行。
+#[test]
+fn container_changes_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/detail/changes.rs"))
+        .expect("读取 container/detail/changes.rs 失败");
+    for helper in [
+        "fn change_counts",
+        "fn filter_changes",
+        "fn changes_toolbar",
+        "fn change_row",
+        "fn change_kind_badge",
+    ] {
+        assert!(source.contains(helper), "变更页缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_container_changes")
+        .expect("缺少 render_container_changes");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_container_changes 超过 80 行：{lines}");
+}

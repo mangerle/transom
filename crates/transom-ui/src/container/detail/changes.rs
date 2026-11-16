@@ -44,59 +44,82 @@ pub(crate) fn render_container_changes(
             p,
         );
     };
-
-    let search_keyword = search_keyword.trim().to_lowercase();
-
     let all_changes = changes_data
         .filter(|(id, _)| id == container_id)
         .map(|(_, list)| list.as_slice())
         .unwrap_or(&[]);
+    let counts = change_counts(all_changes);
+    let toolbar = changes_toolbar(view, tab_id, search_input, counts, p);
+    if loading && all_changes.is_empty() {
+        return changes_hint_with_toolbar(toolbar, "container.changes.loading", p);
+    }
+    if all_changes.is_empty() {
+        return changes_hint_with_toolbar(toolbar, "container.changes.no_changes", p);
+    }
+    let filtered = filter_changes(all_changes, search_keyword);
+    if filtered.is_empty() {
+        return changes_hint_with_toolbar(toolbar, "container.changes.no_results", p);
+    }
+    let rows = v_flex().gap_0p5().children(
+        filtered
+            .into_iter()
+            .map(|change| change_row(view, change, p)),
+    );
+    scroll_body(v_flex().child(toolbar).child(rows), p).into_any_element()
+}
 
-    let filtered: Vec<&ContainerFileSystemChange> = all_changes
-        .iter()
-        .filter(|change| {
-            if search_keyword.is_empty() {
-                true
-            } else {
-                change.path.to_lowercase().contains(&search_keyword)
-            }
-        })
-        .collect();
-
-    // 统计各类变更数
-    let mut added_count = 0;
-    let mut modified_count = 0;
-    let mut deleted_count = 0;
-    for change in all_changes {
+fn change_counts(changes: &[ContainerFileSystemChange]) -> (usize, usize, usize) {
+    let mut added = 0;
+    let mut modified = 0;
+    let mut deleted = 0;
+    for change in changes {
         match change.kind {
-            ContainerPathChangeKind::Added => added_count += 1,
-            ContainerPathChangeKind::Modified => modified_count += 1,
-            ContainerPathChangeKind::Deleted => deleted_count += 1,
+            ContainerPathChangeKind::Added => added += 1,
+            ContainerPathChangeKind::Modified => modified += 1,
+            ContainerPathChangeKind::Deleted => deleted += 1,
         }
     }
+    (added, modified, deleted)
+}
 
+fn filter_changes<'a>(
+    changes: &'a [ContainerFileSystemChange],
+    search_keyword: &str,
+) -> Vec<&'a ContainerFileSystemChange> {
+    let keyword = search_keyword.trim().to_lowercase();
+    changes
+        .iter()
+        .filter(|change| keyword.is_empty() || change.path.to_lowercase().contains(&keyword))
+        .collect()
+}
+
+fn changes_hint_with_toolbar(
+    toolbar: AnyElement,
+    hint_key: &'static str,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .child(toolbar)
+        .child(centered_hint(rust_i18n::t!(hint_key).to_string(), p))
+        .into_any_element()
+}
+
+fn changes_toolbar(
+    view: &Entity<ContainerWorkspace>,
+    tab_id: TabId,
+    search_input: &Entity<InputState>,
+    counts: (usize, usize, usize),
+    p: &Palette,
+) -> AnyElement {
     let refresh_view = view.clone();
-    let refresh_btn = action_button(
-        ElementId::Name(format!("btn-refresh-diff-{tab_id}").into()),
-        UiIcon::REFRESH,
-        rust_i18n::t!("container.changes.refresh").to_string(),
-    )
-    .ghost()
-    .on_click(move |_, _, cx| {
-        refresh_view.update(cx, |workspace, cx| {
-            workspace.refresh_container_changes();
-            cx.notify();
-        });
-    });
-
+    let (added, modified, deleted) = counts;
     let stats_badges = h_flex()
         .gap_1p5()
         .items_center()
-        .child(change_badge("A", added_count, p.success, p))
-        .child(change_badge("C", modified_count, p.warning, p))
-        .child(change_badge("D", deleted_count, p.danger, p));
-
-    let toolbar = h_flex()
+        .child(change_badge("A", added, p.success, p))
+        .child(change_badge("C", modified, p.warning, p))
+        .child(change_badge("D", deleted, p.danger, p));
+    h_flex()
         .justify_between()
         .items_center()
         .gap_2()
@@ -113,109 +136,94 @@ pub(crate) fn render_container_changes(
                 )
                 .child(stats_badges),
         )
-        .child(refresh_btn);
-
-    if loading && all_changes.is_empty() {
-        return v_flex()
-            .child(toolbar)
-            .child(centered_hint(
-                rust_i18n::t!("container.changes.loading").to_string(),
-                p,
-            ))
-            .into_any_element();
-    }
-
-    if all_changes.is_empty() {
-        return v_flex()
-            .child(toolbar)
-            .child(centered_hint(
-                rust_i18n::t!("container.changes.no_changes").to_string(),
-                p,
-            ))
-            .into_any_element();
-    }
-
-    if filtered.is_empty() {
-        return v_flex()
-            .child(toolbar)
-            .child(centered_hint(
-                rust_i18n::t!("container.changes.no_results").to_string(),
-                p,
-            ))
-            .into_any_element();
-    }
-
-    let mut rows = v_flex().gap_0p5();
-    for change in filtered {
-        let (badge_text, badge_color) = match change.kind {
-            ContainerPathChangeKind::Added => ("A", p.success),
-            ContainerPathChangeKind::Modified => ("C", p.warning),
-            ContainerPathChangeKind::Deleted => ("D", p.danger),
-        };
-
-        let path_text = change.path.clone();
-        let copy_path = path_text.clone();
-        let copy_view = view.clone();
-
-        let row = h_flex()
-            .justify_between()
-            .items_center()
-            .py_1()
-            .px_2()
-            .rounded(p.radius.sm)
-            .hover(|s| s.bg(p.muted.opacity(0.2)))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .flex_1()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .w_5()
-                            .h_5()
-                            .flex_none()
-                            .rounded(p.radius.sm)
-                            .bg(badge_color.opacity(0.18))
-                            .text_color(badge_color)
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .items_center()
-                            .justify_center()
-                            .child(badge_text),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .font_family(p.mono_font_family.clone())
-                            .text_size(p.mono_font_size)
-                            .truncate()
-                            .child(path_text),
-                    ),
+        .child(
+            action_button(
+                ElementId::Name(format!("btn-refresh-diff-{tab_id}").into()),
+                UiIcon::REFRESH,
+                rust_i18n::t!("container.changes.refresh").to_string(),
             )
-            .child(
-                IconButton::new(
-                    ElementId::Name(format!("btn-copy-diff-path-{}", change.path).into()),
-                    UiIcon::COPY,
-                    rust_i18n::t!("container.detail.copy_path").to_string(),
-                )
-                .size(IconButtonSize::RowAction)
-                .render()
-                .on_click(move |_, _, cx| {
-                    cx.write_to_clipboard(ClipboardItem::new_string(copy_path.clone()));
-                    let message = rust_i18n::t!("container.detail.copied").to_string();
-                    copy_view.update(cx, |workspace, cx| {
-                        workspace.state.notice = Some(message);
-                        cx.notify();
-                    });
-                }),
-            );
+            .ghost()
+            .on_click(move |_, _, cx| {
+                refresh_view.update(cx, |workspace, cx| {
+                    workspace.refresh_container_changes();
+                    cx.notify();
+                });
+            }),
+        )
+        .into_any_element()
+}
 
-        rows = rows.child(row);
-    }
+fn change_row(
+    view: &Entity<ContainerWorkspace>,
+    change: &ContainerFileSystemChange,
+    p: &Palette,
+) -> AnyElement {
+    let (badge_text, badge_color) = match change.kind {
+        ContainerPathChangeKind::Added => ("A", p.success),
+        ContainerPathChangeKind::Modified => ("C", p.warning),
+        ContainerPathChangeKind::Deleted => ("D", p.danger),
+    };
+    let path_text = change.path.clone();
+    let copy_path = path_text.clone();
+    let copy_view = view.clone();
+    h_flex()
+        .justify_between()
+        .items_center()
+        .py_1()
+        .px_2()
+        .rounded(p.radius.sm)
+        .hover(|s| s.bg(p.muted.opacity(0.2)))
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .flex_1()
+                .min_w_0()
+                .child(change_kind_badge(badge_text, badge_color, p))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .font_family(p.mono_font_family.clone())
+                        .text_size(p.mono_font_size)
+                        .truncate()
+                        .child(path_text),
+                ),
+        )
+        .child(
+            IconButton::new(
+                ElementId::Name(format!("btn-copy-diff-path-{}", change.path).into()),
+                UiIcon::COPY,
+                rust_i18n::t!("container.detail.copy_path").to_string(),
+            )
+            .size(IconButtonSize::RowAction)
+            .render()
+            .on_click(move |_, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(copy_path.clone()));
+                let message = rust_i18n::t!("container.detail.copied").to_string();
+                copy_view.update(cx, |workspace, cx| {
+                    workspace.state.notice = Some(message);
+                    cx.notify();
+                });
+            }),
+        )
+        .into_any_element()
+}
 
-    scroll_body(v_flex().child(toolbar).child(rows), p).into_any_element()
+fn change_kind_badge(letter: &'static str, color: Hsla, p: &Palette) -> AnyElement {
+    div()
+        .w_5()
+        .h_5()
+        .flex_none()
+        .rounded(p.radius.sm)
+        .bg(color.opacity(0.18))
+        .text_color(color)
+        .text_xs()
+        .font_weight(FontWeight::BOLD)
+        .items_center()
+        .justify_center()
+        .child(letter)
+        .into_any_element()
 }
 
 fn change_badge(letter: &'static str, count: usize, color: Hsla, p: &Palette) -> AnyElement {
