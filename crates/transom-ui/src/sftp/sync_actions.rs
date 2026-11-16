@@ -79,15 +79,27 @@ pub(crate) fn sftp_open_sync_modal(
 }
 
 /// 将勾选的差异项打包成一个同步任务入队并启动队列。返回是否成功入队。
+/// 执行一次双向同步的参数集合。
+pub(crate) struct SftpSyncExecute<'a> {
+    pub tab_id: TabId,
+    pub connection_id: Option<transom_core::ConnectionId>,
+    pub local_root: &'a std::path::Path,
+    pub remote_root: &'a str,
+    pub entries: &'a [transom_core::DirDiffEntry],
+}
+
 pub(crate) fn execute_sftp_sync(
     app_state: &mut AppState,
-    tab_id: TabId,
-    connection_id: Option<transom_core::ConnectionId>,
-    local_root: &std::path::Path,
-    remote_root: &str,
-    entries: &[transom_core::DirDiffEntry],
+    params: SftpSyncExecute<'_>,
     cx: &mut Context<AppShell>,
 ) -> bool {
+    let SftpSyncExecute {
+        tab_id,
+        connection_id,
+        local_root,
+        remote_root,
+        entries,
+    } = params;
     let verify = app_settings(cx).sftp.verify_after_transfer;
     let mut upload_count = 0u32;
     let mut download_count = 0u32;

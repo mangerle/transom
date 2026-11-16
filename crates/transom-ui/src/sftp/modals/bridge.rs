@@ -238,11 +238,13 @@ impl SftpModals {
                         .map(|m| m.read(cx).state.connection_id);
                     let started = crate::sftp::execute_sftp_sync(
                         &mut shell.state,
-                        *tab_id,
-                        connection_id,
-                        local_root,
-                        remote_root,
-                        entries,
+                        crate::sftp::SftpSyncExecute {
+                            tab_id: *tab_id,
+                            connection_id,
+                            local_root,
+                            remote_root,
+                            entries,
+                        },
                         cx,
                     );
                     if started {

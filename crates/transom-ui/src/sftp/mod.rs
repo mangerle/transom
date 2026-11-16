@@ -96,7 +96,7 @@ pub(crate) use nav_actions::{
 pub(crate) use overlay::render_drop_overlay;
 pub(crate) use preview_view::render_sftp_hover_preview;
 use std::path::{Path, PathBuf};
-pub(crate) use sync_actions::{execute_sftp_sync, sftp_open_sync_modal};
+pub(crate) use sync_actions::{SftpSyncExecute, execute_sftp_sync, sftp_open_sync_modal};
 pub(crate) use sync_modal::{SftpSyncModalEvent, SftpSyncModalView};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 

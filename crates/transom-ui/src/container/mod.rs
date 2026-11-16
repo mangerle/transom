@@ -59,7 +59,7 @@ pub(crate) use form::{
 pub(crate) use hub::render_container_hub_dialog_body;
 pub(crate) use lifecycle::on_container_create_event;
 pub(crate) use modals::ContainerWorkspaceModal;
-pub(crate) use port_forward::open_container_port_forward;
+pub(crate) use port_forward::{ContainerPortForwardOpen, open_container_port_forward};
 pub(crate) use pull_drawer::render_pull_drawer;
 pub(crate) use pull_manager::PullTaskState;
 pub(crate) use push_dialog::render_container_push_dialog_body;

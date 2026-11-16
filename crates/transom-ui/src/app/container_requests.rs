@@ -56,10 +56,12 @@ impl AppShell {
             } => {
                 crate::container::open_container_port_forward(
                     &mut self.state,
-                    tab_id,
-                    container,
-                    *private,
-                    *public,
+                    crate::container::ContainerPortForwardOpen {
+                        tab_id,
+                        container_name: container,
+                        private_port: *private,
+                        published_port: *public,
+                    },
                     window,
                     cx,
                 );

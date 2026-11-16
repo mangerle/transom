@@ -18,15 +18,26 @@ use transom_core::{Connection, ConnectionId, TabId};
 ///
 /// 为什么留在外壳桥接：目标候选来自全部标签页的活跃 SSH 连接，属于跨领域快照；
 /// 把快照与输入控件一次性注入工作区实体，实体渲染时不反查外壳。
+/// 打开端口转发弹窗的参数集合，避免六个平铺参数造成顺序错误。
+pub(crate) struct ContainerPortForwardOpen<'a> {
+    pub tab_id: TabId,
+    pub container_name: &'a str,
+    pub private_port: u16,
+    pub published_port: Option<u16>,
+}
+
 pub(crate) fn open_container_port_forward(
     app_state: &mut AppState,
-    tab_id: TabId,
-    container_name: &str,
-    private_port: u16,
-    published_port: Option<u16>,
+    params: ContainerPortForwardOpen<'_>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
+    let ContainerPortForwardOpen {
+        tab_id,
+        container_name,
+        private_port,
+        published_port,
+    } = params;
     // 收集所有处于活跃连接态的 SSH 会话（排除本地会话）。
     let ssh_sessions: Vec<(String, TabId, ConnectionId)> = app_state
         .workspace

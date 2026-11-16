@@ -1190,3 +1190,35 @@ fn shell_parameters_are_registered() {
         "携壳参数只允许留在窗口生命周期（保存窗口状态与关闭应用）"
     );
 }
+
+/// 超参热点必须使用参数对象：端口转发、SFTP 同步执行与回放播放器开场三处
+/// 原先平铺 6–7 个参数，禁止回退。
+#[test]
+fn hotspot_functions_use_params_objects() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let cases = [
+        (
+            "src/container/port_forward.rs",
+            "struct ContainerPortForwardOpen",
+            "params: ContainerPortForwardOpen<'_>",
+        ),
+        (
+            "src/sftp/sync_actions.rs",
+            "struct SftpSyncExecute",
+            "params: SftpSyncExecute<'_>",
+        ),
+        (
+            "src/record/ops.rs",
+            "struct CastPlayerOpen",
+            "params: CastPlayerOpen",
+        ),
+    ];
+    for (file, marker, param) in cases {
+        let content = std::fs::read_to_string(root.join(file)).expect("读取参数对象文件失败");
+        assert!(content.contains(marker), "{file} 缺少参数对象：{marker}");
+        assert!(
+            content.contains(param),
+            "{file} 函数未使用参数对象：{param}"
+        );
+    }
+}

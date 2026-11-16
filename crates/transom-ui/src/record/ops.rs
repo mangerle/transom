@@ -105,7 +105,17 @@ pub(crate) fn open_cast_player(
         };
         let _ = this.update_in(cx, |this, window, cx| match parsed {
             Ok((header, events)) => {
-                finish_open_cast_player(&mut this.state, path, title, header, events, window, cx);
+                finish_open_cast_player(
+                    &mut this.state,
+                    CastPlayerOpen {
+                        path,
+                        title,
+                        header,
+                        events,
+                    },
+                    window,
+                    cx,
+                );
             }
             Err(error) => {
                 log::error!("解析会话录制文件失败，原因: {error}");
@@ -119,15 +129,26 @@ pub(crate) fn open_cast_player(
 }
 
 /// 录制文件解析完成后的建标签动作；必须在 UI 线程执行。
-fn finish_open_cast_player(
-    app_state: &mut AppState,
+/// 打开回放播放器的参数集合。
+struct CastPlayerOpen {
     path: PathBuf,
     title: Option<String>,
     header: transom_terminal::CastHeader,
     events: Vec<transom_terminal::CastEvent>,
+}
+
+fn finish_open_cast_player(
+    app_state: &mut AppState,
+    params: CastPlayerOpen,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
+    let CastPlayerOpen {
+        path,
+        title,
+        header,
+        events,
+    } = params;
     let file_name = path
         .file_name()
         .and_then(|n| n.to_str())
