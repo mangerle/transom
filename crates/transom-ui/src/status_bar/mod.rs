@@ -59,8 +59,8 @@ fn status_bar_entries(
     let terminal_scoped = shell.state.active_tab_has_terminal();
     let snippets_entry =
         terminal_scoped.then(|| crate::snippets::render_snippets_popover(shell, p, cx));
-    let broadcast_entry =
-        terminal_scoped.then(|| crate::broadcast::render_broadcast_trigger(shell, cx));
+    let broadcast_entry = terminal_scoped
+        .then(|| crate::broadcast::BroadcastOps::new(&mut shell.state).render_trigger(cx));
     let recording_badge =
         terminal_scoped.then(|| crate::record::render_recording_badge(shell, p, cx));
     let zmodem = shell

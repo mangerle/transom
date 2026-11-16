@@ -12,6 +12,7 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 
 /// 目标选择列表里的一行快照；下拉内容点开时才构建，闭包内不再借用 `AppShell`。
+#[derive(Clone)]
 pub(super) struct BroadcastTargetRow {
     pub(super) tab_id: TabId,
     pub(super) title: String,
@@ -61,7 +62,12 @@ pub(super) fn render_target_rows(
                         .label(row.title)
                         .on_click(move |&checked, _window, cx| {
                             app.update(cx, |this, cx| {
-                                crate::broadcast::set_broadcast_target(this, tab_id, checked, cx);
+                                crate::broadcast::set_broadcast_target(
+                                    &mut this.state.broadcast,
+                                    tab_id,
+                                    checked,
+                                    cx,
+                                );
                             });
                         }),
                 ),

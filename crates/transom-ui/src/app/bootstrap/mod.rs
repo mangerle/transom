@@ -314,7 +314,7 @@ impl AppShell {
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
-                    crate::broadcast::broadcast_send(this, window, cx);
+                    crate::broadcast::BroadcastOps::new(&mut this.state).send(window, cx);
                 }
             },
         )
@@ -324,7 +324,7 @@ impl AppShell {
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
-                    crate::broadcast::broadcast_send(this, window, cx);
+                    crate::broadcast::BroadcastOps::new(&mut this.state).send(window, cx);
                 }
             },
         )
