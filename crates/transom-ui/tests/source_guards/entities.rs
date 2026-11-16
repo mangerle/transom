@@ -26,6 +26,72 @@ fn app_shell_keeps_single_state_field() {
     );
 }
 
+/// 已迁移到窄上下文的协调模块不得重新接收整个 `AppShell`。
+///
+/// 这些模块只应借用领域状态、实体句柄、命令通道或工作区快照；继续接收外壳
+/// 会把跨域读写权限重新打开，抵消实体化与参数对象迁移。
+#[test]
+fn narrow_context_modules_have_no_app_shell_parameters() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for relative in [
+        "src/monitor/ops.rs",
+        "src/cloud_sync/actions.rs",
+        "src/diff_viewer/actions.rs",
+        "src/broadcast/mod.rs",
+        "src/split.rs",
+    ] {
+        let content = std::fs::read_to_string(root.join(relative))
+            .unwrap_or_else(|error| panic!("读取 {relative} 失败: {error}"));
+        let has_code_ref = content.lines().any(|line| {
+            !line.trim_start().starts_with("//")
+                && (line.contains("shell: &AppShell") || line.contains("shell: &mut AppShell"))
+        });
+        if has_code_ref {
+            offenders.push(relative.to_string());
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "窄上下文模块不得接收 AppShell 参数：\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// Git 全局注册表必须随 Git 侧栏实体存活，不得回到 `AppState` 平铺字段。
+#[test]
+fn git_registry_is_owned_by_sidebar_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let state = std::fs::read_to_string(root.join("src/app/state.rs")).expect("读取 AppState 失败");
+    let sidebar = std::fs::read_to_string(root.join("src/git/sidebar/entity.rs"))
+        .expect("读取 GitSidebarView 失败");
+    assert!(
+        !state.contains("pub(crate) git: crate::git::GitHub"),
+        "AppState 不得重新平铺 Git 全局注册表"
+    );
+    assert!(
+        sidebar.contains("pub(crate) state: GitHub"),
+        "GitSidebarView 必须持有 GitHub 全局注册表"
+    );
+}
+
+/// SFTP 弹窗状态不得回到 `AppState` 直接字段，统一由 `ModalHub.sftp` 管理。
+#[test]
+fn sftp_modals_are_not_app_state_direct_field() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let state = std::fs::read_to_string(root.join("src/app/state.rs")).expect("读取 AppState 失败");
+    let modal_hub =
+        std::fs::read_to_string(root.join("src/app/modal_hub.rs")).expect("读取 ModalHub 失败");
+    assert!(
+        !state.contains("pub(crate) sftp_modals"),
+        "AppState 不得重新平铺 SftpModals"
+    );
+    assert!(
+        modal_hub.contains("pub(crate) sftp: crate::sftp::SftpModals"),
+        "SftpModals 必须归入 ModalHub.sftp"
+    );
+}
+
 /// 监控面板的渲染与面板状态必须归属 `MonitorView` 实体：`monitor/` 下只允许
 /// `ops.rs` 保留 `impl AppShell`（采样调度、任务生命周期与跨域动作回交外壳）。
 /// 一旦渲染方法重新散落到外壳，说明实体化被回退了。
