@@ -1131,7 +1131,32 @@ fn whole_state_contexts_are_registered() {
     offenders.dedup();
     assert_eq!(
         offenders,
-        vec!["git/actions/mod.rs".to_string()],
-        "整状态上下文必须登记；清掉 GitActions 后应从允许清单删除"
+        Vec::<String>::new(),
+        "不允许任何整状态上下文（`{{ state: &mut AppState }}`）复活"
+    );
+}
+
+/// GitActions 必须是字段级窄上下文：注册表、侧栏、订阅、服务、落盘、
+/// 工作区、弹窗与请求队列逐项借用，不得持有整份 AppState。
+#[test]
+fn git_actions_is_narrow_context() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/git/actions/mod.rs"))
+        .expect("读取 git/actions/mod.rs 失败");
+    for field in [
+        "sidebar: Entity<GitSidebarView>",
+        "session_sidebar: &'a mut SidebarState",
+        "services: &'a UiServices",
+        "persistence: &'a Persistence",
+        "workspace: &'a mut WorkspaceState",
+        "modals: &'a mut GitModals",
+        "window_requests: &'a mut WindowRequests",
+        "pending_notices: &'a mut PendingNotices",
+    ] {
+        assert!(source.contains(field), "GitActions 缺少窄字段：{field}");
+    }
+    assert!(
+        !source.contains("\n    state: &'a mut"),
+        "GitActions 不得再持有整份 AppState 字段"
     );
 }

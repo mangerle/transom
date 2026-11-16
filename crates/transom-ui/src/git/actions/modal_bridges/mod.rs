@@ -40,6 +40,23 @@ pub(crate) struct GitModalActions<'a> {
 }
 
 impl<'a> GitModalActions<'a> {
+    /// 从 GitActions 的字段借用构造，避免模态桥接回退到整状态。
+    ///
+    /// 设计原理（Why）：两者需要重叠的字段（弹窗组、订阅表、命令端、提示队列、
+    /// 工作区与窗口请求），从同一批字段再借一次即可，不需要重新拿整份 AppState。
+    pub(crate) fn from_actions(actions: &'a mut super::GitActions<'_>) -> Self {
+        Self {
+            modals: &mut *actions.modals,
+            tasks: &mut *actions.tasks,
+            command_tx: &actions.services.command_tx,
+            pending_notices: &mut *actions.pending_notices,
+            workspace: actions.workspace,
+            window_requests: &mut *actions.window_requests,
+        }
+    }
+}
+
+impl<'a> GitModalActions<'a> {
     /// 从应用状态拆借 Git 模态协调能力（字段级窄上下文）。
     pub(crate) fn new(state: &'a mut crate::app::AppState) -> Self {
         let crate::app::AppState {
