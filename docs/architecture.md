@@ -60,7 +60,7 @@ apps/transom (组合根 + 控制平面)
 
 可复用的无状态表现层组件与设计令牌独立在 `transom-ui-kit`（`crates/transom-ui-kit/`）：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项（含禁用态）、列表行与表头、状态徽标、工具栏、语义调色板 `Palette`、字号/间距/控件尺寸令牌。组件只接收数据与回调，不依赖 `AppShell` 或应用业务状态；`transom-ui/src/widgets` 与 `theme::tokens` / `palette` / `format` / `divider` 仅作重导出与极薄的 i18n 包装。
 
-方法是按“是否需要 GPUI 上下文”划分的：不依赖 `Window`/`Entity`/`Context` 的状态查询与变更写在 `impl AppState`，其余渲染、事件路由与生命周期入口留在 `AppShell`。抽取时优先判断能否落到 `AppState`，再考虑是否真的需要外壳。
+状态查询与变更优先写在 `impl AppState` 或对应 feature 实体；跨域协调不接收整个 `AppShell`，而是使用只借用所需字段的窄上下文（如 `MonitorOps`、`CloudSyncActions`、`DiffViewerOps`、`BroadcastOps`、`SplitOps`）。`AppShell` 只保留渲染、事件路由、连接补建与窗口聚焦等生命周期入口。
 
 三条回归闸门固化上述约定：`app_shell_keeps_single_state_field` 禁止外壳重新平铺字段；`widgets_use_design_tokens` 禁止组件层写裸字号与间距；`menu_items_use_widget_constructor` 禁止手写菜单项链。
 
@@ -85,7 +85,13 @@ MODALS: &[ModalEntry]   // 顺序即层叠顺序
 面板独立为 `Entity<面板>`，外壳只持有句柄；状态、动作与渲染都归实体：
 
 ```
-AppShell { monitor: Entity<MonitorView>, editors: Entity<EditorPanels>, ... }
+AppState {
+    monitor: Entity<MonitorView>,
+    editors: Entity<EditorPanels>,
+    cloud_sync: Entity<CloudSyncView>,
+    git_sidebar: Entity<GitSidebarView>,
+    ...
+}
 MonitorView  { state: MonitorState }          // 不持有外壳句柄
 EditorPanels { manager: EditorManager }       // 不持有外壳句柄
 SettingsView { state: SettingsModalState, services: SettingsServices, ... }
@@ -103,7 +109,8 @@ impl 面板                                       →  面板自己的动作
 - 外壳处理实体事件期间不得回读该实体，否则触发
   “cannot read/update ... while it is already being updated”。
 
-已完成实体：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）、SFTP 面板
+已完成实体：监控面板（`MonitorView`）、编辑器面板（`EditorPanels`）、云同步视图
+（`CloudSyncView`）、Git 侧栏（`GitSidebarView`，持有全局项目注册表）、SFTP 面板
 （`SftpPanelView`）、设置面板（`SettingsView`）、已知主机弹窗（`KnownHostsView`）、
 备份弹窗（`BackupPromptView`：口令校验、文件选择与后台任务归实体，目录合并与
 状态栏仍由外壳消费事件完成）、审计查看器（`AuditViewerView`：扫描、选中、删除、
@@ -154,7 +161,14 @@ network、files、pods、quadlet、push、system_df、build、hub）的渲染改
 `impl AppShell`，`container_sidebar_is_owned_by_entity` 与
 `container_migration_bridge_is_removed` 防止侧栏状态回退与迁移桥复活。
 
-Git 侧已迁 `GitWorkspace::load_log` 与实体命令通道；其余 Git 动作仍在外壳。
+Git 的标签页状态与动作已收进 `Entity<GitWorkspace>`，全局项目列表、分组、徽标、
+克隆任务和自动抓取调度收进 `Entity<GitSidebarView>`；命令读写经实体通道执行。
+剩余 `git/actions/modal_bridges` 与事件分发是显式外壳桥接，不再直接持有全局状态字段。
+
+SFTP 的读写结果与任务收尾由 `SftpPanelView` 具名方法落地，弹窗生命周期由
+`SftpModals` 管理；远端查找助手只接收 `WorkspaceState`。CloudSync 的运行状态、
+历史写盘器和拉取任务全部由 `CloudSyncView` 持有，动作经 `CloudSyncActions`
+窄上下文触发。
 
 ## 数据流
 
