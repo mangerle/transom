@@ -1,8 +1,8 @@
-//! 终端录制启停、回放选择入口与独立播放器打开逻辑；回放执行由 `shell.rs` 消费实体意图。
+//! 终端录制启停、回放选择入口与独立播放器打开逻辑；回放执行由 `app_state.rs` 消费实体意图。
 
 use crate::app::app_settings;
 use crate::app::spawn_blocking_local;
-use crate::app::{AppShell, TerminalTab};
+use crate::app::{AppShell, AppState, TerminalTab};
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use gpui_kit::*;
 use std::path::PathBuf;
@@ -12,24 +12,24 @@ use transom_terminal::parse_cast_file;
 
 /// 触发当前活动会话的录制开关（录制中则停止，未录制则启动）。
 pub(crate) fn toggle_recording_for_active_tab(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(active_id) = shell.state.workspace.active_tab else {
+    let Some(active_id) = app_state.workspace.active_tab else {
         return;
     };
-    crate::record::toggle_recording(shell, active_id, window, cx);
+    crate::record::toggle_recording(app_state, active_id, window, cx);
 }
 
 /// 切换指定标签的录制状态。
 pub(crate) fn toggle_recording(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(tab) = shell.state.workspace.tab_mut(tab_id) else {
+    let Some(tab) = app_state.workspace.tab_mut(tab_id) else {
         return;
     };
     let Some(terminal) = tab.terminal() else {
@@ -45,7 +45,7 @@ pub(crate) fn toggle_recording(
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("session.cast");
-            shell.state.ui.status =
+            app_state.ui.status =
                 Some(rust_i18n::t!("recorder.saved_notice", name = name).to_string());
         }
     } else {
@@ -64,11 +64,9 @@ pub(crate) fn toggle_recording(
         let res = terminal.update(cx, |term, _| term.start_recording(path, title));
         if let Err(e) = res {
             log::error!("启动终端录制失败: {e}");
-            shell
-                .state
-                .set_error(rust_i18n::t!("recorder.start_failed").to_string());
+            app_state.set_error(rust_i18n::t!("recorder.start_failed").to_string());
         } else {
-            shell.state.ui.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
+            app_state.ui.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
         }
     }
     cx.notify();
@@ -76,19 +74,19 @@ pub(crate) fn toggle_recording(
 
 /// 打开回放弹窗选择脚本。
 pub(crate) fn open_replay_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.ui.modals.tools.replay.clone();
+    let view = app_state.ui.modals.tools.replay.clone();
     view.update(cx, |view, cx| view.open(tab_id, cx));
     cx.notify();
 }
 
 /// 在独立的只读会话回放器标签页中打开录制文件。
 pub(crate) fn open_cast_player(
-    _shell: &mut AppShell,
+    _app_state: &mut AppState,
     path: PathBuf,
     title: Option<String>,
     window: &mut Window,
@@ -107,7 +105,7 @@ pub(crate) fn open_cast_player(
         };
         let _ = this.update_in(cx, |this, window, cx| match parsed {
             Ok((header, events)) => {
-                finish_open_cast_player(this, path, title, header, events, window, cx);
+                finish_open_cast_player(&mut this.state, path, title, header, events, window, cx);
             }
             Err(error) => {
                 log::error!("解析会话录制文件失败，原因: {error}");
@@ -122,7 +120,7 @@ pub(crate) fn open_cast_player(
 
 /// 录制文件解析完成后的建标签动作；必须在 UI 线程执行。
 fn finish_open_cast_player(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     path: PathBuf,
     title: Option<String>,
     header: transom_terminal::CastHeader,
@@ -182,8 +180,8 @@ fn finish_open_cast_player(
 
     let tab = TerminalTab::player_tab(tab_id, dummy_session, tab_title, player);
 
-    shell.state.workspace.create_group(tab_id, session_id);
-    shell.state.workspace.tabs.push(tab);
-    shell.activate_tab(tab_id, window, cx);
+    app_state.workspace.create_group(tab_id, session_id);
+    app_state.workspace.tabs.push(tab);
+    app_state.ui.window_requests.push_activate_tab(tab_id);
     cx.notify();
 }

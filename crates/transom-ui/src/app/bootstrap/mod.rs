@@ -273,7 +273,7 @@ impl AppShell {
             &self.state.ui.modals.tools.replay,
             window,
             |shell, _view, event: &ReplayEvent, window, cx| {
-                crate::record::on_replay_event(shell, event, window, cx);
+                crate::record::on_replay_event(&mut shell.state, event, window, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.settings = Some(cx.subscribe(

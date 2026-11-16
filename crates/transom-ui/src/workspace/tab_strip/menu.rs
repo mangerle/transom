@@ -167,7 +167,7 @@ fn append_session_menu_items(
             let app = app.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    crate::record::toggle_recording(this, active_pane, window, cx);
+                    crate::record::toggle_recording(&mut this.state, active_pane, window, cx);
                 });
             }
         },
@@ -179,7 +179,7 @@ fn append_session_menu_items(
             let app = app.clone();
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    crate::record::open_replay_modal(this, active_pane, window, cx);
+                    crate::record::open_replay_modal(&mut this.state, active_pane, window, cx);
                 });
             }
         },

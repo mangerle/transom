@@ -62,7 +62,7 @@ fn status_bar_entries(
     let broadcast_entry = terminal_scoped
         .then(|| crate::broadcast::BroadcastOps::new(&mut shell.state).render_trigger(cx));
     let recording_badge =
-        terminal_scoped.then(|| crate::record::render_recording_badge(shell, p, cx));
+        terminal_scoped.then(|| crate::record::render_recording_badge(&mut shell.state, p, cx));
     let zmodem = shell
         .state
         .workspace

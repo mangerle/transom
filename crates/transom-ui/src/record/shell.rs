@@ -5,8 +5,8 @@
 //! 双重租借。
 
 use super::ReplayEvent;
-use crate::app::AppShell;
 use crate::app::spawn_blocking_local;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use std::path::Path;
 use std::time::Duration;
@@ -17,23 +17,23 @@ use transom_terminal::{extract_replay_inputs, parse_cast_file};
 ///
 /// 事件自带全部数据；失败日志已在动作发生点记录，这里不重复输出。
 pub(crate) fn on_replay_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &ReplayEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     match event {
         ReplayEvent::OpenPlayer { path, title } => {
-            crate::record::open_cast_player(shell, path.clone(), title.clone(), window, cx);
+            crate::record::open_cast_player(app_state, path.clone(), title.clone(), window, cx);
         }
         ReplayEvent::ReplayInTerminal { tab_id, path } => {
-            execute_replay_file(shell, *tab_id, path, cx);
+            execute_replay_file(app_state, *tab_id, path, cx);
         }
         ReplayEvent::PickExternalPlayer => {
-            pick_and_play_external_cast(shell, window, cx);
+            pick_and_play_external_cast(app_state, window, cx);
         }
         ReplayEvent::PickExternalReplay { tab_id } => {
-            pick_and_replay_external_cast(shell, *tab_id, window, cx);
+            pick_and_replay_external_cast(app_state, *tab_id, window, cx);
         }
     }
     cx.notify();
@@ -41,7 +41,7 @@ pub(crate) fn on_replay_event(
 
 /// 打开外部 `.cast` 文件并在独立播放器中打开。
 fn pick_and_play_external_cast(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
@@ -53,12 +53,12 @@ fn pick_and_play_external_cast(
         return;
     };
 
-    crate::record::open_cast_player(shell, path, None, window, cx);
+    crate::record::open_cast_player(app_state, path, None, window, cx);
 }
 
 /// 打开外部 `.cast` 文件并立即向当前终端重放。
 fn pick_and_replay_external_cast(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -71,12 +71,12 @@ fn pick_and_replay_external_cast(
         return;
     };
 
-    execute_replay_file(shell, tab_id, &path, cx);
+    execute_replay_file(app_state, tab_id, &path, cx);
 }
 
 /// 执行指定文件的重放。
 fn execute_replay_file(
-    _shell: &mut AppShell,
+    _app_state: &mut AppState,
     tab_id: TabId,
     path: &Path,
     cx: &mut Context<AppShell>,
@@ -94,7 +94,9 @@ fn execute_replay_file(
             return;
         };
         let _ = this.update(cx, |this, cx| match parsed {
-            Ok((header, events)) => execute_replay_events(this, tab_id, header, events, cx),
+            Ok((header, events)) => {
+                execute_replay_events(&mut this.state, tab_id, header, events, cx)
+            }
             Err(error) => {
                 log::error!("解析回放脚本失败: {error}");
                 this.state
@@ -108,7 +110,7 @@ fn execute_replay_file(
 
 /// 解析完成后的输入流调度；必须在 UI 线程执行。
 fn execute_replay_events(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     header: transom_terminal::CastHeader,
     events: Vec<transom_terminal::CastEvent>,
@@ -116,12 +118,12 @@ fn execute_replay_events(
 ) {
     let steps = extract_replay_inputs(&events, 1.5);
     if steps.is_empty() {
-        shell.state.ui.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
+        app_state.ui.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
         cx.notify();
         return;
     }
 
-    let Some(tab) = shell.state.workspace.tab(tab_id) else {
+    let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
     let Some(terminal) = tab.terminal() else {
@@ -129,7 +131,7 @@ fn execute_replay_events(
     };
 
     let step_count = steps.len();
-    shell.state.ui.status = Some(
+    app_state.ui.status = Some(
         rust_i18n::t!(
             "recorder.replaying_start",
             title = header

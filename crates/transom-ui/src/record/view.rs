@@ -1,6 +1,6 @@
 //! 终端录制底栏指示器渲染；回放选择弹窗已迁至 `render.rs`。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::Palette;
 use crate::status_bar::BADGE_HEIGHT;
 use gpui_kit::base::h_flex;
@@ -15,7 +15,7 @@ use transom_ui_icons::UiIcon;
 /// 渲染底栏录制指示器。
 /// 录制中的红色指示徽标：点击停止。
 fn render_recording_indicator(
-    _shell: &mut AppShell,
+    _app_state: &mut AppState,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
@@ -32,20 +32,20 @@ fn render_recording_indicator(
         .cursor_pointer()
         .tooltip(move |_window, cx| Tooltip::new(stop_tip.clone()).build(_window, cx))
         .on_click(cx.listener(|this, _, window, cx| {
-            crate::record::toggle_recording_for_active_tab(this, window, cx);
+            crate::record::toggle_recording_for_active_tab(&mut this.state, window, cx);
         }))
         .child(tag)
         .into_any_element()
 }
 
 pub(crate) fn render_recording_badge(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let active_tab_id = shell.state.workspace.active_tab;
+    let active_tab_id = app_state.workspace.active_tab;
     let active_is_recording = active_tab_id
-        .and_then(|id| shell.state.workspace.tab(id))
+        .and_then(|id| app_state.workspace.tab(id))
         .and_then(|t| t.terminal())
         .is_some_and(|term| term.read(cx).is_recording());
 
@@ -60,11 +60,11 @@ pub(crate) fn render_recording_badge(
         .size(crate::widgets::IconButtonSize::Compact)
         .render()
         .on_click(cx.listener(|this, _, window, cx| {
-            crate::record::toggle_recording_for_active_tab(this, window, cx);
+            crate::record::toggle_recording_for_active_tab(&mut this.state, window, cx);
         }))
         .into_any_element()
     } else {
-        render_recording_indicator(shell, p, cx)
+        render_recording_indicator(app_state, p, cx)
     };
 
     h_flex()
@@ -90,7 +90,11 @@ pub(crate) fn render_recording_badge(
                     let app = app.clone();
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
-                            crate::record::toggle_recording_for_active_tab(this, window, cx);
+                            crate::record::toggle_recording_for_active_tab(
+                                &mut this.state,
+                                window,
+                                cx,
+                            );
                         });
                     }
                 },
@@ -104,7 +108,12 @@ pub(crate) fn render_recording_badge(
                         let app = app.clone();
                         move |_, window, cx| {
                             app.update(cx, |this, cx| {
-                                crate::record::open_replay_modal(this, tab_id, window, cx);
+                                crate::record::open_replay_modal(
+                                    &mut this.state,
+                                    tab_id,
+                                    window,
+                                    cx,
+                                );
                             });
                         }
                     },
