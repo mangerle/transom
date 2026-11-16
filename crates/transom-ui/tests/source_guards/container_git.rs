@@ -1287,3 +1287,44 @@ fn container_detail_render_is_split() {
     let lines = source[start..end].lines().count();
     assert!(lines <= 80, "render_container_detail 超过 80 行：{lines}");
 }
+
+/// SFTP 本地右键菜单必须按动作域拆分：主构造器只决定顺序与条件，
+/// 单函数不超过 60 行。
+#[test]
+fn local_context_menu_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/sftp/local_pane_view/context_menu.rs"))
+        .expect("读取 sftp/local_pane_view/context_menu.rs 失败");
+    for helper in [
+        "fn build_parent_entry_menu",
+        "fn append_edit_item",
+        "fn append_create_items",
+        "fn append_paste_item",
+    ] {
+        assert!(source.contains(helper), "右键菜单缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn build_local_context_menu")
+        .expect("缺少 build_local_context_menu");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 60, "build_local_context_menu 超过 60 行：{lines}");
+}
