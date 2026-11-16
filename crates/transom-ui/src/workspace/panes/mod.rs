@@ -295,7 +295,8 @@ impl AppShell {
             };
             let project_id = workspace.read(cx).state.project.id;
             let badge = self
-                .state.git_registry(cx)
+                .state
+                .git_registry(cx)
                 .badges
                 .get(&project_id)
                 .cloned()
@@ -357,7 +358,7 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
+                        this.split_active_pane(SplitAxis::Horizontal, window, cx);
                     });
                 }
             },
@@ -370,7 +371,7 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
+                        this.split_active_pane(SplitAxis::Vertical, window, cx);
                     });
                 }
             },
@@ -381,7 +382,7 @@ fn pane_context_menu(
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
                     this.activate_tab(tab_id, window, cx);
-                    crate::split::toggle_zoom_pane(this, tab_id, cx);
+                    this.toggle_zoom_pane(tab_id, cx);
                 });
             }
         }))
@@ -393,7 +394,7 @@ fn pane_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(tab_id, window, cx);
-                        crate::split::detach_pane_to_tab(this, tab_id, window, cx);
+                        this.detach_pane_to_tab(tab_id, window, cx);
                     });
                 }
             },

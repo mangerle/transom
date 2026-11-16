@@ -103,7 +103,7 @@ pub(super) fn render_pane_badge(
                             let app = app_entity.clone();
                             move |_, window, cx| {
                                 app.update(cx, |this, cx| {
-                                    crate::split::select_pane(this, tab_id, window, cx);
+                                    this.select_pane(tab_id, window, cx);
                                 });
                             }
                         }),
@@ -119,7 +119,7 @@ pub(super) fn render_pane_badge(
                                 let app = app_entity.clone();
                                 move |_, _window, cx| {
                                     app.update(cx, |this, cx| {
-                                        crate::split::toggle_zoom_pane(this, active_pane, cx)
+                                        this.toggle_zoom_pane(active_pane, cx)
                                     });
                                 }
                             },

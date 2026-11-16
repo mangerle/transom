@@ -1,20 +1,20 @@
 //! 单个标签条目 UI 组件组装与子元素渲染。
 
+use super::badges::{build_tab_tooltip, build_tiled_group_badge};
+use super::item_parts::{render_pane_badge, render_tab_close_button};
+use super::menu::{TabContextMenuParams, build_tab_context_menu};
 use crate::app::AppShell;
+use crate::app::app_settings;
+use crate::connection::session_host;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 use crate::tiling::StripEntry;
+use crate::workspace::tab_drag::attach_tab_drag;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::*;
 use transom_core::Connection;
-use super::item_parts::{render_pane_badge, render_tab_close_button};
-use super::badges::{build_tab_tooltip, build_tiled_group_badge};
-use super::menu::{TabContextMenuParams, build_tab_context_menu};
-use crate::app::app_settings;
-use crate::connection::session_host;
-use crate::workspace::tab_drag::attach_tab_drag;
 use transom_ui_icons::AppIconElement;
 
 /// 渲染标签栏中的单个条目（可以是单标签或并排组）。
@@ -83,8 +83,7 @@ pub(super) fn render_tab_entry(
     let this_set_id = tiled_set.as_ref().map(|tiled| tiled.id);
 
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
-    let tab_icon =
-        crate::workspace::tab_presentation::tab_icon(&shell.state, tab, active, p, cx).0;
+    let tab_icon = crate::workspace::tab_presentation::tab_icon(&shell.state, tab, active, p, cx).0;
     let session_color = crate::workspace::tab_presentation::tab_accent(&shell.state, tab, cx);
     let mut tab_element = h_flex()
         .id(ElementId::Name(format!("tab-{group_id}").into()))

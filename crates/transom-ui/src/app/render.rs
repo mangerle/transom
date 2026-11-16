@@ -9,6 +9,7 @@ use crate::theme::tokens::{rem_px, size};
 use crate::workspace::render::{StatusBarLayoutInput, WorkspaceGroupInput};
 use gpui_kit::base::h_flex;
 use gpui_kit::*;
+use transom_core::TabId;
 
 /// 工作区外层布局的渲染输入。
 struct WorkspaceBodyInput<'a> {
@@ -123,6 +124,161 @@ impl AppShell {
 }
 
 impl AppShell {
+    /// 切分当前窗格并补建新连接。
+    pub(crate) fn split_active_pane(
+        &mut self,
+        axis: transom_core::SplitAxis,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::split::SplitOps::new(&mut self.state).split_active_pane(axis) {
+            Ok(Some(plan)) => {
+                crate::connection::start_connection(self, plan.pane_id, plan.session, cx);
+            }
+            Ok(None) => {}
+            Err(message) => {
+                self.state.set_error(message);
+                cx.notify();
+            }
+        }
+    }
+
+    /// 翻转当前分割方向。
+    pub(crate) fn toggle_split_axis(&mut self, cx: &mut Context<Self>) {
+        if crate::split::SplitOps::new(&mut self.state).toggle_split_axis() {
+            cx.notify();
+        }
+    }
+
+    /// 切换当前窗格最大化。
+    pub(crate) fn toggle_zoom_pane(&mut self, pane: TabId, cx: &mut Context<Self>) {
+        if crate::split::SplitOps::new(&mut self.state).toggle_zoom_pane(pane) {
+            cx.notify();
+        }
+    }
+
+    /// 把窗格摘出为独立标签并激活。
+    pub(crate) fn detach_pane_to_tab(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(tab_id) =
+            crate::split::SplitOps::new(&mut self.state).detach_pane_to_tab(tab_id)
+        {
+            self.activate_tab(tab_id, window, cx);
+        }
+    }
+
+    /// 选中窗格并同步最大化视图。
+    pub(crate) fn select_pane(
+        &mut self,
+        tab_id: TabId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        crate::split::SplitOps::new(&mut self.state).select_pane(tab_id);
+        self.activate_tab(tab_id, window, cx);
+    }
+
+    /// 沿方向移动组内焦点，组到边界后交给并排格。
+    fn focus_neighbor_pane(
+        &mut self,
+        direction: crate::pane_tree::PaneDirection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::split::SplitOps::new(&mut self.state).focus_neighbor_pane(direction) {
+            crate::split::SplitFocusPlan::Pane(tab_id) => self.select_pane(tab_id, window, cx),
+            crate::split::SplitFocusPlan::NeighborTiling(direction) => {
+                crate::tiling::focus_neighbor_tile(self, direction, window, cx);
+            }
+        }
+    }
+
+    fn on_split_right(
+        &mut self,
+        _: &keymap::SplitRight,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.split_active_pane(transom_core::SplitAxis::Horizontal, window, cx);
+    }
+
+    fn on_split_down(
+        &mut self,
+        _: &keymap::SplitDown,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.split_active_pane(transom_core::SplitAxis::Vertical, window, cx);
+    }
+
+    fn on_close_pane(
+        &mut self,
+        _: &keymap::ClosePane,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(tab_id) = self.state.workspace.active_tab {
+            self.close_pane(tab_id, window, cx);
+        }
+    }
+
+    fn on_toggle_split_axis(
+        &mut self,
+        _: &keymap::ToggleSplitAxis,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.toggle_split_axis(cx);
+    }
+
+    fn on_zoom_pane(&mut self, _: &keymap::ZoomPane, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(pane) = self.state.workspace.active_tab {
+            self.toggle_zoom_pane(pane, cx);
+        }
+    }
+
+    fn on_focus_pane_left(
+        &mut self,
+        _: &keymap::FocusPaneLeft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(crate::pane_tree::PaneDirection::Left, window, cx);
+    }
+
+    fn on_focus_pane_right(
+        &mut self,
+        _: &keymap::FocusPaneRight,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(crate::pane_tree::PaneDirection::Right, window, cx);
+    }
+
+    fn on_focus_pane_up(
+        &mut self,
+        _: &keymap::FocusPaneUp,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(crate::pane_tree::PaneDirection::Up, window, cx);
+    }
+
+    fn on_focus_pane_down(
+        &mut self,
+        _: &keymap::FocusPaneDown,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_neighbor_pane(crate::pane_tree::PaneDirection::Down, window, cx);
+    }
+}
+
+impl AppShell {
     /// 把工作区级快捷键动作挂到根元素上。
     ///
     /// 动作链是声明式映射，单独成方法后 `render` 只保留布局与层序；
@@ -146,15 +302,15 @@ impl AppShell {
             .on_action(cx.listener(crate::terminal_search::on_prev_prompt))
             .on_action(cx.listener(crate::terminal_search::on_next_prompt))
             .on_action(cx.listener(crate::snippets::on_toggle_snippets))
-            .on_action(cx.listener(crate::split::on_split_right))
-            .on_action(cx.listener(crate::split::on_split_down))
-            .on_action(cx.listener(crate::split::on_close_pane))
-            .on_action(cx.listener(crate::split::on_toggle_split_axis))
-            .on_action(cx.listener(crate::split::on_zoom_pane))
-            .on_action(cx.listener(crate::split::on_focus_pane_left))
-            .on_action(cx.listener(crate::split::on_focus_pane_right))
-            .on_action(cx.listener(crate::split::on_focus_pane_up))
-            .on_action(cx.listener(crate::split::on_focus_pane_down))
+            .on_action(cx.listener(Self::on_split_right))
+            .on_action(cx.listener(Self::on_split_down))
+            .on_action(cx.listener(Self::on_close_pane))
+            .on_action(cx.listener(Self::on_toggle_split_axis))
+            .on_action(cx.listener(Self::on_zoom_pane))
+            .on_action(cx.listener(Self::on_focus_pane_left))
+            .on_action(cx.listener(Self::on_focus_pane_right))
+            .on_action(cx.listener(Self::on_focus_pane_up))
+            .on_action(cx.listener(Self::on_focus_pane_down))
             // Esc 的传输取消监听：键盘事件沿焦点路径回溯，终端（焦点方）
             // 先收到并向远端写一次转义序列，再由根节点截获成取消命令。
             .on_key_down(cx.listener(crate::zmodem::on_zmodem_cancel_key))

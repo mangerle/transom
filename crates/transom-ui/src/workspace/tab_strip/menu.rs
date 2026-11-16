@@ -192,7 +192,7 @@ fn append_split_menu_items(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        crate::split::split_active_pane(this, SplitAxis::Horizontal, window, cx);
+                        this.split_active_pane(SplitAxis::Horizontal, window, cx);
                     });
                 }
             },
@@ -205,7 +205,7 @@ fn append_split_menu_items(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
-                        crate::split::split_active_pane(this, SplitAxis::Vertical, window, cx);
+                        this.split_active_pane(SplitAxis::Vertical, window, cx);
                     });
                 }
             },
@@ -220,7 +220,7 @@ fn append_split_menu_items(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             this.activate_tab(active_pane, window, cx);
-                            crate::split::toggle_split_axis(this, cx);
+                            this.toggle_split_axis(cx);
                         });
                     }
                 },
@@ -233,7 +233,7 @@ fn append_split_menu_items(
                     move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             this.activate_tab(active_pane, window, cx);
-                            crate::split::detach_pane_to_tab(this, active_pane, window, cx);
+                            this.detach_pane_to_tab(active_pane, window, cx);
                         });
                     }
                 },
