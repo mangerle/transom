@@ -100,7 +100,7 @@ pub(crate) fn close_tiling_groups(
         .flat_map(|group| group.pane_ids())
         .collect();
     if crate::editor::block_close_for_dirty_editors(
-        shell,
+        &mut shell.state,
         &panes,
         PendingEditorClose::Tiling(groups.clone()),
         cx,

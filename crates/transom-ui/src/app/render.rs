@@ -60,7 +60,7 @@ impl AppShell {
         let plan = self.plan_workspace_layout(window, cx, sidebar_width);
         // 折叠状态变化时把 SFTP 面板同步到内容宽度：必须赶在分组构建之前，
         // 本帧的面板尺寸才能反映新的宽度。
-        crate::sftp::sync_sftp_panel_width(self, window, cx);
+        crate::sftp::sync_sftp_panel_width(&mut self.state, window, cx);
         let panels_state = if plan.side_left {
             self.state.ui.workspace_panels_left.clone()
         } else {
@@ -315,7 +315,9 @@ impl AppShell {
             .on_action(cx.listener(Self::on_prev_tab))
             .on_action(cx.listener(Self::on_reconnect))
             .on_action(cx.listener(Self::on_toggle_sidebar))
-            .on_action(cx.listener(crate::sftp::on_toggle_sftp))
+            .on_action(cx.listener(|this, action, window, cx| {
+                crate::sftp::on_toggle_sftp(&mut this.state, action, window, cx)
+            }))
             .on_action(cx.listener(crate::forward::on_toggle_forward))
             .on_action(cx.listener(Self::on_toggle_immersive))
             .on_action(cx.listener(crate::terminal_search::on_search_buffer))

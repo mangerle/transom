@@ -2,8 +2,8 @@
 
 use super::SftpSyncModalState;
 use super::entity::SftpPanelView;
-use crate::app::AppShell;
 use crate::app::app_settings;
+use crate::app::{AppShell, AppState};
 use crate::sftp::{SftpRemotePaneRef, TransferTask};
 use gpui_kit::component::VirtualListScrollHandle;
 use gpui_kit::*;
@@ -69,18 +69,18 @@ impl SftpPanelView {
 }
 
 pub(crate) fn sftp_open_sync_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.open_sync_modal(cx));
     }
 }
 
 /// 将勾选的差异项打包成一个同步任务入队并启动队列。返回是否成功入队。
 pub(crate) fn execute_sftp_sync(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: Option<transom_core::ConnectionId>,
     local_root: &std::path::Path,
@@ -108,7 +108,7 @@ pub(crate) fn execute_sftp_sync(
         .collect::<Vec<_>>();
 
     if items.is_empty() {
-        if let Some(modal) = shell.state.ui.modals.sftp.sync.as_ref() {
+        if let Some(modal) = app_state.ui.modals.sftp.sync.as_ref() {
             modal.update(cx, |m, cx| {
                 m.state.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
                 cx.notify();
@@ -129,7 +129,7 @@ pub(crate) fn execute_sftp_sync(
         algorithm: app_settings(cx).sftp.checksum_algorithm,
     };
     task.target_connection_id = connection_id;
-    if let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) {
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(&app_state.workspace, tab_id, cx) {
         panel.state.queue.tasks.push(task);
         panel.state.set_status(
             rust_i18n::t!(
@@ -141,7 +141,7 @@ pub(crate) fn execute_sftp_sync(
         );
     }
     cx.notify();
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.process_queue(tab_id, cx));
     }
     true

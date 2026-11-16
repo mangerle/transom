@@ -98,13 +98,13 @@ impl AppShell {
         use crate::editor::EditorPanelEvent;
         match request {
             EditorPanelEvent::OpenGotoLine(editor) => {
-                crate::editor::open_editor_goto_line(self, editor, window, cx);
+                crate::editor::open_editor_goto_line(&mut self.state, editor, window, cx);
             }
             EditorPanelEvent::FocusSftpPanel => {
-                crate::sftp::focus_active_sftp_panel(self, window, cx)
+                crate::sftp::focus_active_sftp_panel(&self.state, window, cx)
             }
             EditorPanelEvent::ResumePendingClose => {
-                crate::editor::defer_editor_close_resume(self, window, cx);
+                crate::editor::defer_editor_close_resume(&mut self.state, window, cx);
             }
             EditorPanelEvent::OpenLocalDiff(source) => {
                 crate::diff_viewer::DiffViewerOps::new(&mut self.state)
@@ -212,13 +212,13 @@ impl AppShell {
         use crate::sftp::SftpPanelEvent;
         match request {
             SftpPanelEvent::OpenEditor(params) => {
-                crate::editor::open_remote_editor_panel(self, params, window, cx);
+                crate::editor::open_remote_editor_panel(&mut self.state, params, window, cx);
             }
             SftpPanelEvent::OpenInputModal(params) => {
                 self.state.ui.modals.sftp.open_input(params, window, cx);
             }
             SftpPanelEvent::GrowPanelWidth(extra) => {
-                crate::sftp::grow_sftp_panel_width(self, extra, window, cx);
+                crate::sftp::grow_sftp_panel_width(&mut self.state, extra, window, cx);
             }
             _ => {}
         }
@@ -252,6 +252,20 @@ impl AppShell {
                 }
                 WindowRequest::ActivateTab(tab_id) => self.activate_tab(tab_id, window, cx),
                 WindowRequest::OpenSettings(page) => self.open_settings_modal(page, window, cx),
+                WindowRequest::EditorClose(request) => match request {
+                    crate::editor::EditorCloseRequest::Group(group_id) => {
+                        self.close_group(group_id, window, cx)
+                    }
+                    crate::editor::EditorCloseRequest::Pane(tab_id) => {
+                        self.close_pane(tab_id, window, cx)
+                    }
+                    crate::editor::EditorCloseRequest::Session(session_id) => {
+                        self.delete_session_by_id(session_id, cx)
+                    }
+                    crate::editor::EditorCloseRequest::Tiling(groups) => {
+                        crate::tiling::close_tiling_groups(self, groups, window, cx)
+                    }
+                },
                 WindowRequest::Git(event) => match &event {
                     crate::git::GitWorkspaceEvent::OpenSettings => {
                         crate::git::actions::GitActions::new(&mut self.state)

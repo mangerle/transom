@@ -71,3 +71,12 @@ impl EditorPanels {
         true
     }
 }
+
+/// 脏面板处理完成后需要外壳执行的关闭动作。
+#[derive(Debug, Clone)]
+pub(crate) enum EditorCloseRequest {
+    Group(transom_core::GroupId),
+    Pane(transom_core::TabId),
+    Session(transom_core::SessionId),
+    Tiling(Vec<transom_core::GroupId>),
+}

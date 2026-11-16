@@ -62,6 +62,8 @@ apps/transom (组合根 + 控制平面)
 
 状态查询与变更优先写在 `impl AppState` 或对应 feature 实体；跨域协调不接收整个 `AppShell`，而是使用只借用所需字段的窄上下文（如 `MonitorOps`、`CloudSyncActions`、`DiffViewerOps`、`BroadcastOps`、`SplitOps`）。`AppShell` 只保留渲染、事件路由、连接补建与窗口聚焦等生命周期入口。
 
+编辑器与 SFTP 的桥接函数同样只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；脏面板处理完成后的关闭动作只产出 `EditorCloseRequest`，经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。
+
 三条回归闸门固化上述约定：`app_shell_keeps_single_state_field` 禁止外壳重新平铺字段；`widgets_use_design_tokens` 禁止组件层写裸字号与间距；`menu_items_use_widget_constructor` 禁止手写菜单项链。
 
 新增功能时：状态放 `AppState` 或对应 feature 实体，行为与状态同处；纯展示结构先找 `widgets`，不要继续往 `AppShell` 上堆固有方法。新增模态弹窗时，先在 `dialog_host/registry` 的 `MODALS` 表登记一行（层序即表序），再补 `checks` 的打开判定与文本项函数；渲染、取消与提交仍按领域分发。

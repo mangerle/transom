@@ -3,7 +3,7 @@
 //! 与 [`crate::event_handlers`] 的分工：本文件只处理 SFTP 传输相关事件，
 //! 连接/认证与遥测事件在另一处；拆分让每个文件保持在工程规范的体量内。
 
-use crate::app::{AppShell, app_settings};
+use crate::app::{AppShell, AppState, app_settings};
 use crate::notify::send_desktop_notification;
 use crate::palette::localized_error;
 use crate::sftp::columns::SftpWidthAdjustment;
@@ -13,7 +13,7 @@ use transom_core::{AppSettings, SftpAppEvent, TransferDirection};
 
 /// SFTP 传输完成：落定任务状态、刷新受影响的目录并派发桌面通知。
 pub(crate) fn on_sftp_finished(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -29,7 +29,7 @@ pub(crate) fn on_sftp_finished(
         return true;
     };
     let Some(view) = crate::sftp::sftp_view_entity_for_connection(
-        &shell.state.workspace,
+        &app_state.workspace,
         tab_id,
         connection_id,
         cx,
@@ -58,10 +58,16 @@ pub(crate) fn on_sftp_finished(
         view.update(cx, |view, cx| view.local_refresh(cx));
     }
     if let Some(path) = outcome.refresh {
-        crate::sftp::request_sftp_list(shell, tab_id, path, cx);
+        crate::sftp::request_sftp_list(app_state, tab_id, path, cx);
     }
     if let Some((target_conn, target_dir)) = outcome.refresh_side {
-        crate::sftp::request_sftp_list_for_connection(shell, tab_id, target_conn, target_dir, cx);
+        crate::sftp::request_sftp_list_for_connection(
+            app_state,
+            tab_id,
+            target_conn,
+            target_dir,
+            cx,
+        );
     }
     view.update(cx, |view, cx| view.process_queue(tab_id, cx));
     true
@@ -69,7 +75,7 @@ pub(crate) fn on_sftp_finished(
 
 /// SFTP 失败：同步模态失败自行重绘并返回；传输失败落定任务并通知。
 pub(crate) fn on_sftp_failed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -82,7 +88,7 @@ pub(crate) fn on_sftp_failed(
     else {
         return true;
     };
-    if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
+    if let Some(modal) = app_state.ui.modals.sftp.sync.clone() {
         let matched = modal.update(cx, |modal, cx| {
             if modal.state.op_id == op_id && modal.state.connection_id == connection_id {
                 modal.state.scanning = false;
@@ -98,7 +104,7 @@ pub(crate) fn on_sftp_failed(
         }
     }
     let Some(view) = crate::sftp::sftp_view_entity_for_connection(
-        &shell.state.workspace,
+        &app_state.workspace,
         tab_id,
         connection_id,
         cx,
@@ -121,31 +127,31 @@ pub(crate) fn on_sftp_failed(
 
 /// 处理 SFTP 面板在列折叠/展开时产生的尺寸调整请求。
 pub(crate) fn sync_sftp_panel_width(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(tab_id) = shell.state.workspace.active_tab else {
+    let Some(tab_id) = app_state.workspace.active_tab else {
         return;
     };
-    let adjustment = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx)
+    let adjustment = crate::sftp::sftp_view_mut(&app_state.workspace, tab_id, cx)
         .and_then(|mut panel| panel.state.pending_width_adjustment.take());
     let Some(adjustment) = adjustment else {
         return;
     };
-    let Some(panel) = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx) else {
+    let Some(panel) = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx) else {
         return;
     };
     if !panel.open {
         return;
     }
-    let Some(index) = sftp_resizable_index(shell, app_settings(cx)) else {
+    let Some(index) = sftp_resizable_index(app_state, app_settings(cx)) else {
         return;
     };
     let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
-        shell.state.ui.workspace_panels_left.clone()
+        app_state.ui.workspace_panels_left.clone()
     } else {
-        shell.state.ui.workspace_panels.clone()
+        app_state.ui.workspace_panels.clone()
     };
     let current_width = panels
         .read(cx)
@@ -169,7 +175,7 @@ pub(crate) fn sync_sftp_panel_width(
 
 /// 把 SFTP 面板加宽 `delta`：挂载新列时现有面板放不下，直接向工作区分栏申请空间。
 pub(crate) fn grow_sftp_panel_width(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     delta: f32,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -177,13 +183,13 @@ pub(crate) fn grow_sftp_panel_width(
     if delta <= 0.5 {
         return;
     }
-    let Some(index) = sftp_resizable_index(shell, app_settings(cx)) else {
+    let Some(index) = sftp_resizable_index(app_state, app_settings(cx)) else {
         return;
     };
     let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
-        shell.state.ui.workspace_panels_left.clone()
+        app_state.ui.workspace_panels_left.clone()
     } else {
-        shell.state.ui.workspace_panels.clone()
+        app_state.ui.workspace_panels.clone()
     };
     let Some(current) = panels
         .read(cx)
@@ -200,8 +206,8 @@ pub(crate) fn grow_sftp_panel_width(
 }
 
 /// SFTP 面板在工作区分组里的面板索引。
-fn sftp_resizable_index(shell: &AppShell, settings: &AppSettings) -> Option<usize> {
-    if shell.state.ui.immersive {
+fn sftp_resizable_index(app_state: &AppState, settings: &AppSettings) -> Option<usize> {
+    if app_state.ui.immersive {
         return None;
     }
     Some(if settings.window.sftp_panel_side.is_left() {

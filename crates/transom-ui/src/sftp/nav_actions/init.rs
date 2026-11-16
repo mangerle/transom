@@ -4,7 +4,7 @@
 //! - 实现初衷：为 SSH 与本地会话创建并初始化 SFTP 双栏文件浏览器状态（输入框绑定、回车监听、列表分发）；
 //! - 核心优势：集中管理长生命周期 Input 实体与订阅，避免面板构造逻辑散落在各种触发动作中。
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, AppState, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
 use crate::sftp::columns::ColumnWidthMemory;
@@ -32,14 +32,13 @@ use transom_core::{Connection, TabId};
 ///
 /// [`SftpPanelEvent`]: crate::sftp::SftpPanelEvent
 pub(crate) fn attach_sftp_panel_view(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     index: usize,
     state: SftpPanelState,
     cx: &mut Context<AppShell>,
 ) -> bool {
-    let Some(pane) = shell
-        .state
+    let Some(pane) = app_state
         .workspace
         .tabs
         .get_mut(index)
@@ -51,11 +50,10 @@ pub(crate) fn attach_sftp_panel_view(
     let subscription = cx.subscribe(
         &view,
         |shell, _view, event: &crate::sftp::SftpPanelEvent, cx| {
-            super::panel_events::on_sftp_panel_event(shell, event, cx);
+            super::panel_events::on_sftp_panel_event(&mut shell.state, event, cx);
         },
     );
-    shell
-        .state
+    app_state
         .runtime
         .tasks
         .subscriptions
@@ -67,92 +65,88 @@ pub(crate) fn attach_sftp_panel_view(
 
 /// 将键盘焦点还给当前 SFTP 面板，供弹窗关闭后继续使用面板快捷键。
 pub(crate) fn focus_active_sftp_panel(
-    shell: &AppShell,
+    app_state: &AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let focus_handle = shell
-        .state
+    let focus_handle = app_state
         .workspace
         .active_tab
-        .and_then(|tab_id| crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx))
+        .and_then(|tab_id| crate::sftp::sftp_state(&app_state.workspace, tab_id, cx))
         .map(|panel| panel.focus_handle.clone());
     if let Some(focus_handle) = focus_handle {
         window.focus(&focus_handle, cx);
     }
 }
 
-pub(crate) fn toggle_sftp(shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
-    let Some(tab_id) = shell.state.workspace.active_tab else {
+pub(crate) fn toggle_sftp(
+    app_state: &mut AppState,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(tab_id) = app_state.workspace.active_tab else {
         return;
     };
-    let Some(index) = shell.state.workspace.tab_index(tab_id) else {
+    let Some(index) = app_state.workspace.tab_index(tab_id) else {
         return;
     };
     // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
     // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
-    match crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx).map(|panel| panel.open) {
+    match crate::sftp::sftp_state(&app_state.workspace, tab_id, cx).map(|panel| panel.open) {
         Some(true) => {
-            shell.state.close_sftp_panel(tab_id);
+            app_state.close_sftp_panel(tab_id);
             cx.notify();
             return;
         }
         Some(false) => {
-            let path = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
+            let path = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
                 .map(|panel| panel.remote.path.clone())
                 .unwrap_or_else(|| ".".to_string());
-            if let Some(mut view) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) {
+            if let Some(mut view) = crate::sftp::sftp_view_mut(&app_state.workspace, tab_id, cx) {
                 view.state.open = true;
             }
             // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。
-            if let Some(view) = shell.state.sftp_view(tab_id) {
+            if let Some(view) = app_state.sftp_view(tab_id) {
                 view.update(cx, |view, cx| view.sync_drop_overlay(cx));
             }
-            if let Some(view) = shell.state.sftp_view(tab_id) {
+            if let Some(view) = app_state.sftp_view(tab_id) {
                 view.update(cx, |view, cx| view.spawn_local_dir_refresh(None, cx));
             }
-            crate::sftp::request_sftp_list(shell, tab_id, path, cx);
+            crate::sftp::request_sftp_list(app_state, tab_id, path, cx);
             cx.notify();
             return;
         }
         None => {}
     }
     let is_local = matches!(
-        &shell.state.workspace.tabs[index].session.connection,
+        &app_state.workspace.tabs[index].session.connection,
         Connection::Local(_)
     );
     let is_ssh = matches!(
-        &shell.state.workspace.tabs[index].session.connection,
+        &app_state.workspace.tabs[index].session.connection,
         Connection::Ssh(_)
     );
     if is_local {
-        crate::sftp::open_local_file_panel(shell, index, window, cx);
+        crate::sftp::open_local_file_panel(app_state, index, window, cx);
         return;
     }
     if !is_ssh {
-        shell
-            .state
-            .set_error(rust_i18n::t!("error.sftp_requires_ssh").to_string());
+        app_state.set_error(rust_i18n::t!("error.sftp_requires_ssh").to_string());
         cx.notify();
         return;
     }
-    if !matches!(
-        shell.state.workspace.tabs[index].status,
-        TabStatus::Connected
-    ) {
-        shell
-            .state
-            .set_error(rust_i18n::t!("error.channel_failed").to_string());
+    if !matches!(app_state.workspace.tabs[index].status, TabStatus::Connected) {
+        app_state.set_error(rust_i18n::t!("error.channel_failed").to_string());
         cx.notify();
         return;
     }
-    crate::sftp::build_sftp_panel(shell, tab_id, index, true, window, cx);
+    crate::sftp::build_sftp_panel(app_state, tab_id, index, true, window, cx);
 }
 
 /// 为已连接且已就绪的 SSH 标签建立 SFTP 面板状态（输入框、回车订阅与列表）。
 /// 面板初始路径：本地快捷目录与远端 OSC 7 cwd（回落到 `.`）。
-fn sftp_initial_paths(shell: &AppShell, index: usize) -> (LocalQuickPaths, PathBuf, String) {
-    let tab_id = shell.state.workspace.tabs[index].id;
+fn sftp_initial_paths(app_state: &AppState, index: usize) -> (LocalQuickPaths, PathBuf, String) {
+    let tab_id = app_state.workspace.tabs[index].id;
     let quick_paths = LocalQuickPaths::resolve();
     let local_path = quick_paths
         .downloads
@@ -160,21 +154,21 @@ fn sftp_initial_paths(shell: &AppShell, index: usize) -> (LocalQuickPaths, PathB
         .or_else(|| quick_paths.home.clone())
         .unwrap_or_else(|| PathBuf::from("."));
     // 初始远端目录优先用终端 OSC 7 上报的 cwd；还没上报时回落到远端 Home。
-    let initial_remote_path = shell.state.workspace.tabs[index]
+    let initial_remote_path = app_state.workspace.tabs[index]
         .cwd
         .as_deref()
         .and_then(normalize_remote_cwd)
         .unwrap_or_else(|| ".".to_string());
     log::info!(
         "打开远端文件面板，窗格: {tab_id}，初始目录: {initial_remote_path}，终端 cwd: {:?}",
-        shell.state.workspace.tabs[index].cwd
+        app_state.workspace.tabs[index].cwd
     );
     (quick_paths, local_path, initial_remote_path)
 }
 
 /// 构造面板状态：输入控件、订阅与初始路径一次性装入。
 fn build_sftp_state(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     input: SftpStateInput,
     cx: &mut Context<AppShell>,
 ) -> SftpPanelState {
@@ -193,7 +187,7 @@ fn build_sftp_state(
     SftpPanelState {
         main_connection,
         command_tx,
-        editors: Some(shell.state.features.editors.clone()),
+        editors: Some(app_state.features.editors.clone()),
         mount_candidates: Vec::new(),
         open,
         remote: SftpRemotePaneState::new_main(
@@ -243,14 +237,14 @@ fn build_sftp_state(
 }
 
 pub(crate) fn build_sftp_panel(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     index: usize,
     open: bool,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let (quick_paths, local_path, initial_remote_path) = sftp_initial_paths(shell, index);
+    let (quick_paths, local_path, initial_remote_path) = sftp_initial_paths(app_state, index);
     let inputs = SftpPanelInputs::new(window, cx, &initial_remote_path, &local_path);
     let remote_enter_sub = cx.subscribe_in(
         &inputs.path_input,
@@ -290,10 +284,10 @@ pub(crate) fn build_sftp_panel(
         },
     );
     // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
-    let main_connection = shell.state.workspace.tabs[index].connection_id;
-    let command_tx = Some(shell.state.runtime.services.command_tx.clone());
+    let main_connection = app_state.workspace.tabs[index].connection_id;
+    let command_tx = Some(app_state.runtime.services.command_tx.clone());
     let state = build_sftp_state(
-        shell,
+        app_state,
         SftpStateInput {
             main_connection,
             command_tx,
@@ -308,25 +302,25 @@ pub(crate) fn build_sftp_panel(
         },
         cx,
     );
-    if !crate::sftp::attach_sftp_panel_view(shell, tab_id, index, state, cx) {
+    if !crate::sftp::attach_sftp_panel_view(app_state, tab_id, index, state, cx) {
         return;
     }
     if open {
         // 本地栏初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
-        if let Some(view) = shell.state.sftp_view(tab_id) {
+        if let Some(view) = app_state.sftp_view(tab_id) {
             view.update(cx, |view, cx| view.spawn_local_dir_refresh(None, cx));
         }
-        crate::sftp::request_sftp_list(shell, tab_id, initial_remote_path, cx);
+        crate::sftp::request_sftp_list(app_state, tab_id, initial_remote_path, cx);
     }
 }
 
 pub(crate) fn on_toggle_sftp(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::ToggleSftp,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::sftp::toggle_sftp(shell, window, cx);
+    crate::sftp::toggle_sftp(app_state, window, cx);
 }
 
 /// 面板状态构造输入：连接、输入控件、订阅与初始路径。

@@ -10,8 +10,8 @@ use super::{
     DropOverlayState, LocalQuickPaths, SftpActivePane, SftpLocalPaneInit, SftpLocalPaneState,
     SftpPanelState, SftpPanelView, SftpQueueState, SftpRemotePaneState, normalize_local_cwd,
 };
-use crate::app::AppShell;
 use crate::app::app_settings;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, sftp_text_input};
 use gpui_kit::base::{h_flex, v_flex};
@@ -25,12 +25,12 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
 pub(crate) fn open_local_file_panel(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     index: usize,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(tab) = shell.state.workspace.tabs.get(index) else {
+    let Some(tab) = app_state.workspace.tabs.get(index) else {
         return;
     };
     let tab_id = tab.id;
@@ -58,12 +58,12 @@ pub(crate) fn open_local_file_panel(
     );
 
     // 主连接与命令通道在挂载之前取好：面板之后自己解析目标列与投递命令。
-    let main_connection = shell.state.workspace.tabs[index].connection_id;
-    let command_tx = Some(shell.state.runtime.services.command_tx.clone());
+    let main_connection = app_state.workspace.tabs[index].connection_id;
+    let command_tx = Some(app_state.runtime.services.command_tx.clone());
     let state = SftpPanelState {
         main_connection,
         command_tx,
-        editors: Some(shell.state.features.editors.clone()),
+        editors: Some(app_state.features.editors.clone()),
         mount_candidates: Vec::new(),
         open: true,
         remote: SftpRemotePaneState::new_main(
@@ -110,11 +110,11 @@ pub(crate) fn open_local_file_panel(
     };
     // 本地单栏与 SSH 双栏共用挂载入口：创建实体、登记事件订阅与挂到
     // 窗格三者必须成对，否则关闭、新建、删除确认等意图会被静默丢弃。
-    if !crate::sftp::attach_sftp_panel_view(shell, tab_id, index, state, cx) {
+    if !crate::sftp::attach_sftp_panel_view(app_state, tab_id, index, state, cx) {
         return;
     }
     // 初始列表走后台读取，避免大目录或网络挂载阻塞面板打开
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.spawn_local_dir_refresh(None, cx));
     }
     cx.notify();

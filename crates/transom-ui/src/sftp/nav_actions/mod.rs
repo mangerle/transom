@@ -13,7 +13,7 @@ mod local_nav;
 
 use super::entity::SftpPanelView;
 use super::{SftpRemotePaneRef, normalize_local_cwd, normalize_remote_cwd};
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use std::path::Path;
 use transom_core::{ConnectionId, SftpCommand, SftpOperation, TabId, TransferId};
@@ -151,22 +151,21 @@ impl SftpPanelView {
 }
 
 pub(crate) fn request_sftp_list_pane(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     target: SftpRemotePaneRef,
     path: String,
     cx: &mut Context<AppShell>,
 ) {
     // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
-    let Some(main_connection) = shell
-        .state
+    let Some(main_connection) = app_state
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.connection_id)
     else {
         return;
     };
-    let Some(view) = shell.state.sftp_view(tab_id) else {
+    let Some(view) = app_state.sftp_view(tab_id) else {
         return;
     };
     let Some(connection_id) = view.update(cx, |view, _| {
@@ -175,7 +174,7 @@ pub(crate) fn request_sftp_list_pane(
         return;
     };
     view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
-    shell.state.send_command(SftpCommand::Sftp {
+    app_state.send_command(SftpCommand::Sftp {
         tab_id,
         connection_id,
         op_id: TransferId::new(),
@@ -185,21 +184,20 @@ pub(crate) fn request_sftp_list_pane(
 }
 
 pub(crate) fn request_sftp_list(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     path: String,
     cx: &mut Context<AppShell>,
 ) {
     // 连接号在持有外壳时先取好：实体在 update 期间不能再回头读外壳。
-    let Some(main_connection) = shell
-        .state
+    let Some(main_connection) = app_state
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.connection_id)
     else {
         return;
     };
-    let Some(view) = shell.state.sftp_view(tab_id) else {
+    let Some(view) = app_state.sftp_view(tab_id) else {
         return;
     };
     let Some(connection_id) = view.update(cx, |view, _| {
@@ -208,7 +206,7 @@ pub(crate) fn request_sftp_list(
         return;
     };
     view.update(cx, |view, cx| view.dismiss_hover_preview(cx));
-    shell.state.send_command(SftpCommand::Sftp {
+    app_state.send_command(SftpCommand::Sftp {
         tab_id,
         connection_id,
         op_id: TransferId::new(),
@@ -218,13 +216,13 @@ pub(crate) fn request_sftp_list(
 }
 
 pub(crate) fn sftp_sync_with_terminal_cwd(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     cwd: &str,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| {
             view.sync_with_terminal_cwd(tab_id, cwd, window, cx)
         });
@@ -233,31 +231,31 @@ pub(crate) fn sftp_sync_with_terminal_cwd(
 
 /// 请求特定连接的远端目录列表（用于并列远端）。
 pub(crate) fn request_sftp_list_for_connection(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: ConnectionId,
     path: String,
     cx: &mut Context<AppShell>,
 ) {
-    let target = shell.state.workspace.tab(tab_id).and_then(|tab| {
-        crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
+    let target = app_state.workspace.tab(tab_id).and_then(|tab| {
+        crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
             .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
     });
     let Some(target) = target else {
         return;
     };
-    request_sftp_list_pane(shell, tab_id, target, path, cx);
+    request_sftp_list_pane(app_state, tab_id, target, path, cx);
 }
 
 /// 在外壳上下文向指定连接下发 SFTP 非传输操作。
 pub(crate) fn send_sftp_op_for_connection(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: ConnectionId,
     op: SftpOperation,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| {
             view.send_op_for_connection(connection_id, op, cx)
         });

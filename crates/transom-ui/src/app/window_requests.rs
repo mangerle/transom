@@ -9,7 +9,7 @@
 //! 需要严格先后的动作应在产生点排好，而不是依赖队列分组的固定次序。
 
 use crate::container::ContainerWorkspaceEvent;
-use crate::editor::EditorPanelEvent;
+use crate::editor::{EditorCloseRequest, EditorPanelEvent};
 use crate::git::GitWorkspaceEvent;
 use crate::monitor::MonitorPanelEvent;
 use crate::settings::SettingsRequest;
@@ -39,6 +39,8 @@ pub(crate) enum WindowRequest {
     ActivateTab(TabId),
     /// 打开设置弹窗并定位到指定页。
     OpenSettings(Option<usize>),
+    /// 编辑器脏检查完成后的关闭动作。
+    EditorClose(EditorCloseRequest),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -90,6 +92,10 @@ impl WindowRequests {
 
     pub(crate) fn push_activate_tab(&mut self, tab_id: TabId) {
         self.items.push(WindowRequest::ActivateTab(tab_id));
+    }
+
+    pub(crate) fn push_editor_close(&mut self, request: EditorCloseRequest) {
+        self.items.push(WindowRequest::EditorClose(request));
     }
 
     pub(crate) fn push_open_settings(&mut self, page: Option<usize>) {

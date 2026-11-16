@@ -90,7 +90,7 @@ pub(crate) use bridge::{
     open_remote_editor_panel, open_terminal_code_location, prune_tab_overlays,
     render_editor_goto_line_body, sftp_edit_remote_file_on, spawn_new_editor_panel,
 };
-pub(crate) use close::PendingEditorClose;
+pub(crate) use close::{EditorCloseRequest, PendingEditorClose};
 pub(crate) use diff::EditorDiffWriteSync;
 pub(crate) use entity::{EditorDiffSource, EditorPanelEvent, EditorPanels};
 pub(crate) use list::render_editor_list_popover;

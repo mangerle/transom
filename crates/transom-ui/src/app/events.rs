@@ -76,16 +76,28 @@ impl AppShell {
     ) {
         let should_notify = match event {
             SftpAppEvent::SftpListing { .. } => {
-                crate::sftp::on_sftp_listing(self, event, window, cx)
+                crate::sftp::on_sftp_listing(&mut self.state, event, window, cx)
             }
-            SftpAppEvent::SftpProgress { .. } => crate::sftp::on_sftp_progress(self, event, cx),
-            SftpAppEvent::SftpVerifying { .. } => crate::sftp::on_sftp_verifying(self, event, cx),
-            SftpAppEvent::SftpRetrying { .. } => crate::sftp::on_sftp_retrying(self, event, cx),
-            SftpAppEvent::SftpFinished { .. } => crate::sftp::on_sftp_finished(self, event, cx),
-            SftpAppEvent::SftpMetadata { .. } => crate::sftp::on_sftp_metadata(self, event, cx),
-            SftpAppEvent::SftpPreview { .. } => crate::sftp::on_sftp_preview(self, event, cx),
+            SftpAppEvent::SftpProgress { .. } => {
+                crate::sftp::on_sftp_progress(&mut self.state, event, cx)
+            }
+            SftpAppEvent::SftpVerifying { .. } => {
+                crate::sftp::on_sftp_verifying(&mut self.state, event, cx)
+            }
+            SftpAppEvent::SftpRetrying { .. } => {
+                crate::sftp::on_sftp_retrying(&mut self.state, event, cx)
+            }
+            SftpAppEvent::SftpFinished { .. } => {
+                crate::sftp::on_sftp_finished(&mut self.state, event, cx)
+            }
+            SftpAppEvent::SftpMetadata { .. } => {
+                crate::sftp::on_sftp_metadata(&mut self.state, event, cx)
+            }
+            SftpAppEvent::SftpPreview { .. } => {
+                crate::sftp::on_sftp_preview(&mut self.state, event, cx)
+            }
             SftpAppEvent::SftpPreviewFailed { .. } => {
-                crate::sftp::on_sftp_preview_failed(self, event, cx)
+                crate::sftp::on_sftp_preview_failed(&mut self.state, event, cx)
             }
             SftpAppEvent::SftpTextRead {
                 op_id,
@@ -107,7 +119,7 @@ impl AppShell {
                 if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
                     .handle_remote_written(op_id, meta, window, cx)
                 {
-                    crate::editor::on_editor_text_written(self, op_id, meta, window, cx);
+                    crate::editor::on_editor_text_written(&mut self.state, op_id, meta, window, cx);
                 }
                 true
             }
@@ -118,7 +130,14 @@ impl AppShell {
                 if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
                     .handle_remote_failure(op_id, &message, false, cx)
                 {
-                    crate::editor::note_editor_text_failed(self, op_id, message, code, window, cx);
+                    crate::editor::note_editor_text_failed(
+                        &mut self.state,
+                        op_id,
+                        message,
+                        code,
+                        window,
+                        cx,
+                    );
                 }
                 true
             }
@@ -128,7 +147,7 @@ impl AppShell {
                 if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
                     .handle_remote_failure(op_id, &message, true, cx)
                 {
-                    crate::editor::note_editor_text_conflict(self, op_id, message, cx);
+                    crate::editor::note_editor_text_conflict(&mut self.state, op_id, message, cx);
                 }
                 true
             }
@@ -139,15 +158,17 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpDirCompared { .. } => {
-                crate::sftp::on_sftp_dir_compared(self, event, cx)
+                crate::sftp::on_sftp_dir_compared(&mut self.state, event, cx)
             }
             SftpAppEvent::SudoProbed {
                 op_id, capability, ..
             } => {
-                crate::editor::on_sudo_probed(self, op_id, capability, window, cx);
+                crate::editor::on_sudo_probed(&mut self.state, op_id, capability, window, cx);
                 true
             }
-            SftpAppEvent::SftpFailed { .. } => crate::sftp::on_sftp_failed(self, event, cx),
+            SftpAppEvent::SftpFailed { .. } => {
+                crate::sftp::on_sftp_failed(&mut self.state, event, cx)
+            }
         };
         if should_notify {
             cx.notify();
@@ -305,7 +326,7 @@ impl AppShell {
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.cwd = Some(path.clone());
                 }
-                crate::sftp::sftp_sync_with_terminal_cwd(self, tab_id, path, window, cx);
+                crate::sftp::sftp_sync_with_terminal_cwd(&mut self.state, tab_id, path, window, cx);
             }
             TerminalEvent::Bell => {
                 self.set_transient_status(rust_i18n::t!("status.bell"), cx);
@@ -339,7 +360,7 @@ impl AppShell {
                 crate::connection::record_history_command(self, command, cx);
             }
             TerminalEvent::FilesDropped(paths) => {
-                crate::sftp::handle_dropped_files(self, tab_id, paths, window, cx);
+                crate::sftp::handle_dropped_files(&mut self.state, tab_id, paths, window, cx);
             }
             TerminalEvent::CommandFinished {
                 exit_code,
@@ -359,7 +380,13 @@ impl AppShell {
             }
             TerminalEvent::OpenCodeLocation { path, line, column } => {
                 crate::editor::open_terminal_code_location(
-                    self, tab_id, path, *line, *column, window, cx,
+                    &mut self.state,
+                    tab_id,
+                    path,
+                    *line,
+                    *column,
+                    window,
+                    cx,
                 );
             }
             TerminalEvent::TriggerFired { rule_name, action } => match action {

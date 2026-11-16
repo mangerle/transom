@@ -1,7 +1,7 @@
 //! 远端编辑面板打开、新建与终端代码链接跳转的外壳桥接。
 
 use super::editor_reject;
-use crate::app::{AppShell, app_settings};
+use crate::app::{AppShell, AppState, app_settings};
 use crate::editor::apply_editor_goto;
 use crate::editor::code_link::resolve_code_path;
 use crate::editor::open::{EditGate, EditorPanelSettings, PanelSeed, SpawnEditorPanelParams};
@@ -29,7 +29,7 @@ pub(crate) struct RemoteCodeLocation {
 }
 
 pub(crate) fn sftp_edit_remote_file_on(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: ConnectionId,
     remote_path: String,
@@ -37,12 +37,11 @@ pub(crate) fn sftp_edit_remote_file_on(
     cx: &mut Context<AppShell>,
 ) {
     let max_bytes = app_settings(cx).sftp.edit_max_bytes;
-    let gate = shell
-        .state
+    let gate = app_state
         .workspace
         .tab(tab_id)
         .and_then(|tab| {
-            let panel = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)?;
+            let panel = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)?;
             let entries = if tab.connection_id == Some(connection_id) {
                 &panel.remote.entries
             } else {
@@ -73,7 +72,7 @@ pub(crate) fn sftp_edit_remote_file_on(
     let (connection_id, file_name, permissions) = match gate {
         EditGate::Missing => {
             editor_reject(
-                shell,
+                app_state,
                 tab_id,
                 connection_id,
                 rust_i18n::t!("sftp.select_file").to_string(),
@@ -84,7 +83,7 @@ pub(crate) fn sftp_edit_remote_file_on(
         EditGate::IsDir => return,
         EditGate::TooLarge { name, size } => {
             editor_reject(
-                shell,
+                app_state,
                 tab_id,
                 connection_id,
                 rust_i18n::t!(
@@ -106,7 +105,7 @@ pub(crate) fn sftp_edit_remote_file_on(
     };
 
     open_remote_editor_panel(
-        shell,
+        app_state,
         RemoteEditorOpen {
             tab_id,
             connection_id,
@@ -121,7 +120,7 @@ pub(crate) fn sftp_edit_remote_file_on(
 
 /// 已通过目录闸门的远端文件：抬高已存在的编辑器或新建读取面板。
 pub(crate) fn open_remote_editor_panel(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     params: RemoteEditorOpen,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -133,7 +132,7 @@ pub(crate) fn open_remote_editor_panel(
         file_name,
         permissions,
     } = params;
-    if let Some(editor) = shell.state.features.editors.update(cx, |panels, _| {
+    if let Some(editor) = app_state.features.editors.update(cx, |panels, _| {
         panels.raise_existing(tab_id, connection_id, &remote_path)
     }) {
         editor.update(cx, |state, cx| state.focus(window, cx));
@@ -143,7 +142,7 @@ pub(crate) fn open_remote_editor_panel(
 
     let op_id = TransferId::new();
     let settings = editor_panel_settings(app_settings(cx));
-    let request = shell.state.features.editors.update(cx, |panels, cx| {
+    let request = app_state.features.editors.update(cx, |panels, cx| {
         panels.spawn_editor_panel(
             SpawnEditorPanelParams {
                 tab_id,
@@ -159,7 +158,7 @@ pub(crate) fn open_remote_editor_panel(
         )
     });
     if let Some(request) = request {
-        shell.state.features.editors.update(cx, |panels, cx| {
+        app_state.features.editors.update(cx, |panels, cx| {
             panels.request_remote_text_read(request, cx);
         });
     }
@@ -167,7 +166,7 @@ pub(crate) fn open_remote_editor_panel(
 
 /// 新建远端文件并打开编辑面板：空缓冲区立即可编辑，首次保存才创建远端文件。
 pub(crate) fn spawn_new_editor_panel(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: ConnectionId,
     remote_path: String,
@@ -176,7 +175,7 @@ pub(crate) fn spawn_new_editor_panel(
     cx: &mut Context<AppShell>,
 ) {
     let settings = editor_panel_settings(app_settings(cx));
-    shell.state.features.editors.update(cx, |panels, cx| {
+    app_state.features.editors.update(cx, |panels, cx| {
         panels.spawn_editor_panel(
             SpawnEditorPanelParams {
                 tab_id,
@@ -195,7 +194,7 @@ pub(crate) fn spawn_new_editor_panel(
 
 /// 处理终端投递的代码位置链接。
 pub(crate) fn open_terminal_code_location(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     path: &str,
     line: u32,
@@ -203,18 +202,13 @@ pub(crate) fn open_terminal_code_location(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(connection_id) = shell
-        .state
-        .workspace
-        .tab(tab_id)
-        .map(|tab| tab.connection_id)
-    else {
+    let Some(connection_id) = app_state.workspace.tab(tab_id).map(|tab| tab.connection_id) else {
         return;
     };
-    let remote_dir = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
+    let remote_dir = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
         .map(|panel| panel.remote.path.clone());
     let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
-        shell.state.ui.status =
+        app_state.ui.status =
             Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
         cx.notify();
         return;
@@ -224,14 +218,14 @@ pub(crate) fn open_terminal_code_location(
         if local.is_absolute() {
             crate::audit::open_local_path(local);
         } else {
-            shell.state.ui.status =
+            app_state.ui.status =
                 Some(rust_i18n::t!("editor.error_local_absolute", path = resolved).to_string());
             cx.notify();
         }
         return;
     };
     open_remote_code_location(
-        shell,
+        app_state,
         RemoteCodeLocation {
             tab_id,
             connection_id,
@@ -246,7 +240,7 @@ pub(crate) fn open_terminal_code_location(
 
 /// 从终端 OSC 8 代码链接直接打开远端文件并定位到行列。
 pub(crate) fn open_remote_code_location(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     target: RemoteCodeLocation,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -258,7 +252,7 @@ pub(crate) fn open_remote_code_location(
         line,
         column,
     } = target;
-    if let Some(editor) = shell.state.features.editors.update(cx, |panels, _| {
+    if let Some(editor) = app_state.features.editors.update(cx, |panels, _| {
         panels.raise_existing(tab_id, connection_id, &remote_path)
     }) {
         apply_editor_goto(&editor, line, column, window, cx);
@@ -275,7 +269,7 @@ pub(crate) fn open_remote_code_location(
         );
     let op_id = TransferId::new();
     let settings = editor_panel_settings(app_settings(cx));
-    let request = shell.state.features.editors.update(cx, |panels, cx| {
+    let request = app_state.features.editors.update(cx, |panels, cx| {
         panels.spawn_editor_panel(
             SpawnEditorPanelParams {
                 tab_id,
@@ -294,7 +288,7 @@ pub(crate) fn open_remote_code_location(
         )
     });
     if let Some(request) = request {
-        shell.state.features.editors.update(cx, |panels, cx| {
+        app_state.features.editors.update(cx, |panels, cx| {
             panels.request_remote_text_read(request, cx);
         });
     }

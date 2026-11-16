@@ -320,7 +320,7 @@ pub(crate) fn send_connect(
     }));
     if !shell.state.send_command(command) {
         shell.state.remove_tab(tab_id);
-        crate::editor::prune_tab_overlays(shell, cx);
+        crate::editor::prune_tab_overlays(&mut shell.state, cx);
     }
     cx.notify();
 }

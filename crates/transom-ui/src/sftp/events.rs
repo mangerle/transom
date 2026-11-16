@@ -1,13 +1,13 @@
 //! SFTP 列表、进度、校验、元数据与预览事件的处理与路由。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::sftp::{SftpPreviewResponse, remote_file_properties};
 use gpui_kit::*;
 use transom_core::SftpAppEvent;
 
 /// SFTP 目录列表回填：委托目标窗格的面板实体按连接归属落位。
 pub(crate) fn on_sftp_listing(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -22,7 +22,7 @@ pub(crate) fn on_sftp_listing(
         return true;
     };
     if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
-        &shell.state.workspace,
+        &app_state.workspace,
         tab_id,
         connection_id,
         cx,
@@ -38,7 +38,7 @@ pub(crate) fn on_sftp_listing(
 ///
 /// 返回 `false`：重绘由本方法条件决定，调用方不再统一 notify。
 pub(crate) fn on_sftp_progress(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -56,7 +56,7 @@ pub(crate) fn on_sftp_progress(
     };
     let mut applied = false;
     if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
-        &shell.state.workspace,
+        &app_state.workspace,
         tab_id,
         connection_id,
         cx,
@@ -66,14 +66,14 @@ pub(crate) fn on_sftp_progress(
         });
     }
     if applied {
-        if let Some(view) = shell.state.sftp_view(tab_id) {
+        if let Some(view) = app_state.sftp_view(tab_id) {
             view.update(cx, |view, _| view.note_drop_overlay_progress());
         }
-        if shell.state.is_rendered_pane(tab_id) {
+        if app_state.is_rendered_pane(tab_id) {
             cx.notify();
         }
     }
-    if applied && shell.state.workspace.active_tab == Some(tab_id) && !shell.state.ui.immersive {
+    if applied && app_state.workspace.active_tab == Some(tab_id) && !app_state.ui.immersive {
         cx.notify();
     }
     false
@@ -81,7 +81,7 @@ pub(crate) fn on_sftp_progress(
 
 /// SFTP 进入校验阶段：将任务状态更新为 `TransferStatus::Verifying`。
 pub(crate) fn on_sftp_verifying(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -94,7 +94,7 @@ pub(crate) fn on_sftp_verifying(
         return true;
     };
     if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
-        &shell.state.workspace,
+        &app_state.workspace,
         tab_id,
         connection_id,
         cx,
@@ -106,7 +106,7 @@ pub(crate) fn on_sftp_verifying(
 
 /// SFTP 校验不一致后的自动恢复：任务回到传输中，进度归零。
 pub(crate) fn on_sftp_retrying(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -120,7 +120,7 @@ pub(crate) fn on_sftp_retrying(
         return true;
     };
     if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
-        &shell.state.workspace,
+        &app_state.workspace,
         tab_id,
         connection_id,
         cx,
@@ -132,7 +132,7 @@ pub(crate) fn on_sftp_retrying(
 
 /// SFTP 属性响应：迟到的响应（标签已关闭）直接忽略且不重绘。
 pub(crate) fn on_sftp_metadata(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -145,17 +145,17 @@ pub(crate) fn on_sftp_metadata(
     else {
         return true;
     };
-    if crate::sftp::sftp_view_mut_for_connection(&shell.state.workspace, tab_id, connection_id, cx)
+    if crate::sftp::sftp_view_mut_for_connection(&app_state.workspace, tab_id, connection_id, cx)
         .is_none()
     {
         return false;
     }
-    shell.state.ui.modals.sftp.open_properties(
+    app_state.ui.modals.sftp.open_properties(
         rust_i18n::t!("sftp.modals.scope_remote").to_string(),
         remote_file_properties(&metadata),
         cx,
     );
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.process_queue(tab_id, cx));
     }
     true
@@ -163,7 +163,7 @@ pub(crate) fn on_sftp_metadata(
 
 /// SFTP 预览成功：交给预览响应处理统一落位。
 pub(crate) fn on_sftp_preview(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -177,9 +177,9 @@ pub(crate) fn on_sftp_preview(
     else {
         return true;
     };
-    if crate::sftp::sftp_state_for_connection(&shell.state.workspace, tab_id, connection_id, cx)
+    if crate::sftp::sftp_state_for_connection(&app_state.workspace, tab_id, connection_id, cx)
         .is_some()
-        && let Some(view) = shell.state.sftp_view(tab_id)
+        && let Some(view) = app_state.sftp_view(tab_id)
     {
         view.update(cx, |view, cx| {
             view.handle_preview(
@@ -197,7 +197,7 @@ pub(crate) fn on_sftp_preview(
 
 /// SFTP 预览失败：与成功共用同一条响应处理路径。
 pub(crate) fn on_sftp_preview_failed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -210,9 +210,9 @@ pub(crate) fn on_sftp_preview_failed(
     else {
         return true;
     };
-    if crate::sftp::sftp_state_for_connection(&shell.state.workspace, tab_id, connection_id, cx)
+    if crate::sftp::sftp_state_for_connection(&app_state.workspace, tab_id, connection_id, cx)
         .is_some()
-        && let Some(view) = shell.state.sftp_view(tab_id)
+        && let Some(view) = app_state.sftp_view(tab_id)
     {
         view.update(cx, |view, cx| {
             view.handle_preview(
@@ -230,7 +230,7 @@ pub(crate) fn on_sftp_preview_failed(
 
 /// 目录对比完成：仅在同步模态仍匹配该操作时回填结果。
 pub(crate) fn on_sftp_dir_compared(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: SftpAppEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -243,7 +243,7 @@ pub(crate) fn on_sftp_dir_compared(
     else {
         return true;
     };
-    if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
+    if let Some(modal) = app_state.ui.modals.sftp.sync.clone() {
         modal.update(cx, |modal, cx| {
             modal.apply_dir_compared(connection_id, op_id, &comparison, cx);
         });

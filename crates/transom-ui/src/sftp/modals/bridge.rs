@@ -37,7 +37,7 @@ impl SftpModals {
                     let action = view.read(cx).action.clone();
                     shell.state.ui.modals.sftp.close_confirm();
                     cx.notify();
-                    crate::sftp::execute_sftp_delete(shell, action, cx);
+                    crate::sftp::execute_sftp_delete(&mut shell.state, action, cx);
                 }
                 SftpConfirmModalEvent::Cancel => {
                     shell.state.ui.modals.sftp.close_confirm();
@@ -146,7 +146,7 @@ impl SftpModals {
                         return;
                     };
                     crate::sftp::send_sftp_op_for_connection(
-                        shell,
+                        &mut shell.state,
                         *tab_id,
                         conn_id,
                         SftpOperation::Chmod {
@@ -185,7 +185,7 @@ impl SftpModals {
                     value,
                 } => {
                     if let Err(err) = crate::sftp::file_ops::commit_sftp_input_value(
-                        shell,
+                        &mut shell.state,
                         *tab_id,
                         *connection_id,
                         target,
@@ -198,12 +198,12 @@ impl SftpModals {
                     }
                     shell.state.ui.modals.sftp.close_input();
                     cx.notify();
-                    crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                    crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 }
                 SftpInputModalEvent::Cancel => {
                     shell.state.ui.modals.sftp.close_input();
                     cx.notify();
-                    crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                    crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 }
             },
         );
@@ -218,7 +218,7 @@ impl SftpModals {
             &modal,
             |shell, _, event: &SftpSyncModalEvent, cx| match event {
                 SftpSyncModalEvent::Rescan(tab_id) => {
-                    crate::sftp::sftp_open_sync_modal(shell, *tab_id, cx);
+                    crate::sftp::sftp_open_sync_modal(&mut shell.state, *tab_id, cx);
                 }
                 SftpSyncModalEvent::Start {
                     tab_id,
@@ -235,7 +235,7 @@ impl SftpModals {
                         .as_ref()
                         .map(|m| m.read(cx).state.connection_id);
                     let started = crate::sftp::execute_sftp_sync(
-                        shell,
+                        &mut shell.state,
                         *tab_id,
                         connection_id,
                         local_root,
@@ -279,7 +279,7 @@ impl SftpModals {
                         return;
                     };
                     crate::sftp::send_sftp_op_for_connection(
-                        shell,
+                        &mut shell.state,
                         *tab_id,
                         conn_id,
                         SftpOperation::Search {
@@ -297,14 +297,14 @@ impl SftpModals {
                     cx.notify();
                     if let Some(conn_id) = connection_id {
                         crate::sftp::request_sftp_list_for_connection(
-                            shell,
+                            &mut shell.state,
                             *tab_id,
                             *conn_id,
                             dir.clone(),
                             cx,
                         );
                     } else {
-                        crate::sftp::request_sftp_list(shell, *tab_id, dir.clone(), cx);
+                        crate::sftp::request_sftp_list(&mut shell.state, *tab_id, dir.clone(), cx);
                     }
                 }
                 SftpSearchModalEvent::Cancel => {

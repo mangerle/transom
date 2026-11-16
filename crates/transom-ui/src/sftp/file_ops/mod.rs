@@ -4,14 +4,14 @@ mod commit;
 pub(in crate::sftp) use commit::commit_sftp_input_value;
 pub(in crate::sftp) mod validate;
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::sftp::SftpPendingDelete;
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpOperation, TabId};
 
 /// 执行已确认的远端删除。
 pub(crate) fn perform_sftp_delete(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: Option<ConnectionId>,
     targets: Vec<RemoteDeleteTarget>,
@@ -19,8 +19,7 @@ pub(crate) fn perform_sftp_delete(
 ) {
     let count = targets.len();
     let Some(connection_id) = connection_id.or_else(|| {
-        shell
-            .state
+        app_state
             .workspace
             .tab(tab_id)
             .and_then(|tab| tab.connection_id)
@@ -28,13 +27,13 @@ pub(crate) fn perform_sftp_delete(
         return;
     };
     crate::sftp::send_sftp_op_for_connection(
-        shell,
+        app_state,
         tab_id,
         connection_id,
         SftpOperation::DeleteMany { targets },
         cx,
     );
-    if let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) {
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(&app_state.workspace, tab_id, cx) {
         panel
             .state
             .set_status(rust_i18n::t!("sftp.file_ops.deleting_remote", count = count).to_string());
@@ -44,13 +43,13 @@ pub(crate) fn perform_sftp_delete(
 
 /// 执行确认弹窗中挂起的删除动作。
 pub(crate) fn execute_sftp_delete(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     action: SftpPendingDelete,
     cx: &mut Context<AppShell>,
 ) {
     match action {
         SftpPendingDelete::Local { tab_id, paths } => {
-            if let Some(view) = shell.state.sftp_view(tab_id) {
+            if let Some(view) = app_state.sftp_view(tab_id) {
                 view.update(cx, |view, cx| view.perform_local_delete(paths, cx));
             }
         }
@@ -59,7 +58,7 @@ pub(crate) fn execute_sftp_delete(
             connection_id,
             targets,
         } => {
-            perform_sftp_delete(shell, tab_id, connection_id, targets, cx);
+            perform_sftp_delete(app_state, tab_id, connection_id, targets, cx);
         }
     }
 }

@@ -397,7 +397,7 @@ impl ModalKind {
                 crate::forward::render_forward_confirm_body(shell, app, cx, p)
             }
             ModalKind::EditorGotoLine => {
-                crate::editor::render_editor_goto_line_body(shell, app, cx, p)
+                crate::editor::render_editor_goto_line_body(&shell.state, app, cx, p)
             }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerForm => div().into_any_element(),

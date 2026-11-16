@@ -41,7 +41,7 @@ impl ModalKind {
                 if let Some(modal) = shell.state.ui.modals.sftp.confirm.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
             }
             ModalKind::SftpInput => {
                 if let Some(modal) = shell.state.ui.modals.sftp.input.clone() {
@@ -52,30 +52,30 @@ impl ModalKind {
                 if let Some(modal) = shell.state.ui.modals.sftp.chmod.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
             }
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
                 shell.state.ui.modals.sftp.close_properties();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
             }
             ModalKind::SftpSearch => {
                 shell.state.ui.modals.sftp.close_search();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
             }
             ModalKind::SftpFilter => {
                 if let Some(modal) = shell.state.ui.modals.sftp.filter.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
             }
             ModalKind::SftpSync => {
                 if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
             }
             _ => return false,
         }
@@ -125,7 +125,9 @@ impl ModalKind {
         cx: &mut Context<AppShell>,
     ) {
         match self {
-            ModalKind::EditorGotoLine => crate::editor::commit_editor_goto_line(shell, window, cx),
+            ModalKind::EditorGotoLine => {
+                crate::editor::commit_editor_goto_line(&mut shell.state, window, cx)
+            }
             ModalKind::ContainerForm => shell
                 .state
                 .ui

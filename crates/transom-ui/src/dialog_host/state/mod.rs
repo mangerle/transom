@@ -91,7 +91,7 @@ impl ModalKind {
             ModalKind::SftpConfirm => {
                 shell.state.ui.modals.sftp.close_confirm();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             ModalKind::HostKeyConfirm => {
@@ -131,37 +131,37 @@ impl ModalKind {
             ModalKind::SftpInput => {
                 shell.state.ui.modals.sftp.close_input();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             ModalKind::SftpChmod => {
                 shell.state.ui.modals.sftp.close_chmod();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             ModalKind::SftpProperties => {
                 shell.state.ui.modals.sftp.close_properties();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             ModalKind::SftpFilter => {
                 shell.state.ui.modals.sftp.close_filter();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             ModalKind::SftpSearch => {
                 shell.state.ui.modals.sftp.close_search();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             ModalKind::SftpSync => {
                 shell.state.ui.modals.sftp.close_sync();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(shell, window, cx);
+                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
                 true
             }
             _ => true,
@@ -177,7 +177,7 @@ impl ModalKind {
     ) -> bool {
         match self {
             ModalKind::EditorGotoLine => {
-                crate::editor::cancel_editor_goto_line(shell, window, cx);
+                crate::editor::cancel_editor_goto_line(&mut shell.state, window, cx);
                 true
             }
             ModalKind::ContainerForm => {

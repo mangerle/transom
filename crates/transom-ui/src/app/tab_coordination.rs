@@ -212,7 +212,7 @@ impl AppShell {
         };
         let panes = self.state.workspace.groups[index].pane_ids();
         if crate::editor::block_close_for_dirty_editors(
-            self,
+            &mut self.state,
             &panes,
             PendingEditorClose::Group(group_id),
             cx,
@@ -232,7 +232,7 @@ impl AppShell {
             .workspace
             .tabs
             .retain(|tab| !panes.contains(&tab.id));
-        crate::editor::prune_tab_overlays(self, cx);
+        crate::editor::prune_tab_overlays(&mut self.state, cx);
         self.state.prune_tilings();
 
         let active_removed = self
@@ -287,7 +287,7 @@ impl AppShell {
             return;
         }
         if crate::editor::block_close_for_dirty_editors(
-            self,
+            &mut self.state,
             std::slice::from_ref(&tab_id),
             PendingEditorClose::Pane(tab_id),
             cx,
@@ -298,7 +298,7 @@ impl AppShell {
         self.state
             .send_command(TerminalCommand::CloseTab { tab_id });
         self.state.workspace.tabs.retain(|tab| tab.id != tab_id);
-        crate::editor::prune_tab_overlays(self, cx);
+        crate::editor::prune_tab_overlays(&mut self.state, cx);
         let replacement = self.state.detach_pane_from_group(tab_id);
         self.state.prune_tilings();
         if let Some(next) = replacement {

@@ -13,7 +13,7 @@
 //!   不另造第二套推断。本地列刻意不接外部拖入：那里没有"远端"可言，
 //!   松手无反馈比误传到本地目录更安全。
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, AppState, TabStatus};
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{Connection, Session, TabId};
@@ -37,7 +37,7 @@ fn drop_rejection(session: &Session, status: &TabStatus) -> Option<&'static str>
 
 /// 外部文件松手（终端网格或 SFTP 远程列）：为该标签复用（或补建）SFTP 面板并把文件排进上传队列。
 pub(crate) fn handle_dropped_files(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     paths: &[PathBuf],
     window: &mut Window,
@@ -46,19 +46,19 @@ pub(crate) fn handle_dropped_files(
     if paths.is_empty() {
         return;
     }
-    let Some(index) = shell.state.workspace.tab_index(tab_id) else {
+    let Some(index) = app_state.workspace.tab_index(tab_id) else {
         return;
     };
     if let Some(key) = drop_rejection(
-        &shell.state.workspace.tabs[index].session,
-        &shell.state.workspace.tabs[index].status,
+        &app_state.workspace.tabs[index].session,
+        &app_state.workspace.tabs[index].status,
     ) {
         let message = rust_i18n::t!(key).to_string();
         log::warn!(
             "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
             paths.len()
         );
-        shell.state.ui.status = Some(message);
+        app_state.ui.status = Some(message);
         cx.notify();
         return;
     }
@@ -66,24 +66,24 @@ pub(crate) fn handle_dropped_files(
     // 面板已存在时沿用它当前的远端目录（用户看到哪儿就传到哪儿）；不存在则
     // 建一份隐藏状态：队列、续传与校验都照旧，只是进度改由终端右下角浮层呈现，
     // 不再为了传一个文件而弹开一整列文件管理器。
-    if shell.state.sftp_view(tab_id).is_none() {
-        crate::sftp::build_sftp_panel(shell, tab_id, index, false, window, cx);
+    if app_state.sftp_view(tab_id).is_none() {
+        crate::sftp::build_sftp_panel(app_state, tab_id, index, false, window, cx);
     }
-    let upload_result = match shell.state.sftp_view(tab_id) {
+    let upload_result = match app_state.sftp_view(tab_id) {
         Some(view) => view.update(cx, |view, cx| view.enqueue_uploads(tab_id, paths, cx)),
         None => Err(rust_i18n::t!("sftp.queue_actions.no_remote_upload").to_string()),
     };
     if let Err(message) = upload_result {
-        shell.state.set_error(message);
+        app_state.set_error(message);
         cx.notify();
         return;
     }
     log::info!(
         "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
         paths.len(),
-        crate::connection::describe_target(&shell.state.workspace.tabs[index].session)
+        crate::connection::describe_target(&app_state.workspace.tabs[index].session)
     );
-    if let Some(view) = shell.state.sftp_view(tab_id) {
+    if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.show_drop_overlay(cx));
     }
 }

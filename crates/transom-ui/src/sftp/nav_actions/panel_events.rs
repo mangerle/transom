@@ -1,6 +1,6 @@
 //! SFTP 面板意图事件分发（弹窗打开、持久化设置、窗口级动作转发）。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 
 /// 处理面板发来的意图事件。
@@ -8,7 +8,7 @@ use gpui_kit::*;
 /// 只使用事件携带的数据，不回读面板：事件派发阶段面板仍处于租借中。
 /// 打开类事件：直接写入对应弹窗状态；返回是否已处理。
 fn try_open_sftp_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &crate::sftp::SftpPanelEvent,
     cx: &mut Context<AppShell>,
 ) -> bool {
@@ -22,7 +22,7 @@ fn try_open_sftp_modal(
             permissions,
             octal_input,
         } => {
-            shell.state.ui.modals.sftp.open_chmod(
+            app_state.ui.modals.sftp.open_chmod(
                 crate::sftp::SftpChmodModalParams {
                     tab_id: *tab_id,
                     connection_id: *connection_id,
@@ -35,16 +35,10 @@ fn try_open_sftp_modal(
             );
         }
         SftpPanelEvent::OpenSearchModal(state) => {
-            shell
-                .state
-                .ui
-                .modals
-                .sftp
-                .open_search((**state).clone(), cx);
+            app_state.ui.modals.sftp.open_search((**state).clone(), cx);
         }
         SftpPanelEvent::ShowProperties { scope, properties } => {
-            shell
-                .state
+            app_state
                 .ui
                 .modals
                 .sftp
@@ -52,16 +46,14 @@ fn try_open_sftp_modal(
         }
         SftpPanelEvent::PersistSettings { status } => {
             let snapshot = crate::app::app_settings(cx).clone();
-            if let Err(error) = shell.state.persist_settings(&snapshot) {
-                shell
-                    .state
-                    .set_error(crate::palette::localized_error(&error));
+            if let Err(error) = app_state.persist_settings(&snapshot) {
+                app_state.set_error(crate::palette::localized_error(&error));
             }
-            shell.state.ui.status = Some(status.clone());
+            app_state.ui.status = Some(status.clone());
             cx.notify();
         }
         SftpPanelEvent::ConfirmLocalDelete { tab_id, paths } => {
-            shell.state.ui.modals.sftp.open_confirm(
+            app_state.ui.modals.sftp.open_confirm(
                 crate::sftp::SftpPendingDelete::Local {
                     tab_id: *tab_id,
                     paths: paths.clone(),
@@ -76,7 +68,7 @@ fn try_open_sftp_modal(
             connection_id,
             targets,
         } => {
-            shell.state.ui.modals.sftp.open_confirm(
+            app_state.ui.modals.sftp.open_confirm(
                 crate::sftp::SftpPendingDelete::Remote {
                     tab_id: *tab_id,
                     connection_id: *connection_id,
@@ -94,44 +86,44 @@ fn try_open_sftp_modal(
 }
 
 pub(super) fn on_sftp_panel_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &crate::sftp::SftpPanelEvent,
     cx: &mut Context<AppShell>,
 ) {
     use crate::sftp::SftpPanelEvent;
-    if try_open_sftp_modal(shell, event, cx) {
+    if try_open_sftp_modal(app_state, event, cx) {
         return;
     }
     match event {
         SftpPanelEvent::SendCommand(command) => {
-            shell.state.send_command(command.clone());
+            app_state.send_command(command.clone());
             cx.notify();
         }
         SftpPanelEvent::OpenEditor(_)
         | SftpPanelEvent::OpenInputModal(_)
         | SftpPanelEvent::GrowPanelWidth(_) => {
             // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
-            shell.state.ui.window_requests.push_sftp(event.clone());
+            app_state.ui.window_requests.push_sftp(event.clone());
         }
         SftpPanelEvent::OpenSyncModal(state) => {
-            shell.state.ui.modals.sftp.open_sync((**state).clone(), cx);
+            app_state.ui.modals.sftp.open_sync((**state).clone(), cx);
         }
         SftpPanelEvent::OpenFilterModal { textarea } => {
-            shell.state.ui.modals.sftp.open_filter(textarea.clone(), cx);
+            app_state.ui.modals.sftp.open_filter(textarea.clone(), cx);
         }
         SftpPanelEvent::ClosePanel { tab_id } => {
-            shell.state.close_sftp_panel(*tab_id);
+            app_state.close_sftp_panel(*tab_id);
             cx.notify();
         }
         SftpPanelEvent::OpenLocalDiff { tab_id, target } => {
-            crate::diff_viewer::DiffViewerOps::new(&mut shell.state).open_local_diff_with_target(
+            crate::diff_viewer::DiffViewerOps::new(app_state).open_local_diff_with_target(
                 *tab_id,
                 target.clone(),
                 cx,
             );
         }
         SftpPanelEvent::SetStatus(message) => {
-            shell.state.ui.status = Some(message.clone());
+            app_state.ui.status = Some(message.clone());
             cx.notify();
         }
         SftpPanelEvent::OverlayChanged => {
