@@ -10,8 +10,9 @@ use hyper::body::Incoming;
 use hyper::client::conn::http1::SendRequest;
 use hyper::header::HeaderMap;
 use hyper_util::rt::TokioIo;
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// 每个引擎端点保留的空闲连接上限。
 const POOL_CAPACITY: usize = 4;
@@ -27,7 +28,7 @@ pub struct ConnectionPool {
 }
 impl ConnectionPool {
     fn take(&self, key: &str) -> Option<PooledConnection> {
-        let mut connections = self.connections.lock().ok()?;
+        let mut connections = self.connections.lock();
         let entries = connections.get_mut(key)?;
         let connection = entries.pop();
         if entries.is_empty() {
@@ -37,10 +38,7 @@ impl ConnectionPool {
     }
 
     fn put(&self, key: String, connection: PooledConnection) {
-        let Ok(mut connections) = self.connections.lock() else {
-            connection.driver.abort();
-            return;
-        };
+        let mut connections = self.connections.lock();
         let entries = connections.entry(key).or_default();
         if entries.len() >= POOL_CAPACITY {
             connection.driver.abort();
@@ -54,14 +52,7 @@ impl std::fmt::Debug for ConnectionPool {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("ConnectionPool")
-            .field(
-                "endpoints",
-                &self
-                    .connections
-                    .lock()
-                    .map(|connections| connections.len())
-                    .unwrap_or(0),
-            )
+            .field("endpoints", &self.connections.lock().len())
             .finish()
     }
 }

@@ -6,9 +6,10 @@
 
 use crate::engine::{self, Engine};
 use crate::error::ContainerError;
+use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
 use transom_core::{ContainerEngineProfile, ContainerRequestId};
 
 /// 容器接入服务（随控制器单例）。
@@ -54,81 +55,59 @@ impl ContainerService {
     /// 登记一次可取消操作，返回取消标志。
     pub fn register_cancel(&self, request_id: ContainerRequestId) -> Arc<AtomicBool> {
         let flag = Arc::new(AtomicBool::new(false));
-        if let Ok(mut cancels) = self.cancels.lock() {
-            cancels.insert(request_id, Arc::clone(&flag));
-        }
+        self.cancels.lock().insert(request_id, Arc::clone(&flag));
         flag
     }
 
     /// 置位取消标志；请求不存在时返回 `false`。
     pub fn cancel(&self, request_id: ContainerRequestId) -> bool {
-        match self.cancels.lock() {
-            Ok(cancels) => cancels.get(&request_id).is_some_and(|flag| {
-                flag.store(true, std::sync::atomic::Ordering::Relaxed);
-                true
-            }),
-            Err(_) => false,
-        }
+        self.cancels.lock().get(&request_id).is_some_and(|flag| {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            true
+        })
     }
 
     /// 操作结束后移除登记，避免取消表无限增长。
     pub fn finish(&self, request_id: ContainerRequestId) {
-        if let Ok(mut cancels) = self.cancels.lock() {
-            cancels.remove(&request_id);
-        }
+        self.cancels.lock().remove(&request_id);
     }
 
     /// 当前是否已被取消。
     pub fn is_cancelled(&self, request_id: ContainerRequestId) -> bool {
         self.cancels
             .lock()
-            .ok()
-            .and_then(|cancels| {
-                cancels
-                    .get(&request_id)
-                    .map(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
-            })
-            .unwrap_or(false)
+            .get(&request_id)
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     /// 登记一个具名任务（如镜像拉取任务）的取消标志。
     pub fn register_task_cancel(&self, task_id: &str) -> Arc<AtomicBool> {
         let flag = Arc::new(AtomicBool::new(false));
-        if let Ok(mut cancels) = self.task_cancels.lock() {
-            cancels.insert(task_id.to_string(), Arc::clone(&flag));
-        }
+        self.task_cancels
+            .lock()
+            .insert(task_id.to_string(), Arc::clone(&flag));
         flag
     }
 
     /// 置位指定任务的取消标志；任务不存在时返回 `false`。
     pub fn cancel_task(&self, task_id: &str) -> bool {
-        match self.task_cancels.lock() {
-            Ok(cancels) => cancels.get(task_id).is_some_and(|flag| {
-                flag.store(true, std::sync::atomic::Ordering::Relaxed);
-                true
-            }),
-            Err(_) => false,
-        }
+        self.task_cancels.lock().get(task_id).is_some_and(|flag| {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            true
+        })
     }
 
     /// 任务完成后移除登记。
     pub fn finish_task(&self, task_id: &str) {
-        if let Ok(mut cancels) = self.task_cancels.lock() {
-            cancels.remove(task_id);
-        }
+        self.task_cancels.lock().remove(task_id);
     }
 
     /// 检查指定任务是否已被取消。
     pub fn is_task_cancelled(&self, task_id: &str) -> bool {
         self.task_cancels
             .lock()
-            .ok()
-            .and_then(|cancels| {
-                cancels
-                    .get(task_id)
-                    .map(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
-            })
-            .unwrap_or(false)
+            .get(task_id)
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
     }
 }
 

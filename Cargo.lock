@@ -8825,6 +8825,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "log",
+ "parking_lot 0.13.0",
  "reqwest",
  "rustls",
  "rustls-pki-types",

@@ -321,7 +321,7 @@ apps/transom/src/
 
 ## 改动指引
 
-- **新增一条 AppCommand**：`crates/transom-core/src/commands/mod.rs` 加变体 → `controller/commands.rs`
+- **新增一条 AppCommand**：`crates/transom-core/src/commands/mod.rs` 加变体 → `apps/transom/src/controller/commands/`
   加处理分支（UI 侧构造点按其语义选择 try_send/send_command）；
 - **新增连接类型**：`ReadyConnection` 加变体 → `internal/connected.rs` 的 `adopt_*` 加差异化收尾
   → `pty.rs` 的派发点构造新变体；

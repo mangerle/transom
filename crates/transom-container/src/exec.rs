@@ -13,8 +13,9 @@ use crate::cli::CliBackend;
 use crate::engine::Engine;
 use crate::error::ContainerError;
 use command_group::{CommandGroup, GroupChild};
+use parking_lot::Mutex;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{oneshot, watch};
 use transom_core::{
@@ -215,10 +216,9 @@ struct CliSession {
 
 impl Drop for CliSession {
     fn drop(&mut self) {
-        if let Ok(mut child) = self.child.lock() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+        let mut child = self.child.lock();
+        let _ = child.kill();
+        let _ = child.wait();
         if let Some(handle) = self.wait_thread.take() {
             let _ = handle.join();
         }
@@ -308,8 +308,8 @@ fn cli_exec(
             loop {
                 let status = wait_child
                     .lock()
-                    .map_err(|error| error.to_string())
-                    .and_then(|mut child| child.try_wait().map_err(|error| error.to_string()));
+                    .try_wait()
+                    .map_err(|error| error.to_string());
                 match status {
                     Ok(Some(status)) => {
                         log::info!("容器 CLI 会话已结束，状态: {status}");
@@ -339,9 +339,8 @@ fn cli_exec(
                         // CLI 后端没有 resize 接口；能力矩阵已标记，不重复刷日志。
                     }
                     TerminalControl::Close => {
-                        if let Ok(mut child) = control_child.lock() {
-                            let _ = child.kill();
-                        }
+                        let mut child = control_child.lock();
+                        let _ = child.kill();
                         break;
                     }
                 }

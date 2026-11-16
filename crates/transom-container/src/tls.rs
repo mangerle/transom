@@ -5,12 +5,13 @@
 //! 传输通道，杜绝明文传输导致的宿主机控制权外泄。
 
 use crate::error::ContainerError;
+use parking_lot::Mutex;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
@@ -59,23 +60,22 @@ pub async fn connect_tls(
 fn cached_client_config(tls: &TlsConfig) -> Result<Arc<ClientConfig>, ContainerError> {
     static CACHE: OnceLock<Mutex<HashMap<String, Arc<ClientConfig>>>> = OnceLock::new();
     let key = tls_cache_key(tls);
-    if let Ok(cache) = CACHE
-        .get_or_init(|| Mutex::new(HashMap::with_capacity(4)))
-        .lock()
-        && let Some(config) = cache.get(&key)
     {
-        return Ok(Arc::clone(config));
+        let cache = CACHE
+            .get_or_init(|| Mutex::new(HashMap::with_capacity(4)))
+            .lock();
+        if let Some(config) = cache.get(&key) {
+            return Ok(Arc::clone(config));
+        }
     }
     let config = Arc::new(build_client_config(tls)?);
-    if let Ok(mut cache) = CACHE
+    let mut cache = CACHE
         .get_or_init(|| Mutex::new(HashMap::with_capacity(4)))
-        .lock()
-    {
-        if cache.len() >= TLS_CONFIG_CACHE_LIMIT {
-            cache.clear();
-        }
-        cache.insert(key, Arc::clone(&config));
+        .lock();
+    if cache.len() >= TLS_CONFIG_CACHE_LIMIT {
+        cache.clear();
     }
+    cache.insert(key, Arc::clone(&config));
     Ok(config)
 }
 
