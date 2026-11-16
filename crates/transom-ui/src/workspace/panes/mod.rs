@@ -295,8 +295,7 @@ impl AppShell {
             };
             let project_id = workspace.read(cx).state.project.id;
             let badge = self
-                .state
-                .git
+                .state.git_registry(cx)
                 .badges
                 .get(&project_id)
                 .cloned()

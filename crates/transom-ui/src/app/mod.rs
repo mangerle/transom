@@ -352,8 +352,18 @@ impl AppShell {
         if interval == 0 {
             return;
         }
-        if self.state.git.auto_fetch_schedule.tick(interval) {
-            let projects = self.state.git.projects.clone();
+        let (due, projects) = self.state.update_git_registry(cx, |git| {
+            let due = git.auto_fetch_schedule.tick(interval);
+            (
+                due,
+                if due {
+                    git.projects.clone()
+                } else {
+                    Vec::new()
+                },
+            )
+        });
+        if due {
             for project in projects {
                 self.send_command(GitCommand::Fetch { project });
             }

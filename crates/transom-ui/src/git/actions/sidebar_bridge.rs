@@ -19,27 +19,34 @@ pub(crate) fn on_git_sidebar_event(
             crate::git::actions::modal_bridges::open_git_clone_modal(shell, window, cx);
         }
         GitSidebarEvent::OpenProjectModal(folder) => {
-            crate::git::actions::modal_bridges::open_git_project_modal(
-                shell, *folder, window, cx,
-            );
+            crate::git::actions::modal_bridges::open_git_project_modal(shell, *folder, window, cx);
         }
         GitSidebarEvent::RefreshAll => {
             crate::git::actions::refresh_all_git_projects(shell, cx);
         }
         GitSidebarEvent::ToggleFolderCollapsed(folder_id) => {
-            if shell.state.git.toggle_folder_collapsed(*folder_id) {
+            if shell
+                .state
+                .update_git_registry(cx, |git| git.toggle_folder_collapsed(*folder_id))
+            {
                 crate::git::actions::persist_git_projects(shell, cx);
             }
         }
         GitSidebarEvent::Drop(drag, target) => {
-            if shell.state.git.apply_drop(*drag, *target) {
+            if shell
+                .state
+                .update_git_registry(cx, |git| git.apply_drop(*drag, *target))
+            {
                 crate::git::actions::persist_git_projects(shell, cx);
             } else {
                 cx.notify();
             }
         }
         GitSidebarEvent::SelectProject(id) => {
-            if shell.state.git.select_project(*id) {
+            if shell
+                .state
+                .update_git_registry(cx, |git| git.select_project(*id))
+            {
                 cx.notify();
             }
         }
@@ -49,7 +56,7 @@ pub(crate) fn on_git_sidebar_event(
         GitSidebarEvent::OpenInTerminal(id) => {
             let path = shell
                 .state
-                .git
+                .git_registry(cx)
                 .projects
                 .iter()
                 .find(|item| item.id == *id)
@@ -61,7 +68,7 @@ pub(crate) fn on_git_sidebar_event(
         GitSidebarEvent::RefreshProject(id) => {
             if let Some(project) = shell
                 .state
-                .git
+                .git_registry(cx)
                 .projects
                 .iter()
                 .find(|item| item.id == *id)
@@ -71,7 +78,10 @@ pub(crate) fn on_git_sidebar_event(
             }
         }
         GitSidebarEvent::MoveProjectToRoot(id) => {
-            if shell.state.git.move_project_to_root(*id) {
+            if shell
+                .state
+                .update_git_registry(cx, |git| git.move_project_to_root(*id))
+            {
                 crate::git::actions::persist_git_projects(shell, cx);
             } else {
                 cx.notify();
@@ -86,7 +96,9 @@ pub(crate) fn on_git_sidebar_event(
             );
         }
         GitSidebarEvent::DeleteFolder(id) => {
-            shell.state.git.delete_folder(*id);
+            shell
+                .state
+                .update_git_registry(cx, |git| git.delete_folder(*id));
             crate::git::actions::persist_git_projects(shell, cx);
         }
     }

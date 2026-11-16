@@ -58,7 +58,7 @@ pub(crate) fn dispatch_git_event(
         } => {
             let ours = shell
                 .state
-                .git
+                .git_registry(cx)
                 .pending_project_init
                 .is_some_and(|(pending_id, _)| pending_id == request_id);
             if ours {

@@ -12,7 +12,7 @@ pub(crate) fn open_git_clone_modal(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let folders = git_folder_names(shell);
+    let folders = git_folder_names(&shell.state.git_registry(cx).folders);
     let modal = cx.new(|cx| GitCloneModalView::new(folders, window, cx));
     let subscription = cx.subscribe(&modal, |shell, _, event: &GitCloneModalEvent, cx| {
         on_clone_modal_event(shell, event, cx);
@@ -55,7 +55,7 @@ fn on_clone_modal_event(
             color,
         } => {
             // 一次只跑一个克隆：覆盖任务表会让旧子进程失去取消入口。
-            if shell.state.git.clone_task.is_some() {
+            if shell.state.git_registry(cx).clone_task.is_some() {
                 if let Some(modal) = shell.state.modals.git.clone.clone() {
                     let message = rust_i18n::t!("git.clone.busy").to_string();
                     modal.update(cx, |view, cx| view.set_error(message, cx));
@@ -64,17 +64,19 @@ fn on_clone_modal_event(
                 return;
             }
             let request_id = GitRequestId::new();
-            shell.state.git.clone_task = Some(GitCloneTask {
-                request_id,
-                repo_name: repo_name.clone(),
-                folder_name: folder_name.clone(),
-                icon: *icon,
-                color: *color,
-                last_line: String::new(),
-                percent: None,
-                running: true,
-                error: None,
-                done: None,
+            shell.state.update_git_registry(cx, |git| {
+                git.clone_task = Some(GitCloneTask {
+                    request_id,
+                    repo_name: repo_name.clone(),
+                    folder_name: folder_name.clone(),
+                    icon: *icon,
+                    color: *color,
+                    last_line: String::new(),
+                    percent: None,
+                    running: true,
+                    error: None,
+                    done: None,
+                });
             });
             close_git_clone_modal(shell, cx);
             shell.send_command(GitCommand::Clone {

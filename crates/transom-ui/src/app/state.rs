@@ -126,8 +126,6 @@ pub(crate) struct AppState {
     pub(crate) monitor: Entity<crate::monitor::MonitorView>,
     /// 容器引擎连接侧栏、表单与工作区顶层状态。
     pub(crate) containers: crate::container::ContainerUiState,
-    /// Git 子系统的全局状态（项目列表、分组、徽标与在途任务）。
-    pub(crate) git: crate::git::GitHub,
     /// Git 侧栏视图实体：项目折叠态、交互与右键菜单都归它。
     pub(crate) git_sidebar: Entity<crate::git::GitSidebarView>,
     /// 远端文本编辑面板实体：面板集合、关闭拦截与渲染都归它。

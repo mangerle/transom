@@ -230,9 +230,11 @@ fn handle_read_failed(
             }
         });
     }
-    let badge = shell.state.git.badges.entry(project_id).or_default();
-    badge.loading = false;
-    badge.error = Some(message.clone());
+    shell.state.update_git_registry(cx, |git| {
+        let badge = git.badges.entry(project_id).or_default();
+        badge.loading = false;
+        badge.error = Some(message.clone());
+    });
     if !not_repo {
         shell.set_error(message);
     }

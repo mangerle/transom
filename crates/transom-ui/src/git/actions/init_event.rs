@@ -13,16 +13,18 @@ pub(super) fn apply_git_project_init_event(
     error: Option<AppError>,
     cx: &mut Context<AppShell>,
 ) {
-    let Some((pending_id, project_id)) = shell.state.git.pending_project_init else {
+    let Some((pending_id, project_id)) = shell.state.git_registry(cx).pending_project_init else {
         return;
     };
     if pending_id != request_id {
         return;
     }
-    shell.state.git.pending_project_init = None;
+    shell
+        .state
+        .update_git_registry(cx, |git| git.pending_project_init = None);
     let project = shell
         .state
-        .git
+        .git_registry(cx)
         .projects
         .iter()
         .find(|project| project.id == project_id)
@@ -45,9 +47,11 @@ pub(super) fn apply_git_project_init_event(
                     state.log.error = Some(message.clone());
                 });
             }
-            let badge = shell.state.git.badges.entry(project_id).or_default();
-            badge.loading = false;
-            badge.error = Some(message.clone());
+            shell.state.update_git_registry(cx, |git| {
+                let badge = git.badges.entry(project_id).or_default();
+                badge.loading = false;
+                badge.error = Some(message.clone());
+            });
             shell.set_error(message);
         }
         None => {
@@ -65,9 +69,11 @@ pub(super) fn apply_git_project_init_event(
                     state.log.error = None;
                 });
             }
-            let badge = shell.state.git.badges.entry(project_id).or_default();
-            badge.loading = false;
-            badge.error = None;
+            shell.state.update_git_registry(cx, |git| {
+                let badge = git.badges.entry(project_id).or_default();
+                badge.loading = false;
+                badge.error = None;
+            });
             if let Some(project) = project {
                 crate::git::actions::git_refresh(shell, &project, cx);
                 if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {

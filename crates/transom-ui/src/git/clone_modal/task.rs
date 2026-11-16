@@ -42,52 +42,62 @@ pub(crate) fn apply_git_clone_event(
 ) {
     match event {
         GitAppEvent::CloneProgress { request_id, text } => {
-            let Some(task) = shell.state.git.clone_task.as_mut() else {
-                return;
-            };
-            if task.request_id != request_id {
-                return;
+            let applied = shell.state.update_git_registry(cx, |git| {
+                let Some(task) = git.clone_task.as_mut() else {
+                    return false;
+                };
+                if task.request_id != request_id {
+                    return false;
+                }
+                if let Some(line) = text.lines().rev().find(|line| !line.trim().is_empty()) {
+                    task.last_line = line.trim().to_string();
+                }
+                if let Some(percent) = clone_percent(&text) {
+                    task.percent = Some(percent);
+                }
+                true
+            });
+            if applied {
+                cx.notify();
             }
-            if let Some(line) = text.lines().rev().find(|line| !line.trim().is_empty()) {
-                task.last_line = line.trim().to_string();
-            }
-            if let Some(percent) = clone_percent(&text) {
-                task.percent = Some(percent);
-            }
-            cx.notify();
         }
         GitAppEvent::CloneDone {
             request_id,
             dest,
             error,
         } => {
-            let (folder_name, icon, color, success) = {
-                let Some(task) = shell.state.git.clone_task.as_mut() else {
-                    return;
-                };
-                if task.request_id != request_id {
-                    return;
-                }
-                task.running = false;
-                match error {
-                    Some(error) => {
-                        task.error = Some(localized_error(&error));
-                        (task.folder_name.clone(), task.icon, task.color, false)
+            let Some((folder_name, icon, color, success)) =
+                shell.state.update_git_registry(cx, |git| {
+                    let task = git.clone_task.as_mut()?;
+                    if task.request_id != request_id {
+                        return None;
                     }
-                    None => {
-                        task.error = None;
-                        task.done = Some(dest.clone());
-                        (task.folder_name.clone(), task.icon, task.color, true)
-                    }
-                }
+                    task.running = false;
+                    Some(match error {
+                        Some(error) => {
+                            task.error = Some(localized_error(&error));
+                            (task.folder_name.clone(), task.icon, task.color, false)
+                        }
+                        None => {
+                            task.error = None;
+                            task.done = Some(dest.clone());
+                            (task.folder_name.clone(), task.icon, task.color, true)
+                        }
+                    })
+                })
+            else {
+                return;
             };
             // 结束对 task 的借用后再走登记：add_git_project 会写项目表与落盘。
             if success {
                 let mut draft = GitProjectDraft::new(dest);
                 draft.icon = icon;
                 draft.color = color;
-                draft.folder_id =
-                    crate::git::actions::modal_bridges::git_folder_id_for_name(shell, &folder_name, cx);
+                draft.folder_id = crate::git::actions::modal_bridges::git_folder_id_for_name(
+                    shell,
+                    &folder_name,
+                    cx,
+                );
                 crate::git::actions::add_git_project(shell, draft, cx);
             }
             cx.notify();
@@ -98,7 +108,10 @@ pub(crate) fn apply_git_clone_event(
 
 /// 取消在途克隆：杀掉子进程并收起进度卡。
 fn git_cancel_clone_task(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(task) = shell.state.git.clone_task.take() else {
+    let Some(task) = shell
+        .state
+        .update_git_registry(cx, |git| git.clone_task.take())
+    else {
         return;
     };
     shell.send_command(GitCommand::Cancel {
@@ -114,14 +127,14 @@ pub(crate) fn render_git_clone_task(
     cx: &mut Context<AppShell>,
     p: &Palette,
 ) -> Option<AnyElement> {
-    let task = shell.state.git.clone_task.as_ref()?;
+    let task = shell.state.git_registry(cx).clone_task.as_ref()?;
     if let Some(path) = task.done.clone() {
         let app = cx.entity().clone();
         window.defer(cx, move |window, cx| {
             app.update(cx, |this, cx| {
                 if let Some(project) = this
                     .state
-                    .git
+                    .git_registry(cx)
                     .projects
                     .iter()
                     .find(|item| item.path == path)
@@ -129,7 +142,8 @@ pub(crate) fn render_git_clone_task(
                 {
                     crate::git::actions::open_git_tab(this, project, window, cx);
                 }
-                this.state.git.clone_task = None;
+                this.state
+                    .update_git_registry(cx, |git| git.clone_task = None);
                 cx.notify();
             });
         });
@@ -209,7 +223,8 @@ pub(crate) fn render_git_clone_task(
                     .tooltip(rust_i18n::t!("git.clone.close").to_string())
                     .on_click(move |_, _, cx| {
                         close_app.update(cx, |this, cx| {
-                            this.state.git.clone_task = None;
+                            this.state
+                                .update_git_registry(cx, |git| git.clone_task = None);
                             cx.notify();
                         });
                     }),

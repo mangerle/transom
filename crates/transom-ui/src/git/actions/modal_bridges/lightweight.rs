@@ -41,7 +41,7 @@ pub(crate) fn open_git_rename_folder_modal(
 ) {
     let Some(current) = shell
         .state
-        .git
+        .git_registry(cx)
         .folders
         .iter()
         .find(|folder| folder.id == id)
@@ -126,11 +126,16 @@ fn handle_name_modal_submit(
             }
         }
         crate::git::GitNamePurpose::CreateFolder => {
-            shell.state.git.add_folder(name);
+            shell
+                .state
+                .update_git_registry(cx, |git| git.add_folder(name));
             crate::git::actions::persist_git_projects(shell, cx);
         }
         crate::git::GitNamePurpose::RenameFolder { id } => {
-            if shell.state.git.rename_folder(id, name) {
+            if shell
+                .state
+                .update_git_registry(cx, |git| git.rename_folder(id, name))
+            {
                 crate::git::actions::persist_git_projects(shell, cx);
             }
         }

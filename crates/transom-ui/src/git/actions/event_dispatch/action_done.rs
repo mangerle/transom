@@ -71,7 +71,7 @@ pub(super) fn handle_git_action_done(
     {
         let worktree_project = shell
             .state
-            .git
+            .git_registry(cx)
             .projects
             .iter()
             .find(|item| item.id == project_id)
@@ -91,7 +91,7 @@ pub(super) fn handle_git_action_done(
     // ahead 变化、worktree add 后分支增加）。
     if let Some(project) = shell
         .state
-        .git
+        .git_registry(cx)
         .projects
         .iter()
         .find(|item| item.id == project_id)
@@ -160,7 +160,7 @@ pub(super) fn handle_git_action_done(
             if should_push
                 && let Some(project) = shell
                     .state
-                    .git
+                    .git_registry(cx)
                     .projects
                     .iter()
                     .find(|item| item.id == project_id)
@@ -199,13 +199,15 @@ pub(super) fn apply_git_status(
             .as_deref()
             .map(|oid| oid.chars().take(7).collect()),
     };
-    let badge = shell.state.git.badges.entry(project_id).or_default();
-    badge.branch = branch;
-    badge.dirty = dirty;
-    badge.ahead = status.ahead;
-    badge.behind = status.behind;
-    badge.loading = false;
-    badge.error = None;
+    shell.state.update_git_registry(cx, |git| {
+        let badge = git.badges.entry(project_id).or_default();
+        badge.branch = branch;
+        badge.dirty = dirty;
+        badge.ahead = status.ahead;
+        badge.behind = status.behind;
+        badge.loading = false;
+        badge.error = None;
+    });
     if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
         workspace.update(cx, |workspace, _| {
             let state = &mut workspace.state;

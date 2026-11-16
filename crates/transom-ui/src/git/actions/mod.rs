@@ -22,8 +22,7 @@ use crate::palette::localized_error;
 use crate::sidebar::SidebarSection;
 use gpui_kit::*;
 use transom_core::{
-    Connection, GitCommand, GitProject, GitProjectId, GitRequestId, LocalConnection, Session,
-    TabId,
+    Connection, GitCommand, GitProject, GitProjectId, GitRequestId, LocalConnection, Session, TabId,
 };
 
 mod commit_actions;
@@ -65,8 +64,8 @@ pub(crate) enum GitHistoryAction {
 /// 项目的 `folder_id` 还指着已消失分组」这种撕裂状态（同 `SessionStore` 的理由）。
 pub(crate) fn persist_git_projects(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     let registry = transom_core::GitRegistry {
-        projects: shell.state.git.projects.clone(),
-        folders: shell.state.git.folders.clone(),
+        projects: shell.state.git_registry(cx).projects.clone(),
+        folders: shell.state.git_registry(cx).folders.clone(),
     };
     if let Err(error) = shell.state.services.git_projects.save(&registry) {
         shell.set_error(localized_error(&error));
@@ -86,8 +85,8 @@ pub(crate) fn toggle_git_sidebar(shell: &mut AppShell, cx: &mut Context<AppShell
 
 /// 刷新全部已登记项目的状态徽标。
 pub(crate) fn refresh_all_git_projects(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    for index in 0..shell.state.git.projects.len() {
-        let project = shell.state.git.projects[index].clone();
+    let projects = shell.state.git_registry(cx).projects.clone();
+    for project in projects {
         git_refresh(shell, &project, cx);
     }
 }
@@ -99,9 +98,11 @@ pub(crate) fn git_refresh_active_projects(shell: &mut AppShell, cx: &mut Context
 
 /// 采集单个项目的状态快照（侧栏徽标与标签页共用同一条命令）。
 pub(crate) fn git_refresh(shell: &mut AppShell, project: &GitProject, cx: &mut Context<AppShell>) {
-    let badge = shell.state.git.badges.entry(project.id).or_default();
-    badge.loading = true;
-    badge.error = None;
+    shell.state.update_git_registry(cx, |git| {
+        let badge = git.badges.entry(project.id).or_default();
+        badge.loading = true;
+        badge.error = None;
+    });
     shell.send_command(GitCommand::Refresh {
         project: project.clone(),
     });
@@ -124,7 +125,7 @@ fn git_open_worktree_path(shell: &mut AppShell, path: &str, cx: &mut Context<App
     let target = std::path::PathBuf::from(path);
     if let Some(project) = shell
         .state
-        .git
+        .git_registry(cx)
         .projects
         .iter()
         .find(|item| item.path == target)
@@ -143,7 +144,9 @@ pub(crate) fn open_git_tab(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.git.selected_project = Some(project.id);
+    shell
+        .state
+        .update_git_registry(cx, |git| git.selected_project = Some(project.id));
     if let Some(tab_id) = git_tab_for_project(shell, project.id, cx) {
         shell.activate_tab(tab_id, window, cx);
         return;
@@ -164,11 +167,12 @@ pub(crate) fn open_git_tab(
         .subscriptions
         .git_workspaces
         .insert(tab_id, subscription);
-    shell
-        .state
-        .workspace
-        .tabs
-        .push(TerminalTab::git_tab(tab_id, session, title, workspace.clone()));
+    shell.state.workspace.tabs.push(TerminalTab::git_tab(
+        tab_id,
+        session,
+        title,
+        workspace.clone(),
+    ));
     shell.state.workspace.create_group(tab_id, session_id);
     shell.activate_tab(tab_id, window, cx);
     git_refresh(shell, &project, cx);
@@ -222,7 +226,9 @@ fn handle_git_workspace_event(
             request_id,
             project,
         } => {
-            shell.state.git.pending_project_init = Some((*request_id, project.id));
+            shell.state.update_git_registry(cx, |git| {
+                git.pending_project_init = Some((*request_id, project.id));
+            });
             cx.notify();
         }
         GitWorkspaceEvent::OpenSettings => {
@@ -268,7 +274,7 @@ pub(crate) fn add_git_project(
 ) {
     if shell
         .state
-        .git
+        .git_registry(cx)
         .projects
         .iter()
         .any(|item| item.path == draft.path)
@@ -277,12 +283,10 @@ pub(crate) fn add_git_project(
         return;
     }
     let project = draft.into_project();
-    shell
-        .state
-        .git
-        .badges
-        .insert(project.id, GitBadge::default());
-    shell.state.git.projects.push(project.clone());
+    shell.state.update_git_registry(cx, |git| {
+        git.badges.insert(project.id, GitBadge::default());
+        git.projects.push(project.clone());
+    });
     persist_git_projects(shell, cx);
     git_refresh(shell, &project, cx);
 }
@@ -293,11 +297,13 @@ pub(crate) fn remove_git_project(
     id: GitProjectId,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.git.projects.retain(|project| project.id != id);
-    shell.state.git.badges.remove(&id);
-    if shell.state.git.selected_project == Some(id) {
-        shell.state.git.selected_project = None;
-    }
+    shell.state.update_git_registry(cx, |git| {
+        git.projects.retain(|project| project.id != id);
+        git.badges.remove(&id);
+        if git.selected_project == Some(id) {
+            git.selected_project = None;
+        }
+    });
     if let Some(tab_id) = git_tab_for_project(shell, id, cx) {
         cancel_git_tab(shell, tab_id, cx);
     }

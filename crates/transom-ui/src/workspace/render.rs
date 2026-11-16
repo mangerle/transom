@@ -206,9 +206,10 @@ impl AppShell {
                         .active_tab
                         .and_then(|tab_id| self.state.git_workspace(tab_id))
                         .map(|workspace| workspace.read(cx).state.project.id);
-                    let mut active_branches =
-                        std::collections::HashMap::with_capacity(self.state.git.projects.len());
-                    for project in &self.state.git.projects {
+                    let mut active_branches = std::collections::HashMap::with_capacity(
+                        self.state.git_registry(cx).projects.len(),
+                    );
+                    for project in &self.state.git_registry(cx).projects {
                         if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx)
                             && let Some(transom_core::HeadState::OnBranch(name)) =
                                 workspace.read(cx).state.status.as_ref().map(|s| &s.head)
@@ -219,7 +220,7 @@ impl AppShell {
                     crate::git::sidebar::render_git_sidebar(
                         crate::git::GitSidebarParams {
                             view: &self.state.git_sidebar,
-                            git: &self.state.git,
+                            git: self.state.git_registry(cx),
                             active_project,
                             active_branches: &active_branches,
                         },

@@ -13,11 +13,11 @@ pub(crate) fn open_git_project_modal(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let folders = git_folder_names(shell);
+    let folders = git_folder_names(&shell.state.git_registry(cx).folders);
     let preset_name = folder.and_then(|id| {
         shell
             .state
-            .git
+            .git_registry(cx)
             .folders
             .iter()
             .find(|item| item.id == id)
@@ -79,7 +79,9 @@ fn on_project_modal_event(
                 if let Some(modal) = shell.state.modals.git.project.clone() {
                     modal.update(cx, |view, cx| view.begin_init(request_id, cx));
                 }
-                shell.state.git.pending_init = Some((request_id, draft));
+                shell
+                    .state
+                    .update_git_registry(cx, |git| git.pending_init = Some((request_id, draft)));
                 shell.send_command(GitCommand::Init {
                     request_id,
                     path: path.clone(),
@@ -127,11 +129,16 @@ pub(crate) fn apply_git_probe_event(
             path,
             error,
         } => {
-            let Some((pending_id, draft)) = shell.state.git.pending_init.take() else {
+            let Some((pending_id, draft)) = shell
+                .state
+                .update_git_registry(cx, |git| git.pending_init.take())
+            else {
                 return;
             };
             if pending_id != request_id {
-                shell.state.git.pending_init = Some((pending_id, draft));
+                shell.state.update_git_registry(cx, |git| {
+                    git.pending_init = Some((pending_id, draft));
+                });
                 return;
             }
             match error {
@@ -142,7 +149,9 @@ pub(crate) fn apply_git_probe_event(
                         path.display()
                     );
                     if let Some(modal) = shell.state.modals.git.project.clone() {
-                        modal.update(cx, |view, cx| view.apply_init_error(request_id, message, cx));
+                        modal.update(cx, |view, cx| {
+                            view.apply_init_error(request_id, message, cx)
+                        });
                     }
                 }
                 None => {
@@ -157,14 +166,8 @@ pub(crate) fn apply_git_probe_event(
 }
 
 /// 分组候选：既有分组的名字。
-pub(crate) fn git_folder_names(shell: &AppShell) -> Vec<String> {
-    shell
-        .state
-        .git
-        .folders
-        .iter()
-        .map(|folder| folder.name.clone())
-        .collect()
+pub(crate) fn git_folder_names(folders: &[GitFolder]) -> Vec<String> {
+    folders.iter().map(|folder| folder.name.clone()).collect()
 }
 
 /// 把输入框里的组名落成真实分组：空 → 不归组；已有同名 → 用它；
@@ -178,13 +181,16 @@ pub(crate) fn git_folder_id_for_name(
     if name.is_empty() {
         return None;
     }
-    if let Some(existing) = crate::git::helpers::find_folder_by_name(&shell.state.git.folders, name)
+    if let Some(existing) =
+        crate::git::helpers::find_folder_by_name(&shell.state.git_registry(cx).folders, name)
     {
         return Some(existing);
     }
     log::info!("按表单输入新建 Git 分组: {name}");
-    shell.state.git.folders.push(GitFolder::new(name));
-    let created = shell.state.git.folders.last().map(|folder| folder.id);
+    let created = shell.state.update_git_registry(cx, |git| {
+        git.folders.push(GitFolder::new(name));
+        git.folders.last().map(|folder| folder.id)
+    });
     crate::git::actions::persist_git_projects(shell, cx);
     created
 }

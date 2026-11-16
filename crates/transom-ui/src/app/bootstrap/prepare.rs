@@ -136,8 +136,12 @@ pub(super) fn assemble_state(
         open_modals: crate::dialog_host::OpenModals::default(),
         feedback: super::super::state::UiFeedbackState::new(prepared.pending_notices),
         containers: crate::container::ContainerUiState::new(window, cx),
-        git: crate::git::GitHub::new(git_registry.projects, git_registry.folders),
-        git_sidebar: cx.new(|_| crate::git::GitSidebarView::new()),
+        git_sidebar: cx.new(move |_| {
+            crate::git::GitSidebarView::new(crate::git::GitHub::new(
+                git_registry.projects,
+                git_registry.folders,
+            ))
+        }),
         session_sidebar: cx.new(|_| crate::sidebar::SessionSidebarView::new()),
         restart_requested,
     }
