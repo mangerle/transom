@@ -98,7 +98,7 @@ pub(crate) fn apply_git_clone_event(
                     &folder_name,
                     cx,
                 );
-                crate::git::actions::add_git_project(shell, draft, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).add_git_project(draft, cx);
             }
             cx.notify();
         }
@@ -140,7 +140,7 @@ pub(crate) fn render_git_clone_task(
                     .find(|item| item.path == path)
                     .cloned()
                 {
-                    crate::git::actions::open_git_tab(this, project, window, cx);
+                    crate::git::actions::GitActions::new(&mut this.state).open_git_tab(project, window, cx);
                 }
                 this.state
                     .update_git_registry(cx, |git| git.clone_task = None);

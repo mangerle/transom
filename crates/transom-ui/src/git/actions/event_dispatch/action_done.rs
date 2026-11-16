@@ -47,8 +47,7 @@ pub(super) fn handle_git_action_done(
                 workspace.update(cx, |workspace, _| workspace.state.pending_worktree.take())
             });
         if let Some((path, _checkout)) = pending {
-            crate::git::actions::add_git_project(
-                shell,
+            crate::git::actions::GitActions::new(&mut shell.state).add_git_project(
                 crate::git::GitProjectDraft::new(std::path::PathBuf::from(&path)),
                 cx,
             );
@@ -92,7 +91,7 @@ pub(super) fn handle_git_action_done(
         .find(|item| item.id == project_id)
         .cloned()
     {
-        crate::git::actions::git_refresh(shell, &project, cx);
+        crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
     }
     if matches!(
         action,
@@ -123,7 +122,8 @@ pub(super) fn handle_git_action_done(
             .handle_git_conflict_resolve_done(message.clone(), cx);
     }
     if matches!(action, GitAction::Commit)
-        && let Some(tab_id) = crate::git::actions::git_tab_for_project(shell, project_id, cx)
+        && let Some(tab_id) = crate::git::actions::GitActions::new(&mut shell.state)
+            .git_tab_for_project(project_id, cx)
     {
         let mut should_push = false;
         if let Some(workspace) = shell.state.git_workspace(tab_id) {
@@ -206,7 +206,9 @@ pub(super) fn apply_git_status(
         });
     }
     // 提交页首屏直接给第一个改动的差异：用户不用先点一下才知道右侧能看什么。
-    if let Some(tab_id) = crate::git::actions::git_tab_for_project(shell, project_id, cx) {
+    if let Some(tab_id) =
+        crate::git::actions::GitActions::new(&mut shell.state).git_tab_for_project(project_id, cx)
+    {
         let first = shell
             .state
             .git_workspace(tab_id)

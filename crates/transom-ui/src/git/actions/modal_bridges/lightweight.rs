@@ -129,14 +129,14 @@ fn handle_name_modal_submit(
             shell
                 .state
                 .update_git_registry(cx, |git| git.add_folder(name));
-            crate::git::actions::persist_git_projects(shell, cx);
+            crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
         }
         crate::git::GitNamePurpose::RenameFolder { id } => {
             if shell
                 .state
                 .update_git_registry(cx, |git| git.rename_folder(id, name))
             {
-                crate::git::actions::persist_git_projects(shell, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
             }
         }
     }

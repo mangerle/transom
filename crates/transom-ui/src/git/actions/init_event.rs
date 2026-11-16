@@ -75,7 +75,7 @@ pub(super) fn apply_git_project_init_event(
                 badge.error = None;
             });
             if let Some(project) = project {
-                crate::git::actions::git_refresh(shell, &project, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
                 if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
                     workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
                 }

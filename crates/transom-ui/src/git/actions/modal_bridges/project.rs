@@ -87,7 +87,7 @@ fn on_project_modal_event(
                     path: path.clone(),
                 });
             } else {
-                crate::git::actions::add_git_project(shell, draft, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).add_git_project(draft, cx);
                 close_git_project_modal(shell, cx);
             }
             cx.notify();
@@ -155,7 +155,8 @@ pub(crate) fn apply_git_probe_event(
                     }
                 }
                 None => {
-                    crate::git::actions::add_git_project(shell, draft, cx);
+                    crate::git::actions::GitActions::new(&mut shell.state)
+                        .add_git_project(draft, cx);
                     close_git_project_modal(shell, cx);
                 }
             }
@@ -191,6 +192,6 @@ pub(crate) fn git_folder_id_for_name(
         git.folders.push(GitFolder::new(name));
         git.folders.last().map(|folder| folder.id)
     });
-    crate::git::actions::persist_git_projects(shell, cx);
+    crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
     created
 }

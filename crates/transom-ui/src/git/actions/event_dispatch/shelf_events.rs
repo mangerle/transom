@@ -105,7 +105,7 @@ pub(super) fn handle_shelf_worktree_event(
                 });
             shell.set_transient_status(rust_i18n::t!("git.shelf.create"), cx);
             if let Some(project) = project {
-                super::super::git_refresh(shell, &project, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
             }
             cx.notify();
         }
@@ -146,7 +146,7 @@ pub(super) fn handle_shelf_worktree_event(
                 shell.set_error(message);
             }
             if let Some(project) = project {
-                super::super::git_refresh(shell, &project, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
             }
             cx.notify();
         }

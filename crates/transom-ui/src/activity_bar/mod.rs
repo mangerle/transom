@@ -314,7 +314,7 @@ fn activate_activity_item(
         }
         ActivityItemId::Keys => crate::keys::open_key_wizard(shell, window, cx),
         ActivityItemId::Settings => shell.open_settings_modal(None, window, cx),
-        ActivityItemId::Git => crate::git::actions::toggle_git_sidebar(shell, cx),
+        ActivityItemId::Git => crate::git::actions::GitActions::new(&mut shell.state).toggle_git_sidebar(cx),
         ActivityItemId::CloudSync => {
             crate::cloud_sync::toggle_cloud_sync_sidebar(&mut shell.state, cx)
         }

@@ -62,271 +62,274 @@ pub(crate) enum GitHistoryAction {
 ///
 /// 设计原理（Why）：两者必须同一次写完——分开保存会出现「分组已删、
 /// 项目的 `folder_id` 还指着已消失分组」这种撕裂状态（同 `SessionStore` 的理由）。
-pub(crate) fn persist_git_projects(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let registry = transom_core::GitRegistry {
-        projects: shell.state.git_registry(cx).projects.clone(),
-        folders: shell.state.git_registry(cx).folders.clone(),
-    };
-    if let Err(error) = shell.state.runtime.services.git_projects.save(&registry) {
-        shell.set_error(localized_error(&error));
-    }
-    cx.notify();
+/// Git 项目、标签与全局注册表动作的窄上下文。
+pub(crate) struct GitActions<'a> {
+    state: &'a mut crate::app::AppState,
 }
 
-/// 活动栏点击：切换左侧槽位的 Git 项目列表。
-pub(crate) fn toggle_git_sidebar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let opening = shell
-        .state
-        .session
-        .sidebar
-        .toggle_section(SidebarSection::Git);
-    if opening {
-        // 展开即刷一遍所有项目：列表里的分支与脏数必须是当下的。
-        refresh_all_git_projects(shell, cx);
+impl<'a> GitActions<'a> {
+    /// 从应用状态拆借 Git 全局动作能力。
+    pub(crate) fn new(state: &'a mut crate::app::AppState) -> Self {
+        Self { state }
     }
-    cx.notify();
-}
 
-/// 刷新全部已登记项目的状态徽标。
-pub(crate) fn refresh_all_git_projects(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let projects = shell.state.git_registry(cx).projects.clone();
-    for project in projects {
-        git_refresh(shell, &project, cx);
+    fn send_command(&mut self, command: impl Into<transom_core::AppCommand>) -> bool {
+        self.state.send_command(command)
     }
 }
 
-/// 刷新所有处于管理状态的 Git 项目状态（用于窗口重新聚焦时自动刷新）。
-pub(crate) fn git_refresh_active_projects(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    refresh_all_git_projects(shell, cx);
-}
+impl<'a> GitActions<'a> {
+    pub(crate) fn persist_git_projects(&mut self, cx: &mut Context<AppShell>) {
+        let registry = transom_core::GitRegistry {
+            projects: self.state.git_registry(cx).projects.clone(),
+            folders: self.state.git_registry(cx).folders.clone(),
+        };
+        if let Err(error) = self.state.runtime.services.git_projects.save(&registry) {
+            self.state.set_error(localized_error(&error));
+        }
+        cx.notify();
+    }
 
-/// 采集单个项目的状态快照（侧栏徽标与标签页共用同一条命令）。
-pub(crate) fn git_refresh(shell: &mut AppShell, project: &GitProject, cx: &mut Context<AppShell>) {
-    shell.state.update_git_registry(cx, |git| {
-        let badge = git.badges.entry(project.id).or_default();
-        badge.loading = true;
-        badge.error = None;
-    });
-    shell.send_command(GitCommand::Refresh {
-        project: project.clone(),
-    });
-    shell.send_command(GitCommand::LoadRefs {
-        project: project.clone(),
-    });
-    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
-        workspace.update(cx, |ws, cx| ws.reload_worktrees(cx));
-    } else {
-        shell.send_command(GitCommand::ListWorktrees {
-            project: project.clone(),
-            request_id: GitRequestId::new(),
+    /// 活动栏点击：切换左侧槽位的 Git 项目列表。
+    pub(crate) fn toggle_git_sidebar(&mut self, cx: &mut Context<AppShell>) {
+        let opening = self
+            .state
+            .session
+            .sidebar
+            .toggle_section(SidebarSection::Git);
+        if opening {
+            // 展开即刷一遍所有项目：列表里的分支与脏数必须是当下的。
+            self.refresh_all_git_projects(cx);
+        }
+        cx.notify();
+    }
+
+    /// 刷新全部已登记项目的状态徽标。
+    pub(crate) fn refresh_all_git_projects(&mut self, cx: &mut Context<AppShell>) {
+        let projects = self.state.git_registry(cx).projects.clone();
+        for project in projects {
+            self.git_refresh(&project, cx);
+        }
+    }
+
+    /// 刷新所有处于管理状态的 Git 项目状态（用于窗口重新聚焦时自动刷新）。
+    pub(crate) fn git_refresh_active_projects(&mut self, cx: &mut Context<AppShell>) {
+        self.refresh_all_git_projects(cx);
+    }
+
+    /// 采集单个项目的状态快照（侧栏徽标与标签页共用同一条命令）。
+    pub(crate) fn git_refresh(&mut self, project: &GitProject, cx: &mut Context<AppShell>) {
+        self.state.update_git_registry(cx, |git| {
+            let badge = git.badges.entry(project.id).or_default();
+            badge.loading = true;
+            badge.error = None;
         });
-    }
-    cx.notify();
-}
-
-/// 把一个工作树目录加进项目列表（工作树视图点击即切换/导入）。
-fn git_open_worktree_path(shell: &mut AppShell, path: &str, cx: &mut Context<AppShell>) {
-    let target = std::path::PathBuf::from(path);
-    if let Some(project) = shell
-        .state
-        .git_registry(cx)
-        .projects
-        .iter()
-        .find(|item| item.path == target)
-        .cloned()
-    {
-        git_refresh(shell, &project, cx);
-        return;
-    }
-    add_git_project(shell, super::GitProjectDraft::new(target), cx);
-}
-
-/// 打开（或聚焦）一个项目的 Git 标签页。
-pub(crate) fn open_git_tab(
-    shell: &mut AppShell,
-    project: GitProject,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    shell
-        .state
-        .update_git_registry(cx, |git| git.selected_project = Some(project.id));
-    if let Some(tab_id) = git_tab_for_project(shell, project.id, cx) {
-        shell.activate_tab(tab_id, window, cx);
-        return;
-    }
-    let tab_id = TabId::new();
-    let session = git_placeholder_session(&project);
-    let session_id = session.id;
-    let title = project.display_name();
-    let state = GitWorkspaceState::new(project.clone(), window, cx);
-    let command_tx = shell.state.runtime.services.command_tx.clone();
-    let workspace = cx.new(|_| GitWorkspace::new(state, tab_id, command_tx));
-    let subscription = cx.subscribe(&workspace, |shell, _, event, cx| {
-        handle_git_workspace_event(shell, event, cx);
-    });
-    shell
-        .state
-        .runtime
-        .tasks
-        .subscriptions
-        .git_workspaces
-        .insert(tab_id, subscription);
-    shell.state.workspace.tabs.push(TerminalTab::git_tab(
-        tab_id,
-        session,
-        title,
-        workspace.clone(),
-    ));
-    shell.state.workspace.create_group(tab_id, session_id);
-    shell.activate_tab(tab_id, window, cx);
-    git_refresh(shell, &project, cx);
-    workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
-    cx.notify();
-}
-
-/// 消费 Git 工作区实体上报的跨域意图事件。
-fn handle_git_workspace_event(
-    shell: &mut AppShell,
-    event: &GitWorkspaceEvent,
-    cx: &mut Context<AppShell>,
-) {
-    match event {
-        GitWorkspaceEvent::TransientStatus(message) => {
-            shell.set_transient_status(message.clone(), cx);
+        self.send_command(GitCommand::Refresh {
+            project: project.clone(),
+        });
+        self.send_command(GitCommand::LoadRefs {
+            project: project.clone(),
+        });
+        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+            workspace.update(cx, |ws, cx| ws.reload_worktrees(cx));
+        } else {
+            self.send_command(GitCommand::ListWorktrees {
+                project: project.clone(),
+                request_id: GitRequestId::new(),
+            });
         }
-        GitWorkspaceEvent::Error(message) => {
-            shell.set_error(message.clone());
-            cx.notify();
+        cx.notify();
+    }
+
+    /// 把一个工作树目录加进项目列表（工作树视图点击即切换/导入）。
+    pub(crate) fn git_open_worktree_path(&mut self, path: &str, cx: &mut Context<AppShell>) {
+        let target = std::path::PathBuf::from(path);
+        if let Some(project) = self
+            .state
+            .git_registry(cx)
+            .projects
+            .iter()
+            .find(|item| item.path == target)
+            .cloned()
+        {
+            self.git_refresh(&project, cx);
+            return;
         }
-        GitWorkspaceEvent::OpenPushModal { project, target } => {
-            if crate::app::app_settings(cx).git.push_dialog {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
-                    .open_git_push_modal(project, target.clone(), cx);
-            } else {
-                let options = transom_core::GitPushOptions {
-                    branch: target.clone(),
-                    ..Default::default()
-                };
-                shell.send_command(GitCommand::Push {
-                    project: project.clone(),
-                    options,
+        self.add_git_project(super::GitProjectDraft::new(target), cx);
+    }
+
+    /// 打开（或聚焦）一个项目的 Git 标签页。
+    pub(crate) fn open_git_tab(
+        &mut self,
+        project: GitProject,
+        window: &mut Window,
+        cx: &mut Context<AppShell>,
+    ) {
+        self.state
+            .update_git_registry(cx, |git| git.selected_project = Some(project.id));
+        if let Some(tab_id) = self.git_tab_for_project(project.id, cx) {
+            self.state.ui.window_requests.push_activate_tab(tab_id);
+            return;
+        }
+        let tab_id = TabId::new();
+        let session = git_placeholder_session(&project);
+        let session_id = session.id;
+        let title = project.display_name();
+        let state = GitWorkspaceState::new(project.clone(), window, cx);
+        let command_tx = self.state.runtime.services.command_tx.clone();
+        let workspace = cx.new(|_| GitWorkspace::new(state, tab_id, command_tx));
+        let subscription = cx.subscribe(&workspace, |shell, _, event, cx| {
+            GitActions::new(&mut shell.state).handle_git_workspace_event(event, cx);
+        });
+        self.state
+            .runtime
+            .tasks
+            .subscriptions
+            .git_workspaces
+            .insert(tab_id, subscription);
+        self.state.workspace.tabs.push(TerminalTab::git_tab(
+            tab_id,
+            session,
+            title,
+            workspace.clone(),
+        ));
+        self.state.workspace.create_group(tab_id, session_id);
+        self.state.ui.window_requests.push_activate_tab(tab_id);
+        self.git_refresh(&project, cx);
+        workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
+        cx.notify();
+    }
+
+    /// 消费 Git 工作区实体上报的跨域意图事件。
+    pub(crate) fn handle_git_workspace_event(
+        &mut self,
+        event: &GitWorkspaceEvent,
+        cx: &mut Context<AppShell>,
+    ) {
+        match event {
+            GitWorkspaceEvent::TransientStatus(message) => {
+                self.state.set_transient_status(message.clone(), cx);
+            }
+            GitWorkspaceEvent::Error(message) => {
+                self.state.set_error(message.clone());
+                cx.notify();
+            }
+            GitWorkspaceEvent::OpenPushModal { project, target } => {
+                if crate::app::app_settings(cx).git.push_dialog {
+                    crate::git::actions::modal_bridges::GitModalActions::new(self.state)
+                        .open_git_push_modal(project, target.clone(), cx);
+                } else {
+                    let options = transom_core::GitPushOptions {
+                        branch: target.clone(),
+                        ..Default::default()
+                    };
+                    self.send_command(GitCommand::Push {
+                        project: project.clone(),
+                        options,
+                    });
+                    cx.notify();
+                }
+            }
+            GitWorkspaceEvent::OpenNameModal { .. }
+            | GitWorkspaceEvent::OpenWorktreeModal { .. } => {
+                self.state.ui.window_requests.push_git(event.clone());
+                cx.notify();
+            }
+            GitWorkspaceEvent::OpenRebaseModal { project, upstream } => {
+                crate::git::actions::modal_bridges::GitModalActions::new(self.state)
+                    .open_git_rebase_modal(project, upstream, cx);
+            }
+            GitWorkspaceEvent::OpenConflictModal(project) => {
+                crate::git::actions::modal_bridges::GitModalActions::new(self.state)
+                    .open_git_conflict_modal(project, cx);
+            }
+            GitWorkspaceEvent::OpenWorktreePath(path) => {
+                self.git_open_worktree_path(path, cx);
+            }
+            GitWorkspaceEvent::ProjectInitStarted {
+                request_id,
+                project,
+            } => {
+                self.state.update_git_registry(cx, |git| {
+                    git.pending_project_init = Some((*request_id, project.id));
                 });
                 cx.notify();
             }
-        }
-        GitWorkspaceEvent::OpenNameModal { .. } | GitWorkspaceEvent::OpenWorktreeModal { .. } => {
-            shell.state.ui.window_requests.push_git(event.clone());
-            cx.notify();
-        }
-        GitWorkspaceEvent::OpenRebaseModal { project, upstream } => {
-            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
-                .open_git_rebase_modal(project, upstream, cx);
-        }
-        GitWorkspaceEvent::OpenConflictModal(project) => {
-            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
-                .open_git_conflict_modal(project, cx);
-        }
-        GitWorkspaceEvent::OpenWorktreePath(path) => {
-            git_open_worktree_path(shell, path, cx);
-        }
-        GitWorkspaceEvent::ProjectInitStarted {
-            request_id,
-            project,
-        } => {
-            shell.state.update_git_registry(cx, |git| {
-                git.pending_project_init = Some((*request_id, project.id));
-            });
-            cx.notify();
-        }
-        GitWorkspaceEvent::OpenSettings => {
-            shell
-                .state
-                .ui
-                .window_requests
-                .push_git(GitWorkspaceEvent::OpenSettings);
-            cx.notify();
-        }
-        GitWorkspaceEvent::PersistSettings(settings) => {
-            shell.state.persist_settings_reported(settings);
-            cx.notify();
+            GitWorkspaceEvent::OpenSettings => {
+                self.state
+                    .ui
+                    .window_requests
+                    .push_git(GitWorkspaceEvent::OpenSettings);
+                cx.notify();
+            }
+            GitWorkspaceEvent::PersistSettings(settings) => {
+                self.state.persist_settings_reported(settings);
+                cx.notify();
+            }
         }
     }
-}
 
-/// 关闭标签页时取消该项目所有在途请求。
-pub(crate) fn cancel_git_tab(shell: &mut AppShell, tab_id: TabId, cx: &mut Context<AppShell>) {
-    let Some(workspace) = shell.state.git_workspace(tab_id) else {
-        return;
-    };
-    workspace.read(cx).cancel_pending();
-    cx.notify();
-}
-
-/// 按项目 id 找已打开的标签页。
-pub(crate) fn git_tab_for_project(
-    shell: &AppShell,
-    project_id: GitProjectId,
-    cx: &App,
-) -> Option<TabId> {
-    shell
-        .state
-        .git_workspace_of_project(project_id, cx)
-        .map(|workspace| workspace.read(cx).tab_id)
-}
-
-/// 按草稿添加项目到列表（探测或初始化通过后调用）。
-pub(crate) fn add_git_project(
-    shell: &mut AppShell,
-    draft: GitProjectDraft,
-    cx: &mut Context<AppShell>,
-) {
-    if shell
-        .state
-        .git_registry(cx)
-        .projects
-        .iter()
-        .any(|item| item.path == draft.path)
-    {
-        shell.set_error(rust_i18n::t!("git.project.duplicate").to_string());
-        return;
+    /// 关闭标签页时取消该项目所有在途请求。
+    pub(crate) fn cancel_git_tab(&mut self, tab_id: TabId, cx: &mut Context<AppShell>) {
+        let Some(workspace) = self.state.git_workspace(tab_id) else {
+            return;
+        };
+        workspace.read(cx).cancel_pending();
+        cx.notify();
     }
-    let project = draft.into_project();
-    shell.state.update_git_registry(cx, |git| {
-        git.badges.insert(project.id, GitBadge::default());
-        git.projects.push(project.clone());
-    });
-    persist_git_projects(shell, cx);
-    git_refresh(shell, &project, cx);
-}
 
-/// 从列表移除项目（只删登记，不动磁盘）。
-pub(crate) fn remove_git_project(
-    shell: &mut AppShell,
-    id: GitProjectId,
-    cx: &mut Context<AppShell>,
-) {
-    shell.state.update_git_registry(cx, |git| {
-        git.projects.retain(|project| project.id != id);
-        git.badges.remove(&id);
-        if git.selected_project == Some(id) {
-            git.selected_project = None;
+    /// 按项目 id 找已打开的标签页。
+    pub(crate) fn git_tab_for_project(&self, project_id: GitProjectId, cx: &App) -> Option<TabId> {
+        self.state
+            .git_workspace_of_project(project_id, cx)
+            .map(|workspace| workspace.read(cx).tab_id)
+    }
+
+    /// 按草稿添加项目到列表（探测或初始化通过后调用）。
+    pub(crate) fn add_git_project(&mut self, draft: GitProjectDraft, cx: &mut Context<AppShell>) {
+        if self
+            .state
+            .git_registry(cx)
+            .projects
+            .iter()
+            .any(|item| item.path == draft.path)
+        {
+            self.state
+                .set_error(rust_i18n::t!("git.project.duplicate").to_string());
+            return;
         }
-    });
-    if let Some(tab_id) = git_tab_for_project(shell, id, cx) {
-        cancel_git_tab(shell, tab_id, cx);
+        let project = draft.into_project();
+        self.state.update_git_registry(cx, |git| {
+            git.badges.insert(project.id, GitBadge::default());
+            git.projects.push(project.clone());
+        });
+        self.persist_git_projects(cx);
+        self.git_refresh(&project, cx);
     }
-    persist_git_projects(shell, cx);
-    cx.notify();
-}
 
-/// 打开偏好设置弹窗并直接定位到 Git 版本控制设置页。
-pub(crate) fn open_git_settings(
-    shell: &mut AppShell,
-    window: &mut Window,
-    cx: &mut Context<AppShell>,
-) {
-    shell.open_settings_modal(Some(crate::settings::GIT_PAGE_INDEX), window, cx);
+    /// 从列表移除项目（只删登记，不动磁盘）。
+    pub(crate) fn remove_git_project(&mut self, id: GitProjectId, cx: &mut Context<AppShell>) {
+        self.state.update_git_registry(cx, |git| {
+            git.projects.retain(|project| project.id != id);
+            git.badges.remove(&id);
+            if git.selected_project == Some(id) {
+                git.selected_project = None;
+            }
+        });
+        if let Some(tab_id) = self.git_tab_for_project(id, cx) {
+            self.cancel_git_tab(tab_id, cx);
+        }
+        self.persist_git_projects(cx);
+        cx.notify();
+    }
+
+    /// 打开偏好设置弹窗并直接定位到 Git 版本控制设置页。
+    pub(crate) fn open_git_settings(&mut self, _window: &mut Window, _cx: &mut Context<AppShell>) {
+        self.state
+            .ui
+            .window_requests
+            .push_open_settings(Some(crate::settings::GIT_PAGE_INDEX));
+    }
 }
 
 /// Git 标签页需要的占位会话。

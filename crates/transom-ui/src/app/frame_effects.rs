@@ -250,9 +250,12 @@ impl AppShell {
                 WindowRequest::SessionSidebar(event) => {
                     crate::sidebar::on_session_sidebar_event(self, &event, window, cx);
                 }
+                WindowRequest::ActivateTab(tab_id) => self.activate_tab(tab_id, window, cx),
+                WindowRequest::OpenSettings(page) => self.open_settings_modal(page, window, cx),
                 WindowRequest::Git(event) => match &event {
                     crate::git::GitWorkspaceEvent::OpenSettings => {
-                        crate::git::actions::open_git_settings(self, window, cx);
+                        crate::git::actions::GitActions::new(&mut self.state)
+                            .open_git_settings(window, cx);
                     }
                     crate::git::GitWorkspaceEvent::OpenNameModal {
                         project,

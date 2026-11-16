@@ -35,6 +35,10 @@ pub(crate) enum WindowRequest {
     SessionSidebar(crate::sidebar::SessionSidebarEvent),
     /// Git 工作区窗口级动作。
     Git(GitWorkspaceEvent),
+    /// 激活指定标签并同步窗口焦点。
+    ActivateTab(TabId),
+    /// 打开设置弹窗并定位到指定页。
+    OpenSettings(Option<usize>),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -82,6 +86,14 @@ impl WindowRequests {
 
     pub(crate) fn push_git(&mut self, event: GitWorkspaceEvent) {
         self.items.push(WindowRequest::Git(event));
+    }
+
+    pub(crate) fn push_activate_tab(&mut self, tab_id: TabId) {
+        self.items.push(WindowRequest::ActivateTab(tab_id));
+    }
+
+    pub(crate) fn push_open_settings(&mut self, page: Option<usize>) {
+        self.items.push(WindowRequest::OpenSettings(page));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

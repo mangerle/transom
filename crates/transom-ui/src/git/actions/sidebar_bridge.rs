@@ -22,14 +22,14 @@ pub(crate) fn on_git_sidebar_event(
             crate::git::actions::modal_bridges::open_git_project_modal(shell, *folder, window, cx);
         }
         GitSidebarEvent::RefreshAll => {
-            crate::git::actions::refresh_all_git_projects(shell, cx);
+            crate::git::actions::GitActions::new(&mut shell.state).refresh_all_git_projects(cx);
         }
         GitSidebarEvent::ToggleFolderCollapsed(folder_id) => {
             if shell
                 .state
                 .update_git_registry(cx, |git| git.toggle_folder_collapsed(*folder_id))
             {
-                crate::git::actions::persist_git_projects(shell, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
             }
         }
         GitSidebarEvent::Drop(drag, target) => {
@@ -37,7 +37,7 @@ pub(crate) fn on_git_sidebar_event(
                 .state
                 .update_git_registry(cx, |git| git.apply_drop(*drag, *target))
             {
-                crate::git::actions::persist_git_projects(shell, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
             } else {
                 cx.notify();
             }
@@ -51,7 +51,11 @@ pub(crate) fn on_git_sidebar_event(
             }
         }
         GitSidebarEvent::OpenProjectTab(project) => {
-            crate::git::actions::open_git_tab(shell, project.clone(), window, cx);
+            crate::git::actions::GitActions::new(&mut shell.state).open_git_tab(
+                project.clone(),
+                window,
+                cx,
+            );
         }
         GitSidebarEvent::OpenInTerminal(id) => {
             let path = shell
@@ -74,7 +78,7 @@ pub(crate) fn on_git_sidebar_event(
                 .find(|item| item.id == *id)
                 .cloned()
             {
-                crate::git::actions::git_refresh(shell, &project, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
             }
         }
         GitSidebarEvent::MoveProjectToRoot(id) => {
@@ -82,13 +86,13 @@ pub(crate) fn on_git_sidebar_event(
                 .state
                 .update_git_registry(cx, |git| git.move_project_to_root(*id))
             {
-                crate::git::actions::persist_git_projects(shell, cx);
+                crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
             } else {
                 cx.notify();
             }
         }
         GitSidebarEvent::RemoveProject(id) => {
-            crate::git::actions::remove_git_project(shell, *id, cx);
+            crate::git::actions::GitActions::new(&mut shell.state).remove_git_project(*id, cx);
         }
         GitSidebarEvent::OpenRenameFolderModal(id) => {
             crate::git::actions::modal_bridges::open_git_rename_folder_modal(
@@ -99,7 +103,7 @@ pub(crate) fn on_git_sidebar_event(
             shell
                 .state
                 .update_git_registry(cx, |git| git.delete_folder(*id));
-            crate::git::actions::persist_git_projects(shell, cx);
+            crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
         }
     }
 }
