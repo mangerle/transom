@@ -107,7 +107,8 @@ impl AppShell {
                 crate::editor::defer_editor_close_resume(self, window, cx);
             }
             EditorPanelEvent::OpenLocalDiff(source) => {
-                crate::diff_viewer::open_editor_local_diff(self, source, cx);
+                crate::diff_viewer::DiffViewerOps::new(&mut self.state)
+                    .open_editor_local_diff(source, cx);
             }
             EditorPanelEvent::ListOpenChanged => cx.notify(),
             EditorPanelEvent::DiffPreferencesChanged => {

@@ -287,7 +287,7 @@ impl ModalKind {
                 true
             }
             ModalKind::DiffViewer => {
-                crate::diff_viewer::close_diff_viewer(shell, cx);
+                crate::diff_viewer::DiffViewerOps::new(&mut shell.state).close(cx);
                 true
             }
             _ => true,

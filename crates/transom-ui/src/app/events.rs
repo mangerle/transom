@@ -94,7 +94,9 @@ impl AppShell {
                 ..
             } => {
                 // 对比面板与编辑器共用同一条只读通道，按在途请求归属分发。
-                if !crate::diff_viewer::diff_handle_remote_read(self, op_id, &content, meta, cx) {
+                if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
+                    .handle_remote_read(op_id, &content, meta, cx)
+                {
                     self.state.editors.update(cx, |panels, cx| {
                         panels.apply_editor_text(op_id, content, meta, window, cx)
                     });
@@ -102,7 +104,9 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpTextWritten { op_id, meta, .. } => {
-                if !crate::diff_viewer::diff_handle_remote_written(self, op_id, meta, window, cx) {
+                if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
+                    .handle_remote_written(op_id, meta, window, cx)
+                {
                     crate::editor::on_editor_text_written(self, op_id, meta, window, cx);
                 }
                 true
@@ -111,7 +115,8 @@ impl AppShell {
                 // 编辑读写失败只回到面板内显示，不写远端栏错误、不进传输队列统计。
                 let code = error.code;
                 let message = localized_error(&error);
-                if !crate::diff_viewer::diff_handle_remote_failure(self, op_id, &message, false, cx)
+                if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
+                    .handle_remote_failure(op_id, &message, false, cx)
                 {
                     crate::editor::note_editor_text_failed(self, op_id, message, code, window, cx);
                 }
@@ -120,7 +125,8 @@ impl AppShell {
             SftpAppEvent::SftpTextConflict { op_id, error, .. } => {
                 // 版本指纹拦截不是普通失败：面板要弹出三选一冲突横幅。
                 let message = localized_error(&error);
-                if !crate::diff_viewer::diff_handle_remote_failure(self, op_id, &message, true, cx)
+                if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
+                    .handle_remote_failure(op_id, &message, true, cx)
                 {
                     crate::editor::note_editor_text_conflict(self, op_id, message, cx);
                 }

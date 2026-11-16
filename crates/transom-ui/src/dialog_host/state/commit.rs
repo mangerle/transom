@@ -181,7 +181,9 @@ impl ModalKind {
                 .update(cx, |view, cx| view.close(cx)),
             ModalKind::Settings => shell.save_settings(window, cx),
             ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
-            ModalKind::DiffViewer => crate::diff_viewer::close_diff_viewer(shell, cx),
+            ModalKind::DiffViewer => {
+                crate::diff_viewer::DiffViewerOps::new(&mut shell.state).close(cx)
+            }
             _ => {}
         }
     }

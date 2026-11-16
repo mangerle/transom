@@ -18,11 +18,7 @@
 //! - 远端文件为非 UTF-8 编码（`transcoded`）时允许查看，但禁止写回。
 
 mod actions;
-pub(crate) use actions::{
-    cancel_diff_merge, close_diff_viewer, confirm_diff_merge, diff_handle_remote_failure,
-    diff_handle_remote_read, diff_handle_remote_written, open_editor_local_diff,
-    open_local_diff_with_target, request_diff_merge, step_diff_hunk,
-};
+pub(crate) use actions::DiffViewerOps;
 mod compute;
 mod entity;
 mod local_io;

@@ -118,7 +118,11 @@ pub(super) fn on_sftp_panel_event(
             cx.notify();
         }
         SftpPanelEvent::OpenLocalDiff { tab_id, target } => {
-            crate::diff_viewer::open_local_diff_with_target(shell, *tab_id, target.clone(), cx);
+            crate::diff_viewer::DiffViewerOps::new(&mut shell.state).open_local_diff_with_target(
+                *tab_id,
+                target.clone(),
+                cx,
+            );
         }
         SftpPanelEvent::SetStatus(message) => {
             shell.state.status = Some(message.clone());

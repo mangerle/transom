@@ -43,9 +43,12 @@ fn localize_error(path: &Path, error: LocalTextError) -> String {
         LocalTextError::BadPath => {
             rust_i18n::t!("diff.error_bad_path", path = path.display()).to_string()
         }
-        LocalTextError::TempWrite { path, error } => {
-            rust_i18n::t!("diff.error_temp_write", path = path.display(), error = error).to_string()
-        }
+        LocalTextError::TempWrite { path, error } => rust_i18n::t!(
+            "diff.error_temp_write",
+            path = path.display(),
+            error = error
+        )
+        .to_string(),
         LocalTextError::SetPermissions { path, error } => rust_i18n::t!(
             "diff.error_set_permissions",
             path = path.display(),

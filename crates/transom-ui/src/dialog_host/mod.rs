@@ -456,9 +456,13 @@ impl ModalKind {
             ModalKind::ShortcutCapture => {
                 crate::shortcuts::render_shortcut_capture_body(shell, app, window, cx, p)
             }
-            ModalKind::DiffViewer => {
-                crate::diff_viewer::render_diff_viewer_body(shell, app, window, cx, p)
-            }
+            ModalKind::DiffViewer => crate::diff_viewer::render_diff_viewer_body(
+                shell.state.diff_viewer.as_ref(),
+                app,
+                window,
+                cx,
+                p,
+            ),
             _ => div().into_any_element(),
         }
     }
