@@ -1,39 +1,38 @@
 //! 本地终端启动、快捷连接、桌面深链与命令历史记录。
 
 use crate::app::app_settings;
-use crate::app::{AppShell, TerminalTab};
+use crate::app::{AppShell, AppState, TerminalTab};
 use crate::keymap;
 use gpui_kit::*;
 use transom_core::{DeepLinkRequest, LocalConnection, Session, TabId, parse_ssh_config};
 use transom_platform::shell::ShellOption;
 
 pub(crate) fn on_new_local_terminal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::NewLocalTerminal,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::connection::open_local_terminal(shell, window, cx);
+    crate::connection::open_local_terminal(app_state, window, cx);
 }
 
 pub(crate) fn on_quick_open(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::QuickOpen,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::connection::toggle_quick_open(shell, window, cx);
+    crate::connection::toggle_quick_open(app_state, window, cx);
 }
 
 pub(crate) fn toggle_quick_open(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.ui.modals.tools.show_quick_open = !shell.state.ui.modals.tools.show_quick_open;
-    if shell.state.ui.modals.tools.show_quick_open {
-        shell
-            .state
+    app_state.ui.modals.tools.show_quick_open = !app_state.ui.modals.tools.show_quick_open;
+    if app_state.ui.modals.tools.show_quick_open {
+        app_state
             .ui
             .modals
             .tools
@@ -47,20 +46,20 @@ pub(crate) fn toggle_quick_open(
 }
 
 pub(crate) fn open_local_terminal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::connection::spawn_local_command(shell, None, None, cx);
+    crate::connection::spawn_local_command(app_state, None, None, cx);
 }
 
 /// 新开一个本地终端标签。
 pub(crate) fn spawn_local_terminal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     working_dir: Option<std::path::PathBuf>,
     cx: &mut Context<AppShell>,
 ) {
-    crate::connection::spawn_local_command(shell, None, working_dir, cx);
+    crate::connection::spawn_local_command(app_state, None, working_dir, cx);
 }
 
 /// 新开一个本地终端标签，可选地在其中直接执行命令（`X-TerminalArgExec`）。
@@ -69,26 +68,26 @@ pub(crate) fn spawn_local_terminal(
 /// 分词，再拼一次会破坏含空格、引号与 `$` 的参数。标题取命令行的前一段，
 /// 让用户一眼看出这个标签不是普通 Shell。
 pub(crate) fn spawn_local_command(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     command: Option<Vec<String>>,
     working_dir: Option<std::path::PathBuf>,
     cx: &mut Context<AppShell>,
 ) {
-    spawn_local_request(shell, command, working_dir, None, cx);
+    spawn_local_request(app_state, command, working_dir, None, cx);
 }
 
 /// 用用户本次明确选择的 Shell 新开标签；与默认设置分离，选择只影响本次。
 pub(crate) fn spawn_local_shell(
-    app: &mut AppShell,
+    app_state: &mut AppState,
     shell: ShellOption,
     run_as_admin: bool,
     cx: &mut Context<AppShell>,
 ) {
-    spawn_local_request(app, None, None, Some((shell, run_as_admin)), cx);
+    spawn_local_request(app_state, None, None, Some((shell, run_as_admin)), cx);
 }
 
 fn spawn_local_request(
-    app: &mut AppShell,
+    app_state: &mut AppState,
     command: Option<Vec<String>>,
     working_dir: Option<std::path::PathBuf>,
     shell_override: Option<(ShellOption, bool)>,
@@ -146,43 +145,42 @@ fn spawn_local_request(
             ..Default::default()
         }),
     );
-    app.state
+    app_state
         .workspace
         .create_local_group(tab_id, session.id, &session.name);
-    app.state
+    app_state
         .workspace
         .tabs
         .push(TerminalTab::pending(tab_id, session.clone()));
-    app.state.workspace.active_tab = Some(tab_id);
-    app.state.present_active_group();
-    crate::connection::start_connection(app, tab_id, session, cx);
+    app_state.workspace.active_tab = Some(tab_id);
+    app_state.present_active_group();
+    crate::connection::start_connection(app_state, tab_id, session, cx);
 }
 
 /// Quick Connect：解析主机串并发起不落盘的临时 SSH 连接。
-pub(crate) fn connect_quick_host(shell: &mut AppShell, host: &str, cx: &mut Context<AppShell>) {
+pub(crate) fn connect_quick_host(app_state: &mut AppState, host: &str, cx: &mut Context<AppShell>) {
     let session = match transom_core::quick_connect_session(host) {
         Ok(session) => session,
         Err(error) => {
-            shell.state.set_error(error);
+            app_state.set_error(error);
             cx.notify();
             return;
         }
     };
     let tab_id = TabId::new();
-    shell.state.workspace.create_group(tab_id, session.id);
-    shell
-        .state
+    app_state.workspace.create_group(tab_id, session.id);
+    app_state
         .workspace
         .tabs
         .push(TerminalTab::pending(tab_id, session.clone()));
-    shell.state.workspace.active_tab = Some(tab_id);
-    shell.state.present_active_group();
-    crate::connection::start_connection(shell, tab_id, session, cx);
+    app_state.workspace.active_tab = Some(tab_id);
+    app_state.present_active_group();
+    crate::connection::start_connection(app_state, tab_id, session, cx);
 }
 
 /// 桌面深链唤起。
 pub(crate) fn handle_deep_link(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request: DeepLinkRequest,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -190,12 +188,12 @@ pub(crate) fn handle_deep_link(
     cx.activate(true);
     window.activate_window();
     match request {
-        DeepLinkRequest::Ssh { url } => crate::connection::connect_quick_host(shell, &url, cx),
+        DeepLinkRequest::Ssh { url } => crate::connection::connect_quick_host(app_state, &url, cx),
         DeepLinkRequest::Dir { path } => {
-            crate::connection::spawn_local_terminal(shell, Some(path), cx)
+            crate::connection::spawn_local_terminal(app_state, Some(path), cx)
         }
         DeepLinkRequest::Exec { command, dir } => {
-            crate::connection::spawn_local_command(shell, Some(command), dir, cx);
+            crate::connection::spawn_local_command(app_state, Some(command), dir, cx);
         }
         DeepLinkRequest::Activate => cx.notify(),
     }
@@ -203,7 +201,7 @@ pub(crate) fn handle_deep_link(
 
 /// 记录一条采集到的命令：更新内存快照并后台落盘。
 pub(crate) fn record_history_command(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     command: &str,
     cx: &mut Context<AppShell>,
 ) {
@@ -211,14 +209,14 @@ pub(crate) fn record_history_command(
         return;
     }
     let recorded = {
-        let mut snapshot = shell.state.runtime.history.write();
+        let mut snapshot = app_state.runtime.history.write();
         transom_core::record_command(&mut snapshot, command)
     };
     if !recorded {
         return;
     }
-    let snapshot: Vec<String> = shell.state.runtime.history.read().clone();
-    let store = shell.state.runtime.services.history.clone();
+    let snapshot: Vec<String> = app_state.runtime.history.read().clone();
+    let store = app_state.runtime.services.history.clone();
     cx.spawn(async move |_, cx| {
         let error = cx
             .background_executor()
@@ -235,21 +233,17 @@ pub(crate) fn record_history_command(
 ///
 /// 读取放在阻塞线程池：家目录位于 NFS 或配置较大时，同步读会卡住 UI
 /// 线程；解析与目录合并仍在界面线程完成，保证状态只有一个写入点。
-pub(crate) fn import_ssh_config(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+pub(crate) fn import_ssh_config(app_state: &mut AppState, cx: &mut Context<AppShell>) {
     let ssh_config_path = transom_platform::paths::ssh_config_path();
 
     let Some(path) = ssh_config_path else {
-        shell
-            .state
-            .set_error(rust_i18n::t!("app.import_none").to_string());
+        app_state.set_error(rust_i18n::t!("app.import_none").to_string());
         cx.notify();
         return;
     };
 
     if !path.exists() {
-        shell
-            .state
-            .set_error(rust_i18n::t!("app.import_none").to_string());
+        app_state.set_error(rust_i18n::t!("app.import_none").to_string());
         cx.notify();
         return;
     }
@@ -262,7 +256,7 @@ pub(crate) fn import_ssh_config(shell: &mut AppShell, cx: &mut Context<AppShell>
             return;
         };
         let _ = this.update(cx, |this, cx| match result {
-            Ok(content) => finish_import_ssh_config(this, content, cx),
+            Ok(content) => finish_import_ssh_config(&mut this.state, content, cx),
             Err(error) => {
                 this.state.set_error(error.to_string());
                 cx.notify();
@@ -273,21 +267,18 @@ pub(crate) fn import_ssh_config(shell: &mut AppShell, cx: &mut Context<AppShell>
 }
 
 /// 解析并合并 SSH 配置；在界面线程执行。
-fn finish_import_ssh_config(shell: &mut AppShell, content: String, cx: &mut Context<AppShell>) {
+fn finish_import_ssh_config(app_state: &mut AppState, content: String, cx: &mut Context<AppShell>) {
     let parsed = parse_ssh_config(&content);
     if parsed.is_empty() {
-        shell
-            .state
-            .set_error(rust_i18n::t!("app.import_none").to_string());
+        app_state.set_error(rust_i18n::t!("app.import_none").to_string());
         cx.notify();
         return;
     }
 
-    let folder = shell.state.session.catalog.ensure_folder_path("SSH Config");
+    let folder = app_state.session.catalog.ensure_folder_path("SSH Config");
     let mut added_count = 0;
     for mut session in parsed {
-        if !shell
-            .state
+        if !app_state
             .session
             .catalog
             .sessions
@@ -295,18 +286,18 @@ fn finish_import_ssh_config(shell: &mut AppShell, content: String, cx: &mut Cont
             .any(|s| s.name == session.name)
         {
             session.folder_id = folder;
-            shell.state.session.catalog.sessions.push(session);
+            app_state.session.catalog.sessions.push(session);
             added_count += 1;
         }
     }
 
     if added_count > 0 {
-        if shell.state.persist_catalog() {
-            shell.state.ui.status =
+        if app_state.persist_catalog() {
+            app_state.ui.status =
                 Some(rust_i18n::t!("app.import_success", count = added_count).to_string());
         }
     } else {
-        shell.state.ui.status = Some(rust_i18n::t!("app.import_none").to_string());
+        app_state.ui.status = Some(rust_i18n::t!("app.import_none").to_string());
     }
     cx.notify();
 }

@@ -240,7 +240,7 @@ impl AppShell {
                     let session_keys = app_settings(cx).window.previous_tab_sessions.clone();
                     for key in session_keys {
                         if key == "local" {
-                            crate::connection::open_local_terminal(self, window, cx);
+                            crate::connection::open_local_terminal(&mut self.state, window, cx);
                         } else if let Some(session) = self
                             .state
                             .session
@@ -250,14 +250,19 @@ impl AppShell {
                             .find(|s| s.id.to_string() == key)
                             .cloned()
                         {
-                            crate::connection::connect_session(self, session.id, window, cx);
+                            crate::connection::connect_session(
+                                &mut self.state,
+                                session.id,
+                                window,
+                                cx,
+                            );
                         }
                     }
                 }
             }
             StartupTabs::EmptyWorkspace => {}
             StartupTabs::NewLocalTerminal => {
-                crate::connection::open_local_terminal(self, window, cx)
+                crate::connection::open_local_terminal(&mut self.state, window, cx)
             }
         }
     }

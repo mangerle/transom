@@ -168,7 +168,7 @@ impl AppShell {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         // 认证已确定通过，此刻才允许把用户勾选保存的凭据写入钥匙串。
-        crate::connection::flush_pending_credential(self, session_id, connection_id, cx);
+        crate::connection::flush_pending_credential(&mut self.state, session_id, connection_id, cx);
         if still_active {
             window.focus(&focus_handle, cx);
         }

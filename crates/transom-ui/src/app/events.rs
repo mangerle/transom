@@ -48,7 +48,7 @@ impl AppShell {
                 crate::git::actions::dispatch_git_event(&mut self.state, git_event, cx);
             }
             AppEvent::DeepLink { request } => {
-                crate::connection::handle_deep_link(self, request, window, cx);
+                crate::connection::handle_deep_link(&mut self.state, request, window, cx);
             }
         }
     }
@@ -340,7 +340,12 @@ impl AppShell {
                 self.set_transient_status(rust_i18n::t!("status.copied"), cx);
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
-                crate::connection::request_clipboard_permission(self, tab_id, text.clone(), cx);
+                crate::connection::request_clipboard_permission(
+                    &mut self.state,
+                    tab_id,
+                    text.clone(),
+                    cx,
+                );
             }
             TerminalEvent::CopyModeChanged { active } => {
                 // 提示只在本次进入时写入；退出时只清理自己写的那条，避免覆盖
@@ -362,7 +367,7 @@ impl AppShell {
             }
             TerminalEvent::ContextMenuRequested { .. } => {}
             TerminalEvent::CommandRecorded { command } => {
-                crate::connection::record_history_command(self, command, cx);
+                crate::connection::record_history_command(&mut self.state, command, cx);
             }
             TerminalEvent::FilesDropped(paths) => {
                 crate::sftp::handle_dropped_files(&mut self.state, tab_id, paths, window, cx);

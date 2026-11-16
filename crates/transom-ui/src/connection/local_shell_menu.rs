@@ -21,7 +21,7 @@ pub(crate) fn build_local_terminal_menu(
         AppIcon::Domain(DomainIcon::TERMINAL),
         move |_, window, cx| {
             default_app.update(cx, |this, cx| {
-                crate::connection::open_local_terminal(this, window, cx)
+                crate::connection::open_local_terminal(&mut this.state, window, cx)
             });
         },
     ));
@@ -35,7 +35,7 @@ pub(crate) fn build_local_terminal_menu(
             AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, _, cx| {
                 app.update(cx, |this, cx| {
-                    crate::connection::spawn_local_shell(this, shell.clone(), false, cx);
+                    crate::connection::spawn_local_shell(&mut this.state, shell.clone(), false, cx);
                 });
             },
         ));
@@ -59,7 +59,12 @@ pub(crate) fn build_local_terminal_menu(
                     AppIcon::Domain(DomainIcon::TERMINAL),
                     move |_, _, cx| {
                         app.update(cx, |this, cx| {
-                            crate::connection::spawn_local_shell(this, shell.clone(), true, cx);
+                            crate::connection::spawn_local_shell(
+                                &mut this.state,
+                                shell.clone(),
+                                true,
+                                cx,
+                            );
                         });
                     },
                 ));

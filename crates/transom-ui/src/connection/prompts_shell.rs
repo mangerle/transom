@@ -7,13 +7,13 @@
 //! GPUI 的双重租借。
 
 use super::{ConnectionPromptsEvent, PendingCredential};
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::TabId;
 
 /// 消费连接确认弹窗实体上报的意图。
 pub(crate) fn on_connection_prompts_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &ConnectionPromptsEvent,
     cx: &mut Context<AppShell>,
 ) {
@@ -24,20 +24,20 @@ pub(crate) fn on_connection_prompts_event(
             kind,
             value,
         } => {
-            shell.state.ui.modals.connection.pending_credential = Some(PendingCredential {
+            app_state.ui.modals.connection.pending_credential = Some(PendingCredential {
                 session_id: *session_id,
                 // 归属解析留在外壳：引用凭据模板时会话可能只是模板别名。
-                owner: shell.state.secret_owner_for(*session_id),
+                owner: app_state.secret_owner_for(*session_id),
                 connection_id: *connection_id,
                 kind: *kind,
                 value: value.clone(),
             });
         }
         ConnectionPromptsEvent::ClipboardAllowed { tab_id, text } => {
-            apply_clipboard_allowed(shell, *tab_id, text, cx);
+            apply_clipboard_allowed(app_state, *tab_id, text, cx);
         }
         ConnectionPromptsEvent::Denied => {
-            shell.state.ui.status = Some(rust_i18n::t!("clipboard_consent.denied").to_string());
+            app_state.ui.status = Some(rust_i18n::t!("clipboard_consent.denied").to_string());
         }
     }
     cx.notify();
@@ -49,13 +49,12 @@ pub(crate) fn on_connection_prompts_event(
 /// 只改变后续请求的走向，不重复写剪贴板。终端可能已随标签关闭而消失，
 /// 此时仍写入本次内容与状态栏，不把一次已经获准的复制吞掉。
 fn apply_clipboard_allowed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     text: &str,
     cx: &mut Context<AppShell>,
 ) {
-    let terminal = shell
-        .state
+    let terminal = app_state
         .workspace
         .tab_mut(tab_id)
         .and_then(|tab| tab.session_pane_mut())
@@ -64,7 +63,7 @@ fn apply_clipboard_allowed(
         terminal.update(cx, |view, _| view.allow_remote_clipboard_write());
     }
     cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-    shell.state.ui.status = Some(rust_i18n::t!("clipboard_consent.allowed").to_string());
+    app_state.ui.status = Some(rust_i18n::t!("clipboard_consent.allowed").to_string());
 }
 
 /// 登记一次远端剪贴板写入请求。
@@ -73,12 +72,12 @@ fn apply_clipboard_allowed(
 /// 覆盖会让前一个请求凭空消失；而程序往往在每次复制时连发，排队弹窗
 /// 也只会把界面淹没，用户的一次决定足以覆盖这段连续请求。
 pub(crate) fn request_clipboard_permission(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     text: String,
     cx: &mut Context<AppShell>,
 ) {
-    let prompts = shell.state.ui.modals.connection.prompts.clone();
+    let prompts = app_state.ui.modals.connection.prompts.clone();
     if let Some(pending) = prompts.read(cx).clipboard() {
         log::debug!(
             "已有待裁决的远端剪贴板请求，本次请求被忽略，窗格: {tab_id}，待裁决窗格: {}",
@@ -86,7 +85,7 @@ pub(crate) fn request_clipboard_permission(
         );
         return;
     }
-    let Some(tab) = shell.state.workspace.tab(tab_id) else {
+    let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
     let session_name = tab.session.name.clone();

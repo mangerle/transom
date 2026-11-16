@@ -247,7 +247,7 @@ impl AppShell {
         self.state.runtime.tasks.subscriptions.connection_prompts = Some(cx.subscribe(
             &self.state.ui.modals.connection.prompts,
             |shell, _view, event: &crate::connection::ConnectionPromptsEvent, cx| {
-                crate::connection::on_connection_prompts_event(shell, event, cx);
+                crate::connection::on_connection_prompts_event(&mut shell.state, event, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.key_wizard = Some(cx.subscribe(

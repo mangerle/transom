@@ -133,7 +133,12 @@ impl AppShell {
     ) {
         match crate::split::SplitOps::new(&mut self.state).split_active_pane(axis) {
             Ok(Some(plan)) => {
-                crate::connection::start_connection(self, plan.pane_id, plan.session, cx);
+                crate::connection::start_connection(
+                    &mut self.state,
+                    plan.pane_id,
+                    plan.session,
+                    cx,
+                );
             }
             Ok(None) => {}
             Err(message) => {
@@ -308,8 +313,12 @@ impl AppShell {
     fn attach_workspace_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.key_context(keymap::WORKSPACE_CONTEXT)
             .on_action(cx.listener(Self::on_new_session))
-            .on_action(cx.listener(crate::connection::on_new_local_terminal))
-            .on_action(cx.listener(crate::connection::on_quick_open))
+            .on_action(cx.listener(|this, action, window, cx| {
+                crate::connection::on_new_local_terminal(&mut this.state, action, window, cx)
+            }))
+            .on_action(cx.listener(|this, action, window, cx| {
+                crate::connection::on_quick_open(&mut this.state, action, window, cx)
+            }))
             .on_action(cx.listener(Self::on_close_tab))
             .on_action(cx.listener(Self::on_next_tab))
             .on_action(cx.listener(Self::on_prev_tab))

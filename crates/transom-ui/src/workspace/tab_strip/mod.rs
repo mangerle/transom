@@ -78,7 +78,7 @@ impl AppShell {
                             .accessibility_label(rust_i18n::t!("app.new_local").to_string())
                             .tooltip(rust_i18n::t!("app.new_local").to_string())
                             .on_click(cx.listener(|this, _, window, cx| {
-                                crate::connection::open_local_terminal(this, window, cx);
+                                crate::connection::open_local_terminal(&mut this.state, window, cx);
                             }));
                         let menu_app = cx.entity().clone();
                         let shells = (*self.state.session.local_shells).clone();

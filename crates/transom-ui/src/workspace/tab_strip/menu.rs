@@ -71,9 +71,14 @@ pub(crate) fn build_tab_context_menu(
                     app.update(cx, |this, cx| {
                         this.activate_tab(active_pane, window, cx);
                         if is_local {
-                            crate::connection::open_local_terminal(this, window, cx);
+                            crate::connection::open_local_terminal(&mut this.state, window, cx);
                         } else {
-                            crate::connection::connect_session(this, session_id, window, cx);
+                            crate::connection::connect_session(
+                                &mut this.state,
+                                session_id,
+                                window,
+                                cx,
+                            );
                         }
                     });
                 }

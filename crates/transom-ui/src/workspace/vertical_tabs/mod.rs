@@ -319,7 +319,7 @@ fn build_new_session_menu(
             AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, window, cx| {
                 local_app.update(cx, |this, cx| {
-                    crate::connection::open_local_terminal(this, window, cx)
+                    crate::connection::open_local_terminal(&mut this.state, window, cx)
                 });
             },
         ))
@@ -374,7 +374,7 @@ fn session_menu_item(entry: &NewSessionEntry, app: &Entity<AppShell>) -> PopupMe
     let session_id = entry.session_id;
     crate::widgets::menu_item(entry.label.clone(), entry.icon, move |_, window, cx| {
         app.update(cx, |this, cx| {
-            crate::connection::connect_session(this, session_id, window, cx)
+            crate::connection::connect_session(&mut this.state, session_id, window, cx)
         });
     })
 }

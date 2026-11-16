@@ -262,7 +262,7 @@ impl AppShell {
                 }
                 WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
                 WindowRequest::LocalTerminal(cwd) => {
-                    crate::connection::spawn_local_terminal(self, cwd, cx)
+                    crate::connection::spawn_local_terminal(&mut self.state, cwd, cx)
                 }
                 WindowRequest::EditorClose(request) => match request {
                     crate::editor::EditorCloseRequest::Group(group_id) => {

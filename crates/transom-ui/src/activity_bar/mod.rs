@@ -278,7 +278,9 @@ fn activate_activity_item(
                 .toggle_section(SidebarSection::Tabs);
             cx.notify();
         }
-        ActivityItemId::QuickOpen => crate::connection::toggle_quick_open(shell, window, cx),
+        ActivityItemId::QuickOpen => {
+            crate::connection::toggle_quick_open(&mut shell.state, window, cx)
+        }
         ActivityItemId::Forwards => crate::forward::toggle_forward_panel(shell, window, cx),
         ActivityItemId::Sftp => crate::sftp::toggle_sftp(&mut shell.state, window, cx),
         ActivityItemId::Monitor => {
@@ -288,7 +290,7 @@ fn activate_activity_item(
                     shell.activate_tab(tab_id, window, cx)
                 }
                 Some(MonitorTerminalPlan::OpenLocal) => {
-                    crate::connection::open_local_terminal(shell, window, cx)
+                    crate::connection::open_local_terminal(&mut shell.state, window, cx)
                 }
                 None => {}
             }
@@ -302,7 +304,9 @@ fn activate_activity_item(
             cx.notify();
         }
         ActivityItemId::Language => shell.toggle_language(cx),
-        ActivityItemId::ImportSshConfig => crate::connection::import_ssh_config(shell, cx),
+        ActivityItemId::ImportSshConfig => {
+            crate::connection::import_ssh_config(&mut shell.state, cx)
+        }
         ActivityItemId::KnownHosts => {
             shell
                 .state

@@ -71,7 +71,7 @@ pub(crate) fn on_session_sidebar_event(
             cx.notify();
         }
         SessionSidebarEvent::ConnectSession(session_id) => {
-            crate::connection::connect_session(shell, *session_id, window, cx);
+            crate::connection::connect_session(&mut shell.state, *session_id, window, cx);
             shell.reveal_vertical_tabs_panel(cx);
         }
         SessionSidebarEvent::OpenContainerWorkspace(session_id) => {

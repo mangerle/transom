@@ -46,7 +46,7 @@ impl AppShell {
         }
         self.state.discard_pending_credential(connection_id);
         self.state.mark_forwards_stopped(tab_id);
-        crate::connection::schedule_auto_reconnect(self, tab_id, connection_id, cx);
+        crate::connection::schedule_auto_reconnect(&mut self.state, tab_id, connection_id, cx);
         true
     }
 
@@ -78,7 +78,7 @@ impl AppShell {
             );
         }
         self.state.mark_forwards_stopped(tab_id);
-        crate::connection::schedule_auto_reconnect(self, tab_id, connection_id, cx);
+        crate::connection::schedule_auto_reconnect(&mut self.state, tab_id, connection_id, cx);
         true
     }
 

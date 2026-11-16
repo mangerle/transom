@@ -742,3 +742,32 @@ fn dialog_host_modules_take_app_state_not_shell() {
         "弹窗宿主不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
     );
 }
+
+/// 连接模块不得以 `shell` 类型的参数接收外壳：连接建立、本地终端启动、
+/// 凭据事件与 Shell 菜单只借应用状态，标签创建与命令投递都在 `AppState`。
+#[test]
+fn connection_modules_take_app_state_not_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/connection")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                offenders.push(format!("{}:{}", entry.display(), index + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "连接模块不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
+    );
+}

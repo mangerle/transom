@@ -25,7 +25,7 @@ pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
-use crate::app::{AppShell, TabStatus, TerminalTab};
+use crate::app::{AppShell, AppState, TabStatus, TerminalTab};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -74,7 +74,7 @@ pub(crate) struct HostKeyConfirmState {
 /// 记录最近打开的会话 ID，并异步落盘保存。
 /// 从最近打开会话记录中移除指定会话，并异步落盘保存。
 pub(crate) fn remove_recent_session(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session_id: SessionId,
     cx: &mut Context<AppShell>,
 ) {
@@ -85,7 +85,7 @@ pub(crate) fn remove_recent_session(
         .retain(|id| *id != session_id);
     if app_settings(cx).window.recent_sessions.len() != before_len {
         let settings_snapshot = app_settings(cx).clone();
-        if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
+        if let Err(error) = app_state.persist_settings(&settings_snapshot) {
             log::warn!("保存最近打开会话设置失败，原因: {error}");
         }
         cx.notify();
@@ -94,13 +94,12 @@ pub(crate) fn remove_recent_session(
 
 /// 为某个会话新建一个标签组并发起连接。
 pub(crate) fn connect_session(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session_id: SessionId,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(found) = shell
-        .state
+    let Some(found) = app_state
         .session
         .catalog
         .sessions
@@ -109,30 +108,29 @@ pub(crate) fn connect_session(
     else {
         return;
     };
-    let session = shell.state.session.catalog.resolved_session(found);
-    crate::connection::record_recent_session(shell, session_id, cx);
+    let session = app_state.session.catalog.resolved_session(found);
+    crate::connection::record_recent_session(app_state, session_id, cx);
 
     let tab_id = TabId::new();
-    shell.state.workspace.create_group(tab_id, session_id);
-    shell
-        .state
+    app_state.workspace.create_group(tab_id, session_id);
+    app_state
         .workspace
         .tabs
         .push(TerminalTab::pending(tab_id, session.clone()));
-    shell.state.workspace.active_tab = Some(tab_id);
-    shell.state.present_active_group();
-    crate::connection::start_connection(shell, tab_id, session, cx);
+    app_state.workspace.active_tab = Some(tab_id);
+    app_state.present_active_group();
+    crate::connection::start_connection(app_state, tab_id, session, cx);
 }
 
 /// 意外断线或连接失败后的自动重连调度。
 pub(crate) fn schedule_auto_reconnect(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     failed_connection: ConnectionId,
     cx: &mut Context<AppShell>,
 ) {
     const BACKOFF_SECS: [u64; 3] = [2, 5, 10];
-    let Some(tab) = shell.state.workspace.tab_mut(tab_id) else {
+    let Some(tab) = app_state.workspace.tab_mut(tab_id) else {
         return;
     };
     if tab.connection_id != Some(failed_connection) {
@@ -187,15 +185,15 @@ pub(crate) fn schedule_auto_reconnect(
             if tab.connection_id != Some(failed_connection) || tab.session_id != session_id {
                 return;
             }
-            crate::connection::start_connection(this, tab_id, session, cx);
+            crate::connection::start_connection(&mut this.state, tab_id, session, cx);
         });
     }));
     cx.notify();
 }
 
 /// 新连接建立前清空旧通道残留：连接标识、cwd 与面板快照。
-fn reset_tab_connection(shell: &mut AppShell, tab_id: TabId, connection_id: ConnectionId) {
-    if let Some(tab) = shell.state.workspace.tab_mut(tab_id) {
+fn reset_tab_connection(app_state: &mut AppState, tab_id: TabId, connection_id: ConnectionId) {
+    if let Some(tab) = app_state.workspace.tab_mut(tab_id) {
         tab.connection_id = Some(connection_id);
         // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
         // 等新连接上的提示符钩子回报后再恢复 SFTP 跟随。
@@ -210,7 +208,7 @@ fn reset_tab_connection(shell: &mut AppShell, tab_id: TabId, connection_id: Conn
 }
 
 pub(crate) fn start_connection(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     session: Session,
     cx: &mut Context<AppShell>,
@@ -221,24 +219,22 @@ pub(crate) fn start_connection(
         session.name,
         describe_target(&session)
     );
-    reset_tab_connection(shell, tab_id, connection_id);
+    reset_tab_connection(app_state, tab_id, connection_id);
 
     if !connection_supported(&session) {
-        shell
-            .state
-            .set_error(rust_i18n::t!("error.configuration").to_string());
+        app_state.set_error(rust_i18n::t!("error.configuration").to_string());
         return;
     }
 
-    let chain = match shell.state.session.catalog.proxy_jump_chain(&session) {
+    let chain = match app_state.session.catalog.proxy_jump_chain(&session) {
         Ok(chain) => chain,
         Err(error) => {
             log::warn!(
                 "跳板机链路解析失败，窗格: {tab_id}，会话: {}，原因: {error}",
                 session.name
             );
-            shell.state.set_error(localized_error(&error));
-            if let Some(tab) = shell.state.workspace.tab_mut(tab_id) {
+            app_state.set_error(localized_error(&error));
+            if let Some(tab) = app_state.workspace.tab_mut(tab_id) {
                 tab.status = TabStatus::Failed(error);
             }
             cx.notify();
@@ -253,15 +249,15 @@ pub(crate) fn start_connection(
             session.name
         );
         let error = AppError::with_detail(ErrorCode::Configuration, reason);
-        shell.state.set_error(localized_error(&error));
-        if let Some(tab) = shell.state.workspace.tab_mut(tab_id) {
+        app_state.set_error(localized_error(&error));
+        if let Some(tab) = app_state.workspace.tab_mut(tab_id) {
             tab.status = TabStatus::Failed(error);
         }
         cx.notify();
         return;
     }
 
-    let secret_store = shell.state.runtime.services.secret_store.clone();
+    let secret_store = app_state.runtime.services.secret_store.clone();
     let load_session = session.clone();
     cx.spawn(async move |this, cx| {
         let (secrets, hops, error) = cx
@@ -281,7 +277,7 @@ pub(crate) fn start_connection(
                 this.state.set_error(error);
             }
             crate::connection::send_connect(
-                this,
+                &mut this.state,
                 tab_id,
                 connection_id,
                 session,
@@ -298,7 +294,7 @@ pub(crate) fn start_connection(
 }
 
 pub(crate) fn send_connect(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: ConnectionId,
     session: Session,
@@ -318,15 +314,15 @@ pub(crate) fn send_connect(
         allow_sha1_publickey_auth: app_settings(cx).allow_sha1_publickey_auth,
         shell_integration: app_settings(cx).block_view.shell_integration,
     }));
-    if !shell.state.send_command(command) {
-        shell.state.remove_tab(tab_id);
-        crate::editor::prune_tab_overlays(&mut shell.state, cx);
+    if !app_state.send_command(command) {
+        app_state.remove_tab(tab_id);
+        crate::editor::prune_tab_overlays(app_state, cx);
     }
     cx.notify();
 }
 
 pub(crate) fn record_recent_session(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session_id: SessionId,
     cx: &mut Context<AppShell>,
 ) {
@@ -340,7 +336,7 @@ pub(crate) fn record_recent_session(
         .insert(0, session_id);
     app_settings_mut(cx).window.recent_sessions.truncate(20);
     let settings_snapshot = app_settings_mut(cx).clone();
-    if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
+    if let Err(error) = app_state.persist_settings(&settings_snapshot) {
         log::warn!("保存最近打开会话失败，原因: {error}");
     }
 }

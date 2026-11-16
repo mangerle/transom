@@ -24,7 +24,7 @@ impl AppShell {
 
         let groups_before = self.state.workspace.groups.len();
         if saved.session == "local" {
-            crate::connection::open_local_terminal(self, window, cx);
+            crate::connection::open_local_terminal(&mut self.state, window, cx);
         } else {
             let session = self
                 .state
@@ -34,7 +34,7 @@ impl AppShell {
                 .iter()
                 .find(|session| session.id.to_string() == saved.session)
                 .cloned()?;
-            crate::connection::connect_session(self, session.id, window, cx);
+            crate::connection::connect_session(&mut self.state, session.id, window, cx);
         }
         if self.state.workspace.groups.len() <= groups_before {
             return None;
@@ -62,7 +62,7 @@ impl AppShell {
                 .workspace
                 .tabs
                 .push(TerminalTab::pending(pane_id, session.clone()));
-            crate::connection::start_connection(self, pane_id, session.clone(), cx);
+            crate::connection::start_connection(&mut self.state, pane_id, session.clone(), cx);
         }
         cx.notify();
         Some(group_id)
@@ -93,7 +93,7 @@ impl AppShell {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
         self.state.present_active_group();
-        crate::connection::start_connection(self, tab_id, session, cx);
+        crate::connection::start_connection(&mut self.state, tab_id, session, cx);
     }
 
     /// 激活指定标签并同步焦点、并排网格槽位及附属面板状态。

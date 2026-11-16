@@ -213,10 +213,10 @@ fn apply_palette_target(
 ) {
     match target {
         Some(PaletteTarget::Local) => {
-            crate::connection::open_local_terminal(shell, window, cx);
+            crate::connection::open_local_terminal(&mut shell.state, window, cx);
         }
         Some(PaletteTarget::Session(session_id)) => {
-            crate::connection::connect_session(shell, session_id, window, cx);
+            crate::connection::connect_session(&mut shell.state, session_id, window, cx);
         }
         Some(PaletteTarget::QuickConnect) => {
             // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
@@ -230,7 +230,7 @@ fn apply_palette_target(
                 .query(cx)
                 .trim()
                 .to_string();
-            crate::connection::connect_quick_host(shell, &host, cx);
+            crate::connection::connect_quick_host(&mut shell.state, &host, cx);
         }
         Some(PaletteTarget::SettingsPage(page)) => {
             shell.open_settings_modal(Some(page), window, cx);

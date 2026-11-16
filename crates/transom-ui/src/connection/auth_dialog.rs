@@ -14,8 +14,7 @@
 //! 已被拒绝的口令写进钥匙串。
 
 use super::secrets::enable_auth_save;
-use crate::app::AppShell;
-use crate::app::AppState;
+use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::{Connection, ConnectionId, ErrorCode, SecretKey, SessionId};
@@ -83,13 +82,12 @@ impl AppState {
 
 /// 连接成功建立后，把用户勾选保存的凭据写入钥匙串。
 pub(crate) fn flush_pending_credential(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session_id: SessionId,
     connection_id: ConnectionId,
     cx: &mut Context<AppShell>,
 ) {
-    let matched = shell
-        .state
+    let matched = app_state
         .ui
         .modals
         .connection
@@ -101,12 +99,12 @@ pub(crate) fn flush_pending_credential(
     if !matched {
         return;
     }
-    let Some(pending) = shell.state.ui.modals.connection.pending_credential.take() else {
+    let Some(pending) = app_state.ui.modals.connection.pending_credential.take() else {
         return;
     };
     let key = SecretKey::new(pending.owner.clone(), pending.kind);
-    shell.state.mark_credential_saved(pending.owner.clone());
-    let secret_store = shell.state.runtime.services.secret_store.clone();
+    app_state.mark_credential_saved(pending.owner.clone());
+    let secret_store = app_state.runtime.services.secret_store.clone();
     cx.spawn(async move |this, cx| {
         let error = cx
             .background_executor()
