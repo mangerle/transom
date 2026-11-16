@@ -3,6 +3,7 @@
 use super::custom_keys::is_control_or_function_key;
 use super::{SendBacktab, SendTab, TerminalCopy, TerminalPaste, TerminalView};
 use crate::input::{KeyEventKind, keystroke_event_to_bytes, tab_bytes};
+use crate::view::clipboard::clipboard_contains_image;
 use alacritty_terminal::term::TermMode;
 use gpui_kit::*;
 
@@ -53,9 +54,13 @@ impl TerminalView {
         // 复制/粘贴的键位不在这里硬编码：它们登记在应用的可改键表里（默认 `$app-c`
         // /`$app-v`，非 macOS 展开为 Ctrl+Shift+…），命中保留键后由本视图的
         // `on_action_terminal_copy` / `on_action_terminal_paste` 处理，用户可改键。
-        // 纯 Ctrl+V 默认被拦下，既不发给 Shell 也不改写成粘贴：`^V` 一旦落到
-        // readline 就布置了一次性引用插入，紧接着的括号粘贴会把标记的开头 ESC
-        // 变成 `^[[200~` 字面残字并污染那条命令行。拦下即从源头消除误伤。
+        // 纯 Ctrl+V 在剪贴板没有图片时默认被拦下，既不发给 Shell 也不改写成粘贴：
+        // `^V` 一旦落到 readline 就布置了一次性引用插入，紧接着的括号粘贴会把标记
+        // 的开头 ESC 变成 `^[[200~` 字面残字并污染那条命令行。拦下即从源头消除误伤。
+        //
+        // 剪贴板含图片时必须例外放行。Claude Code 这类 TUI 自己绑定 Ctrl+V，并在
+        // 收到 `^V` 后直接读取系统剪贴板；若终端把它拦下或改写成文本粘贴，图片附件
+        // 都无法到达程序。这里保持按键原始语义，只传控制字节，不在终端内落临时文件。
         // 需要 readline 引用插入或 vim 块选择时关掉本开关回到 Unix 惯例，或保留
         // 开关、用自定义按键把别的组合（如 ctrl-q）绑成 \x16；自定义映射在前面已优先。
         if self.interaction.suppress_ctrl_v
@@ -63,6 +68,9 @@ impl TerminalView {
             && !modifiers.shift
             && !modifiers.platform
             && key == "v"
+            && !cx
+                .read_from_clipboard()
+                .is_some_and(|item| clipboard_contains_image(&item))
         {
             cx.stop_propagation();
             return;

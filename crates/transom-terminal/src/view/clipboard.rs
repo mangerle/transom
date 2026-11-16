@@ -1,6 +1,34 @@
 //! 程序化输入与剪贴板交互：发送文本、粘贴与选区复制。
 use super::*;
-use crate::input::paste_bytes;
+use crate::input::{KeyEventKind, keystroke_event_to_bytes, paste_bytes};
+
+/// 判断剪贴板条目是否包含图片数据。
+///
+/// 图片粘贴不走文本粘贴通道：Claude Code 这类 TUI 会绑定 Ctrl+V 并直接读取
+/// 系统剪贴板，终端只需把控制字节交给程序。混合条目只要含图片就按图片处理，
+/// 避免应用提供的可选文本降级掩盖用户真正要粘贴的图片。
+pub(super) fn clipboard_contains_image(item: &ClipboardItem) -> bool {
+    item.entries()
+        .iter()
+        .any(|entry| matches!(entry, ClipboardEntry::Image(_)))
+}
+
+/// 图片粘贴应把 Ctrl+V 控制序列交给终端程序，而不是转换成文本粘贴。
+///
+/// Claude Code 等 TUI 通过 Ctrl+V 事件直接读取系统剪贴板并创建图片附件；终端
+/// 不能把图片字节伪装成括号粘贴文本，也不能把图片写入临时路径后代发。使用当前
+/// 终端模式编码控制序列，确保 Kitty 键盘协议协商时保持按键语义一致。
+pub(super) fn image_paste_bytes(mode: TermMode) -> Option<Vec<u8>> {
+    let keystroke = Keystroke {
+        modifiers: gpui_kit::Modifiers {
+            control: true,
+            ..Default::default()
+        },
+        key: "v".to_string(),
+        key_char: None,
+    };
+    keystroke_event_to_bytes(&keystroke, mode, KeyEventKind::Press)
+}
 
 impl TerminalView {
     /// 将程序化文本写入终端输入通道。
@@ -89,7 +117,23 @@ impl TerminalView {
     }
 
     pub(super) fn paste_from_clipboard(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+        let Some(item) = cx.read_from_clipboard() else {
+            return false;
+        };
+        if clipboard_contains_image(&item) {
+            let mode = self.state.engine.lock().mode();
+            let Some(bytes) = image_paste_bytes(mode) else {
+                return false;
+            };
+            return if self.write_input(&bytes) {
+                self.state.engine.lock().scroll_to_bottom();
+                cx.notify();
+                true
+            } else {
+                false
+            };
+        }
+        let Some(text) = item.text() else {
             return false;
         };
         let bytes = self.encode_paste(&text, cx);

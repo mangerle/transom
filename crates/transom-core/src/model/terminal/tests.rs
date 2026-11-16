@@ -32,9 +32,10 @@ fn setting_behavior_updates_legacy_flag() {
     assert!(interaction.right_click_paste);
 }
 
-/// 纯 Ctrl+V 默认被终端拦下：透传 `^V` 会让一次误按污染紧接着的括号粘贴
-/// （readline 的一次性引用插入把标记的 ESC 变成字面文本）。老配置没有该字段时
-/// 按新默认拦下；显式写 `false` 的用户仍回到把 `^V` 发给 Shell 的 Unix 惯例。
+/// 纯 Ctrl+V 的拦截开关默认开启：剪贴板不含图片时透传 `^V` 会让一次误按污染
+/// 紧接着的括号粘贴（readline 的一次性引用插入把标记的 ESC 变成字面文本）。
+/// 图片剪贴板由终端层例外放行；老配置没有该字段时按新默认拦下，显式写
+/// `false` 的用户仍回到把 `^V` 发给 Shell 的 Unix 惯例。
 #[test]
 fn ctrl_v_is_suppressed_by_default_and_respects_explicit_off() {
     assert!(TerminalInteraction::default().suppress_ctrl_v);

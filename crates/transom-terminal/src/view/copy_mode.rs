@@ -60,8 +60,9 @@ impl TerminalView {
             return;
         }
         if control && key == "v" {
-            // 与常规输入域同一语义：拦下纯 Ctrl+V 时这里也不粘贴，避免同一个键
-            // 在两种模式下给出两种猜测行为；粘贴仍走 Ctrl+Shift+V 或 Cmd+V。
+            // 与常规输入域的文本拦截语义保持一致：拦下纯 Ctrl+V 时这里也不粘贴。
+            // 复制模式是模态选区操作，不放行图片场景的 `^V`，避免退出模式后把控制
+            // 字节混入远端；图片粘贴请回到普通输入域，或使用 Ctrl+Shift+V / Cmd+V。
             if self.interaction.suppress_ctrl_v
                 && modifiers.control
                 && !modifiers.platform

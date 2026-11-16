@@ -1,9 +1,38 @@
 use crate::view::build_custom_keys;
+use crate::view::clipboard::{clipboard_contains_image, image_paste_bytes};
 use crate::view_ime::{
     ime_caret_index_for_query, ime_column_to_utf16_index, ime_utf16_index_to_column_cells,
 };
-use gpui_kit::{Keystroke, OperatingSystem};
+use alacritty_terminal::term::TermMode;
+use gpui_kit::{
+    ClipboardEntry, ClipboardItem, ClipboardString, Image, ImageFormat, Keystroke, OperatingSystem,
+};
 use transom_core::TerminalKeyBinding;
+
+/// 图片剪贴板识别必须覆盖纯图片与图文混合条目，文本条目不得误判。
+#[test]
+fn clipboard_image_detection_covers_image_and_mixed_entries() {
+    let text = ClipboardItem::new_string("普通文本".to_string());
+    assert!(!clipboard_contains_image(&text));
+
+    let image = Image::from_bytes(ImageFormat::Png, vec![0x89, b'P', b'N', b'G']);
+    let image_only = ClipboardItem::new_image(&image);
+    assert!(clipboard_contains_image(&image_only));
+
+    let mixed = ClipboardItem {
+        entries: vec![
+            ClipboardEntry::Image(image),
+            ClipboardEntry::String(ClipboardString::new("图片说明".to_string())),
+        ],
+    };
+    assert!(clipboard_contains_image(&mixed));
+}
+
+/// 图片粘贴动作必须生成 Ctrl+V 控制序列，供 TUI 直接读取系统剪贴板。
+#[test]
+fn image_paste_encodes_ctrl_v_key() {
+    assert_eq!(image_paste_bytes(TermMode::empty()), Some(b"\x16".to_vec()));
+}
 
 /// 自定义映射按 gpui 键位语法匹配，修饰键不同不得误命中。
 #[test]
