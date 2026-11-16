@@ -99,14 +99,42 @@ pub(crate) fn render_container_system_df_dialog_body(
     let loading = state.system_df_loading;
     let prune_running = state.system_prune_running;
     let usage = state.system_df.clone().unwrap_or_default();
-    let prune_all = state.system_prune_all;
-    let prune_volumes = state.system_prune_volumes;
+    let has_snapshot = state.system_df.is_some();
+    let content = v_flex()
+        .gap_3()
+        .child(df_summary_banner(&usage, loading, has_snapshot, p))
+        .child(super::system_df_view::render_stacked_usage_bar(&usage, p))
+        .child(super::system_df_view::render_df_details_list(&usage, p))
+        .child(df_options_section(
+            view,
+            state.system_prune_all,
+            state.system_prune_volumes,
+            p,
+        ))
+        .child(df_actions_bar(
+            view,
+            loading,
+            prune_running,
+            usage.total_reclaimable > 0 || state.system_prune_all,
+        ));
+    crate::widgets::dialog_body(
+        "container-system-df-modal",
+        rust_i18n::t!("container.system_df.title").to_string(),
+        Some(rust_i18n::t!("container.system_df.subtitle").to_string()),
+        content,
+        None::<AnyElement>,
+    )
+}
 
+fn df_summary_banner(
+    usage: &transom_core::ContainerSystemDiskUsage,
+    loading: bool,
+    has_snapshot: bool,
+    p: &Palette,
+) -> AnyElement {
     let total_size_str = format_size(usage.total_size);
     let reclaim_size_str = format_size(usage.total_reclaimable);
-
-    // 顶部总览横幅。
-    let summary_banner = h_flex()
+    h_flex()
         .justify_between()
         .items_center()
         .p_4()
@@ -114,27 +142,12 @@ pub(crate) fn render_container_system_df_dialog_body(
         .bg(p.secondary)
         .border_1()
         .border_color(p.border)
-        .child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.system_df.total_used").to_string()),
-                )
-                .child(
-                    div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(p.foreground)
-                        .child(if loading && state.system_df.is_none() {
-                            Spinner::new().small().color(p.primary).into_any_element()
-                        } else {
-                            div().child(total_size_str).into_any_element()
-                        }),
-                ),
-        )
+        .child(df_banner_cell(
+            "container.system_df.total_used",
+            p.foreground,
+            banner_value(&total_size_str, loading && !has_snapshot),
+            p,
+        ))
         .child(
             v_flex()
                 .gap_1()
@@ -154,99 +167,151 @@ pub(crate) fn render_container_system_df_dialog_body(
                         } else {
                             p.muted_foreground
                         })
-                        .child(if loading && state.system_df.is_none() {
-                            Spinner::new().small().color(p.primary).into_any_element()
-                        } else {
-                            div().child(reclaim_size_str).into_any_element()
-                        }),
+                        .child(banner_value(&reclaim_size_str, loading && !has_snapshot)),
                 ),
-        );
+        )
+        .into_any_element()
+}
 
-    // 堆叠占用比例条与分类明细看板。
-    let stacked_bar = super::system_df_view::render_stacked_usage_bar(&usage, p);
-    let details_list = super::system_df_view::render_df_details_list(&usage, p);
+fn df_banner_cell(
+    label_key: &'static str,
+    value_color: gpui_kit::Hsla,
+    value: AnyElement,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!(label_key).to_string()),
+        )
+        .child(
+            div()
+                .text_xl()
+                .font_weight(FontWeight::BOLD)
+                .text_color(value_color)
+                .child(value),
+        )
+        .into_any_element()
+}
 
-    // 清理选项控制。
-    let options_section = v_flex()
+fn banner_value(text: &str, loading: bool) -> AnyElement {
+    if loading {
+        Spinner::new().small().into_any_element()
+    } else {
+        div().child(text.to_string()).into_any_element()
+    }
+}
+
+fn df_options_section(
+    view: &Entity<ContainerWorkspace>,
+    prune_all: bool,
+    prune_volumes: bool,
+    p: &Palette,
+) -> AnyElement {
+    let p = p.clone();
+    v_flex()
         .gap_2()
         .p_3()
         .rounded(p.radius.md)
         .bg(p.muted.opacity(0.1))
         .border_1()
         .border_color(p.border)
+        .child(df_prune_all_row(view, prune_all, &p))
+        .child(df_prune_volumes_row(view, prune_volumes, &p))
+        .into_any_element()
+}
+
+fn df_prune_all_row(view: &Entity<ContainerWorkspace>, enabled: bool, p: &Palette) -> AnyElement {
+    let view = view.clone();
+    h_flex()
+        .items_center()
+        .justify_between()
+        .child(df_option_text(
+            "container.system_df.opt_prune_all",
+            "container.system_df.opt_prune_all_hint",
+            p,
+        ))
         .child(
-            h_flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    v_flex()
-                        .gap_0p5()
-                        .child(
-                            div().text_sm().font_weight(FontWeight::MEDIUM).child(
-                                rust_i18n::t!("container.system_df.opt_prune_all").to_string(),
-                            ),
-                        )
-                        .child(div().text_xs().text_color(p.muted_foreground).child(
-                            rust_i18n::t!("container.system_df.opt_prune_all_hint").to_string(),
-                        )),
-                )
-                .child(
-                    Button::new("opt-prune-all-toggle")
-                        .xsmall()
-                        .ghost()
-                        .selected(prune_all)
-                        .label(if prune_all {
-                            rust_i18n::t!("container.system_df.opt_enabled").to_string()
-                        } else {
-                            rust_i18n::t!("container.system_df.opt_disabled").to_string()
-                        })
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.toggle_system_prune_all(cx)
-                                });
-                            }
-                        }),
-                ),
+            Button::new("opt-prune-all-toggle")
+                .xsmall()
+                .ghost()
+                .selected(enabled)
+                .label(df_option_label(enabled))
+                .on_click(move |_, _, cx| {
+                    view.update(cx, |workspace, cx| workspace.toggle_system_prune_all(cx));
+                }),
+        )
+        .into_any_element()
+}
+
+fn df_prune_volumes_row(
+    view: &Entity<ContainerWorkspace>,
+    enabled: bool,
+    p: &Palette,
+) -> AnyElement {
+    let view = view.clone();
+    h_flex()
+        .items_center()
+        .justify_between()
+        .child(df_option_text(
+            "container.system_df.opt_prune_volumes",
+            "container.system_df.opt_prune_volumes_hint",
+            p,
+        ))
+        .child(
+            Button::new("opt-prune-volumes-toggle")
+                .xsmall()
+                .ghost()
+                .selected(enabled)
+                .label(df_option_label(enabled))
+                .on_click(move |_, _, cx| {
+                    view.update(cx, |workspace, cx| {
+                        workspace.toggle_system_prune_volumes(cx)
+                    });
+                }),
+        )
+        .into_any_element()
+}
+
+fn df_option_text(label_key: &'static str, hint_key: &'static str, p: &Palette) -> AnyElement {
+    v_flex()
+        .gap_0p5()
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .child(rust_i18n::t!(label_key).to_string()),
         )
         .child(
-            h_flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    v_flex()
-                        .gap_0p5()
-                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
-                            rust_i18n::t!("container.system_df.opt_prune_volumes").to_string(),
-                        ))
-                        .child(div().text_xs().text_color(p.muted_foreground).child(
-                            rust_i18n::t!("container.system_df.opt_prune_volumes_hint").to_string(),
-                        )),
-                )
-                .child(
-                    Button::new("opt-prune-volumes-toggle")
-                        .xsmall()
-                        .ghost()
-                        .selected(prune_volumes)
-                        .label(if prune_volumes {
-                            rust_i18n::t!("container.system_df.opt_enabled").to_string()
-                        } else {
-                            rust_i18n::t!("container.system_df.opt_disabled").to_string()
-                        })
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.toggle_system_prune_volumes(cx)
-                                });
-                            }
-                        }),
-                ),
-        );
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!(hint_key).to_string()),
+        )
+        .into_any_element()
+}
 
-    // 底部动作条。
-    let actions_bar = h_flex()
+fn df_option_label(enabled: bool) -> String {
+    if enabled {
+        rust_i18n::t!("container.system_df.opt_enabled").to_string()
+    } else {
+        rust_i18n::t!("container.system_df.opt_disabled").to_string()
+    }
+}
+
+fn df_actions_bar(
+    view: &Entity<ContainerWorkspace>,
+    loading: bool,
+    prune_running: bool,
+    can_prune: bool,
+) -> AnyElement {
+    let refresh_view = view.clone();
+    let close_view = view.clone();
+    let submit_view = view.clone();
+    h_flex()
         .justify_between()
         .items_center()
         .pt_2()
@@ -258,11 +323,8 @@ pub(crate) fn render_container_system_df_dialog_body(
             )
             .ghost()
             .disabled(loading || prune_running)
-            .on_click({
-                let view = view.clone();
-                move |_, _, cx| {
-                    view.update(cx, |workspace, cx| workspace.refresh_system_df(cx));
-                }
+            .on_click(move |_, _, cx| {
+                refresh_view.update(cx, |workspace, cx| workspace.refresh_system_df(cx));
             }),
         )
         .child(
@@ -273,13 +335,9 @@ pub(crate) fn render_container_system_df_dialog_body(
                         .small()
                         .ghost()
                         .label(rust_i18n::t!("common.close").to_string())
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |workspace, cx| {
-                                    workspace.close_system_df_dialog(cx)
-                                });
-                            }
+                        .on_click(move |_, _, cx| {
+                            close_view
+                                .update(cx, |workspace, cx| workspace.close_system_df_dialog(cx));
                         }),
                 )
                 .child(
@@ -293,31 +351,11 @@ pub(crate) fn render_container_system_df_dialog_body(
                         },
                     )
                     .danger()
-                    .disabled(
-                        loading || prune_running || (usage.total_reclaimable == 0 && !prune_all),
-                    )
-                    .on_click({
-                        let view = view.clone();
-                        move |_, _, cx| {
-                            view.update(cx, |workspace, cx| workspace.submit_system_prune(cx));
-                        }
+                    .disabled(loading || prune_running || !can_prune)
+                    .on_click(move |_, _, cx| {
+                        submit_view.update(cx, |workspace, cx| workspace.submit_system_prune(cx));
                     }),
                 ),
-        );
-
-    let content = v_flex()
-        .gap_3()
-        .child(summary_banner)
-        .child(stacked_bar)
-        .child(details_list)
-        .child(options_section)
-        .child(actions_bar);
-
-    crate::widgets::dialog_body(
-        "container-system-df-modal",
-        rust_i18n::t!("container.system_df.title").to_string(),
-        Some(rust_i18n::t!("container.system_df.subtitle").to_string()),
-        content,
-        None::<AnyElement>,
-    )
+        )
+        .into_any_element()
 }

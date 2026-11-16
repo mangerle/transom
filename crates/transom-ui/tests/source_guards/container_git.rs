@@ -1648,3 +1648,44 @@ fn tiny_source_files_are_index_or_tests() {
         "小于 30 行的文件只允许 mod.rs/common.rs/tests.rs: {offenders:?}"
     );
 }
+
+/// 系统磁盘看板弹窗必须拆分：主函数只做内容组装，不超过 80 行。
+#[test]
+fn system_df_dialog_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/system_df_dialog.rs"))
+        .expect("读取 container/system_df_dialog.rs 失败");
+    for helper in [
+        "fn df_summary_banner",
+        "fn df_options_section",
+        "fn df_prune_all_row",
+        "fn df_prune_volumes_row",
+        "fn df_actions_bar",
+    ] {
+        assert!(source.contains(helper), "磁盘看板缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_container_system_df_dialog_body")
+        .expect("缺少磁盘看板主渲染函数");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "磁盘看板主函数超过 80 行：{lines}");
+}

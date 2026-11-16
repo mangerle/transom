@@ -68,7 +68,9 @@ apps/transom (组合根 + 控制平面)
 
 编辑器关闭续行的决策已收归 `EditorPanels`：桥接只传工作区快照与脏标签集合，实体返回 `EditorCloseRequest` 后由外壳排期执行。
 
-编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。引擎侧栏行拆为推导快照、交互外壳、右键菜单（每项一个构造器）、行体与拖拽覆盖层，并改用 `EngineRowParams` 参数对象（守卫 `engine_row_is_split_and_parameterized`）。
+编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。系统磁盘看板弹窗拆为总览横幅、清理选项（两个独立开关行）与底部动作条（守卫 `system_df_dialog_is_split`）。
+
+引擎侧栏行拆为推导快照、交互外壳、右键菜单（每项一个构造器）、行体与拖拽覆盖层，并改用 `EngineRowParams` 参数对象（守卫 `engine_row_is_split_and_parameterized`）。
 
 纵向标签行拆为数据快照、高亮条、文字列、角标与事件装配（守卫 `vertical_tab_row_is_split`）。
 
