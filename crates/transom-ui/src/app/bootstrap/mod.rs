@@ -293,20 +293,20 @@ impl AppShell {
             &self.state.ui.modals.tools.container_form,
             window,
             |shell, _view, event: &crate::container::ContainerFormEvent, window, cx| {
-                crate::container::on_container_form_event(shell, event, window, cx);
+                crate::container::on_container_form_event(&mut shell.state, event, window, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.container_run_form = Some(cx.subscribe(
             &self.state.ui.modals.tools.run_form,
             |shell, _view, event: &crate::container::ContainerRunFormEvent, cx| {
-                crate::container::on_container_run_form_event(shell, event, cx);
+                crate::container::on_container_run_form_event(&mut shell.state, event, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.container_create = Some(cx.subscribe_in(
             &self.state.ui.modals.tools.create_dialog,
             window,
             |shell, _view, event: &crate::container::ContainerCreateDialogEvent, window, cx| {
-                crate::container::on_container_create_event(shell, event, window, cx);
+                crate::container::on_container_create_event(&mut shell.state, event, window, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.cloud_sync = Some(cx.subscribe_in(

@@ -652,3 +652,35 @@ fn container_workspace_modals_are_grouped_and_dispatched_uniformly() {
         "dialog_host/registry/checks/container.rs 不得逐个枚举工作区弹窗，应由 ContainerWorkspaceModal 统一接管"
     );
 }
+
+/// 容器模块不得再以 `Shell` 类型的参数接收外壳：领域逻辑只借应用状态，
+/// 需要窗口的动作走 `WindowRequest` 队列。
+///
+/// 设计原理（Why）：`Context<AppShell>` 只是订阅与通知所需的上下文，允许存在；
+/// 真正要杜绝的是把整个外壳当参数传进领域函数，那样状态边界与可测试性都会退化。
+#[test]
+fn container_modules_take_app_state_not_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/container")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                offenders.push(format!("{}:{}", entry.display(), index + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "容器模块不得再接收外壳参数，改为 &mut AppState 并经 WindowRequest 处理窗口动作: {offenders:?}"
+    );
+}

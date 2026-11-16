@@ -12,93 +12,99 @@ use transom_core::CatalogError;
 
 /// 处理一条侧栏动作意图。
 pub(crate) fn on_container_sidebar_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &ContainerSidebarEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let sidebar = shell.state.features.containers.sidebar.clone();
+    let sidebar = app_state.features.containers.sidebar.clone();
     match event {
         ContainerSidebarEvent::OpenEngine(profile) => {
-            crate::container::open_engine_workspace(shell, (**profile).clone(), window, cx);
+            crate::container::open_engine_workspace(app_state, (**profile).clone(), window, cx);
         }
         ContainerSidebarEvent::OpenEngineForm(profile) => {
             let profile = profile.as_ref().map(|profile| (**profile).clone());
-            crate::container::open_container_form(shell, profile, None, window, cx);
+            crate::container::open_container_form(app_state, profile, None, window, cx);
         }
         ContainerSidebarEvent::OpenNewEngineForm(folder) => {
-            crate::container::open_new_container_in_folder(shell, *folder, window, cx);
+            crate::container::open_new_container_in_folder(app_state, *folder, window, cx);
         }
         ContainerSidebarEvent::DeleteEngine(id) => {
-            crate::container::delete_container_profile(shell, *id, window, cx);
+            crate::container::delete_container_profile(app_state, *id, window, cx);
         }
         ContainerSidebarEvent::MoveEngineToRoot(id) => {
-            match shell.state.session.catalog.move_engine(*id, None) {
+            match app_state.session.catalog.move_engine(*id, None) {
                 Ok(()) => {
-                    shell.state.persist_catalog();
+                    app_state.persist_catalog();
                 }
-                Err(error) => shell.state.set_error(error.to_string()),
+                Err(error) => app_state.set_error(error.to_string()),
             }
             cx.notify();
         }
         ContainerSidebarEvent::ToggleFolder(folder_id) => {
-            toggle_engine_folder(shell, *folder_id, cx);
+            toggle_engine_folder(app_state, *folder_id, cx);
         }
         ContainerSidebarEvent::SubmitFolderForm {
             parent,
             editing,
             name,
         } => {
-            submit_engine_folder_form(shell, *parent, *editing, name.clone(), &sidebar, cx);
+            submit_engine_folder_form(app_state, *parent, *editing, name.clone(), &sidebar, cx);
         }
         ContainerSidebarEvent::DeleteFolder(folder_id) => {
-            delete_engine_folder(shell, *folder_id, window, cx);
+            delete_engine_folder(app_state, *folder_id, window, cx);
         }
         ContainerSidebarEvent::Drop { drag, target } => {
-            handle_container_sidebar_drop(shell, *drag, *target, cx);
+            handle_container_sidebar_drop(app_state, *drag, *target, cx);
         }
         ContainerSidebarEvent::DiscoverEngines => {
-            discover_engines(shell, &sidebar, cx);
+            discover_engines(app_state, &sidebar, cx);
         }
         ContainerSidebarEvent::AddDiscoveredEngine(profile) => {
-            add_discovered_engine(shell, (**profile).clone(), &sidebar, window, cx);
+            add_discovered_engine(app_state, (**profile).clone(), &sidebar, window, cx);
         }
         ContainerSidebarEvent::OpenSessionWorkspace(session_id) => {
-            crate::container::open_container_workspace_for_session(shell, *session_id, window, cx);
+            crate::container::open_container_workspace_for_session(
+                app_state,
+                *session_id,
+                window,
+                cx,
+            );
         }
         ContainerSidebarEvent::ShowToast { message, success } => {
-            shell.show_toast(message.clone(), *success, window, cx);
+            app_state
+                .ui
+                .window_requests
+                .push_toast(message.clone(), *success);
         }
     }
 }
 
 /// 折叠/展开引擎分组并持久化。
 fn toggle_engine_folder(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     folder_id: transom_core::FolderId,
     cx: &mut Context<AppShell>,
 ) {
-    let collapsed = shell
-        .state
+    let collapsed = app_state
         .session
         .catalog
         .engine_folder(folder_id)
         .map(|folder| !folder.collapsed);
     log::debug!("切换引擎分组折叠，分组: {folder_id}，折叠后: {collapsed:?}");
     if let Some(collapsed) = collapsed {
-        let _ = shell
-            .state
+        let _ = app_state
             .session
             .catalog
             .set_engine_folder_collapsed(folder_id, collapsed);
-        shell.state.persist_catalog();
+        app_state.persist_catalog();
     }
     cx.notify();
 }
 
 /// 提交分组名称：新建或重命名，错误就地回写侧栏表单。
 fn submit_engine_folder_form(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     parent: Option<transom_core::FolderId>,
     editing: Option<transom_core::FolderId>,
     name: String,
@@ -107,9 +113,8 @@ fn submit_engine_folder_form(
 ) {
     log::debug!("提交引擎分组表单，编辑: {editing:?}，名称: {name}");
     let result = match editing {
-        Some(id) => shell.state.session.catalog.rename_engine_folder(id, &name),
-        None => shell
-            .state
+        Some(id) => app_state.session.catalog.rename_engine_folder(id, &name),
+        None => app_state
             .session
             .catalog
             .add_engine_folder(&name, parent)
@@ -118,7 +123,7 @@ fn submit_engine_folder_form(
     match result {
         Ok(()) => {
             sidebar.update(cx, |sidebar, cx| sidebar.finish_folder_form(cx));
-            shell.state.persist_catalog();
+            app_state.persist_catalog();
         }
         Err(error) => {
             sidebar.update(cx, |sidebar, cx| {
@@ -130,41 +135,38 @@ fn submit_engine_folder_form(
 
 /// 删除分组；其中的连接与子分组提升到父层级。
 fn delete_engine_folder(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     folder_id: transom_core::FolderId,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     log::info!("删除引擎分组，分组: {folder_id}");
-    match shell.state.session.catalog.delete_engine_folder(folder_id) {
+    match app_state.session.catalog.delete_engine_folder(folder_id) {
         Ok(name) => {
-            shell.state.persist_catalog();
-            shell.show_toast(
+            app_state.persist_catalog();
+            app_state.ui.window_requests.push_toast(
                 rust_i18n::t!("container.sidebar.folder_deleted", name = name).to_string(),
                 true,
-                window,
-                cx,
             );
         }
-        Err(error) => shell.state.set_error(error.to_string()),
+        Err(error) => app_state.set_error(error.to_string()),
     }
     cx.notify();
 }
 
 /// 处理引擎树拖放：换分组或同级排序。
 fn handle_container_sidebar_drop(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     drag: ContainerSidebarDrag,
     target: ContainerSidebarTarget,
     cx: &mut Context<AppShell>,
 ) {
     log::info!("引擎侧栏拖放，载荷: {:?}，落点: {:?}", drag, target);
-    match apply_container_sidebar_drop(shell, drag, target) {
+    match apply_container_sidebar_drop(app_state, drag, target) {
         Ok(landed) => {
             // 目标分组被折叠时自动展开，保证拖进去的条目可见。
             if let Some(folder_id) = landed
-                && let Some(folder) = shell
-                    .state
+                && let Some(folder) = app_state
                     .session
                     .catalog
                     .engine_folders
@@ -173,35 +175,33 @@ fn handle_container_sidebar_drop(
             {
                 folder.collapsed = false;
             }
-            shell.state.persist_catalog();
+            app_state.persist_catalog();
         }
-        Err(error) => shell.state.set_error(error.to_string()),
+        Err(error) => app_state.set_error(error.to_string()),
     }
     cx.notify();
 }
 
 /// 把拖放映射为目录写入；返回落点分组，供调用方展开。
 fn apply_container_sidebar_drop(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     drag: ContainerSidebarDrag,
     target: ContainerSidebarTarget,
 ) -> Result<Option<transom_core::FolderId>, CatalogError> {
     match (drag, target) {
         (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarTarget::Root) => {
-            shell.state.session.catalog.move_engine(profile_id, None)?;
+            app_state.session.catalog.move_engine(profile_id, None)?;
             Ok(None)
         }
         (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarTarget::Root) => {
-            shell
-                .state
+            app_state
                 .session
                 .catalog
                 .move_engine_folder(folder_id, None)?;
             Ok(None)
         }
         (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarTarget::Folder(folder_id)) => {
-            shell
-                .state
+            app_state
                 .session
                 .catalog
                 .move_engine(profile_id, Some(folder_id))?;
@@ -211,8 +211,7 @@ fn apply_container_sidebar_drop(
             if moved == parent {
                 return Ok(Some(parent));
             }
-            shell
-                .state
+            app_state
                 .session
                 .catalog
                 .move_engine_folder(moved, Some(parent))?;
@@ -220,13 +219,11 @@ fn apply_container_sidebar_drop(
         }
         (drag, ContainerSidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
             (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarDrag::Engine(anchor_id)) => {
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .reorder_engine(profile_id, anchor_id, side)?;
-                Ok(shell
-                    .state
+                Ok(app_state
                     .session
                     .catalog
                     .engines
@@ -235,37 +232,32 @@ fn apply_container_sidebar_drop(
                     .and_then(|profile| profile.folder_id))
             }
             (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarDrag::Folder(anchor_id)) => {
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .reorder_engine_folder(folder_id, anchor_id, side)?;
-                Ok(shell
-                    .state
+                Ok(app_state
                     .session
                     .catalog
                     .engine_folder(folder_id)
                     .and_then(|folder| folder.parent))
             }
             (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarDrag::Folder(anchor_id)) => {
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .move_engine(profile_id, Some(anchor_id))?;
                 Ok(Some(anchor_id))
             }
             (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarDrag::Engine(anchor_id)) => {
-                let parent = shell
-                    .state
+                let parent = app_state
                     .session
                     .catalog
                     .engines
                     .iter()
                     .find(|profile| profile.id == anchor_id)
                     .and_then(|profile| profile.folder_id);
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .move_engine_folder(folder_id, parent)?;
@@ -277,7 +269,7 @@ fn apply_container_sidebar_drop(
 
 /// 发起一次本机引擎发现。
 fn discover_engines(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     sidebar: &Entity<ContainerSidebarView>,
     cx: &mut Context<AppShell>,
 ) {
@@ -285,7 +277,7 @@ fn discover_engines(
         return;
     }
     sidebar.update(cx, |sidebar, cx| sidebar.begin_discovery(cx));
-    shell.state.send_command(ContainerCommand::Discover {
+    app_state.send_command(ContainerCommand::Discover {
         request_id: ContainerRequestId::new(),
     });
     cx.notify();
@@ -293,23 +285,23 @@ fn discover_engines(
 
 /// 添加一个发现的引擎：同种类同端点已保存时不再重复入库，直接打开工作区。
 fn add_discovered_engine(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     profile: transom_core::ContainerEngineProfile,
     sidebar: &Entity<ContainerSidebarView>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let duplicated = shell.state.session.catalog.engines.iter().any(|saved| {
+    let duplicated = app_state.session.catalog.engines.iter().any(|saved| {
         saved.engine.kind == profile.engine.kind
             && saved.engine.endpoint.describe() == profile.engine.endpoint.describe()
     });
     if !duplicated {
-        shell.state.session.catalog.engines.push(profile.clone());
-        shell.state.persist_catalog();
+        app_state.session.catalog.engines.push(profile.clone());
+        app_state.persist_catalog();
     }
     let endpoint = profile.engine.endpoint.describe();
     sidebar.update(cx, |sidebar, cx| {
         sidebar.remove_discovery_candidate(&endpoint, cx)
     });
-    crate::container::open_engine_workspace(shell, profile, window, cx);
+    crate::container::open_engine_workspace(app_state, profile, window, cx);
 }

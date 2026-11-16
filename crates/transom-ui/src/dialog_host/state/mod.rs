@@ -10,8 +10,10 @@ impl ModalKind {
     /// 其余种类由注册表按种类提供。
     pub(super) fn is_open(self, shell: &AppShell, cx: &App) -> bool {
         if let Some(modal) = self.as_container_modal() {
-            return crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
-                .is_some();
+            return crate::container::find_container_modal_tab(&shell.state, cx, |ws| {
+                modal.is_open(ws)
+            })
+            .is_some();
         }
         let state = super::registry::DialogCheckState::from_state(&shell.state);
         (super::registry::entry(self).is_open)(&state, cx)
@@ -31,9 +33,11 @@ impl ModalKind {
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
     pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
         if let Some(modal) = self.as_container_modal() {
-            return crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
-                .map(|(_, ws)| modal.text_values(&ws.read(cx).state, cx))
-                .unwrap_or_default();
+            return crate::container::find_container_modal_tab(&shell.state, cx, |ws| {
+                modal.is_open(ws)
+            })
+            .map(|(_, ws)| modal.text_values(&ws.read(cx).state, cx))
+            .unwrap_or_default();
         }
         let state = super::registry::DialogCheckState::from_state(&shell.state);
         (super::registry::entry(self).field_values)(&state, cx)

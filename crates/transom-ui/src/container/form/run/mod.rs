@@ -21,13 +21,13 @@ pub(crate) use entity::{ContainerRunFormEvent, ContainerRunFormView};
 
 /// 打开「运行容器」表单；从镜像行进入时预填镜像引用。
 pub(crate) fn open_container_run_form(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     image_hint: Option<String>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.ui.modals.tools.run_form.clone();
+    let view = app_state.ui.modals.tools.run_form.clone();
     view.update(cx, |view, cx| view.open_new(tab_id, image_hint, window, cx));
     // 弹窗栈在外壳渲染里对账，实体变脏不会自动跑外壳的 reconcile。
     cx.notify();
@@ -35,26 +35,26 @@ pub(crate) fn open_container_run_form(
 
 /// 打开「克隆容器」表单；基于已有容器配置反向预填。
 pub(crate) fn open_container_clone_form(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     details: &transom_core::ContainerDetails,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.ui.modals.tools.run_form.clone();
+    let view = app_state.ui.modals.tools.run_form.clone();
     view.update(cx, |view, cx| view.open_clone(tab_id, details, window, cx));
     cx.notify();
 }
 
 /// 打开容器就地修改与重建表单。
 pub(crate) fn open_container_recreate_form(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     details: &transom_core::ContainerDetails,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.ui.modals.tools.run_form.clone();
+    let view = app_state.ui.modals.tools.run_form.clone();
     view.update(cx, |view, cx| {
         view.open_recreate(tab_id, details, window, cx)
     });
@@ -63,14 +63,14 @@ pub(crate) fn open_container_recreate_form(
 
 /// 触发容器克隆：优先读取已有详情，未全量 inspect 时由 summary 补齐必要参数。
 pub(crate) fn clone_container(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     id: &str,
     name: &str,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(workspace) = shell.state.container_workspace(tab_id) else {
+    let Some(workspace) = app_state.container_workspace(tab_id) else {
         return;
     };
     let workspace = &workspace.read(cx).state;
@@ -80,7 +80,7 @@ pub(crate) fn clone_container(
         .filter(|d| d.id == id || d.name == name)
         .cloned()
     {
-        open_container_clone_form(shell, tab_id, &details, window, cx);
+        open_container_clone_form(app_state, tab_id, &details, window, cx);
     } else if let Some(summary) = workspace
         .containers
         .iter()
@@ -115,20 +115,20 @@ pub(crate) fn clone_container(
             exposed_ports: Vec::new(),
             inspect: String::new(),
         };
-        open_container_clone_form(shell, tab_id, &details, window, cx);
+        open_container_clone_form(app_state, tab_id, &details, window, cx);
     }
 }
 
 /// 触发容器就地修改与重建：加载配置后在运行表单中保留原容器名，提交时原子重建。
 pub(crate) fn recreate_container(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     id: &str,
     name: &str,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(workspace) = shell.state.container_workspace(tab_id) else {
+    let Some(workspace) = app_state.container_workspace(tab_id) else {
         return;
     };
     let workspace = &workspace.read(cx).state;
@@ -138,7 +138,7 @@ pub(crate) fn recreate_container(
         .filter(|d| d.id == id || d.name == name)
         .cloned()
     {
-        open_container_recreate_form(shell, tab_id, &details, window, cx);
+        open_container_recreate_form(app_state, tab_id, &details, window, cx);
     } else if let Some(summary) = workspace
         .containers
         .iter()
@@ -173,7 +173,7 @@ pub(crate) fn recreate_container(
             exposed_ports: Vec::new(),
             inspect: String::new(),
         };
-        open_container_recreate_form(shell, tab_id, &details, window, cx);
+        open_container_recreate_form(app_state, tab_id, &details, window, cx);
     }
 }
 
@@ -182,7 +182,7 @@ pub(crate) fn recreate_container(
 /// 事件自带创建参数与目标标签，处理时禁止回读实体：派发阶段实体仍被租借。
 /// 目标工作区已关闭时静默丢弃命令，避免把结果发给不存在的标签页。
 pub(crate) fn on_container_run_form_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &ContainerRunFormEvent,
     cx: &mut Context<AppShell>,
 ) {
@@ -191,7 +191,7 @@ pub(crate) fn on_container_run_form_event(
         spec,
         recreate_id,
     } = event;
-    let Some(workspace) = shell.state.container_workspace(*tab_id) else {
+    let Some(workspace) = app_state.container_workspace(*tab_id) else {
         cx.notify();
         return;
     };

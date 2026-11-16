@@ -154,7 +154,7 @@ impl AppState {
 /// 返回实体句柄而不是引用：谓词在 `read` 守卫内执行，返回前即释放，
 /// 调用方随后自行 `update`，不会在写闭包里再反查同一实体。
 pub(crate) fn find_container_modal_tab<F>(
-    shell: &AppShell,
+    app_state: &AppState,
     cx: &App,
     predicate: F,
 ) -> Option<(TabId, Entity<ContainerWorkspace>)>
@@ -164,13 +164,13 @@ where
     let search = |tab_id: TabId, workspace: Entity<ContainerWorkspace>| {
         predicate(&workspace.read(cx).state).then_some((tab_id, workspace))
     };
-    if let Some(tab_id) = shell.state.workspace.active_tab
-        && let Some(workspace) = shell.state.container_workspace(tab_id)
+    if let Some(tab_id) = app_state.workspace.active_tab
+        && let Some(workspace) = app_state.container_workspace(tab_id)
         && let Some(found) = search(tab_id, workspace)
     {
         return Some(found);
     }
-    for tab in shell.state.workspace.tabs.iter() {
+    for tab in app_state.workspace.tabs.iter() {
         let Some(workspace) = tab.containers() else {
             continue;
         };
@@ -183,7 +183,7 @@ where
 
 /// Esc 关闭容器侧的全屏浮层（终端页签放行）。
 pub(crate) fn on_container_overlay_key(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &KeyDownEvent,
     fullscreen_tab: Option<TabId>,
     cx: &mut Context<AppShell>,
@@ -192,19 +192,16 @@ pub(crate) fn on_container_overlay_key(
         return;
     }
     let Some(tab) =
-        fullscreen_tab.filter(|tab| shell.state.features.containers.fullscreen == Some(*tab))
+        fullscreen_tab.filter(|tab| app_state.features.containers.fullscreen == Some(*tab))
     else {
         return;
     };
-    let in_terminal = shell
-        .state
-        .container_workspace(tab)
-        .is_some_and(|workspace| {
-            workspace.read(cx).state.detail_tab == ContainerDetailTab::Terminal
-        });
+    let in_terminal = app_state.container_workspace(tab).is_some_and(|workspace| {
+        workspace.read(cx).state.detail_tab == ContainerDetailTab::Terminal
+    });
     if in_terminal {
         return;
     }
-    shell.state.features.containers.fullscreen = None;
+    app_state.features.containers.fullscreen = None;
     cx.notify();
 }

@@ -11,16 +11,16 @@ use transom_core::{ContainerRequestId, ImageLayerProgress, ImageSearchResult};
 
 /// 处理远端镜像搜索返回事件。
 pub(super) fn on_container_images_searched(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     results: Vec<ImageSearchResult>,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         let applied = workspace.update(cx, |workspace, _| {
             workspace.apply_images_searched(request_id, results)
         });
@@ -32,15 +32,15 @@ pub(super) fn on_container_images_searched(
 
 /// 处理 Registry 实时标签列表返回事件。
 pub(super) fn on_container_image_tags_listed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     tags: Vec<String>,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         let applied = workspace.update(cx, |workspace, _| {
             workspace.apply_image_tags_listed(request_id, tags)
         });
@@ -52,17 +52,16 @@ pub(super) fn on_container_image_tags_listed(
 
 /// 处理分层下载进度推送。
 pub(super) fn on_container_pull_task_progress(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     task_id: String,
     status: String,
     layers: Vec<ImageLayerProgress>,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let tab_ids: Vec<TabId> = shell.state.workspace.tabs.iter().map(|t| t.id).collect();
+    let tab_ids: Vec<TabId> = app_state.workspace.tabs.iter().map(|t| t.id).collect();
     let target = tab_ids.into_iter().find(|tab_id| {
-        shell
-            .state
+        app_state
             .container_workspace(*tab_id)
             .is_some_and(|workspace| {
                 workspace
@@ -74,7 +73,7 @@ pub(super) fn on_container_pull_task_progress(
             })
     });
     if let Some(tab_id) = target
-        && let Some(workspace) = shell.state.container_workspace(tab_id)
+        && let Some(workspace) = app_state.container_workspace(tab_id)
     {
         workspace.update(cx, |workspace, cx| {
             workspace.apply_pull_progress(&task_id, status, layers);
@@ -85,10 +84,10 @@ pub(super) fn on_container_pull_task_progress(
 
 /// 处理镜像下载任务结束（成功、失败或取消）。
 pub(super) fn on_container_pull_task_finished(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     task_id: String,
     error: Option<transom_core::AppError>,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     let mut target_tab = None;
@@ -99,9 +98,9 @@ pub(super) fn on_container_pull_task_finished(
         .is_some_and(|e| e.code == transom_core::ErrorCode::Cancelled);
     let error_msg = error.as_ref().map(localized_error);
 
-    let tab_ids: Vec<TabId> = shell.state.workspace.tabs.iter().map(|t| t.id).collect();
+    let tab_ids: Vec<TabId> = app_state.workspace.tabs.iter().map(|t| t.id).collect();
     for tab_id in tab_ids {
-        let Some(workspace) = shell.state.container_workspace(tab_id) else {
+        let Some(workspace) = app_state.container_workspace(tab_id) else {
             continue;
         };
         let found = workspace.update(cx, |workspace, _| {
@@ -125,17 +124,17 @@ pub(super) fn on_container_pull_task_finished(
                 error = err
             )
             .to_string();
-            shell.show_toast(msg, false, window, cx);
+            app_state.ui.window_requests.push_toast(msg, false);
         } else {
             let msg = rust_i18n::t!(
                 "container.pull_manager.task_finished",
                 reference = task_reference
             )
             .to_string();
-            shell.show_toast(msg, true, window, cx);
+            app_state.ui.window_requests.push_toast(msg, true);
             // 自动刷新镜像列表以呈现新载入的镜像
             let req_images = ContainerRequestId::new();
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, _| {
                     workspace.send_tracked(
                         req_images,
@@ -150,7 +149,7 @@ pub(super) fn on_container_pull_task_finished(
 
         // 调度排队中的下一个下载任务
         if let Some((next_task_id, next_tab_id, reference, auth)) = next_command {
-            shell.state.send_command(ContainerCommand::PullImageTask {
+            app_state.send_command(ContainerCommand::PullImageTask {
                 tab_id: next_tab_id,
                 task_id: next_task_id,
                 reference,

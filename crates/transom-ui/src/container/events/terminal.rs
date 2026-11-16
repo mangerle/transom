@@ -3,7 +3,7 @@
 use super::*;
 
 pub(super) fn on_container_exec_ready(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     request_id: ContainerRequestId,
     io: TerminalIo,
@@ -11,18 +11,18 @@ pub(super) fn on_container_exec_ready(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| {
             workspace.take_request(request_id);
         });
     }
     drop(exit);
-    if shell.state.workspace.tab(tab_id).is_none() {
+    if app_state.workspace.tab(tab_id).is_none() {
         return;
     }
     let (terminal, subscription) =
-        super::super::terminal::create_container_terminal(shell, io, tab_id, window, cx);
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+        super::super::terminal::create_container_terminal(app_state, io, tab_id, window, cx);
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| {
             let (user, shell) = workspace
                 .state

@@ -74,7 +74,7 @@ impl ContainerWorkspace {
 }
 
 pub(super) fn create_container_terminal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     io: transom_core::TerminalIo,
     tab_id: TabId,
     window: &mut Window,
@@ -85,7 +85,7 @@ pub(super) fn create_container_terminal(
     profile.background_transparency = settings.window.window_transparency;
     let interaction = settings.terminal_interaction;
     let remote_clipboard_allowed = interaction.default_allow_remote_clipboard_write;
-    let reserved = shell.state.ui.shortcut_recording.filter.clone();
+    let reserved = app_state.ui.shortcut_recording.filter.clone();
     let key_filter: KeyFilter = Arc::new(move |keystroke| {
         reserved
             .read()
@@ -108,7 +108,7 @@ pub(super) fn create_container_terminal(
             },
         )
     });
-    let provider = shell.state.runtime.history_provider.clone();
+    let provider = app_state.runtime.history_provider.clone();
     terminal.update(cx, |view, _cx| view.attach_history(provider));
     let focus_handle = terminal.read(cx).focus_handle().clone();
     window.focus(&focus_handle, cx);

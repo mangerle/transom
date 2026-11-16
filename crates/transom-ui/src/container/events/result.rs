@@ -6,14 +6,14 @@
 use super::*;
 
 pub(super) fn on_container_action_finished(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     error: Option<AppError>,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let label = shell.state.container_request_label(request_id, cx);
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let label = app_state.container_request_label(request_id, cx);
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
     let mut refresh = false;
@@ -26,7 +26,7 @@ pub(super) fn on_container_action_finished(
             label.map(|label| (toast_succeeded(&label), true))
         }
     };
-    let Some(workspace) = shell.state.container_workspace(tab_id) else {
+    let Some(workspace) = app_state.container_workspace(tab_id) else {
         return;
     };
     let editor = workspace.update(cx, |workspace, _| {
@@ -39,7 +39,7 @@ pub(super) fn on_container_action_finished(
         });
     }
     if let Some((message, success)) = toast {
-        shell.show_toast(message, success, window, cx);
+        app_state.ui.window_requests.push_toast(message, success);
     }
     let (pods_open, quadlets_open) = {
         let state = &workspace.read(cx).state;
@@ -60,14 +60,14 @@ pub(super) fn on_container_action_finished(
 }
 
 pub(super) fn on_container_transfer_finished(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     error: Option<AppError>,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let label = shell.state.container_request_label(request_id, cx);
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let label = app_state.container_request_label(request_id, cx);
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
     let toast = match &error {
@@ -77,14 +77,14 @@ pub(super) fn on_container_transfer_finished(
         )),
         None => label.map(|label| (toast_succeeded(&label), true)),
     };
-    let Some(workspace) = shell.state.container_workspace(tab_id) else {
+    let Some(workspace) = app_state.container_workspace(tab_id) else {
         return;
     };
     let (refresh_images, refresh_files) = workspace.update(cx, |workspace, _| {
         workspace.apply_transfer_finished(error.as_ref())
     });
     if let Some((message, success)) = toast {
-        shell.show_toast(message, success, window, cx);
+        app_state.ui.window_requests.push_toast(message, success);
     }
     if refresh_images {
         workspace.update(cx, |workspace, _| workspace.refresh_section());
@@ -96,18 +96,18 @@ pub(super) fn on_container_transfer_finished(
 }
 
 pub(super) fn on_container_failed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     error: AppError,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let label = shell.state.container_request_label(request_id, cx);
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let label = app_state.container_request_label(request_id, cx);
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
     let err_desc = localized_error(&error);
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| {
             workspace.apply_failed(request_id, &err_desc)
         });
@@ -116,19 +116,19 @@ pub(super) fn on_container_failed(
     // 后台静默采样、列表查询等只读请求失败只记录内部状态，杜绝弹窗轰炸。
     if let Some(label) = label {
         let message = toast_failed(Some(&label), &err_desc);
-        shell.show_toast(message, false, window, cx);
+        app_state.ui.window_requests.push_toast(message, false);
     }
 }
 
 pub(super) fn handle_prune_report(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     deleted_count: usize,
     target: ContainerPruneTarget,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
     let message = if deleted_count == 0 {
@@ -136,8 +136,8 @@ pub(super) fn handle_prune_report(
     } else {
         rust_i18n::t!(target.done_key(), count = deleted_count).to_string()
     };
-    shell.show_toast(message, true, window, cx);
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+    app_state.ui.window_requests.push_toast(message, true);
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| workspace.refresh_section());
     }
 }

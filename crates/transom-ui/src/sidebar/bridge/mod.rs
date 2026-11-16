@@ -75,7 +75,12 @@ pub(crate) fn on_session_sidebar_event(
             shell.reveal_vertical_tabs_panel(cx);
         }
         SessionSidebarEvent::OpenContainerWorkspace(session_id) => {
-            crate::container::open_container_workspace_for_session(shell, *session_id, window, cx);
+            crate::container::open_container_workspace_for_session(
+                &mut shell.state,
+                *session_id,
+                window,
+                cx,
+            );
         }
         SessionSidebarEvent::DuplicateSession(session_id) => {
             shell.duplicate_session(*session_id, cx);

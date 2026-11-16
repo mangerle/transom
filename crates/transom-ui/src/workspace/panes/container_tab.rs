@@ -122,7 +122,12 @@ impl AppShell {
             .key_context(crate::keymap::OVERLAY_CONTEXT)
             .on_key_down(
                 cx.listener(move |this, event: &gpui_kit::KeyDownEvent, _, cx| {
-                    crate::container::on_container_overlay_key(this, event, Some(tab_id), cx);
+                    crate::container::on_container_overlay_key(
+                        &mut this.state,
+                        event,
+                        Some(tab_id),
+                        cx,
+                    );
                 }),
             )
             .child(content);

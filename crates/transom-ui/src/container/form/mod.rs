@@ -11,7 +11,7 @@
 //! - 连接类型：端点分组（本地/远端）
 //! - 动态扩展字段：根据端点档位追加 SSH / TLS / CLI 参数字段
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::container::types::{ContainerFormState, ContainerSection, EndpointChoice};
 use crate::palette::Palette;
 use crate::session_appearance::{
@@ -47,13 +47,13 @@ const RUN_RESTART_POLICIES: [&str; 4] = ["no", "on-failure", "always", "unless-s
 
 /// 打开新建/编辑容器连接表单。
 pub(crate) fn open_container_form(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     profile: Option<ContainerEngineProfile>,
     folder: Option<FolderId>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.ui.modals.tools.container_form.clone();
+    let view = app_state.ui.modals.tools.container_form.clone();
     view.update(cx, |view, cx| view.open(profile, folder, window, cx));
     // 弹窗栈在外壳渲染里对账，实体变脏不会自动跑外壳的 reconcile。
     cx.notify();

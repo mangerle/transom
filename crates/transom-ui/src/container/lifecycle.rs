@@ -8,7 +8,7 @@ use super::*;
 /// `create_input` 做空值校验，失败时写回实体错误并保持弹窗，成功投递命令后
 /// 才关闭实体。事件自带目标标签与分类，处理时禁止回读实体。
 pub(crate) fn on_container_create_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &ContainerCreateDialogEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -23,8 +23,8 @@ pub(crate) fn on_container_create_event(
         tag,
         internal,
     } = event;
-    let Some(workspace) = shell.state.container_workspace(*tab_id) else {
-        close_container_create_dialog(shell, cx);
+    let Some(workspace) = app_state.container_workspace(*tab_id) else {
+        close_container_create_dialog(app_state, cx);
         return;
     };
     let (value, create_input) = {
@@ -35,7 +35,7 @@ pub(crate) fn on_container_create_event(
         )
     };
     if value.is_empty() {
-        let view = shell.state.ui.modals.tools.create_dialog.clone();
+        let view = app_state.ui.modals.tools.create_dialog.clone();
         view.update(cx, |view, cx| {
             view.set_error(
                 rust_i18n::t!("container.create_dialog.name_required").to_string(),
@@ -77,7 +77,7 @@ pub(crate) fn on_container_create_event(
                 internal: *internal,
             };
             if let Err(error) = spec.validate() {
-                shell.show_toast(error, false, window, cx);
+                app_state.ui.window_requests.push_toast(error, false);
                 return;
             }
             ContainerCommand::CreateNetwork {
@@ -93,12 +93,12 @@ pub(crate) fn on_container_create_event(
         workspace.send_tracked(request_id, command);
     });
     create_input.update(cx, |input, cx| input.set_value("", window, cx));
-    close_container_create_dialog(shell, cx);
+    close_container_create_dialog(app_state, cx);
 }
 
 /// 关闭拉取/新建弹窗：实体丢弃本次打开期的附加输入。
-fn close_container_create_dialog(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let view = shell.state.ui.modals.tools.create_dialog.clone();
+fn close_container_create_dialog(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let view = app_state.ui.modals.tools.create_dialog.clone();
     view.update(cx, |view, cx| view.close(cx));
     cx.notify();
 }

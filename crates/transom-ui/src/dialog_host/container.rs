@@ -44,7 +44,7 @@ impl ModalKind {
     ) -> Option<bool> {
         let modal = self.as_container_modal()?;
         if let Some((_, workspace)) =
-            crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
+            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))
         {
             workspace.update(cx, |workspace, cx| modal.cancel(workspace, cx));
         }
@@ -60,7 +60,7 @@ impl ModalKind {
     ) -> Option<()> {
         let modal = self.as_container_modal()?;
         if let Some((_, workspace)) =
-            crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
+            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))
         {
             workspace.update(cx, |workspace, cx| modal.commit(workspace, cx));
         }
@@ -70,9 +70,10 @@ impl ModalKind {
     /// 容器弹窗首帧焦点控件。
     pub(super) fn container_focus_target(self, shell: &AppShell, cx: &App) -> Option<ModalFocus> {
         let modal = self.as_container_modal()?;
-        let focus = crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
-            .and_then(|(_, ws)| modal.focus_input(&ws.read(cx).state))
-            .map_or(ModalFocus::None, ModalFocus::Input);
+        let focus =
+            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))
+                .and_then(|(_, ws)| modal.focus_input(&ws.read(cx).state))
+                .map_or(ModalFocus::None, ModalFocus::Input);
         Some(focus)
     }
 
@@ -87,7 +88,7 @@ impl ModalKind {
     ) -> Option<AnyElement> {
         let modal = self.as_container_modal()?;
         let (_, view) =
-            crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))?;
+            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))?;
         let state = &view.read(cx).state;
         Some(modal.render_body(&view, state, cx, p))
     }

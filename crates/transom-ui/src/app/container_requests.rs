@@ -22,7 +22,13 @@ impl AppShell {
         use crate::container::ContainerWorkspaceEvent;
         match event {
             ContainerWorkspaceEvent::OpenRunForm(image) => {
-                crate::container::open_container_run_form(self, tab_id, image.clone(), window, cx);
+                crate::container::open_container_run_form(
+                    &mut self.state,
+                    tab_id,
+                    image.clone(),
+                    window,
+                    cx,
+                );
             }
             ContainerWorkspaceEvent::OpenImageHub => {
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -49,7 +55,13 @@ impl AppShell {
                 public,
             } => {
                 crate::container::open_container_port_forward(
-                    self, tab_id, container, *private, *public, window, cx,
+                    &mut self.state,
+                    tab_id,
+                    container,
+                    *private,
+                    *public,
+                    window,
+                    cx,
                 );
             }
             ContainerWorkspaceEvent::OpenVolumeFiles => {
@@ -129,10 +141,10 @@ impl AppShell {
                 }
             }
             ContainerWorkspaceEvent::CloneContainer { id, name } => {
-                crate::container::clone_container(self, tab_id, id, name, window, cx);
+                crate::container::clone_container(&mut self.state, tab_id, id, name, window, cx);
             }
             ContainerWorkspaceEvent::RecreateContainer { id, name } => {
-                crate::container::recreate_container(self, tab_id, id, name, window, cx);
+                crate::container::recreate_container(&mut self.state, tab_id, id, name, window, cx);
             }
             ContainerWorkspaceEvent::SetDetailTab(tab) => {
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
@@ -150,7 +162,7 @@ impl AppShell {
                     match pending {
                         crate::container::ShellRowAction::RunImage(image) => {
                             crate::container::open_container_run_form(
-                                self,
+                                &mut self.state,
                                 tab_id,
                                 Some(image),
                                 window,
@@ -158,7 +170,14 @@ impl AppShell {
                             );
                         }
                         crate::container::ShellRowAction::CloneContainer { id, name } => {
-                            crate::container::clone_container(self, tab_id, &id, &name, window, cx);
+                            crate::container::clone_container(
+                                &mut self.state,
+                                tab_id,
+                                &id,
+                                &name,
+                                window,
+                                cx,
+                            );
                         }
                     }
                 }

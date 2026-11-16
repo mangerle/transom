@@ -17,7 +17,7 @@ use super::*;
 
 /// 容器事件分发：先按请求 ID 找到工作区，再更新对应字段。
 pub(crate) fn dispatch_container_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: ContainerAppEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -28,7 +28,7 @@ pub(crate) fn dispatch_container_event(
         | ContainerAppEvent::EnginesDiscovered { .. }
         | ContainerAppEvent::TestFinished { .. }
         | ContainerAppEvent::Disconnected { .. }) => {
-            connection::handle_connection_event(shell, e, window, cx);
+            connection::handle_connection_event(app_state, e, window, cx);
         }
         e @ (ContainerAppEvent::ContainersListed { .. }
         | ContainerAppEvent::ContainerInspected { .. }
@@ -42,7 +42,7 @@ pub(crate) fn dispatch_container_event(
         | ContainerAppEvent::PodsListed { .. }
         | ContainerAppEvent::QuadletsListed { .. }
         | ContainerAppEvent::ProcessesListed { .. }) => {
-            listing::handle_listing_event(shell, e, window, cx);
+            listing::handle_listing_event(app_state, e, window, cx);
         }
         e @ (ContainerAppEvent::ExecReady { .. }
         | ContainerAppEvent::LogsChunk { .. }
@@ -53,7 +53,7 @@ pub(crate) fn dispatch_container_event(
         | ContainerAppEvent::FilePreview { .. }
         | ContainerAppEvent::TransferProgress { .. }
         | ContainerAppEvent::BuildProgress { .. }) => {
-            file_stats::handle_file_stats_event(shell, e, window, cx);
+            file_stats::handle_file_stats_event(app_state, e, window, cx);
         }
         e @ (ContainerAppEvent::VolumesPruned { .. }
         | ContainerAppEvent::ImagesPruned { .. }
@@ -69,7 +69,7 @@ pub(crate) fn dispatch_container_event(
         | ContainerAppEvent::SystemDfLoaded { .. }
         | ContainerAppEvent::SystemPruned { .. }
         | ContainerAppEvent::EngineEventReceived { .. }) => {
-            operations::handle_operations_event(shell, e, window, cx);
+            operations::handle_operations_event(app_state, e, window, cx);
         }
     }
     cx.notify();

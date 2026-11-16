@@ -37,7 +37,12 @@ impl AppShell {
                 self.dispatch_zmodem_event(zmodem_event, cx);
             }
             AppEvent::Container(container_event) => {
-                crate::container::dispatch_container_event(self, container_event, window, cx);
+                crate::container::dispatch_container_event(
+                    &mut self.state,
+                    container_event,
+                    window,
+                    cx,
+                );
             }
             AppEvent::Git(git_event) => {
                 crate::git::actions::dispatch_git_event(self, git_event, cx);

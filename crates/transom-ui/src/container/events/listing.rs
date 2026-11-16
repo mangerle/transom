@@ -6,17 +6,17 @@
 use super::super::*;
 
 fn apply_by_request<F>(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request_id: ContainerRequestId,
     cx: &mut Context<AppShell>,
     apply: F,
 ) where
     F: FnOnce(&mut ContainerWorkspace),
 {
-    let Some(tab_id) = shell.state.take_container_request(request_id, cx) else {
+    let Some(tab_id) = app_state.take_container_request(request_id, cx) else {
         return;
     };
-    if let Some(workspace) = shell.state.container_workspace(tab_id) {
+    if let Some(workspace) = app_state.container_workspace(tab_id) {
         workspace.update(cx, |workspace, _| {
             apply(workspace);
         });
@@ -24,7 +24,7 @@ fn apply_by_request<F>(
 }
 
 pub(super) fn handle_listing_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: ContainerAppEvent,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -33,62 +33,68 @@ pub(super) fn handle_listing_event(
         ContainerAppEvent::ContainersListed {
             request_id,
             containers,
-        } => apply_by_request(shell, request_id, cx, |w| {
+        } => apply_by_request(app_state, request_id, cx, |w| {
             w.apply_containers_listed(containers)
         }),
         ContainerAppEvent::ContainerInspected {
             request_id,
             details,
-        } => apply_by_request(shell, request_id, cx, |w| {
+        } => apply_by_request(app_state, request_id, cx, |w| {
             w.apply_container_inspected(*details)
         }),
         ContainerAppEvent::ImagesListed { request_id, images } => {
-            apply_by_request(shell, request_id, cx, |w| w.apply_images_listed(images))
+            apply_by_request(app_state, request_id, cx, |w| w.apply_images_listed(images))
         }
         ContainerAppEvent::ImageInspected {
             request_id,
             details,
-        } => apply_by_request(shell, request_id, cx, |w| w.apply_image_inspected(*details)),
+        } => apply_by_request(app_state, request_id, cx, |w| {
+            w.apply_image_inspected(*details)
+        }),
         ContainerAppEvent::VolumesListed {
             request_id,
             volumes,
-        } => apply_by_request(shell, request_id, cx, |w| w.apply_volumes_listed(volumes)),
+        } => apply_by_request(app_state, request_id, cx, |w| {
+            w.apply_volumes_listed(volumes)
+        }),
         ContainerAppEvent::VolumeInspected {
             request_id,
             details,
-        } => apply_by_request(shell, request_id, cx, |w| {
+        } => apply_by_request(app_state, request_id, cx, |w| {
             w.apply_volume_inspected(*details)
         }),
         ContainerAppEvent::NetworksListed {
             request_id,
             networks,
-        } => apply_by_request(shell, request_id, cx, |w| w.apply_networks_listed(networks)),
+        } => apply_by_request(app_state, request_id, cx, |w| {
+            w.apply_networks_listed(networks)
+        }),
         ContainerAppEvent::NetworkInspected {
             request_id,
             details,
-        } => apply_by_request(shell, request_id, cx, |w| {
+        } => apply_by_request(app_state, request_id, cx, |w| {
             w.apply_network_inspected(*details)
         }),
         ContainerAppEvent::ComposeProjectsListed {
             request_id,
             projects,
-        } => apply_by_request(shell, request_id, cx, |w| {
+        } => apply_by_request(app_state, request_id, cx, |w| {
             w.apply_compose_projects_listed(projects)
         }),
         ContainerAppEvent::PodsListed { request_id, pods } => {
-            apply_by_request(shell, request_id, cx, |w| {
+            apply_by_request(app_state, request_id, cx, |w| {
                 w.apply_pods_listed(request_id, pods);
             });
         }
         ContainerAppEvent::QuadletsListed { request_id, units } => {
-            apply_by_request(shell, request_id, cx, |w| {
+            apply_by_request(app_state, request_id, cx, |w| {
                 w.apply_quadlets_listed(request_id, units);
             });
         }
         ContainerAppEvent::ProcessesListed {
             request_id,
             processes,
-        } => apply_by_request(shell, request_id, cx, |w| {
+        } => apply_by_request(app_state, request_id, cx, |w| {
             w.apply_processes_listed(processes)
         }),
         _ => {}

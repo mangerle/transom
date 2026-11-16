@@ -145,7 +145,10 @@ fn append_session_menu_items(
             move |_, window, cx| {
                 container_app.update(cx, |this, cx| {
                     crate::container::open_container_workspace_for_session(
-                        this, session_id, window, cx,
+                        &mut this.state,
+                        session_id,
+                        window,
+                        cx,
                     );
                 });
             },

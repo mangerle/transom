@@ -14,7 +14,7 @@ use super::ContainerWorkspace;
 use super::types::{
     ContainerDetailTab, ContainerPruneTarget, ContainerSection, RowAction, RowTarget,
 };
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::{Context, EventEmitter};
 use std::path::PathBuf;
 use transom_core::{
@@ -166,15 +166,15 @@ impl EventEmitter<ContainerWorkspaceEvent> for ContainerWorkspace {}
 /// 状态的动作直接调用既有外壳方法；需要窗口（输入表单、弹窗）或必须在实体
 /// 派发结束之后才能读写的动作推进 `window_requests`，由渲染期统一执行。
 pub(crate) fn on_container_workspace_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     event: &ContainerWorkspaceEvent,
     cx: &mut Context<AppShell>,
 ) {
     match event {
         ContainerWorkspaceEvent::ToggleFullscreen => {
-            shell.state.features.containers.fullscreen =
-                if shell.state.features.containers.fullscreen == Some(tab_id) {
+            app_state.features.containers.fullscreen =
+                if app_state.features.containers.fullscreen == Some(tab_id) {
                     None
                 } else {
                     Some(tab_id)
@@ -182,60 +182,60 @@ pub(crate) fn on_container_workspace_event(
             cx.notify();
         }
         ContainerWorkspaceEvent::OpenSystemDf => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| workspace.open_system_df_dialog(cx));
             }
         }
         ContainerWorkspaceEvent::OpenPods => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| workspace.open_pods_dialog(cx));
             }
         }
         ContainerWorkspaceEvent::OpenQuadlet => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| workspace.open_quadlets_dialog(cx));
             }
         }
         ContainerWorkspaceEvent::CreateComposeFromTemplate(content) => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |ws, cx| {
                     ws.create_local_compose_with_content(content.clone(), cx);
                 });
             }
         }
         ContainerWorkspaceEvent::ImportCompose => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |ws, cx| ws.import_local_compose(cx));
             }
         }
         ContainerWorkspaceEvent::LoadImage => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| workspace.load_image(cx));
             }
         }
         ContainerWorkspaceEvent::PruneTarget(target) => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| {
                     workspace.prune_target(*target, true, cx)
                 });
             }
         }
         ContainerWorkspaceEvent::BackupVolume(volume) => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| {
                     workspace.backup_volume(volume.clone(), cx);
                 });
             }
         }
         ContainerWorkspaceEvent::RestoreVolume(volume) => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| {
                     workspace.restore_volume(volume.clone(), cx);
                 });
             }
         }
         ContainerWorkspaceEvent::SaveImage(image) => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| workspace.save_image(image.clone(), cx));
             }
         }
@@ -260,10 +260,8 @@ pub(crate) fn on_container_workspace_event(
                     },
                 },
             );
-            shell
-                .state
-                .set_forward_status(*ssh_tab_id, rule.id, ForwardState::Starting, None);
-            shell.state.send_command(ForwardCommand::ForwardStart {
+            app_state.set_forward_status(*ssh_tab_id, rule.id, ForwardState::Starting, None);
+            app_state.send_command(ForwardCommand::ForwardStart {
                 tab_id: *ssh_tab_id,
                 connection_id: *connection_id,
                 rule,
@@ -291,8 +289,7 @@ pub(crate) fn on_container_workspace_event(
         | ContainerWorkspaceEvent::SetDetailTab(_)
         | ContainerWorkspaceEvent::ShowToast { .. }
         | ContainerWorkspaceEvent::RunRowAction { .. } => {
-            shell
-                .state
+            app_state
                 .ui
                 .window_requests
                 .push_container(tab_id, event.clone());

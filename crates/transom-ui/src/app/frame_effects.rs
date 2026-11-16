@@ -242,7 +242,12 @@ impl AppShell {
                     self.handle_container_request(tab_id, &event, window, cx);
                 }
                 WindowRequest::ContainerSidebar(event) => {
-                    crate::container::on_container_sidebar_event(self, &event, window, cx);
+                    crate::container::on_container_sidebar_event(
+                        &mut self.state,
+                        &event,
+                        window,
+                        cx,
+                    );
                 }
                 WindowRequest::GitSidebar(event) => {
                     crate::git::actions::on_git_sidebar_event(self, &event, window, cx);
@@ -252,6 +257,10 @@ impl AppShell {
                 }
                 WindowRequest::ActivateTab(tab_id) => self.activate_tab(tab_id, window, cx),
                 WindowRequest::OpenSettings(page) => self.open_settings_modal(page, window, cx),
+                WindowRequest::Toast { message, success } => {
+                    self.show_toast(message, success, window, cx)
+                }
+                WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
                 WindowRequest::EditorClose(request) => match request {
                     crate::editor::EditorCloseRequest::Group(group_id) => {
                         self.close_group(group_id, window, cx)

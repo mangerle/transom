@@ -41,6 +41,13 @@ pub(crate) enum WindowRequest {
     OpenSettings(Option<usize>),
     /// 编辑器脏检查完成后的关闭动作。
     EditorClose(EditorCloseRequest),
+    /// 右上角操作结果提示；展示依赖窗口，延后到渲染期执行。
+    Toast {
+        message: String,
+        success: bool,
+    },
+    /// 关闭包含指定标签的整组窗格。
+    CloseTab(TabId),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -100,6 +107,19 @@ impl WindowRequests {
 
     pub(crate) fn push_open_settings(&mut self, page: Option<usize>) {
         self.items.push(WindowRequest::OpenSettings(page));
+    }
+
+    /// 排队一条结果提示：提示需要窗口，统一交给渲染期展示。
+    pub(crate) fn push_toast(&mut self, message: impl Into<String>, success: bool) {
+        self.items.push(WindowRequest::Toast {
+            message: message.into(),
+            success,
+        });
+    }
+
+    /// 关闭标签所属的整组窗格。
+    pub(crate) fn push_close_tab(&mut self, tab_id: TabId) {
+        self.items.push(WindowRequest::CloseTab(tab_id));
     }
 
     pub(crate) fn is_empty(&self) -> bool {
