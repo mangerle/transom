@@ -28,26 +28,49 @@ pub(crate) fn processes_card(
         collapsed,
     } = params;
     let p = chrome.p;
+    let summary = processes_summary(view, loading, is_running, processes.len(), p);
+    let mut card = v_flex()
+        .id("container-stats-card-processes")
+        .w_full()
+        .rounded(px(10.0))
+        .bg(p.surface.ghost)
+        .overflow_hidden()
+        .child(processes_header(view, collapsed, summary, p));
+    if !collapsed {
+        card = card.child(processes_body(error, is_running, processes, p));
+    }
+    card.into_any_element()
+}
+
+/// 卡片头右侧摘要：进程数（加载中/未运行/实际数量）与刷新按钮。
+fn processes_summary(
+    view: &Entity<ContainerWorkspace>,
+    loading: bool,
+    is_running: bool,
+    count: usize,
+    p: &Palette,
+) -> AnyElement {
     let refresh_tooltip = if is_running {
         rust_i18n::t!("container.stats.process_refresh").to_string()
     } else {
         rust_i18n::t!("container.stats.not_running_short").to_string()
     };
-
-    let summary = h_flex()
+    let summary_text = if loading {
+        rust_i18n::t!("container.stats.process_loading").to_string()
+    } else if !is_running {
+        "-".to_string()
+    } else {
+        count.to_string()
+    };
+    let view = view.clone();
+    h_flex()
         .gap_2()
         .items_center()
         .child(
             div()
                 .text_xs()
                 .text_color(p.muted_foreground)
-                .child(if loading {
-                    rust_i18n::t!("container.stats.process_loading").to_string()
-                } else if !is_running {
-                    "-".to_string()
-                } else {
-                    processes.len().to_string()
-                }),
+                .child(summary_text),
         )
         .child(
             IconButton::new(
@@ -57,20 +80,26 @@ pub(crate) fn processes_card(
             )
             .disabled(!is_running)
             .render()
-            .on_click({
-                let view = view.clone();
-                move |_, _, cx| {
-                    if is_running {
-                        view.update(cx, |workspace, cx| {
-                            workspace.ensure_container_processes();
-                            cx.notify();
-                        });
-                    }
+            .on_click(move |_, _, cx| {
+                if is_running {
+                    view.update(cx, |workspace, cx| {
+                        workspace.ensure_container_processes();
+                        cx.notify();
+                    });
                 }
             }),
-        );
+        )
+        .into_any_element()
+}
 
-    let header_btn = h_flex()
+fn processes_header(
+    view: &Entity<ContainerWorkspace>,
+    collapsed: bool,
+    summary: AnyElement,
+    p: &Palette,
+) -> AnyElement {
+    let toggle_view = view.clone();
+    h_flex()
         .gap_2()
         .items_center()
         .justify_between()
@@ -83,14 +112,11 @@ pub(crate) fn processes_card(
                 .gap_1p5()
                 .items_center()
                 .cursor_pointer()
-                .on_click({
-                    let view = view.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.toggle_container_stats_processes();
-                            cx.notify();
-                        });
-                    }
+                .on_click(move |_, _, cx| {
+                    toggle_view.update(cx, |workspace, cx| {
+                        workspace.toggle_container_stats_processes();
+                        cx.notify();
+                    });
                 })
                 .child(
                     AppIconElement::new(if collapsed {
@@ -114,109 +140,107 @@ pub(crate) fn processes_card(
                         .child(rust_i18n::t!("container.stats.processes").to_string()),
                 ),
         )
-        .child(summary);
+        .child(summary)
+        .into_any_element()
+}
 
-    let mut card = v_flex()
-        .id("container-stats-card-processes")
-        .w_full()
-        .rounded(px(10.0))
-        .bg(p.surface.ghost)
-        .overflow_hidden()
-        .child(header_btn);
-
-    if !collapsed {
-        let body: AnyElement = if let Some(error) = error {
-            div()
-                .px_3()
-                .pb_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(error.to_string())
-                .into_any_element()
-        } else if !is_running {
-            div()
-                .px_3()
-                .pb_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.stats.process_not_running").to_string())
-                .into_any_element()
-        } else if processes.is_empty() {
-            div()
-                .px_3()
-                .pb_3()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.stats.process_empty").to_string())
-                .into_any_element()
-        } else {
-            let mut sorted: Vec<&ContainerProcess> = processes.iter().collect();
-            sorted.sort_by(|left, right| {
-                right
-                    .cpu_percent
-                    .partial_cmp(&left.cpu_percent)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            let th = table_header(
-                vec![
-                    div()
-                        .w(px(64.0))
-                        .flex_none()
-                        .child("PID".to_string())
-                        .into_any_element(),
-                    div()
-                        .w(px(80.0))
-                        .flex_none()
-                        .child(rust_i18n::t!("container.stats.process_user").to_string())
-                        .into_any_element(),
-                    div()
-                        .w(px(64.0))
-                        .flex_none()
-                        .text_right()
-                        .child("CPU".to_string())
-                        .into_any_element(),
-                    div()
-                        .w(px(64.0))
-                        .flex_none()
-                        .text_right()
-                        .child(rust_i18n::t!("container.stats.process_mem").to_string())
-                        .into_any_element(),
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(rust_i18n::t!("container.stats.process_command").to_string())
-                        .into_any_element(),
-                ],
-                p,
-            );
-
-            let mut table = v_flex().w_full().child(th).children(
-                sorted
-                    .iter()
-                    .take(PROCESS_LIMIT)
-                    .map(|process| process_row(process, p)),
-            );
-            if sorted.len() > PROCESS_LIMIT {
-                table = table.child(
-                    div()
-                        .px_3()
-                        .pt_1()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(
-                            rust_i18n::t!("container.stats.process_limit", count = PROCESS_LIMIT)
-                                .to_string(),
-                        ),
-                );
-            }
-            table.pb_2().into_any_element()
-        };
-
-        card = card.child(body);
+fn processes_body(
+    error: Option<&str>,
+    is_running: bool,
+    processes: &[ContainerProcess],
+    p: &Palette,
+) -> AnyElement {
+    if let Some(error) = error {
+        return processes_hint(error.to_string(), p);
     }
+    if !is_running {
+        return processes_hint(
+            rust_i18n::t!("container.stats.process_not_running").to_string(),
+            p,
+        );
+    }
+    if processes.is_empty() {
+        return processes_hint(
+            rust_i18n::t!("container.stats.process_empty").to_string(),
+            p,
+        );
+    }
+    processes_table(processes, p)
+}
 
-    card.into_any_element()
+fn processes_hint(message: String, p: &Palette) -> AnyElement {
+    div()
+        .px_3()
+        .pb_3()
+        .text_xs()
+        .text_color(p.muted_foreground)
+        .child(message)
+        .into_any_element()
+}
+
+fn processes_table(processes: &[ContainerProcess], p: &Palette) -> AnyElement {
+    let mut sorted: Vec<&ContainerProcess> = processes.iter().collect();
+    sorted.sort_by(|left, right| {
+        right
+            .cpu_percent
+            .partial_cmp(&left.cpu_percent)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut table = v_flex().w_full().child(process_table_header(p)).children(
+        sorted
+            .iter()
+            .take(PROCESS_LIMIT)
+            .map(|process| process_row(process, p)),
+    );
+    if sorted.len() > PROCESS_LIMIT {
+        table = table.child(
+            div()
+                .px_3()
+                .pt_1()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(
+                    rust_i18n::t!("container.stats.process_limit", count = PROCESS_LIMIT)
+                        .to_string(),
+                ),
+        );
+    }
+    table.pb_2().into_any_element()
+}
+
+fn process_table_header(p: &Palette) -> AnyElement {
+    table_header(
+        vec![
+            div()
+                .w(px(64.0))
+                .flex_none()
+                .child("PID".to_string())
+                .into_any_element(),
+            div()
+                .w(px(80.0))
+                .flex_none()
+                .child(rust_i18n::t!("container.stats.process_user").to_string())
+                .into_any_element(),
+            div()
+                .w(px(64.0))
+                .flex_none()
+                .text_right()
+                .child("CPU".to_string())
+                .into_any_element(),
+            div()
+                .w(px(64.0))
+                .flex_none()
+                .text_right()
+                .child(rust_i18n::t!("container.stats.process_mem").to_string())
+                .into_any_element(),
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(rust_i18n::t!("container.stats.process_command").to_string())
+                .into_any_element(),
+        ],
+        p,
+    )
 }
 
 pub(crate) fn process_row(process: &ContainerProcess, p: &Palette) -> AnyElement {

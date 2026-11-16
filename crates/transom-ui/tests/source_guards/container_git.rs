@@ -1814,3 +1814,44 @@ fn run_preview_panel_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_run_preview_panel 超过 80 行：{lines}");
 }
+
+/// 进程统计卡片必须拆分：主函数只负责卡片外壳与折叠，不超过 80 行。
+#[test]
+fn processes_card_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/stats/processes.rs"))
+        .expect("读取 container/stats/processes.rs 失败");
+    for helper in [
+        "fn processes_summary",
+        "fn processes_header",
+        "fn processes_body",
+        "fn processes_table",
+        "fn process_table_header",
+    ] {
+        assert!(source.contains(helper), "进程卡片缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn processes_card")
+        .expect("缺少 processes_card");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "processes_card 超过 80 行：{lines}");
+}
