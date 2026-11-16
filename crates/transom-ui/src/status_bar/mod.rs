@@ -17,7 +17,7 @@ pub(crate) use crate::format::{format_compact_size, format_rate};
 pub(crate) use drag::restore_status_bar;
 
 pub(crate) use self::metrics::{StatusBarMetricsView, StatusMetricsSnapshot};
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, AppState, TabStatus};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -50,24 +50,23 @@ struct StatusBarEntries {
 /// 渲染底栏。`divider_x` 为分界线横坐标，`0` 表示侧栏已隐藏、整条不分段。
 /// 状态栏左侧会话作用域入口：片段、广播、录制与 ZMODEM 徽章。
 fn status_bar_entries(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     cx: &mut Context<AppShell>,
     p: &Palette,
 ) -> StatusBarEntries {
     // 三个入口都直接作用于当前终端。容器管理、录像回放与主机监控标签没有
     // 可输入终端，保留入口只会产生无响应点击，所以按活动标签能力显隐。
-    let terminal_scoped = shell.state.active_tab_has_terminal();
+    let terminal_scoped = app_state.active_tab_has_terminal();
     let snippets_entry =
-        terminal_scoped.then(|| crate::snippets::render_snippets_popover(shell, p, cx));
-    let broadcast_entry = terminal_scoped
-        .then(|| crate::broadcast::BroadcastOps::new(&mut shell.state).render_trigger(cx));
+        terminal_scoped.then(|| crate::snippets::render_snippets_popover(app_state, p, cx));
+    let broadcast_entry =
+        terminal_scoped.then(|| crate::broadcast::BroadcastOps::new(app_state).render_trigger(cx));
     let recording_badge =
-        terminal_scoped.then(|| crate::record::render_recording_badge(&mut shell.state, p, cx));
-    let zmodem = shell
-        .state
+        terminal_scoped.then(|| crate::record::render_recording_badge(app_state, p, cx));
+    let zmodem = app_state
         .workspace
         .active_tab
-        .and_then(|tab_id| crate::zmodem::render_zmodem_badge(shell, tab_id, p, cx));
+        .and_then(|tab_id| crate::zmodem::render_zmodem_badge(app_state, tab_id, p, cx));
     StatusBarEntries {
         snippets: snippets_entry,
         broadcast: broadcast_entry,
@@ -77,17 +76,17 @@ fn status_bar_entries(
 }
 
 pub(crate) fn render_status_bar(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     p: &Palette,
     cx: &mut Context<AppShell>,
     divider_x: Pixels,
 ) -> AnyElement {
-    let connection_pill = render_connection_pill(shell, p);
+    let connection_pill = render_connection_pill(app_state, p);
     let app = cx.entity().clone();
-    let metrics = shell.state.features.status_metrics.clone();
+    let metrics = app_state.features.status_metrics.clone();
 
-    let entries = status_bar_entries(shell, cx, p);
-    let front_zone = metrics::front_drop_zone(&shell.state.features.status_metrics, p);
+    let entries = status_bar_entries(app_state, cx, p);
+    let front_zone = metrics::front_drop_zone(&app_state.features.status_metrics, p);
     let menu_app = app.clone();
     let badges = h_flex()
         .flex_none()
@@ -108,15 +107,13 @@ pub(crate) fn render_status_bar(
         .context_menu(move |menu, _window, _cx| drag::status_bar_context_menu(menu, &menu_app));
     bar = bar.divider_edge(DividerEdge::Top, p.divider_width);
 
-    let active_git_tab = shell
-        .state
+    let active_git_tab = app_state
         .workspace
         .active_tab
-        .filter(|tab_id| shell.state.git_workspace(*tab_id).is_some());
+        .filter(|tab_id| app_state.git_workspace(*tab_id).is_some());
 
     let make_git_log_btn = |id: TabId, app_entity: Entity<AppShell>| {
-        let is_open = shell
-            .state
+        let is_open = app_state
             .git_workspace(id)
             .is_some_and(|workspace| workspace.read(cx).state.bottom_log_open);
         let tooltip_text = if is_open {
@@ -198,20 +195,18 @@ pub(crate) fn render_status_bar(
 }
 
 /// 把活动标签的指标快照推进状态栏指标实体；无可见数据时给出版本兜底。
-pub(crate) fn refresh_status_metrics(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let tab = shell
-        .state
+pub(crate) fn refresh_status_metrics(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let tab = app_state
         .workspace
         .active_tab
-        .and_then(|tab_id| shell.state.workspace.tab(tab_id));
+        .and_then(|tab_id| app_state.workspace.tab(tab_id));
     let traffic = tab.and_then(|tab| tab.network_traffic());
     let stats = tab.and_then(|tab| tab.system_stats());
     let is_ssh =
         tab.is_some_and(|tab| matches!(tab.session.connection, transom_core::Connection::Ssh(_)));
-    let status = shell.state.ui.status.as_deref();
+    let status = app_state.ui.status.as_deref();
     // 先借用比较：未变化时不构造快照，避免每帧克隆系统名与流量样本。
-    if shell
-        .state
+    if app_state
         .features
         .status_metrics
         .read(cx)
@@ -224,18 +219,17 @@ pub(crate) fn refresh_status_metrics(shell: &mut AppShell, cx: &mut Context<AppS
         stats: stats.map(metrics::StatusMetricsValues::from),
         is_ssh,
     };
-    shell.state.features.status_metrics.update(cx, |view, cx| {
+    app_state.features.status_metrics.update(cx, |view, cx| {
         view.set_snapshot(snapshot, status, cx);
     });
 }
 
 /// 左侧连接状态胶囊：活动标签名、连接状态点与状态文案。
-fn render_connection_pill(shell: &AppShell, p: &Palette) -> AnyElement {
-    let active_tab_info = shell
-        .state
+fn render_connection_pill(app_state: &AppState, p: &Palette) -> AnyElement {
+    let active_tab_info = app_state
         .workspace
         .active_tab
-        .and_then(|tab_id| shell.state.workspace.tab(tab_id));
+        .and_then(|tab_id| app_state.workspace.tab(tab_id));
 
     let (status_dot_color, status_text) = if let Some(tab) = active_tab_info {
         let (color, text) = match &tab.status {

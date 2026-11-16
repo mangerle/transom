@@ -14,14 +14,14 @@ use gpui_kit::*;
 
 /// 打开按键录制弹窗并抢占键盘焦点。
 pub(crate) fn open_shortcut_capture(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     id: &'static str,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     let focus = cx.focus_handle();
     window.focus(&focus, cx);
-    shell.state.ui.shortcut_recording.capture = Some(ShortcutCapture {
+    app_state.ui.shortcut_recording.capture = Some(ShortcutCapture {
         id,
         error: None,
         focus,
@@ -34,32 +34,32 @@ pub(crate) fn open_shortcut_capture(
 /// GPUI 键位表只支持追加，因此先为上一次生效的键位追加 `NoAction`
 /// 抑制绑定，再追加本次完整键位；这样旧键位立即失效，且无需重建
 /// 输入框、命令面板等组件自带的默认绑定。
-pub(crate) fn apply_shortcut_settings(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let previous = std::mem::take(&mut shell.state.ui.shortcut_recording.applied_keys);
+pub(crate) fn apply_shortcut_settings(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let previous = std::mem::take(&mut app_state.ui.shortcut_recording.applied_keys);
     let suppression = keymap::suppression_bindings(&previous, cx);
     let bindings = keymap::bindings(&app_settings(cx).shortcuts, cx);
     let reserved = keymap::reserved_keystrokes(&app_settings(cx).shortcuts, cx.platform_info().os);
-    shell.state.ui.shortcut_recording.applied_keys =
+    app_state.ui.shortcut_recording.applied_keys =
         keymap::effective_key_strings(&app_settings(cx).shortcuts, cx.platform_info().os);
     cx.bind_keys(suppression);
     cx.bind_keys(bindings);
-    *shell.state.ui.shortcut_recording.filter.write() = reserved;
+    *app_state.ui.shortcut_recording.filter.write() = reserved;
     cx.notify();
 }
 
 fn on_shortcut_capture_key(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &KeyDownEvent,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(capture) = shell.state.ui.shortcut_recording.capture.as_ref() else {
+    let Some(capture) = app_state.ui.shortcut_recording.capture.as_ref() else {
         return;
     };
     let id = capture.id;
     let keystroke = &event.keystroke;
     if keystroke.key.eq_ignore_ascii_case("escape") {
-        shell.state.ui.shortcut_recording.capture = None;
+        app_state.ui.shortcut_recording.capture = None;
         cx.notify();
         return;
     }
@@ -73,7 +73,7 @@ fn on_shortcut_capture_key(
                 cx.platform_info().os,
             ) {
                 let name = rust_i18n::t!(conflict.label_key).to_string();
-                if let Some(capture) = shell.state.ui.shortcut_recording.capture.as_mut() {
+                if let Some(capture) = app_state.ui.shortcut_recording.capture.as_mut() {
                     capture.error =
                         Some(rust_i18n::t!("settings.shortcut_conflict", name = name).to_string());
                 }
@@ -82,9 +82,8 @@ fn on_shortcut_capture_key(
                     .shortcuts
                     .bindings
                     .insert(id.to_string(), vec![candidate]);
-                shell.state.ui.shortcut_recording.capture = None;
-                shell.state.ui.status =
-                    Some(rust_i18n::t!("settings.shortcut_recorded").to_string());
+                app_state.ui.shortcut_recording.capture = None;
+                app_state.ui.status = Some(rust_i18n::t!("settings.shortcut_recorded").to_string());
             }
         }
         Err(issue) => {
@@ -96,7 +95,7 @@ fn on_shortcut_capture_key(
                     rust_i18n::t!("settings.shortcut_needs_modifier").to_string()
                 }
             };
-            if let Some(capture) = shell.state.ui.shortcut_recording.capture.as_mut() {
+            if let Some(capture) = app_state.ui.shortcut_recording.capture.as_mut() {
                 capture.error = Some(message);
             }
         }
@@ -154,7 +153,10 @@ pub(crate) fn render_shortcut_capture_body(
         .gap_3()
         .track_focus(&focus)
         .key_context(keymap::OVERLAY_CONTEXT)
-        .on_key_down(crate::dialog_host::on_event(app, on_shortcut_capture_key))
+        .on_key_down(crate::dialog_host::on_event(
+            app,
+            |this, event, window, cx| on_shortcut_capture_key(&mut this.state, event, window, cx),
+        ))
         .child(header)
         .child(content)
         .child(footer);

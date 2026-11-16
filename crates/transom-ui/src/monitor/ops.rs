@@ -156,8 +156,8 @@ impl<'a> MonitorOps<'a> {
         self.tasks.background.monitor = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(interval).await;
-                let result = this.update(cx, |shell, cx| {
-                    MonitorOps::new(&mut shell.state).sample_processes_if_open(cx)
+                let result = this.update(cx, |app_state, cx| {
+                    MonitorOps::new(&mut app_state.state).sample_processes_if_open(cx)
                 });
                 if result.is_err() {
                     break;

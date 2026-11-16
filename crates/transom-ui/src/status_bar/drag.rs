@@ -5,8 +5,8 @@
 
 use super::metrics::StatusBarMetricsView;
 use super::status_item_icon;
-use crate::app::AppShell;
 use crate::app::app_settings_mut;
+use crate::app::{AppShell, AppState};
 use crate::palette::Palette;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
@@ -60,7 +60,9 @@ pub(super) fn status_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>) -
         rust_i18n::t!("activity.restore_default").to_string(),
         AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
-            app_restore.update(cx, crate::status_bar::restore_status_bar);
+            app_restore.update(cx, |this, cx| {
+                crate::status_bar::restore_status_bar(&mut this.state, cx)
+            });
         },
     ))
 }
@@ -196,9 +198,9 @@ fn metrics_item_context_menu(
     ))
 }
 
-pub(crate) fn restore_status_bar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+pub(crate) fn restore_status_bar(app_state: &mut AppState, cx: &mut Context<AppShell>) {
     if app_settings_mut(cx).status_bar.restore_defaults() {
-        shell.persist_layout_settings(cx);
+        app_state.persist_layout_settings(cx);
     } else {
         cx.notify();
     }

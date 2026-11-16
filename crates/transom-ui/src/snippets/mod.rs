@@ -56,24 +56,23 @@ pub(crate) struct SnippetPanelState {
 
 /// 快捷键入口：打开/关闭快捷命令卡片。
 pub(crate) fn on_toggle_snippets(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &crate::keymap::ToggleSnippets,
     _: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    crate::snippets::toggle_snippets_panel(shell, cx);
+    crate::snippets::toggle_snippets_panel(app_state, cx);
 }
 
 /// 打开/关闭快捷命令卡片。显隐属运行期（与侧边栏、沉浸模式同一口径），不落盘。
 ///
 /// 沉浸模式没有底栏，卡片失去锚点，因此直接忽略；已在沉浸模式时打开的卡片
 /// 会在进入沉浸的那一刻关闭。
-pub(crate) fn toggle_snippets_panel(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if shell.state.ui.immersive {
+pub(crate) fn toggle_snippets_panel(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    if app_state.ui.immersive {
         return;
     }
-    shell.state.ui.modals.tools.snippet_panel.open =
-        !shell.state.ui.modals.tools.snippet_panel.open;
+    app_state.ui.modals.tools.snippet_panel.open = !app_state.ui.modals.tools.snippet_panel.open;
     cx.notify();
 }
 
@@ -82,16 +81,14 @@ pub(crate) fn toggle_snippets_panel(shell: &mut AppShell, cx: &mut Context<AppSh
 /// 是否直接执行由卡片底部的开关决定；默认只填充，终端里误执行一条
 /// 危险命令的代价远高于多点一次回车。
 pub(crate) fn apply_snippet(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     snippet: &Snippet,
     execute: bool,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
+    let Some(terminal) = app_state.workspace.active_pane_terminal() else {
         // 徽标在场时状态文字没有显示位置，这里改用错误通知，避免点了没反应。
-        shell
-            .state
-            .set_error(rust_i18n::t!("snippets.no_terminal").to_string());
+        app_state.set_error(rust_i18n::t!("snippets.no_terminal").to_string());
         cx.notify();
         return;
     };
@@ -102,11 +99,9 @@ pub(crate) fn apply_snippet(
     };
     let sent = terminal.update(cx, |view, cx| view.send_text(&text, cx));
     if !sent {
-        shell
-            .state
-            .set_error(rust_i18n::t!("snippets.send_failed").to_string());
+        app_state.set_error(rust_i18n::t!("snippets.send_failed").to_string());
     } else if !execute {
-        shell.set_transient_status(rust_i18n::t!("snippets.filled"), cx);
+        app_state.set_transient_status(rust_i18n::t!("snippets.filled"), cx);
     }
     cx.notify();
 }
@@ -116,15 +111,13 @@ pub(crate) fn apply_snippet(
 /// 命令库不再提供多行管理面板：卡片行内已经有编辑与删除，新增和编辑
 /// 只处理一条命令。新增超过条数上限时直接提示，不打开弹窗。
 pub(crate) fn open_snippet_form(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
     existing: Option<Snippet>,
 ) {
     if existing.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
-        shell
-            .state
-            .set_error(rust_i18n::t!("snippets.too_many").to_string());
+        app_state.set_error(rust_i18n::t!("snippets.too_many").to_string());
         cx.notify();
         return;
     }
@@ -141,20 +134,20 @@ pub(crate) fn open_snippet_form(
     });
     command_input.update(cx, |state, cx| state.set_value(command, window, cx));
     let focus = name_input.read(cx).focus_handle(cx);
-    shell.state.ui.modals.tools.snippet_panel.form = Some(SnippetFormState {
+    app_state.ui.modals.tools.snippet_panel.form = Some(SnippetFormState {
         id,
         name: name_input,
         command: command_input,
         error: None,
     });
     // 卡片先收起：编辑弹窗是独立浮层，不应该和卡片叠在一起。
-    shell.state.ui.modals.tools.snippet_panel.open = false;
+    app_state.ui.modals.tools.snippet_panel.open = false;
     window.focus(&focus, cx);
     cx.notify();
 }
 
-pub(crate) fn close_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.ui.modals.tools.snippet_panel.form = None;
+pub(crate) fn close_snippet_form(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    app_state.ui.modals.tools.snippet_panel.form = None;
     cx.notify();
 }
 
@@ -209,14 +202,14 @@ pub(crate) fn save_snippet_form(app_state: &mut AppState, cx: &mut Context<AppSh
 }
 
 /// 从卡片里删除一条命令并立即落盘；卡片保持打开，便于连续清理。
-pub(super) fn delete_snippet(shell: &mut AppShell, id: SnippetId, cx: &mut Context<AppShell>) {
+pub(super) fn delete_snippet(app_state: &mut AppState, id: SnippetId, cx: &mut Context<AppShell>) {
     let before = app_settings(cx).snippets.items.len();
     app_settings_mut(cx)
         .snippets
         .items
         .retain(|item| item.id != id);
     if app_settings(cx).snippets.items.len() != before {
-        shell.persist_layout_settings(cx);
+        app_state.persist_layout_settings(cx);
     }
 }
 
@@ -225,11 +218,11 @@ pub(super) fn delete_snippet(shell: &mut AppShell, id: SnippetId, cx: &mut Conte
 /// 显隐由 `snippet_panel.open` 控制，因此底栏图标、活动栏条目与快捷键打开的是
 /// 同一个卡片；`Popover` 负责向上定位、点外部与 Esc 关闭。
 pub(crate) fn render_snippets_popover(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let open = shell.state.ui.modals.tools.snippet_panel.open;
+    let open = app_state.ui.modals.tools.snippet_panel.open;
     let items = app_settings(cx).snippets.items.clone();
     let execute_directly = app_settings(cx).snippets.execute_directly;
     let app = cx.entity().clone();
@@ -318,7 +311,9 @@ pub(crate) fn render_snippet_form_body(
                 .label(rust_i18n::t!("common.cancel").to_string())
                 .on_click(crate::dialog_host::on_event(
                     app,
-                    |this, _: &ClickEvent, _, cx| crate::snippets::close_snippet_form(this, cx),
+                    |this, _: &ClickEvent, _, cx| {
+                        crate::snippets::close_snippet_form(&mut this.state, cx)
+                    },
                 )),
         )
         .child(

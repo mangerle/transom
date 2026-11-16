@@ -92,7 +92,7 @@ pub(crate) fn build_tab_context_menu(
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
                         crate::audit_viewer::open_audit_viewer_for_tab(
-                            this,
+                            &mut this.state,
                             active_pane,
                             window,
                             cx,

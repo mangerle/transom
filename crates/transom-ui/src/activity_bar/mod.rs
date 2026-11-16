@@ -281,7 +281,9 @@ fn activate_activity_item(
         ActivityItemId::QuickOpen => {
             crate::connection::toggle_quick_open(&mut shell.state, window, cx)
         }
-        ActivityItemId::Forwards => crate::forward::toggle_forward_panel(shell, window, cx),
+        ActivityItemId::Forwards => {
+            crate::forward::toggle_forward_panel(&mut shell.state, window, cx)
+        }
         ActivityItemId::Sftp => crate::sftp::toggle_sftp(&mut shell.state, window, cx),
         ActivityItemId::Monitor => {
             let plan = MonitorOps::new(&mut shell.state).toggle_monitor(cx);
@@ -316,7 +318,7 @@ fn activate_activity_item(
                 .known_hosts
                 .update(cx, |view, cx| view.open(cx));
         }
-        ActivityItemId::Keys => crate::keys::open_key_wizard(shell, window, cx),
+        ActivityItemId::Keys => crate::keys::open_key_wizard(&mut shell.state, window, cx),
         ActivityItemId::Settings => shell.open_settings_modal(None, window, cx),
         ActivityItemId::Git => {
             crate::git::actions::GitActions::new(&mut shell.state).toggle_git_sidebar(cx)

@@ -5,13 +5,13 @@
 //! 状态栏提示与错误在此落位，“打开设置”属于窗口级动作，也只能由外壳执行。
 
 use super::entity::AuditViewerEvent;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::{Connection, Session, SessionId, TabId};
 
 /// 打开审计日志查看器。
 pub(crate) fn open_audit_viewer(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session: Option<&Session>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -34,7 +34,7 @@ pub(crate) fn open_audit_viewer(
         None => (None, None, rust_i18n::t!("audit_viewer.title").to_string()),
     };
     let show_all = session.is_none();
-    let view = shell.state.ui.modals.tools.audit_viewer.clone();
+    let view = app_state.ui.modals.tools.audit_viewer.clone();
     view.update(cx, |view, cx| {
         view.open(target_title, session_name, host, show_all, window, cx);
     });
@@ -43,32 +43,30 @@ pub(crate) fn open_audit_viewer(
 
 /// 打开指定标签页的审计日志查看器。
 pub(crate) fn open_audit_viewer_for_tab(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let session = shell
-        .state
+    let session = app_state
         .workspace
         .tab(tab_id)
         .map(|tab| tab.session.clone());
     if let Some(s) = session {
-        crate::audit_viewer::open_audit_viewer(shell, Some(&s), window, cx);
+        crate::audit_viewer::open_audit_viewer(app_state, Some(&s), window, cx);
     } else {
-        crate::audit_viewer::open_audit_viewer(shell, None, window, cx);
+        crate::audit_viewer::open_audit_viewer(app_state, None, window, cx);
     }
 }
 
 /// 打开指定会话的审计日志查看器。
 pub(crate) fn open_audit_viewer_for_session(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session_id: SessionId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let session = shell
-        .state
+    let session = app_state
         .session
         .catalog
         .sessions
@@ -76,9 +74,9 @@ pub(crate) fn open_audit_viewer_for_session(
         .find(|session| session.id == session_id)
         .cloned();
     if let Some(s) = session {
-        crate::audit_viewer::open_audit_viewer(shell, Some(&s), window, cx);
+        crate::audit_viewer::open_audit_viewer(app_state, Some(&s), window, cx);
     } else {
-        crate::audit_viewer::open_audit_viewer(shell, None, window, cx);
+        crate::audit_viewer::open_audit_viewer(app_state, None, window, cx);
     }
 }
 
@@ -87,15 +85,15 @@ pub(crate) fn open_audit_viewer_for_session(
 /// 事件自带全部数据，这里禁止回读实体，否则会在实体 `emit` 期间形成
 /// 双重租借；错误提示的日志已由实体在失败点记录，此处不再重复。
 pub(crate) fn on_audit_viewer_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &AuditViewerEvent,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        AuditViewerEvent::Notice(message) => shell.state.ui.status = Some(message.clone()),
-        AuditViewerEvent::Error(message) => shell.state.set_error(message.clone()),
-        AuditViewerEvent::OpenSettings => shell.open_settings_modal(None, window, cx),
+        AuditViewerEvent::Notice(message) => app_state.ui.status = Some(message.clone()),
+        AuditViewerEvent::Error(message) => app_state.set_error(message.clone()),
+        AuditViewerEvent::OpenSettings => app_state.ui.window_requests.push_open_settings(None),
     }
     cx.notify();
 }

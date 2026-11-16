@@ -26,13 +26,12 @@ pub(crate) struct ZmodemState {
 
 /// 处理控制器转发的 ZMODEM 事件。
 pub(crate) fn handle_zmodem_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     event: ZmodemEvent,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(pane) = shell
-        .state
+    let Some(pane) = app_state
         .workspace
         .tab_mut(tab_id)
         .and_then(|tab| tab.session_pane_mut())
@@ -48,7 +47,7 @@ pub(crate) fn handle_zmodem_event(
                 total: None,
             });
             let text = rust_i18n::t!("zmodem.started").to_string();
-            shell.state.ui.status = Some(text);
+            app_state.ui.status = Some(text);
         }
         ZmodemEvent::Progress {
             direction,
@@ -66,10 +65,10 @@ pub(crate) fn handle_zmodem_event(
         ZmodemEvent::AwaitUpload => {
             // 用户取消文件选择视同放弃上传：让对端 rz 尽快退出轮询。
             let Some(files) = rfd::FileDialog::new().pick_files() else {
-                shell.state.send_zmodem_cancel(tab_id);
+                app_state.send_zmodem_cancel(tab_id);
                 return;
             };
-            shell.state.send_zmodem_upload(tab_id, files);
+            app_state.send_zmodem_upload(tab_id, files);
             return;
         }
         ZmodemEvent::Finished(outcome) => {
@@ -85,7 +84,7 @@ pub(crate) fn handle_zmodem_event(
                     reason
                 }
             };
-            shell.state.ui.status = Some(text);
+            app_state.ui.status = Some(text);
         }
     }
     cx.notify();
@@ -97,7 +96,7 @@ pub(crate) fn handle_zmodem_event(
 /// 因此单独截获它不会与 vim 等全屏程序争键；无传输时保持零开销直接返回，
 /// 避免干扰搜索栏、弹窗等既有 Esc 语义。
 pub(crate) fn on_zmodem_cancel_key(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &KeyDownEvent,
     _window: &mut Window,
     _cx: &mut Context<AppShell>,
@@ -109,30 +108,28 @@ pub(crate) fn on_zmodem_cancel_key(
     if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
         return;
     }
-    let Some(tab_id) = shell.state.workspace.active_tab else {
+    let Some(tab_id) = app_state.workspace.active_tab else {
         return;
     };
-    if shell
-        .state
+    if app_state
         .workspace
         .tabs
         .iter()
         .any(|tab| tab.id == tab_id && tab.zmodem().is_some())
     {
-        shell.state.send_zmodem_cancel(tab_id);
+        app_state.send_zmodem_cancel(tab_id);
     }
 }
 
 /// 状态栏的 ZMODEM 进度徽章：进度/文件名 + 取消按钮。
 /// 无活跃会话时返回 None。
 pub(crate) fn render_zmodem_badge(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: transom_core::TabId,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> Option<AnyElement> {
-    let state = shell
-        .state
+    let state = app_state
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.zmodem().cloned())?;

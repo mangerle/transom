@@ -141,7 +141,7 @@ impl AppShell {
                 crate::theme::sync_with_system(window, cx);
                 if crate::settings::sync_terminal_palette(cx) {
                     app_entity.update(cx, |shell, cx| {
-                        crate::settings::apply_appearance_to_live_panes(shell, cx)
+                        crate::settings::apply_appearance_to_live_panes(&shell.state, cx)
                     });
                 }
             }
@@ -219,7 +219,7 @@ impl AppShell {
                     event,
                     crate::status_bar::metrics::StatusMetricsEvent::LayoutChanged
                 ) {
-                    shell.persist_layout_settings(cx);
+                    shell.state.persist_layout_settings(cx);
                 }
             },
         ));
@@ -253,7 +253,7 @@ impl AppShell {
         self.state.runtime.tasks.subscriptions.key_wizard = Some(cx.subscribe(
             &self.state.ui.modals.tools.key_wizard,
             |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {
-                crate::keys::on_key_wizard_event(shell, event, cx);
+                crate::keys::on_key_wizard_event(&mut shell.state, event, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.backup = Some(cx.subscribe(
@@ -266,7 +266,7 @@ impl AppShell {
             &self.state.ui.modals.tools.audit_viewer,
             window,
             |shell, _view, event: &AuditViewerEvent, window, cx| {
-                crate::audit_viewer::on_audit_viewer_event(shell, event, window, cx);
+                crate::audit_viewer::on_audit_viewer_event(&mut shell.state, event, window, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.replay = Some(cx.subscribe_in(
@@ -279,7 +279,7 @@ impl AppShell {
         self.state.runtime.tasks.subscriptions.settings = Some(cx.subscribe(
             &self.state.ui.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
-                crate::settings::on_settings_event(shell, event, cx);
+                crate::settings::on_settings_event(&mut shell.state, event, cx);
             },
         ));
         self.state.runtime.tasks.subscriptions.session_form = Some(cx.subscribe_in(

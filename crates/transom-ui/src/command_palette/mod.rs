@@ -173,7 +173,7 @@ fn apply_ui_theme_choice(shell: &mut AppShell, name: &str, cx: &mut Context<AppS
         ThemeMode::Light => UiThemeMode::Light,
     };
     crate::settings::update_appearance(
-        shell,
+        &mut shell.state,
         |appearance| {
             appearance.ui_theme = name.to_string();
             appearance.mode = mode;
@@ -191,7 +191,7 @@ fn apply_terminal_theme_choice(shell: &mut AppShell, name: &str, cx: &mut Contex
     };
     update_app_settings(cx, |s| s.terminal_profile.theme_name = theme.name);
     update_app_settings(cx, |s| s.terminal_profile.palette = theme.palette);
-    crate::settings::apply_appearance_to_live_panes(shell, cx);
+    crate::settings::apply_appearance_to_live_panes(&shell.state, cx);
     persist_theme_choice(shell, cx);
 }
 
@@ -250,7 +250,7 @@ fn apply_palette_target(
                 .cloned();
             if let Some(snippet) = snippet {
                 let execute = app_settings(cx).snippets.execute_directly;
-                crate::snippets::apply_snippet(shell, &snippet, execute, cx);
+                crate::snippets::apply_snippet(&mut shell.state, &snippet, execute, cx);
             }
         }
         Some(PaletteTarget::Container {

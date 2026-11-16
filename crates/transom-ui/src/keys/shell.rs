@@ -6,31 +6,31 @@
 //! `emit` 期间形成双重租借。
 
 use super::entity::KeyWizardEvent;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::AppError;
 
 /// 打开密钥生成与管理向导。
 pub(crate) fn open_key_wizard(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.ui.modals.tools.key_wizard.clone();
+    let view = app_state.ui.modals.tools.key_wizard.clone();
     view.update(cx, |view, cx| view.open(window, cx));
     cx.notify();
 }
 
 /// 消费向导实体上报的状态栏提示与错误。
 pub(crate) fn on_key_wizard_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &KeyWizardEvent,
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        KeyWizardEvent::Status(message) => shell.state.ui.status = Some(message.clone()),
-        KeyWizardEvent::Error(message) => shell.state.set_error(message.clone()),
+        KeyWizardEvent::Status(message) => app_state.ui.status = Some(message.clone()),
+        KeyWizardEvent::Error(message) => app_state.set_error(message.clone()),
     }
     cx.notify();
 }
@@ -40,19 +40,19 @@ pub(crate) fn on_key_wizard_event(
 /// 状态栏文案必须在 `error` 被移入实体之前取定；实体 `update` 期间外壳
 /// 只持有自己的状态，不会形成对同一实体的双重租借。
 pub(crate) fn handle_public_key_deployed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     key_name: String,
     error: Option<AppError>,
     cx: &mut Context<AppShell>,
 ) {
     match &error {
-        Some(error) => shell.state.set_error(localized_error(error)),
+        Some(error) => app_state.set_error(localized_error(error)),
         None => {
-            shell.state.ui.status =
+            app_state.ui.status =
                 Some(rust_i18n::t!("keys.deployed_status", key = key_name.as_str()).to_string());
         }
     }
-    let view = shell.state.ui.modals.tools.key_wizard.clone();
+    let view = app_state.ui.modals.tools.key_wizard.clone();
     view.update(cx, |view, cx| view.on_deployed(key_name, error, cx));
     cx.notify();
 }

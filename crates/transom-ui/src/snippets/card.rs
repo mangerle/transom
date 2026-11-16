@@ -37,7 +37,7 @@ fn snippets_form_button(
     button.on_click(move |_, window, cx| {
         let existing = existing.clone();
         app.update(cx, |this, cx| {
-            crate::snippets::open_snippet_form(this, window, cx, existing)
+            crate::snippets::open_snippet_form(&mut this.state, window, cx, existing)
         });
     })
 }
@@ -70,7 +70,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
             let item = row_item.clone();
             row_app.update(cx, |this, cx| {
                 let execute = app_settings(cx).snippets.execute_directly;
-                crate::snippets::apply_snippet(this, &item, execute, cx);
+                crate::snippets::apply_snippet(&mut this.state, &item, execute, cx);
                 this.state.ui.modals.tools.snippet_panel.open = false;
                 cx.notify();
             });
@@ -110,7 +110,12 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                         cx.stop_propagation();
                         let item = edit_item.clone();
                         edit_app.update(cx, |this, cx| {
-                            crate::snippets::open_snippet_form(this, window, cx, Some(item));
+                            crate::snippets::open_snippet_form(
+                                &mut this.state,
+                                window,
+                                cx,
+                                Some(item),
+                            );
                         });
                     }),
                 )
@@ -124,7 +129,9 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
                     .render()
                     .on_click(move |_, _, cx| {
                         cx.stop_propagation();
-                        delete_app.update(cx, |this, cx| super::delete_snippet(this, item_id, cx));
+                        delete_app.update(cx, |this, cx| {
+                            super::delete_snippet(&mut this.state, item_id, cx)
+                        });
                     }),
                 ),
         )
@@ -191,7 +198,7 @@ pub(super) fn render_snippets_card(
                 let checked = *checked;
                 app.update(cx, |this, cx| {
                     update_app_settings(cx, |s| s.snippets.execute_directly = checked);
-                    this.persist_layout_settings(cx);
+                    this.state.persist_layout_settings(cx);
                 });
             }
         });

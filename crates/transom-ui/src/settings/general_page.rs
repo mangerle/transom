@@ -71,7 +71,7 @@ impl SettingsView {
             self.services
                 .local_shells
                 .iter()
-                .map(|shell| (shell.program.clone(), shell.label.clone())),
+                .map(|app_state| (app_state.program.clone(), app_state.label.clone())),
         );
         options.push((
             LOCAL_SHELL_CUSTOM.to_string(),
@@ -89,15 +89,15 @@ impl SettingsView {
                         settings.local_shell_args.clear();
                     });
                 } else if choice != LOCAL_SHELL_CUSTOM
-                    && let Some(shell) = this
+                    && let Some(app_state) = this
                         .services
                         .local_shells
                         .iter()
-                        .find(|shell| shell_program_matches(&shell.program, &choice))
+                        .find(|app_state| shell_program_matches(&app_state.program, &choice))
                 {
-                    let program = shell.program.clone();
-                    let args = shell.args.clone();
-                    let supports_elevation = shell.supports_elevation;
+                    let program = app_state.program.clone();
+                    let args = app_state.args.clone();
+                    let supports_elevation = app_state.supports_elevation;
                     update_app_settings(cx, |settings| {
                         settings.local_shell = Some(program.clone());
                         settings.local_shell_args = args.clone();
@@ -140,8 +140,10 @@ impl SettingsView {
                 .services
                 .local_shells
                 .iter()
-                .find(|shell| shell_program_matches(&shell.program, &self.state.local_shell_choice))
-                .is_none_or(|shell| shell.supports_elevation);
+                .find(|app_state| {
+                    shell_program_matches(&app_state.program, &self.state.local_shell_choice)
+                })
+                .is_none_or(|app_state| app_state.supports_elevation);
             group.child(crate::widgets::setting_row(
                 "settings.local_shell_admin",
                 Some("settings.local_shell_admin_desc"),

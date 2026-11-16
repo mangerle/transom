@@ -59,7 +59,7 @@ pub(super) fn activity_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>)
 
 fn hide_activity_item(shell: &mut AppShell, id: ActivityItemId, cx: &mut Context<AppShell>) {
     if app_settings_mut(cx).activity_bar.set_visible(id, false) {
-        shell.persist_layout_settings(cx);
+        shell.state.persist_layout_settings(cx);
     } else {
         cx.notify();
     }
@@ -67,7 +67,7 @@ fn hide_activity_item(shell: &mut AppShell, id: ActivityItemId, cx: &mut Context
 
 pub(crate) fn restore_activity_bar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     if app_settings_mut(cx).activity_bar.restore_defaults() {
-        shell.persist_layout_settings(cx);
+        shell.state.persist_layout_settings(cx);
     } else {
         cx.notify();
     }

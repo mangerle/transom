@@ -237,7 +237,7 @@ impl AppShell {
         }
         // 周期采样事件只在数据真的属于可见标签时才重绘底栏。
         if applied && self.state.workspace.active_tab == Some(tab_id) {
-            crate::status_bar::refresh_status_metrics(self, cx);
+            crate::status_bar::refresh_status_metrics(&mut self.state, cx);
         }
         false
     }
@@ -272,7 +272,7 @@ impl AppShell {
             applied = true;
         }
         if applied && self.state.workspace.active_tab == Some(tab_id) {
-            crate::status_bar::refresh_status_metrics(self, cx);
+            crate::status_bar::refresh_status_metrics(&mut self.state, cx);
         }
         false
     }

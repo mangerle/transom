@@ -7,46 +7,44 @@
 //! 在渲染期执行。
 
 use super::{SettingsEvent, SettingsRequest};
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::sidebar::SidebarSection;
 use gpui_kit::*;
 use transom_terminal::TerminalView;
 
 /// 设置实体发出的跨域意图。
 pub(crate) fn on_settings_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &SettingsEvent,
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        SettingsEvent::Saved(settings) => on_settings_saved(shell, settings, cx),
+        SettingsEvent::Saved(settings) => on_settings_saved(app_state, settings, cx),
         SettingsEvent::Cancelled | SettingsEvent::ProfilePreview => {
-            crate::settings::apply_appearance_to_live_panes(shell, cx);
+            crate::settings::apply_appearance_to_live_panes(app_state, cx);
             cx.notify();
         }
         SettingsEvent::CatalogChanged(catalog) => {
-            shell.state.session.catalog = (**catalog).clone();
-            shell.state.refresh_tab_sessions();
-            shell.state.persist_catalog();
+            app_state.session.catalog = (**catalog).clone();
+            app_state.refresh_tab_sessions();
+            app_state.persist_catalog();
             cx.notify();
         }
         SettingsEvent::SetSftpPanelSide(side) => {
-            shell.set_sftp_panel_side(*side, cx);
+            app_state.set_sftp_panel_side(*side, cx);
         }
         SettingsEvent::MonitorIntervalChanged(mode) => {
-            crate::monitor::MonitorOps::new(&mut shell.state).set_monitor_interval_mode(*mode, cx);
+            crate::monitor::MonitorOps::new(app_state).set_monitor_interval_mode(*mode, cx);
         }
         SettingsEvent::MonitorSectionsChanged(collapse) => {
-            shell
-                .state
+            app_state
                 .features
                 .monitor
                 .update(cx, |view, _| view.state.collapse = *collapse);
             cx.notify();
         }
         SettingsEvent::MonitorDrawerWidthChanged(width) => {
-            shell
-                .state
+            app_state
                 .features
                 .monitor
                 .update(cx, |view, _| view.set_drawer_width(*width));
@@ -54,14 +52,13 @@ pub(crate) fn on_settings_event(
         }
         SettingsEvent::TabPositionChanged(position) => {
             if *position == transom_core::TabPosition::Left {
-                let section = match shell.state.session.sidebar.section() {
+                let section = match app_state.session.sidebar.section() {
                     SidebarSection::Sessions => SidebarSection::Tabs,
                     section => section,
                 };
-                shell.state.session.sidebar.show_section(section);
-            } else if shell.state.session.sidebar.section() == SidebarSection::Tabs {
-                shell
-                    .state
+                app_state.session.sidebar.show_section(section);
+            } else if app_state.session.sidebar.section() == SidebarSection::Tabs {
+                app_state
                     .session
                     .sidebar
                     .select_section(SidebarSection::Sessions);
@@ -69,48 +66,47 @@ pub(crate) fn on_settings_event(
             cx.notify();
         }
         SettingsEvent::ApplyTriggers(triggers) => {
-            apply_triggers_to_terminals(shell, triggers.as_ref(), cx);
+            apply_triggers_to_terminals(app_state, triggers.as_ref(), cx);
         }
         SettingsEvent::OpenShortcutCapture(id) => {
-            queue_settings_request(shell, SettingsRequest::OpenShortcutCapture(id));
+            queue_settings_request(app_state, SettingsRequest::OpenShortcutCapture(id));
         }
         SettingsEvent::OpenBackupImport => {
-            queue_settings_request(shell, SettingsRequest::OpenBackupImport);
+            queue_settings_request(app_state, SettingsRequest::OpenBackupImport);
         }
         SettingsEvent::OpenBackupExport => {
-            queue_settings_request(shell, SettingsRequest::OpenBackupExport);
+            queue_settings_request(app_state, SettingsRequest::OpenBackupExport);
         }
         SettingsEvent::OpenAuditViewer => {
-            queue_settings_request(shell, SettingsRequest::OpenAuditViewer);
+            queue_settings_request(app_state, SettingsRequest::OpenAuditViewer);
         }
         SettingsEvent::CloudSyncCheck => {
-            queue_settings_request(shell, SettingsRequest::CloudSyncCheck);
+            queue_settings_request(app_state, SettingsRequest::CloudSyncCheck);
         }
         SettingsEvent::CloudSyncTest => {
-            queue_settings_request(shell, SettingsRequest::CloudSyncTest);
+            queue_settings_request(app_state, SettingsRequest::CloudSyncTest);
         }
         SettingsEvent::CloudSyncPush => {
-            queue_settings_request(shell, SettingsRequest::CloudSyncPush);
+            queue_settings_request(app_state, SettingsRequest::CloudSyncPush);
         }
         SettingsEvent::CloudSyncPull => {
-            queue_settings_request(shell, SettingsRequest::CloudSyncPull);
+            queue_settings_request(app_state, SettingsRequest::CloudSyncPull);
         }
         SettingsEvent::GitSyncNow => {
-            queue_settings_request(shell, SettingsRequest::GitSyncNow);
+            queue_settings_request(app_state, SettingsRequest::GitSyncNow);
         }
         SettingsEvent::Status(message) => {
-            shell.state.ui.status = Some(message.clone());
+            app_state.ui.status = Some(message.clone());
             cx.notify();
         }
         SettingsEvent::Error(message) => {
-            shell.state.set_error(message.clone());
+            app_state.set_error(message.clone());
             cx.notify();
         }
         SettingsEvent::RestartForUpdate => {
             // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
             // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
-            shell
-                .state
+            app_state
                 .runtime
                 .restart_requested
                 .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -121,16 +117,16 @@ pub(crate) fn on_settings_event(
 
 /// 设置保存后：应用外观、快捷键、块视图与触发器快照。
 fn on_settings_saved(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     settings: &transom_core::AppSettings,
     cx: &mut Context<AppShell>,
 ) {
-    crate::settings::apply_appearance_to_live_panes(shell, cx);
-    crate::shortcuts::apply_shortcut_settings(shell, cx);
-    crate::settings::apply_block_view_settings(shell, cx);
-    apply_triggers_to_terminals(shell, &settings.triggers, cx);
+    crate::settings::apply_appearance_to_live_panes(app_state, cx);
+    crate::shortcuts::apply_shortcut_settings(app_state, cx);
+    crate::settings::apply_block_view_settings(app_state, cx);
+    apply_triggers_to_terminals(app_state, &settings.triggers, cx);
     // Git 可执行文件与提交作者是进程级配置：界面只投递意图，写入权归控制平面。
-    shell.send_command(transom_core::GitCommand::Configure {
+    app_state.send_command(transom_core::GitCommand::Configure {
         program: settings.git.executable_path.clone(),
         author_name: settings.git.author_name.clone(),
         author_email: settings.git.author_email.clone(),
@@ -140,12 +136,11 @@ fn on_settings_saved(
 
 /// 把触发器快照推给所有已打开终端。
 fn apply_triggers_to_terminals(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     triggers: &transom_core::TriggerSettings,
     cx: &mut Context<AppShell>,
 ) {
-    let terminals: Vec<Entity<TerminalView>> = shell
-        .state
+    let terminals: Vec<Entity<TerminalView>> = app_state
         .workspace
         .tabs
         .iter()
@@ -157,44 +152,40 @@ fn apply_triggers_to_terminals(
 }
 
 /// 设置实体要求外壳做的窗口动作统一入队。
-fn queue_settings_request(shell: &mut AppShell, request: SettingsRequest) {
-    shell.state.ui.window_requests.push_settings(request);
+fn queue_settings_request(app_state: &mut AppState, request: SettingsRequest) {
+    app_state.ui.window_requests.push_settings(request);
 }
 
 /// 执行一条设置实体排队的窗口动作。
 pub(crate) fn handle_settings_request(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     request: super::SettingsRequest,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     match request {
         SettingsRequest::OpenShortcutCapture(id) => {
-            crate::shortcuts::open_shortcut_capture(shell, id, window, cx);
+            crate::shortcuts::open_shortcut_capture(app_state, id, window, cx);
         }
-        SettingsRequest::OpenBackupImport => shell.open_backup_import(window, cx),
-        SettingsRequest::OpenBackupExport => shell.open_backup_export(window, cx),
+        SettingsRequest::OpenBackupImport => app_state.open_backup_import(window, cx),
+        SettingsRequest::OpenBackupExport => app_state.open_backup_export(window, cx),
         SettingsRequest::OpenAuditViewer => {
-            crate::audit_viewer::open_audit_viewer(shell, None, window, cx)
+            crate::audit_viewer::open_audit_viewer(app_state, None, window, cx)
         }
         SettingsRequest::CloudSyncCheck => {
-            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
-                .start_cloud_sync_check(window, cx)
+            crate::cloud_sync::CloudSyncActions::new(app_state).start_cloud_sync_check(window, cx)
         }
         SettingsRequest::CloudSyncTest => {
-            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
-                .start_cloud_sync_test(window, cx)
+            crate::cloud_sync::CloudSyncActions::new(app_state).start_cloud_sync_test(window, cx)
         }
         SettingsRequest::CloudSyncPush => {
-            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
-                .start_cloud_sync_push(window, cx)
+            crate::cloud_sync::CloudSyncActions::new(app_state).start_cloud_sync_push(window, cx)
         }
         SettingsRequest::CloudSyncPull => {
-            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
-                .start_cloud_sync_pull(window, cx)
+            crate::cloud_sync::CloudSyncActions::new(app_state).start_cloud_sync_pull(window, cx)
         }
         SettingsRequest::GitSyncNow => {
-            crate::cloud_sync::CloudSyncActions::new(&mut shell.state).start_git_sync(window, cx)
+            crate::cloud_sync::CloudSyncActions::new(app_state).start_git_sync(window, cx)
         }
     }
 }

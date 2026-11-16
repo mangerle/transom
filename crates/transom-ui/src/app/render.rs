@@ -327,14 +327,18 @@ impl AppShell {
             .on_action(cx.listener(|this, action, window, cx| {
                 crate::sftp::on_toggle_sftp(&mut this.state, action, window, cx)
             }))
-            .on_action(cx.listener(crate::forward::on_toggle_forward))
+            .on_action(cx.listener(|this, action, window, cx| {
+                crate::forward::on_toggle_forward(&mut this.state, action, window, cx)
+            }))
             .on_action(cx.listener(Self::on_toggle_immersive))
             .on_action(cx.listener(crate::terminal_search::on_search_buffer))
             .on_action(cx.listener(Self::on_toggle_copy_mode))
             .on_action(cx.listener(crate::terminal_search::on_toggle_block_view))
             .on_action(cx.listener(crate::terminal_search::on_prev_prompt))
             .on_action(cx.listener(crate::terminal_search::on_next_prompt))
-            .on_action(cx.listener(crate::snippets::on_toggle_snippets))
+            .on_action(cx.listener(|this, action, window, cx| {
+                crate::snippets::on_toggle_snippets(&mut this.state, action, window, cx)
+            }))
             .on_action(cx.listener(Self::on_split_right))
             .on_action(cx.listener(Self::on_split_down))
             .on_action(cx.listener(Self::on_close_pane))
@@ -346,7 +350,9 @@ impl AppShell {
             .on_action(cx.listener(Self::on_focus_pane_down))
             // Esc 的传输取消监听：键盘事件沿焦点路径回溯，终端（焦点方）
             // 先收到并向远端写一次转义序列，再由根节点截获成取消命令。
-            .on_key_down(cx.listener(crate::zmodem::on_zmodem_cancel_key))
+            .on_key_down(cx.listener(|this, event, window, cx| {
+                crate::zmodem::on_zmodem_cancel_key(&mut this.state, event, window, cx)
+            }))
         // 拖拽悬浮面板的位移与收尾由 EditorDragTracker 的窗口级监听接管：
         // 普通元素监听带"指针命中"门槛，拖拽中指针会移出面板乃至窗口，
         // 元素级监听收不到这些事件。追踪器随编辑面板实体渲染挂载，
@@ -426,6 +432,11 @@ impl AppShell {
         } else {
             px(0.0)
         };
-        Some(crate::status_bar::render_status_bar(self, p, cx, divider_x))
+        Some(crate::status_bar::render_status_bar(
+            &mut self.state,
+            p,
+            cx,
+            divider_x,
+        ))
     }
 }

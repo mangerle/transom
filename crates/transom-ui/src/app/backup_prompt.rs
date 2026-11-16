@@ -15,35 +15,6 @@ use transom_core::{
 };
 
 impl AppShell {
-    /// 打开导出弹窗：注入当前目录快照后交给实体。
-    pub(crate) fn open_backup_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let catalog = self.state.session.catalog.clone();
-        let view = self.state.ui.modals.tools.backup_prompt.clone();
-        view.update(cx, |view, cx| {
-            view.set_catalog(catalog);
-            view.open_export(window, cx);
-        });
-        cx.notify();
-    }
-
-    /// 先让用户选文件，再打开导入弹窗。
-    pub(crate) fn open_backup_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(path) = rfd::FileDialog::new()
-            .set_title(rust_i18n::t!("backup.import_title").to_string())
-            .add_filter("Transom Backup", &["json", "yaml", "yml"])
-            .pick_file()
-        else {
-            return;
-        };
-        let catalog = self.state.session.catalog.clone();
-        let view = self.state.ui.modals.tools.backup_prompt.clone();
-        view.update(cx, |view, cx| {
-            view.set_catalog(catalog);
-            view.open_import(path, window, cx);
-        });
-        cx.notify();
-    }
-
     /// 备份实体上报的最终结果。
     ///
     /// 事件已携带路径、统计与目录快照；这里不得再读备份实体，否则会在

@@ -25,13 +25,13 @@ pub(crate) fn on_session_sidebar_event(
 ) {
     match event {
         SessionSidebarEvent::ToggleSelectionMode => {
-            crate::batch::toggle_selection_mode(shell, cx);
+            crate::batch::toggle_selection_mode(&mut shell.state, cx);
         }
         SessionSidebarEvent::SelectAllSessions => {
-            crate::batch::select_all_sessions(shell, cx);
+            crate::batch::select_all_sessions(&mut shell.state, cx);
         }
         SessionSidebarEvent::OpenBatchEdit => {
-            crate::batch::open_batch_edit(shell, window, cx);
+            crate::batch::open_batch_edit(&mut shell.state, window, cx);
         }
         SessionSidebarEvent::OpenNewFolder(parent) => {
             open_new_folder(shell, *parent, window, cx);
@@ -64,7 +64,7 @@ pub(crate) fn on_session_sidebar_event(
             session_id,
             selected,
         } => {
-            crate::batch::toggle_session_selection(shell, *session_id, *selected, cx);
+            crate::batch::toggle_session_selection(&mut shell.state, *session_id, *selected, cx);
         }
         SessionSidebarEvent::SelectTreeSession(session_id) => {
             shell.state.session.sidebar.tree_selection = Some(*session_id);
@@ -89,7 +89,12 @@ pub(crate) fn on_session_sidebar_event(
             shell.open_edit_session(*session_id, window, cx);
         }
         SessionSidebarEvent::OpenAuditViewer(session_id) => {
-            crate::audit_viewer::open_audit_viewer_for_session(shell, *session_id, window, cx);
+            crate::audit_viewer::open_audit_viewer_for_session(
+                &mut shell.state,
+                *session_id,
+                window,
+                cx,
+            );
         }
         SessionSidebarEvent::CopyHost(host) => {
             shell.state.ui.status =

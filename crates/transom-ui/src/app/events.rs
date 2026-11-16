@@ -275,7 +275,7 @@ impl AppShell {
                 key_name,
                 error,
             } => {
-                crate::keys::handle_public_key_deployed(self, key_name, error, cx);
+                crate::keys::handle_public_key_deployed(&mut self.state, key_name, error, cx);
                 cx.notify();
             }
             HostAppEvent::HostActionResult {
@@ -304,7 +304,7 @@ impl AppShell {
             connection_id: _,
             event,
         } = event;
-        crate::zmodem::handle_zmodem_event(self, tab_id, event, cx);
+        crate::zmodem::handle_zmodem_event(&mut self.state, tab_id, event, cx);
     }
 
     pub(crate) fn handle_terminal_event(

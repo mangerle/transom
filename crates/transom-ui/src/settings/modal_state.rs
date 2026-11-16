@@ -334,7 +334,7 @@ pub(crate) fn local_shell_choice(settings: &AppSettings, local_shells: &[ShellOp
         Some(program)
             if local_shells
                 .iter()
-                .any(|shell| shell_program_matches(&shell.program, program)) =>
+                .any(|app_state| shell_program_matches(&app_state.program, program)) =>
         {
             program.to_string()
         }
@@ -419,7 +419,7 @@ mod tests {
     use transom_core::AppSettings;
     use transom_platform::shell::ShellOption;
 
-    fn shell(program: &str) -> ShellOption {
+    fn app_state(program: &str) -> ShellOption {
         ShellOption {
             program: program.to_string(),
             args: Vec::new(),
@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn local_shell_choice_distinguishes_system_known_and_custom() {
-        let shells = vec![shell("/bin/zsh")];
+        let shells = vec![app_state("/bin/zsh")];
         let mut settings = AppSettings::default();
         assert_eq!(local_shell_choice(&settings, &shells), LOCAL_SHELL_SYSTEM);
 

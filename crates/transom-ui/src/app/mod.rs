@@ -52,8 +52,8 @@ use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use transom_core::{
-    AppCommand, AppSettings, GitCommand, PanelSide, SessionCatalog, StartupTabs, TabId,
-    TabPosition, UiThemeMode,
+    AppCommand, AppSettings, GitCommand, SessionCatalog, StartupTabs, TabId, TabPosition,
+    UiThemeMode,
 };
 
 pub(crate) use types::*;
@@ -182,34 +182,6 @@ impl AppShell {
             view.set_monitor_interval(interval);
             view.prepare_open(window, page, cx);
         });
-        cx.notify();
-    }
-
-    /// 让设置实体执行保存；弹窗容器与快捷键提交共用这一入口。
-    /// 让设置实体执行取消（外观回滚 + 关闭）。
-    /// 直接操作型设置（活动栏/状态栏拖拽、显隐）的即时落盘。
-    ///
-    /// 这些动作发生在设置弹窗之外，不需要经过实体；与实体保存共用
-    /// `AppState::persist_settings_reported` 这一条上报路径。
-    pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<Self>) {
-        let snapshot = app_settings(cx).clone();
-        self.state.persist_settings_reported(&snapshot);
-        cx.notify();
-    }
-
-    /// 设置工具面板（SFTP/转发）停靠方向。
-    pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<Self>) {
-        if app_settings(cx).window.sftp_panel_side == side {
-            return;
-        }
-        update_app_settings(cx, |s| s.window.sftp_panel_side = side);
-        let state = &mut self.state;
-        std::mem::swap(
-            &mut state.ui.workspace_panels,
-            &mut state.ui.workspace_panels_left,
-        );
-        let snapshot = app_settings(cx).clone();
-        self.state.persist_settings_reported(&snapshot);
         cx.notify();
     }
 

@@ -50,6 +50,8 @@ pub(crate) enum WindowRequest {
     CloseTab(TabId),
     /// 关闭指定标签组。
     CloseGroup(GroupId),
+    /// 关闭单个标签窗格。
+    ClosePane(TabId),
     /// 在新标签打开本地终端（可选初始工作目录）。
     LocalTerminal(Option<std::path::PathBuf>),
 }
@@ -129,6 +131,11 @@ impl WindowRequests {
     /// 关闭指定标签组。
     pub(crate) fn push_close_group(&mut self, group_id: GroupId) {
         self.items.push(WindowRequest::CloseGroup(group_id));
+    }
+
+    /// 关闭单个标签窗格（与整组关闭区分）。
+    pub(crate) fn push_close_pane(&mut self, tab_id: TabId) {
+        self.items.push(WindowRequest::ClosePane(tab_id));
     }
 
     /// 在新的标签页打开本地终端。

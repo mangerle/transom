@@ -829,3 +829,57 @@ fn record_modules_take_app_state_not_shell() {
         "录制模块不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
     );
 }
+
+/// 面板与设置类模块不得以 `shell` 类型的参数接收外壳：这些动作只改应用，
+/// 窗口级副作用已统一走 `WindowRequest`。
+#[test]
+fn panels_take_app_state_not_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for dir in [
+        "src/forward",
+        "src/settings",
+        "src/snippets",
+        "src/batch",
+        "src/audit_viewer",
+        "src/monitor",
+        "src/keys",
+        "src/status_bar",
+    ] {
+        for entry in walkdir_like(&root.join(dir)) {
+            if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(content) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            for (index, line) in content.lines().enumerate() {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                    offenders.push(format!("{}:{}", entry.display(), index + 1));
+                }
+            }
+        }
+    }
+    for file in ["src/shortcuts.rs", "src/zmodem.rs"] {
+        let Ok(content) = std::fs::read_to_string(root.join(file)) else {
+            continue;
+        };
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                offenders.push(format!("{file}:{}", index + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "这些模块不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
+    );
+}

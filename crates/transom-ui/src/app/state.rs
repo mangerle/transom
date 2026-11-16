@@ -13,10 +13,12 @@
 //! 功能模块之间仍共享同一份写入权限，后续按领域继续下沉到 feature 结构体。
 
 use super::AppShell;
+use super::app_settings;
 use super::modal_hub::ModalHub;
 use super::persistence::Persistence;
 use super::task_hub::TaskHub;
 use super::types::PendingNotices;
+use super::update_app_settings;
 use crate::UiServices;
 use crate::broadcast::BroadcastBarState;
 use crate::cloud_sync::{CloudSyncView, GitSyncScheduler};
@@ -34,6 +36,7 @@ use gpui_kit::{App, Context, Entity, Window};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use transom_core::PanelSide;
 use transom_core::{AppCommand, AppSettings, GitProjectId, SessionCatalog, SessionId, TabId};
 use transom_platform::shell::ShellOption;
 
@@ -204,6 +207,60 @@ impl AppState {
         view.update(cx, |view, cx| view.cancel_settings(window, cx));
     }
 
+    /// 把当前布局设置快照落盘并刷新界面。
+    ///
+    /// 设计原理（Why）：活动栏/状态栏拖拽、片段与监控布局都只改设置快照，
+    /// 不依赖外壳；下沉到状态层后这些调用方不必再持整壳。
+    pub(crate) fn persist_layout_settings(&mut self, cx: &mut Context<AppShell>) {
+        let snapshot = app_settings(cx).clone();
+        self.persist_settings_reported(&snapshot);
+        cx.notify();
+    }
+
+    /// 切换 SFTP/转发工具面板的停靠方向，并落盘。
+    pub(crate) fn set_sftp_panel_side(&mut self, side: PanelSide, cx: &mut Context<AppShell>) {
+        if app_settings(cx).window.sftp_panel_side == side {
+            return;
+        }
+        update_app_settings(cx, |s| s.window.sftp_panel_side = side);
+        std::mem::swap(
+            &mut self.ui.workspace_panels,
+            &mut self.ui.workspace_panels_left,
+        );
+        let snapshot = app_settings(cx).clone();
+        self.persist_settings_reported(&snapshot);
+        cx.notify();
+    }
+
+    /// 打开备份导出弹窗：注入当前目录快照后交给实体。
+    pub(crate) fn open_backup_export(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        let catalog = self.session.catalog.clone();
+        let view = self.ui.modals.tools.backup_prompt.clone();
+        view.update(cx, |view, cx| {
+            view.set_catalog(catalog);
+            view.open_export(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// 先让用户选文件，再打开备份导入弹窗。
+    pub(crate) fn open_backup_import(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(rust_i18n::t!("backup.import_title").to_string())
+            .add_filter("Transom Backup", &["json", "yaml", "yml"])
+            .pick_file()
+        else {
+            return;
+        };
+        let catalog = self.session.catalog.clone();
+        let view = self.ui.modals.tools.backup_prompt.clone();
+        view.update(cx, |view, cx| {
+            view.set_catalog(catalog);
+            view.open_import(path, window, cx);
+        });
+        cx.notify();
+    }
+
     /// 向控制器提交命令：非阻塞 `try_send`，队列满时快速失败。
     pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
         match self.runtime.services.command_tx.try_send(command.into()) {
@@ -237,7 +294,7 @@ impl AppState {
                     && this.state.ui.status.as_deref() == Some(text.as_str())
                 {
                     this.state.ui.status = None;
-                    crate::status_bar::refresh_status_metrics(this, cx);
+                    crate::status_bar::refresh_status_metrics(&mut this.state, cx);
                     cx.notify();
                 }
             });

@@ -3,28 +3,26 @@
 use super::common::*;
 use super::state::{BatchEditForm, BatchUpdates, apply_batch_updates};
 
-pub(crate) fn toggle_selection_mode(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.session.sidebar.selection_mode = !shell.state.session.sidebar.selection_mode;
-    shell.state.session.sidebar.clear_selection();
+pub(crate) fn toggle_selection_mode(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    app_state.session.sidebar.selection_mode = !app_state.session.sidebar.selection_mode;
+    app_state.session.sidebar.clear_selection();
     cx.notify();
 }
 
 pub(crate) fn toggle_session_selection(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     session_id: SessionId,
     selected: bool,
     cx: &mut Context<AppShell>,
 ) {
     if selected {
-        shell
-            .state
+        app_state
             .session
             .sidebar
             .selected_sessions
             .insert(session_id);
     } else {
-        shell
-            .state
+        app_state
             .session
             .sidebar
             .selected_sessions
@@ -33,9 +31,8 @@ pub(crate) fn toggle_session_selection(
     cx.notify();
 }
 
-pub(crate) fn select_all_sessions(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.session.sidebar.selected_sessions = shell
-        .state
+pub(crate) fn select_all_sessions(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    app_state.session.sidebar.selected_sessions = app_state
         .session
         .catalog
         .sessions
@@ -46,19 +43,17 @@ pub(crate) fn select_all_sessions(shell: &mut AppShell, cx: &mut Context<AppShel
 }
 
 pub(crate) fn open_batch_edit(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let selected_count = shell
-        .state
+    let selected_count = app_state
         .session
         .sidebar
         .selected_sessions
         .iter()
         .filter(|id| {
-            shell
-                .state
+            app_state
                 .session
                 .catalog
                 .sessions
@@ -67,11 +62,11 @@ pub(crate) fn open_batch_edit(
         })
         .count();
     if selected_count == 0 {
-        shell.state.ui.status = Some(rust_i18n::t!("batch.none_selected").to_string());
+        app_state.ui.status = Some(rust_i18n::t!("batch.none_selected").to_string());
         cx.notify();
         return;
     }
-    shell.state.ui.modals.session.batch_edit = Some(BatchEditForm {
+    app_state.ui.modals.session.batch_edit = Some(BatchEditForm {
         selected_count,
         change_port: false,
         port: sftp_text_input(window, cx, "22", rust_i18n::t!("form.port").as_ref()),

@@ -92,7 +92,7 @@ fn render_activity_reorder_half(
                 .activity_bar
                 .move_relative_to(dragged, anchor, !before)
             {
-                this.persist_layout_settings(cx);
+                this.state.persist_layout_settings(cx);
             } else {
                 cx.notify();
             }
@@ -137,7 +137,7 @@ pub(super) fn render_activity_blank_zone(
                     .move_to_bottom_start(dragged)
             };
             if changed {
-                this.persist_layout_settings(cx);
+                this.state.persist_layout_settings(cx);
             } else {
                 cx.notify();
             }

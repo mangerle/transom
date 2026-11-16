@@ -57,15 +57,12 @@ impl SettingsView {
                 settings.local_shell = Some(path.clone());
                 settings.local_shell_args.clear();
             });
-        } else if let Some(shell) = self
-            .services
-            .local_shells
-            .iter()
-            .find(|shell| super::modal_state::shell_program_matches(&shell.program, &choice))
-        {
-            let program = shell.program.clone();
-            let args = shell.args.clone();
-            let supports_elevation = shell.supports_elevation;
+        } else if let Some(app_state) = self.services.local_shells.iter().find(|app_state| {
+            super::modal_state::shell_program_matches(&app_state.program, &choice)
+        }) {
+            let program = app_state.program.clone();
+            let args = app_state.args.clone();
+            let supports_elevation = app_state.supports_elevation;
             update_app_settings(cx, |settings| {
                 settings.local_shell = Some(program.clone());
                 settings.local_shell_args = args.clone();

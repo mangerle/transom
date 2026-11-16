@@ -145,16 +145,22 @@ impl AppShell {
         use crate::monitor::MonitorPanelEvent;
         match request {
             MonitorPanelEvent::DrawerWidthChanged(width) => {
-                crate::monitor::apply_monitor_drawer_width(self, width, window, cx);
+                crate::monitor::apply_monitor_drawer_width(&mut self.state, width, window, cx);
             }
             MonitorPanelEvent::MaximizeToTab => {
-                crate::monitor::maximize_monitor_to_tab(self, window, cx);
+                crate::monitor::maximize_monitor_to_tab(&mut self.state, window, cx);
             }
             MonitorPanelEvent::DockToDrawer {
                 tab_id,
                 target_tab_id,
             } => {
-                crate::monitor::dock_monitor_to_drawer(self, tab_id, target_tab_id, window, cx);
+                crate::monitor::dock_monitor_to_drawer(
+                    &mut self.state,
+                    tab_id,
+                    target_tab_id,
+                    window,
+                    cx,
+                );
             }
             MonitorPanelEvent::ClosePane { tab_id } => {
                 self.close_pane(tab_id, window, cx);
@@ -236,7 +242,7 @@ impl AppShell {
                 WindowRequest::Monitor(event) => self.handle_monitor_request(event, window, cx),
                 WindowRequest::Editor(event) => self.handle_editor_request(event, window, cx),
                 WindowRequest::Settings(event) => {
-                    crate::settings::handle_settings_request(self, event, window, cx)
+                    crate::settings::handle_settings_request(&mut self.state, event, window, cx)
                 }
                 WindowRequest::Container { tab_id, event } => {
                     self.handle_container_request(tab_id, &event, window, cx);
@@ -262,6 +268,7 @@ impl AppShell {
                 }
                 WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
                 WindowRequest::CloseGroup(group_id) => self.close_group(group_id, window, cx),
+                WindowRequest::ClosePane(tab_id) => self.close_pane(tab_id, window, cx),
                 WindowRequest::LocalTerminal(cwd) => {
                     crate::connection::spawn_local_terminal(&mut self.state, cwd, cx)
                 }
@@ -357,7 +364,7 @@ impl AppShell {
         self.refresh_sftp_mount_candidates(cx);
         self.refresh_forward_panel_data(cx);
         self.refresh_monitor_stats(cx);
-        crate::status_bar::refresh_status_metrics(self, cx);
+        crate::status_bar::refresh_status_metrics(&mut self.state, cx);
         self.flush_window_requests(window, cx);
     }
 }
