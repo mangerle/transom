@@ -182,11 +182,7 @@ struct LogStreamParams {
     timestamps: bool,
 }
 
-fn spawn_log_stream(
-    state: &mut ControllerState,
-    ctx: &ControllerCtx,
-    params: LogStreamParams,
-) {
+fn spawn_log_stream(state: &mut ControllerState, ctx: &ControllerCtx, params: LogStreamParams) {
     let LogStreamParams {
         tab_id,
         request_id,

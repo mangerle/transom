@@ -167,15 +167,23 @@ fn write_error(path: &Path, error: std::io::Error) -> AppError {
 pub enum LocalTextError {
     Metadata(std::io::Error),
     NotAFile,
-    TooLarge { limit: u64 },
+    TooLarge {
+        limit: u64,
+    },
     TooLargeDuringRead,
     Read(std::io::Error),
     NotUtf8,
     Modified,
     NoParent,
     BadPath,
-    TempWrite { path: PathBuf, error: std::io::Error },
-    SetPermissions { path: PathBuf, error: std::io::Error },
+    TempWrite {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    SetPermissions {
+        path: PathBuf,
+        error: std::io::Error,
+    },
     Replace(std::io::Error),
 }
 

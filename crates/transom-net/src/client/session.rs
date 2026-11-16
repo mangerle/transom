@@ -118,7 +118,9 @@ impl SshRemote {
     }
 
     pub(crate) fn register_remote_target(&self, port: u16, host: String, target_port: u16) {
-        self.remote_forwards.lock().insert(port, (host, target_port));
+        self.remote_forwards
+            .lock()
+            .insert(port, (host, target_port));
     }
 
     pub(crate) fn unregister_remote_target(&self, port: u16) {

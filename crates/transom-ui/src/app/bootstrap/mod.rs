@@ -155,7 +155,8 @@ impl AppShell {
             if visibility.is_visible() {
                 app_entity.update(cx, |shell, cx| {
                     if app_settings(cx).git.auto_update_on_focus {
-                        crate::git::actions::GitActions::new(&mut shell.state).git_refresh_active_projects(cx);
+                        crate::git::actions::GitActions::new(&mut shell.state)
+                            .git_refresh_active_projects(cx);
                     }
                 });
             }

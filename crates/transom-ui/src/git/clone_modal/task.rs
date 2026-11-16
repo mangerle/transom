@@ -140,7 +140,8 @@ pub(crate) fn render_git_clone_task(
                     .find(|item| item.path == path)
                     .cloned()
                 {
-                    crate::git::actions::GitActions::new(&mut this.state).open_git_tab(project, window, cx);
+                    crate::git::actions::GitActions::new(&mut this.state)
+                        .open_git_tab(project, window, cx);
                 }
                 this.state
                     .update_git_registry(cx, |git| git.clone_task = None);
