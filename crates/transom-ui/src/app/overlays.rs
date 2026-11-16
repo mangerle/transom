@@ -122,7 +122,7 @@ impl AppShell {
             overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
         }
         if let Some(clone_task) =
-            crate::git::clone_modal::render_git_clone_task(self, window, cx, &p)
+            crate::git::clone_modal::render_git_clone_task(&mut self.state, window, cx, &p)
         {
             overlays.push(clone_task);
         }

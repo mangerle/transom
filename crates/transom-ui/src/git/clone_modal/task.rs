@@ -1,7 +1,7 @@
 //! 克隆后台任务管理、事件更新与右下角进度卡渲染。
 
 use super::calc::clone_percent;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::git::form::GitProjectDraft;
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
@@ -36,13 +36,13 @@ pub(crate) struct GitCloneTask {
 
 /// 落地克隆进度与完成事件。
 pub(crate) fn apply_git_clone_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: GitAppEvent,
     cx: &mut Context<AppShell>,
 ) {
     match event {
         GitAppEvent::CloneProgress { request_id, text } => {
-            let applied = shell.state.update_git_registry(cx, |git| {
+            let applied = app_state.update_git_registry(cx, |git| {
                 let Some(task) = git.clone_task.as_mut() else {
                     return false;
                 };
@@ -67,7 +67,7 @@ pub(crate) fn apply_git_clone_event(
             error,
         } => {
             let Some((folder_name, icon, color, success)) =
-                shell.state.update_git_registry(cx, |git| {
+                app_state.update_git_registry(cx, |git| {
                     let task = git.clone_task.as_mut()?;
                     if task.request_id != request_id {
                         return None;
@@ -94,11 +94,11 @@ pub(crate) fn apply_git_clone_event(
                 draft.icon = icon;
                 draft.color = color;
                 draft.folder_id = crate::git::actions::modal_bridges::git_folder_id_for_name(
-                    shell,
+                    app_state,
                     &folder_name,
                     cx,
                 );
-                crate::git::actions::GitActions::new(&mut shell.state).add_git_project(draft, cx);
+                crate::git::actions::GitActions::new(app_state).add_git_project(draft, cx);
             }
             cx.notify();
         }
@@ -107,14 +107,11 @@ pub(crate) fn apply_git_clone_event(
 }
 
 /// 取消在途克隆：杀掉子进程并收起进度卡。
-fn git_cancel_clone_task(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(task) = shell
-        .state
-        .update_git_registry(cx, |git| git.clone_task.take())
-    else {
+fn git_cancel_clone_task(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let Some(task) = app_state.update_git_registry(cx, |git| git.clone_task.take()) else {
         return;
     };
-    shell.send_command(GitCommand::Cancel {
+    app_state.send_command(GitCommand::Cancel {
         request_id: task.request_id,
     });
     cx.notify();
@@ -122,12 +119,12 @@ fn git_cancel_clone_task(shell: &mut AppShell, cx: &mut Context<AppShell>) {
 
 /// 右下角克隆进度卡：非模态，成功后延后开仓库并消失。
 pub(crate) fn render_git_clone_task(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
     p: &Palette,
 ) -> Option<AnyElement> {
-    let task = shell.state.git_registry(cx).clone_task.as_ref()?;
+    let task = app_state.git_registry(cx).clone_task.as_ref()?;
     if let Some(path) = task.done.clone() {
         let app = cx.entity().clone();
         window.defer(cx, move |window, cx| {
@@ -210,7 +207,8 @@ pub(crate) fn render_git_clone_task(
                     .accessibility_label(rust_i18n::t!("git.clone.cancel").to_string())
                     .tooltip(rust_i18n::t!("git.clone.cancel").to_string())
                     .on_click(move |_, _, cx| {
-                        cancel_app.update(cx, git_cancel_clone_task);
+                        cancel_app
+                            .update(cx, |this, cx| git_cancel_clone_task(&mut this.state, cx));
                     }),
             )
         })

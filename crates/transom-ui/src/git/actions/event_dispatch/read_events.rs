@@ -1,13 +1,13 @@
 //! Git 读取与日志/差异事件落地。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::{ErrorCode, GitAppEvent};
 
 /// 处理读取类、日志分页、提交详情与差异加载事件。
 pub(super) fn handle_read_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: GitAppEvent,
     cx: &mut Context<AppShell>,
 ) {
@@ -18,7 +18,7 @@ pub(super) fn handle_read_event(
             tags,
             paths,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.branches = branches;
@@ -32,15 +32,15 @@ pub(super) fn handle_read_event(
             project_id,
             request_id,
             page,
-        } => handle_log_loaded(shell, project_id, request_id, *page, cx),
+        } => handle_log_loaded(app_state, project_id, request_id, *page, cx),
         GitAppEvent::RebaseTodoLoaded {
             project_id,
             request_id,
             base,
             steps,
         } => {
-            drop_workspace_request(shell, project_id, request_id, cx);
-            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+            drop_workspace_request(app_state, project_id, request_id, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                 .apply_git_rebase_todo(&base, steps, cx);
         }
         GitAppEvent::CommitUrlLoaded {
@@ -49,9 +49,9 @@ pub(super) fn handle_read_event(
             oid,
             url,
         } => {
-            drop_workspace_request(shell, project_id, request_id, cx);
+            drop_workspace_request(app_state, project_id, request_id, cx);
             if let Some(msg) = crate::git::web_link::resolve_commit_url_feedback(url, &oid) {
-                shell.set_transient_status(msg, cx);
+                app_state.set_transient_status(msg, cx);
             }
             cx.notify();
         }
@@ -61,7 +61,7 @@ pub(super) fn handle_read_event(
             oid,
             files,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.drop_request(request_id);
@@ -75,7 +75,7 @@ pub(super) fn handle_read_event(
                     }
                 });
             }
-            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+            crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                 .apply_git_push_commit_files(&oid, files, cx);
             cx.notify();
         }
@@ -86,8 +86,8 @@ pub(super) fn handle_read_event(
             remote_branch,
             commits,
         } => {
-            drop_workspace_request(shell, project_id, request_id, cx);
-            crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+            drop_workspace_request(app_state, project_id, request_id, cx);
+            crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                 .apply_git_outgoing_commits(project_id, &branch, &remote_branch, commits, cx);
             cx.notify();
         }
@@ -96,7 +96,7 @@ pub(super) fn handle_read_event(
             request_id,
             diff,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, cx| {
                     let state = &mut workspace.state;
                     state.drop_request(request_id);
@@ -110,18 +110,18 @@ pub(super) fn handle_read_event(
             project_id,
             request_id,
             error,
-        } => handle_read_failed(shell, project_id, request_id, error, cx),
+        } => handle_read_failed(app_state, project_id, request_id, error, cx),
         _ => {}
     }
 }
 
 fn drop_workspace_request(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project_id: transom_core::GitProjectId,
     request_id: transom_core::GitRequestId,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+    if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
         workspace.update(cx, |workspace, _| {
             workspace.state.drop_request(request_id);
         });
@@ -129,13 +129,13 @@ fn drop_workspace_request(
 }
 
 fn handle_log_loaded(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project_id: transom_core::GitProjectId,
     request_id: transom_core::GitRequestId,
     page: transom_core::LogPage,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) else {
+    let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) else {
         return;
     };
     let Some((landed, keep_waiting, jump, tab_id)) = workspace.update(cx, |workspace, _| {
@@ -176,23 +176,23 @@ fn handle_log_loaded(
     };
     cx.notify();
     if let Some(index) = landed {
-        if let Some(workspace) = shell.state.git_workspace(tab_id) {
+        if let Some(workspace) = app_state.git_workspace(tab_id) {
             workspace.update(cx, |ws, cx| ws.select_commit_by_index(index, cx));
         }
     } else if keep_waiting {
         // 目标行还没加载：顺着分页往下翻，翻到头或超页数上限才提示找不到。
-        if let Some(workspace) = shell.state.git_workspace(tab_id) {
+        if let Some(workspace) = app_state.git_workspace(tab_id) {
             workspace.update(cx, |ws, cx| ws.load_more_log(cx));
         }
     } else if let Some(target) = jump {
         log::info!("Git 提交跳转未落地即停止，目标: {target:?}");
-        shell.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);
+        app_state.set_transient_status(rust_i18n::t!("git.log.jump_missing"), cx);
         cx.notify();
     }
 }
 
 fn handle_read_failed(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project_id: transom_core::GitProjectId,
     request_id: transom_core::GitRequestId,
     error: transom_core::AppError,
@@ -205,7 +205,7 @@ fn handle_read_failed(
     } else {
         log::error!("Git 读取失败，项目: {project_id}，原因: {message}");
     }
-    if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+    if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
         workspace.update(cx, |workspace, _| {
             workspace.diff_tasks.remove(&request_id);
             let state = &mut workspace.state;
@@ -226,13 +226,13 @@ fn handle_read_failed(
             }
         });
     }
-    shell.state.update_git_registry(cx, |git| {
+    app_state.update_git_registry(cx, |git| {
         let badge = git.badges.entry(project_id).or_default();
         badge.loading = false;
         badge.error = Some(message.clone());
     });
     if !not_repo {
-        shell.set_error(message);
+        app_state.set_error(message);
     }
     cx.notify();
 }

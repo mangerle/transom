@@ -48,6 +48,8 @@ pub(crate) enum WindowRequest {
     },
     /// 关闭包含指定标签的整组窗格。
     CloseTab(TabId),
+    /// 在新标签打开本地终端（可选初始工作目录）。
+    LocalTerminal(Option<std::path::PathBuf>),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -120,6 +122,11 @@ impl WindowRequests {
     /// 关闭标签所属的整组窗格。
     pub(crate) fn push_close_tab(&mut self, tab_id: TabId) {
         self.items.push(WindowRequest::CloseTab(tab_id));
+    }
+
+    /// 在新的标签页打开本地终端。
+    pub(crate) fn push_local_terminal(&mut self, cwd: Option<std::path::PathBuf>) {
+        self.items.push(WindowRequest::LocalTerminal(cwd));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

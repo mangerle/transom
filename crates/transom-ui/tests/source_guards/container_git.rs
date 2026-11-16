@@ -684,3 +684,32 @@ fn container_modules_take_app_state_not_shell() {
         "容器模块不得再接收外壳参数，改为 &mut AppState 并经 WindowRequest 处理窗口动作: {offenders:?}"
     );
 }
+
+/// Git 模块不得再以 `shell` 类型的参数接收外壳：领域逻辑只借应用状态，
+/// 需要窗口或跨标签的动作经 `WindowRequest` 队列交给外壳。
+#[test]
+fn git_modules_take_app_state_not_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/git")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                offenders.push(format!("{}:{}", entry.display(), index + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "Git 模块不得再接收外壳参数，改为 &mut AppState 并经 WindowRequest 处理窗口动作: {offenders:?}"
+    );
+}

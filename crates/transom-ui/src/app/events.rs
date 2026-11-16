@@ -45,7 +45,7 @@ impl AppShell {
                 );
             }
             AppEvent::Git(git_event) => {
-                crate::git::actions::dispatch_git_event(self, git_event, cx);
+                crate::git::actions::dispatch_git_event(&mut self.state, git_event, cx);
             }
             AppEvent::DeepLink { request } => {
                 crate::connection::handle_deep_link(self, request, window, cx);

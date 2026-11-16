@@ -1,6 +1,6 @@
 //! Git 工作树、暂存栈（Stash）与搁置（Shelf）事件落地。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::git::GitCommitTab;
 use crate::palette::localized_error;
 use gpui_kit::*;
@@ -8,7 +8,7 @@ use transom_core::GitAppEvent;
 
 /// 处理工作树、暂存栈与搁置相关事件。
 pub(super) fn handle_shelf_worktree_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: GitAppEvent,
     cx: &mut Context<AppShell>,
 ) {
@@ -18,7 +18,7 @@ pub(super) fn handle_shelf_worktree_event(
             request_id,
             entries,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.drop_request(request_id);
@@ -32,7 +32,7 @@ pub(super) fn handle_shelf_worktree_event(
             request_id,
             entries,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.drop_request(request_id);
@@ -47,7 +47,7 @@ pub(super) fn handle_shelf_worktree_event(
             selector,
             files,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.drop_request(request_id);
@@ -66,7 +66,7 @@ pub(super) fn handle_shelf_worktree_event(
             request_id,
             shelves,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.drop_request(request_id);
@@ -88,8 +88,7 @@ pub(super) fn handle_shelf_worktree_event(
             request_id,
             entry,
         } => {
-            let project = shell
-                .state
+            let project = app_state
                 .git_workspace_of_project(project_id, cx)
                 .map(|workspace| {
                     workspace.update(cx, |workspace, _| {
@@ -103,9 +102,9 @@ pub(super) fn handle_shelf_worktree_event(
                         state.project.clone()
                     })
                 });
-            shell.set_transient_status(rust_i18n::t!("git.shelf.create"), cx);
+            app_state.set_transient_status(rust_i18n::t!("git.shelf.create"), cx);
             if let Some(project) = project {
-                crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
+                crate::git::actions::GitActions::new(app_state).git_refresh(&project, cx);
             }
             cx.notify();
         }
@@ -119,8 +118,7 @@ pub(super) fn handle_shelf_worktree_event(
             // 补丁已应用是既成事实；删除条目失败只影响列表，不能按整次失败处理，
             // 也不能把仍留在存储里的条目从界面移除（否则用户没法重试删除）。
             let cleanup_failed = cleanup_error.is_some();
-            let project = shell
-                .state
+            let project = app_state
                 .git_workspace_of_project(project_id, cx)
                 .map(|workspace| {
                     workspace.update(cx, |workspace, _| {
@@ -139,14 +137,14 @@ pub(super) fn handle_shelf_worktree_event(
             } else {
                 "git.shelf.apply"
             };
-            shell.set_transient_status(rust_i18n::t!(key), cx);
+            app_state.set_transient_status(rust_i18n::t!(key), cx);
             if let Some(error) = cleanup_error {
                 let message = localized_error(&error);
                 log::warn!("搁置项补丁已应用，但删除条目失败，项目: {project_id}，原因: {message}");
-                shell.set_error(message);
+                app_state.set_error(message);
             }
             if let Some(project) = project {
-                crate::git::actions::GitActions::new(&mut shell.state).git_refresh(&project, cx);
+                crate::git::actions::GitActions::new(app_state).git_refresh(&project, cx);
             }
             cx.notify();
         }
@@ -155,7 +153,7 @@ pub(super) fn handle_shelf_worktree_event(
             request_id: _,
             shelf_id,
         } => {
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     let state = &mut workspace.state;
                     state.shelves.retain(|shelf| shelf.id != shelf_id);
@@ -164,7 +162,7 @@ pub(super) fn handle_shelf_worktree_event(
                     }
                 });
             }
-            shell.set_transient_status(rust_i18n::t!("git.shelf.drop"), cx);
+            app_state.set_transient_status(rust_i18n::t!("git.shelf.drop"), cx);
             cx.notify();
         }
         GitAppEvent::ShelfFailed {
@@ -177,12 +175,12 @@ pub(super) fn handle_shelf_worktree_event(
             log::error!(
                 "Git 搁置操作失败，操作: {operation:?}，项目: {project_id}，原因: {message}"
             );
-            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+            if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
                     workspace.state.drop_request(request_id);
                 });
             }
-            shell.set_error(message);
+            app_state.set_error(message);
             cx.notify();
         }
         _ => {}

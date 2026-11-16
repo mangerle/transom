@@ -250,7 +250,7 @@ impl AppShell {
                     );
                 }
                 WindowRequest::GitSidebar(event) => {
-                    crate::git::actions::on_git_sidebar_event(self, &event, window, cx);
+                    crate::git::actions::on_git_sidebar_event(&mut self.state, &event, window, cx);
                 }
                 WindowRequest::SessionSidebar(event) => {
                     crate::sidebar::on_session_sidebar_event(self, &event, window, cx);
@@ -261,6 +261,9 @@ impl AppShell {
                     self.show_toast(message, success, window, cx)
                 }
                 WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
+                WindowRequest::LocalTerminal(cwd) => {
+                    crate::connection::spawn_local_terminal(self, cwd, cx)
+                }
                 WindowRequest::EditorClose(request) => match request {
                     crate::editor::EditorCloseRequest::Group(group_id) => {
                         self.close_group(group_id, window, cx)
@@ -286,7 +289,7 @@ impl AppShell {
                         initial,
                     } => {
                         crate::git::actions::modal_bridges::open_git_name_modal(
-                            self,
+                            &mut self.state,
                             project,
                             purpose.clone(),
                             initial.clone(),
@@ -296,7 +299,7 @@ impl AppShell {
                     }
                     crate::git::GitWorkspaceEvent::OpenWorktreeModal { project, start } => {
                         crate::git::actions::modal_bridges::open_git_worktree_modal(
-                            self,
+                            &mut self.state,
                             project.clone(),
                             start,
                             window,

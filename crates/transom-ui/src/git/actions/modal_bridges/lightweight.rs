@@ -1,29 +1,36 @@
 //! 轻量 Git 实体弹窗（名称录入、新建工作树）与 AppShell 的生命周期与事件桥接。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::{GitCommand, GitProject};
 
 /// 打开 Git 名称录入对话框实体。
 pub(crate) fn open_git_name_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project: &GitProject,
     purpose: crate::git::GitNamePurpose,
     default: String,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    open_name_modal_with(shell, Some(project.clone()), purpose, default, window, cx);
+    open_name_modal_with(
+        app_state,
+        Some(project.clone()),
+        purpose,
+        default,
+        window,
+        cx,
+    );
 }
 
 /// 打开「新建分组」名称对话框。
 pub(crate) fn open_git_folder_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     open_name_modal_with(
-        shell,
+        app_state,
         None,
         crate::git::GitNamePurpose::CreateFolder,
         String::new(),
@@ -34,13 +41,12 @@ pub(crate) fn open_git_folder_modal(
 
 /// 打开「重命名分组」名称对话框。
 pub(crate) fn open_git_rename_folder_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     id: transom_core::GitFolderId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(current) = shell
-        .state
+    let Some(current) = app_state
         .git_registry(cx)
         .folders
         .iter()
@@ -50,7 +56,7 @@ pub(crate) fn open_git_rename_folder_modal(
         return;
     };
     open_name_modal_with(
-        shell,
+        app_state,
         None,
         crate::git::GitNamePurpose::RenameFolder { id },
         current,
@@ -60,7 +66,7 @@ pub(crate) fn open_git_rename_folder_modal(
 }
 
 fn open_name_modal_with(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project: Option<GitProject>,
     purpose: crate::git::GitNamePurpose,
     default: String,
@@ -77,28 +83,34 @@ fn open_name_modal_with(
                 purpose,
                 name,
             } => {
-                handle_name_modal_submit(shell, project.clone(), purpose.clone(), name.clone(), cx);
+                handle_name_modal_submit(
+                    &mut shell.state,
+                    project.clone(),
+                    purpose.clone(),
+                    name.clone(),
+                    cx,
+                );
             }
-            crate::git::GitNameModalEvent::Close => close_git_name_modal(shell, cx),
+            crate::git::GitNameModalEvent::Close => close_git_name_modal(&mut shell.state, cx),
         },
     );
-    shell.state.ui.modals.git.name = Some(modal);
-    shell.state.runtime.tasks.subscriptions.git_name_modal = Some(subscription);
+    app_state.ui.modals.git.name = Some(modal);
+    app_state.runtime.tasks.subscriptions.git_name_modal = Some(subscription);
     cx.notify();
 }
 
 fn handle_name_modal_submit(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project: Option<GitProject>,
     purpose: crate::git::GitNamePurpose,
     name: String,
     cx: &mut Context<AppShell>,
 ) {
-    close_git_name_modal(shell, cx);
+    close_git_name_modal(app_state, cx);
     match purpose {
         crate::git::GitNamePurpose::CreateBranch { start } => {
             if let Some(project) = project {
-                shell.send_command(GitCommand::CreateBranch {
+                app_state.send_command(GitCommand::CreateBranch {
                     project,
                     name,
                     start,
@@ -108,7 +120,7 @@ fn handle_name_modal_submit(
         }
         crate::git::GitNamePurpose::CreateTag { target } => {
             if let Some(project) = project {
-                shell.send_command(GitCommand::CreateTag {
+                app_state.send_command(GitCommand::CreateTag {
                     project,
                     name,
                     target,
@@ -118,7 +130,7 @@ fn handle_name_modal_submit(
         }
         crate::git::GitNamePurpose::RenameBranch { old } => {
             if let Some(project) = project {
-                shell.send_command(GitCommand::RenameBranch {
+                app_state.send_command(GitCommand::RenameBranch {
                     project,
                     old,
                     new: name,
@@ -126,17 +138,12 @@ fn handle_name_modal_submit(
             }
         }
         crate::git::GitNamePurpose::CreateFolder => {
-            shell
-                .state
-                .update_git_registry(cx, |git| git.add_folder(name));
-            crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
+            app_state.update_git_registry(cx, |git| git.add_folder(name));
+            crate::git::actions::GitActions::new(app_state).persist_git_projects(cx);
         }
         crate::git::GitNamePurpose::RenameFolder { id } => {
-            if shell
-                .state
-                .update_git_registry(cx, |git| git.rename_folder(id, name))
-            {
-                crate::git::actions::GitActions::new(&mut shell.state).persist_git_projects(cx);
+            if app_state.update_git_registry(cx, |git| git.rename_folder(id, name)) {
+                crate::git::actions::GitActions::new(app_state).persist_git_projects(cx);
             }
         }
     }
@@ -144,22 +151,22 @@ fn handle_name_modal_submit(
 }
 
 /// 触发名称对话框提交。
-pub(crate) fn submit_git_name_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if let Some(modal) = shell.state.ui.modals.git.name.as_ref() {
+pub(crate) fn submit_git_name_modal(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    if let Some(modal) = app_state.ui.modals.git.name.as_ref() {
         modal.update(cx, |modal, cx| modal.submit(cx));
     }
 }
 
 /// 关闭名称对话框。
-pub(crate) fn close_git_name_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.ui.modals.git.name = None;
-    shell.state.runtime.tasks.subscriptions.git_name_modal = None;
+pub(crate) fn close_git_name_modal(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    app_state.ui.modals.git.name = None;
+    app_state.runtime.tasks.subscriptions.git_name_modal = None;
     cx.notify();
 }
 
 /// 打开「新建工作树」对话框实体。
 pub(crate) fn open_git_worktree_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     project: GitProject,
     start: &str,
     window: &mut Window,
@@ -176,7 +183,7 @@ pub(crate) fn open_git_worktree_modal(
                 start,
                 checkout,
             } => {
-                close_git_worktree_modal(shell, cx);
+                close_git_worktree_modal(&mut shell.state, cx);
                 if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
                     workspace.update(cx, |ws, cx| {
                         ws.create_worktree(
@@ -190,7 +197,7 @@ pub(crate) fn open_git_worktree_modal(
                         );
                     });
                 } else {
-                    shell.send_command(GitCommand::AddWorktree {
+                    shell.state.send_command(GitCommand::AddWorktree {
                         project: project.clone(),
                         path: path.clone(),
                         branch: branch.clone(),
@@ -198,24 +205,26 @@ pub(crate) fn open_git_worktree_modal(
                     });
                 }
             }
-            crate::git::GitWorktreeModalEvent::Close => close_git_worktree_modal(shell, cx),
+            crate::git::GitWorktreeModalEvent::Close => {
+                close_git_worktree_modal(&mut shell.state, cx)
+            }
         },
     );
-    shell.state.ui.modals.git.worktree = Some(modal);
-    shell.state.runtime.tasks.subscriptions.git_worktree_modal = Some(subscription);
+    app_state.ui.modals.git.worktree = Some(modal);
+    app_state.runtime.tasks.subscriptions.git_worktree_modal = Some(subscription);
     cx.notify();
 }
 
 /// 触发工作树对话框提交。
-pub(crate) fn submit_git_worktree_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if let Some(modal) = shell.state.ui.modals.git.worktree.as_ref() {
+pub(crate) fn submit_git_worktree_modal(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    if let Some(modal) = app_state.ui.modals.git.worktree.as_ref() {
         modal.update(cx, |modal, cx| modal.submit(cx));
     }
 }
 
 /// 关闭工作树对话框。
-pub(crate) fn close_git_worktree_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.ui.modals.git.worktree = None;
-    shell.state.runtime.tasks.subscriptions.git_worktree_modal = None;
+pub(crate) fn close_git_worktree_modal(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    app_state.ui.modals.git.worktree = None;
+    app_state.runtime.tasks.subscriptions.git_worktree_modal = None;
     cx.notify();
 }

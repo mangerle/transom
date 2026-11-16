@@ -155,11 +155,6 @@ impl AppShell {
         self.state.send_command(command)
     }
 
-    /// 设置底部状态栏错误提示文案。
-    pub(crate) fn set_error(&mut self, message: impl Into<String>) {
-        self.state.set_error(message);
-    }
-
     /// 设置会在固定时间后清除的底栏操作完成提示。
     pub(crate) fn set_transient_status(
         &mut self,

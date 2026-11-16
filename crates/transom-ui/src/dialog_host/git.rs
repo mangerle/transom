@@ -15,19 +15,19 @@ impl ModalKind {
     ) -> Option<bool> {
         match self {
             ModalKind::GitProject => {
-                crate::git::actions::modal_bridges::close_git_project_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_project_modal(&mut shell.state, cx);
                 Some(true)
             }
             ModalKind::GitClone => {
-                crate::git::actions::modal_bridges::close_git_clone_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_clone_modal(&mut shell.state, cx);
                 Some(true)
             }
             ModalKind::GitWorktree => {
-                crate::git::actions::modal_bridges::close_git_worktree_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_worktree_modal(&mut shell.state, cx);
                 Some(true)
             }
             ModalKind::GitName => {
-                crate::git::actions::modal_bridges::close_git_name_modal(shell, cx);
+                crate::git::actions::modal_bridges::close_git_name_modal(&mut shell.state, cx);
                 Some(true)
             }
             ModalKind::GitRebase => {
@@ -58,19 +58,19 @@ impl ModalKind {
     ) -> Option<()> {
         match self {
             ModalKind::GitProject => {
-                crate::git::actions::modal_bridges::commit_git_project_modal(shell, cx);
+                crate::git::actions::modal_bridges::commit_git_project_modal(&mut shell.state, cx);
                 Some(())
             }
             ModalKind::GitClone => {
-                crate::git::actions::modal_bridges::submit_git_clone_modal(shell, cx);
+                crate::git::actions::modal_bridges::submit_git_clone_modal(&mut shell.state, cx);
                 Some(())
             }
             ModalKind::GitWorktree => {
-                crate::git::actions::modal_bridges::submit_git_worktree_modal(shell, cx);
+                crate::git::actions::modal_bridges::submit_git_worktree_modal(&mut shell.state, cx);
                 Some(())
             }
             ModalKind::GitName => {
-                crate::git::actions::modal_bridges::submit_git_name_modal(shell, cx);
+                crate::git::actions::modal_bridges::submit_git_name_modal(&mut shell.state, cx);
                 Some(())
             }
             ModalKind::GitRebase => {
