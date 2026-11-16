@@ -1493,3 +1493,43 @@ fn ports_card_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "ports_card 超过 80 行：{lines}");
 }
+
+/// 容器头部动作必须拆分：主函数只分派生命周期动作与“更多”按钮，不超过 80 行。
+#[test]
+fn container_header_actions_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/detail/header_container.rs"))
+        .expect("读取 container/detail/header_container.rs 失败");
+    for helper in [
+        "fn lifecycle_actions",
+        "fn stop_action",
+        "fn terminal_jump_button",
+        "fn container_more_button",
+    ] {
+        assert!(source.contains(helper), "头部动作缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn container_header_actions")
+        .expect("缺少 container_header_actions");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "container_header_actions 超过 80 行：{lines}");
+}

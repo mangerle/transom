@@ -66,7 +66,9 @@ apps/transom (组合根 + 控制平面)
 
 编辑器关闭续行的决策已收归 `EditorPanels`：桥接只传工作区快照与脏标签集合，实体返回 `EditorCloseRequest` 后由外壳排期执行。
 
-编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。容器统计端口卡片拆为加载态、头部、表体、已发布端口行与暴露端口行（守卫 `ports_card_is_split`）。
+编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。容器详情头部动作拆为生命周期动作、停止/终端按钮与“更多”菜单（每个菜单项一个构造器，守卫 `container_header_actions_is_split`）。
+
+容器统计端口卡片拆为加载态、头部、表体、已发布端口行与暴露端口行（守卫 `ports_card_is_split`）。
 
 设置页容器仓库列表拆为顶栏、卡片、身份摘要与动作组（守卫 `registries_list_is_split`）。
 
