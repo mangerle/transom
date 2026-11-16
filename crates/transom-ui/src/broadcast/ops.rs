@@ -1,0 +1,442 @@
+//! 广播条的操作与渲染上下文。
+
+use super::BroadcastBarState;
+use super::rows::{BroadcastTargetRow, render_target_rows};
+use crate::app::{AppShell, AppState};
+use crate::divider::{DividerEdge, DividerStyled};
+use crate::palette::Palette;
+use crate::workspace::pane_status_indicator;
+use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Selectable;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::popover::Popover;
+use gpui_kit::*;
+use std::collections::HashSet;
+use transom_core::{GroupId, TabId};
+use transom_ui_icons::AppIcon;
+use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
+use transom_ui_icons::UiIcon;
+
+pub(crate) struct BroadcastOps<'a> {
+    state: &'a mut BroadcastBarState,
+    workspace: &'a crate::workspace::WorkspaceState,
+    status: &'a mut Option<String>,
+}
+
+impl<'a> BroadcastOps<'a> {
+    /// 从应用状态拆借广播域能力。
+    pub(crate) fn new(app: &'a mut AppState) -> Self {
+        Self {
+            state: &mut app.features.broadcast,
+            workspace: &app.workspace,
+            status: &mut app.ui.status,
+        }
+    }
+
+    /// 打开或关闭广播条；关闭时返回需要重新聚焦的活动标签。
+    pub(crate) fn toggle(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<AppShell>,
+    ) -> Option<TabId> {
+        if self.state.open {
+            self.close(window, cx)
+        } else {
+            self.open(window, cx);
+            None
+        }
+    }
+
+    /// 打开广播条并把焦点交给单行输入框。
+    fn open(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        self.state.open = true;
+        self.state.multiline = false;
+        self.state.targets_open = false;
+        let scope = self.current_visual_groups();
+        self.state.targets = self.default_broadcast_targets(&scope);
+        self.state.targets_scope = scope;
+        self.state.input.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+            state.focus(window, cx);
+        });
+        self.state
+            .textarea
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        cx.notify();
+    }
+
+    /// 关闭广播条并请求重新聚焦当前标签。
+    fn close(&mut self, _window: &mut Window, cx: &mut Context<AppShell>) -> Option<TabId> {
+        self.state.open = false;
+        self.state.targets_open = false;
+        let active = self.workspace.active_tab;
+        if active.is_none() {
+            cx.notify();
+        }
+        active
+    }
+
+    /// 单行与多行互切，文本随模式带过去，焦点落到新输入框。
+    pub(crate) fn toggle_multiline(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        if !self.state.open {
+            return;
+        }
+        let text = if self.state.multiline {
+            self.state.textarea.read(cx).value().to_string()
+        } else {
+            self.state.input.read(cx).value().to_string()
+        };
+        self.state.multiline = !self.state.multiline;
+        if self.state.multiline {
+            self.state.textarea.update(cx, |state, cx| {
+                state.set_value(&text, window, cx);
+                state.focus(window, cx);
+            });
+        } else {
+            // 单行输入框不能承载换行；收起来时把换行折成空格，保留可编辑内容。
+            let single = text.replace("\r\n", "\n").replace('\n', " ");
+            self.state.input.update(cx, |state, cx| {
+                state.set_value(&single, window, cx);
+                state.focus(window, cx);
+            });
+        }
+        cx.notify();
+    }
+
+    /// 把当前输入发送到所有已选目标；单行补回车，多行按粘贴语义整段发送。
+    pub(crate) fn send(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        if !self.state.open {
+            return;
+        }
+        let Some((text, targets)) = self.prepare(cx) else {
+            return;
+        };
+        let multiline = self.state.multiline;
+        let mut failed = 0usize;
+        for tab_id in &targets {
+            let Some(tab) = self.workspace.tab(*tab_id) else {
+                failed += 1;
+                continue;
+            };
+            let Some(terminal) = tab.terminal() else {
+                failed += 1;
+                continue;
+            };
+            let sent = terminal.update(cx, |view, cx| {
+                if multiline {
+                    view.send_paste(&text, true, cx)
+                } else {
+                    view.send_text(&format!("{text}\r"), cx)
+                }
+            });
+            if !sent {
+                failed += 1;
+            }
+        }
+        if failed > 0 {
+            *self.status = Some(rust_i18n::t!("broadcast.send_failed").to_string());
+        }
+        // 命令内容可能含敏感信息，只记录目标数量与失败数，绝不落盘正文。
+        log::info!(
+            "广播命令已发送，目标窗格数: {}，失败数: {}",
+            targets.len(),
+            failed
+        );
+        self.clear_inputs(window, cx);
+        cx.notify();
+    }
+
+    /// 读取广播文本并收敛目标集；空文本或无有效目标时返回 None。
+    fn prepare(&mut self, cx: &mut Context<AppShell>) -> Option<(String, Vec<TabId>)> {
+        let raw = if self.state.multiline {
+            self.state.textarea.read(cx).value().to_string()
+        } else {
+            self.state.input.read(cx).value().to_string()
+        };
+        let text = raw.trim_end_matches(['\r', '\n']).to_string();
+        if text.trim().is_empty() {
+            return None;
+        }
+        // 目标集合必须仍然落在当前视觉标签内：标签切换或窗格关闭后，残留的
+        // 旧目标不能继续收到命令。
+        let allowed: HashSet<TabId> = self
+            .current_visual_groups()
+            .into_iter()
+            .filter_map(|group_id| self.workspace.group(group_id))
+            .flat_map(|group| group.pane_ids())
+            .collect();
+        self.state.targets.retain(|id| allowed.contains(id));
+        let targets: Vec<TabId> = self.state.targets.iter().copied().collect();
+        if targets.is_empty() {
+            *self.status = Some(rust_i18n::t!("broadcast.no_targets").to_string());
+            cx.notify();
+            return None;
+        }
+        Some((text, targets))
+    }
+
+    /// 发送完成后清空两种输入并按当前模式恢复焦点。
+    fn clear_inputs(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        self.state
+            .input
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.state
+            .textarea
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        let multiline = self.state.multiline;
+        if multiline {
+            self.state
+                .textarea
+                .update(cx, |state, cx| state.focus(window, cx));
+        } else {
+            self.state
+                .input
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+    }
+
+    /// 当前“视觉标签”里的标签组，顺序固定为并排对的前后格或单标签本身。
+    fn current_visual_groups(&self) -> Vec<GroupId> {
+        let Some(active_index) = self
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.workspace.group_index_for_tab(tab_id))
+        else {
+            return Vec::new();
+        };
+        let active_group = self.workspace.groups[active_index].id;
+        if let Some(tiled) = self
+            .workspace
+            .tiled_sets
+            .iter()
+            .find(|tiled| tiled.contains(active_group))
+        {
+            return tiled.occupied_groups();
+        }
+        vec![active_group]
+    }
+
+    /// 按给定的视觉标签作用域收集默认目标：只取已有终端的窗格。
+    fn default_broadcast_targets(&self, groups: &[GroupId]) -> HashSet<TabId> {
+        let mut targets = HashSet::with_capacity(self.workspace.tabs.len());
+        for group_id in groups {
+            let Some(group) = self.workspace.group(*group_id) else {
+                continue;
+            };
+            for pane_id in group.pane_ids() {
+                if self
+                    .workspace
+                    .tabs
+                    .iter()
+                    .any(|tab| tab.id == pane_id && tab.terminal().is_some())
+                {
+                    targets.insert(pane_id);
+                }
+            }
+        }
+        targets
+    }
+
+    /// 目标选择列表：只列当前视觉标签内的窗格，不跨标签。
+    fn target_rows(&self, p: &Palette) -> Vec<BroadcastTargetRow> {
+        let groups = self.current_visual_groups();
+        let mut rows = Vec::with_capacity(self.workspace.tabs.len());
+        for group_id in groups {
+            let Some(group) = self.workspace.group(group_id) else {
+                continue;
+            };
+            let pane_ids = group.pane_ids();
+            let multi = pane_ids.len() > 1;
+            for (position, pane_id) in pane_ids.iter().enumerate() {
+                let Some(tab) = self
+                    .workspace
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.id == *pane_id && tab.terminal().is_some())
+                else {
+                    continue;
+                };
+                let (dot_color, _) = pane_status_indicator(&tab.status, p);
+                let mut title = tab.display_name();
+                if group.serial > 0 {
+                    title = format!("{title} #{}", group.serial);
+                }
+                if multi {
+                    let suffix =
+                        rust_i18n::t!("broadcast.pane_suffix", index = position + 1).to_string();
+                    title = format!("{title} · {suffix}");
+                }
+                rows.push(BroadcastTargetRow {
+                    tab_id: *pane_id,
+                    title,
+                    dot_color,
+                    icon: crate::connection::icon(&tab.session.connection),
+                    selected: self.state.targets.contains(pane_id),
+                });
+            }
+        }
+        rows
+    }
+
+    /// 状态栏快捷命令旁的广播入口。
+    pub(crate) fn render_trigger(&self, cx: &mut Context<AppShell>) -> AnyElement {
+        Button::new("broadcast-trigger")
+            .ghost()
+            .xsmall()
+            .child(AppIconElement::new(AppIcon::Custom(CustomIcon::BROADCAST)).small())
+            .selected(self.state.open)
+            .accessibility_label(rust_i18n::t!("broadcast.title").to_string())
+            .tooltip(rust_i18n::t!("broadcast.title").to_string())
+            .on_click(cx.listener(|this, _, window, cx| {
+                let plan = crate::broadcast::BroadcastOps::new(&mut this.state).toggle(window, cx);
+                if let Some(tab_id) = plan {
+                    this.activate_tab(tab_id, window, cx);
+                }
+            }))
+            .into_any_element()
+    }
+
+    /// 广播目标选择浮层：触发按钮与目标行列表。
+    fn render_targets(&self, cx: &mut Context<AppShell>, p: &Palette) -> AnyElement {
+        let target_trigger = Button::new("broadcast-targets-trigger")
+            .ghost()
+            .xsmall()
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
+            .label(rust_i18n::t!("broadcast.targets").to_string())
+            .selected(self.state.targets_open)
+            .tooltip(rust_i18n::t!("broadcast.targets").to_string());
+        let app = cx.entity().clone();
+        let app_open = app.clone();
+        let rows = self.target_rows(p);
+        let content_palette = p.clone();
+        Popover::new("broadcast-targets-popover")
+            .anchor(Anchor::BottomLeft)
+            .offset(px(-1.0))
+            .trigger_style(StyleRefinement::default().flex_none().flex().items_center())
+            .open(self.state.targets_open)
+            .on_open_change(move |open, _window, cx| {
+                let open = *open;
+                app_open.update(cx, |this, cx| {
+                    if this.state.features.broadcast.targets_open != open {
+                        this.state.features.broadcast.targets_open = open;
+                        cx.notify();
+                    }
+                });
+            })
+            .trigger(target_trigger)
+            .content(move |_, _, _cx| render_target_rows(&app, rows.clone(), &content_palette))
+            .into_any_element()
+    }
+
+    /// 底部广播输入条。
+    pub(crate) fn render_bar(&self, cx: &mut Context<AppShell>, p: &Palette) -> AnyElement {
+        let multiline = self.state.multiline;
+        let targets_popover = self.render_targets(cx, p);
+        let close = crate::widgets::IconButton::new(
+            "broadcast-close",
+            AppIcon::Ui(UiIcon::CLOSE),
+            rust_i18n::t!("app.close").to_string(),
+        )
+        .size(crate::widgets::IconButtonSize::Compact)
+        .render()
+        .on_click(cx.listener(|this, _, window, cx| {
+            let plan = crate::broadcast::BroadcastOps::new(&mut this.state).toggle(window, cx);
+            if let Some(tab_id) = plan {
+                this.activate_tab(tab_id, window, cx);
+            }
+        }));
+        let toggle = Button::new("broadcast-mode-toggle")
+            .ghost()
+            .xsmall()
+            .child(
+                AppIconElement::new(if multiline {
+                    AppIcon::Ui(UiIcon::DOWN)
+                } else {
+                    AppIcon::Ui(UiIcon::UP)
+                })
+                .small(),
+            )
+            .accessibility_label(if multiline {
+                rust_i18n::t!("broadcast.collapse").to_string()
+            } else {
+                rust_i18n::t!("broadcast.expand").to_string()
+            })
+            .tooltip(if multiline {
+                rust_i18n::t!("broadcast.collapse").to_string()
+            } else {
+                rust_i18n::t!("broadcast.expand").to_string()
+            })
+            .on_click(cx.listener(|this, _, window, cx| {
+                crate::broadcast::BroadcastOps::new(&mut this.state).toggle_multiline(window, cx);
+            }));
+
+        if multiline {
+            v_flex()
+                .w_full()
+                .bg(p.tab_bar)
+                .border_color(p.divider(p.border))
+                .divider_edge(DividerEdge::Top, p.divider_width)
+                .child(
+                    h_flex()
+                        .px_2()
+                        .py_1()
+                        .gap_2()
+                        .items_center()
+                        .child(targets_popover)
+                        .child(div().flex_1())
+                        .child(close)
+                        .child(toggle),
+                )
+                .child(
+                    div().px_2().pb_2().w_full().child(
+                        Textarea::new(&self.state.textarea)
+                            .appearance(false)
+                            .bordered(false)
+                            .h(rems(7.0))
+                            .w_full(),
+                    ),
+                )
+                .into_any_element()
+        } else {
+            h_flex()
+                .w_full()
+                .h(rems(2.5))
+                .px_2()
+                .gap_2()
+                .items_center()
+                .bg(p.tab_bar)
+                .border_color(p.divider(p.border))
+                .divider_edge(DividerEdge::Top, p.divider_width)
+                .child(targets_popover)
+                .child(
+                    div().flex_1().min_w_0().child(
+                        Input::new(&self.state.input)
+                            .appearance(false)
+                            .bordered(false)
+                            .w_full(),
+                    ),
+                )
+                .child(close)
+                .child(toggle)
+                .into_any_element()
+        }
+    }
+}
+
+/// 更新单个广播目标的勾选状态。
+pub(crate) fn set_broadcast_target(
+    state: &mut BroadcastBarState,
+    tab_id: TabId,
+    selected: bool,
+    cx: &mut Context<AppShell>,
+) {
+    if selected {
+        state.targets.insert(tab_id);
+    } else {
+        state.targets.remove(&tab_id);
+    }
+    cx.notify();
+}

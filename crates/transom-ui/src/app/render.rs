@@ -279,6 +279,28 @@ impl AppShell {
 }
 
 impl AppShell {
+    /// 切换当前焦点终端的键盘复制模式。
+    fn on_toggle_copy_mode(
+        &mut self,
+        _: &keymap::ToggleCopyMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(terminal) = self.state.workspace.active_pane_terminal() else {
+            return;
+        };
+        // 先把焦点交给终端：从侧栏/面板触发时焦点还在输入框里，模式虽然
+        // 打开了，后续按键却继续落进那个输入框，像“按了没反应”。
+        let focus_handle = terminal.read(cx).focus_handle().clone();
+        window.focus(&focus_handle, cx);
+        terminal.update(cx, |view, cx| {
+            view.toggle_copy_mode(cx);
+        });
+        cx.notify();
+    }
+}
+
+impl AppShell {
     /// 把工作区级快捷键动作挂到根元素上。
     ///
     /// 动作链是声明式映射，单独成方法后 `render` 只保留布局与层序；
@@ -297,7 +319,7 @@ impl AppShell {
             .on_action(cx.listener(crate::forward::on_toggle_forward))
             .on_action(cx.listener(Self::on_toggle_immersive))
             .on_action(cx.listener(crate::terminal_search::on_search_buffer))
-            .on_action(cx.listener(crate::terminal_copy_mode::on_toggle_copy_mode))
+            .on_action(cx.listener(Self::on_toggle_copy_mode))
             .on_action(cx.listener(crate::terminal_search::on_toggle_block_view))
             .on_action(cx.listener(crate::terminal_search::on_prev_prompt))
             .on_action(cx.listener(crate::terminal_search::on_next_prompt))

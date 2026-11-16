@@ -132,7 +132,9 @@ impl ContainerWorkspace {
     /// 应用构建进度：更新提示并把日志追加到构建弹窗。
     pub(crate) fn apply_build_progress(&mut self, request_id: ContainerRequestId, line: &str) {
         self.state.notice = line.lines().last().map(str::to_string);
-        if let Some(build) = self.state.modals
+        if let Some(build) = self
+            .state
+            .modals
             .build_dialog
             .as_mut()
             .filter(|build| build.request_id == Some(request_id))

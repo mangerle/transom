@@ -21,7 +21,9 @@
 mod builtin;
 mod document;
 mod preview;
-pub(crate) mod tokens;
+pub(crate) mod tokens {
+    pub(crate) use transom_ui_kit::tokens::*;
+}
 
 pub(crate) use document::{
     MAX_THEME_DOCUMENT_BYTES, ThemeDraft, parse_single_theme_document, serialize_theme_document,

@@ -6,12 +6,11 @@
 //!   只隐藏图标，不关闭已经打开的面板，快捷键仍可继续操作对应功能；
 //! - 拖拽落点分两类：图标上半/下半决定插到该图标之前/之后，图标之间的空白则
 //!   承载跨区移动；
-//! - 模块拆分：度量提取至 `metrics`，拖拽与预览提取至 `drag`，右键菜单提取至 `menu`，
+//! - 模块拆分：拖拽与预览提取至 `drag`，右键菜单提取至 `menu`，
 //!   主模块聚焦视图装配与条目点击分发。
 
 mod drag;
 mod menu;
-mod metrics;
 
 use crate::app::AppShell;
 use crate::app::app_settings;
@@ -19,6 +18,7 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::monitor::{MonitorOps, MonitorTerminalPlan};
 use crate::palette::Palette;
 use crate::sidebar::SidebarSection;
+use crate::theme::tokens::size;
 use drag::{
     ActivityDrag, ActivityDragPreview, render_activity_blank_zone, render_activity_reorder_overlay,
 };
@@ -26,10 +26,30 @@ use gpui_kit::base::v_flex;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
-use metrics::METRICS;
 use transom_core::AppSettings;
 use transom_core::{ActivityItemId, Connection, TabPosition};
 use transom_ui_icons::AppIconElement;
+
+/// 活动栏的布局度量统一从这里取值。
+///
+/// 设计原理（Why）：按钮尺寸与间距同时决定条宽、命中区和插入线位置，集中
+/// 定义可避免绘制方法各自漂移；宽度、按钮与图标随密度缩放，间距保留像素语义。
+#[derive(Clone, Copy)]
+struct ActivityBarMetrics {
+    width: f32,
+    button: f32,
+    icon: f32,
+    gap: f32,
+    padding_y: f32,
+}
+
+const METRICS: ActivityBarMetrics = ActivityBarMetrics {
+    width: size::ACTIVITY_BAR_WIDTH,
+    button: size::ACTIVITY_BUTTON_SIZE,
+    icon: size::ACTIVITY_ICON_SIZE,
+    gap: 4.0,
+    padding_y: 4.0,
+};
 
 pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 pub(crate) use menu::restore_activity_bar;

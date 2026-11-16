@@ -2,7 +2,7 @@
 
 use crate::app::AppShell;
 use crate::editor::close::PendingEditorClose;
-use crate::editor::navigate::{EditorGotoLineModalState, apply_editor_goto};
+use crate::editor::{EditorGotoLineModalState, apply_editor_goto};
 use crate::palette::Palette;
 use crate::palette::sftp_text_input;
 use gpui_kit::base::{h_flex, v_flex};

@@ -12,8 +12,8 @@
 //! # 代价与局限
 //! 事件只携带结果，外壳不再能通过读实体补数据；所有跨域信息必须在事件里带全。
 //! 文件对话框仍在 UI 线程同步弹出（与迁移前一致），这是 `rfd` 的平台约束。
-use super::helpers::ensure_backup_extension;
-use super::prompt::{BackupAction, BackupPromptState};
+use super::ensure_backup_extension;
+use super::{BackupAction, BackupPromptState};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;

@@ -2,8 +2,8 @@
 
 use super::editor_reject;
 use crate::app::{AppShell, app_settings};
+use crate::editor::apply_editor_goto;
 use crate::editor::code_link::resolve_code_path;
-use crate::editor::navigate::apply_editor_goto;
 use crate::editor::open::{EditGate, EditorPanelSettings, PanelSeed, SpawnEditorPanelParams};
 use crate::sftp::format_size;
 use gpui_kit::*;

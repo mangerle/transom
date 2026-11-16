@@ -19,11 +19,11 @@
 //!   发读取命令并在投递失败时把错误交回实体。
 
 use super::entity::EditorPanels;
-use super::open_support::panel_seed_state;
 use super::panel::{
     EditorPanelState, EditorPhase, PANEL_HEIGHT, PANEL_WIDTH, PendingGoto, caret_of,
     cascade_origin, editor_language_token,
 };
+use super::panel_seed_state;
 use gpui_kit::component::input::{EditorState, InputEvent};
 use gpui_kit::*;
 use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, TabId, TransferId};
@@ -367,7 +367,7 @@ impl EditorPanels {
         let goto = item.pending_goto.take();
         let editor = item.editor.clone();
         if let Some((line, column)) = goto {
-            super::navigate::apply_editor_goto(&editor, line, column, window, cx);
+            super::apply_editor_goto(&editor, line, column, window, cx);
         } else {
             editor.update(cx, |state, cx| state.focus(window, cx));
         }

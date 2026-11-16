@@ -26,7 +26,6 @@ mod delete;
 mod drop_upload;
 mod event_applier;
 mod file_ops;
-mod local_diff;
 mod queue;
 mod side_remote;
 mod status;
@@ -278,5 +277,25 @@ impl AppState {
             return false;
         };
         pane.sftp_view.take().is_some()
+    }
+}
+
+impl SftpPanelView {
+    /// 从本地栏打开：选中本地文件，与远端当前目录的同名文件比对。
+    pub(crate) fn open_local_diff(&mut self, cx: &mut Context<Self>) {
+        match crate::diff_viewer::local_diff_check(self.state.main_connection, &self.state) {
+            crate::diff_viewer::LocalDiffCheck::Ready(target) => {
+                cx.emit(crate::sftp::SftpPanelEvent::OpenLocalDiff {
+                    tab_id: self.tab_id,
+                    target,
+                });
+                cx.notify();
+            }
+            crate::diff_viewer::LocalDiffCheck::Rejected(reason) => {
+                cx.emit(crate::sftp::SftpPanelEvent::SetStatus(reason));
+                cx.notify();
+            }
+            crate::diff_viewer::LocalDiffCheck::NotApplicable => {}
+        }
     }
 }

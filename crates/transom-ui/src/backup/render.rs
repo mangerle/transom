@@ -3,8 +3,8 @@
 //! 渲染期实体已被租借，因此这里只读 `state`；按钮回调经 `cx.listener` 回到
 //! [`BackupPromptView`]，避免出现“渲染里再 `update` 自己”的双重租借。
 
-use super::prompt::{BackupAction, BackupPromptState};
 use super::view::BackupPromptView;
+use super::{BackupAction, BackupPromptState};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;

@@ -1,18 +1,116 @@
 //! 单个引擎工作区的状态：列表、选中项、日志、统计、终端与文件页。
 //!
-//! 主体状态在 state.rs，文件操作弹窗与确认弹窗类型分别放在 prompt/panel。
+//! 主体状态在 state.rs，文件操作提示、提交/确认与局部弹窗契约聚合在本模块。
 
-mod modals;
-mod panel;
-mod prompt;
 mod state;
 
-pub(crate) use modals::ContainerWorkspaceModals;
-pub(crate) use panel::{ContainerCommitState, ContainerConfirm};
-pub(crate) use prompt::ContainerFilePrompt;
 pub(crate) use state::ContainerWorkspaceState;
 
 use super::*;
+
+/// 容器提交镜像的就地表单状态。
+#[derive(Clone)]
+pub(crate) struct ContainerCommitState {
+    pub(crate) container: String,
+    pub(crate) repo: Entity<InputState>,
+    pub(crate) tag: Entity<InputState>,
+    pub(crate) comment: Entity<InputState>,
+}
+
+/// 待确认的删除操作：删除是破坏性动作，必须再点一次确认。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ContainerConfirm {
+    Container(String),
+    Image(String),
+    Volume(String),
+    Network(String),
+    /// 编排项目 `down`：会删掉该项目创建的容器与网络。
+    Compose(String),
+    FilePath {
+        path: String,
+        recursive: bool,
+    },
+    /// 上传目标已存在：确认后覆盖。
+    UploadOverwrite {
+        path: String,
+        local_path: std::path::PathBuf,
+        directory: bool,
+    },
+}
+
+/// 文件操作提示词；来源路径与操作类型一起决定标题、校验与命令。
+#[derive(Clone)]
+pub(crate) enum ContainerFilePrompt {
+    Rename { from: String },
+    Copy { from: String },
+    Chmod { path: String },
+    Chown { path: String },
+}
+
+impl ContainerFilePrompt {
+    pub(crate) fn title_key(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "container.files.rename_modal_title",
+            Self::Copy { .. } => "container.files.copy_modal_title",
+            Self::Chmod { .. } => "container.files.chmod_modal_title",
+            Self::Chown { .. } => "container.files.chown_modal_title",
+        }
+    }
+
+    pub(crate) fn prompt_key(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "container.files.rename_prompt",
+            Self::Copy { .. } => "container.files.copy_prompt",
+            Self::Chmod { .. } => "container.files.chmod_prompt",
+            Self::Chown { .. } => "container.files.chown_prompt",
+        }
+    }
+
+    pub(crate) fn placeholder_key(&self) -> &'static str {
+        match self {
+            Self::Rename { .. } => "container.files.rename_placeholder",
+            Self::Copy { .. } => "container.files.copy_placeholder",
+            Self::Chmod { .. } => "container.files.chmod_placeholder",
+            Self::Chown { .. } => "container.files.chown_placeholder",
+        }
+    }
+
+    pub(crate) fn default_value(&self) -> String {
+        match self {
+            Self::Rename { from } => from.rsplit('/').next().unwrap_or(from).to_string(),
+            _ => String::new(),
+        }
+    }
+}
+
+/// 单个容器引擎工作区内挂靠的模态弹窗状态集合。
+#[derive(Default)]
+pub(crate) struct ContainerWorkspaceModals {
+    pub(crate) confirm: Option<ContainerConfirm>,
+    pub(crate) rename_container: Option<(String, Entity<InputState>)>,
+    pub(crate) update_container: Option<(String, Entity<InputState>, Entity<InputState>)>,
+    pub(crate) tag_image: Option<(String, Entity<InputState>)>,
+    pub(crate) connect_network: Option<(String, Entity<InputState>)>,
+    pub(crate) export_config: Option<(String, String, String, bool)>,
+    pub(crate) commit_container: Option<ContainerCommitState>,
+    pub(crate) hub_dialog: Option<ContainerHubDialog>,
+    pub(crate) push_dialog: Option<ContainerPushDialog>,
+    pub(crate) build_dialog: Option<ContainerBuildDialog>,
+    pub(crate) forward_dialog: Option<ContainerForwardDialog>,
+    pub(crate) system_df_dialog_open: bool,
+    pub(crate) pods_dialog_open: bool,
+    pub(crate) quadlets_dialog_open: bool,
+}
+
+impl ContainerWorkspaceModals {
+    /// 切换工作区分类时收起依赖当前选中对象上下文的轻量弹窗。
+    pub(crate) fn clear_on_section_change(&mut self) {
+        self.confirm = None;
+        self.rename_container = None;
+        self.export_config = None;
+        self.commit_container = None;
+    }
+}
 
 /// 工作区连接状态。
 #[derive(Debug, Clone, PartialEq, Eq)]

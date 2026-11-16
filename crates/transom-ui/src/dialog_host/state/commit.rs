@@ -219,21 +219,27 @@ impl ModalKind {
     fn sftp_focus_target(self, shell: &AppShell, cx: &App) -> Option<ModalFocus> {
         let focus = match self {
             ModalKind::SftpInput => input_focus(shell, |state| {
-                state.ui.modals
+                state
+                    .ui
+                    .modals
                     .sftp
                     .input
                     .as_ref()
                     .map(|modal| modal.read(cx).input.clone())
             }),
             ModalKind::SftpChmod => input_focus(shell, |state| {
-                state.ui.modals
+                state
+                    .ui
+                    .modals
                     .sftp
                     .chmod
                     .as_ref()
                     .map(|modal| modal.read(cx).octal_input.clone())
             }),
             ModalKind::SftpSearch => input_focus(shell, |state| {
-                state.ui.modals
+                state
+                    .ui
+                    .modals
                     .sftp
                     .search
                     .as_ref()
@@ -257,7 +263,9 @@ impl ModalKind {
     fn tool_and_session_focus_target(self, shell: &AppShell, cx: &App) -> ModalFocus {
         match self {
             ModalKind::EditorGotoLine => input_focus(shell, |state| {
-                state.ui.modals
+                state
+                    .ui
+                    .modals
                     .tools
                     .editor_goto_line
                     .as_ref()
@@ -322,14 +330,18 @@ impl ModalKind {
                     ModalFocus::Input(form.name.clone())
                 }),
             ModalKind::FolderForm => input_focus(shell, |state| {
-                state.ui.modals
+                state
+                    .ui
+                    .modals
                     .session
                     .folder_form
                     .as_ref()
                     .map(|form| form.name.clone())
             }),
             ModalKind::SnippetForm => input_focus(shell, |state| {
-                state.ui.modals
+                state
+                    .ui
+                    .modals
                     .tools
                     .snippet_panel
                     .form

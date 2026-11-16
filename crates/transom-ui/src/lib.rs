@@ -19,8 +19,14 @@ mod bundled_fonts;
 mod cast_player;
 mod cast_player_io;
 mod diff_pane;
-mod divider;
-mod format;
+pub(crate) mod divider {
+    pub(crate) use transom_ui_kit::divider::*;
+}
+
+pub(crate) mod format {
+    pub(crate) use transom_ui_kit::format::*;
+}
+
 mod i18n;
 pub(crate) mod identity;
 mod keymap;
@@ -62,7 +68,6 @@ pub(crate) mod sparkline;
 pub(crate) mod split;
 pub(crate) mod startup;
 pub(crate) mod status_bar;
-pub(crate) mod terminal_copy_mode;
 pub(crate) mod terminal_search;
 pub(crate) mod tiling;
 pub(crate) mod window_state;

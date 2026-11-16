@@ -1,6 +1,6 @@
 //! 活动栏拖拽交互、跟随预览与落点重序覆盖层。
 
-use super::metrics::METRICS;
+use super::METRICS;
 use crate::app::AppShell;
 use crate::app::app_settings_mut;
 use crate::palette::Palette;

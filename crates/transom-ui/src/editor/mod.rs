@@ -20,13 +20,68 @@ mod drag_tracker;
 mod entity;
 mod list;
 mod manager;
-mod navigate;
 mod open;
-mod open_support;
 mod ops;
 mod panel;
 mod status;
 mod view;
+
+/// 编辑器“跳转到行”弹窗的状态。
+pub(crate) struct EditorGotoLineModalState {
+    pub(crate) editor: gpui_kit::Entity<gpui_kit::component::input::EditorState>,
+    pub(crate) input: gpui_kit::Entity<gpui_kit::component::input::InputState>,
+    pub(crate) error: Option<String>,
+    pub(crate) _enter_sub: gpui_kit::Subscription,
+}
+
+/// 把编辑器光标移到 1 基的行列位置，展开被折叠的行并收敛越界值。
+pub(crate) fn apply_editor_goto(
+    editor: &gpui_kit::Entity<gpui_kit::component::input::EditorState>,
+    line: u32,
+    column: Option<u32>,
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::App,
+) {
+    use gpui_kit::component::input::{Position, RopeExt};
+    let total = editor.read(cx).text().lines_len().max(1) as u32;
+    let line = line.max(1).min(total);
+    let column = column.unwrap_or(1).max(1) - 1;
+    let position = Position::new(line - 1, column);
+    editor.update(cx, |state, cx| {
+        state.unfold_at(position, cx);
+        state.set_cursor_position(position, window, cx);
+    });
+}
+
+/// 由面板种子推导装载态、阶段、待处理操作与远端元信息。
+pub(crate) fn panel_seed_state(
+    seed: open::PanelSeed,
+) -> (
+    bool,
+    panel::EditorPhase,
+    Option<transom_core::TransferId>,
+    Option<transom_core::RemoteTextMeta>,
+    bool,
+) {
+    match seed {
+        open::PanelSeed::Reading { op_id, .. } => {
+            (false, panel::EditorPhase::Reading, Some(op_id), None, false)
+        }
+        open::PanelSeed::NewFile => (
+            true,
+            panel::EditorPhase::Idle,
+            None,
+            Some(transom_core::RemoteTextMeta {
+                size: 0,
+                mtime: None,
+                bom: false,
+                crlf: false,
+                transcoded: false,
+            }),
+            true,
+        ),
+    }
+}
 
 pub(crate) use bridge::{
     RemoteEditorOpen, block_close_for_dirty_editors, cancel_editor_goto_line,
@@ -39,5 +94,4 @@ pub(crate) use close::PendingEditorClose;
 pub(crate) use diff::EditorDiffWriteSync;
 pub(crate) use entity::{EditorDiffSource, EditorPanelEvent, EditorPanels};
 pub(crate) use list::render_editor_list_popover;
-pub(crate) use navigate::EditorGotoLineModalState;
 pub(crate) use panel::{caret_of, editor_language_token};

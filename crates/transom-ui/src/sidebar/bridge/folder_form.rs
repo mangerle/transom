@@ -1,6 +1,6 @@
 //! 文件夹表单弹窗的打开、保存与渲染逻辑。
 
-use super::super::folders::FolderForm;
+use super::super::FolderForm;
 use crate::app::AppShell;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};

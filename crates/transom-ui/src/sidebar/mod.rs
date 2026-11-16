@@ -2,16 +2,40 @@
 
 mod bridge;
 mod entity;
-mod folders;
 mod slot;
 mod state;
 mod tree;
 
 pub(crate) use bridge::{on_session_sidebar_event, render_folder_form_body, save_folder_form};
 pub(crate) use entity::{SessionSidebarEvent, SessionSidebarView};
-pub(crate) use folders::FolderForm;
 pub(crate) use slot::{SidebarSlotLayout, SidebarSlotSync, sync_sidebar_slot};
 pub(crate) use state::{SidebarRowsCache, SidebarSection, SidebarState};
+
+/// 新建/编辑文件夹的模态表单；`base` 为编辑目标，`parent` 为新建位置。
+pub(crate) struct FolderForm {
+    pub(crate) base: Option<FolderId>,
+    pub(crate) parent: Option<FolderId>,
+    pub(crate) name: Entity<InputState>,
+    pub(crate) default_port: Entity<InputState>,
+    pub(crate) default_username: Entity<InputState>,
+    pub(crate) default_key_path: Entity<InputState>,
+    pub(crate) error: Option<String>,
+}
+
+impl FolderForm {
+    /// 表单全部文本项的当前值，用作脏判定基线。
+    pub(crate) fn text_values(&self, cx: &App) -> Vec<String> {
+        [
+            &self.name,
+            &self.default_port,
+            &self.default_username,
+            &self.default_key_path,
+        ]
+        .into_iter()
+        .map(|input| input.read(cx).value().to_string())
+        .collect()
+    }
+}
 
 /// 侧栏工具图标按钮配置属性。
 pub(crate) struct SidebarButtonProps<F> {
@@ -34,7 +58,7 @@ use gpui_kit::component::{Sizable, v_virtual_list};
 use gpui_kit::*;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use transom_core::SessionId;
+use transom_core::{FolderId, SessionId};
 use transom_ui_icons::{AppIcon, UiIcon};
 pub(crate) use tree::{
     ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, SidebarRow, indent_padding,

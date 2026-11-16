@@ -103,7 +103,9 @@ impl ContainerWorkspace {
             return;
         };
         let path_str = folder.display().to_string();
-        let Some(input) = self.state.modals
+        let Some(input) = self
+            .state
+            .modals
             .build_dialog
             .as_ref()
             .map(|build| build.context_path.clone())

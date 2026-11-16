@@ -103,7 +103,9 @@ impl crate::app::AppState {
     /// 优先读目录里的会话定义：改了图标与颜色，已打开的标签立刻跟着变，不必
     /// 重连；本地终端没有目录条目，用标签自带的会话快照。
     pub(crate) fn session_appearance(&self, tab: &TerminalTab) -> SessionAppearance {
-        let session = self.session.catalog
+        let session = self
+            .session
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == tab.session_id)

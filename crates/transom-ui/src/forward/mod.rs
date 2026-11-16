@@ -1,8 +1,34 @@
 //! 端口转发面板与公网监听确认弹窗模块。
 
+/// 转发面板向外壳发出的意图。
+#[derive(Clone)]
+pub(crate) enum ForwardPanelEvent {
+    /// 提交一条已通过校验的转发规则。
+    SubmitRule {
+        tab_id: transom_core::TabId,
+        rule: transom_core::ForwardRule,
+    },
+    /// 启动一条规则。
+    StartRule {
+        tab_id: transom_core::TabId,
+        rule_id: transom_core::ForwardId,
+    },
+    /// 停止一条规则。
+    StopRule {
+        tab_id: transom_core::TabId,
+        rule_id: transom_core::ForwardId,
+    },
+    /// 删除一条规则。
+    DeleteRule {
+        tab_id: transom_core::TabId,
+        rule_id: transom_core::ForwardId,
+    },
+    /// 关闭面板；句柄由外壳回收。
+    ClosePanel,
+}
+
 mod actions;
 mod entity;
-mod panel_event;
 mod view;
 
 pub(crate) use actions::{
@@ -11,7 +37,6 @@ pub(crate) use actions::{
     toggle_forward_panel,
 };
 pub(crate) use entity::ForwardView;
-pub(crate) use panel_event::ForwardPanelEvent;
 pub(crate) use view::render_forward_confirm_body;
 
 use gpui_kit::component::input::InputState;
