@@ -25,6 +25,19 @@ const CANCEL_TICK: Duration = Duration::from_millis(250);
 /// 日志输出回调：收到的是已经合并、可直接写入终端的字节。
 pub type LogSink<'a> = dyn FnMut(Vec<u8>) + Send + 'a;
 
+/// 容器日志流拉取参数，避免多布尔/控制参数平铺。
+#[derive(Clone, Copy)]
+pub struct LogStreamOptions<'a> {
+    /// 尾部行数，`0` 表示全量。
+    pub tail: usize,
+    /// 是否持续跟随新增日志。
+    pub follow: bool,
+    /// 是否附加服务端时间戳。
+    pub timestamps: bool,
+    /// 取消信号。
+    pub cancel: &'a Arc<AtomicBool>,
+}
+
 /// 拉取容器日志；`follow` 为真时持续到取消或容器结束，`timestamps` 为真时带上服务端时间戳。
 ///
 /// `tail` 是要取的尾部行数，`0` 表示全量：引擎把数值 0 理解为「最后 0 行」，
@@ -35,12 +48,15 @@ pub type LogSink<'a> = dyn FnMut(Vec<u8>) + Send + 'a;
 pub async fn stream_logs(
     engine: &Engine,
     container: &str,
-    tail: usize,
-    follow: bool,
-    timestamps: bool,
-    cancel: &Arc<AtomicBool>,
+    options: LogStreamOptions<'_>,
     sink: &mut LogSink<'_>,
 ) -> Result<(), ContainerError> {
+    let LogStreamOptions {
+        tail,
+        follow,
+        timestamps,
+        cancel,
+    } = options;
     if let Some(cli) = engine.cli_backend_ref() {
         return cli_logs(cli, container, tail, follow, timestamps, cancel, sink).await;
     }
@@ -156,10 +172,7 @@ impl LinePrefixer {
 pub async fn stream_project_logs(
     engine: &Engine,
     containers: Vec<String>,
-    tail: usize,
-    follow: bool,
-    timestamps: bool,
-    cancel: &Arc<AtomicBool>,
+    options: LogStreamOptions<'_>,
     sink: &mut LogSink<'_>,
 ) -> Result<(), ContainerError> {
     if containers.is_empty() {
@@ -168,11 +181,15 @@ pub async fn stream_project_logs(
 
     let (tx, rx) = flume::bounded::<Vec<u8>>(64);
     let mut handles = Vec::with_capacity(containers.len());
+    let cancel = options.cancel;
 
     for (color_idx, name) in containers.into_iter().enumerate() {
         let engine = engine.clone();
-        let cancel = Arc::clone(cancel);
+        let cancel_owned = Arc::clone(cancel);
         let tx = tx.clone();
+        let tail = options.tail;
+        let follow = options.follow;
+        let timestamps = options.timestamps;
         let handle = tokio::spawn(async move {
             let mut prefixer = LinePrefixer::with_color(&name, color_idx);
             let mut sub_sink = |chunk: Vec<u8>| {
@@ -186,10 +203,12 @@ pub async fn stream_project_logs(
             let _ = stream_logs(
                 &engine,
                 &name,
-                tail,
-                follow,
-                timestamps,
-                &cancel,
+                LogStreamOptions {
+                    tail,
+                    follow,
+                    timestamps,
+                    cancel: &cancel_owned,
+                },
                 &mut sub_sink,
             )
             .await;

@@ -10,12 +10,11 @@
 //! 只发生在槽内。
 
 mod drag;
-mod format;
 mod items;
 pub(crate) mod metrics;
 
+pub(crate) use crate::format::{format_compact_size, format_rate};
 pub(crate) use drag::restore_status_bar;
-pub(crate) use format::{format_compact_size, format_rate};
 
 pub(crate) use self::metrics::{StatusBarMetricsView, StatusMetricsSnapshot};
 use crate::app::{AppShell, TabStatus};

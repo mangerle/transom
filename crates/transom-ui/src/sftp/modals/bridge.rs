@@ -7,14 +7,14 @@
 use super::chmod::{SftpChmodModalEvent, SftpChmodModalView};
 use super::confirm::{SftpConfirmModalEvent, SftpConfirmModalView};
 use super::filter::{SftpFilterModalEvent, SftpFilterModalView};
-use super::input::{SftpInputModalEvent, SftpInputModalView};
+use super::input::{SftpInputModalEvent, SftpInputModalParams, SftpInputModalView};
 use super::properties::{SftpPropertiesModalEvent, SftpPropertiesModalView};
 use super::state::SftpPendingDelete;
 use crate::app::{AppShell, app_settings, update_app_settings};
 use crate::palette::localized_error;
 use crate::sftp::{
-    FileProperties, SftpInputModalParams, SftpSearchModalEvent, SftpSearchModalState,
-    SftpSearchModalView, SftpSyncModalEvent, SftpSyncModalState, SftpSyncModalView,
+    FileProperties, SftpSearchModalEvent, SftpSearchModalState, SftpSearchModalView,
+    SftpSyncModalEvent, SftpSyncModalState, SftpSyncModalView,
 };
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
@@ -162,7 +162,7 @@ pub(crate) fn open_sftp_chmod_modal(
             }) else {
                 return;
             };
-            crate::sftp::remote_actions::send_sftp_op_for_connection(
+            crate::sftp::send_sftp_op_for_connection(
                 shell,
                 *tab_id,
                 conn_id,
@@ -286,7 +286,7 @@ pub(crate) fn open_sftp_search_modal(
             }) else {
                 return;
             };
-            crate::sftp::remote_actions::send_sftp_op_for_connection(
+            crate::sftp::send_sftp_op_for_connection(
                 shell,
                 *tab_id,
                 conn_id,

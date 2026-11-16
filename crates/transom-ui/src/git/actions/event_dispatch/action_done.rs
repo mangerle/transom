@@ -19,7 +19,9 @@ pub(super) fn handle_git_action_done(
     match &message {
         Some(text) => {
             log::error!("Git 动作失败，动作: {action:?}，项目: {project_id}，原因: {text}");
-            crate::git::patch::git_patch_failed(shell, project_id, action, cx);
+            if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
+                workspace.update(cx, |ws, _| ws.clear_patch_on_failure(action));
+            }
             crate::git::actions::modal_bridges::fail_git_rebase_modal(
                 shell,
                 project_id,
@@ -31,7 +33,10 @@ pub(super) fn handle_git_action_done(
         }
         None => {
             // 补丁动作要报出落盘路径，其余动作沿用动作名文案。
-            let saved = crate::git::patch::git_patch_done_status(shell, project_id, cx);
+            let saved = shell
+                .state
+                .git_workspace_of_project(project_id, cx)
+                .and_then(|workspace| workspace.update(cx, |ws, _| ws.take_patch_done_status()));
             shell.set_transient_status(
                 saved.unwrap_or_else(|| rust_i18n::t!(action.i18n_key()).to_string()),
                 cx,

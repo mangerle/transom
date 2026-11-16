@@ -17,6 +17,7 @@ pub(crate) use bridge::{
     close_sftp_input_modal, close_sftp_properties_modal, close_sftp_search_modal,
     close_sftp_sync_modal, open_sftp_chmod_modal, open_sftp_confirm_modal, open_sftp_filter_modal,
     open_sftp_properties_modal, open_sftp_search_modal, open_sftp_sync_modal,
-    subscribe_sftp_input_modal,
+    subscribe_sftp_input_modal as open_sftp_input_modal,
 };
+pub(crate) use input::SftpInputModalParams;
 pub(crate) use state::{SftpModals, SftpPendingDelete};

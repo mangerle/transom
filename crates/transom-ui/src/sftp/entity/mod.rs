@@ -64,6 +64,16 @@ impl SftpPanelView {
         &self.state.mount_candidates
     }
 
+    /// 打开传输排除规则编辑弹窗：文本取自外壳设置，装配在外壳完成。
+    pub(crate) fn open_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = crate::app::app_settings(cx).sftp.transfer_filter.clone();
+        let textarea =
+            cx.new(|cx| gpui_kit::component::input::TextareaState::new(window, cx).default_value(text));
+        textarea.update(cx, |state, cx| state.focus(window, cx));
+        cx.emit(crate::sftp::SftpPanelEvent::OpenFilterModal { textarea });
+        cx.notify();
+    }
+
     /// 面板状态只读访问。
     pub(crate) fn state(&self) -> &SftpPanelState {
         &self.state

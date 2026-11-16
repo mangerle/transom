@@ -23,106 +23,285 @@ pub(crate) fn render_image_history(
     p: &Palette,
 ) -> AnyElement {
     let Some(details) = details else {
-        if summary.is_some() {
-            return centered_hint(
-                rust_i18n::t!("container.detail.loading_history").to_string(),
-                p,
-            );
-        }
-        return centered_hint(
-            rust_i18n::t!("container.detail.no_selection").to_string(),
-            p,
-        );
+        let key = if summary.is_some() {
+            "container.detail.loading_history"
+        } else {
+            "container.detail.no_selection"
+        };
+        return centered_hint(rust_i18n::t!(key).to_string(), p);
     };
 
-    // 优先展示详细的构建指令历史时间线
     if !details.history.is_empty() {
-        let mut history_list = v_flex().gap_2();
+        return render_history_timeline(view, details, p);
+    }
+    if !details.layer_digests.is_empty() {
+        return render_layer_digests_fallback(view, &details.layer_digests, p);
+    }
+    centered_hint(
+        rust_i18n::t!("container.detail.no_history_info").to_string(),
+        p,
+    )
+}
 
-        // 预先计算整镜像瘦身建议总数
-        let all_advices: Vec<Vec<ImageSlimmingAdvice>> = details
-            .history
-            .iter()
-            .map(|item| {
-                let cmd_raw = if item.created_by.is_empty() {
-                    &item.comment
-                } else {
-                    &item.created_by
-                };
-                inspect_layer_slimming(cmd_raw, item.size, details.size)
+fn render_history_timeline(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerImageDetails,
+    p: &Palette,
+) -> AnyElement {
+    let all_advices: Vec<Vec<ImageSlimmingAdvice>> = details
+        .history
+        .iter()
+        .map(|item| {
+            let cmd_raw = if item.created_by.is_empty() {
+                &item.comment
+            } else {
+                &item.created_by
+            };
+            inspect_layer_slimming(cmd_raw, item.size, details.size)
+        })
+        .collect();
+    let total_advice_count: usize = all_advices.iter().map(|a| a.len()).sum();
+
+    let mut history_list = v_flex().gap_2().child(render_history_summary_bar(
+        details.history.len(),
+        total_advice_count,
+        details.size,
+        p,
+    ));
+    for (index, item) in details.history.iter().enumerate() {
+        history_list = history_list.child(render_history_layer_card(
+            view,
+            index,
+            item,
+            &all_advices[index],
+            p,
+        ));
+    }
+    scroll_body(history_list, p).into_any_element()
+}
+
+fn render_history_summary_bar(
+    layer_count: usize,
+    total_advice_count: usize,
+    total_size: u64,
+    p: &Palette,
+) -> AnyElement {
+    h_flex()
+        .justify_between()
+        .items_center()
+        .p_2()
+        .rounded(p.radius.md)
+        .bg(p.surface.pressed)
+        .child(
+            div().text_xs().text_color(p.muted_foreground).child(
+                rust_i18n::t!("container.detail.history_total", count = layer_count).to_string(),
+            ),
+        )
+        .children((total_advice_count > 0).then(|| {
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.warning)
+                .child(format!("发现 {total_advice_count} 项瘦身建议"))
+        }))
+        .child(
+            div().text_xs().text_color(p.muted_foreground).child(
+                rust_i18n::t!(
+                    "container.detail.total_size",
+                    size = crate::format::format_size(total_size)
+                )
+                .to_string(),
+            ),
+        )
+        .into_any_element()
+}
+
+fn render_history_layer_card(
+    view: &Entity<ContainerWorkspace>,
+    index: usize,
+    item: &transom_core::ContainerImageLayer,
+    layer_advices: &[ImageSlimmingAdvice],
+    p: &Palette,
+) -> AnyElement {
+    let size_str = if item.size == 0 {
+        "0 B".to_string()
+    } else {
+        format!("+ {}", crate::format::format_size(item.size))
+    };
+    let cmd_raw = if item.created_by.is_empty() {
+        item.comment.clone()
+    } else {
+        item.created_by.clone()
+    };
+    let cmd_cleaned = clean_dockerfile_instruction(&cmd_raw);
+    let tags_str = if !item.tags.is_empty() {
+        format!("Tag: {}", item.tags.join(", "))
+    } else {
+        String::new()
+    };
+    let copy_cmd = copy_button(
+        view,
+        ElementId::Name(format!("copy-layer-cmd-{index}").into()),
+        cmd_raw,
+        rust_i18n::t!("container.detail.copy_instruction").to_string(),
+    );
+
+    let mut card = v_flex()
+        .gap_1p5()
+        .p_2()
+        .rounded(p.radius.md)
+        .bg(p.surface.active)
+        .border_1()
+        .border_color(p.stroke.strong)
+        .child(render_layer_card_header(
+            index,
+            &size_str,
+            item.size > 0,
+            item.created,
+            &tags_str,
+            copy_cmd,
+            p,
+        ))
+        .child(
+            div()
+                .p_1p5()
+                .rounded(p.radius.sm)
+                .bg(p.background)
+                .font_family(p.mono_font_family.clone())
+                .text_size(p.mono_font_size)
+                .text_color(p.foreground)
+                .child(cmd_cleaned),
+        );
+
+    for adv in layer_advices {
+        card = card.child(render_layer_advice_badge(adv, p));
+    }
+    card.into_any_element()
+}
+
+fn render_layer_card_header(
+    index: usize,
+    size_str: &str,
+    has_size: bool,
+    created: i64,
+    tags_str: &str,
+    copy_cmd: AnyElement,
+    p: &Palette,
+) -> AnyElement {
+    h_flex()
+        .justify_between()
+        .items_center()
+        .child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.primary.opacity(0.15))
+                        .text_xs()
+                        .text_color(p.primary)
+                        .child(format!("#{}", index + 1)),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(if has_size {
+                            p.primary
+                        } else {
+                            p.muted_foreground
+                        })
+                        .child(size_str.to_string()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(format_unix(created)),
+                )
+                .children((!tags_str.is_empty()).then(|| {
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.muted)
+                        .text_xs()
+                        .text_color(p.foreground)
+                        .child(tags_str.to_string())
+                })),
+        )
+        .child(copy_cmd)
+        .into_any_element()
+}
+
+fn render_layer_advice_badge(adv: &ImageSlimmingAdvice, p: &Palette) -> AnyElement {
+    let badge_color = if adv.is_warning { p.danger } else { p.warning };
+    h_flex()
+        .gap_2()
+        .p_1p5()
+        .rounded(p.radius.sm)
+        .bg(badge_color.opacity(0.12))
+        .items_start()
+        .child(
+            AppIconElement::new(if adv.is_warning {
+                AppIcon::Ui(UiIcon::WARNING)
+            } else {
+                AppIcon::Custom(CustomIcon::INFO)
             })
-            .collect();
-        let total_advice_count: usize = all_advices.iter().map(|a| a.len()).sum();
+            .with_size(px(14.0))
+            .text_color(badge_color),
+        )
+        .child(
+            v_flex()
+                .gap_0p5()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(badge_color)
+                        .child(adv.title.clone()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child(adv.suggestion.clone()),
+                ),
+        )
+        .into_any_element()
+}
 
-        // 概览摘要栏
-        history_list = history_list.child(
+fn render_layer_digests_fallback(
+    view: &Entity<ContainerWorkspace>,
+    layer_digests: &[String],
+    p: &Palette,
+) -> AnyElement {
+    let mut layers_list = v_flex().gap_2().child(
+        v_flex()
+            .gap_1()
+            .p_2()
+            .rounded(p.radius.md)
+            .bg(p.primary.opacity(0.1))
+            .border_1()
+            .border_color(p.primary.opacity(0.3))
+            .child(div().text_xs().text_color(p.primary).child(
+                rust_i18n::t!("container.detail.history_fallback_hint").to_string(),
+            )),
+    );
+
+    for (index, digest) in layer_digests.iter().enumerate() {
+        let copy_digest = copy_button(
+            view,
+            ElementId::Name(format!("copy-layer-digest-{index}").into()),
+            digest.clone(),
+            rust_i18n::t!("container.detail.copy_layer_digest").to_string(),
+        );
+        layers_list = layers_list.child(
             h_flex()
                 .justify_between()
                 .items_center()
-                .p_2()
-                .rounded(p.radius.md)
-                .bg(p.surface.pressed)
-                .child(
-                    div().text_xs().text_color(p.muted_foreground).child(
-                        rust_i18n::t!(
-                            "container.detail.history_total",
-                            count = details.history.len()
-                        )
-                        .to_string(),
-                    ),
-                )
-                .children(if total_advice_count > 0 {
-                    Some(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.warning)
-                            .child(format!("发现 {total_advice_count} 项瘦身建议")),
-                    )
-                } else {
-                    None
-                })
-                .child(
-                    div().text_xs().text_color(p.muted_foreground).child(
-                        rust_i18n::t!(
-                            "container.detail.total_size",
-                            size = crate::format::format_size(details.size)
-                        )
-                        .to_string(),
-                    ),
-                ),
-        );
-
-        // 逐层时间线卡片
-        for (index, item) in details.history.iter().enumerate() {
-            let size_str = if item.size == 0 {
-                "0 B".to_string()
-            } else {
-                format!("+ {}", crate::format::format_size(item.size))
-            };
-            let cmd_raw = if item.created_by.is_empty() {
-                item.comment.clone()
-            } else {
-                item.created_by.clone()
-            };
-            let cmd_cleaned = clean_dockerfile_instruction(&cmd_raw);
-            let tags_str = if !item.tags.is_empty() {
-                format!("Tag: {}", item.tags.join(", "))
-            } else {
-                String::new()
-            };
-
-            let copy_cmd = copy_button(
-                view,
-                ElementId::Name(format!("copy-layer-cmd-{index}").into()),
-                cmd_raw.clone(),
-                rust_i18n::t!("container.detail.copy_instruction").to_string(),
-            );
-
-            let layer_advices = &all_advices[index];
-
-            let mut card = v_flex()
-                .gap_1p5()
                 .p_2()
                 .rounded(p.radius.md)
                 .bg(p.surface.active)
@@ -130,184 +309,34 @@ pub(crate) fn render_image_history(
                 .border_color(p.stroke.strong)
                 .child(
                     h_flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .px_1p5()
-                                        .py_0p5()
-                                        .rounded(p.radius.sm)
-                                        .bg(p.primary.opacity(0.15))
-                                        .text_xs()
-                                        .text_color(p.primary)
-                                        .child(format!("#{}", index + 1)),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if item.size > 0 {
-                                            p.primary
-                                        } else {
-                                            p.muted_foreground
-                                        })
-                                        .child(size_str),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(p.muted_foreground)
-                                        .child(format_unix(item.created)),
-                                )
-                                .children(if !tags_str.is_empty() {
-                                    Some(
-                                        div()
-                                            .px_1p5()
-                                            .py_0p5()
-                                            .rounded(p.radius.sm)
-                                            .bg(p.muted)
-                                            .text_xs()
-                                            .text_color(p.foreground)
-                                            .child(tags_str),
-                                    )
-                                } else {
-                                    None
-                                }),
-                        )
-                        .child(copy_cmd),
-                )
-                .child(
-                    div()
-                        .p_1p5()
-                        .rounded(p.radius.sm)
-                        .bg(p.background)
-                        .font_family(p.mono_font_family.clone())
-                        .text_size(p.mono_font_size)
-                        .text_color(p.foreground)
-                        .child(cmd_cleaned),
-                );
-
-            for adv in layer_advices {
-                let badge_color = if adv.is_warning { p.danger } else { p.warning };
-                let bg_color = badge_color.opacity(0.12);
-                card = card.child(
-                    h_flex()
                         .gap_2()
-                        .p_1p5()
-                        .rounded(p.radius.sm)
-                        .bg(bg_color)
-                        .items_start()
+                        .items_center()
+                        .flex_1()
+                        .min_w_0()
                         .child(
-                            AppIconElement::new(if adv.is_warning {
-                                AppIcon::Ui(UiIcon::WARNING)
-                            } else {
-                                AppIcon::Custom(CustomIcon::INFO)
-                            })
-                            .with_size(px(14.0))
-                            .text_color(badge_color),
+                            div()
+                                .px_1p5()
+                                .py_0p5()
+                                .rounded(p.radius.sm)
+                                .bg(p.primary.opacity(0.15))
+                                .text_xs()
+                                .text_color(p.primary)
+                                .child(format!("#{}", index + 1)),
                         )
                         .child(
-                            v_flex()
-                                .gap_0p5()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(badge_color)
-                                        .child(adv.title.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(p.muted_foreground)
-                                        .child(adv.suggestion.clone()),
-                                ),
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .font_family(p.mono_font_family.clone())
+                                .text_size(p.mono_font_size)
+                                .text_color(p.foreground)
+                                .child(digest.clone()),
                         ),
-                );
-            }
-
-            history_list = history_list.child(card);
-        }
-
-        return scroll_body(history_list, p).into_any_element();
+                )
+                .child(copy_digest),
+        );
     }
-
-    // 安全降级：当镜像无详细构建历史时，展示 RootFS.Layers 的 SHA256 散列指纹层
-    if !details.layer_digests.is_empty() {
-        let mut layers_list = v_flex().gap_2();
-
-        // 降级提示条
-        layers_list =
-            layers_list.child(
-                v_flex()
-                    .gap_1()
-                    .p_2()
-                    .rounded(p.radius.md)
-                    .bg(p.primary.opacity(0.1))
-                    .border_1()
-                    .border_color(p.primary.opacity(0.3))
-                    .child(div().text_xs().text_color(p.primary).child(
-                        rust_i18n::t!("container.detail.history_fallback_hint").to_string(),
-                    )),
-            );
-
-        for (index, digest) in details.layer_digests.iter().enumerate() {
-            let copy_digest = copy_button(
-                view,
-                ElementId::Name(format!("copy-layer-digest-{index}").into()),
-                digest.clone(),
-                rust_i18n::t!("container.detail.copy_layer_digest").to_string(),
-            );
-
-            layers_list = layers_list.child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .p_2()
-                    .rounded(p.radius.md)
-                    .bg(p.surface.active)
-                    .border_1()
-                    .border_color(p.stroke.strong)
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .px_1p5()
-                                    .py_0p5()
-                                    .rounded(p.radius.sm)
-                                    .bg(p.primary.opacity(0.15))
-                                    .text_xs()
-                                    .text_color(p.primary)
-                                    .child(format!("#{}", index + 1)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .font_family(p.mono_font_family.clone())
-                                    .text_size(p.mono_font_size)
-                                    .text_color(p.foreground)
-                                    .child(digest.clone()),
-                            ),
-                    )
-                    .child(copy_digest),
-            );
-        }
-
-        return scroll_body(layers_list, p).into_any_element();
-    }
-
-    centered_hint(
-        rust_i18n::t!("container.detail.no_history_info").to_string(),
-        p,
-    )
+    scroll_body(layers_list, p).into_any_element()
 }
 
 /// 清洗并美化 Docker 构建历史指令，去除内部包装命令前缀。

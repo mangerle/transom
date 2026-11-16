@@ -387,7 +387,17 @@ async fn logs_stage(engine: &Engine, container: &str, report: &mut Report) -> Op
         };
         timed(
             "读取容器日志",
-            stream_logs(engine, container, 0, false, false, &cancel, &mut sink),
+            stream_logs(
+                engine,
+                container,
+                transom_container::LogStreamOptions {
+                    tail: 0,
+                    follow: false,
+                    timestamps: false,
+                    cancel: &cancel,
+                },
+                &mut sink,
+            ),
         )
         .await
     };
@@ -419,7 +429,17 @@ async fn timestamped_logs(engine: &Engine, container: &str, report: &mut Report)
         };
         timed(
             "日志时间戳",
-            stream_logs(engine, container, 3, false, true, &cancel, &mut sink),
+            stream_logs(
+                engine,
+                container,
+                transom_container::LogStreamOptions {
+                    tail: 3,
+                    follow: false,
+                    timestamps: true,
+                    cancel: &cancel,
+                },
+                &mut sink,
+            ),
         )
         .await
     };
@@ -460,7 +480,17 @@ async fn follow_logs(engine: &Engine, container: &str, report: &mut Report) {
     });
     let outcome = timed(
         "日志跟随",
-        stream_logs(engine, container, 1, true, false, &cancel, &mut sink),
+        stream_logs(
+            engine,
+            container,
+            transom_container::LogStreamOptions {
+                tail: 1,
+                follow: true,
+                timestamps: false,
+                cancel: &cancel,
+            },
+            &mut sink,
+        ),
     )
     .await;
     watchdog.abort();

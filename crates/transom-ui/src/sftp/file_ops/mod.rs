@@ -27,7 +27,7 @@ pub(crate) fn perform_sftp_delete(
     }) else {
         return;
     };
-    super::remote_actions::send_sftp_op_for_connection(
+    crate::sftp::send_sftp_op_for_connection(
         shell,
         tab_id,
         connection_id,

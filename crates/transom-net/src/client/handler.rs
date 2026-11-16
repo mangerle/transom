@@ -2,13 +2,14 @@
 
 use crate::auth::AuthPrompter;
 use crate::error::NetError;
+use parking_lot::Mutex;
 use russh::Channel;
 use russh::ChannelOpenFailure;
 use russh::client::{self, Msg};
 use russh::keys::{HashAlg, PublicKeyOrCertificate};
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -82,18 +83,15 @@ impl RemoteForwardTasks {
     /// `port = 0` 是 SSH Agent 转发的保留哨兵：它没有监听端口，但同属会话级
     /// 后台通道，需要参与 `abort_all` 的统一收割。
     pub(crate) fn track(&self, port: u16, handle: JoinHandle<()>) {
-        if let Ok(mut lock) = self.tasks.lock() {
-            let list = lock.entry(port).or_default();
-            list.retain(|h| !h.is_finished());
-            list.push(handle);
-        }
+        let mut lock = self.tasks.lock();
+        let list = lock.entry(port).or_default();
+        list.retain(|h| !h.is_finished());
+        list.push(handle);
     }
 
     /// 取消并收割特定远端转发端口的所有活动中任务。
     pub(crate) fn abort_port(&self, port: u16) {
-        if let Ok(mut lock) = self.tasks.lock()
-            && let Some(handles) = lock.remove(&port)
-        {
+        if let Some(handles) = self.tasks.lock().remove(&port) {
             for handle in handles {
                 handle.abort();
             }
@@ -102,11 +100,9 @@ impl RemoteForwardTasks {
 
     /// 取消并收割所有远端转发端口的所有活动中任务。
     pub(crate) fn abort_all(&self) {
-        if let Ok(mut lock) = self.tasks.lock() {
-            for (_, handles) in lock.drain() {
-                for handle in handles {
-                    handle.abort();
-                }
+        for (_, handles) in self.tasks.lock().drain() {
+            for handle in handles {
+                handle.abort();
             }
         }
     }
@@ -114,13 +110,11 @@ impl RemoteForwardTasks {
     /// 统计当前在途的活动中任务总数（供测试与诊断）。
     #[cfg(test)]
     pub(crate) fn active_count(&self) -> usize {
-        if let Ok(lock) = self.tasks.lock() {
-            lock.values()
-                .map(|list| list.iter().filter(|h| !h.is_finished()).count())
-                .sum()
-        } else {
-            0
-        }
+        self.tasks
+            .lock()
+            .values()
+            .map(|list| list.iter().filter(|h| !h.is_finished()).count())
+            .sum()
     }
 }
 
@@ -208,11 +202,7 @@ impl client::Handler for ClientHandler {
         _session: &mut client::Session,
     ) -> Result<(), Self::Error> {
         let listen_port = connected_port as u16;
-        let target = self
-            .remote_forwards
-            .lock()
-            .ok()
-            .and_then(|map| map.get(&listen_port).cloned());
+        let target = self.remote_forwards.lock().get(&listen_port).cloned();
         let Some((host, port)) = target else {
             log::warn!("收到未登记端口的远端转发请求，已拒绝，远端端口: {listen_port}");
             reply

@@ -549,7 +549,7 @@ fn workspace_has_no_mut_shell_free_functions() {
     );
 }
 
-/// 会话侧栏已完成向 `Entity<SessionSidebarView>` 迁移：`src/sidebar` 下只允许 `bridge.rs` 桥接外壳。
+/// 会话侧栏已完成向 `Entity<SessionSidebarView>` 迁移：`src/sidebar` 下只允许 `bridge/` 桥接外壳。
 #[test]
 fn session_sidebar_is_owned_by_entity() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/sidebar");
@@ -559,7 +559,7 @@ fn session_sidebar_is_owned_by_entity() {
             continue;
         }
         let norm = normalized_path(&entry);
-        if norm.ends_with("/sidebar/bridge.rs") {
+        if norm.contains("/sidebar/bridge/") {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(&entry) else {
@@ -728,11 +728,24 @@ fn git_app_shell_is_confined_to_bridges() {
             "/git/actions/modal_bridges/lightweight.rs",
             "/git/actions/modal_bridges/mod.rs",
             "/git/actions/modal_bridges/project.rs",
-            "/git/actions/sidebar_actions.rs",
             "/git/actions/sidebar_bridge.rs",
             "/git/clone_modal/task.rs",
-            "/git/patch.rs",
-            "/git/web_link.rs",
+        ],
+    );
+}
+
+/// 云同步域除明确登记的桥接与事件写回文件外，实体、状态与侧栏渲染不得引用 AppShell。
+#[test]
+fn cloud_sync_app_shell_is_confined_to_bridges() {
+    assert_app_shell_confined_to(
+        "cloud_sync",
+        &[
+            "/cloud_sync/actions.rs",
+            "/cloud_sync/auto_sync.rs",
+            "/cloud_sync/bridge.rs",
+            "/cloud_sync/common.rs",
+            "/cloud_sync/events.rs",
+            "/cloud_sync/pull.rs",
         ],
     );
 }

@@ -20,7 +20,6 @@ pub(crate) struct BackgroundTasks {
     pub(crate) probe_expiry: HashMap<SessionId, Task<()>>,
     pub(crate) monitor: Option<Task<()>>,
     pub(crate) git_sync: Option<Task<()>>,
-    pub(crate) sync_pull: Option<Task<()>>,
     pub(crate) sync_history_load: Option<Task<()>>,
     /// 首帧稳定后的升级确认任务：延迟执行，避免把"窗口刚创建"误判为健康运行。
     pub(crate) update_confirm: Option<Task<()>>,
@@ -36,7 +35,6 @@ impl BackgroundTasks {
             probe_expiry: HashMap::new(),
             monitor: None,
             git_sync: None,
-            sync_pull: None,
             sync_history_load: None,
             update_confirm: None,
             toast_tasks: VecDeque::with_capacity(32),
@@ -61,6 +59,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) git_sidebar: Option<Subscription>,
     /// 会话侧栏发往外壳的意图事件：侧栏是单例实体。
     pub(crate) session_sidebar: Option<Subscription>,
+    /// 云同步视图发往外壳的意图事件：单例实体。
+    pub(crate) cloud_sync: Option<Subscription>,
     pub(crate) settings: Option<Subscription>,
     /// 会话表单：保存落目录与删除会话由外壳处理。
     pub(crate) session_form: Option<Subscription>,
@@ -106,6 +106,7 @@ impl PanelSubscriptions {
             container_sidebar: None,
             git_sidebar: None,
             session_sidebar: None,
+            cloud_sync: None,
             settings: None,
             session_form: None,
             container_form: None,

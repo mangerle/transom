@@ -1,7 +1,7 @@
 //! 启动期准备阶段：历史、快捷键过滤与目录预加载。
 
 use super::*;
-use crate::cloud_sync::CloudSyncViewState;
+use crate::cloud_sync::{CloudSyncView, SyncHistoryWriter, sync_history_path};
 use std::sync::atomic::AtomicBool;
 
 /// 构造期一次性准备的服务与设置快照。
@@ -73,6 +73,7 @@ pub(super) fn assemble_state(
         cx.new(|_| crate::container::ContainerFormView::new(services.command_tx.clone()));
     let container_run_form = cx.new(|_| crate::container::ContainerRunFormView::new());
     let container_create_dialog = cx.new(|_| crate::container::ContainerCreateDialogView::new());
+    let cloud_sync = cx.new(|_| CloudSyncView::new(SyncHistoryWriter::spawn(sync_history_path())));
     AppState {
         services,
         local_shells,
@@ -105,10 +106,7 @@ pub(super) fn assemble_state(
         ),
         tasks: TaskHub::new(appearance_subscription, event_task),
         automation: super::super::state::AutomationState::default(),
-        cloud_sync: CloudSyncViewState::new(),
-        sync_history_writer: crate::cloud_sync::SyncHistoryWriter::spawn(
-            crate::cloud_sync::sync_history_path(),
-        ),
+        cloud_sync,
         history: prepared.history,
         history_provider: prepared.history_provider,
         probe_badges: HashMap::new(),

@@ -318,10 +318,12 @@ fn render_network_line(
                 move |bounds, _, window, _cx| {
                     paint_network_lines(
                         bounds,
-                        &rx_history,
-                        &tx_history,
-                        rx_color,
-                        tx_color,
+                        NetworkSeries {
+                            rx_history: &rx_history,
+                            tx_history: &tx_history,
+                            rx_color,
+                            tx_color,
+                        },
                         config,
                         window,
                     );
@@ -332,16 +334,26 @@ fn render_network_line(
         .into_any_element()
 }
 
+struct NetworkSeries<'a> {
+    rx_history: &'a [u64],
+    tx_history: &'a [u64],
+    rx_color: Hsla,
+    tx_color: Hsla,
+}
+
 /// 实际绘制网络双向平滑折线与重叠面积。
 fn paint_network_lines(
     bounds: Bounds<Pixels>,
-    rx_history: &[u64],
-    tx_history: &[u64],
-    rx_color: Hsla,
-    tx_color: Hsla,
+    series: NetworkSeries<'_>,
     config: SparklineConfig,
     window: &mut Window,
 ) {
+    let NetworkSeries {
+        rx_history,
+        tx_history,
+        rx_color,
+        tx_color,
+    } = series;
     let w = bounds.size.width;
     let h = bounds.size.height;
     if w <= px(0.0) || h <= px(0.0) {

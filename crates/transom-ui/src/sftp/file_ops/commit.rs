@@ -21,13 +21,17 @@ pub(in crate::sftp) fn commit_sftp_input_value(
         Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
         None => SftpRemotePaneRef::Main,
     };
-    let scope =
-        super::super::remote_actions::remote_pane_scope(shell, tab_id, target, cx).map(|scope| {
-            SftpInputScope {
-                connection_id: scope.connection_id,
-                base_path: scope.pane.path.clone(),
-                entries: scope.pane.entries.clone(),
-            }
+    let fallback_main = shell
+        .state
+        .workspace
+        .tab(tab_id)
+        .and_then(|tab| tab.connection_id);
+    let scope = crate::sftp::sftp_state(shell, tab_id, cx)
+        .and_then(|panel| panel.remote_pane_scope(target, fallback_main))
+        .map(|scope| SftpInputScope {
+            connection_id: scope.connection_id,
+            base_path: scope.pane.path.clone(),
+            entries: scope.pane.entries.clone(),
         });
 
     if matches!(modal_target, SftpInputTarget::RemoteEditorNewFile) {
@@ -50,7 +54,7 @@ pub(in crate::sftp) fn commit_sftp_input_value(
             if let Some(scope) = &scope
                 && let Some(op) = remote_operation(modal_target, &scope.base_path, name)
             {
-                super::super::remote_actions::send_sftp_op_for_connection(
+                crate::sftp::send_sftp_op_for_connection(
                     shell,
                     tab_id,
                     scope.connection_id,

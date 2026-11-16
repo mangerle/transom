@@ -2,7 +2,8 @@
 
 mod badges;
 mod item;
-pub(super) use item::item_parts::render_tab_close_button;
+mod item_parts;
+pub(super) use item_parts::render_tab_close_button;
 pub(crate) mod menu;
 
 use crate::app::AppShell;

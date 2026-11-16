@@ -126,10 +126,13 @@ fn handle_name_modal_submit(
             }
         }
         crate::git::GitNamePurpose::CreateFolder => {
-            crate::git::actions::add_git_folder(shell, name, cx);
+            shell.state.git.add_folder(name);
+            crate::git::actions::persist_git_projects(shell, cx);
         }
         crate::git::GitNamePurpose::RenameFolder { id } => {
-            crate::git::actions::rename_git_folder(shell, id, name, cx);
+            if shell.state.git.rename_folder(id, name) {
+                crate::git::actions::persist_git_projects(shell, cx);
+            }
         }
     }
     cx.notify();

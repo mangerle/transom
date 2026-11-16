@@ -98,24 +98,34 @@ pub(crate) fn build_remote_context_menu(
     let m = append_archive_and_transfer_items(
         menu,
         &app,
-        tab_id,
-        target,
-        &entry_path,
-        is_dir,
-        has_main_remote,
+        RemoteMenuItemCtx {
+            target,
+            entry_path: &entry_path,
+            is_dir,
+            has_main_remote,
+        },
     );
     append_file_action_items(m, &app, tab_id, target, &entry_path)
+}
+
+struct RemoteMenuItemCtx<'a> {
+    target: SftpRemotePaneRef,
+    entry_path: &'a str,
+    is_dir: bool,
+    has_main_remote: bool,
 }
 
 fn append_archive_and_transfer_items(
     menu: PopupMenu,
     app: &Entity<SftpPanelView>,
-    _tab_id: TabId,
-    target: SftpRemotePaneRef,
-    entry_path: &str,
-    is_dir: bool,
-    has_main_remote: bool,
+    ctx: RemoteMenuItemCtx<'_>,
 ) -> PopupMenu {
+    let RemoteMenuItemCtx {
+        target,
+        entry_path,
+        is_dir,
+        has_main_remote,
+    } = ctx;
     let p_dl = entry_path.to_string();
     let p_edit = entry_path.to_string();
     let p_side_copy = entry_path.to_string();

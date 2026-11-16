@@ -5,10 +5,11 @@ use crate::timeout::{
     CHANNEL_OPEN_TIMEOUT, CHANNEL_REQUEST_TIMEOUT, DISCONNECT_TIMEOUT, FORWARD_REQUEST_TIMEOUT,
     with_timeout,
 };
+use parking_lot::Mutex;
 use russh::client::{Handle, Msg};
 use russh::{Channel, ChannelMsg, Disconnect};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use transom_core::{AppError, ErrorCode, TerminalControl, TerminalIo, TrafficCounter};
@@ -117,15 +118,11 @@ impl SshRemote {
     }
 
     pub(crate) fn register_remote_target(&self, port: u16, host: String, target_port: u16) {
-        if let Ok(mut map) = self.remote_forwards.lock() {
-            map.insert(port, (host, target_port));
-        }
+        self.remote_forwards.lock().insert(port, (host, target_port));
     }
 
     pub(crate) fn unregister_remote_target(&self, port: u16) {
-        if let Ok(mut map) = self.remote_forwards.lock() {
-            map.remove(&port);
-        }
+        self.remote_forwards.lock().remove(&port);
         self.forward_tasks.abort_port(port);
     }
 

@@ -6,9 +6,9 @@
 //! - 默认名里的标题来自提交说明，属于不可信字符集（可能含 `/`、`..`、换行），
 //!   因此清洗成单个文件名再交给对话框，避免把用户选定的目录顶掉。
 
-use crate::app::AppShell;
+use crate::git::GitWorkspace;
 use gpui_kit::*;
-use transom_core::{GitAction, GitCommand, GitProject, GitProjectId};
+use transom_core::{GitAction, GitCommand};
 
 /// 清洗成可作文件名的补丁名：`<短号>-<标题slug>.patch`。
 ///
@@ -47,72 +47,45 @@ pub(crate) fn patch_file_name(short_oid: &str, subject: &str) -> String {
     format!("{short_oid}-{slug}.patch")
 }
 
-/// 「创建补丁…」：问用户要写到哪里，然后交给控制器落盘。
-pub(crate) fn git_create_patch(
-    shell: &mut AppShell,
-    project: &GitProject,
-    oid: &str,
-    cx: &mut Context<AppShell>,
-) {
-    let (short_oid, subject) = shell
-        .state
-        .git_workspace_of_project(project.id, cx)
-        .and_then(|workspace| {
-            let state = &workspace.read(cx).state;
-            state
-                .log
-                .entries
-                .iter()
-                .find(|entry| entry.oid == oid)
-                .map(|entry| (entry.short_oid().to_string(), entry.subject.clone()))
-        })
-        .unwrap_or_else(|| (oid.get(..8).unwrap_or(oid).to_string(), String::new()));
-    let Some(path) = rfd::FileDialog::new()
-        .set_title(rust_i18n::t!("git.menu.create_patch").to_string())
-        .set_file_name(patch_file_name(&short_oid, &subject))
-        .add_filter("Patch", &["patch", "mbox"])
-        .save_file()
-    else {
-        return;
-    };
-    if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
-        workspace.update(cx, |workspace, _| {
-            workspace.state.patch_target = Some(path.clone());
+impl GitWorkspace {
+    /// 「创建补丁…」：问用户要写到哪里，然后交给控制器落盘。
+    pub(crate) fn create_patch(&mut self, oid: &str, cx: &mut Context<Self>) {
+        let (short_oid, subject) = self
+            .state
+            .log
+            .entries
+            .iter()
+            .find(|entry| entry.oid == oid)
+            .map(|entry| (entry.short_oid().to_string(), entry.subject.clone()))
+            .unwrap_or_else(|| (oid.get(..8).unwrap_or(oid).to_string(), String::new()));
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(rust_i18n::t!("git.menu.create_patch").to_string())
+            .set_file_name(patch_file_name(&short_oid, &subject))
+            .add_filter("Patch", &["patch", "mbox"])
+            .save_file()
+        else {
+            return;
+        };
+        self.state.patch_target = Some(path.clone());
+        self.send(GitCommand::CreatePatch {
+            project: self.state.project.clone(),
+            oid: oid.to_string(),
+            path,
         });
+        cx.notify();
     }
-    shell.send_command(GitCommand::CreatePatch {
-        project: project.clone(),
-        oid: oid.to_string(),
-        path,
-    });
-    cx.notify();
-}
 
-/// 补丁写成功后把状态栏换成落盘路径；没有待定路径时返回 `None` 让通用文案兜底。
-pub(crate) fn git_patch_done_status(
-    shell: &mut AppShell,
-    project_id: GitProjectId,
-    cx: &mut Context<AppShell>,
-) -> Option<String> {
-    let workspace = shell.state.git_workspace_of_project(project_id, cx)?;
-    let path = workspace.update(cx, |workspace, _| workspace.state.patch_target.take())?;
-    Some(rust_i18n::t!("git.patch.saved", path = path.display().to_string()).to_string())
-}
-
-/// 动作失败时也要清掉待定路径，否则下一次同类动作的成功会报出旧路径。
-pub(crate) fn git_patch_failed(
-    shell: &mut AppShell,
-    project_id: GitProjectId,
-    action: GitAction,
-    cx: &mut Context<AppShell>,
-) {
-    if action != GitAction::CreatePatch {
-        return;
+    /// 补丁写成功后取出落盘路径提示；没有待定路径时返回 `None` 让通用文案兜底。
+    pub(crate) fn take_patch_done_status(&mut self) -> Option<String> {
+        let path = self.state.patch_target.take()?;
+        Some(rust_i18n::t!("git.patch.saved", path = path.display().to_string()).to_string())
     }
-    if let Some(workspace) = shell.state.git_workspace_of_project(project_id, cx) {
-        workspace.update(cx, |workspace, _| {
-            workspace.state.patch_target = None;
-        });
+
+    /// 动作失败时清掉待定路径，避免下一次同类动作成功时误报旧路径。
+    pub(crate) fn clear_patch_on_failure(&mut self, action: GitAction) {
+        if action == GitAction::CreatePatch {
+            self.state.patch_target = None;
+        }
     }
 }
 

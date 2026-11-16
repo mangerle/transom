@@ -49,7 +49,10 @@ pub(super) fn handle_read_event(
             url,
         } => {
             drop_workspace_request(shell, project_id, request_id, cx);
-            crate::git::web_link::git_open_commit_url(shell, url, &oid, cx);
+            if let Some(msg) = crate::git::web_link::resolve_commit_url_feedback(url, &oid) {
+                shell.set_transient_status(msg, cx);
+            }
+            cx.notify();
         }
         GitAppEvent::CommitFilesLoaded {
             project_id,

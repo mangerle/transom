@@ -1,7 +1,6 @@
 //! Git/WebDAV/S3 同步命令的采集、触发与通用历史记录。
 
 use super::common::*;
-use super::history::{SyncHistoryEntry, SyncHistoryStatus};
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use transom_core::{CloudPullMode, CloudPushMode, SyncOperation, SyncTrigger};
@@ -159,6 +158,7 @@ fn send_git_sync(
         trigger,
         provider,
         rust_i18n::t!("sync.git_running").to_string(),
+        cx,
     );
     let catalog = shell.state.catalog.clone();
     if !shell.state.send_command(SyncCommand::GitSync {
@@ -172,6 +172,7 @@ fn send_git_sync(
             trigger,
             "git",
             rust_i18n::t!("sync.enqueue_failed").to_string(),
+            cx,
         );
     }
     cx.notify();
@@ -228,6 +229,7 @@ pub(crate) fn dispatch_cloud_sync_check(
         trigger,
         provider,
         rust_i18n::t!("sync.checking").to_string(),
+        cx,
     );
     let catalog = shell.state.catalog.clone();
     if !shell.state.send_command(SyncCommand::CloudSyncCheck {
@@ -241,6 +243,7 @@ pub(crate) fn dispatch_cloud_sync_check(
             trigger,
             &provider_key(&app_settings(cx).sync),
             rust_i18n::t!("sync.enqueue_failed").to_string(),
+            cx,
         );
     }
     cx.notify();
@@ -259,6 +262,7 @@ pub(crate) fn dispatch_cloud_sync_test(
         trigger,
         provider,
         rust_i18n::t!("sync.testing").to_string(),
+        cx,
     );
     if !shell
         .state
@@ -270,6 +274,7 @@ pub(crate) fn dispatch_cloud_sync_test(
             trigger,
             &provider_key(&app_settings(cx).sync),
             rust_i18n::t!("sync.enqueue_failed").to_string(),
+            cx,
         );
     }
     cx.notify();
@@ -289,6 +294,7 @@ pub(crate) fn dispatch_cloud_sync_push(
         trigger,
         provider,
         rust_i18n::t!("sync.push_started").to_string(),
+        cx,
     );
     let catalog = shell.state.catalog.clone();
     if !shell.state.send_command(SyncCommand::CloudSyncPush {
@@ -303,6 +309,7 @@ pub(crate) fn dispatch_cloud_sync_push(
             trigger,
             &provider_key(&app_settings(cx).sync),
             rust_i18n::t!("sync.enqueue_failed").to_string(),
+            cx,
         );
     }
     cx.notify();
@@ -322,6 +329,7 @@ pub(crate) fn dispatch_cloud_sync_pull(
         trigger,
         provider,
         rust_i18n::t!("sync.pull_started").to_string(),
+        cx,
     );
     if !shell.state.send_command(SyncCommand::CloudSyncPull {
         settings,
@@ -334,6 +342,7 @@ pub(crate) fn dispatch_cloud_sync_pull(
             trigger,
             &provider_key(&app_settings(cx).sync),
             rust_i18n::t!("sync.enqueue_failed").to_string(),
+            cx,
         );
     }
     cx.notify();
@@ -345,11 +354,11 @@ fn begin_sync_operation(
     trigger: SyncTrigger,
     _provider: String,
     message: String,
+    cx: &mut Context<AppShell>,
 ) {
-    shell
-        .state
-        .cloud_sync
-        .begin(operation, trigger, message.clone());
+    shell.state.cloud_sync.update(cx, |view, cx| {
+        view.begin_operation(operation, trigger, message.clone(), cx);
+    });
     shell.state.status = Some(message);
 }
 
@@ -360,53 +369,13 @@ pub(crate) fn finish_sync_failure(
     trigger: SyncTrigger,
     provider: &str,
     message: String,
+    cx: &mut Context<AppShell>,
 ) {
     shell.state.set_error(message.clone());
-    let entry = crate::cloud_sync::record_sync_history(
-        shell,
-        SyncHistoryRecord {
-            operation,
-            trigger,
-            status: SyncHistoryStatus::Failed,
-            provider,
-            duration_ms: 0,
-            sessions: 0,
-            folders: 0,
-            bytes: 0,
-            message,
-        },
-    );
-    shell.state.cloud_sync.finish(entry);
-    shell.state.status = shell.state.cloud_sync.message.clone();
-}
-
-/// 写入内存历史并排队落盘。
-pub(crate) fn record_sync_history(
-    shell: &mut AppShell,
-    record: SyncHistoryRecord<'_>,
-) -> SyncHistoryEntry {
-    let at_ms = chrono::Utc::now().timestamp_millis();
-    let entry = SyncHistoryEntry {
-        id: format!(
-            "{at_ms}-{}-{}",
-            record.operation.key(),
-            record.trigger.key()
-        ),
-        at_ms,
-        operation: record.operation,
-        trigger: record.trigger,
-        status: record.status,
-        provider: record.provider.to_string(),
-        duration_ms: record.duration_ms,
-        sessions: record.sessions,
-        folders: record.folders,
-        bytes: record.bytes,
-        message: record.message,
-    };
-    if let Some(writer) = &shell.state.sync_history_writer {
-        writer.append(entry.clone());
-    }
-    entry
+    let next_msg = shell.state.cloud_sync.update(cx, |view, cx| {
+        view.finish_failure(operation, trigger, provider, message, cx)
+    });
+    shell.state.status = next_msg;
 }
 
 pub(crate) fn provider_key(settings: &SyncSettings) -> String {
@@ -417,17 +386,4 @@ pub(crate) fn provider_key(settings: &SyncSettings) -> String {
             (settings.active_channel == transom_core::SyncChannel::Git).then(|| "git".to_string())
         })
         .unwrap_or_else(|| "none".to_string())
-}
-
-/// 一次历史记录的参数集合，避免多字段平铺造成调用点顺序错误。
-pub(crate) struct SyncHistoryRecord<'a> {
-    pub(crate) operation: SyncOperation,
-    pub(crate) trigger: SyncTrigger,
-    pub(crate) status: SyncHistoryStatus,
-    pub(crate) provider: &'a str,
-    pub(crate) duration_ms: u64,
-    pub(crate) sessions: usize,
-    pub(crate) folders: usize,
-    pub(crate) bytes: u64,
-    pub(crate) message: String,
 }

@@ -27,13 +27,21 @@ pub(crate) fn on_git_sidebar_event(
             crate::git::actions::refresh_all_git_projects(shell, cx);
         }
         GitSidebarEvent::ToggleFolderCollapsed(folder_id) => {
-            crate::git::actions::toggle_git_folder_collapsed(shell, *folder_id, cx);
+            if shell.state.git.toggle_folder_collapsed(*folder_id) {
+                crate::git::actions::persist_git_projects(shell, cx);
+            }
         }
         GitSidebarEvent::Drop(drag, target) => {
-            crate::git::actions::apply_git_drop(shell, *drag, *target, cx);
+            if shell.state.git.apply_drop(*drag, *target) {
+                crate::git::actions::persist_git_projects(shell, cx);
+            } else {
+                cx.notify();
+            }
         }
         GitSidebarEvent::SelectProject(id) => {
-            crate::git::actions::select_git_project(shell, *id, cx);
+            if shell.state.git.select_project(*id) {
+                cx.notify();
+            }
         }
         GitSidebarEvent::OpenProjectTab(project) => {
             crate::git::actions::open_git_tab(shell, project.clone(), window, cx);
@@ -63,7 +71,11 @@ pub(crate) fn on_git_sidebar_event(
             }
         }
         GitSidebarEvent::MoveProjectToRoot(id) => {
-            crate::git::actions::git_move_project_to_root(shell, *id, cx);
+            if shell.state.git.move_project_to_root(*id) {
+                crate::git::actions::persist_git_projects(shell, cx);
+            } else {
+                cx.notify();
+            }
         }
         GitSidebarEvent::RemoveProject(id) => {
             crate::git::actions::remove_git_project(shell, *id, cx);
@@ -74,7 +86,8 @@ pub(crate) fn on_git_sidebar_event(
             );
         }
         GitSidebarEvent::DeleteFolder(id) => {
-            crate::git::actions::delete_git_folder(shell, *id, cx);
+            shell.state.git.delete_folder(*id);
+            crate::git::actions::persist_git_projects(shell, cx);
         }
     }
 }

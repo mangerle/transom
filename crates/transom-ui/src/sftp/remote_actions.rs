@@ -12,12 +12,11 @@
 //! 导航与过滤动作在 `remote_nav`，文件操作实现分散在各自的业务文件中。
 
 use super::entity::SftpPanelView;
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
-use crate::sftp::{SftpRemotePaneRef, SftpRemotePaneState, format_size, parent_remote};
+use crate::sftp::{SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, format_size, parent_remote};
 use gpui_kit::*;
-use transom_core::{ConnectionId, SftpCommand, SftpOperation, TabId, TransferId};
+use transom_core::{ConnectionId, SftpCommand, SftpOperation, TransferId};
 
 /// 一次远端列动作的操作域：目标列、实际连接与弹窗应携带的连接语义。
 ///
@@ -239,32 +238,19 @@ impl SftpPanelView {
     }
 }
 
-pub(crate) fn remote_pane_scope<'a>(
-    shell: &AppShell,
-    tab_id: TabId,
-    target: SftpRemotePaneRef,
-    cx: &'a App,
-) -> Option<RemotePaneScope<'a>> {
-    let tab = shell.state.workspace.tab(tab_id)?;
-    let panel = crate::sftp::sftp_state(shell, tab_id, cx)?;
-    let pane = panel.remote_pane(target)?;
-    let connection_id = panel.remote_connection(target, tab.connection_id)?;
-    Some(RemotePaneScope {
-        pane,
-        connection_id,
-    })
-}
-
-pub(crate) fn send_sftp_op_for_connection(
-    shell: &mut AppShell,
-    tab_id: TabId,
-    connection_id: ConnectionId,
-    op: SftpOperation,
-    cx: &mut Context<AppShell>,
-) {
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        view.update(cx, |view, cx| {
-            view.send_op_for_connection(connection_id, op, cx)
-        });
+impl SftpPanelState {
+    /// 解析目标远端列的面板状态与实际连接 ID。
+    pub(crate) fn remote_pane_scope(
+        &self,
+        target: SftpRemotePaneRef,
+        fallback_main: Option<ConnectionId>,
+    ) -> Option<RemotePaneScope<'_>> {
+        let pane = self.remote_pane(target)?;
+        let connection_id =
+            self.remote_connection(target, self.main_connection.or(fallback_main))?;
+        Some(RemotePaneScope {
+            pane,
+            connection_id,
+        })
     }
 }

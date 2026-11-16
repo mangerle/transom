@@ -1,22 +1,16 @@
 //! 单个标签条目 UI 组件组装与子元素渲染。
 
-use crate::app::{AppShell, TabGroup};
+use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
-use crate::tiling::{StripEntry, TiledTabs};
+use crate::tiling::StripEntry;
 use gpui_kit::base::h_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::menu::{ContextMenuExt, DropdownMenu, PopupMenuItem};
-use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::*;
-use transom_core::{Connection, GroupId, SplitAxis, TabId};
-#[path = "item_parts.rs"]
-pub(super) mod item_parts;
-
-use self::item_parts::{render_pane_badge, render_tab_close_button};
-use super::badges::{PaneRow, build_tab_tooltip, build_tiled_group_badge};
+use transom_core::Connection;
+use super::item_parts::{render_pane_badge, render_tab_close_button};
+use super::badges::{build_tab_tooltip, build_tiled_group_badge};
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
 use crate::app::app_settings;
 use crate::connection::session_host;

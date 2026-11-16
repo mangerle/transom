@@ -288,7 +288,7 @@ crates/transom-container/src/
 apps/transom/src/controller/
   mod.rs       接线与主循环（约 300 行：收事件、委托处理、判定停机）
   state.rs     ControllerState（全部状态表）与 ControllerCtx（共享句柄）
-  commands.rs  用户命令处理
+  commands/    用户命令处理（按连接/SFTP/转发/云同步/进程/停机拆分子模块）
   internal/    内部完成事件处理与单一接入路径：
                mod.rs 只做分发，connected / disconnected / sftp / forward / container
                各处理一类事件

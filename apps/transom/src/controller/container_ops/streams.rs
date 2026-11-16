@@ -208,18 +208,19 @@ fn spawn_log_stream(
         async move {
             let mut batcher = LogBatcher::new(&event_tx, request_id);
             let mut sink = |bytes: Vec<u8>| batcher.push(&bytes);
+            let options = transom_container::LogStreamOptions {
+                tail,
+                follow,
+                timestamps,
+                cancel: &cancel,
+            };
             let result = match target {
                 LogStreamTarget::Container(container) => {
-                    transom_container::stream_logs(
-                        &engine, &container, tail, follow, timestamps, &cancel, &mut sink,
-                    )
-                    .await
+                    transom_container::stream_logs(&engine, &container, options, &mut sink).await
                 }
                 LogStreamTarget::Project(containers) => {
-                    transom_container::stream_project_logs(
-                        &engine, containers, tail, follow, timestamps, &cancel, &mut sink,
-                    )
-                    .await
+                    transom_container::stream_project_logs(&engine, containers, options, &mut sink)
+                        .await
                 }
             };
             drop(sink);

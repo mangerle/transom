@@ -5,31 +5,30 @@ use history::{
     history_filter_key, render_history_row, short_hash, sync_state_color, sync_state_label,
 };
 
-use super::common::*;
+use super::entity::{CloudSyncEvent, CloudSyncSidebarAction, CloudSyncView};
 use super::history::SyncHistoryEntry;
 use super::state::SyncHistoryFilter;
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::palette::Palette;
-use crate::sidebar::SidebarSection;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
 use transom_core::{SyncCheckReport, SyncRelation};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
-/// 渲染云同步侧边栏；配置入口仍回到设置页。
-pub(crate) fn render_cloud_sync_sidebar(
-    shell: &mut AppShell,
+/// 渲染云同步侧边栏实体；配置入口经事件回到外壳打开设置页。
+pub(super) fn render_cloud_sync_sidebar_view(
+    view: &mut CloudSyncView,
     _window: &mut Window,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<CloudSyncView>,
     p: &Palette,
 ) -> AnyElement {
     let settings = app_settings(cx).sync.clone();
-    let state = &shell.state.cloud_sync;
+    let state = &view.state;
     let running = state.is_running();
     let git_active =
         settings.active_channel == transom_core::SyncChannel::Git && settings.git.is_some();
@@ -81,12 +80,14 @@ pub(crate) fn render_cloud_sync_sidebar(
 
     let header = render_cloud_sync_header(
         p,
-        state_color,
-        state_label,
-        provider,
-        &last_success,
-        &settings.device_name,
-        message,
+        CloudSyncHeaderProps {
+            state_color,
+            state_label,
+            provider,
+            last_success: &last_success,
+            device_name: &settings.device_name,
+            message,
+        },
     );
     let actions = render_cloud_sync_actions(p, git_active, running, enabled, cx);
     let conflict_card = conflict.map(|conflict| render_conflict_card(p, &conflict, running, cx));
@@ -107,8 +108,8 @@ pub(crate) fn render_cloud_sync_sidebar(
                     Button::new("cloud-sync-open-settings-disabled")
                         .small()
                         .label(rust_i18n::t!("sync.configure_now").to_string())
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.open_settings_modal(None, window, cx);
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(CloudSyncEvent::OpenSettings);
                         })),
                 ),
             )
@@ -125,15 +126,24 @@ pub(crate) fn render_cloud_sync_sidebar(
         .into_any_element()
 }
 
-fn render_cloud_sync_header(
-    p: &Palette,
+struct CloudSyncHeaderProps<'a> {
     state_color: Hsla,
     state_label: String,
     provider: String,
-    last_success: &str,
-    device_name: &str,
+    last_success: &'a str,
+    device_name: &'a str,
     message: Option<String>,
-) -> AnyElement {
+}
+
+fn render_cloud_sync_header(p: &Palette, props: CloudSyncHeaderProps<'_>) -> AnyElement {
+    let CloudSyncHeaderProps {
+        state_color,
+        state_label,
+        provider,
+        last_success,
+        device_name,
+        message,
+    } = props;
     v_flex()
         .w_full()
         .gap_2()
@@ -198,7 +208,7 @@ fn render_cloud_sync_actions(
     git_active: bool,
     running: bool,
     enabled: bool,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<CloudSyncView>,
 ) -> AnyElement {
     let mut actions = h_flex()
         .w_full()
@@ -214,8 +224,10 @@ fn render_cloud_sync_actions(
                 .child(AppIconElement::new(AppIcon::Ui(UiIcon::VCS)).small())
                 .label(rust_i18n::t!("sync.git_sync_now").to_string())
                 .disabled(running || !enabled)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    crate::cloud_sync::start_git_sync(this, window, cx);
+                .on_click(cx.listener(|_, _, _, cx| {
+                    cx.emit(CloudSyncEvent::TriggerAction(
+                        CloudSyncSidebarAction::GitSyncNow,
+                    ));
                 })),
         );
     } else {
@@ -226,8 +238,8 @@ fn render_cloud_sync_actions(
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
                     .label(rust_i18n::t!("sync.check").to_string())
                     .disabled(running || !enabled)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        crate::cloud_sync::start_cloud_sync_check(this, window, cx);
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(CloudSyncEvent::TriggerAction(CloudSyncSidebarAction::Check));
                     })),
             )
             .child(
@@ -238,8 +250,8 @@ fn render_cloud_sync_actions(
                     )
                     .label(rust_i18n::t!("sync.test").to_string())
                     .disabled(running || !enabled)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        crate::cloud_sync::start_cloud_sync_test(this, window, cx);
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(CloudSyncEvent::TriggerAction(CloudSyncSidebarAction::Test));
                     })),
             )
             .child(
@@ -248,8 +260,8 @@ fn render_cloud_sync_actions(
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::UPLOAD)).small())
                     .label(rust_i18n::t!("sync.push").to_string())
                     .disabled(running || !enabled)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        crate::cloud_sync::start_cloud_sync_push(this, window, cx);
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(CloudSyncEvent::TriggerAction(CloudSyncSidebarAction::Push));
                     })),
             )
             .child(
@@ -258,8 +270,8 @@ fn render_cloud_sync_actions(
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                     .label(rust_i18n::t!("sync.pull").to_string())
                     .disabled(running || !enabled)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        crate::cloud_sync::start_cloud_sync_pull(this, window, cx);
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(CloudSyncEvent::TriggerAction(CloudSyncSidebarAction::Pull));
                     })),
             );
     }
@@ -270,8 +282,8 @@ fn render_cloud_sync_actions(
                 .ghost()
                 .child(AppIconElement::new(AppIcon::Ui(UiIcon::SETTINGS)).small())
                 .label(rust_i18n::t!("settings.title").to_string())
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_settings_modal(None, window, cx);
+                .on_click(cx.listener(|_, _, _, cx| {
+                    cx.emit(CloudSyncEvent::OpenSettings);
                 })),
         )
         .into_any_element()
@@ -283,7 +295,7 @@ fn render_cloud_sync_history_section(
     expanded: &std::collections::HashSet<String>,
     filter: SyncHistoryFilter,
     limit: usize,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<CloudSyncView>,
 ) -> (AnyElement, AnyElement) {
     let filter_options = [
         (SyncHistoryFilter::All, rust_i18n::t!("sync.history_all")),
@@ -322,8 +334,7 @@ fn render_cloud_sync_history_section(
                 entry,
                 is_expanded,
                 cx.listener(move |this, _, _, cx| {
-                    this.state.cloud_sync.toggle_history(&id);
-                    cx.notify();
+                    this.toggle_history(&id, cx);
                 }),
             ));
         }
@@ -336,8 +347,7 @@ fn render_cloud_sync_history_section(
                         .w_full()
                         .label(rust_i18n::t!("sync.history_more").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.state.cloud_sync.show_more_history();
-                            cx.notify();
+                            this.show_more_history(cx);
                         })),
                 ),
             );
@@ -365,9 +375,7 @@ fn render_cloud_sync_history_section(
                 .when(value != filter, |button| button.ghost())
                 .label(label.to_string())
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.state.cloud_sync.history_filter = value;
-                    this.state.cloud_sync.history_visible_limit = 20;
-                    cx.notify();
+                    this.set_history_filter(value, cx);
                 }))
                 .into_any_element()
         }))
@@ -376,20 +384,11 @@ fn render_cloud_sync_history_section(
     (filters, rows.into_any_element())
 }
 
-/// 显示云同步侧边栏；活动栏点击统一走这里，保持收起再展开行为一致。
-pub(crate) fn toggle_cloud_sync_sidebar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell
-        .state
-        .sidebar
-        .toggle_section(SidebarSection::CloudSync);
-    cx.notify();
-}
-
 fn render_conflict_card(
     p: &Palette,
     conflict: &SyncCheckReport,
     running: bool,
-    cx: &mut Context<AppShell>,
+    cx: &mut Context<CloudSyncView>,
 ) -> AnyElement {
     let remote = conflict.remote_summary.as_ref().map_or_else(
         || rust_i18n::t!("sync.remote_absent").to_string(),
@@ -456,8 +455,10 @@ fn render_conflict_card(
                         .small()
                         .label(rust_i18n::t!("sync.download_remote_version").to_string())
                         .disabled(running)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            crate::cloud_sync::start_cloud_sync_force_pull(this, cx);
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(CloudSyncEvent::TriggerAction(
+                                CloudSyncSidebarAction::ForcePull,
+                            ));
                         })),
                 )
                 .child(
@@ -466,8 +467,10 @@ fn render_conflict_card(
                         .primary()
                         .label(rust_i18n::t!("sync.upload_local_version").to_string())
                         .disabled(running)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            crate::cloud_sync::start_cloud_sync_force_push(this, cx);
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(CloudSyncEvent::TriggerAction(
+                                CloudSyncSidebarAction::ForcePush,
+                            ));
                         })),
                 ),
         )

@@ -230,3 +230,36 @@ pub(crate) fn sftp_sync_with_terminal_cwd(
         });
     }
 }
+
+/// 请求特定连接的远端目录列表（用于并列远端）。
+pub(crate) fn request_sftp_list_for_connection(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    path: String,
+    cx: &mut Context<AppShell>,
+) {
+    let target = shell.state.workspace.tab(tab_id).and_then(|tab| {
+        crate::sftp::sftp_state(shell, tab_id, cx)
+            .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
+    });
+    let Some(target) = target else {
+        return;
+    };
+    request_sftp_list_pane(shell, tab_id, target, path, cx);
+}
+
+/// 在外壳上下文向指定连接下发 SFTP 非传输操作。
+pub(crate) fn send_sftp_op_for_connection(
+    shell: &mut AppShell,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    op: SftpOperation,
+    cx: &mut Context<AppShell>,
+) {
+    if let Some(view) = shell.state.sftp_view(tab_id) {
+        view.update(cx, |view, cx| {
+            view.send_op_for_connection(connection_id, op, cx)
+        });
+    }
+}

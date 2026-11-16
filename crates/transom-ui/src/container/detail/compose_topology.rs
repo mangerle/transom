@@ -191,18 +191,66 @@ fn render_topology_card(
         hovered_service,
     } = context;
     let highlight = calculate_highlight_state(service_name, hovered_service, deps, rev_deps);
-
-    let is_running = member.state.is_running();
-    let container_id = member.id.clone();
-    let container_name = member.name.clone();
-    let member_id_select = member.id.clone();
-    let member_id_toggle = member.id.clone();
-    let current_svc_name = service_name.to_string();
-
     let upstream_deps = deps.get(service_name).cloned().unwrap_or_default();
     let downstream_dependents = rev_deps.get(service_name).cloned().unwrap_or_default();
+    let (border_color, border_width, opacity_val, tag_badge) =
+        topology_highlight_style(highlight, p);
 
-    let (border_color, border_width, opacity_val, tag_badge) = match highlight {
+    let hover_svc = service_name.to_string();
+    let hover_view = view.clone();
+    let main_row = h_flex()
+        .items_center()
+        .justify_between()
+        .w_full()
+        .child(render_topology_card_info(
+            service_name,
+            member,
+            tag_badge,
+            p,
+        ))
+        .child(render_topology_card_actions(view, member));
+
+    let mut card = v_flex()
+        .id(ElementId::Name(
+            format!("compose-card-{service_name}").into(),
+        ))
+        .w_full()
+        .p_2p5()
+        .gap_2()
+        .rounded(p.radius.md)
+        .bg(p.list_background)
+        .border_color(border_color)
+        .border(border_width)
+        .opacity(opacity_val)
+        .on_hover(move |hovered: &bool, _, cx| {
+            hover_view.update(cx, |workspace, cx| {
+                if *hovered {
+                    workspace.state.compose_hovered_service = Some(hover_svc.clone());
+                } else if workspace.state.compose_hovered_service.as_deref() == Some(&hover_svc) {
+                    workspace.state.compose_hovered_service = None;
+                }
+                cx.notify();
+            });
+        })
+        .child(main_row);
+
+    if !upstream_deps.is_empty() || !downstream_dependents.is_empty() {
+        card = card.child(render_topology_pins_bar(
+            &upstream_deps,
+            &downstream_dependents,
+            hovered_service,
+            p,
+        ));
+    }
+
+    card.into_any_element()
+}
+
+fn topology_highlight_style(
+    highlight: TopologyHighlightState,
+    p: &Palette,
+) -> (Hsla, Pixels, f32, Option<(String, Hsla)>) {
+    match highlight {
         TopologyHighlightState::Normal => (p.divider(p.border), px(1.0), 1.0, None),
         TopologyHighlightState::Focused => (
             p.primary,
@@ -232,37 +280,17 @@ fn render_topology_card(
             )),
         ),
         TopologyHighlightState::Dimmed => (p.divider(p.border), px(1.0), 0.38, None),
-    };
+    }
+}
 
-    let hover_svc = current_svc_name.clone();
-    let hover_view = view.clone();
-
-    let mut card = v_flex()
-        .id(ElementId::Name(
-            format!("compose-card-{service_name}").into(),
-        ))
-        .w_full()
-        .p_2p5()
-        .gap_2()
-        .rounded(p.radius.md)
-        .bg(p.list_background)
-        .border_color(border_color)
-        .border(border_width)
-        .opacity(opacity_val)
-        .on_hover(move |hovered: &bool, _, cx| {
-            hover_view.update(cx, |workspace, cx| {
-                if *hovered {
-                    workspace.state.compose_hovered_service = Some(hover_svc.clone());
-                } else if workspace.state.compose_hovered_service.as_deref() == Some(&hover_svc) {
-                    workspace.state.compose_hovered_service = None;
-                }
-                cx.notify();
-            });
-        });
-
-    let mut main_row = h_flex().items_center().justify_between().w_full();
-
-    let left_info = h_flex()
+fn render_topology_card_info(
+    service_name: &str,
+    member: &ContainerSummary,
+    tag_badge: Option<(String, Hsla)>,
+    p: &Palette,
+) -> AnyElement {
+    let is_running = member.state.is_running();
+    h_flex()
         .gap_2p5()
         .items_center()
         .flex_1()
@@ -291,7 +319,7 @@ fn render_topology_card(
                             div()
                                 .text_xs()
                                 .text_color(p.muted_foreground)
-                                .child(container_name),
+                                .child(member.name.clone()),
                         )
                         .when_some(tag_badge, |this, (label, color)| {
                             this.child(
@@ -317,11 +345,22 @@ fn render_topology_card(
                         .child(div().child("·"))
                         .child(div().child(member.status.clone())),
                 ),
-        );
+        )
+        .into_any_element()
+}
 
+fn render_topology_card_actions(
+    view: &Entity<ContainerWorkspace>,
+    member: &ContainerSummary,
+) -> AnyElement {
+    let is_running = member.state.is_running();
+    let container_id = member.id.clone();
+    let member_id_toggle = member.id.clone();
+    let member_id_select = member.id.clone();
     let toggle_view = view.clone();
     let inspect_view = view.clone();
-    let actions = h_flex()
+
+    h_flex()
         .gap_1()
         .items_center()
         .child(
@@ -375,93 +414,76 @@ fn render_topology_card(
                     cx.notify();
                 });
             }),
-        );
+        )
+        .into_any_element()
+}
 
-    main_row = main_row.child(left_info).child(actions);
-    card = card.child(main_row);
+fn render_topology_pins_bar(
+    upstream_deps: &[String],
+    downstream_dependents: &[String],
+    hovered_service: Option<&str>,
+    p: &Palette,
+) -> AnyElement {
+    let mut pins_bar = h_flex()
+        .gap_3()
+        .items_center()
+        .pt_1()
+        .border_t_1()
+        .border_color(p.stroke.subtle)
+        .text_xs();
 
-    // 依赖拓扑引脚关系栏：呈现本服务的上下游连接脉络
-    if !upstream_deps.is_empty() || !downstream_dependents.is_empty() {
-        let mut pins_bar = h_flex()
-            .gap_3()
-            .items_center()
-            .pt_1()
-            .border_t_1()
-            .border_color(p.stroke.subtle)
-            .text_xs();
-
-        // 依赖的上游
-        if !upstream_deps.is_empty() {
-            let mut up_row = h_flex().gap_1p5().items_center();
-            up_row = up_row.child(div().text_color(p.muted_foreground).child(format!(
-                "↳ {}:",
-                rust_i18n::t!("container.compose.topology_depends_on")
-            )));
-            for dep in &upstream_deps {
-                let is_dep_focused = hovered_service == Some(dep.as_str());
-                up_row = up_row.child(
-                    div()
-                        .px_1p5()
-                        .py_0p5()
-                        .rounded(p.radius.sm)
-                        .bg(if is_dep_focused {
-                            p.primary.opacity(0.15)
-                        } else {
-                            p.surface.hover
-                        })
-                        .text_color(if is_dep_focused {
-                            p.primary
-                        } else {
-                            p.foreground
-                        })
-                        .font_weight(if is_dep_focused {
-                            FontWeight::BOLD
-                        } else {
-                            FontWeight::NORMAL
-                        })
-                        .child(dep.clone()),
-                );
-            }
-            pins_bar = pins_bar.child(up_row);
-        }
-
-        // 供给的下游
-        if !downstream_dependents.is_empty() {
-            let mut down_row = h_flex().gap_1p5().items_center();
-            down_row = down_row.child(div().text_color(p.muted_foreground).child(format!(
-                "↱ {}:",
-                rust_i18n::t!("container.compose.topology_dependents")
-            )));
-            for down in &downstream_dependents {
-                let is_down_focused = hovered_service == Some(down.as_str());
-                down_row = down_row.child(
-                    div()
-                        .px_1p5()
-                        .py_0p5()
-                        .rounded(p.radius.sm)
-                        .bg(if is_down_focused {
-                            p.warning.opacity(0.15)
-                        } else {
-                            p.surface.hover
-                        })
-                        .text_color(if is_down_focused {
-                            p.warning
-                        } else {
-                            p.foreground
-                        })
-                        .font_weight(if is_down_focused {
-                            FontWeight::BOLD
-                        } else {
-                            FontWeight::NORMAL
-                        })
-                        .child(down.clone()),
-                );
-            }
-            pins_bar = pins_bar.child(down_row);
-        }
-
-        card = card.child(pins_bar);
+    if !upstream_deps.is_empty() {
+        pins_bar = pins_bar.child(render_topology_pin_group(
+            &format!("↳ {}:", rust_i18n::t!("container.compose.topology_depends_on")),
+            upstream_deps,
+            hovered_service,
+            p.primary,
+            p,
+        ));
     }
+    if !downstream_dependents.is_empty() {
+        pins_bar = pins_bar.child(render_topology_pin_group(
+            &format!("↱ {}:", rust_i18n::t!("container.compose.topology_dependents")),
+            downstream_dependents,
+            hovered_service,
+            p.warning,
+            p,
+        ));
+    }
+    pins_bar.into_any_element()
+}
 
-    card.into_any_element()
+fn render_topology_pin_group(
+    label: &str,
+    items: &[String],
+    hovered_service: Option<&str>,
+    accent: Hsla,
+    p: &Palette,
+) -> AnyElement {
+    let mut row = h_flex()
+        .gap_1p5()
+        .items_center()
+        .child(div().text_color(p.muted_foreground).child(label.to_string()));
+    for item in items {
+        let focused = hovered_service == Some(item.as_str());
+        row = row.child(
+            div()
+                .px_1p5()
+                .py_0p5()
+                .rounded(p.radius.sm)
+                .bg(if focused {
+                    accent.opacity(0.15)
+                } else {
+                    p.surface.hover
+                })
+                .text_color(if focused { accent } else { p.foreground })
+                .font_weight(if focused {
+                    FontWeight::BOLD
+                } else {
+                    FontWeight::NORMAL
+                })
+                .child(item.clone()),
+        );
+    }
+    row.into_any_element()
 }

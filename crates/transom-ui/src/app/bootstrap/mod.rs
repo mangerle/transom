@@ -299,6 +299,13 @@ impl AppShell {
                 crate::container::on_container_create_event(shell, event, window, cx);
             },
         ));
+        self.state.tasks.subscriptions.cloud_sync = Some(cx.subscribe_in(
+            &self.state.cloud_sync,
+            window,
+            |shell, _view, event: &crate::cloud_sync::CloudSyncEvent, window, cx| {
+                crate::cloud_sync::on_cloud_sync_event(shell, event, window, cx);
+            },
+        ));
     }
 
     fn subscribe_input_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -349,7 +356,9 @@ impl AppShell {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
-                this.state.cloud_sync.replace_history(history);
+                this.state.cloud_sync.update(cx, |view, cx| {
+                    view.replace_history(history, cx);
+                });
                 cx.notify();
             });
         }));

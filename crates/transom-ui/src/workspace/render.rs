@@ -227,9 +227,7 @@ impl AppShell {
                         p,
                     )
                 }
-                SidebarSection::CloudSync => {
-                    crate::cloud_sync::render_cloud_sync_sidebar(self, window, cx, p)
-                }
+                SidebarSection::CloudSync => self.state.cloud_sync.clone().into_any_element(),
                 SidebarSection::Tabs if self.show_vertical_tabs_panel(app_settings(cx)) => {
                     self.render_vertical_tabs_panel(p, cx)
                 }

@@ -63,7 +63,9 @@ pub(crate) fn finish_cloud_sync_pull(
             );
         });
     });
-    shell.state.tasks.background.sync_pull = Some(task);
+    shell.state.cloud_sync.update(cx, |view, _| {
+        view.pull_task = Some(task);
+    });
 }
 
 /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
@@ -110,11 +112,7 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
     };
     shell.state.catalog = catalog;
     let saved = shell.state.persist_catalog();
-    shell
-        .state
-        .cloud_sync
-        .scheduler
-        .mark_catalog_synced(shell.state.catalog_revision);
+    let catalog_revision = shell.state.catalog_revision;
     shell.state.refresh_tab_sessions();
     let local_hash = sync_catalog_hash(&shell.state.catalog).ok();
     update_app_settings(cx, |s| {
@@ -158,10 +156,8 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
     if saved {
         shell.state.status = Some(message.clone());
     }
-    shell.state.cloud_sync.active_operation = None;
-    shell.state.cloud_sync.active_trigger = None;
-    shell.state.cloud_sync.status = super::history::SyncHistoryStatus::Success;
-    shell.state.cloud_sync.message = Some(message);
-    shell.state.tasks.background.sync_pull = None;
+    shell.state.cloud_sync.update(cx, |view, cx| {
+        view.finish_pull_apply(catalog_revision, message, cx);
+    });
     cx.notify();
 }

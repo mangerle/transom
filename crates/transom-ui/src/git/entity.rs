@@ -56,10 +56,6 @@ pub(crate) enum GitWorkspaceEvent {
     },
     /// 请求打开设置弹窗并定位到 Git 页。
     OpenSettings,
-    /// 请求基于指定文件或工作区路径创建补丁文件。
-    CreatePatch { project: GitProject, path: String },
-    /// 请求在浏览器打开指定提交的远端仓库页面。
-    BrowseCommit { project: GitProject, oid: String },
     /// 请求持久化差异显示等设置快照。
     PersistSettings(Box<transom_core::AppSettings>),
 }
@@ -309,22 +305,6 @@ impl GitWorkspace {
             paths: vec![path.to_string()],
         });
         cx.notify();
-    }
-
-    /// 请求为指定路径创建补丁文件。
-    pub(crate) fn create_patch(&mut self, path: &str, cx: &mut Context<Self>) {
-        cx.emit(GitWorkspaceEvent::CreatePatch {
-            project: self.state.project.clone(),
-            path: path.to_string(),
-        });
-    }
-
-    /// 请求在远端仓库网页打开指定提交。
-    pub(crate) fn browse_commit(&mut self, oid: &str, cx: &mut Context<Self>) {
-        cx.emit(GitWorkspaceEvent::BrowseCommit {
-            project: self.state.project.clone(),
-            oid: oid.to_string(),
-        });
     }
 
     /// 请求打开 Git 设置页。

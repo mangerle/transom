@@ -55,15 +55,15 @@ pub async fn run(
         endpoint_args
     );
 
-    let first = spawn_compose(
-        &program,
+    let first = spawn_compose(ComposeSpawnParams {
+        program: &program,
         project,
         action,
-        &endpoint_args,
-        &command_prefix,
-        local_dir.as_deref(),
+        endpoint_args: &endpoint_args,
+        command_prefix: &command_prefix,
+        working_dir: local_dir.as_deref(),
         cancel,
-    )
+    })
     .await?;
     if first.status.success() {
         return Ok(tail_text(&first.stdout, &first.stderr));
@@ -77,15 +77,15 @@ pub async fn run(
         });
     };
 
-    let retry = spawn_compose(
-        &fallback,
+    let retry = spawn_compose(ComposeSpawnParams {
+        program: &fallback,
         project,
         action,
-        &endpoint_args,
-        &command_prefix,
-        local_dir.as_deref(),
+        endpoint_args: &endpoint_args,
+        command_prefix: &command_prefix,
+        working_dir: local_dir.as_deref(),
         cancel,
-    )
+    })
     .await?;
     if retry.status.success() {
         return Ok(tail_text(&retry.stdout, &retry.stderr));
@@ -291,15 +291,26 @@ struct Completed {
     stderr: Vec<u8>,
 }
 
-async fn spawn_compose(
-    program: &str,
-    project: &ComposeProject,
+struct ComposeSpawnParams<'a> {
+    program: &'a str,
+    project: &'a ComposeProject,
     action: ComposeAction,
-    endpoint_args: &[String],
-    command_prefix: &[String],
-    working_dir: Option<&str>,
-    cancel: &Arc<AtomicBool>,
-) -> Result<Completed, ContainerError> {
+    endpoint_args: &'a [String],
+    command_prefix: &'a [String],
+    working_dir: Option<&'a str>,
+    cancel: &'a Arc<AtomicBool>,
+}
+
+async fn spawn_compose(params: ComposeSpawnParams<'_>) -> Result<Completed, ContainerError> {
+    let ComposeSpawnParams {
+        program,
+        project,
+        action,
+        endpoint_args,
+        command_prefix,
+        working_dir,
+        cancel,
+    } = params;
     let args = build_args(
         program,
         project,

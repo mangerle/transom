@@ -120,63 +120,70 @@ fn render_legend_item(label: String, percent: u32, color: Hsla, p: &Palette) -> 
         .into_any_element()
 }
 
-/// 渲染 4 类资源的细致明细行。
-pub(crate) fn render_df_details_list(
-    usage: &transom_core::ContainerSystemDiskUsage,
-    p: &Palette,
-) -> AnyElement {
-    let vol_color = p.sidebar_accent_foreground;
-    v_flex()
-        .gap_1p5()
-        .w_full()
-        .child(render_df_detail_row(
-            rust_i18n::t!("container.system_df.category_images").to_string(),
-            AppIcon::Domain(DomainIcon::MONITOR),
-            usage.images_count,
-            usage.images_size,
-            usage.images_reclaimable,
-            p.primary,
-            p,
-        ))
-        .child(render_df_detail_row(
-            rust_i18n::t!("container.system_df.category_containers").to_string(),
-            AppIcon::Domain(DomainIcon::CONTAINER),
-            usage.containers_count,
-            usage.containers_size,
-            usage.containers_reclaimable,
-            p.success,
-            p,
-        ))
-        .child(render_df_detail_row(
-            rust_i18n::t!("container.system_df.category_volumes").to_string(),
-            AppIcon::Custom(CustomIcon::VOLUME),
-            usage.volumes_count,
-            usage.volumes_size,
-            usage.volumes_reclaimable,
-            vol_color,
-            p,
-        ))
-        .child(render_df_detail_row(
-            rust_i18n::t!("container.system_df.category_build_cache").to_string(),
-            AppIcon::Ui(UiIcon::DEPENDENCIES),
-            usage.build_cache_count,
-            usage.build_cache_size,
-            usage.build_cache_reclaimable,
-            p.warning,
-            p,
-        ))
-        .into_any_element()
-}
-
-fn render_df_detail_row(
+struct DfDetailRowProps {
     title: String,
     icon: AppIcon,
     count: usize,
     size: u64,
     reclaimable: u64,
     accent_color: Hsla,
+}
+
+/// 渲染 4 类资源的细致明细行。
+pub(crate) fn render_df_details_list(
+    usage: &transom_core::ContainerSystemDiskUsage,
     p: &Palette,
 ) -> AnyElement {
+    let rows = [
+        DfDetailRowProps {
+            title: rust_i18n::t!("container.system_df.category_images").to_string(),
+            icon: AppIcon::Domain(DomainIcon::MONITOR),
+            count: usage.images_count,
+            size: usage.images_size,
+            reclaimable: usage.images_reclaimable,
+            accent_color: p.primary,
+        },
+        DfDetailRowProps {
+            title: rust_i18n::t!("container.system_df.category_containers").to_string(),
+            icon: AppIcon::Domain(DomainIcon::CONTAINER),
+            count: usage.containers_count,
+            size: usage.containers_size,
+            reclaimable: usage.containers_reclaimable,
+            accent_color: p.success,
+        },
+        DfDetailRowProps {
+            title: rust_i18n::t!("container.system_df.category_volumes").to_string(),
+            icon: AppIcon::Custom(CustomIcon::VOLUME),
+            count: usage.volumes_count,
+            size: usage.volumes_size,
+            reclaimable: usage.volumes_reclaimable,
+            accent_color: p.sidebar_accent_foreground,
+        },
+        DfDetailRowProps {
+            title: rust_i18n::t!("container.system_df.category_build_cache").to_string(),
+            icon: AppIcon::Ui(UiIcon::DEPENDENCIES),
+            count: usage.build_cache_count,
+            size: usage.build_cache_size,
+            reclaimable: usage.build_cache_reclaimable,
+            accent_color: p.warning,
+        },
+    ];
+    v_flex()
+        .gap_1p5()
+        .w_full()
+        .children(rows.into_iter().map(|row| render_df_detail_row(row, p)))
+        .into_any_element()
+}
+
+fn render_df_detail_row(row: DfDetailRowProps, p: &Palette) -> AnyElement {
+    let DfDetailRowProps {
+        title,
+        icon,
+        count,
+        size,
+        reclaimable,
+        accent_color,
+    } = row;
     let size_str = format_size(size);
     let reclaim_str = format_size(reclaimable);
 

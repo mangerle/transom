@@ -18,7 +18,7 @@ use super::task_hub::TaskHub;
 use super::types::PendingNotices;
 use crate::UiServices;
 use crate::broadcast::BroadcastBarState;
-use crate::cloud_sync::{CloudSyncViewState, GitSyncScheduler, SyncHistoryWriter};
+use crate::cloud_sync::{CloudSyncView, GitSyncScheduler};
 use crate::dialog_host::OpenModals;
 use crate::editor::EditorPanels;
 use crate::git::GitWorkspace;
@@ -115,10 +115,8 @@ pub(crate) struct AppState {
     pub(crate) tasks: TaskHub,
     /// 后台定时自动化节拍状态（Git 自动同步、容器定时清理）。
     pub(crate) automation: AutomationState,
-    /// WebDAV/S3 云同步运行态、冲突与历史。
-    pub(crate) cloud_sync: CloudSyncViewState,
-    /// 有界云同步历史写线程；进程退出时由 RAII 停机。
-    pub(crate) sync_history_writer: Option<SyncHistoryWriter>,
+    /// WebDAV/S3 云同步视图实体（状态、有界历史写线程与拉取任务）。
+    pub(crate) cloud_sync: Entity<CloudSyncView>,
     /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 共享给每个终端视图的历史查询回调。

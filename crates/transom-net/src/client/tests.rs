@@ -102,7 +102,7 @@ async fn handler_records_unknown_and_rejects_changed_keys() {
         host: "example.com".into(),
         port: 22,
         known_hosts: known_hosts.clone(),
-        remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        remote_forwards: Arc::new(Mutex::new(HashMap::new())),
         forward_tasks: RemoteForwardTasks::new(),
         remote_forward_slots: Arc::new(Semaphore::new(REMOTE_FORWARD_LIMIT)),
         prompter: Arc::new(ScriptedPrompter {
@@ -133,7 +133,7 @@ async fn handler_rejected_host_key_is_not_recorded() {
         host: "example.com".into(),
         port: 22,
         known_hosts: known_hosts.clone(),
-        remote_forwards: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        remote_forwards: Arc::new(Mutex::new(HashMap::new())),
         forward_tasks: RemoteForwardTasks::new(),
         remote_forward_slots: Arc::new(Semaphore::new(REMOTE_FORWARD_LIMIT)),
         prompter: Arc::new(ScriptedPrompter {

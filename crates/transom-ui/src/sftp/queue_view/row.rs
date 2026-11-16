@@ -39,176 +39,8 @@ pub(super) fn render_queue_task_row(
         ),
         _ => status_label(&task.status),
     };
-    let file_name = display_name(task);
-
     let task_id = task.id;
-    let status_clone = task.status.clone();
-    let mut actions = h_flex().gap_1().items_center();
-    match status_clone {
-        TransferStatus::Transferring => {
-            actions = actions
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-pause-{task_id}"),
-                        AppIcon::Ui(UiIcon::PAUSE),
-                        rust_i18n::t!("sftp.queue.pause_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.pause_task(tab_id, task_id, cx);
-                    })),
-                )
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-cancel-{task_id}"),
-                        AppIcon::Ui(UiIcon::CLOSE),
-                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .show_tooltip(false)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_task(tab_id, task_id, cx);
-                    })),
-                );
-        }
-        TransferStatus::Verifying => {
-            actions = actions.child(
-                crate::widgets::IconButton::new(
-                    format!("queue-cancel-{task_id}"),
-                    AppIcon::Ui(UiIcon::CLOSE),
-                    rust_i18n::t!("sftp.queue.cancel_task").to_string(),
-                )
-                .size(crate::widgets::IconButtonSize::Compact)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.cancel_task(tab_id, task_id, cx);
-                })),
-            );
-        }
-        TransferStatus::Paused => {
-            actions = actions
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-prioritize-{task_id}"),
-                        AppIcon::Ui(UiIcon::UPLOAD),
-                        rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.prioritize_task(tab_id, task_id, cx);
-                    })),
-                )
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-resume-{task_id}"),
-                        AppIcon::Ui(UiIcon::RUN),
-                        rust_i18n::t!("sftp.queue.resume_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.resume_task(tab_id, task_id, cx);
-                    })),
-                )
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-cancel-{task_id}"),
-                        AppIcon::Ui(UiIcon::CLOSE),
-                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_task(tab_id, task_id, cx);
-                    })),
-                );
-        }
-        TransferStatus::Pending => {
-            actions = actions
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-prioritize-{task_id}"),
-                        AppIcon::Ui(UiIcon::UPLOAD),
-                        rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.prioritize_task(tab_id, task_id, cx);
-                    })),
-                )
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-cancel-{task_id}"),
-                        AppIcon::Ui(UiIcon::CLOSE),
-                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_task(tab_id, task_id, cx);
-                    })),
-                );
-        }
-        TransferStatus::Failed(_) => {
-            actions = actions
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-retry-{task_id}"),
-                        AppIcon::Ui(UiIcon::REFRESH),
-                        rust_i18n::t!("sftp.queue.retry_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.resume_task(tab_id, task_id, cx);
-                    })),
-                )
-                // 失败任务直接可移除：取消只是把状态改成“已取消”，还得再清空
-                // 队列才能清掉失败记录，对只想收起失败项的用户是多余的步骤。
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-remove-{task_id}"),
-                        AppIcon::Ui(UiIcon::DELETE),
-                        rust_i18n::t!("sftp.overlay_remove").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.remove_task(task_id, cx);
-                    })),
-                )
-                .child(
-                    crate::widgets::IconButton::new(
-                        format!("queue-cancel-{task_id}"),
-                        AppIcon::Ui(UiIcon::CLOSE),
-                        rust_i18n::t!("sftp.queue.cancel_task").to_string(),
-                    )
-                    .size(crate::widgets::IconButtonSize::Compact)
-                    .render()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_task(tab_id, task_id, cx);
-                    })),
-                );
-        }
-        TransferStatus::Completed | TransferStatus::Cancelled => {
-            actions = actions.child(
-                crate::widgets::IconButton::new(
-                    format!("queue-remove-{task_id}"),
-                    AppIcon::Ui(UiIcon::DELETE),
-                    rust_i18n::t!("sftp.overlay_remove").to_string(),
-                )
-                .size(crate::widgets::IconButtonSize::Compact)
-                .render()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.remove_task(task_id, cx);
-                })),
-            );
-        }
-    }
+    let actions = render_queue_task_actions(task_id, &task.status, tab_id, cx);
 
     h_flex()
         .id(ElementId::Name(format!("queue-task-{task_id}").into()))
@@ -223,38 +55,25 @@ pub(super) fn render_queue_task_row(
         .child(
             div()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(if task.direction == TransferDirection::Upload {
-                    p.sidebar_accent_foreground
-                } else if task.direction == TransferDirection::Download {
-                    p.success
-                } else if task.direction == TransferDirection::RemoteCopy {
-                    p.warning
-                } else {
-                    p.sidebar_accent_foreground
+                .text_color(match task.direction {
+                    TransferDirection::Download => p.success,
+                    TransferDirection::RemoteCopy => p.warning,
+                    TransferDirection::Upload | TransferDirection::Sync => {
+                        p.sidebar_accent_foreground
+                    }
                 })
                 .child(dir_tag),
         )
         .when(task.kind == TransferKind::Directory, |this| {
-            this.child(
-                div()
-                    .px_1()
-                    .rounded(p.radius.sm)
-                    .bg(p.muted)
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("sftp.folder_tag").to_string()),
-            )
+            this.child(queue_tag_badge(
+                rust_i18n::t!("sftp.folder_tag").to_string(),
+                p,
+            ))
         })
         .when(task.verify.enabled, |this| {
-            this.child(
-                div()
-                    .px_1()
-                    .rounded(p.radius.sm)
-                    .bg(p.muted)
-                    .text_color(p.muted_foreground)
-                    .child(task.verify.algorithm.label()),
-            )
+            this.child(queue_tag_badge(task.verify.algorithm.label(), p))
         })
-        .child(div().flex_1().overflow_hidden().child(file_name))
+        .child(div().flex_1().overflow_hidden().child(display_name(task)))
         .child(div().text_color(p.muted_foreground).child(match task.size {
             Some(total) => format!("{} / {}", format_size(task.transferred), format_size(total)),
             None => format_size(task.transferred),
@@ -283,4 +102,107 @@ pub(super) fn render_queue_task_row(
         )
         .child(actions)
         .into_any_element()
+}
+
+fn queue_tag_badge(label: impl Into<SharedString>, p: &Palette) -> AnyElement {
+    div()
+        .px_1()
+        .rounded(p.radius.sm)
+        .bg(p.muted)
+        .text_color(p.muted_foreground)
+        .child(label.into())
+        .into_any_element()
+}
+
+fn queue_action_btn(
+    id: String,
+    icon: UiIcon,
+    label: String,
+    show_tooltip: bool,
+    on_click: impl Fn(&mut SftpPanelView, &mut Context<SftpPanelView>) + 'static,
+    cx: &mut Context<SftpPanelView>,
+) -> AnyElement {
+    crate::widgets::IconButton::new(id, AppIcon::Ui(icon), label)
+        .size(crate::widgets::IconButtonSize::Compact)
+        .show_tooltip(show_tooltip)
+        .render()
+        .on_click(cx.listener(move |this, _, _, cx| on_click(this, cx)))
+        .into_any_element()
+}
+
+fn render_queue_task_actions(
+    task_id: transom_core::TransferId,
+    status: &TransferStatus,
+    tab_id: TabId,
+    cx: &mut Context<SftpPanelView>,
+) -> AnyElement {
+    let pause = |cx: &mut Context<SftpPanelView>| {
+        queue_action_btn(
+            format!("queue-pause-{task_id}"),
+            UiIcon::PAUSE,
+            rust_i18n::t!("sftp.queue.pause_task").to_string(),
+            true,
+            move |this, cx| this.pause_task(tab_id, task_id, cx),
+            cx,
+        )
+    };
+    let cancel = |show_tip: bool, cx: &mut Context<SftpPanelView>| {
+        queue_action_btn(
+            format!("queue-cancel-{task_id}"),
+            UiIcon::CLOSE,
+            rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+            show_tip,
+            move |this, cx| this.cancel_task(tab_id, task_id, cx),
+            cx,
+        )
+    };
+    let prioritize = |cx: &mut Context<SftpPanelView>| {
+        queue_action_btn(
+            format!("queue-prioritize-{task_id}"),
+            UiIcon::UPLOAD,
+            rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
+            true,
+            move |this, cx| this.prioritize_task(tab_id, task_id, cx),
+            cx,
+        )
+    };
+    let resume = |label_key: &str, id_prefix: &str, icon: UiIcon, cx: &mut Context<SftpPanelView>| {
+        queue_action_btn(
+            format!("{id_prefix}-{task_id}"),
+            icon,
+            rust_i18n::t!(label_key).to_string(),
+            true,
+            move |this, cx| this.resume_task(tab_id, task_id, cx),
+            cx,
+        )
+    };
+    let remove = |cx: &mut Context<SftpPanelView>| {
+        queue_action_btn(
+            format!("queue-remove-{task_id}"),
+            UiIcon::DELETE,
+            rust_i18n::t!("sftp.overlay_remove").to_string(),
+            true,
+            move |this, cx| this.remove_task(task_id, cx),
+            cx,
+        )
+    };
+
+    let row = h_flex().gap_1().items_center();
+    match status {
+        TransferStatus::Transferring => row.child(pause(cx)).child(cancel(false, cx)),
+        TransferStatus::Verifying => row.child(cancel(true, cx)),
+        TransferStatus::Paused => row
+            .child(prioritize(cx))
+            .child(resume("sftp.queue.resume_task", "queue-resume", UiIcon::RUN, cx))
+            .child(cancel(true, cx)),
+        TransferStatus::Pending => row.child(prioritize(cx)).child(cancel(true, cx)),
+        TransferStatus::Failed(_) => row
+            .child(resume("sftp.queue.retry_task", "queue-retry", UiIcon::REFRESH, cx))
+            // 失败任务直接可移除：取消只是把状态改成“已取消”，还得再清空
+            // 队列才能清掉失败记录，对只想收起失败项的用户是多余的步骤。
+            .child(remove(cx))
+            .child(cancel(true, cx)),
+        TransferStatus::Completed | TransferStatus::Cancelled => row.child(remove(cx)),
+    }
+    .into_any_element()
 }

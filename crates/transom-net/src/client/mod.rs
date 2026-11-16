@@ -11,8 +11,9 @@ mod tests;
 use crate::auth::AuthPrompter;
 use crate::bridge::{ChannelReader, ChannelWriter};
 use crate::timeout::{CHANNEL_OPEN_TIMEOUT, CHANNEL_REQUEST_TIMEOUT, with_timeout};
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use transom_core::{
     AppError, ConnectionSecrets, ErrorCode, KnownHostsStore, OutboundProxy, SshConnection, SshHop,

@@ -36,21 +36,28 @@ mod event_dispatch;
 mod init_event;
 mod log_actions;
 pub(crate) mod modal_bridges;
-mod ref_actions;
 mod shelf_actions;
 pub(crate) use shelf_actions::CreateWorktreeParams;
 pub(crate) use sidebar_bridge::on_git_sidebar_event;
 mod sidebar_actions;
 mod sidebar_bridge;
 mod workspace_refs;
-pub(crate) use sidebar_actions::{
-    add_git_folder, apply_git_drop, delete_git_folder, git_move_project_to_root, rename_git_folder,
-    select_git_project, toggle_git_folder_collapsed,
-};
 
 // 统一收口对外导出的动作与事件分发自由函数，供 Git 各视图与主壳层按 `crate::git::actions::*` 调用。
 pub(crate) use super::types::{GitDiffRequest, first_worktree_diff};
-pub(crate) use ref_actions::GitHistoryAction;
+
+/// 历史改写与整合动作（界面意图，落到具体命令）。
+pub(crate) enum GitHistoryAction {
+    Reset {
+        target: String,
+        kind: transom_core::GitResetKind,
+    },
+    Revert(String),
+    CherryPick(String),
+    Merge(String),
+    Rebase(String),
+    RebaseAbort,
+}
 
 /// 项目与分组一次落盘。
 ///
@@ -210,12 +217,6 @@ fn handle_git_workspace_event(
         }
         GitWorkspaceEvent::OpenWorktreePath(path) => {
             git_open_worktree_path(shell, path, cx);
-        }
-        GitWorkspaceEvent::CreatePatch { project, path } => {
-            crate::git::patch::git_create_patch(shell, project, path, cx);
-        }
-        GitWorkspaceEvent::BrowseCommit { project, oid } => {
-            crate::git::web_link::git_browse_commit(shell, project, oid, cx);
         }
         GitWorkspaceEvent::ProjectInitStarted {
             request_id,

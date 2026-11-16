@@ -2,10 +2,23 @@
 
 use super::common::*;
 use crate::palette::sftp_text_input;
-use crate::sftp::{SftpInputModalParams, SftpInputTarget};
+use crate::sftp::SftpInputTarget;
 use gpui_kit::component::input::InputState;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
+
+/// 输入弹窗的装配参数。
+#[derive(Clone)]
+pub(crate) struct SftpInputModalParams {
+    pub(crate) tab_id: TabId,
+    /// `None` 表示主远端；`Some` 表示并列远端列。本地目标也使用 `None`。
+    pub(crate) connection_id: Option<ConnectionId>,
+    pub(crate) title: String,
+    pub(crate) prompt: String,
+    pub(crate) placeholder: String,
+    pub(crate) value: String,
+    pub(crate) target: SftpInputTarget,
+}
 
 /// SFTP 输入弹窗事件。
 pub(crate) enum SftpInputModalEvent {

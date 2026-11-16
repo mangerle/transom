@@ -10,7 +10,6 @@ mod file_row;
 mod file_row_content;
 mod filter;
 pub(crate) mod handlers;
-mod input_modal;
 mod local_async;
 mod local_listing;
 mod local_only;
@@ -48,7 +47,6 @@ mod state;
 mod sync_actions;
 mod sync_modal;
 mod task;
-mod transfer_filter_modal;
 mod transfer_presentation;
 
 pub(crate) use self::entity::{
@@ -56,14 +54,14 @@ pub(crate) use self::entity::{
     sftp_view_mut_for_connection,
 };
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
-pub(crate) use self::input_modal::SftpInputModalParams;
 pub(crate) use self::local_listing::LocalDirectoryLister;
 pub(crate) use self::modals::{
-    SftpModals, SftpPendingDelete, close_sftp_chmod_modal, close_sftp_confirm_modal,
-    close_sftp_filter_modal, close_sftp_input_modal, close_sftp_properties_modal,
-    close_sftp_search_modal, close_sftp_sync_modal, open_sftp_chmod_modal,
-    open_sftp_confirm_modal, open_sftp_filter_modal, open_sftp_properties_modal,
-    open_sftp_search_modal, open_sftp_sync_modal, subscribe_sftp_input_modal,
+    SftpInputModalParams, SftpModals, SftpPendingDelete, close_sftp_chmod_modal,
+    close_sftp_confirm_modal, close_sftp_filter_modal, close_sftp_input_modal,
+    close_sftp_properties_modal, close_sftp_search_modal, close_sftp_sync_modal,
+    open_sftp_chmod_modal, open_sftp_confirm_modal, open_sftp_filter_modal,
+    open_sftp_input_modal, open_sftp_properties_modal, open_sftp_search_modal,
+    open_sftp_sync_modal,
 };
 pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;
@@ -94,15 +92,14 @@ use gpui_kit::*;
 pub(crate) use handlers::{
     grow_sftp_panel_width, on_sftp_failed, on_sftp_finished, sync_sftp_panel_width,
 };
-pub(crate) use input_modal::open_sftp_input_modal;
 pub(crate) use local_only::open_local_file_panel;
 pub(crate) use nav_actions::{
     attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp,
-    request_sftp_list, request_sftp_list_pane, sftp_sync_with_terminal_cwd, toggle_sftp,
+    request_sftp_list, request_sftp_list_for_connection, send_sftp_op_for_connection,
+    sftp_sync_with_terminal_cwd, toggle_sftp,
 };
 pub(crate) use overlay::render_drop_overlay;
 pub(crate) use preview_view::render_sftp_hover_preview;
-pub(crate) use side_remote::request_sftp_list_for_connection;
 use std::path::{Path, PathBuf};
 pub(crate) use sync_actions::{execute_sftp_sync, sftp_open_sync_modal};
 pub(crate) use sync_modal::{SftpSyncModalEvent, SftpSyncModalView};
