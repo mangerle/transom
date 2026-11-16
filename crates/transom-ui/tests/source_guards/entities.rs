@@ -636,10 +636,7 @@ fn assert_app_shell_confined_to(domain: &str, allowed_suffixes: &[&str]) {
             continue;
         }
         let norm = normalized_path(&entry);
-        if allowed_suffixes
-            .iter()
-            .any(|suffix| norm.ends_with(suffix))
-        {
+        if allowed_suffixes.iter().any(|suffix| norm.ends_with(suffix)) {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(&entry) else {
@@ -699,14 +696,11 @@ fn sftp_app_shell_is_confined_to_bridges() {
             "/sftp/file_ops/commit.rs",
             "/sftp/file_ops/mod.rs",
             "/sftp/handlers.rs",
-            "/sftp/input_modal.rs",
             "/sftp/local_only.rs",
             "/sftp/modals/bridge.rs",
             "/sftp/nav_actions/init.rs",
             "/sftp/nav_actions/mod.rs",
             "/sftp/nav_actions/panel_events.rs",
-            "/sftp/remote_actions.rs",
-            "/sftp/side_remote/mod.rs",
             "/sftp/sync_actions.rs",
         ],
     );

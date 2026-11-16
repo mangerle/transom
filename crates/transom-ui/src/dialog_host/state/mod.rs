@@ -13,7 +13,8 @@ impl ModalKind {
             return crate::container::find_container_modal_tab(shell, cx, |ws| modal.is_open(ws))
                 .is_some();
         }
-        (super::registry::entry(self).is_open)(shell, cx)
+        let state = super::registry::DialogCheckState::from_state(&shell.state);
+        (super::registry::entry(self).is_open)(&state, cx)
     }
 
     /// 是否存在未提交内容：与影子栈记录的打开时基线逐项比对。
@@ -34,7 +35,8 @@ impl ModalKind {
                 .map(|(_, ws)| modal.text_values(&ws.read(cx).state, cx))
                 .unwrap_or_default();
         }
-        (super::registry::entry(self).field_values)(shell, cx)
+        let state = super::registry::DialogCheckState::from_state(&shell.state);
+        (super::registry::entry(self).field_values)(&state, cx)
     }
 
     /// 取消：把用户意图回给等待方并清空自身状态，返回是否允许容器关闭该层。
@@ -87,7 +89,8 @@ impl ModalKind {
     ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                crate::sftp::close_sftp_confirm_modal(shell, cx);
+                shell.state.modals.sftp.close_confirm();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
@@ -123,32 +126,38 @@ impl ModalKind {
                 true
             }
             ModalKind::SftpInput => {
-                crate::sftp::close_sftp_input_modal(shell, cx);
+                shell.state.modals.sftp.close_input();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpChmod => {
-                crate::sftp::close_sftp_chmod_modal(shell, cx);
+                shell.state.modals.sftp.close_chmod();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpProperties => {
-                crate::sftp::close_sftp_properties_modal(shell, cx);
+                shell.state.modals.sftp.close_properties();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpFilter => {
-                crate::sftp::close_sftp_filter_modal(shell, cx);
+                shell.state.modals.sftp.close_filter();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpSearch => {
-                crate::sftp::close_sftp_search_modal(shell, cx);
+                shell.state.modals.sftp.close_search();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpSync => {
-                crate::sftp::close_sftp_sync_modal(shell, cx);
+                shell.state.modals.sftp.close_sync();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }

@@ -43,7 +43,8 @@ impl SftpFilterModalView {
                     .detail
                     .unwrap_or_else(|| rust_i18n::t!("sftp.filter.invalid").to_string()),
             );
-            self.textarea.update(cx, |state, cx| state.focus(window, cx));
+            self.textarea
+                .update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }

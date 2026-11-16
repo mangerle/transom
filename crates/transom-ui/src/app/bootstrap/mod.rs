@@ -173,7 +173,7 @@ impl AppShell {
         self.state.tasks.subscriptions.monitor = Some(cx.subscribe(
             &self.state.monitor,
             |shell, _view, event: &crate::monitor::MonitorPanelEvent, cx| {
-                crate::monitor::on_monitor_panel_event(shell, event, cx);
+                crate::monitor::MonitorOps::new(&mut shell.state).on_monitor_panel_event(event, cx);
             },
         ));
         self.state.tasks.subscriptions.container_sidebar = Some(cx.subscribe(

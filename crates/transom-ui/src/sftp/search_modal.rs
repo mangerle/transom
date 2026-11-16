@@ -122,7 +122,9 @@ impl SftpSearchModalView {
         let pattern = self.state.input.read(cx).value().trim().to_string();
         if pattern.is_empty() {
             self.state.error = Some(rust_i18n::t!("sftp.search.error_empty").to_string());
-            self.state.input.update(cx, |state, cx| state.focus(window, cx));
+            self.state
+                .input
+                .update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }

@@ -1,29 +1,41 @@
 //! Git 弹窗的判定与文本项。
-use crate::app::AppShell;
+use super::super::DialogCheckState;
 use gpui_kit::App;
 
-pub(in crate::dialog_host) fn git_project_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.project.is_some()
+pub(in crate::dialog_host) fn git_project_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.project.is_some()
 }
 
-pub(in crate::dialog_host) fn git_project_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell
-        .state
+pub(in crate::dialog_host) fn git_project_values(
+    state: &DialogCheckState,
+    cx: &App,
+) -> Vec<String> {
+    state
         .modals
         .git
         .project
         .as_ref()
-        .map(|modal| vec![modal.read(cx).picker.read(cx).path.read(cx).value().to_string()])
+        .map(|modal| {
+            vec![
+                modal
+                    .read(cx)
+                    .picker
+                    .read(cx)
+                    .path
+                    .read(cx)
+                    .value()
+                    .to_string(),
+            ]
+        })
         .unwrap_or_default()
 }
 
-pub(in crate::dialog_host) fn git_clone_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.clone.is_some()
+pub(in crate::dialog_host) fn git_clone_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.clone.is_some()
 }
 
-pub(in crate::dialog_host) fn git_clone_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell
-        .state
+pub(in crate::dialog_host) fn git_clone_values(state: &DialogCheckState, cx: &App) -> Vec<String> {
+    state
         .modals
         .git
         .clone
@@ -38,13 +50,15 @@ pub(in crate::dialog_host) fn git_clone_values(shell: &AppShell, cx: &App) -> Ve
         .unwrap_or_default()
 }
 
-pub(in crate::dialog_host) fn git_worktree_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.worktree.is_some()
+pub(in crate::dialog_host) fn git_worktree_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.worktree.is_some()
 }
 
-pub(in crate::dialog_host) fn git_worktree_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell
-        .state
+pub(in crate::dialog_host) fn git_worktree_values(
+    state: &DialogCheckState,
+    cx: &App,
+) -> Vec<String> {
+    state
         .modals
         .git
         .worktree
@@ -59,13 +73,12 @@ pub(in crate::dialog_host) fn git_worktree_values(shell: &AppShell, cx: &App) ->
         .unwrap_or_default()
 }
 
-pub(in crate::dialog_host) fn git_name_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.name.is_some()
+pub(in crate::dialog_host) fn git_name_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.name.is_some()
 }
 
-pub(in crate::dialog_host) fn git_name_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell
-        .state
+pub(in crate::dialog_host) fn git_name_values(state: &DialogCheckState, cx: &App) -> Vec<String> {
+    state
         .modals
         .git
         .name
@@ -74,14 +87,14 @@ pub(in crate::dialog_host) fn git_name_values(shell: &AppShell, cx: &App) -> Vec
         .unwrap_or_default()
 }
 
-pub(in crate::dialog_host) fn git_rebase_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.rebase.is_some()
+pub(in crate::dialog_host) fn git_rebase_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.rebase.is_some()
 }
 
-pub(in crate::dialog_host) fn git_push_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.push.is_some()
+pub(in crate::dialog_host) fn git_push_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.push.is_some()
 }
 
-pub(in crate::dialog_host) fn git_conflict_open(shell: &AppShell, _: &App) -> bool {
-    shell.state.modals.git.conflict.is_some()
+pub(in crate::dialog_host) fn git_conflict_open(state: &DialogCheckState, _: &App) -> bool {
+    state.modals.git.conflict.is_some()
 }

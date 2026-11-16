@@ -70,12 +70,7 @@ impl SftpInputModalView {
         }
     }
 
-    pub(crate) fn set_error(
-        &mut self,
-        error: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn set_error(&mut self, error: String, window: &mut Window, cx: &mut Context<Self>) {
         self.error = Some(error);
         self.input.update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
@@ -91,7 +86,8 @@ impl SftpInputModalView {
             );
             return;
         }
-        if let Some(message) = crate::sftp::file_ops::validate::name_validation_error(&self.target, &value)
+        if let Some(message) =
+            crate::sftp::file_ops::validate::name_validation_error(&self.target, &value)
         {
             self.set_error(message, window, cx);
             return;

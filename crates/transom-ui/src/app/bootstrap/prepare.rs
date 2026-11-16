@@ -113,7 +113,6 @@ pub(super) fn assemble_state(
         monitor,
         editors,
         diff_viewer: None,
-        sftp_modals: SftpModals::default(),
         broadcast: BroadcastBarState {
             open: false,
             multiline: false,

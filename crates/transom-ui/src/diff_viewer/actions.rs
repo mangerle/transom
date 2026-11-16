@@ -180,7 +180,7 @@ fn update_diff_remote_entry(
     modified: Option<u32>,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx)
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx)
         && let Some(entry) = panel
             .state
             .remote

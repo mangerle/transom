@@ -21,5 +21,5 @@ pub(crate) use open::{
 };
 pub(crate) use ops::{
     editor_reject, note_editor_text_conflict, note_editor_text_failed, on_editor_text_written,
-    on_sudo_probed, request_remote_text_read, submit_sudo_editor_write,
+    on_sudo_probed,
 };

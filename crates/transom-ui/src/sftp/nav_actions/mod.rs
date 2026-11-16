@@ -240,7 +240,7 @@ pub(crate) fn request_sftp_list_for_connection(
     cx: &mut Context<AppShell>,
 ) {
     let target = shell.state.workspace.tab(tab_id).and_then(|tab| {
-        crate::sftp::sftp_state(shell, tab_id, cx)
+        crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
             .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
     });
     let Some(target) = target else {

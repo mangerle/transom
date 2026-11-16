@@ -16,8 +16,12 @@
 //! （固定档位、全局上限、视口比例），新增第四种形态时要先扩展 [`ModalWidth`]
 //! 而不是在调用点特判。
 use super::{ModalKind, ModalSpec};
-use crate::app::AppShell;
-use gpui_kit::{App, Pixels, Window};
+use crate::app::{AppState, ModalHub};
+use crate::container::ContainerUiState;
+use crate::diff_viewer::DiffViewerView;
+use crate::keymap::ShortcutRecordingState;
+use crate::workspace::WorkspaceState;
+use gpui_kit::{App, Entity, Pixels, Window};
 
 mod checks;
 
@@ -43,13 +47,39 @@ impl ModalWidth {
     }
 }
 
+/// 注册表判定所需的窄读取视图。
+///
+/// 设计原理（Why）：注册表只需要弹窗状态、少量跨域只读状态与工作区索引，
+/// 不需要整个 `AppShell`。把这个视图作为唯一入参后，判定函数可以在不接触
+/// 外壳和写操作的情况下独立测试，也避免注册表继续扩大对应用状态的访问面。
+pub(super) struct DialogCheckState<'a> {
+    pub(super) modals: &'a ModalHub,
+    pub(super) shortcut_recording: &'a ShortcutRecordingState,
+    pub(super) diff_viewer: &'a Option<Entity<DiffViewerView>>,
+    pub(super) containers: &'a ContainerUiState,
+    pub(super) workspace: &'a WorkspaceState,
+}
+
+impl<'a> DialogCheckState<'a> {
+    /// 从应用状态构造只读判定视图；不持有外壳引用，确保判定函数只能读取登记字段。
+    pub(super) fn from_state(state: &'a AppState) -> Self {
+        Self {
+            modals: &state.modals,
+            shortcut_recording: &state.shortcut_recording,
+            diff_viewer: &state.diff_viewer,
+            containers: &state.containers,
+            workspace: &state.workspace,
+        }
+    }
+}
+
 /// 单个弹窗的注册信息。
 pub(super) struct ModalEntry {
     pub(super) kind: ModalKind,
     pub(super) slug: &'static str,
     pub(super) width: ModalWidth,
-    pub(super) is_open: fn(&AppShell, &App) -> bool,
-    pub(super) field_values: fn(&AppShell, &App) -> Vec<String>,
+    pub(super) is_open: fn(&DialogCheckState, &App) -> bool,
+    pub(super) field_values: fn(&DialogCheckState, &App) -> Vec<String>,
 }
 
 /// 全部弹窗；顺序即层序，越靠后越在上层。

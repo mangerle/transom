@@ -14,13 +14,9 @@ use transom_core::{
 };
 
 mod result;
-pub(in crate::editor) use result::{
-    EditorFailureAction, EditorWrittenAction, SudoProbeOutcome,
-};
+pub(in crate::editor) use result::{EditorFailureAction, EditorWrittenAction, SudoProbeOutcome};
 mod save;
-pub(in crate::editor) use save::{
-    EditorWriteMode, EditorWriteRequest, SudoPasswordRequest, SudoProbeRequest,
-};
+pub(in crate::editor) use save::{SudoPasswordRequest, SudoProbeRequest};
 
 /// 把提权不可用原因翻译成用户能读懂、可据以采取行动的说明。
 fn sudo_unavailable_text(reason: SudoUnavailable) -> String {

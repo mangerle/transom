@@ -1,14 +1,11 @@
-//! SFTP 列表、进度、校验、元数据与预览事件的处理。
+//! SFTP 列表、进度、校验、元数据与预览事件的处理与路由。
 
 use crate::app::AppShell;
-use crate::sftp::TransferStatus;
-use crate::sftp::{
-    RemoteDirCacheEntry, SftpPreviewResponse, remote_file_properties,
-};
+use crate::sftp::{SftpPreviewResponse, remote_file_properties};
 use gpui_kit::*;
 use transom_core::SftpAppEvent;
 
-/// SFTP 目录列表回填：主面板或并排远端列按连接归属分别落位。
+/// SFTP 目录列表回填：委托目标窗格的面板实体按连接归属落位。
 pub(crate) fn on_sftp_listing(
     shell: &mut AppShell,
     event: SftpAppEvent,
@@ -24,59 +21,22 @@ pub(crate) fn on_sftp_listing(
     else {
         return true;
     };
-    let mut update_input = None;
-    if let Some(main_connection) = shell
-        .state
-        .workspace
-        .tab(tab_id)
-        .and_then(|tab| tab.connection_id)
-        && let Some(mut panel) =
-            crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
-    {
-        if let Some(target) = panel
-            .state
-            .remote_pane_of_connection(connection_id, Some(main_connection))
-        {
-            if let Some(pane) = panel.state.remote_pane_mut(target) {
-                log::debug!(
-                    "远端目录回填，窗格: {tab_id}，目标: {target:?}，连接: {connection_id}，路径: {path}，条目数: {}",
-                    entries.len()
-                );
-                pane.path = path.clone();
-                pane.dir_cache.insert(
-                    path.clone(),
-                    RemoteDirCacheEntry {
-                        entries: entries.clone(),
-                        cached_at: std::time::Instant::now(),
-                    },
-                );
-                pane.entries = entries;
-                pane.loading = false;
-                pane.error = None;
-                let valid_paths: std::collections::BTreeSet<String> = pane
-                    .entries
-                    .iter()
-                    .map(|entry| entry.path.clone())
-                    .collect();
-                pane.sync_selection(&valid_paths);
-                update_input = Some((pane.path_input.clone(), path));
-            }
-        } else {
-            // 列已关闭或事件标签不匹配：回填没有落点，留一条调试线索。
-            log::debug!(
-                "远端目录回填找不到目标列，窗格: {tab_id}，连接: {connection_id}，路径: {path}"
-            );
-        }
-    }
-    if let Some((input, path)) = update_input {
-        input.update(cx, |state, cx| state.set_value(path, window, cx));
+    if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
+        &shell.state.workspace,
+        tab_id,
+        connection_id,
+        cx,
+    ) {
+        view.update(cx, |panel, cx| {
+            panel.apply_listing(connection_id, path, entries, window, cx);
+        });
     }
     true
 }
 
 /// SFTP 进度：高频可覆盖样本，只更新数据；仅可见标签自行触发重绘。
 ///
-/// 返回 `false`：重绘由本方法条件决定（见内联注释），调用方不再统一 notify。
+/// 返回 `false`：重绘由本方法条件决定，调用方不再统一 notify。
 pub(crate) fn on_sftp_progress(
     shell: &mut AppShell,
     event: SftpAppEvent,
@@ -95,24 +55,17 @@ pub(crate) fn on_sftp_progress(
         return true;
     };
     let mut applied = false;
-    if let Some(mut panel) =
-        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
-        && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
-    {
-        task.transferred = transferred;
-        if total.is_some() {
-            task.size = total;
-        }
-        task.speed_bps = speed_bps;
-        task.eta_secs = eta_secs;
-        panel.state.recompute_progress();
-        applied = true;
+    if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
+        &shell.state.workspace,
+        tab_id,
+        connection_id,
+        cx,
+    ) {
+        view.update(cx, |panel, cx| {
+            applied = panel.apply_progress(op_id, transferred, total, speed_bps, eta_secs, cx);
+        });
     }
-    // 进度事件高频到达：只有当前可见标签的传输队列在显示进度时
-    // 才值得整帧重绘外壳；后台标签的数据照常更新，切回时自然呈现。
     if applied {
-        // 浮层的速率与重绘按"窗格是否真的在屏上"判断，比只看活动窗格更宽：
-        // 分屏里两个窗格可以同时显示各自的浮层。
         if let Some(view) = shell.state.sftp_view(tab_id) {
             view.update(cx, |view, _| view.note_drop_overlay_progress());
         }
@@ -140,26 +93,18 @@ pub(crate) fn on_sftp_verifying(
     else {
         return true;
     };
-    if let Some(mut panel) =
-        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
-        && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
-    {
-        task.status = TransferStatus::Verifying;
-        task.speed_bps = None;
-        task.eta_secs = None;
-    }
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        let message = rust_i18n::t!("sftp.verifying").to_string();
-        view.update(cx, |view, cx| view.set_transient_status(message, cx));
+    if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
+        &shell.state.workspace,
+        tab_id,
+        connection_id,
+        cx,
+    ) {
+        view.update(cx, |panel, cx| panel.apply_verifying(op_id, cx));
     }
     true
 }
 
 /// SFTP 校验不一致后的自动恢复：任务回到传输中，进度归零。
-///
-/// 设计原理（Why）：界面在这里只反映“从头重传”这一事实，不自行决定是否
-/// 重传——控制层已经把所有目标端内容丢掉重新写入，界面若继续显示“校验中”
-/// 或保留旧进度，会让用户看到一条与事实相反的队列。
 pub(crate) fn on_sftp_retrying(
     shell: &mut AppShell,
     event: SftpAppEvent,
@@ -174,20 +119,13 @@ pub(crate) fn on_sftp_retrying(
     else {
         return true;
     };
-    log::warn!("传输校验不一致，开始从头覆盖重传，任务: {op_id}，原因: {reason}");
-    if let Some(mut panel) =
-        crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx)
-        && let Some(task) = panel.state.queue.tasks.iter_mut().find(|t| t.id == op_id)
-    {
-        task.plan_restart();
-        task.status = TransferStatus::Transferring;
-        task.speed_bps = None;
-        task.eta_secs = None;
-        panel.state.recompute_progress();
-    }
-    if let Some(view) = shell.state.sftp_view(tab_id) {
-        let message = rust_i18n::t!("sftp.retrying").to_string();
-        view.update(cx, |view, cx| view.set_transient_status(message, cx));
+    if let Some(view) = crate::sftp::sftp_view_entity_for_connection(
+        &shell.state.workspace,
+        tab_id,
+        connection_id,
+        cx,
+    ) {
+        view.update(cx, |panel, cx| panel.apply_retrying(op_id, &reason, cx));
     }
     true
 }
@@ -207,12 +145,12 @@ pub(crate) fn on_sftp_metadata(
     else {
         return true;
     };
-    if crate::sftp::sftp_view_mut_for_connection(shell, tab_id, connection_id, cx).is_none() {
-        // 标签页已关闭（或连接已切换）：忽略迟到的属性响应，不再弹出属性窗
+    if crate::sftp::sftp_view_mut_for_connection(&shell.state.workspace, tab_id, connection_id, cx)
+        .is_none()
+    {
         return false;
     }
-    crate::sftp::open_sftp_properties_modal(
-        shell,
+    shell.state.modals.sftp.open_properties(
         rust_i18n::t!("sftp.modals.scope_remote").to_string(),
         remote_file_properties(&metadata),
         cx,
@@ -239,7 +177,8 @@ pub(crate) fn on_sftp_preview(
     else {
         return true;
     };
-    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx).is_some()
+    if crate::sftp::sftp_state_for_connection(&shell.state.workspace, tab_id, connection_id, cx)
+        .is_some()
         && let Some(view) = shell.state.sftp_view(tab_id)
     {
         view.update(cx, |view, cx| {
@@ -271,7 +210,8 @@ pub(crate) fn on_sftp_preview_failed(
     else {
         return true;
     };
-    if crate::sftp::sftp_state_for_connection(shell, tab_id, connection_id, cx).is_some()
+    if crate::sftp::sftp_state_for_connection(&shell.state.workspace, tab_id, connection_id, cx)
+        .is_some()
         && let Some(view) = shell.state.sftp_view(tab_id)
     {
         view.update(cx, |view, cx| {
@@ -303,20 +243,9 @@ pub(crate) fn on_sftp_dir_compared(
     else {
         return true;
     };
-    if let Some(modal) = shell.state.sftp_modals.sync.clone() {
+    if let Some(modal) = shell.state.modals.sftp.sync.clone() {
         modal.update(cx, |modal, cx| {
-            if modal.state.op_id == op_id && modal.state.connection_id == connection_id {
-                modal.state.scanning = false;
-                modal.state.skipped = comparison.skipped;
-                modal.state.selected = comparison
-                    .entries
-                    .iter()
-                    .map(|entry| entry.sync_item().is_some())
-                    .collect();
-                modal.state.entries = comparison.entries;
-                modal.state.error = None;
-                cx.notify();
-            }
+            modal.apply_dir_compared(connection_id, op_id, &comparison, cx);
         });
     }
     true

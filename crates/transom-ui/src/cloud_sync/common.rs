@@ -8,5 +8,5 @@ pub(super) use gpui_kit::*;
 pub(super) use std::path::PathBuf;
 pub(super) use transom_core::{
     AppError, BackupExportOptions, MergePreference, SecretRestoreReport, SessionCatalog,
-    SyncCommand, SyncSettings, merge_catalogs,
+    merge_catalogs,
 };

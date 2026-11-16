@@ -108,7 +108,7 @@ pub(crate) fn execute_sftp_sync(
         .collect::<Vec<_>>();
 
     if items.is_empty() {
-        if let Some(modal) = shell.state.sftp_modals.sync.as_ref() {
+        if let Some(modal) = shell.state.modals.sftp.sync.as_ref() {
             modal.update(cx, |m, cx| {
                 m.state.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
                 cx.notify();
@@ -129,7 +129,7 @@ pub(crate) fn execute_sftp_sync(
         algorithm: app_settings(cx).sftp.checksum_algorithm,
     };
     task.target_connection_id = connection_id;
-    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) {
         panel.state.queue.tasks.push(task);
         panel.state.set_status(
             rust_i18n::t!(

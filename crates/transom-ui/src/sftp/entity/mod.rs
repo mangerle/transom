@@ -24,16 +24,19 @@ mod chmod;
 mod clipboard;
 mod delete;
 mod drop_upload;
+mod event_applier;
 mod file_ops;
 mod local_diff;
 mod queue;
 mod side_remote;
 mod status;
 mod task_control;
+mod task_settle;
 
 use super::SftpPanelState;
 use crate::app::{AppShell, AppState};
 use crate::keymap;
+use crate::workspace::WorkspaceState;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use transom_core::{ConnectionId, TabId};
@@ -67,8 +70,9 @@ impl SftpPanelView {
     /// 打开传输排除规则编辑弹窗：文本取自外壳设置，装配在外壳完成。
     pub(crate) fn open_filter_modal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = crate::app::app_settings(cx).sftp.transfer_filter.clone();
-        let textarea =
-            cx.new(|cx| gpui_kit::component::input::TextareaState::new(window, cx).default_value(text));
+        let textarea = cx.new(|cx| {
+            gpui_kit::component::input::TextareaState::new(window, cx).default_value(text)
+        });
         textarea.update(cx, |state, cx| state.focus(window, cx));
         cx.emit(crate::sftp::SftpPanelEvent::OpenFilterModal { textarea });
         cx.notify();
@@ -111,11 +115,11 @@ impl Render for SftpPanelView {
 /// 与旧 `tab.sftp()` 的差别：状态存放在实体里，读取需要 `cx`；
 /// 返回值借用 `cx`，调用方必须在借用结束后再修改外壳。
 pub(crate) fn sftp_state<'a>(
-    shell: &AppShell,
+    workspace: &WorkspaceState,
     tab_id: TabId,
     cx: &'a App,
 ) -> Option<&'a SftpPanelState> {
-    let view = shell.state.sftp_view(tab_id)?;
+    let view = workspace.tab(tab_id)?.sftp_view()?;
     Some(view.read(cx).state())
 }
 
@@ -124,27 +128,24 @@ pub(crate) fn sftp_state<'a>(
 /// 借用结束（`GpuiBorrow` 析构）时自动通知实体重绘；调用期间 `cx` 被
 /// 独占，必须先结束借用再调用其它 `&mut Context<AppShell>` 方法。
 pub(crate) fn sftp_view_mut<'a>(
-    shell: &AppShell,
+    workspace: &WorkspaceState,
     tab_id: TabId,
     cx: &'a mut Context<AppShell>,
 ) -> Option<GpuiBorrow<'a, SftpPanelView>> {
-    let view = shell.state.sftp_view(tab_id)?;
+    let view = workspace.tab(tab_id)?.sftp_view()?;
     Some(view.as_mut(cx))
 }
 
 /// 按窗格与连接只读面板状态；连接不属于该窗格时返回 `None`。
 pub(crate) fn sftp_state_for_connection<'a>(
-    shell: &AppShell,
+    workspace: &WorkspaceState,
     tab_id: TabId,
     connection_id: ConnectionId,
     cx: &'a App,
 ) -> Option<&'a SftpPanelState> {
-    let view = shell.state.sftp_view(tab_id)?;
+    let view = workspace.tab(tab_id)?.sftp_view()?;
     let view_ref = view.read(cx);
-    if !shell
-        .state
-        .sftp_connection_matches(tab_id, connection_id, view_ref)
-    {
+    if !sftp_connection_matches(workspace, tab_id, connection_id, view_ref) {
         return None;
     }
     Some(&view_ref.state)
@@ -155,19 +156,46 @@ pub(crate) fn sftp_state_for_connection<'a>(
 /// 事件回传只携带连接号：连接不属于该窗格时视为迟到事件，返回 `None`
 /// 而不是静默改到别的列上。
 pub(crate) fn sftp_view_mut_for_connection<'a>(
-    shell: &AppShell,
+    workspace: &WorkspaceState,
     tab_id: TabId,
     connection_id: ConnectionId,
     cx: &'a mut Context<AppShell>,
 ) -> Option<GpuiBorrow<'a, SftpPanelView>> {
-    let view = shell.state.sftp_view(tab_id)?;
-    if !shell
-        .state
-        .sftp_connection_matches(tab_id, connection_id, view.read(cx))
-    {
+    let view = workspace.tab(tab_id)?.sftp_view()?;
+    if !sftp_connection_matches(workspace, tab_id, connection_id, view.read(cx)) {
         return None;
     }
     Some(view.as_mut(cx))
+}
+
+/// 按窗格与连接获取面板视图实体句柄；连接必须属于该窗格。
+pub(crate) fn sftp_view_entity_for_connection(
+    workspace: &WorkspaceState,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    cx: &App,
+) -> Option<Entity<SftpPanelView>> {
+    let view = workspace.tab(tab_id)?.sftp_view()?;
+    if !sftp_connection_matches(workspace, tab_id, connection_id, view.read(cx)) {
+        return None;
+    }
+    Some(view)
+}
+
+/// 判断连接是否属于指定窗格的主远端列或并列列。
+fn sftp_connection_matches(
+    workspace: &WorkspaceState,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    view: &SftpPanelView,
+) -> bool {
+    let main_connection = workspace.tab(tab_id).and_then(|tab| tab.connection_id);
+    main_connection == Some(connection_id)
+        || view
+            .state
+            .side_remotes
+            .iter()
+            .any(|side| side.connection_id == Some(connection_id))
 }
 
 impl SftpPanelView {
@@ -236,22 +264,6 @@ impl AppState {
     /// 按窗格查找 SFTP 实体句柄；未建立面板或窗格已关闭时返回 `None`。
     pub(crate) fn sftp_view(&self, tab_id: TabId) -> Option<Entity<SftpPanelView>> {
         self.workspace.tab(tab_id)?.sftp_view()
-    }
-
-    /// 该窗格是否持有指定连接的远端列（主连接或并列列）。
-    pub(crate) fn sftp_connection_matches(
-        &self,
-        tab_id: TabId,
-        connection_id: ConnectionId,
-        view: &SftpPanelView,
-    ) -> bool {
-        let main_connection = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id);
-        main_connection == Some(connection_id)
-            || view
-                .state
-                .side_remotes
-                .iter()
-                .any(|side| side.connection_id == Some(connection_id))
     }
 
     /// 销毁窗格上的 SFTP 实体；返回此前是否存在。

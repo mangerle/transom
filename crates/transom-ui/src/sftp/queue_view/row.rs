@@ -166,16 +166,17 @@ fn render_queue_task_actions(
             cx,
         )
     };
-    let resume = |label_key: &str, id_prefix: &str, icon: UiIcon, cx: &mut Context<SftpPanelView>| {
-        queue_action_btn(
-            format!("{id_prefix}-{task_id}"),
-            icon,
-            rust_i18n::t!(label_key).to_string(),
-            true,
-            move |this, cx| this.resume_task(tab_id, task_id, cx),
-            cx,
-        )
-    };
+    let resume =
+        |label_key: &str, id_prefix: &str, icon: UiIcon, cx: &mut Context<SftpPanelView>| {
+            queue_action_btn(
+                format!("{id_prefix}-{task_id}"),
+                icon,
+                rust_i18n::t!(label_key).to_string(),
+                true,
+                move |this, cx| this.resume_task(tab_id, task_id, cx),
+                cx,
+            )
+        };
     let remove = |cx: &mut Context<SftpPanelView>| {
         queue_action_btn(
             format!("queue-remove-{task_id}"),
@@ -193,11 +194,21 @@ fn render_queue_task_actions(
         TransferStatus::Verifying => row.child(cancel(true, cx)),
         TransferStatus::Paused => row
             .child(prioritize(cx))
-            .child(resume("sftp.queue.resume_task", "queue-resume", UiIcon::RUN, cx))
+            .child(resume(
+                "sftp.queue.resume_task",
+                "queue-resume",
+                UiIcon::RUN,
+                cx,
+            ))
             .child(cancel(true, cx)),
         TransferStatus::Pending => row.child(prioritize(cx)).child(cancel(true, cx)),
         TransferStatus::Failed(_) => row
-            .child(resume("sftp.queue.retry_task", "queue-retry", UiIcon::REFRESH, cx))
+            .child(resume(
+                "sftp.queue.retry_task",
+                "queue-retry",
+                UiIcon::REFRESH,
+                cx,
+            ))
             // 失败任务直接可移除：取消只是把状态改成“已取消”，还得再清空
             // 队列才能清掉失败记录，对只想收起失败项的用户是多余的步骤。
             .child(remove(cx))

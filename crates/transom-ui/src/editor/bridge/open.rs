@@ -1,6 +1,6 @@
 //! 远端编辑面板打开、新建与终端代码链接跳转的外壳桥接。
 
-use super::{editor_reject, request_remote_text_read};
+use super::editor_reject;
 use crate::app::{AppShell, app_settings};
 use crate::editor::code_link::resolve_code_path;
 use crate::editor::navigate::apply_editor_goto;
@@ -42,7 +42,7 @@ pub(crate) fn sftp_edit_remote_file_on(
         .workspace
         .tab(tab_id)
         .and_then(|tab| {
-            let panel = crate::sftp::sftp_state(shell, tab_id, cx)?;
+            let panel = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)?;
             let entries = if tab.connection_id == Some(connection_id) {
                 &panel.remote.entries
             } else {
@@ -159,7 +159,9 @@ pub(crate) fn open_remote_editor_panel(
         )
     });
     if let Some(request) = request {
-        request_remote_text_read(shell, request, cx);
+        shell.state.editors.update(cx, |panels, cx| {
+            panels.request_remote_text_read(request, cx);
+        });
     }
 }
 
@@ -209,8 +211,8 @@ pub(crate) fn open_terminal_code_location(
     else {
         return;
     };
-    let remote_dir =
-        crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| panel.remote.path.clone());
+    let remote_dir = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
+        .map(|panel| panel.remote.path.clone());
     let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
         shell.state.status =
             Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
@@ -292,7 +294,9 @@ pub(crate) fn open_remote_code_location(
         )
     });
     if let Some(request) = request {
-        request_remote_text_read(shell, request, cx);
+        shell.state.editors.update(cx, |panels, cx| {
+            panels.request_remote_text_read(request, cx);
+        });
     }
 }
 

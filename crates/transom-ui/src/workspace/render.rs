@@ -60,7 +60,7 @@ impl AppShell {
         let side_left = app_settings(cx).window.sftp_panel_side.is_left();
         let active_tab = self.state.workspace.active_tab;
         let show_sftp = active_tab
-            .and_then(|tab_id| crate::sftp::sftp_state(self, tab_id, cx))
+            .and_then(|tab_id| crate::sftp::sftp_state(&self.state.workspace, tab_id, cx))
             .is_some_and(|panel| panel.open);
         let show_forwards = active_tab
             .and_then(|tab_id| self.state.workspace.tab(tab_id))
@@ -114,7 +114,7 @@ impl AppShell {
             .state
             .workspace
             .active_tab
-            .and_then(|tab_id| crate::sftp::sftp_state(self, tab_id, cx));
+            .and_then(|tab_id| crate::sftp::sftp_state(&self.state.workspace, tab_id, cx));
         let sftp_plan = sftp_layout_plan(sftp_panel, rem);
         let show_sftp = sftp_plan.show;
         let sftp_width = sftp_plan.width;
@@ -209,8 +209,7 @@ impl AppShell {
                     let mut active_branches =
                         std::collections::HashMap::with_capacity(self.state.git.projects.len());
                     for project in &self.state.git.projects {
-                        if let Some(workspace) =
-                            self.state.git_workspace_of_project(project.id, cx)
+                        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx)
                             && let Some(transom_core::HeadState::OnBranch(name)) =
                                 workspace.read(cx).state.status.as_ref().map(|s| &s.head)
                         {

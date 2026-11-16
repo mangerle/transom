@@ -25,28 +25,17 @@ pub(crate) fn on_cloud_sync_event(
         CloudSyncEvent::OpenSettings => {
             shell.open_settings_modal(None, window, cx);
         }
-        CloudSyncEvent::TriggerAction(action) => match action {
-            CloudSyncSidebarAction::GitSyncNow => {
-                crate::cloud_sync::start_git_sync(shell, window, cx);
+        CloudSyncEvent::TriggerAction(action) => {
+            let mut actions = crate::cloud_sync::CloudSyncActions::new(&mut shell.state);
+            match action {
+                CloudSyncSidebarAction::GitSyncNow => actions.start_git_sync(window, cx),
+                CloudSyncSidebarAction::Check => actions.start_cloud_sync_check(window, cx),
+                CloudSyncSidebarAction::Test => actions.start_cloud_sync_test(window, cx),
+                CloudSyncSidebarAction::Push => actions.start_cloud_sync_push(window, cx),
+                CloudSyncSidebarAction::Pull => actions.start_cloud_sync_pull(window, cx),
+                CloudSyncSidebarAction::ForcePull => actions.start_cloud_sync_force_pull(cx),
+                CloudSyncSidebarAction::ForcePush => actions.start_cloud_sync_force_push(cx),
             }
-            CloudSyncSidebarAction::Check => {
-                crate::cloud_sync::start_cloud_sync_check(shell, window, cx);
-            }
-            CloudSyncSidebarAction::Test => {
-                crate::cloud_sync::start_cloud_sync_test(shell, window, cx);
-            }
-            CloudSyncSidebarAction::Push => {
-                crate::cloud_sync::start_cloud_sync_push(shell, window, cx);
-            }
-            CloudSyncSidebarAction::Pull => {
-                crate::cloud_sync::start_cloud_sync_pull(shell, window, cx);
-            }
-            CloudSyncSidebarAction::ForcePull => {
-                crate::cloud_sync::start_cloud_sync_force_pull(shell, cx);
-            }
-            CloudSyncSidebarAction::ForcePush => {
-                crate::cloud_sync::start_cloud_sync_force_push(shell, cx);
-            }
-        },
+        }
     }
 }

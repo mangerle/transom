@@ -16,6 +16,7 @@ mod metrics;
 use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::divider::{DividerEdge, DividerStyled};
+use crate::monitor::{MonitorOps, MonitorTerminalPlan};
 use crate::palette::Palette;
 use crate::sidebar::SidebarSection;
 use drag::{
@@ -242,7 +243,18 @@ fn activate_activity_item(
         ActivityItemId::QuickOpen => crate::connection::toggle_quick_open(shell, window, cx),
         ActivityItemId::Forwards => crate::forward::toggle_forward_panel(shell, window, cx),
         ActivityItemId::Sftp => crate::sftp::toggle_sftp(shell, window, cx),
-        ActivityItemId::Monitor => crate::monitor::toggle_monitor(shell, window, cx),
+        ActivityItemId::Monitor => {
+            let plan = MonitorOps::new(&mut shell.state).toggle_monitor(cx);
+            match plan {
+                Some(MonitorTerminalPlan::Activate(tab_id)) => {
+                    shell.activate_tab(tab_id, window, cx)
+                }
+                Some(MonitorTerminalPlan::OpenLocal) => {
+                    crate::connection::open_local_terminal(shell, window, cx)
+                }
+                None => {}
+            }
+        }
         ActivityItemId::Containers => {
             shell
                 .state

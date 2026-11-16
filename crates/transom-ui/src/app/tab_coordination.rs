@@ -149,7 +149,8 @@ impl AppShell {
                         .monitor
                         .update(cx, |view, _| view.reset_history());
                     let collapsed = shell.state.monitor.read(cx).processes_collapsed();
-                    crate::monitor::sample_processes(shell, collapsed, cx);
+                    crate::monitor::MonitorOps::new(&mut shell.state)
+                        .sample_processes(collapsed, cx);
                 }
             });
         });

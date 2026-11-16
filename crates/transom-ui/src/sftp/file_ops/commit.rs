@@ -26,7 +26,7 @@ pub(in crate::sftp) fn commit_sftp_input_value(
         .workspace
         .tab(tab_id)
         .and_then(|tab| tab.connection_id);
-    let scope = crate::sftp::sftp_state(shell, tab_id, cx)
+    let scope = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
         .and_then(|panel| panel.remote_pane_scope(target, fallback_main))
         .map(|scope| SftpInputScope {
             connection_id: scope.connection_id,
@@ -44,7 +44,9 @@ pub(in crate::sftp) fn commit_sftp_input_value(
     match modal_target {
         SftpInputTarget::SudoElevation { editor } => {
             let password = (!name.trim().is_empty()).then(|| name.to_string());
-            crate::editor::submit_sudo_editor_write(shell, editor, password, window, cx);
+            shell.state.editors.update(cx, |panels, cx| {
+                panels.submit_sudo_editor_write(editor, password, cx);
+            });
         }
         SftpInputTarget::RemoteMkdir
         | SftpInputTarget::RemoteRename { .. }
@@ -90,7 +92,9 @@ fn commit_new_remote_file(
         .find(|entry| entry.path == path)
         .map(|entry| entry.is_dir);
     match existing_is_dir {
-        Some(true) => Err(rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name).to_string()),
+        Some(true) => {
+            Err(rust_i18n::t!("sftp.file_ops.file_exists_as_dir", name = name).to_string())
+        }
         Some(false) => {
             crate::editor::sftp_edit_remote_file_on(
                 shell,
@@ -125,14 +129,15 @@ fn commit_local_input(
     tab_id: TabId,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(local_path) =
-        crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| panel.local.path.clone())
+    let Some(local_path) = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
+        .map(|panel| panel.local.path.clone())
     else {
         return;
     };
     if let SftpInputTarget::LocalRename { old_path } = target {
         let Some(parent) = old_path.parent() else {
-            if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+            if let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx)
+            {
                 panel.state.set_local_error(
                     rust_i18n::t!(
                         "sftp.file_ops.local_rename_failed",
@@ -145,7 +150,6 @@ fn commit_local_input(
             return;
         };
         spawn_local_fs(
-            shell,
             tab_id,
             LocalFsOp::Rename(old_path.clone(), parent.join(name)),
             cx,
@@ -160,7 +164,7 @@ fn commit_local_input(
         }
         _ => return,
     };
-    spawn_local_fs(shell, tab_id, op, cx);
+    spawn_local_fs(tab_id, op, cx);
 }
 
 /// 本次输入的目标远端范围：连接、当前目录与条目快照。
@@ -332,7 +336,7 @@ fn run_local_fs(op: LocalFsOp) -> LocalFsOutcome {
 }
 
 /// 在后台线程执行本地文件操作，完成后回 UI 刷新对应面板。
-fn spawn_local_fs(_shell: &mut AppShell, tab_id: TabId, op: LocalFsOp, cx: &mut Context<AppShell>) {
+fn spawn_local_fs(tab_id: TabId, op: LocalFsOp, cx: &mut Context<AppShell>) {
     cx.spawn(async move |this, cx| {
         let Some(outcome) = spawn_blocking_local(move || run_local_fs(op)).await else {
             log::error!("本地文件操作线程创建失败");
@@ -353,7 +357,7 @@ fn apply_local_fs_outcome(
     cx: &mut Context<AppShell>,
 ) {
     let (select, reveal) = {
-        let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) else {
+        let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) else {
             return;
         };
         if let Some(error) = outcome.error {

@@ -49,3 +49,47 @@ pub(crate) struct SftpModals {
     pub(crate) search: Option<Entity<SftpSearchModalView>>,
     pub(crate) subs: SftpModalSubscriptions,
 }
+
+impl SftpModals {
+    /// 关闭确认弹窗并取消订阅。
+    pub(crate) fn close_confirm(&mut self) {
+        self.confirm = None;
+        self.subs.confirm = None;
+    }
+
+    /// 关闭输入弹窗并取消订阅。
+    pub(crate) fn close_input(&mut self) {
+        self.input = None;
+        self.subs.input = None;
+    }
+
+    /// 关闭权限弹窗并取消订阅。
+    pub(crate) fn close_chmod(&mut self) {
+        self.chmod = None;
+        self.subs.chmod = None;
+    }
+
+    /// 关闭属性弹窗并取消订阅。
+    pub(crate) fn close_properties(&mut self) {
+        self.properties = None;
+        self.subs.properties = None;
+    }
+
+    /// 关闭过滤弹窗并取消订阅。
+    pub(crate) fn close_filter(&mut self) {
+        self.filter = None;
+        self.subs.filter = None;
+    }
+
+    /// 关闭同步弹窗并取消订阅。
+    pub(crate) fn close_sync(&mut self) {
+        self.sync = None;
+        self.subs.sync = None;
+    }
+
+    /// 关闭搜索弹窗并取消订阅。
+    pub(crate) fn close_search(&mut self) {
+        self.search = None;
+        self.subs.search = None;
+    }
+}

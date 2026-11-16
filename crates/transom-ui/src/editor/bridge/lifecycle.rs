@@ -5,13 +5,13 @@ use crate::editor::close::PendingEditorClose;
 use crate::editor::navigate::{EditorGotoLineModalState, apply_editor_goto};
 use crate::palette::Palette;
 use crate::palette::sftp_text_input;
-use gpui_kit::component::input::RopeExt;
-use transom_ui_icons::AppIconElement;
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::input::RopeExt;
 use gpui_kit::component::input::{EditorState, Input, InputEvent};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::TabId;
+use transom_ui_icons::AppIconElement;
 use transom_ui_icons::{AppIcon, UiIcon};
 
 /// 丢弃标签已不存在的对比面板。

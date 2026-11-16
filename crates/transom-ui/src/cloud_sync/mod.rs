@@ -21,12 +21,7 @@ mod scheduler;
 mod sidebar;
 mod state;
 
-pub(crate) use actions::{
-    dispatch_cloud_sync_check, dispatch_cloud_sync_pull, dispatch_cloud_sync_push,
-    dispatch_cloud_sync_test, finish_sync_failure, start_cloud_sync_check,
-    start_cloud_sync_force_pull, start_cloud_sync_force_push, start_cloud_sync_pull,
-    start_cloud_sync_push, start_cloud_sync_test, start_git_sync, start_git_sync_scheduled,
-};
+pub(crate) use actions::CloudSyncActions;
 pub(crate) use auto_sync::tick_cloud_sync_auto;
 pub(crate) use bridge::{on_cloud_sync_event, toggle_cloud_sync_sidebar};
 pub(crate) use entity::{CloudSyncEvent, CloudSyncView};

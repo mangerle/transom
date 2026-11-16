@@ -127,12 +127,14 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpSearchResults { items, .. } => {
-                if let Some(modal) = self.state.sftp_modals.search.clone() {
+                if let Some(modal) = self.state.modals.sftp.search.clone() {
                     modal.update(cx, |m, cx| m.apply_results(items, None, cx));
                 }
                 true
             }
-            SftpAppEvent::SftpDirCompared { .. } => crate::sftp::on_sftp_dir_compared(self, event, cx),
+            SftpAppEvent::SftpDirCompared { .. } => {
+                crate::sftp::on_sftp_dir_compared(self, event, cx)
+            }
             SftpAppEvent::SudoProbed {
                 op_id, capability, ..
             } => {
@@ -190,21 +192,36 @@ impl AppShell {
                 connection_id,
                 processes,
             } => {
-                crate::monitor::monitor_sampled(self, tab_id, connection_id, processes, cx);
+                crate::monitor::MonitorOps::new(&mut self.state).monitor_sampled(
+                    tab_id,
+                    connection_id,
+                    processes,
+                    cx,
+                );
             }
             HostAppEvent::ProcessCountSampled {
                 tab_id,
                 connection_id,
                 count,
             } => {
-                crate::monitor::monitor_count_sampled(self, tab_id, connection_id, count, cx);
+                crate::monitor::MonitorOps::new(&mut self.state).monitor_count_sampled(
+                    tab_id,
+                    connection_id,
+                    count,
+                    cx,
+                );
             }
             HostAppEvent::ProcessesSampleFailed {
                 tab_id,
                 connection_id,
                 error,
             } => {
-                crate::monitor::monitor_failed(self, tab_id, connection_id, error, cx);
+                crate::monitor::MonitorOps::new(&mut self.state).monitor_failed(
+                    tab_id,
+                    connection_id,
+                    error,
+                    cx,
+                );
             }
             HostAppEvent::ProcessKilled {
                 tab_id,
@@ -212,7 +229,13 @@ impl AppShell {
                 pid,
                 error,
             } => {
-                crate::monitor::monitor_killed(self, tab_id, connection_id, pid, error, cx);
+                crate::monitor::MonitorOps::new(&mut self.state).monitor_killed(
+                    tab_id,
+                    connection_id,
+                    pid,
+                    error,
+                    cx,
+                );
             }
             HostAppEvent::PublicKeyDeployed {
                 tab_id: _,
@@ -285,12 +308,7 @@ impl AppShell {
                 self.set_transient_status(rust_i18n::t!("status.copied"), cx);
             }
             TerminalEvent::ClipboardWriteRequest { text } => {
-                crate::connection::request_clipboard_permission(
-                    self,
-                    tab_id,
-                    text.clone(),
-                    cx,
-                );
+                crate::connection::request_clipboard_permission(self, tab_id, text.clone(), cx);
             }
             TerminalEvent::CopyModeChanged { active } => {
                 // 提示只在本次进入时写入；退出时只清理自己写的那条，避免覆盖
@@ -366,9 +384,9 @@ pub(crate) fn on_known_hosts_event(
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => {
-            shell.state.set_error(crate::palette::localized_error(error))
-        }
+        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => shell
+            .state
+            .set_error(crate::palette::localized_error(error)),
         crate::keys::KnownHostsEvent::Removed { error: None } => {
             shell.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
         }

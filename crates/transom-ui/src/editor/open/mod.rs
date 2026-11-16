@@ -375,6 +375,38 @@ impl EditorPanels {
         cx.notify();
     }
 
+    /// 投递一次远程文本读取；上限取当前设置，失败按任务标识回填面板。
+    pub(crate) fn request_remote_text_read(
+        &mut self,
+        params: RemoteTextReadParams,
+        cx: &mut Context<Self>,
+    ) {
+        let op_id = params.op_id;
+        let max_bytes = self.edit_max_bytes(cx);
+        let sent = self.command_tx().is_some_and(|tx| {
+            tx.try_send(
+                SftpCommand::Sftp {
+                    tab_id: params.tab_id,
+                    connection_id: params.connection_id,
+                    op_id: params.op_id,
+                    op: SftpOperation::ReadText {
+                        path: params.remote_path,
+                        max_bytes,
+                    },
+                }
+                .into(),
+            )
+            .is_ok()
+        });
+        if !sent {
+            self.fail_by_op(
+                op_id,
+                rust_i18n::t!("editor.error_read_dispatch").to_string(),
+                cx,
+            );
+        }
+    }
+
     /// 重发读取命令：读取失败后的"重试读取"与冲突横幅的"放弃本地并重新载入"
     /// 共用同一条装载路径。
     ///

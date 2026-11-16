@@ -34,7 +34,6 @@ pub(crate) use bridge::{
     note_editor_text_failed, on_editor_text_written, on_sudo_probed, open_editor_goto_line,
     open_remote_editor_panel, open_terminal_code_location, prune_tab_overlays,
     render_editor_goto_line_body, sftp_edit_remote_file_on, spawn_new_editor_panel,
-    submit_sudo_editor_write,
 };
 pub(crate) use close::PendingEditorClose;
 pub(crate) use diff::EditorDiffWriteSync;

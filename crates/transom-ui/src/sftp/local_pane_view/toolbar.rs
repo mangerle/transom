@@ -67,7 +67,11 @@ fn render_local_path_row(
                 .mr_1()
                 .child(rust_i18n::t!("sftp.local_title").to_string()),
         )
-        .child(div().flex_1().child(Input::new(props.local_path_input).w_full()))
+        .child(
+            div()
+                .flex_1()
+                .child(Input::new(props.local_path_input).w_full()),
+        )
         .child(
             crate::widgets::IconButton::new(
                 "local-up",
@@ -96,9 +100,9 @@ fn render_local_path_row(
             )
             .size(crate::widgets::IconButtonSize::Regular)
             .render()
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.local_enter_path(tab_id, window, cx)
-            })),
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.local_enter_path(tab_id, window, cx)),
+            ),
         )
         .when(props.remote_available, |this| {
             this.child(

@@ -34,7 +34,7 @@ pub(crate) fn perform_sftp_delete(
         SftpOperation::DeleteMany { targets },
         cx,
     );
-    if let Some(mut panel) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+    if let Some(mut panel) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) {
         panel
             .state
             .set_status(rust_i18n::t!("sftp.file_ops.deleting_remote", count = count).to_string());

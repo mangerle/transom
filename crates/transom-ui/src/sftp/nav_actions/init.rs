@@ -74,7 +74,7 @@ pub(crate) fn focus_active_sftp_panel(
         .state
         .workspace
         .active_tab
-        .and_then(|tab_id| crate::sftp::sftp_state(shell, tab_id, cx))
+        .and_then(|tab_id| crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx))
         .map(|panel| panel.focus_handle.clone());
     if let Some(focus_handle) = focus_handle {
         window.focus(&focus_handle, cx);
@@ -90,17 +90,17 @@ pub(crate) fn toggle_sftp(shell: &mut AppShell, window: &mut Window, cx: &mut Co
     };
     // `tab.sftp` 存在不等于面板展开：拖拽上传会留一份只看浮层的隐藏状态，
     // 这时 toggle 的意图是"我要看面板"，展开它而不是销毁重建队列。
-    match crate::sftp::sftp_state(shell, tab_id, cx).map(|panel| panel.open) {
+    match crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx).map(|panel| panel.open) {
         Some(true) => {
             shell.state.close_sftp_panel(tab_id);
             cx.notify();
             return;
         }
         Some(false) => {
-            let path = crate::sftp::sftp_state(shell, tab_id, cx)
+            let path = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
                 .map(|panel| panel.remote.path.clone())
                 .unwrap_or_else(|| ".".to_string());
-            if let Some(mut view) = crate::sftp::sftp_view_mut(shell, tab_id, cx) {
+            if let Some(mut view) = crate::sftp::sftp_view_mut(&shell.state.workspace, tab_id, cx) {
                 view.state.open = true;
             }
             // 面板接管进度显示，浮层同步退场；隐藏期间没有列表过目录，这里补上。

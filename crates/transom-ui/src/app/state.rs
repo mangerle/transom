@@ -25,7 +25,6 @@ use crate::git::GitWorkspace;
 use crate::keymap::ShortcutRecordingState;
 use crate::palette::localized_error;
 use crate::probe::ProbeBadge;
-use crate::sftp::SftpModals;
 use crate::sidebar::SidebarState;
 use crate::workspace::WorkspaceState;
 use gpui_kit::component::input::InputState;
@@ -133,8 +132,6 @@ pub(crate) struct AppState {
     pub(crate) git_sidebar: Entity<crate::git::GitSidebarView>,
     /// 远端文本编辑面板实体：面板集合、关闭拦截与渲染都归它。
     pub(crate) editors: Entity<EditorPanels>,
-    /// SFTP 五类弹窗（权限、重命名等输入、属性、过滤、同步）的聚合状态。
-    pub(crate) sftp_modals: SftpModals,
     /// 远程与本地文件分栏对比面板；同一时刻至多一个。
     pub(crate) diff_viewer: Option<Entity<crate::diff_viewer::DiffViewerView>>,
     /// 底部广播输入条：目标集合、单行/多行输入与展开状态。

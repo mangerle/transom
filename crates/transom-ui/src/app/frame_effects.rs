@@ -32,8 +32,8 @@ impl AppShell {
             }
             return;
         }
-        let is_local_only =
-            crate::sftp::sftp_state(self, tab_id, cx).is_some_and(|panel| panel.local.only);
+        let is_local_only = crate::sftp::sftp_state(&self.state.workspace, tab_id, cx)
+            .is_some_and(|panel| panel.local.only);
         let current_session = self.state.workspace.tab(tab_id).map(|tab| tab.session.id);
 
         // 先只比较连接标识：大多数帧候选不变，此时不必克隆显示名与 cwd。
@@ -212,7 +212,7 @@ impl AppShell {
                 crate::editor::open_remote_editor_panel(self, params, window, cx);
             }
             SftpPanelEvent::OpenInputModal(params) => {
-                crate::sftp::open_sftp_input_modal(self, params, window, cx);
+                self.state.modals.sftp.open_input(params, window, cx);
             }
             SftpPanelEvent::GrowPanelWidth(extra) => {
                 crate::sftp::grow_sftp_panel_width(self, extra, window, cx);

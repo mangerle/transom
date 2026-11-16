@@ -50,18 +50,13 @@ mod task;
 mod transfer_presentation;
 
 pub(crate) use self::entity::{
-    SftpPanelView, sftp_state, sftp_state_for_connection, sftp_view_mut,
-    sftp_view_mut_for_connection,
+    SftpPanelView, sftp_state, sftp_state_for_connection, sftp_view_entity_for_connection,
+    sftp_view_mut, sftp_view_mut_for_connection,
 };
 pub(crate) use self::file_row_content::{FileRowContentOptions, render_file_row_content};
 pub(crate) use self::local_listing::LocalDirectoryLister;
 pub(crate) use self::modals::{
-    SftpInputModalParams, SftpModals, SftpPendingDelete, close_sftp_chmod_modal,
-    close_sftp_confirm_modal, close_sftp_filter_modal, close_sftp_input_modal,
-    close_sftp_properties_modal, close_sftp_search_modal, close_sftp_sync_modal,
-    open_sftp_chmod_modal, open_sftp_confirm_modal, open_sftp_filter_modal,
-    open_sftp_input_modal, open_sftp_properties_modal, open_sftp_search_modal,
-    open_sftp_sync_modal,
+    SftpChmodModalParams, SftpInputModalParams, SftpModals, SftpPendingDelete,
 };
 pub(crate) use self::overlay::DropOverlayState;
 pub(crate) use self::preview::SftpPreviewResponse;

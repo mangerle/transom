@@ -50,10 +50,10 @@ impl EditorPanels {
     pub(crate) fn save_editor_panel(
         &mut self,
         editor: &Entity<EditorState>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.submit_editor_write(editor, EditorWriteMode::Normal { force: false }, window, cx);
+        self.submit_editor_write(editor, EditorWriteMode::Normal { force: false }, cx);
     }
 
     /// 冲突横幅上的"强制覆盖远端"：跳过指纹比对直接提交当前缓冲区。
@@ -62,10 +62,10 @@ impl EditorPanels {
     pub(crate) fn overwrite_editor_panel_after_conflict(
         &mut self,
         editor: &Entity<EditorState>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.submit_editor_write(editor, EditorWriteMode::Normal { force: true }, window, cx);
+        self.submit_editor_write(editor, EditorWriteMode::Normal { force: true }, cx);
     }
 
     /// 关闭确认横幅上的"保存并关闭"：先回传，成功即关闭面板。
@@ -75,14 +75,14 @@ impl EditorPanels {
     pub(crate) fn save_and_close_editor_panel(
         &mut self,
         editor: &Entity<EditorState>,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.update_panel(editor, |item| {
             item.close_after_write = true;
             item.confirm = None;
         });
-        self.submit_editor_write(editor, EditorWriteMode::Normal { force: false }, window, cx);
+        self.submit_editor_write(editor, EditorWriteMode::Normal { force: false }, cx);
     }
 
     /// 提权保存入口：先探测远端能力，再决定直接提交还是弹口令框。
@@ -115,6 +115,16 @@ impl EditorPanels {
             self.fail_sudo_probe_dispatch(op_id, cx);
         }
         cx.notify();
+    }
+
+    /// 提交一次 sudo 写回；口令为 `None` 表示已确认可免密执行。
+    pub(crate) fn submit_sudo_editor_write(
+        &mut self,
+        editor: &Entity<EditorState>,
+        password: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.submit_editor_write(editor, EditorWriteMode::Sudo { password }, cx);
     }
 
     /// 状态改完之后提交写回：投递失败时把错误落回面板。
@@ -166,7 +176,6 @@ impl EditorPanels {
         &mut self,
         editor: &Entity<EditorState>,
         mode: EditorWriteMode,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(request) = self.prepare_editor_write(editor, mode, cx) else {
@@ -260,7 +269,11 @@ impl EditorPanels {
     }
 
     /// 探测投递失败：回到失败态，保留可原地重试的错误文本。
-    pub(in crate::editor) fn fail_sudo_probe_dispatch(&mut self, op_id: TransferId, cx: &mut Context<Self>) {
+    pub(in crate::editor) fn fail_sudo_probe_dispatch(
+        &mut self,
+        op_id: TransferId,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(item) = self
             .manager_mut()
             .panels

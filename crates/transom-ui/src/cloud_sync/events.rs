@@ -88,8 +88,7 @@ fn handle_cloud_sync_checked(
             follow_up_after_check(shell, &report, meta.trigger, cx);
         }
         Err(error) => {
-            crate::cloud_sync::finish_sync_failure(
-                shell,
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state).finish_sync_failure(
                 SyncOperation::Check,
                 meta.trigger,
                 &provider,
@@ -133,14 +132,14 @@ fn handle_cloud_sync_tested(
             });
             shell.state.status = Some(message);
         }
-        Err(error) => crate::cloud_sync::finish_sync_failure(
-            shell,
-            SyncOperation::TestConnection,
-            meta.trigger,
-            &provider,
-            localized_error(&error),
-            cx,
-        ),
+        Err(error) => crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+            .finish_sync_failure(
+                SyncOperation::TestConnection,
+                meta.trigger,
+                &provider,
+                localized_error(&error),
+                cx,
+            ),
     }
     cx.notify();
 }
@@ -272,8 +271,7 @@ fn handle_cloud_sync_pulled(
             crate::cloud_sync::finish_cloud_sync_pull(shell, report, mode, window, cx);
         }
         Err(error) => {
-            crate::cloud_sync::finish_sync_failure(
-                shell,
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state).finish_sync_failure(
                 SyncOperation::Pull,
                 meta.trigger,
                 &provider,
@@ -337,8 +335,7 @@ fn handle_git_synced(
             shell.state.status = Some(message);
         }
         Err(error) => {
-            crate::cloud_sync::finish_sync_failure(
-                shell,
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state).finish_sync_failure(
                 SyncOperation::Git,
                 meta.trigger,
                 "git",
@@ -363,8 +360,7 @@ fn follow_up_after_check(
     let settings = app_settings(cx).sync.clone();
     match report.relation {
         SyncRelation::LocalAhead if settings.auto_push_on_change => {
-            crate::cloud_sync::dispatch_cloud_sync_push(
-                shell,
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state).dispatch_cloud_sync_push(
                 settings,
                 trigger,
                 CloudPushMode::Merge,
@@ -379,13 +375,8 @@ fn follow_up_after_check(
                 });
                 shell.state.status = Some(reason);
             } else {
-                crate::cloud_sync::dispatch_cloud_sync_pull(
-                    shell,
-                    settings,
-                    trigger,
-                    CloudPullMode::Merge,
-                    cx,
-                );
+                crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+                    .dispatch_cloud_sync_pull(settings, trigger, CloudPullMode::Merge, cx);
             }
         }
         SyncRelation::UpToDate

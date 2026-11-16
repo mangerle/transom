@@ -40,7 +40,6 @@ use crate::editor::EditorPanels;
 use crate::keymap;
 use crate::keymap::ShortcutRecordingState;
 use crate::palette::localized_error;
-use crate::sftp::SftpModals;
 use crate::sidebar::SidebarState;
 use crate::snippets::SnippetPanelState;
 use crate::workspace::WorkspaceState;
@@ -343,7 +342,7 @@ impl AppShell {
             .as_ref()
             .map_or(0, |git| git.interval_minutes);
         if self.state.automation.git_sync_schedule.tick(interval) {
-            crate::cloud_sync::start_git_sync_scheduled(self, cx);
+            crate::cloud_sync::CloudSyncActions::new(&mut self.state).start_git_sync_scheduled(cx);
         }
     }
 

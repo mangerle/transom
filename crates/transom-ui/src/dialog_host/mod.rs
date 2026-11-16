@@ -314,49 +314,56 @@ impl ModalKind {
         match self {
             ModalKind::SftpConfirm => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .confirm
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::SftpInput => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .input
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::SftpChmod => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .chmod
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::SftpProperties => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .properties
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::SftpFilter => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .filter
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::SftpSearch => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .search
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::SftpSync => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .sync
                 .as_ref()
                 .map(|m| m.clone().into_any_element())

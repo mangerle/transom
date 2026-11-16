@@ -34,5 +34,6 @@ pub(crate) fn tick_cloud_sync_auto(shell: &mut AppShell, cx: &mut Context<AppShe
         Some(CloudSyncTick::LocalChange) => SyncTrigger::LocalChange,
         None => return,
     };
-    crate::cloud_sync::dispatch_cloud_sync_check(shell, settings, trigger, cx);
+    crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+        .dispatch_cloud_sync_check(settings, trigger, cx);
 }

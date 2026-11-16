@@ -7,6 +7,19 @@ use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
+/// 打开权限修改弹窗所需的一次性参数包。
+///
+/// 设计原理（Why）：参数原本平铺了六个字段，调用点容易把路径、权限与输入实体
+/// 顺序写错；参数对象让字段名在构造处可见，也为后续弹窗字段扩展保留稳定入口。
+pub(crate) struct SftpChmodModalParams {
+    pub(crate) tab_id: TabId,
+    pub(crate) connection_id: Option<ConnectionId>,
+    pub(crate) file_name: String,
+    pub(crate) remote_path: String,
+    pub(crate) permissions: u32,
+    pub(crate) octal_input: Entity<InputState>,
+}
+
 /// SFTP 权限修改弹窗事件。
 pub(crate) enum SftpChmodModalEvent {
     Apply {
@@ -217,11 +230,7 @@ fn chmod_octal_row(
 }
 
 /// 三组权限复选行：属主/属组/其他，各含读/写/执行。
-fn chmod_grid(
-    perms: u32,
-    cx: &mut Context<SftpChmodModalView>,
-    p: &Palette,
-) -> AnyElement {
+fn chmod_grid(perms: u32, cx: &mut Context<SftpChmodModalView>, p: &Palette) -> AnyElement {
     let groups = [
         (
             rust_i18n::t!("sftp.chmod.group_owner").to_string(),

@@ -14,7 +14,9 @@
 use super::entity::SftpPanelView;
 use crate::app::app_settings;
 use crate::sftp::side_remote::SftpRemoteCopyParams;
-use crate::sftp::{SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, format_size, parent_remote};
+use crate::sftp::{
+    SftpPanelState, SftpRemotePaneRef, SftpRemotePaneState, format_size, parent_remote,
+};
 use gpui_kit::*;
 use transom_core::{ConnectionId, SftpCommand, SftpOperation, TransferId};
 

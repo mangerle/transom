@@ -34,7 +34,7 @@ pub(crate) fn on_settings_event(
             shell.set_sftp_panel_side(*side, cx);
         }
         SettingsEvent::MonitorIntervalChanged(mode) => {
-            crate::monitor::set_monitor_interval_mode(shell, *mode, cx);
+            crate::monitor::MonitorOps::new(&mut shell.state).set_monitor_interval_mode(*mode, cx);
         }
         SettingsEvent::MonitorSectionsChanged(collapse) => {
             shell
@@ -171,17 +171,23 @@ pub(crate) fn handle_settings_request(
             crate::audit_viewer::open_audit_viewer(shell, None, window, cx)
         }
         SettingsRequest::CloudSyncCheck => {
-            crate::cloud_sync::start_cloud_sync_check(shell, window, cx)
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+                .start_cloud_sync_check(window, cx)
         }
         SettingsRequest::CloudSyncTest => {
-            crate::cloud_sync::start_cloud_sync_test(shell, window, cx)
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+                .start_cloud_sync_test(window, cx)
         }
         SettingsRequest::CloudSyncPush => {
-            crate::cloud_sync::start_cloud_sync_push(shell, window, cx)
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+                .start_cloud_sync_push(window, cx)
         }
         SettingsRequest::CloudSyncPull => {
-            crate::cloud_sync::start_cloud_sync_pull(shell, window, cx)
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
+                .start_cloud_sync_pull(window, cx)
         }
-        SettingsRequest::GitSyncNow => crate::cloud_sync::start_git_sync(shell, window, cx),
+        SettingsRequest::GitSyncNow => {
+            crate::cloud_sync::CloudSyncActions::new(&mut shell.state).start_git_sync(window, cx)
+        }
     }
 }

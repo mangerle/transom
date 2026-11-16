@@ -30,42 +30,49 @@ impl ModalKind {
         self.tool_and_session_commit(shell, window, cx);
     }
 
-    fn sftp_commit(self, shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) -> bool {
+    fn sftp_commit(
+        self,
+        shell: &mut AppShell,
+        window: &mut Window,
+        cx: &mut Context<AppShell>,
+    ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                if let Some(modal) = shell.state.sftp_modals.confirm.clone() {
+                if let Some(modal) = shell.state.modals.sftp.confirm.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpInput => {
-                if let Some(modal) = shell.state.sftp_modals.input.clone() {
+                if let Some(modal) = shell.state.modals.sftp.input.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
             }
             ModalKind::SftpChmod => {
-                if let Some(modal) = shell.state.sftp_modals.chmod.clone() {
+                if let Some(modal) = shell.state.modals.sftp.chmod.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
-                crate::sftp::close_sftp_properties_modal(shell, cx);
+                shell.state.modals.sftp.close_properties();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpSearch => {
-                crate::sftp::close_sftp_search_modal(shell, cx);
+                shell.state.modals.sftp.close_search();
+                cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpFilter => {
-                if let Some(modal) = shell.state.sftp_modals.filter.clone() {
+                if let Some(modal) = shell.state.modals.sftp.filter.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpSync => {
-                if let Some(modal) = shell.state.sftp_modals.sync.clone() {
+                if let Some(modal) = shell.state.modals.sftp.sync.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
@@ -198,28 +205,32 @@ impl ModalKind {
         let focus = match self {
             ModalKind::SftpInput => input_focus(shell, |state| {
                 state
-                    .sftp_modals
+                    .modals
+                    .sftp
                     .input
                     .as_ref()
                     .map(|modal| modal.read(cx).input.clone())
             }),
             ModalKind::SftpChmod => input_focus(shell, |state| {
                 state
-                    .sftp_modals
+                    .modals
+                    .sftp
                     .chmod
                     .as_ref()
                     .map(|modal| modal.read(cx).octal_input.clone())
             }),
             ModalKind::SftpSearch => input_focus(shell, |state| {
                 state
-                    .sftp_modals
+                    .modals
+                    .sftp
                     .search
                     .as_ref()
                     .map(|modal| modal.read(cx).state.input.clone())
             }),
             ModalKind::SftpFilter => shell
                 .state
-                .sftp_modals
+                .modals
+                .sftp
                 .filter
                 .as_ref()
                 .map_or(ModalFocus::None, |modal| {

@@ -122,6 +122,7 @@ pub(crate) struct ModalHub {
     pub(crate) connection: ConnectionModals,
     pub(crate) tools: ToolModals,
     pub(crate) git: GitModals,
+    pub(crate) sftp: crate::sftp::SftpModals,
     /// 设置弹窗已经实体化，这里只保留句柄。
     pub(crate) settings: Entity<SettingsView>,
 }
@@ -169,6 +170,7 @@ impl ModalHub {
                 editor_goto_line: None,
             },
             git: GitModals::new(),
+            sftp: crate::sftp::SftpModals::default(),
             settings,
         }
     }

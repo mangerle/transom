@@ -4,26 +4,25 @@
 //! `ContainerWorkspaceModal`，由 `dialog_host/state/mod.rs` 通过
 //! `as_container_modal()` 统一分发，本文件不再逐字段探测工作区内部状态。
 
-use crate::app::AppShell;
+use super::super::DialogCheckState;
 use gpui_kit::App;
 
-pub(in crate::dialog_host) fn container_form_open(shell: &AppShell, cx: &App) -> bool {
-    shell.state.modals.tools.container_form.read(cx).is_open()
+pub(in crate::dialog_host) fn container_form_open(state: &DialogCheckState, cx: &App) -> bool {
+    state.modals.tools.container_form.read(cx).is_open()
 }
 
-pub(in crate::dialog_host) fn container_form_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell
-        .state
-        .modals
-        .tools
-        .container_form
-        .read(cx)
-        .text_values(cx)
+pub(in crate::dialog_host) fn container_form_values(
+    state: &DialogCheckState,
+    cx: &App,
+) -> Vec<String> {
+    state.modals.tools.container_form.read(cx).text_values(cx)
 }
 
-pub(in crate::dialog_host) fn container_folder_form_open(shell: &AppShell, cx: &App) -> bool {
-    shell
-        .state
+pub(in crate::dialog_host) fn container_folder_form_open(
+    state: &DialogCheckState,
+    cx: &App,
+) -> bool {
+    state
         .containers
         .sidebar
         .read(cx)
@@ -33,11 +32,10 @@ pub(in crate::dialog_host) fn container_folder_form_open(shell: &AppShell, cx: &
 }
 
 pub(in crate::dialog_host) fn container_folder_form_values(
-    shell: &AppShell,
+    state: &DialogCheckState,
     cx: &App,
 ) -> Vec<String> {
-    shell
-        .state
+    state
         .containers
         .sidebar
         .read(cx)
@@ -48,25 +46,35 @@ pub(in crate::dialog_host) fn container_folder_form_values(
         .unwrap_or_default()
 }
 
-pub(in crate::dialog_host) fn container_run_form_open(shell: &AppShell, cx: &App) -> bool {
-    shell.state.modals.tools.run_form.read(cx).is_open()
+pub(in crate::dialog_host) fn container_run_form_open(state: &DialogCheckState, cx: &App) -> bool {
+    state.modals.tools.run_form.read(cx).is_open()
 }
 
-pub(in crate::dialog_host) fn container_run_form_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    shell.state.modals.tools.run_form.read(cx).text_values(cx)
+pub(in crate::dialog_host) fn container_run_form_values(
+    state: &DialogCheckState,
+    cx: &App,
+) -> Vec<String> {
+    state.modals.tools.run_form.read(cx).text_values(cx)
 }
 
-pub(in crate::dialog_host) fn container_create_open(shell: &AppShell, cx: &App) -> bool {
-    shell.state.modals.tools.create_dialog.read(cx).is_open()
+pub(in crate::dialog_host) fn container_create_open(state: &DialogCheckState, cx: &App) -> bool {
+    state.modals.tools.create_dialog.read(cx).is_open()
 }
 
-pub(in crate::dialog_host) fn container_create_values(shell: &AppShell, cx: &App) -> Vec<String> {
-    let view = shell.state.modals.tools.create_dialog.read(cx);
+pub(in crate::dialog_host) fn container_create_values(
+    state: &DialogCheckState,
+    cx: &App,
+) -> Vec<String> {
+    let view = state.modals.tools.create_dialog.read(cx);
     let Some(dialog) = view.state() else {
         return Vec::new();
     };
     let mut values = Vec::with_capacity(4);
-    if let Some(workspace) = shell.state.container_workspace(dialog.tab_id) {
+    if let Some(workspace) = state
+        .workspace
+        .tab(dialog.tab_id)
+        .and_then(|tab| tab.containers())
+    {
         values.push(
             workspace
                 .read(cx)
@@ -82,6 +90,6 @@ pub(in crate::dialog_host) fn container_create_values(shell: &AppShell, cx: &App
 }
 
 /// 工作区局部弹窗的注册表占位判定；实际判定由 `ModalKind::as_container_modal` 拦截接管。
-pub(in crate::dialog_host) fn workspace_modal_placeholder(_: &AppShell, _: &App) -> bool {
+pub(in crate::dialog_host) fn workspace_modal_placeholder(_: &DialogCheckState, _: &App) -> bool {
     false
 }

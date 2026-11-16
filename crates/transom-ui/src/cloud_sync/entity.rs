@@ -74,7 +74,11 @@ impl CloudSyncView {
         self.state.is_running() || self.pull_task.is_some()
     }
 
-    pub(crate) fn replace_history(&mut self, history: Vec<SyncHistoryEntry>, cx: &mut Context<Self>) {
+    pub(crate) fn replace_history(
+        &mut self,
+        history: Vec<SyncHistoryEntry>,
+        cx: &mut Context<Self>,
+    ) {
         self.state.replace_history(history);
         cx.notify();
     }
@@ -131,11 +135,7 @@ impl CloudSyncView {
         entry
     }
 
-    pub(crate) fn finish_success(
-        &mut self,
-        record: SyncHistoryRecord<'_>,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn finish_success(&mut self, record: SyncHistoryRecord<'_>, cx: &mut Context<Self>) {
         let entry = self.record_history(record);
         self.state.finish(entry);
         cx.notify();

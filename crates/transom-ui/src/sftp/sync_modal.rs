@@ -11,7 +11,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use std::path::PathBuf;
 use std::rc::Rc;
-use transom_core::{DirDiffEntry, DirDiffStatus, TabId};
+use transom_core::{ConnectionId, DirComparison, DirDiffEntry, DirDiffStatus, TabId, TransferId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -47,6 +47,28 @@ impl SftpSyncModalView {
         Self { state }
     }
 
+    /// 目录对比完成：校验连接与操作匹配后回填扫描结果。
+    pub(crate) fn apply_dir_compared(
+        &mut self,
+        connection_id: ConnectionId,
+        op_id: TransferId,
+        comparison: &DirComparison,
+        cx: &mut Context<Self>,
+    ) {
+        if self.state.op_id == op_id && self.state.connection_id == connection_id {
+            self.state.scanning = false;
+            self.state.skipped = comparison.skipped;
+            self.state.selected = comparison
+                .entries
+                .iter()
+                .map(|entry| entry.sync_item().is_some())
+                .collect();
+            self.state.entries = comparison.entries.clone();
+            self.state.error = None;
+            cx.notify();
+        }
+    }
+
     pub(crate) fn toggle_entry(&mut self, index: usize, checked: bool, cx: &mut Context<Self>) {
         if let Some(slot) = self.state.selected.get_mut(index) {
             *slot = checked;
@@ -55,7 +77,12 @@ impl SftpSyncModalView {
     }
 
     pub(crate) fn select_all(&mut self, checked: bool, cx: &mut Context<Self>) {
-        for (entry, slot) in self.state.entries.iter().zip(self.state.selected.iter_mut()) {
+        for (entry, slot) in self
+            .state
+            .entries
+            .iter()
+            .zip(self.state.selected.iter_mut())
+        {
             if entry.status != DirDiffStatus::TypeMismatch {
                 *slot = checked;
             }
@@ -72,9 +99,8 @@ impl SftpSyncModalView {
             .entries
             .iter()
             .zip(self.state.selected.iter())
-            .filter_map(|(entry, checked)| {
-                (*checked && entry.status != DirDiffStatus::TypeMismatch).then(|| entry.clone())
-            })
+            .filter(|(entry, checked)| **checked && entry.status != DirDiffStatus::TypeMismatch)
+            .map(|(entry, _)| entry.clone())
             .collect();
         cx.emit(SftpSyncModalEvent::Start {
             tab_id: self.state.tab_id,
@@ -93,7 +119,12 @@ impl SftpSyncModalView {
         let error = self.state.error.as_ref();
         let local_root = self.state.local_root.display().to_string();
         let remote_root = self.state.remote_root.as_str();
-        let selected_count = self.state.selected.iter().filter(|checked| **checked).count();
+        let selected_count = self
+            .state
+            .selected
+            .iter()
+            .filter(|checked| **checked)
+            .count();
         let diff_count = self.state.entries.len();
         let can_start = !scanning && error.is_none() && diff_count > 0;
 
