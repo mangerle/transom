@@ -167,7 +167,7 @@ network、files、pods、quadlet、push、system_df、build、hub）的渲染改
 
 Git 的标签页状态与动作已收进 `Entity<GitWorkspace>`，全局项目列表、分组、徽标、
 克隆任务和自动抓取调度收进 `Entity<GitSidebarView>`；命令读写经实体通道执行。
-仓库补初始化、读取与动作完成结果都由实体落地：`GitHub::take_project_init` / `set_badge_result` / `apply_repo_status_badge` 管注册表与徽标；`GitWorkspace` 的 `apply_project_init_result` / `apply_refs_loaded` / `apply_commit_files_loaded` / `apply_log_loaded` / `apply_read_failure` / `apply_commit_done` / `apply_repo_status` / `take_pending_worktree` 以及货架系列的 `apply_worktrees_loaded` / `apply_stashes_loaded` / `apply_stash_files_loaded` / `apply_shelves_loaded` / `apply_shelved` / `apply_shelf_applied` / `apply_shelf_dropped` / `drop_shelf_request` 管标签页状态与动作收尾，桥接只负责定位实体、转发日志与刷新。剩余 `git/actions/modal_bridges` 与事件分发是显式外壳桥接，不再直接持有全局状态字段。
+仓库补初始化、读取与动作完成结果都由实体落地：`GitHub::take_project_init` / `set_badge_result` / `apply_repo_status_badge` 管注册表与徽标；`GitWorkspace` 的 `apply_project_init_result` / `apply_refs_loaded` / `apply_commit_files_loaded` / `apply_log_loaded` / `apply_read_failure` / `apply_commit_done` / `apply_repo_status` / `take_pending_worktree` 以及货架系列的 `apply_worktrees_loaded` / `apply_stashes_loaded` / `apply_stash_files_loaded` / `apply_shelves_loaded` / `apply_shelved` / `apply_shelf_applied` / `apply_shelf_dropped` / `drop_shelf_request` 管标签页状态与动作收尾，桥接只负责定位实体、转发日志与刷新。`git/actions/modal_bridges` 的 `GitModalActions` 是字段级窄上下文（弹窗组、订阅表、命令端、提示队列、工作区快照与窗口请求队列）；事件分发桥接只负责定位实体、转发日志与刷新，不再直接持有全局状态字段。
 
 SFTP 的读写结果与任务收尾由 `SftpPanelView` 具名方法落地，弹窗生命周期由
 `SftpModals` 管理；远端查找助手只接收 `WorkspaceState`。CloudSync 的运行状态、

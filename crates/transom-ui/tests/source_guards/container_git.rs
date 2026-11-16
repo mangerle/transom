@@ -1079,3 +1079,21 @@ fn sftp_commit_uses_params_object() {
         "commit_sftp_input_value 必须使用 SftpInputCommit 参数对象"
     );
 }
+
+/// Git 模态上下文必须是窄上下文：只借弹窗组、订阅表、命令端、提示队列、
+/// 工作区快照与窗口请求队列，不得再持有整份 AppState。
+#[test]
+fn git_modal_actions_is_narrow_context() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/git/actions/modal_bridges/mod.rs"))
+        .expect("读取 git/actions/modal_bridges/mod.rs 失败");
+    assert!(
+        source.contains("struct GitModalActions<'a>")
+            && source.contains("modals: &'a mut GitModals"),
+        "GitModalActions 必须显式借用所需字段"
+    );
+    assert!(
+        !source.contains("\n    state: &'a mut"),
+        "GitModalActions 不得再持有整份 AppState 字段"
+    );
+}

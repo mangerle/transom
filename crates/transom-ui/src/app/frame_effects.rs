@@ -269,6 +269,9 @@ impl AppShell {
                 WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
                 WindowRequest::CloseGroup(group_id) => self.close_group(group_id, window, cx),
                 WindowRequest::ClosePane(tab_id) => self.close_pane(tab_id, window, cx),
+                WindowRequest::TransientStatus(message) => {
+                    self.state.set_transient_status(message, cx)
+                }
                 WindowRequest::LocalTerminal(cwd) => {
                     crate::connection::spawn_local_terminal(&mut self.state, cwd, cx)
                 }

@@ -5,10 +5,12 @@
 //!   仅维护弹窗内部状态与 UI 渲染，通过 `EventEmitter` 上报需要外壳协调的跨模块命令；
 //! - 由本桥接模块集中创建实体、登记订阅、转发后台 `GitCommand` 与回流结果。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, GitModals, PendingNotices, TaskHub};
+use crate::git::GitWorkspace;
 use crate::git::conflict_modal::{GitConflictModalEvent, GitConflictModalView};
 use crate::git::push_modal::{GitPushModalEvent, GitPushModalView};
 use crate::git::rebase_modal::{GitRebaseModalEvent, GitRebaseModalView};
+use crate::workspace::WorkspaceState;
 use gpui_kit::*;
 use transom_core::ConflictSides;
 use transom_core::{CommitEntry, CommitFile, HeadState};
@@ -23,17 +25,65 @@ pub(crate) use project::*;
 /// 打开「从这里交互式变基」弹窗实体并向后台请求待办清单。
 /// Git 模态桥接的窄操作上下文。
 pub(crate) struct GitModalActions<'a> {
-    state: &'a mut crate::app::AppState,
+    /// Git 弹窗状态：只借 `ModalHub.git` 这一组。
+    modals: &'a mut GitModals,
+    /// Git 弹窗实体的订阅句柄。
+    tasks: &'a mut TaskHub,
+    /// 控制器命令投递端，只读借用。
+    command_tx: &'a flume::Sender<transom_core::AppCommand>,
+    /// 命令队列满时的错误提示队列。
+    pending_notices: &'a mut PendingNotices,
+    /// 标签页只读快照，用于按项目/标签定位工作区实体。
+    workspace: &'a WorkspaceState,
+    /// 窗口级动作队列：瞬态提示等不直接执行的副作用。
+    window_requests: &'a mut crate::app::WindowRequests,
 }
 
 impl<'a> GitModalActions<'a> {
-    /// 从应用状态拆借 Git 模态协调能力。
+    /// 从应用状态拆借 Git 模态协调能力（字段级窄上下文）。
     pub(crate) fn new(state: &'a mut crate::app::AppState) -> Self {
-        Self { state }
+        let crate::app::AppState {
+            runtime,
+            ui,
+            workspace,
+            ..
+        } = state;
+        Self {
+            modals: &mut ui.modals.git,
+            tasks: &mut runtime.tasks,
+            command_tx: &runtime.services.command_tx,
+            pending_notices: &mut ui.feedback.pending_notices,
+            workspace,
+            window_requests: &mut ui.window_requests,
+        }
     }
 
     fn send_command(&mut self, command: impl Into<transom_core::AppCommand>) -> bool {
-        self.state.send_command(command)
+        match self.command_tx.try_send(command.into()) {
+            Ok(()) => true,
+            Err(error) => {
+                self.pending_notices
+                    .push(crate::app::command_send_error_text(error));
+                false
+            }
+        }
+    }
+
+    /// 按标签 id 取 Git 工作区实体句柄。
+    fn git_workspace(&self, tab_id: transom_core::TabId) -> Option<Entity<GitWorkspace>> {
+        self.workspace.tab(tab_id)?.git()
+    }
+
+    /// 按项目 id 取第一个打开该项目的 Git 工作区实体句柄。
+    fn git_workspace_of_project(
+        &self,
+        project_id: transom_core::GitProjectId,
+        cx: &App,
+    ) -> Option<Entity<GitWorkspace>> {
+        self.workspace.tabs.iter().find_map(|tab| {
+            let workspace = tab.git()?;
+            (workspace.read(cx).state.project.id == project_id).then_some(workspace)
+        })
     }
 }
 
@@ -45,7 +95,6 @@ impl<'a> GitModalActions<'a> {
         cx: &mut Context<AppShell>,
     ) {
         let subject = self
-            .state
             .git_workspace_of_project(project.id, cx)
             .and_then(|workspace| {
                 let state = &workspace.read(cx).state;
@@ -58,7 +107,7 @@ impl<'a> GitModalActions<'a> {
             })
             .unwrap_or_default();
         let request_id = GitRequestId::new();
-        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+        if let Some(workspace) = self.git_workspace_of_project(project.id, cx) {
             workspace.update(cx, |workspace, _| {
                 workspace.state.pending.push(request_id);
             });
@@ -67,8 +116,8 @@ impl<'a> GitModalActions<'a> {
         let subscription = cx.subscribe(&modal, |shell, _, event: &GitRebaseModalEvent, cx| {
             GitModalActions::new(&mut shell.state).on_rebase_modal_event(event, cx);
         });
-        self.state.ui.modals.git.rebase = Some(modal);
-        self.state.runtime.tasks.subscriptions.git_rebase_modal = Some(subscription);
+        self.modals.rebase = Some(modal);
+        self.tasks.subscriptions.git_rebase_modal = Some(subscription);
         self.send_command(GitCommand::RebaseTodo {
             project: project.clone(),
             request_id,
@@ -104,7 +153,7 @@ impl<'a> GitModalActions<'a> {
         steps: Vec<GitRebaseStep>,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.rebase.as_ref() {
+        if let Some(modal) = self.modals.rebase.as_ref() {
             modal.update(cx, |modal, cx| modal.apply_todo(base, steps, cx));
         }
     }
@@ -117,7 +166,7 @@ impl<'a> GitModalActions<'a> {
         message: String,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.rebase.as_ref() {
+        if let Some(modal) = self.modals.rebase.as_ref() {
             modal.update(cx, |modal, cx| {
                 modal.set_failed(project_id, action, message, cx)
             });
@@ -126,15 +175,15 @@ impl<'a> GitModalActions<'a> {
 
     /// 触发当前交互式变基弹窗提交。
     pub(crate) fn run_git_rebase_modal(&mut self, cx: &mut Context<AppShell>) {
-        if let Some(modal) = self.state.ui.modals.git.rebase.as_ref() {
+        if let Some(modal) = self.modals.rebase.as_ref() {
             modal.update(cx, |modal, cx| modal.run(cx));
         }
     }
 
     /// 关闭交互式变基弹窗（取消不改历史）。
     pub(crate) fn close_git_rebase_modal(&mut self, cx: &mut Context<AppShell>) {
-        self.state.ui.modals.git.rebase = None;
-        self.state.runtime.tasks.subscriptions.git_rebase_modal = None;
+        self.modals.rebase = None;
+        self.tasks.subscriptions.git_rebase_modal = None;
         cx.notify();
     }
 
@@ -145,7 +194,6 @@ impl<'a> GitModalActions<'a> {
         cx: &mut Context<AppShell>,
     ) {
         let conflict_files: Vec<String> = self
-            .state
             .git_workspace_of_project(project.id, cx)
             .and_then(|workspace| {
                 workspace.read(cx).state.status.as_ref().map(|status| {
@@ -167,8 +215,8 @@ impl<'a> GitModalActions<'a> {
         let subscription = cx.subscribe(&modal, |shell, _, event: &GitConflictModalEvent, cx| {
             GitModalActions::new(&mut shell.state).on_conflict_modal_event(event, cx);
         });
-        self.state.ui.modals.git.conflict = Some(modal);
-        self.state.runtime.tasks.subscriptions.git_conflict_modal = Some(subscription);
+        self.modals.conflict = Some(modal);
+        self.tasks.subscriptions.git_conflict_modal = Some(subscription);
 
         self.send_command(GitCommand::LoadConflictSides {
             project: project.clone(),
@@ -225,7 +273,7 @@ impl<'a> GitModalActions<'a> {
         sides: ConflictSides,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.conflict.as_ref() {
+        if let Some(modal) = self.modals.conflict.as_ref() {
             modal.update(cx, |modal, cx| {
                 modal.apply_sides(project_id, path, sides, cx)
             });
@@ -238,15 +286,15 @@ impl<'a> GitModalActions<'a> {
         error_message: Option<String>,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.conflict.as_ref() {
+        if let Some(modal) = self.modals.conflict.as_ref() {
             modal.update(cx, |modal, cx| modal.handle_resolve_done(error_message, cx));
         }
     }
 
     /// 关闭冲突解决模态框。
     pub(crate) fn close_git_conflict_modal(&mut self, cx: &mut Context<AppShell>) {
-        self.state.ui.modals.git.conflict = None;
-        self.state.runtime.tasks.subscriptions.git_conflict_modal = None;
+        self.modals.conflict = None;
+        self.tasks.subscriptions.git_conflict_modal = None;
         cx.notify();
     }
 
@@ -258,7 +306,6 @@ impl<'a> GitModalActions<'a> {
         cx: &mut Context<AppShell>,
     ) {
         let (branch_name, upstream_name) = self
-            .state
             .git_workspace_of_project(project.id, cx)
             .map(|workspace| {
                 let state = &workspace.read(cx).state;
@@ -287,7 +334,6 @@ impl<'a> GitModalActions<'a> {
         };
 
         let tab_id = self
-            .state
             .git_workspace_of_project(project.id, cx)
             .map(|workspace| workspace.read(cx).tab_id);
         let modal = cx.new(|_| {
@@ -302,11 +348,11 @@ impl<'a> GitModalActions<'a> {
         let subscription = cx.subscribe(&modal, |shell, _, event: &GitPushModalEvent, cx| {
             GitModalActions::new(&mut shell.state).on_push_modal_event(event, cx);
         });
-        self.state.ui.modals.git.push = Some(modal);
-        self.state.runtime.tasks.subscriptions.git_push_modal = Some(subscription);
+        self.modals.push = Some(modal);
+        self.tasks.subscriptions.git_push_modal = Some(subscription);
 
         let request_id = GitRequestId::new();
-        if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+        if let Some(workspace) = self.git_workspace_of_project(project.id, cx) {
             workspace.update(cx, |workspace, _| {
                 workspace.state.pending.push(request_id);
             });
@@ -325,7 +371,7 @@ impl<'a> GitModalActions<'a> {
         match event {
             GitPushModalEvent::LoadCommitFiles { project, oid } => {
                 let request_id = GitRequestId::new();
-                if let Some(workspace) = self.state.git_workspace_of_project(project.id, cx) {
+                if let Some(workspace) = self.git_workspace_of_project(project.id, cx) {
                     workspace.update(cx, |workspace, _| {
                         workspace.state.pending.push(request_id);
                     });
@@ -345,14 +391,14 @@ impl<'a> GitModalActions<'a> {
                 cx.notify();
             }
             GitPushModalEvent::OpenFileDiff { tab_id, path } => {
-                if let Some(workspace) = self.state.git_workspace(*tab_id) {
+                if let Some(workspace) = self.git_workspace(*tab_id) {
                     workspace.update(cx, |ws, cx| ws.diff_commit_file(path, cx));
                 }
             }
             GitPushModalEvent::CopyOid(oid) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(oid.to_string()));
-                self.state
-                    .set_transient_status(rust_i18n::t!("git.menu.copied"), cx);
+                self.window_requests
+                    .push_transient_status(rust_i18n::t!("git.menu.copied"));
                 cx.notify();
             }
             GitPushModalEvent::Close => self.close_git_push_modal(cx),
@@ -368,7 +414,7 @@ impl<'a> GitModalActions<'a> {
         commits: Vec<CommitEntry>,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.push.as_ref() {
+        if let Some(modal) = self.modals.push.as_ref() {
             modal.update(cx, |modal, cx| {
                 modal.apply_outgoing_commits(project_id, branch, remote_branch, commits, cx)
             });
@@ -382,7 +428,7 @@ impl<'a> GitModalActions<'a> {
         files: Vec<CommitFile>,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.push.as_ref() {
+        if let Some(modal) = self.modals.push.as_ref() {
             modal.update(cx, |modal, cx| modal.apply_commit_files(oid, files, cx));
         }
     }
@@ -394,7 +440,7 @@ impl<'a> GitModalActions<'a> {
         error: Option<String>,
         cx: &mut Context<AppShell>,
     ) {
-        if let Some(modal) = self.state.ui.modals.git.push.as_ref() {
+        if let Some(modal) = self.modals.push.as_ref() {
             modal.update(cx, |modal, cx| {
                 modal.handle_push_result(project_id, error, cx)
             });
@@ -403,15 +449,15 @@ impl<'a> GitModalActions<'a> {
 
     /// 触发推送弹窗提交。
     pub(crate) fn submit_git_push_modal(&mut self, cx: &mut Context<AppShell>) {
-        if let Some(modal) = self.state.ui.modals.git.push.as_ref() {
+        if let Some(modal) = self.modals.push.as_ref() {
             modal.update(cx, |modal, cx| modal.submit(cx));
         }
     }
 
     /// 关闭推送模态弹窗。
     pub(crate) fn close_git_push_modal(&mut self, cx: &mut Context<AppShell>) {
-        self.state.ui.modals.git.push = None;
-        self.state.runtime.tasks.subscriptions.git_push_modal = None;
+        self.modals.push = None;
+        self.tasks.subscriptions.git_push_modal = None;
         cx.notify();
     }
 }

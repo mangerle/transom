@@ -54,6 +54,8 @@ pub(crate) enum WindowRequest {
     ClosePane(TabId),
     /// 在新标签打开本地终端（可选初始工作目录）。
     LocalTerminal(Option<std::path::PathBuf>),
+    /// 底栏瞬态提示：由外壳在渲染期设置并自动清除。
+    TransientStatus(String),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -141,6 +143,12 @@ impl WindowRequests {
     /// 在新的标签页打开本地终端。
     pub(crate) fn push_local_terminal(&mut self, cwd: Option<std::path::PathBuf>) {
         self.items.push(WindowRequest::LocalTerminal(cwd));
+    }
+
+    /// 排队一条底栏瞬态提示。
+    pub(crate) fn push_transient_status(&mut self, message: impl Into<String>) {
+        self.items
+            .push(WindowRequest::TransientStatus(message.into()));
     }
 
     pub(crate) fn is_empty(&self) -> bool {
