@@ -1097,3 +1097,41 @@ fn git_modal_actions_is_narrow_context() {
         "GitModalActions 不得再持有整份 AppState 字段"
     );
 }
+
+/// 禁止再新增"整状态上下文"（`{ state: &mut AppState }` 形式的马甲）。
+///
+/// 允许清单是迁移期债务：当前只剩 GitActions，修复后必须把清单清空，
+/// 新出现的整状态上下文一律失败。
+#[test]
+fn whole_state_contexts_are_registered() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for line in content.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if trimmed.starts_with("state:")
+                && trimmed.contains("AppState")
+                && trimmed.contains("&'a mut")
+            {
+                let relative = entry.strip_prefix(root.join("src")).unwrap_or(&entry);
+                offenders.push(crate::common::normalized_path(relative));
+            }
+        }
+    }
+    offenders.sort();
+    offenders.dedup();
+    assert_eq!(
+        offenders,
+        vec!["git/actions/mod.rs".to_string()],
+        "整状态上下文必须登记；清掉 GitActions 后应从允许清单删除"
+    );
+}
