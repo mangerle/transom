@@ -1414,3 +1414,40 @@ fn hub_result_card_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_hub_result_card 超过 80 行：{lines}");
 }
+
+/// 容器仓库列表渲染必须拆分：主函数只负责顶栏与卡片组装，不超过 80 行。
+#[test]
+fn registries_list_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/settings/containers_page/list.rs"))
+        .expect("读取 settings/containers_page/list.rs 失败");
+    for helper in [
+        "fn registry_top_bar",
+        "fn registry_card",
+        "fn registry_identity",
+        "fn registry_actions",
+    ] {
+        assert!(source.contains(helper), "仓库列表缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_registries_list")
+        .expect("缺少 render_registries_list");
+    let brace = source[start..].find('{').map(|i| start + i).expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_registries_list 超过 80 行：{lines}");
+}
