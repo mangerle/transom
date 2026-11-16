@@ -1618,3 +1618,33 @@ fn engine_row_is_split_and_parameterized() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_engine_row 超过 80 行：{lines}");
 }
+
+/// 小于 30 行的源码文件只能是模块索引、共享导入或测试模块；
+/// 新出现的单函数碎片文件一律视为碎片化回退。
+#[test]
+fn tiny_source_files_are_index_or_tests() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.lines().count() >= 30 {
+            continue;
+        }
+        let name = entry
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        if !matches!(name, "mod.rs" | "common.rs" | "tests.rs") {
+            offenders.push(format!("{}", entry.display()));
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "小于 30 行的文件只允许 mod.rs/common.rs/tests.rs: {offenders:?}"
+    );
+}

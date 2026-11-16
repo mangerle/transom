@@ -58,6 +58,8 @@ apps/transom (组合根 + 控制平面)
 
 `transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 的字段只对 `app` 及其后代可见，crate 其它模块无法绕过外壳直接改状态。应用状态集中在 `app::state::AppState`，`AppShell` 只保留一个 `state` 字段；状态访问一律显式写 `self.state.xxx`，不用 `Deref` 继承方法。
 
+碎片文件审计结论：小于 30 行的文件全部是 `mod.rs` 索引、`common.rs` 共享导入或 `tests.rs` 测试模块，不存在单函数碎片；守卫 `tiny_source_files_are_index_or_tests` 阻止新增无归属小文件。
+
 镜像构建历史视图按关注点拆为 `image_history/{mod,layer_card,fallback,slimming}.rs`，单文件保持在 500 行内；源码守卫 `no_source_file_over_500_lines` 阻止生产文件重新超过阈值。
 
 可复用的无状态表现层组件与设计令牌独立在 `transom-ui-kit`（`crates/transom-ui-kit/`）：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项（含禁用态）、列表行与表头、状态徽标、工具栏、语义调色板 `Palette`、字号/间距/控件尺寸令牌。组件只接收数据与回调，不依赖 `AppShell` 或应用业务状态；`transom-ui/src/widgets` 与 `theme::tokens` / `palette` / `format` / `divider` 仅作重导出与极薄的 i18n 包装。
