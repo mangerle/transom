@@ -335,7 +335,7 @@ impl AppShell {
                 .and_then(|tiled| tiled.focused_group()),
         };
         if let Some(group) = target {
-            crate::tiling::activate_group(self, group, window, cx);
+            crate::tiling::activate_group(&mut self.state, group, window, cx);
         }
     }
 }

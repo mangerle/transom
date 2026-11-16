@@ -197,7 +197,7 @@ impl AppShell {
         match crate::split::SplitOps::new(&mut self.state).focus_neighbor_pane(direction) {
             crate::split::SplitFocusPlan::Pane(tab_id) => self.select_pane(tab_id, window, cx),
             crate::split::SplitFocusPlan::NeighborTiling(direction) => {
-                crate::tiling::focus_neighbor_tile(self, direction, window, cx);
+                crate::tiling::focus_neighbor_tile(&mut self.state, direction, window, cx);
             }
         }
     }

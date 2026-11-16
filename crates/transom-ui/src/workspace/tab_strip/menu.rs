@@ -287,7 +287,13 @@ fn append_tiling_menu_items(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::tiling::tile_tab(this, group_id, SplitAxis::Horizontal, window, cx);
+                        crate::tiling::tile_tab(
+                            &mut this.state,
+                            group_id,
+                            SplitAxis::Horizontal,
+                            window,
+                            cx,
+                        );
                     });
                 }
             }),
@@ -302,7 +308,13 @@ fn append_tiling_menu_items(
                 let app = app.clone();
                 move |_, window, cx| {
                     app.update(cx, |this, cx| {
-                        crate::tiling::tile_tab(this, group_id, SplitAxis::Vertical, window, cx);
+                        crate::tiling::tile_tab(
+                            &mut this.state,
+                            group_id,
+                            SplitAxis::Vertical,
+                            window,
+                            cx,
+                        );
                     });
                 }
             }),
@@ -317,10 +329,13 @@ fn append_tiling_menu_items(
             AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
             move |_, window, cx| {
                 app.update(cx, |this, cx| {
-                    if let Some(group) =
-                        crate::tiling::add_groups_to_tiling(this, set_id, groups.clone(), window)
-                    {
-                        crate::tiling::activate_group(this, group, window, cx);
+                    if let Some(group) = crate::tiling::add_groups_to_tiling(
+                        &mut this.state,
+                        set_id,
+                        groups.clone(),
+                        window,
+                    ) {
+                        crate::tiling::activate_group(&mut this.state, group, window, cx);
                         this.state.workspace.tab_selection.clear();
                     } else {
                         this.state.set_error(
@@ -376,7 +391,9 @@ fn append_tiling_menu_items(
             let app = app.clone();
             move |_, _window, cx| {
                 if let Some(id) = this_set_id {
-                    app.update(cx, |this, cx| crate::tiling::untile_tiling(this, id, cx));
+                    app.update(cx, |this, cx| {
+                        crate::tiling::untile_tiling(&mut this.state, id, cx)
+                    });
                 }
             }
         }),
@@ -414,7 +431,7 @@ fn append_close_menu_items(
                 move |_, window, cx| {
                     if let Some(id) = this_set_id {
                         app.update(cx, |this, cx| {
-                            crate::tiling::close_tiling_group(this, id, window, cx);
+                            crate::tiling::close_tiling_group(&mut this.state, id, window, cx);
                         });
                     }
                 }

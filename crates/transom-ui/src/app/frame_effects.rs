@@ -261,6 +261,7 @@ impl AppShell {
                     self.show_toast(message, success, window, cx)
                 }
                 WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
+                WindowRequest::CloseGroup(group_id) => self.close_group(group_id, window, cx),
                 WindowRequest::LocalTerminal(cwd) => {
                     crate::connection::spawn_local_terminal(&mut self.state, cwd, cx)
                 }
@@ -275,7 +276,7 @@ impl AppShell {
                         self.delete_session_by_id(session_id, cx)
                     }
                     crate::editor::EditorCloseRequest::Tiling(groups) => {
-                        crate::tiling::close_tiling_groups(self, groups, window, cx)
+                        crate::tiling::close_tiling_groups(&mut self.state, groups, window, cx)
                     }
                 },
                 WindowRequest::Git(event) => match &event {

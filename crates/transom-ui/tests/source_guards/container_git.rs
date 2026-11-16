@@ -771,3 +771,32 @@ fn connection_modules_take_app_state_not_shell() {
         "连接模块不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
     );
 }
+
+/// 分屏模块不得以 `shell` 类型的参数接收外壳：并排状态增删查改只借应用状态，
+/// 激活与关闭动作经 `WindowRequest` 在渲染期执行。
+#[test]
+fn tiling_modules_take_app_state_not_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/tiling")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                offenders.push(format!("{}:{}", entry.display(), index + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "分屏模块不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
+    );
+}

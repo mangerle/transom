@@ -14,7 +14,7 @@ use crate::git::GitWorkspaceEvent;
 use crate::monitor::MonitorPanelEvent;
 use crate::settings::SettingsRequest;
 use crate::sftp::SftpPanelEvent;
-use transom_core::TabId;
+use transom_core::{GroupId, TabId};
 
 /// 一条需要窗口才能执行的请求。
 pub(crate) enum WindowRequest {
@@ -48,6 +48,8 @@ pub(crate) enum WindowRequest {
     },
     /// 关闭包含指定标签的整组窗格。
     CloseTab(TabId),
+    /// 关闭指定标签组。
+    CloseGroup(GroupId),
     /// 在新标签打开本地终端（可选初始工作目录）。
     LocalTerminal(Option<std::path::PathBuf>),
 }
@@ -122,6 +124,11 @@ impl WindowRequests {
     /// 关闭标签所属的整组窗格。
     pub(crate) fn push_close_tab(&mut self, tab_id: TabId) {
         self.items.push(WindowRequest::CloseTab(tab_id));
+    }
+
+    /// 关闭指定标签组。
+    pub(crate) fn push_close_group(&mut self, group_id: GroupId) {
+        self.items.push(WindowRequest::CloseGroup(group_id));
     }
 
     /// 在新的标签页打开本地终端。

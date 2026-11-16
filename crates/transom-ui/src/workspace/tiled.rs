@@ -133,7 +133,7 @@ impl AppShell {
                 palette: p,
             },
             cx.listener(move |this, _, window, cx| {
-                crate::tiling::activate_group(this, group_id, window, cx);
+                crate::tiling::activate_group(&mut this.state, group_id, window, cx);
             }),
             cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
@@ -150,7 +150,7 @@ impl AppShell {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, _, window, cx| {
-                    crate::tiling::activate_group(this, group_id, window, cx);
+                    crate::tiling::activate_group(&mut this.state, group_id, window, cx);
                 }),
             )
             .into_any_element()
@@ -218,7 +218,12 @@ impl AppShell {
                     menu = menu.item(PopupMenuItem::new(title).on_click(move |_, window, cx| {
                         app.update(cx, |this, cx| {
                             crate::tiling::fill_tiling_slot(
-                                this, tiling_id, slot, group_id, window, cx,
+                                &mut this.state,
+                                tiling_id,
+                                slot,
+                                group_id,
+                                window,
+                                cx,
                             );
                         });
                     }));

@@ -167,7 +167,7 @@ pub(crate) fn render_tab_close_button(
                 AppIcon::Ui(UiIcon::DELETE),
                 move |_, window, cx| {
                     close_all.update(cx, |this, cx| {
-                        crate::tiling::close_tiling_group(this, tiling_id, window, cx);
+                        crate::tiling::close_tiling_group(&mut this.state, tiling_id, window, cx);
                     });
                 },
             ))
