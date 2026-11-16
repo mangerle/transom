@@ -1432,7 +1432,10 @@ fn registries_list_is_split() {
     let start = source
         .find("fn render_registries_list")
         .expect("缺少 render_registries_list");
-    let brace = source[start..].find('{').map(|i| start + i).expect("缺少函数体");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
     let mut depth = 0i32;
     let mut end = None;
     for (offset, ch) in source[brace..].char_indices() {
@@ -1450,4 +1453,43 @@ fn registries_list_is_split() {
     }
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_registries_list 超过 80 行：{lines}");
+}
+
+/// 端口统计卡片必须拆分：主函数只负责卡片外壳与折叠，不超过 80 行。
+#[test]
+fn ports_card_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/stats/ports.rs"))
+        .expect("读取 container/stats/ports.rs 失败");
+    for helper in [
+        "fn ports_loading_card",
+        "fn ports_header",
+        "fn ports_body",
+        "fn published_port_row",
+        "fn exposed_port_row",
+    ] {
+        assert!(source.contains(helper), "端口卡片缺少拆分函数：{helper}");
+    }
+    let start = source.find("fn ports_card").expect("缺少 ports_card");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "ports_card 超过 80 行：{lines}");
 }
