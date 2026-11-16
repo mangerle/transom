@@ -1730,3 +1730,44 @@ fn local_actions_row_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_local_actions_row 超过 80 行：{lines}");
 }
+
+/// 日志侧栏必须拆分到独立子模块：主函数只组合三组按钮，不超过 80 行。
+#[test]
+fn logs_sidebar_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/detail/logs/sidebar.rs"))
+        .expect("读取 container/detail/logs/sidebar.rs 失败");
+    for helper in [
+        "fn log_timestamps_button",
+        "fn log_tail_button",
+        "fn log_scroll_top_button",
+        "fn log_copy_button",
+        "fn log_clear_button",
+    ] {
+        assert!(source.contains(helper), "日志侧栏缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_logs_sidebar")
+        .expect("缺少 render_logs_sidebar");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_logs_sidebar 超过 80 行：{lines}");
+}
