@@ -1,7 +1,6 @@
 //! Git 工作树、暂存栈（Stash）与搁置（Shelf）事件落地。
 
 use crate::app::{AppShell, AppState};
-use crate::git::GitCommitTab;
 use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::GitAppEvent;
@@ -20,9 +19,7 @@ pub(super) fn handle_shelf_worktree_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.drop_request(request_id);
-                    state.worktrees = entries;
+                    workspace.apply_worktrees_loaded(request_id, entries);
                 });
             }
             cx.notify();
@@ -34,9 +31,7 @@ pub(super) fn handle_shelf_worktree_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.drop_request(request_id);
-                    state.stashes = entries;
+                    workspace.apply_stashes_loaded(request_id, entries);
                 });
             }
             cx.notify();
@@ -49,14 +44,7 @@ pub(super) fn handle_shelf_worktree_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.drop_request(request_id);
-                    state.stash_files_loading = false;
-                    // 迟到的清单不能写进已经换过展开项的视图：编号会随删除前移，
-                    // 对不上选择器就如实丢弃，而不是让界面挂着一份别人的文件。
-                    if state.expanded_stash.as_deref() == Some(selector.as_str()) {
-                        state.stash_files = files;
-                    }
+                    workspace.apply_stash_files_loaded(request_id, &selector, files);
                 });
             }
             cx.notify();
@@ -68,17 +56,7 @@ pub(super) fn handle_shelf_worktree_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.drop_request(request_id);
-                    state.shelves = shelves;
-                    // 展开项可能已在别处删除：保留指向不存在条目的展开态会让面板空白。
-                    if state
-                        .expanded_shelf
-                        .as_ref()
-                        .is_some_and(|id| !state.shelves.iter().any(|entry| &entry.id == id))
-                    {
-                        state.expanded_shelf = None;
-                    }
+                    workspace.apply_shelves_loaded(request_id, shelves);
                 });
             }
             cx.notify();
@@ -92,14 +70,7 @@ pub(super) fn handle_shelf_worktree_event(
                 .git_workspace_of_project(project_id, cx)
                 .map(|workspace| {
                     workspace.update(cx, |workspace, _| {
-                        let state = &mut workspace.state;
-                        state.drop_request(request_id);
-                        // 列表刷新事件可能已带回同一条目：按 ID 去重后再插到最前。
-                        state.shelves.retain(|shelf| shelf.id != entry.id);
-                        state.shelves.insert(0, entry);
-                        state.checked.clear();
-                        state.commit_tab = GitCommitTab::Shelf;
-                        state.project.clone()
+                        workspace.apply_shelved(request_id, entry)
                     })
                 });
             app_state.set_transient_status(rust_i18n::t!("git.shelf.create"), cx);
@@ -122,14 +93,7 @@ pub(super) fn handle_shelf_worktree_event(
                 .git_workspace_of_project(project_id, cx)
                 .map(|workspace| {
                     workspace.update(cx, |workspace, _| {
-                        let state = &mut workspace.state;
-                        if pop && !cleanup_failed {
-                            state.shelves.retain(|shelf| shelf.id != shelf_id);
-                            if state.expanded_shelf.as_deref() == Some(shelf_id.as_str()) {
-                                state.expanded_shelf = None;
-                            }
-                        }
-                        state.project.clone()
+                        workspace.apply_shelf_applied(&shelf_id, pop, cleanup_failed)
                     })
                 });
             let key = if pop && !cleanup_failed {
@@ -155,11 +119,7 @@ pub(super) fn handle_shelf_worktree_event(
         } => {
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    let state = &mut workspace.state;
-                    state.shelves.retain(|shelf| shelf.id != shelf_id);
-                    if state.expanded_shelf.as_deref() == Some(shelf_id.as_str()) {
-                        state.expanded_shelf = None;
-                    }
+                    workspace.apply_shelf_dropped(&shelf_id);
                 });
             }
             app_state.set_transient_status(rust_i18n::t!("git.shelf.drop"), cx);
@@ -177,7 +137,7 @@ pub(super) fn handle_shelf_worktree_event(
             );
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
                 workspace.update(cx, |workspace, _| {
-                    workspace.state.drop_request(request_id);
+                    workspace.drop_shelf_request(request_id);
                 });
             }
             app_state.set_error(message);

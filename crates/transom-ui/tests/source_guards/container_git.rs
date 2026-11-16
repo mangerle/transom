@@ -1004,3 +1004,40 @@ fn git_action_results_applied_by_entity() {
         );
     }
 }
+
+/// Git 货架与工作树事件必须由实体落地：展开态清理、列表去重与页签切换
+/// 都不得在 shelf_events 桥接里直接改字段。
+#[test]
+fn git_shelf_results_applied_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let entity = std::fs::read_to_string(root.join("src/git/actions/shelf_actions.rs"))
+        .expect("读取 git/actions/shelf_actions.rs 失败");
+    for method in [
+        "fn apply_worktrees_loaded",
+        "fn apply_stashes_loaded",
+        "fn apply_stash_files_loaded",
+        "fn apply_shelves_loaded",
+        "fn apply_shelved",
+        "fn apply_shelf_applied",
+        "fn apply_shelf_dropped",
+    ] {
+        assert!(
+            entity.contains(method),
+            "货架结果必须由 GitWorkspace 落地：{method}"
+        );
+    }
+    let bridge =
+        std::fs::read_to_string(root.join("src/git/actions/event_dispatch/shelf_events.rs"))
+            .expect("读取 git/actions/event_dispatch/shelf_events.rs 失败");
+    for forbidden in [
+        "workspace.state",
+        "state.shelves",
+        "state.worktrees",
+        "GitCommitTab",
+    ] {
+        assert!(
+            !bridge.contains(forbidden),
+            "shelf_events 桥接不得直接改实体字段：{forbidden}"
+        );
+    }
+}
