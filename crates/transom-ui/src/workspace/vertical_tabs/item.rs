@@ -35,14 +35,78 @@ pub(super) fn render_vertical_tab_row(
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> Option<AnyElement> {
+    let data = collect_row_data(app_state, group_id, p, cx)?;
+    let tiled = app_state.tiling_of_group(group_id);
+    let app_entity = cx.entity().clone();
+    let mut band = build_tab_band(&data, p);
+    if app_settings(cx).window.show_tab_close_button {
+        band = band.child(crate::workspace::tab_strip::render_tab_close_button(
+            group_id,
+            data.active,
+            tiled,
+            &app_entity,
+            p,
+            cx,
+        ));
+    }
+    let row = attach_vertical_tab_drag(
+        div()
+            .id(ElementId::Name(
+                format!("vertical-tab-row-{group_id}").into(),
+            ))
+            .w_full()
+            .h(ROW_HEIGHT)
+            .flex()
+            .items_center(),
+        group_id,
+        data.title.clone(),
+        data.icon,
+        &app_entity,
+        p,
+    );
+    Some(apply_row_events(row, band, &data, app_entity, p, cx).into_any_element())
+}
+
+/// 行渲染所需的数据快照：只由状态推导，不再在渲染期回读实体。
+struct VerticalTabRowData {
+    group_id: GroupId,
+    active_pane: transom_core::TabId,
+    session_id: transom_core::SessionId,
+    pane_count: usize,
+    pane_axis: SplitAxis,
+    active: bool,
+    entry_selected: bool,
+    title: String,
+    labeled: String,
+    subtitle: String,
+    is_local: bool,
+    dot_color: gpui_kit::Hsla,
+    icon: AppIcon,
+    icon_color: gpui_kit::Hsla,
+    tiled_badge: bool,
+    this_set_id: Option<crate::tiling::TilingId>,
+    menu_host: Option<String>,
+    can_tile: bool,
+    selection_groups: Vec<GroupId>,
+    selected_singles: Vec<GroupId>,
+    touched_sets_count: usize,
+    selected_singles_count: usize,
+    show_add_to_tiling: bool,
+    show_multi_tile: bool,
+    tooltip_label: String,
+}
+
+fn collect_row_data(
+    app_state: &AppState,
+    group_id: GroupId,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> Option<VerticalTabRowData> {
     let group = app_state.workspace.group(group_id)?;
     let tab = app_state.workspace.tab(group.active_pane)?;
-    let app_entity = cx.entity().clone();
-    let palette = p.clone();
     let active_pane = group.active_pane;
     let session_id = tab.session_id;
     let pane_count = group.pane_count();
-    let serial = group.serial;
     let pane_axis = group.root.root_axis();
     // 激活判定用"组包含活动窗格"而不是比较活动窗格本身：组内切窗格后，
     // 行仍然保持高亮，不会短暂熄灭。
@@ -51,10 +115,8 @@ pub(super) fn render_vertical_tab_row(
         .active_tab
         .is_some_and(|tab_id| group.contains(tab_id));
     // 与横向标签栏同一口径：优先运行期 OSC 标题，空标题回落到会话名。
-    // 纵向面板是“切换正在运行的东西”，与顶部标签显示同一名字才不会让人
-    // 以为两处指向不同会话；会话身份由副标题的连接目标承担。
     let title = tab.tab_label();
-    let labeled = crate::workspace::tab_presentation::tab_title(tab, serial);
+    let labeled = crate::workspace::tab_presentation::tab_title(tab, group.serial);
     let subtitle = crate::workspace::tab_presentation::tab_subtitle(tab);
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
@@ -65,9 +127,6 @@ pub(super) fn render_vertical_tab_row(
     let this_set_id = tiled.map(|tiled| tiled.id);
     let menu_host = session_host(&tab.session).map(str::to_string);
     let can_tile = app_state.workspace.groups.len() >= 2;
-
-    // 右键菜单与横向标签栏共用同一套参数：并排、多选、复制主机等动作的
-    // 可用性判断必须与标签栏完全一致，避免两个入口给出不同结果。
     let crate::workspace::tab_selection::TabSelectionModel {
         selection_groups,
         entry_selected,
@@ -76,10 +135,47 @@ pub(super) fn render_vertical_tab_row(
         show_add_to_tiling,
         show_multi_tile,
     } = crate::workspace::tab_selection::selection_model(&app_state.workspace, group_id, tiled);
-    let tile_enabled = this_set_id.is_none() && can_tile;
+    let selected_singles_count = selected_singles.len();
+    let touched_sets_count = touched_sets.len();
+    let tooltip_label = if subtitle.is_empty() {
+        labeled.clone()
+    } else {
+        format!("{labeled}\n{subtitle}")
+    };
+    Some(VerticalTabRowData {
+        group_id,
+        active_pane,
+        session_id,
+        pane_count,
+        pane_axis,
+        active,
+        entry_selected,
+        title,
+        labeled,
+        subtitle,
+        is_local,
+        dot_color,
+        icon,
+        icon_color,
+        tiled_badge,
+        this_set_id,
+        menu_host,
+        can_tile,
+        selection_groups,
+        selected_singles,
+        touched_sets_count,
+        selected_singles_count,
+        show_add_to_tiling,
+        show_multi_tile,
+        tooltip_label,
+    })
+}
 
+fn build_tab_band(data: &VerticalTabRowData, p: &Palette) -> Stateful<Div> {
     let mut band = h_flex()
-        .id(ElementId::Name(format!("vertical-tab-{group_id}").into()))
+        .id(ElementId::Name(
+            format!("vertical-tab-{}", data.group_id).into(),
+        ))
         .relative()
         .w_full()
         .h(ROW_BAND_HEIGHT)
@@ -87,20 +183,20 @@ pub(super) fn render_vertical_tab_row(
         .gap_2()
         .items_center()
         .rounded(p.radius.md)
-        .bg(if active {
+        .bg(if data.active {
             p.sidebar_accent
-        } else if entry_selected {
+        } else if data.entry_selected {
             p.sidebar_accent.opacity(0.42)
         } else {
             p.sidebar_accent.opacity(0.14)
         })
-        .text_color(if active {
+        .text_color(if data.active {
             p.sidebar_accent_foreground
         } else {
             p.sidebar_foreground
         })
         .cursor_pointer();
-    if active {
+    if data.active {
         // 活动行与悬浮态同为实心强调色，靠左侧竖条区分"当前正在使用的组"。
         band = band.child(
             div()
@@ -115,109 +211,114 @@ pub(super) fn render_vertical_tab_row(
     } else {
         band = band.hover(|style| style.bg(p.sidebar_accent));
     }
-
-    band = band
-        .child(crate::widgets::status_dot_bare(dot_color))
+    let band = band
+        .child(crate::widgets::status_dot_bare(data.dot_color))
         .child(
-            AppIconElement::new(icon)
+            AppIconElement::new(data.icon)
                 .with_rems(ROW_ICON_SIZE)
-                .text_color(icon_color),
+                .text_color(data.icon_color),
+        )
+        .child(tab_band_labels(data, p));
+    add_tab_band_badges(band, data, p)
+}
+
+fn tab_band_labels(data: &VerticalTabRowData, p: &Palette) -> Div {
+    v_flex()
+        .flex_1()
+        .min_w_0()
+        .child(
+            div()
+                .text_sm()
+                .line_height(px(17.0))
+                .font_weight(FontWeight::MEDIUM)
+                .truncate()
+                .child(data.labeled.clone()),
         )
         .child(
-            v_flex()
-                .flex_1()
-                .min_w_0()
-                .child(
-                    div()
-                        .text_sm()
-                        .line_height(px(17.0))
-                        .font_weight(FontWeight::MEDIUM)
-                        .truncate()
-                        .child(labeled.clone()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .line_height(px(14.0))
-                        .truncate()
-                        .text_color(if active {
-                            p.sidebar_accent_foreground
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(subtitle.clone()),
-                ),
-        );
-
-    if pane_count > 1 {
-        let split_icon = if pane_axis == SplitAxis::Horizontal {
-            AppIcon::Ui(UiIcon::EDITOR_PREVIEW)
-        } else {
-            AppIcon::Ui(UiIcon::EDITOR_ONLY)
-        };
-        band = band.child(
-            h_flex()
-                .flex_none()
-                .gap_0p5()
-                .items_center()
-                .text_color(if active {
+            div()
+                .text_xs()
+                .line_height(px(14.0))
+                .truncate()
+                .text_color(if data.active {
                     p.sidebar_accent_foreground
                 } else {
                     p.muted_foreground
                 })
-                .child(AppIconElement::new(split_icon).xsmall())
-                .child(div().text_xs().child(pane_count.to_string())),
-        );
+                .child(data.subtitle.clone()),
+        )
+}
+
+fn add_tab_band_badges(
+    band: Stateful<Div>,
+    data: &VerticalTabRowData,
+    p: &Palette,
+) -> Stateful<Div> {
+    let mut band = band;
+    if data.pane_count > 1 {
+        band = band.child(split_count_badge(data, p));
     }
-    if tiled_badge {
+    if data.tiled_badge {
         band = band.child(
             AppIconElement::new(AppIcon::Ui(UiIcon::EDITOR_PREVIEW))
                 .xsmall()
-                .text_color(if active {
+                .text_color(if data.active {
                     p.sidebar_accent_foreground
                 } else {
                     p.muted_foreground
                 }),
         );
     }
+    band
+}
 
-    if app_settings(cx).window.show_tab_close_button {
-        band = band.child(crate::workspace::tab_strip::render_tab_close_button(
-            group_id,
-            active,
-            tiled,
-            &app_entity,
-            p,
-            cx,
-        ));
-    }
-
-    let tooltip_label = if subtitle.is_empty() {
-        labeled
+fn split_count_badge(data: &VerticalTabRowData, p: &Palette) -> AnyElement {
+    let split_icon = if data.pane_axis == SplitAxis::Horizontal {
+        AppIcon::Ui(UiIcon::EDITOR_PREVIEW)
     } else {
-        format!("{labeled}\n{subtitle}")
+        AppIcon::Ui(UiIcon::EDITOR_ONLY)
     };
-    let menu_selection = selected_singles.clone();
-    let touched_sets_count = touched_sets.len();
-    let selected_singles_count = selected_singles.len();
-    let menu_app_entity = app_entity.clone();
+    h_flex()
+        .flex_none()
+        .gap_0p5()
+        .items_center()
+        .text_color(if data.active {
+            p.sidebar_accent_foreground
+        } else {
+            p.muted_foreground
+        })
+        .child(AppIconElement::new(split_icon).xsmall())
+        .child(div().text_xs().child(data.pane_count.to_string()))
+        .into_any_element()
+}
 
-    let row = attach_vertical_tab_drag(
-        div()
-            .id(ElementId::Name(
-                format!("vertical-tab-row-{group_id}").into(),
-            ))
-            .w_full()
-            .h(ROW_HEIGHT)
-            .flex()
-            .items_center(),
-        group_id,
-        title,
-        icon,
-        &app_entity,
-        p,
-    )
-    .child(
+fn apply_row_events(
+    row: Stateful<Div>,
+    band: Stateful<Div>,
+    data: &VerticalTabRowData,
+    app_entity: Entity<AppShell>,
+    p: &Palette,
+    cx: &mut Context<AppShell>,
+) -> Stateful<Div> {
+    let group_id = data.group_id;
+    let active_pane = data.active_pane;
+    let selection_groups = data.selection_groups.clone();
+    let tooltip_label = data.tooltip_label.clone();
+    let menu_active_pane = data.active_pane;
+    let menu_session_id = data.session_id;
+    let menu_is_local = data.is_local;
+    let menu_pane_count = data.pane_count;
+    let menu_tile_enabled = data.this_set_id.is_none() && data.can_tile;
+    let menu_group_id = data.group_id;
+    let menu_this_set_id = data.this_set_id;
+    let menu_show_add_to_tiling = data.show_add_to_tiling;
+    let menu_selection = data.selected_singles.clone();
+    let menu_show_multi_tile = data.show_multi_tile;
+    let menu_palette = p.clone();
+    let menu_entry_selected = data.entry_selected;
+    let menu_touched_sets_count = data.touched_sets_count;
+    let menu_selected_singles_count = data.selected_singles_count;
+    let menu_host = data.menu_host.clone();
+    row.child(
         band.on_mouse_down(
             MouseButton::Middle,
             cx.listener(move |this, _, window, cx| {
@@ -238,28 +339,26 @@ pub(super) fn render_vertical_tab_row(
                 menu,
                 window,
                 cx,
-                &menu_app_entity,
+                &app_entity,
                 TabContextMenuParams {
-                    active_pane,
-                    session_id,
-                    is_local,
-                    pane_count,
-                    tile_enabled,
-                    group_id,
-                    this_set_id,
-                    show_add_to_tiling,
+                    active_pane: menu_active_pane,
+                    session_id: menu_session_id,
+                    is_local: menu_is_local,
+                    pane_count: menu_pane_count,
+                    tile_enabled: menu_tile_enabled,
+                    group_id: menu_group_id,
+                    this_set_id: menu_this_set_id,
+                    show_add_to_tiling: menu_show_add_to_tiling,
                     menu_selection: menu_selection.clone(),
-                    show_multi_tile,
-                    palette: palette.clone(),
-                    entry_selected,
-                    touched_sets_count,
-                    selected_singles_count,
+                    show_multi_tile: menu_show_multi_tile,
+                    palette: menu_palette.clone(),
+                    entry_selected: menu_entry_selected,
+                    touched_sets_count: menu_touched_sets_count,
+                    selected_singles_count: menu_selected_singles_count,
                     host: menu_host.clone(),
                 },
             )
         }),
     )
-    .tooltip(move |_window, cx| Tooltip::new(tooltip_label.clone()).build(_window, cx));
-
-    Some(row.into_any_element())
+    .tooltip(move |_window, cx| Tooltip::new(tooltip_label.clone()).build(_window, cx))
 }

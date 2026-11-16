@@ -1533,3 +1533,44 @@ fn container_header_actions_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "container_header_actions 超过 80 行：{lines}");
 }
+
+/// 纵向标签行必须拆分：主函数只做快照、拖拽与事件装配，不超过 80 行。
+#[test]
+fn vertical_tab_row_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/workspace/vertical_tabs/item.rs"))
+        .expect("读取 workspace/vertical_tabs/item.rs 失败");
+    for helper in [
+        "fn collect_row_data",
+        "fn build_tab_band",
+        "fn tab_band_labels",
+        "fn add_tab_band_badges",
+        "fn apply_row_events",
+    ] {
+        assert!(source.contains(helper), "纵向标签行缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_vertical_tab_row")
+        .expect("缺少 render_vertical_tab_row");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_vertical_tab_row 超过 80 行：{lines}");
+}
