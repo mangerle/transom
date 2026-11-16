@@ -30,7 +30,7 @@ use crate::sidebar::SidebarState;
 use crate::workspace::WorkspaceState;
 use gpui_kit::component::input::InputState;
 use gpui_kit::component::resizable::ResizableState;
-use gpui_kit::{App, Context, Entity};
+use gpui_kit::{App, Context, Entity, Window};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -187,6 +187,21 @@ impl AppState {
             let workspace = tab.git()?;
             (workspace.read(cx).state.project.id == project_id).then_some(workspace)
         })
+    }
+
+    /// 让设置实体执行保存：表单收集、主题校验与窗口外观落定都在实体内部完成。
+    ///
+    /// 设计原理（Why）：保存动作依赖 `Window` 与实体上下文，但不依赖外壳本身；
+    /// 下沉到状态层后，弹窗提交路径与设置页按钮都能复用同一入口。
+    pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        let view = self.ui.modals.settings.clone();
+        view.update(cx, |view, cx| view.save_settings(window, cx));
+    }
+
+    /// 让设置实体执行取消：回滚外观快照并关闭弹窗。
+    pub(crate) fn cancel_settings(&mut self, window: &mut Window, cx: &mut Context<AppShell>) {
+        let view = self.ui.modals.settings.clone();
+        view.update(cx, |view, cx| view.cancel_settings(window, cx));
     }
 
     /// 向控制器提交命令：非阻塞 `try_send`，队列满时快速失败。

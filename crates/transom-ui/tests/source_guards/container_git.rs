@@ -713,3 +713,32 @@ fn git_modules_take_app_state_not_shell() {
         "Git 模块不得再接收外壳参数，改为 &mut AppState 并经 WindowRequest 处理窗口动作: {offenders:?}"
     );
 }
+
+/// 弹窗宿主不得以 `shell` 类型的参数接收外壳：判定、提交、取消与渲染只借
+/// 应用状态；设置保存等动作已下沉到 `impl AppState`。
+#[test]
+fn dialog_host_modules_take_app_state_not_shell() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src/dialog_host")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for (index, line) in content.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                offenders.push(format!("{}:{}", entry.display(), index + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "弹窗宿主不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
+    );
+}

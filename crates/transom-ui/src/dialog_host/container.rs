@@ -6,7 +6,7 @@
 
 use super::ModalKind;
 use super::body::ModalFocus;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::container::ContainerWorkspaceModal;
 use crate::palette::Palette;
 use gpui_kit::*;
@@ -39,12 +39,12 @@ impl ModalKind {
     /// 容器弹窗取消动作。若属于容器弹窗种类，执行取消并返回 `Some(true)`；否则返回 `None`。
     pub(super) fn container_cancel(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         cx: &mut Context<AppShell>,
     ) -> Option<bool> {
         let modal = self.as_container_modal()?;
         if let Some((_, workspace)) =
-            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))
+            crate::container::find_container_modal_tab(app_state, cx, |ws| modal.is_open(ws))
         {
             workspace.update(cx, |workspace, cx| modal.cancel(workspace, cx));
         }
@@ -54,13 +54,13 @@ impl ModalKind {
     /// 容器弹窗提交动作。若属于容器弹窗种类，执行提交并返回 `Some(())`；否则返回 `None`。
     pub(super) fn container_commit(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         _window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Option<()> {
         let modal = self.as_container_modal()?;
         if let Some((_, workspace)) =
-            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))
+            crate::container::find_container_modal_tab(app_state, cx, |ws| modal.is_open(ws))
         {
             workspace.update(cx, |workspace, cx| modal.commit(workspace, cx));
         }
@@ -68,10 +68,14 @@ impl ModalKind {
     }
 
     /// 容器弹窗首帧焦点控件。
-    pub(super) fn container_focus_target(self, shell: &AppShell, cx: &App) -> Option<ModalFocus> {
+    pub(super) fn container_focus_target(
+        self,
+        app_state: &AppState,
+        cx: &App,
+    ) -> Option<ModalFocus> {
         let modal = self.as_container_modal()?;
         let focus =
-            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))
+            crate::container::find_container_modal_tab(app_state, cx, |ws| modal.is_open(ws))
                 .and_then(|(_, ws)| modal.focus_input(&ws.read(cx).state))
                 .map_or(ModalFocus::None, ModalFocus::Input);
         Some(focus)
@@ -82,13 +86,13 @@ impl ModalKind {
     /// 返回 `None` 表示这个种类不是容器工作区实体弹窗，交回宿主继续分发。
     pub(super) fn container_workspace_body(
         self,
-        shell: &AppShell,
+        app_state: &AppState,
         cx: &App,
         p: &Palette,
     ) -> Option<AnyElement> {
         let modal = self.as_container_modal()?;
         let (_, view) =
-            crate::container::find_container_modal_tab(&shell.state, cx, |ws| modal.is_open(ws))?;
+            crate::container::find_container_modal_tab(app_state, cx, |ws| modal.is_open(ws))?;
         let state = &view.read(cx).state;
         Some(modal.render_body(&view, state, cx, p))
     }

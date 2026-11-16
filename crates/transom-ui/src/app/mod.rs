@@ -186,17 +186,7 @@ impl AppShell {
     }
 
     /// 让设置实体执行保存；弹窗容器与快捷键提交共用这一入口。
-    pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let view = self.state.ui.modals.settings.clone();
-        view.update(cx, |view, cx| view.save_settings(window, cx));
-    }
-
     /// 让设置实体执行取消（外观回滚 + 关闭）。
-    pub(crate) fn cancel_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let view = self.state.ui.modals.settings.clone();
-        view.update(cx, |view, cx| view.cancel_settings(window, cx));
-    }
-
     /// 直接操作型设置（活动栏/状态栏拖拽、显隐）的即时落盘。
     ///
     /// 这些动作发生在设置弹窗之外，不需要经过实体；与实体保存共用

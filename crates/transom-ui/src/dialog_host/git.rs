@@ -2,7 +2,7 @@
 
 use super::ModalKind;
 use super::body::ModalFocus;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::Palette;
 use gpui_kit::*;
 
@@ -10,38 +10,38 @@ impl ModalKind {
     /// Git 弹窗取消操作。
     pub(super) fn git_cancel(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         cx: &mut Context<AppShell>,
     ) -> Option<bool> {
         match self {
             ModalKind::GitProject => {
-                crate::git::actions::modal_bridges::close_git_project_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::close_git_project_modal(app_state, cx);
                 Some(true)
             }
             ModalKind::GitClone => {
-                crate::git::actions::modal_bridges::close_git_clone_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::close_git_clone_modal(app_state, cx);
                 Some(true)
             }
             ModalKind::GitWorktree => {
-                crate::git::actions::modal_bridges::close_git_worktree_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::close_git_worktree_modal(app_state, cx);
                 Some(true)
             }
             ModalKind::GitName => {
-                crate::git::actions::modal_bridges::close_git_name_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::close_git_name_modal(app_state, cx);
                 Some(true)
             }
             ModalKind::GitRebase => {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                     .close_git_rebase_modal(cx);
                 Some(true)
             }
             ModalKind::GitPush => {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                     .close_git_push_modal(cx);
                 Some(true)
             }
             ModalKind::GitConflict => {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                     .close_git_conflict_modal(cx);
                 Some(true)
             }
@@ -52,39 +52,39 @@ impl ModalKind {
     /// Git 弹窗提交动作。若属于 Git 弹窗种类，执行提交并返回 `Some(())`；否则返回 `None`。
     pub(super) fn git_commit(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         _window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> Option<()> {
         match self {
             ModalKind::GitProject => {
-                crate::git::actions::modal_bridges::commit_git_project_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::commit_git_project_modal(app_state, cx);
                 Some(())
             }
             ModalKind::GitClone => {
-                crate::git::actions::modal_bridges::submit_git_clone_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::submit_git_clone_modal(app_state, cx);
                 Some(())
             }
             ModalKind::GitWorktree => {
-                crate::git::actions::modal_bridges::submit_git_worktree_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::submit_git_worktree_modal(app_state, cx);
                 Some(())
             }
             ModalKind::GitName => {
-                crate::git::actions::modal_bridges::submit_git_name_modal(&mut shell.state, cx);
+                crate::git::actions::modal_bridges::submit_git_name_modal(app_state, cx);
                 Some(())
             }
             ModalKind::GitRebase => {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                     .run_git_rebase_modal(cx);
                 Some(())
             }
             ModalKind::GitPush => {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                     .submit_git_push_modal(cx);
                 Some(())
             }
             ModalKind::GitConflict => {
-                crate::git::actions::modal_bridges::GitModalActions::new(&mut shell.state)
+                crate::git::actions::modal_bridges::GitModalActions::new(app_state)
                     .close_git_conflict_modal(cx);
                 Some(())
             }
@@ -93,7 +93,7 @@ impl ModalKind {
     }
 
     /// Git 弹窗初始焦点控件。
-    pub(super) fn git_focus_target(self, _shell: &AppShell) -> Option<ModalFocus> {
+    pub(super) fn git_focus_target(self, _app_state: &AppState) -> Option<ModalFocus> {
         match self {
             ModalKind::GitProject
             | ModalKind::GitClone
@@ -109,15 +109,14 @@ impl ModalKind {
     /// Git 弹窗主体渲染分发。
     pub(super) fn render_git_dialog_body(
         self,
-        shell: &AppShell,
+        app_state: &AppState,
         _app: &Entity<AppShell>,
         _window: &mut Window,
         _cx: &App,
         _p: &Palette,
     ) -> Option<AnyElement> {
         let element = match self {
-            ModalKind::GitProject => shell
-                .state
+            ModalKind::GitProject => app_state
                 .ui
                 .modals
                 .git
@@ -125,8 +124,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| modal.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::GitClone => shell
-                .state
+            ModalKind::GitClone => app_state
                 .ui
                 .modals
                 .git
@@ -134,8 +132,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| modal.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::GitWorktree => shell
-                .state
+            ModalKind::GitWorktree => app_state
                 .ui
                 .modals
                 .git
@@ -143,8 +140,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| modal.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::GitName => shell
-                .state
+            ModalKind::GitName => app_state
                 .ui
                 .modals
                 .git
@@ -152,8 +148,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| modal.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::GitRebase => shell
-                .state
+            ModalKind::GitRebase => app_state
                 .ui
                 .modals
                 .git
@@ -161,8 +156,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| modal.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::GitPush => shell
-                .state
+            ModalKind::GitPush => app_state
                 .ui
                 .modals
                 .git
@@ -170,8 +164,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|modal| modal.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::GitConflict => shell
-                .state
+            ModalKind::GitConflict => app_state
                 .ui
                 .modals
                 .git

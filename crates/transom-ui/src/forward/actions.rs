@@ -307,8 +307,8 @@ pub(crate) fn start_forward_rule(
     cx.notify();
 }
 
-pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(pending) = shell.state.ui.modals.tools.confirm_forward_any.take() else {
+pub(crate) fn confirm_forward_start(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let Some(pending) = app_state.ui.modals.tools.confirm_forward_any.take() else {
         return;
     };
     let PendingForwardConfirm {
@@ -316,10 +316,9 @@ pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppSh
         connection_id,
         rule,
     } = pending;
-    let session_id = shell.state.workspace.tab(tab_id).map(|t| t.session_id);
+    let session_id = app_state.workspace.tab(tab_id).map(|t| t.session_id);
     if let Some(session_id) = session_id {
-        if let Some(session) = shell
-            .state
+        if let Some(session) = app_state
             .session
             .catalog
             .sessions
@@ -329,12 +328,10 @@ pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppSh
         {
             r.enabled = true;
         }
-        shell.state.persist_catalog();
+        app_state.persist_catalog();
     }
-    shell
-        .state
-        .set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-    shell.state.send_command(ForwardCommand::ForwardStart {
+    app_state.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
+    app_state.send_command(ForwardCommand::ForwardStart {
         tab_id,
         connection_id,
         rule,
@@ -342,8 +339,8 @@ pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppSh
     cx.notify();
 }
 
-pub(crate) fn cancel_forward_confirm(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.ui.modals.tools.confirm_forward_any = None;
+pub(crate) fn cancel_forward_confirm(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    app_state.ui.modals.tools.confirm_forward_any = None;
     cx.notify();
 }
 

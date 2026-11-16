@@ -1,6 +1,6 @@
 //! 批量编辑子模块共用导入。
 
-pub(super) use crate::app::AppShell;
+pub(super) use crate::app::{AppShell, AppState};
 pub(super) use crate::palette::{Palette, sftp_text_input};
 pub(super) use crate::session_form::AuthChoice;
 pub(super) use gpui_kit::base::{Selectable, h_flex, v_flex};

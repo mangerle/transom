@@ -3,13 +3,13 @@
 use super::common::*;
 
 pub(crate) fn render_batch_edit_body(
-    shell: &AppShell,
+    app_state: &AppState,
     app: &Entity<AppShell>,
     _window: &mut Window,
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(form) = shell.state.ui.modals.session.batch_edit.as_ref() else {
+    let Some(form) = app_state.ui.modals.session.batch_edit.as_ref() else {
         return div().into_any_element();
     };
     let selected_count = form.selected_count;
@@ -45,7 +45,7 @@ pub(crate) fn render_batch_edit_body(
         p,
     );
 
-    let auth_section = render_batch_auth_section(shell, form, app, p);
+    let auth_section = render_batch_auth_section(app_state, form, app, p);
 
     let mut content = v_flex()
         .gap_3()
@@ -78,7 +78,7 @@ pub(crate) fn render_batch_edit_body(
             None,
             crate::widgets::DialogConfirmKind::Primary,
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                crate::batch::save_batch_edit(this, cx);
+                crate::batch::save_batch_edit(&mut this.state, cx);
             }),
         ));
 
@@ -146,7 +146,7 @@ fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyEle
 }
 
 fn render_batch_auth_section(
-    _shell: &AppShell,
+    _app_state: &AppState,
     form: &super::state::BatchEditForm,
     app: &Entity<AppShell>,
     p: &Palette,

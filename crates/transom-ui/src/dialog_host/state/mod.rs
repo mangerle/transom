@@ -8,14 +8,14 @@ use super::*;
 impl ModalKind {
     /// 该弹窗此刻是否应当存在；容器工作区弹窗由 [`ContainerWorkspaceModal`] 统一接管，
     /// 其余种类由注册表按种类提供。
-    pub(super) fn is_open(self, shell: &AppShell, cx: &App) -> bool {
+    pub(super) fn is_open(self, app_state: &AppState, cx: &App) -> bool {
         if let Some(modal) = self.as_container_modal() {
-            return crate::container::find_container_modal_tab(&shell.state, cx, |ws| {
+            return crate::container::find_container_modal_tab(app_state, cx, |ws| {
                 modal.is_open(ws)
             })
             .is_some();
         }
-        let state = super::registry::DialogCheckState::from_state(&shell.state);
+        let state = super::registry::DialogCheckState::from_state(app_state);
         (super::registry::entry(self).is_open)(&state, cx)
     }
 
@@ -25,21 +25,21 @@ impl ModalKind {
     /// 维护，逐处加脏标记要把每个输入框都接一遍回调，漏一处就出现"改了不拦"；
     /// 快照比对只看结果，新增字段不会漏。代价是每次取消都要读一遍全部文本项，
     /// 量级是二十来个字符串，可忽略。
-    pub(super) fn is_dirty(self, shell: &AppShell, cx: &App) -> bool {
-        let current = self.field_values(shell, cx);
-        !current.is_empty() && current != shell.state.ui.open_modals.baseline(self)
+    pub(super) fn is_dirty(self, app_state: &AppState, cx: &App) -> bool {
+        let current = self.field_values(app_state, cx);
+        !current.is_empty() && current != app_state.ui.open_modals.baseline(self)
     }
 
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
-    pub(super) fn field_values(self, shell: &AppShell, cx: &App) -> Vec<String> {
+    pub(super) fn field_values(self, app_state: &AppState, cx: &App) -> Vec<String> {
         if let Some(modal) = self.as_container_modal() {
-            return crate::container::find_container_modal_tab(&shell.state, cx, |ws| {
+            return crate::container::find_container_modal_tab(app_state, cx, |ws| {
                 modal.is_open(ws)
             })
             .map(|(_, ws)| modal.text_values(&ws.read(cx).state, cx))
             .unwrap_or_default();
         }
-        let state = super::registry::DialogCheckState::from_state(&shell.state);
+        let state = super::registry::DialogCheckState::from_state(app_state);
         (super::registry::entry(self).field_values)(&state, cx)
     }
 
@@ -50,22 +50,22 @@ impl ModalKind {
     /// 返回 `true` 表示取消已被执行、这一层允许关闭；脏表单返回 `false` 并写提示。
     pub(super) fn cancel(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> bool {
-        if self.is_dirty(shell, cx) {
+        if self.is_dirty(app_state, cx) {
             // 拦截必须可见：文案说明为什么按了没反应，行为与提示一致。
-            shell.state.ui.feedback.dialog_hint =
+            app_state.ui.feedback.dialog_hint =
                 Some(rust_i18n::t!("dialog.dirty_block_hint").to_string());
             cx.notify();
             return false;
         }
-        shell.state.ui.feedback.dialog_hint = None;
-        if let Some(handled) = self.container_cancel(shell, cx) {
+        app_state.ui.feedback.dialog_hint = None;
+        if let Some(handled) = self.container_cancel(app_state, cx) {
             return handled;
         }
-        if let Some(handled) = self.git_cancel(shell, cx) {
+        if let Some(handled) = self.git_cancel(app_state, cx) {
             return handled;
         }
         match self {
@@ -79,28 +79,27 @@ impl ModalKind {
             | ModalKind::SftpProperties
             | ModalKind::SftpFilter
             | ModalKind::SftpSearch
-            | ModalKind::SftpSync => self.cancel_prompt_or_sftp(shell, window, cx),
-            _ => self.cancel_tools_and_session(shell, window, cx),
+            | ModalKind::SftpSync => self.cancel_prompt_or_sftp(app_state, window, cx),
+            _ => self.cancel_tools_and_session(app_state, window, cx),
         }
     }
 
     /// 取消连接鉴权提示与 SFTP 弹窗。
     fn cancel_prompt_or_sftp(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                shell.state.ui.modals.sftp.close_confirm();
+                app_state.ui.modals.sftp.close_confirm();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             ModalKind::HostKeyConfirm => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .connection
@@ -109,8 +108,7 @@ impl ModalKind {
                 true
             }
             ModalKind::ClipboardPrompt => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .connection
@@ -119,12 +117,11 @@ impl ModalKind {
                 true
             }
             ModalKind::ForwardConfirm => {
-                crate::forward::cancel_forward_confirm(shell, cx);
+                crate::forward::cancel_forward_confirm(app_state, cx);
                 true
             }
             ModalKind::AuthPrompt => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .connection
@@ -133,39 +130,39 @@ impl ModalKind {
                 true
             }
             ModalKind::SftpInput => {
-                shell.state.ui.modals.sftp.close_input();
+                app_state.ui.modals.sftp.close_input();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             ModalKind::SftpChmod => {
-                shell.state.ui.modals.sftp.close_chmod();
+                app_state.ui.modals.sftp.close_chmod();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             ModalKind::SftpProperties => {
-                shell.state.ui.modals.sftp.close_properties();
+                app_state.ui.modals.sftp.close_properties();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             ModalKind::SftpFilter => {
-                shell.state.ui.modals.sftp.close_filter();
+                app_state.ui.modals.sftp.close_filter();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             ModalKind::SftpSearch => {
-                shell.state.ui.modals.sftp.close_search();
+                app_state.ui.modals.sftp.close_search();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             ModalKind::SftpSync => {
-                shell.state.ui.modals.sftp.close_sync();
+                app_state.ui.modals.sftp.close_sync();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
                 true
             }
             _ => true,
@@ -175,18 +172,17 @@ impl ModalKind {
     /// 取消编辑器、容器表单、会话与工具弹窗。
     fn cancel_tools_and_session(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> bool {
         match self {
             ModalKind::EditorGotoLine => {
-                crate::editor::cancel_editor_goto_line(&mut shell.state, window, cx);
+                crate::editor::cancel_editor_goto_line(app_state, window, cx);
                 true
             }
             ModalKind::ContainerForm => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -195,8 +191,7 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerFolderForm => {
-                shell
-                    .state
+                app_state
                     .features
                     .containers
                     .sidebar
@@ -204,8 +199,7 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerRunForm => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -214,8 +208,7 @@ impl ModalKind {
                 true
             }
             ModalKind::ContainerCreate => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -224,8 +217,7 @@ impl ModalKind {
                 true
             }
             ModalKind::SessionForm => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .session
@@ -234,20 +226,19 @@ impl ModalKind {
                 true
             }
             ModalKind::FolderForm => {
-                shell.state.ui.modals.session.folder_form = None;
+                app_state.ui.modals.session.folder_form = None;
                 true
             }
             ModalKind::BatchEdit => {
-                shell.state.ui.modals.session.batch_edit = None;
+                app_state.ui.modals.session.batch_edit = None;
                 true
             }
             ModalKind::SnippetForm => {
-                shell.state.ui.modals.tools.snippet_panel.form = None;
+                app_state.ui.modals.tools.snippet_panel.form = None;
                 true
             }
             ModalKind::KnownHosts => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .connection
@@ -256,8 +247,7 @@ impl ModalKind {
                 true
             }
             ModalKind::KeyWizard => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -266,8 +256,7 @@ impl ModalKind {
                 true
             }
             ModalKind::BackupPrompt => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -276,8 +265,7 @@ impl ModalKind {
                 true
             }
             ModalKind::AuditViewer => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -286,8 +274,7 @@ impl ModalKind {
                 true
             }
             ModalKind::Replay => {
-                shell
-                    .state
+                app_state
                     .ui
                     .modals
                     .tools
@@ -296,15 +283,15 @@ impl ModalKind {
                 true
             }
             ModalKind::Settings => {
-                shell.cancel_settings(window, cx);
+                app_state.cancel_settings(window, cx);
                 true
             }
             ModalKind::ShortcutCapture => {
-                shell.state.ui.shortcut_recording.capture = None;
+                app_state.ui.shortcut_recording.capture = None;
                 true
             }
             ModalKind::DiffViewer => {
-                crate::diff_viewer::DiffViewerOps::new(&mut shell.state).close(cx);
+                crate::diff_viewer::DiffViewerOps::new(app_state).close(cx);
                 true
             }
             _ => true,

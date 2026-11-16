@@ -9,7 +9,7 @@ pub(super) fn cancel_modal(
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
-    let closed = app.update(cx, |shell, cx| kind.cancel(shell, window, cx));
+    let closed = app.update(cx, |shell, cx| kind.cancel(&mut shell.state, window, cx));
     app.update(cx, |shell, cx| {
         if closed {
             shell.state.ui.open_modals.drop(kind);
@@ -25,7 +25,7 @@ pub(super) fn commit_modal(
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
-    let closed = app.update(cx, |shell, cx| kind.commit(shell, window, cx));
+    let closed = app.update(cx, |shell, cx| kind.commit(&mut shell.state, window, cx));
     app.update(cx, |shell, cx| {
         if closed {
             shell.state.ui.open_modals.drop(kind);
@@ -74,9 +74,9 @@ impl OpenModals {
 }
 
 /// 当前应当打开的弹窗栈，按层序由下到上。
-fn desired_modal_stack(shell: &AppShell, cx: &App) -> Vec<ModalKind> {
+fn desired_modal_stack(app_state: &AppState, cx: &App) -> Vec<ModalKind> {
     super::registry::ordered_kinds()
-        .filter(|kind| kind.is_open(shell, cx))
+        .filter(|kind| kind.is_open(app_state, cx))
         .collect()
 }
 
@@ -87,13 +87,12 @@ fn desired_modal_stack(shell: &AppShell, cx: &App) -> Vec<ModalKind> {
 /// 为什么要 `defer`：`open_dialog` 会移交焦点并通知组件层，在渲染过程中
 /// 改这些状态会踩借用与重入，延到绘制之后再执行。
 pub(crate) fn reconcile_dialogs(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let desired = desired_modal_stack(shell, cx);
-    let actual: Vec<ModalKind> = shell
-        .state
+    let desired = desired_modal_stack(app_state, cx);
+    let actual: Vec<ModalKind> = app_state
         .ui
         .open_modals
         .layers
@@ -122,14 +121,16 @@ pub(crate) fn reconcile_dialogs(
             window.close_dialog(cx);
         }
         for kind in deferred_missing {
-            deferred_app.update(cx, |shell, cx| push_dialog(shell, kind, window, cx));
+            deferred_app.update(cx, |shell, cx| {
+                push_dialog(&mut shell.state, kind, window, cx)
+            });
         }
     });
     // 影子栈先按期望落定：延后执行的那批开关完成后即与之一致。
-    shell.state.ui.open_modals.layers.truncate(common);
+    app_state.ui.open_modals.layers.truncate(common);
     for kind in missing {
         // 基线在开弹窗这一刻取：此后任何文本变化都算未提交内容。
-        let baseline = kind.field_values(shell, cx);
+        let baseline = kind.field_values(app_state, cx);
         let body_app = app.clone();
         let body = cx.new(move |cx| {
             let observe = cx.observe(&body_app, move |_, _, cx| cx.notify());
@@ -140,7 +141,7 @@ pub(crate) fn reconcile_dialogs(
                 _observe: observe,
             }
         });
-        shell.state.ui.open_modals.layers.push(ModalLayer {
+        app_state.ui.open_modals.layers.push(ModalLayer {
             kind,
             body,
             baseline,
@@ -150,13 +151,12 @@ pub(crate) fn reconcile_dialogs(
 
 /// 压入一层弹窗：外壳只负责容器属性，内容交给弹窗体。
 fn push_dialog(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     kind: ModalKind,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(body) = shell
-        .state
+    let Some(body) = app_state
         .ui
         .open_modals
         .layers
@@ -243,8 +243,8 @@ fn push_dialog(
 /// 内缩定位，客户端装饰下实测四周各留 20px；而应用顶栏从窗面 y=0 起画，
 /// 于是压暗层上沿正好卡在顶栏中间。宿主元素铺满整个窗面，层序在编辑面板
 /// 之上、弹窗层之下，与迁移前的自绘遮罩一致。
-pub(crate) fn dialog_dim(shell: &AppShell, p: &Palette) -> Option<AnyElement> {
-    if shell.state.ui.open_modals.layers.is_empty() {
+pub(crate) fn dialog_dim(app_state: &AppState, p: &Palette) -> Option<AnyElement> {
+    if app_state.ui.open_modals.layers.is_empty() {
         return None;
     }
     Some(

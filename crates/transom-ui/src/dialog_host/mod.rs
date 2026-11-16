@@ -20,7 +20,7 @@
 //!      生效，实测见 `tests/dialog_key_probe.rs`，因此取消与提交同时接
 //!      容器动作与输入框动作两路。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::container::ContainerFormFolders;
 use crate::palette::Palette;
 use gpui_kit::base::actions::{Cancel, Confirm};
@@ -214,10 +214,10 @@ impl ModalKind {
         }
         if self == ModalKind::KeyWizard {
             let (view, targets) = {
-                let shell = app.read(cx);
+                let app_state = &app.read(cx).state;
                 (
-                    shell.state.ui.modals.tools.key_wizard.clone(),
-                    shell.state.key_targets(),
+                    app_state.ui.modals.tools.key_wizard.clone(),
+                    app_state.key_targets(),
                 )
             };
             return view.update(cx, |view, cx| view.render_body(&targets, cx, p));
@@ -234,9 +234,8 @@ impl ModalKind {
             // 分组候选由外壳在读锁内快照后注入，实体不反查目录；快照读完即
             // 结束外壳借用，随后的实体 update 才不会撞上双重租借。
             let (view, folders) = {
-                let shell = app.read(cx);
-                let options = shell
-                    .state
+                let app_state = &app.read(cx).state;
+                let options = app_state
                     .session
                     .catalog
                     .engine_folders
@@ -244,7 +243,7 @@ impl ModalKind {
                     .map(|folder| (folder.id, folder.name.clone()))
                     .collect();
                 (
-                    shell.state.ui.modals.tools.container_form.clone(),
+                    app_state.ui.modals.tools.container_form.clone(),
                     ContainerFormFolders { options },
                 )
             };
@@ -254,12 +253,11 @@ impl ModalKind {
             // 镜像摘要由外壳在读锁内快照后注入，实体不反查工作区；快照读完即
             // 结束外壳借用，随后的实体 update 才不会撞上双重租借。
             let (view, image_meta) = {
-                let shell = app.read(cx);
-                let view = shell.state.ui.modals.tools.run_form.clone();
+                let app_state = &app.read(cx).state;
+                let view = app_state.ui.modals.tools.run_form.clone();
                 let image_meta = view.read(cx).state().and_then(|form| {
                     let image_raw = form.image.read(cx).value().trim().to_string();
-                    shell
-                        .state
+                    app_state
                         .container_workspace(form.tab_id)
                         .and_then(|workspace| {
                             workspace
@@ -283,11 +281,10 @@ impl ModalKind {
             // 实体不反查工作区；句柄读完即结束外壳借用，随后的实体 update
             // 才不会撞上双重租借。
             let (view, create_input) = {
-                let shell = app.read(cx);
-                let view = shell.state.ui.modals.tools.create_dialog.clone();
+                let app_state = &app.read(cx).state;
+                let view = app_state.ui.modals.tools.create_dialog.clone();
                 let create_input = view.read(cx).state().and_then(|dialog| {
-                    shell
-                        .state
+                    app_state
                         .container_workspace(dialog.tab_id)
                         .map(|workspace| workspace.read(cx).state.create_input.clone())
                 });
@@ -299,8 +296,8 @@ impl ModalKind {
             return view.update(cx, |view, cx| view.render_body(create_input, p, cx));
         }
         if let Some(element) = {
-            let shell = app.read(cx);
-            self.container_workspace_body(shell, cx, p)
+            let app_state = &app.read(cx).state;
+            self.container_workspace_body(app_state, cx, p)
         } {
             return element;
         }
@@ -311,10 +308,9 @@ impl ModalKind {
             let view = app.read(cx).state.ui.modals.connection.prompts.clone();
             return view.update(cx, |view, cx| view.render_body(self, cx, p));
         }
-        let shell = app.read(cx);
+        let app_state = &app.read(cx).state;
         match self {
-            ModalKind::SftpConfirm => shell
-                .state
+            ModalKind::SftpConfirm => app_state
                 .ui
                 .modals
                 .sftp
@@ -322,8 +318,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpInput => shell
-                .state
+            ModalKind::SftpInput => app_state
                 .ui
                 .modals
                 .sftp
@@ -331,8 +326,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpChmod => shell
-                .state
+            ModalKind::SftpChmod => app_state
                 .ui
                 .modals
                 .sftp
@@ -340,8 +334,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpProperties => shell
-                .state
+            ModalKind::SftpProperties => app_state
                 .ui
                 .modals
                 .sftp
@@ -349,8 +342,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpFilter => shell
-                .state
+            ModalKind::SftpFilter => app_state
                 .ui
                 .modals
                 .sftp
@@ -358,8 +350,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpSearch => shell
-                .state
+            ModalKind::SftpSearch => app_state
                 .ui
                 .modals
                 .sftp
@@ -367,8 +358,7 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpSync => shell
-                .state
+            ModalKind::SftpSync => app_state
                 .ui
                 .modals
                 .sftp
@@ -376,38 +366,38 @@ impl ModalKind {
                 .as_ref()
                 .map(|m| m.clone().into_any_element())
                 .unwrap_or_else(|| div().into_any_element()),
-            _ => self.render_shell_body(shell, app, window, cx, p),
+            _ => self.render_shell_body(app_state, app, window, cx, p),
         }
     }
 
     /// 非实体弹窗的渲染分发：只读外壳状态。
     fn render_shell_body(
         self,
-        shell: &AppShell,
+        app_state: &AppState,
         app: &Entity<AppShell>,
         window: &mut Window,
         cx: &App,
         p: &Palette,
     ) -> AnyElement {
-        if let Some(element) = self.render_git_dialog_body(shell, app, window, cx, p) {
+        if let Some(element) = self.render_git_dialog_body(app_state, app, window, cx, p) {
             return element;
         }
         match self {
             ModalKind::ForwardConfirm => {
-                crate::forward::render_forward_confirm_body(shell, app, cx, p)
+                crate::forward::render_forward_confirm_body(app_state, app, cx, p)
             }
             ModalKind::EditorGotoLine => {
-                crate::editor::render_editor_goto_line_body(&shell.state, app, cx, p)
+                crate::editor::render_editor_goto_line_body(app_state, app, cx, p)
             }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::ContainerForm => div().into_any_element(),
             ModalKind::ContainerFolderForm => {
-                let sidebar = shell.state.features.containers.sidebar.clone();
+                let sidebar = app_state.features.containers.sidebar.clone();
                 let state = sidebar.read(cx);
                 crate::container::render_engine_folder_form_body(
                     &sidebar,
                     &state.state,
-                    &shell.state.session.catalog,
+                    &app_state.session.catalog,
                     p,
                 )
             }
@@ -441,11 +431,13 @@ impl ModalKind {
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::SessionForm => div().into_any_element(),
             ModalKind::FolderForm => {
-                crate::sidebar::render_folder_form_body(shell, app, window, cx, p)
+                crate::sidebar::render_folder_form_body(app_state, app, window, cx, p)
             }
-            ModalKind::BatchEdit => crate::batch::render_batch_edit_body(shell, app, window, cx, p),
+            ModalKind::BatchEdit => {
+                crate::batch::render_batch_edit_body(app_state, app, window, cx, p)
+            }
             ModalKind::SnippetForm => {
-                crate::snippets::render_snippet_form_body(shell, app, window, cx, p)
+                crate::snippets::render_snippet_form_body(app_state, app, window, cx, p)
             }
             // 由 [`Self::render_body`] 的实体分支处理，这里不会走到。
             ModalKind::KnownHosts => div().into_any_element(),
@@ -462,10 +454,10 @@ impl ModalKind {
                 div().into_any_element()
             }
             ModalKind::ShortcutCapture => {
-                crate::shortcuts::render_shortcut_capture_body(shell, app, window, cx, p)
+                crate::shortcuts::render_shortcut_capture_body(app_state, app, window, cx, p)
             }
             ModalKind::DiffViewer => crate::diff_viewer::render_diff_viewer_body(
-                shell.state.features.diff_viewer.as_ref(),
+                app_state.features.diff_viewer.as_ref(),
                 app,
                 window,
                 cx,

@@ -86,12 +86,12 @@ pub(crate) fn open_batch_edit(
     cx.notify();
 }
 
-pub(crate) fn save_batch_edit(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(form) = shell.state.ui.modals.session.batch_edit.as_ref() else {
+pub(crate) fn save_batch_edit(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let Some(form) = app_state.ui.modals.session.batch_edit.as_ref() else {
         return;
     };
     if !form.change_port && !form.change_username && !form.change_auth {
-        if let Some(form) = shell.state.ui.modals.session.batch_edit.as_mut() {
+        if let Some(form) = app_state.ui.modals.session.batch_edit.as_mut() {
             form.error = Some(rust_i18n::t!("batch.error_no_change").to_string());
         }
         cx.notify();
@@ -103,7 +103,7 @@ pub(crate) fn save_batch_edit(shell: &mut AppShell, cx: &mut Context<AppShell>) 
         match form.port.read(cx).value().trim().parse::<u16>() {
             Ok(value) if value > 0 => port = Some(value),
             _ => {
-                if let Some(form) = shell.state.ui.modals.session.batch_edit.as_mut() {
+                if let Some(form) = app_state.ui.modals.session.batch_edit.as_mut() {
                     form.error = Some(rust_i18n::t!("batch.error_port").to_string());
                 }
                 cx.notify();
@@ -115,7 +115,7 @@ pub(crate) fn save_batch_edit(shell: &mut AppShell, cx: &mut Context<AppShell>) 
     if form.change_username {
         let value = form.username.read(cx).value().trim().to_string();
         if value.is_empty() {
-            if let Some(form) = shell.state.ui.modals.session.batch_edit.as_mut() {
+            if let Some(form) = app_state.ui.modals.session.batch_edit.as_mut() {
                 form.error = Some(rust_i18n::t!("batch.error_username").to_string());
             }
             cx.notify();
@@ -129,7 +129,7 @@ pub(crate) fn save_batch_edit(shell: &mut AppShell, cx: &mut Context<AppShell>) 
             AuthChoice::PrivateKey => {
                 let path = form.key_path.read(cx).value().trim().to_string();
                 if path.is_empty() {
-                    if let Some(form) = shell.state.ui.modals.session.batch_edit.as_mut() {
+                    if let Some(form) = app_state.ui.modals.session.batch_edit.as_mut() {
                         form.error = Some(rust_i18n::t!("batch.error_key").to_string());
                     }
                     cx.notify();
@@ -154,16 +154,16 @@ pub(crate) fn save_batch_edit(shell: &mut AppShell, cx: &mut Context<AppShell>) 
         username,
         auth,
     };
-    let selected = shell.state.session.sidebar.selected_sessions.clone();
+    let selected = app_state.session.sidebar.selected_sessions.clone();
     let (updated, skipped) =
-        apply_batch_updates(&mut shell.state.session.catalog, &selected, &updates);
-    shell.state.ui.modals.session.batch_edit = None;
-    let saved = shell.state.persist_catalog();
-    shell.state.refresh_tab_sessions();
-    shell.state.session.sidebar.selection_mode = false;
-    shell.state.session.sidebar.clear_selection();
+        apply_batch_updates(&mut app_state.session.catalog, &selected, &updates);
+    app_state.ui.modals.session.batch_edit = None;
+    let saved = app_state.persist_catalog();
+    app_state.refresh_tab_sessions();
+    app_state.session.sidebar.selection_mode = false;
+    app_state.session.sidebar.clear_selection();
     if saved {
-        shell.state.ui.status =
+        app_state.ui.status =
             Some(rust_i18n::t!("batch.updated", updated = updated, skipped = skipped).to_string());
     }
     cx.notify();

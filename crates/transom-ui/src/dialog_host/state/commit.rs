@@ -11,103 +11,99 @@ impl ModalKind {
     /// 恰恰就是弹窗该继续存在的唯一事实。
     pub(in super::super) fn commit(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> bool {
-        self.run_commit(shell, window, cx);
-        !self.is_open(shell, cx)
+        self.run_commit(app_state, window, cx);
+        !self.is_open(app_state, cx)
     }
 
-    fn run_commit(self, shell: &mut AppShell, window: &mut Window, cx: &mut Context<AppShell>) {
-        if self.container_commit(shell, window, cx).is_some()
-            || self.git_commit(shell, window, cx).is_some()
-            || self.sftp_commit(shell, window, cx)
-            || self.connection_commit(shell, cx)
+    fn run_commit(self, app_state: &mut AppState, window: &mut Window, cx: &mut Context<AppShell>) {
+        if self.container_commit(app_state, window, cx).is_some()
+            || self.git_commit(app_state, window, cx).is_some()
+            || self.sftp_commit(app_state, window, cx)
+            || self.connection_commit(app_state, cx)
         {
             return;
         }
-        self.tool_and_session_commit(shell, window, cx);
+        self.tool_and_session_commit(app_state, window, cx);
     }
 
     fn sftp_commit(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                if let Some(modal) = shell.state.ui.modals.sftp.confirm.clone() {
+                if let Some(modal) = app_state.ui.modals.sftp.confirm.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
             }
             ModalKind::SftpInput => {
-                if let Some(modal) = shell.state.ui.modals.sftp.input.clone() {
+                if let Some(modal) = app_state.ui.modals.sftp.input.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
             }
             ModalKind::SftpChmod => {
-                if let Some(modal) = shell.state.ui.modals.sftp.chmod.clone() {
+                if let Some(modal) = app_state.ui.modals.sftp.chmod.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
             }
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
-                shell.state.ui.modals.sftp.close_properties();
+                app_state.ui.modals.sftp.close_properties();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
             }
             ModalKind::SftpSearch => {
-                shell.state.ui.modals.sftp.close_search();
+                app_state.ui.modals.sftp.close_search();
                 cx.notify();
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
             }
             ModalKind::SftpFilter => {
-                if let Some(modal) = shell.state.ui.modals.sftp.filter.clone() {
+                if let Some(modal) = app_state.ui.modals.sftp.filter.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
             }
             ModalKind::SftpSync => {
-                if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
+                if let Some(modal) = app_state.ui.modals.sftp.sync.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
-                crate::sftp::focus_active_sftp_panel(&shell.state, window, cx);
+                crate::sftp::focus_active_sftp_panel(app_state, window, cx);
             }
             _ => return false,
         }
         true
     }
 
-    fn connection_commit(self, shell: &mut AppShell, cx: &mut Context<AppShell>) -> bool {
+    fn connection_commit(self, app_state: &mut AppState, cx: &mut Context<AppShell>) -> bool {
         match self {
-            ModalKind::HostKeyConfirm => shell
-                .state
+            ModalKind::HostKeyConfirm => app_state
                 .ui
                 .modals
                 .connection
                 .prompts
                 .update(cx, |view, cx| view.accept_host_key(cx)),
-            ModalKind::ClipboardPrompt => shell
-                .state
+            ModalKind::ClipboardPrompt => app_state
                 .ui
                 .modals
                 .connection
                 .prompts
                 .update(cx, |view, cx| view.allow_clipboard(cx)),
-            ModalKind::ForwardConfirm => crate::forward::confirm_forward_start(shell, cx),
-            ModalKind::AuthPrompt => shell
-                .state
+            ModalKind::ForwardConfirm => crate::forward::confirm_forward_start(app_state, cx),
+            ModalKind::AuthPrompt => app_state
                 .ui
                 .modals
                 .connection
                 .prompts
                 .update(cx, |view, cx| view.submit_auth(cx)),
-            ModalKind::KnownHosts => shell
-                .state
+            ModalKind::KnownHosts => app_state
                 .ui
                 .modals
                 .connection
@@ -120,85 +116,74 @@ impl ModalKind {
 
     fn tool_and_session_commit(
         self,
-        shell: &mut AppShell,
+        app_state: &mut AppState,
         window: &mut Window,
         cx: &mut Context<AppShell>,
     ) {
         match self {
             ModalKind::EditorGotoLine => {
-                crate::editor::commit_editor_goto_line(&mut shell.state, window, cx)
+                crate::editor::commit_editor_goto_line(app_state, window, cx)
             }
-            ModalKind::ContainerForm => shell
-                .state
+            ModalKind::ContainerForm => app_state
                 .ui
                 .modals
                 .tools
                 .container_form
                 .update(cx, |view, cx| view.save(cx)),
-            ModalKind::ContainerFolderForm => shell
-                .state
+            ModalKind::ContainerFolderForm => app_state
                 .features
                 .containers
                 .sidebar
                 .update(cx, |sidebar, cx| sidebar.submit_folder_form(cx)),
-            ModalKind::ContainerRunForm => shell
-                .state
+            ModalKind::ContainerRunForm => app_state
                 .ui
                 .modals
                 .tools
                 .run_form
                 .update(cx, |view, cx| view.submit(cx)),
-            ModalKind::ContainerCreate => shell
-                .state
+            ModalKind::ContainerCreate => app_state
                 .ui
                 .modals
                 .tools
                 .create_dialog
                 .update(cx, |view, cx| view.submit(cx)),
-            ModalKind::SessionForm => shell
-                .state
+            ModalKind::SessionForm => app_state
                 .ui
                 .modals
                 .session
                 .form
                 .update(cx, |view, cx| view.save(cx)),
-            ModalKind::FolderForm => crate::sidebar::save_folder_form(shell, cx),
-            ModalKind::BatchEdit => crate::batch::save_batch_edit(shell, cx),
-            ModalKind::SnippetForm => crate::snippets::save_snippet_form(shell, cx),
-            ModalKind::BackupPrompt => shell
-                .state
+            ModalKind::FolderForm => crate::sidebar::save_folder_form(app_state, cx),
+            ModalKind::BatchEdit => crate::batch::save_batch_edit(app_state, cx),
+            ModalKind::SnippetForm => crate::snippets::save_snippet_form(app_state, cx),
+            ModalKind::BackupPrompt => app_state
                 .ui
                 .modals
                 .tools
                 .backup_prompt
                 .update(cx, |view, cx| view.submit(window, cx)),
-            ModalKind::KeyWizard => shell
-                .state
+            ModalKind::KeyWizard => app_state
                 .ui
                 .modals
                 .tools
                 .key_wizard
                 .update(cx, |view, cx| view.close(cx)),
-            ModalKind::AuditViewer => shell
-                .state
+            ModalKind::AuditViewer => app_state
                 .ui
                 .modals
                 .tools
                 .audit_viewer
                 .update(cx, |view, cx| view.close(cx)),
             // Enter 与原实现一致只关闭弹窗；打开播放器由页脚主按钮显式触发。
-            ModalKind::Replay => shell
-                .state
+            ModalKind::Replay => app_state
                 .ui
                 .modals
                 .tools
                 .replay
                 .update(cx, |view, cx| view.close(cx)),
-            ModalKind::Settings => shell.save_settings(window, cx),
-            ModalKind::ShortcutCapture => shell.state.ui.shortcut_recording.capture = None,
-            ModalKind::DiffViewer => {
-                crate::diff_viewer::DiffViewerOps::new(&mut shell.state).close(cx)
-            }
+            ModalKind::Settings => app_state.save_settings(window, cx),
+            ModalKind::ShortcutCapture => app_state.ui.shortcut_recording.capture = None,
+            ModalKind::DiffViewer => crate::diff_viewer::DiffViewerOps::new(app_state).close(cx),
             _ => {}
         }
     }
@@ -207,20 +192,20 @@ impl ModalKind {
     ///
     /// 一律走 `as_ref()` 安全取值：关闭动作可能在对账把弹窗弹出栈之前就把状态
     /// 清空，这一帧仍可能渲染一次；用 `expect` 会把这条正常路径变成 panic。
-    pub(in super::super) fn focus_target(self, shell: &AppShell, cx: &App) -> ModalFocus {
+    pub(in super::super) fn focus_target(self, app_state: &AppState, cx: &App) -> ModalFocus {
         if let Some(target) = self
-            .container_focus_target(shell, cx)
-            .or_else(|| self.git_focus_target(shell))
-            .or_else(|| self.sftp_focus_target(shell, cx))
+            .container_focus_target(app_state, cx)
+            .or_else(|| self.git_focus_target(app_state))
+            .or_else(|| self.sftp_focus_target(app_state, cx))
         {
             return target;
         }
-        self.tool_and_session_focus_target(shell, cx)
+        self.tool_and_session_focus_target(app_state, cx)
     }
 
-    fn sftp_focus_target(self, shell: &AppShell, cx: &App) -> Option<ModalFocus> {
+    fn sftp_focus_target(self, app_state: &AppState, cx: &App) -> Option<ModalFocus> {
         let focus = match self {
-            ModalKind::SftpInput => input_focus(shell, |state| {
+            ModalKind::SftpInput => input_focus(app_state, |state| {
                 state
                     .ui
                     .modals
@@ -229,7 +214,7 @@ impl ModalKind {
                     .as_ref()
                     .map(|modal| modal.read(cx).input.clone())
             }),
-            ModalKind::SftpChmod => input_focus(shell, |state| {
+            ModalKind::SftpChmod => input_focus(app_state, |state| {
                 state
                     .ui
                     .modals
@@ -238,7 +223,7 @@ impl ModalKind {
                     .as_ref()
                     .map(|modal| modal.read(cx).octal_input.clone())
             }),
-            ModalKind::SftpSearch => input_focus(shell, |state| {
+            ModalKind::SftpSearch => input_focus(app_state, |state| {
                 state
                     .ui
                     .modals
@@ -247,8 +232,7 @@ impl ModalKind {
                     .as_ref()
                     .map(|modal| modal.read(cx).state.input.clone())
             }),
-            ModalKind::SftpFilter => shell
-                .state
+            ModalKind::SftpFilter => app_state
                 .ui
                 .modals
                 .sftp
@@ -262,9 +246,9 @@ impl ModalKind {
         Some(focus)
     }
 
-    fn tool_and_session_focus_target(self, shell: &AppShell, cx: &App) -> ModalFocus {
+    fn tool_and_session_focus_target(self, app_state: &AppState, cx: &App) -> ModalFocus {
         match self {
-            ModalKind::EditorGotoLine => input_focus(shell, |state| {
+            ModalKind::EditorGotoLine => input_focus(app_state, |state| {
                 state
                     .ui
                     .modals
@@ -273,8 +257,7 @@ impl ModalKind {
                     .as_ref()
                     .map(|modal| modal.input.clone())
             }),
-            ModalKind::ContainerForm => shell
-                .state
+            ModalKind::ContainerForm => app_state
                 .ui
                 .modals
                 .tools
@@ -284,8 +267,7 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |form| {
                     ModalFocus::Input(form.name.clone())
                 }),
-            ModalKind::ContainerFolderForm => shell
-                .state
+            ModalKind::ContainerFolderForm => app_state
                 .features
                 .containers
                 .sidebar
@@ -296,8 +278,7 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |form| {
                     ModalFocus::Input(form.input.clone())
                 }),
-            ModalKind::ContainerRunForm => shell
-                .state
+            ModalKind::ContainerRunForm => app_state
                 .ui
                 .modals
                 .tools
@@ -307,8 +288,7 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |form| {
                     ModalFocus::Input(form.image.clone())
                 }),
-            ModalKind::ContainerCreate => shell
-                .state
+            ModalKind::ContainerCreate => app_state
                 .ui
                 .modals
                 .tools
@@ -316,12 +296,11 @@ impl ModalKind {
                 .read(cx)
                 .state()
                 .and_then(|dialog| {
-                    let workspace = shell.state.container_workspace(dialog.tab_id)?;
+                    let workspace = app_state.container_workspace(dialog.tab_id)?;
                     Some(workspace.read(cx).state.create_input.clone())
                 })
                 .map_or(ModalFocus::None, ModalFocus::Input),
-            ModalKind::SessionForm => shell
-                .state
+            ModalKind::SessionForm => app_state
                 .ui
                 .modals
                 .session
@@ -331,7 +310,7 @@ impl ModalKind {
                 .map_or(ModalFocus::None, |form| {
                     ModalFocus::Input(form.name.clone())
                 }),
-            ModalKind::FolderForm => input_focus(shell, |state| {
+            ModalKind::FolderForm => input_focus(app_state, |state| {
                 state
                     .ui
                     .modals
@@ -340,7 +319,7 @@ impl ModalKind {
                     .as_ref()
                     .map(|form| form.name.clone())
             }),
-            ModalKind::SnippetForm => input_focus(shell, |state| {
+            ModalKind::SnippetForm => input_focus(app_state, |state| {
                 state
                     .ui
                     .modals
@@ -351,8 +330,7 @@ impl ModalKind {
                     .map(|form| form.name_input())
             }),
             // 改键录入面板自己持有焦点句柄：录键期间按键要落在这块面板上。
-            ModalKind::ShortcutCapture => shell
-                .state
+            ModalKind::ShortcutCapture => app_state
                 .ui
                 .shortcut_recording
                 .capture
@@ -367,8 +345,8 @@ impl ModalKind {
 
 /// 从外壳状态取输入控件作为首帧焦点；缺失时保持无焦点。
 fn input_focus(
-    shell: &AppShell,
+    app_state: &AppState,
     pick: impl Fn(&crate::app::AppState) -> Option<Entity<InputState>>,
 ) -> ModalFocus {
-    pick(&shell.state).map_or(ModalFocus::None, ModalFocus::Input)
+    pick(app_state).map_or(ModalFocus::None, ModalFocus::Input)
 }

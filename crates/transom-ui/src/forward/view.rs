@@ -2,7 +2,7 @@
 
 use super::ForwardKindChoice;
 use super::ForwardView;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -296,12 +296,12 @@ impl ForwardView {
 /// 取消与"确认启动"分别绑到 `cancel_forward_confirm` /
 /// `confirm_forward_start`，Esc 走前者：把拒绝回给等待中的转发请求。
 pub(crate) fn render_forward_confirm_body(
-    shell: &AppShell,
+    app_state: &AppState,
     app: &Entity<AppShell>,
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(pending) = shell.state.ui.modals.tools.confirm_forward_any.as_ref() else {
+    let Some(pending) = app_state.ui.modals.tools.confirm_forward_any.as_ref() else {
         return div().into_any_element();
     };
     let rule_name = pending.rule.name.clone();
@@ -323,7 +323,7 @@ pub(crate) fn render_forward_confirm_body(
             "cancel-forward-confirm",
             rust_i18n::t!("common.cancel").to_string(),
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                crate::forward::cancel_forward_confirm(this, cx)
+                crate::forward::cancel_forward_confirm(&mut this.state, cx)
             }),
         ))
         .child(crate::widgets::dialog_confirm_button(
@@ -332,7 +332,7 @@ pub(crate) fn render_forward_confirm_body(
             None,
             crate::widgets::DialogConfirmKind::Danger,
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                crate::forward::confirm_forward_start(this, cx);
+                crate::forward::confirm_forward_start(&mut this.state, cx);
             }),
         ));
 

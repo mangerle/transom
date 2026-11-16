@@ -1,7 +1,7 @@
 //! 文件夹表单弹窗的打开、保存与渲染逻辑。
 
 use super::super::FolderForm;
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::Button;
@@ -114,8 +114,8 @@ fn pick_folder_default_key_path(
     cx.notify();
 }
 
-pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(form) = shell.state.ui.modals.session.folder_form.as_ref() else {
+pub(crate) fn save_folder_form(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let Some(form) = app_state.ui.modals.session.folder_form.as_ref() else {
         return;
     };
     let name = form.name.read(cx).value().trim().to_string();
@@ -141,15 +141,14 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
     let base = form.base;
     let parent = form.parent;
     let result = match base {
-        Some(folder_id) => shell.state.session.catalog.update_folder(
+        Some(folder_id) => app_state.session.catalog.update_folder(
             folder_id,
             &name,
             default_port,
             default_username,
             default_key_path,
         ),
-        None => shell
-            .state
+        None => app_state
             .session
             .catalog
             .add_folder_with_defaults(
@@ -161,8 +160,7 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
             )
             .map(|_| {
                 if let Some(parent_id) = parent
-                    && let Some(folder) = shell
-                        .state
+                    && let Some(folder) = app_state
                         .session
                         .catalog
                         .folders
@@ -175,16 +173,16 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
     };
     match result {
         Ok(()) => {
-            shell.state.ui.modals.session.folder_form = None;
-            shell.state.persist_catalog();
-            shell.state.ui.status = Some(if base.is_some() {
+            app_state.ui.modals.session.folder_form = None;
+            app_state.persist_catalog();
+            app_state.ui.status = Some(if base.is_some() {
                 rust_i18n::t!("folder.renamed").to_string()
             } else {
                 rust_i18n::t!("folder.created").to_string()
             });
         }
         Err(error) => {
-            if let Some(form) = shell.state.ui.modals.session.folder_form.as_mut() {
+            if let Some(form) = app_state.ui.modals.session.folder_form.as_mut() {
                 form.error = Some(error.to_string());
             }
         }
@@ -252,13 +250,13 @@ fn render_folder_defaults(form: &FolderForm, app: &Entity<AppShell>, p: &Palette
 }
 
 pub(crate) fn render_folder_form_body(
-    shell: &AppShell,
+    app_state: &AppState,
     app: &Entity<AppShell>,
     _window: &mut Window,
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(form) = shell.state.ui.modals.session.folder_form.as_ref() else {
+    let Some(form) = app_state.ui.modals.session.folder_form.as_ref() else {
         return div().into_any_element();
     };
     let editing = form.base.is_some();
@@ -269,7 +267,7 @@ pub(crate) fn render_folder_form_body(
     };
     let description = form
         .parent
-        .and_then(|parent| shell.state.session.catalog.folder_path(parent))
+        .and_then(|parent| app_state.session.catalog.folder_path(parent))
         .map(|path| rust_i18n::t!("folder.parent_hint", path = path).to_string())
         .unwrap_or_else(|| rust_i18n::t!("folder.root_hint").to_string());
 
@@ -302,7 +300,7 @@ pub(crate) fn render_folder_form_body(
             None,
             crate::widgets::DialogConfirmKind::Primary,
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                save_folder_form(this, cx);
+                save_folder_form(&mut this.state, cx);
             }),
         ));
 

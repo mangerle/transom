@@ -1,8 +1,8 @@
 //! 快捷键录制弹窗与运行时改键应用。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
+use crate::app::{AppShell, AppState};
 use crate::keymap;
 use crate::keymap::ShortcutCapture;
 use crate::palette::Palette;
@@ -109,13 +109,13 @@ fn on_shortcut_capture_key(
 /// 保留元素自己的 `on_key_down`：录键期间任意按键都要被它截下来当候选，
 /// Escape 清捕获是这条链的一部分；容器再挂一层取消只是同一条动作的兜底。
 pub(crate) fn render_shortcut_capture_body(
-    shell: &AppShell,
+    app_state: &AppState,
     app: &Entity<AppShell>,
     _window: &mut Window,
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(capture) = shell.state.ui.shortcut_recording.capture.as_ref() else {
+    let Some(capture) = app_state.ui.shortcut_recording.capture.as_ref() else {
         return div().into_any_element();
     };
     let focus = capture.focus.clone();

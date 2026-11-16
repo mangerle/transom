@@ -338,7 +338,7 @@ impl AppShell {
         cx.defer_in(window, |this, window, cx| {
             this.state.ui.feedback.frame_effects_scheduled = false;
             this.run_frame_effects(window, cx);
-            crate::dialog_host::reconcile_dialogs(this, window, cx);
+            crate::dialog_host::reconcile_dialogs(&mut this.state, window, cx);
             let pending_errors = this.state.ui.feedback.pending_notices.drain();
             for message in pending_errors {
                 window.push_notification(Notification::error(message).autohide(false), cx);

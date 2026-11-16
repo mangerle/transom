@@ -389,7 +389,7 @@ impl Render for AppShell {
         root = root.child(self.state.features.editors.clone());
         // 弹窗栈的压暗层铺在编辑面板之上：弹窗本体由组件库在窗口根上渲染，
         // 层序天然更高，这里只需要把窗面压暗并阻断下层命中。
-        root = root.children(crate::dialog_host::dialog_dim(self, &p));
+        root = root.children(crate::dialog_host::dialog_dim(&self.state, &p));
         root.children(overlays)
     }
 }

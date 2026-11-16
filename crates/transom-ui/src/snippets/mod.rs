@@ -6,7 +6,7 @@
 //! 卡片显隐属运行期状态；"直接执行"跨重启保存，因为它是用户对风险的选择，
 //! 但默认关闭——终端里误执行一条命令的代价远高于多点一次回车。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::palette::{Palette, localized_error};
 use crate::theme::tokens::size;
 use gpui_kit::base::{h_flex, v_flex};
@@ -159,8 +159,8 @@ pub(crate) fn close_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell
 }
 
 /// 校验并保存单条命令。名称或命令不合法时保留弹窗并就地提示。
-pub(crate) fn save_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_ref() else {
+pub(crate) fn save_snippet_form(app_state: &mut AppState, cx: &mut Context<AppShell>) {
+    let Some(form) = app_state.ui.modals.tools.snippet_panel.form.as_ref() else {
         return;
     };
     let id = form.id;
@@ -172,14 +172,14 @@ pub(crate) fn save_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>
         command,
     };
     if !candidate.is_valid() {
-        if let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_mut() {
+        if let Some(form) = app_state.ui.modals.tools.snippet_panel.form.as_mut() {
             form.error = Some(rust_i18n::t!("snippets.form_invalid").to_string());
         }
         cx.notify();
         return;
     }
     if id.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
-        if let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_mut() {
+        if let Some(form) = app_state.ui.modals.tools.snippet_panel.form.as_mut() {
             form.error = Some(rust_i18n::t!("snippets.too_many").to_string());
         }
         cx.notify();
@@ -196,15 +196,15 @@ pub(crate) fn save_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>
         app_settings_mut(cx).snippets.items.push(candidate);
     }
     let settings_snapshot = app_settings(cx).clone();
-    if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
-        if let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_mut() {
+    if let Err(error) = app_state.persist_settings(&settings_snapshot) {
+        if let Some(form) = app_state.ui.modals.tools.snippet_panel.form.as_mut() {
             form.error = Some(localized_error(&error));
         }
         cx.notify();
         return;
     }
-    shell.state.ui.modals.tools.snippet_panel.form = None;
-    shell.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
+    app_state.ui.modals.tools.snippet_panel.form = None;
+    app_state.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
     cx.notify();
 }
 
@@ -279,13 +279,13 @@ pub(crate) fn render_snippets_popover(
 
 /// 渲染新增/编辑单条快捷命令的小弹窗。
 pub(crate) fn render_snippet_form_body(
-    shell: &AppShell,
+    app_state: &AppState,
     app: &Entity<AppShell>,
     _window: &mut Window,
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_ref() else {
+    let Some(form) = app_state.ui.modals.tools.snippet_panel.form.as_ref() else {
         return div().into_any_element();
     };
     let title = if form.id.is_some() {
@@ -328,7 +328,9 @@ pub(crate) fn render_snippet_form_body(
                 .label(rust_i18n::t!("common.save").to_string())
                 .on_click(crate::dialog_host::on_event(
                     app,
-                    |this, _: &ClickEvent, _, cx| crate::snippets::save_snippet_form(this, cx),
+                    |this, _: &ClickEvent, _, cx| {
+                        crate::snippets::save_snippet_form(&mut this.state, cx)
+                    },
                 )),
         );
     crate::widgets::dialog_body("snippet-form", title, None::<String>, content, Some(footer))
