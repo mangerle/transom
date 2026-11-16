@@ -28,7 +28,7 @@ pub(crate) fn finish_cloud_sync_pull(
         log::info!("下载合并前已保存本机安全副本，路径: {}", path.display());
     }
 
-    let backup = shell.state.services.backup.clone();
+    let backup = shell.state.runtime.services.backup.clone();
     let SyncPullReport {
         mut document,
         remote_version: _,
@@ -63,7 +63,7 @@ pub(crate) fn finish_cloud_sync_pull(
             );
         });
     });
-    shell.state.cloud_sync.update(cx, |view, _| {
+    shell.state.features.cloud_sync.update(cx, |view, _| {
         view.pull_task = Some(task);
     });
 }
@@ -75,9 +75,10 @@ fn write_sync_safety_copy(shell: &AppShell) -> Option<PathBuf> {
     let options = BackupExportOptions::default();
     match shell
         .state
+        .runtime
         .services
         .backup
-        .export(&path, &shell.state.catalog, &options)
+        .export(&path, &shell.state.session.catalog, &options)
     {
         Ok(_) => Some(path),
         Err(error) => {
@@ -104,17 +105,17 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
     let (catalog, report) = match mode {
         CloudPullMode::Merge => merge_catalogs(
             None,
-            &shell.state.catalog,
+            &shell.state.session.catalog,
             &remote_catalog,
             MergePreference::Remote,
         ),
         CloudPullMode::ForceRemote => (remote_catalog, transom_core::SyncMergeReport::default()),
     };
-    shell.state.catalog = catalog;
+    shell.state.session.catalog = catalog;
     let saved = shell.state.persist_catalog();
-    let catalog_revision = shell.state.catalog_revision;
+    let catalog_revision = shell.state.session.catalog_revision;
     shell.state.refresh_tab_sessions();
-    let local_hash = sync_catalog_hash(&shell.state.catalog).ok();
+    let local_hash = sync_catalog_hash(&shell.state.session.catalog).ok();
     update_app_settings(cx, |s| {
         if let Some(baseline) = s.sync.active_baseline_mut() {
             baseline.last_pull_at = Some(at);
@@ -154,9 +155,9 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
         );
     }
     if saved {
-        shell.state.status = Some(message.clone());
+        shell.state.ui.status = Some(message.clone());
     }
-    shell.state.cloud_sync.update(cx, |view, cx| {
+    shell.state.features.cloud_sync.update(cx, |view, cx| {
         view.finish_pull_apply(catalog_revision, message, cx);
     });
     cx.notify();

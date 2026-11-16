@@ -55,7 +55,7 @@ impl AppShell {
         };
 
         self.flush_container_notice(tab_id, window, cx);
-        let fullscreen = self.state.containers.fullscreen == Some(tab_id);
+        let fullscreen = self.state.features.containers.fullscreen == Some(tab_id);
         let state = view.read(cx);
         crate::container::render_container_tab_body(
             &view,

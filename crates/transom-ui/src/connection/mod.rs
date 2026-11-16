@@ -18,7 +18,9 @@ pub(crate) use local_and_quick::{
 pub(crate) use local_shell_menu::build_local_terminal_menu;
 pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
 pub(crate) use prompts_shell::{on_connection_prompts_event, request_clipboard_permission};
-pub(crate) use prompts_view::{ClipboardWritePrompt, ConnectionPromptsEvent, ConnectionPromptsView};
+pub(crate) use prompts_view::{
+    ClipboardWritePrompt, ConnectionPromptsEvent, ConnectionPromptsView,
+};
 pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;
@@ -99,6 +101,7 @@ pub(crate) fn connect_session(
 ) {
     let Some(found) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
@@ -106,7 +109,7 @@ pub(crate) fn connect_session(
     else {
         return;
     };
-    let session = shell.state.catalog.resolved_session(found);
+    let session = shell.state.session.catalog.resolved_session(found);
     crate::connection::record_recent_session(shell, session_id, cx);
 
     let tab_id = TabId::new();
@@ -227,7 +230,7 @@ pub(crate) fn start_connection(
         return;
     }
 
-    let chain = match shell.state.catalog.proxy_jump_chain(&session) {
+    let chain = match shell.state.session.catalog.proxy_jump_chain(&session) {
         Ok(chain) => chain,
         Err(error) => {
             log::warn!(
@@ -258,7 +261,7 @@ pub(crate) fn start_connection(
         return;
     }
 
-    let secret_store = shell.state.services.secret_store.clone();
+    let secret_store = shell.state.runtime.services.secret_store.clone();
     let load_session = session.clone();
     cx.spawn(async move |this, cx| {
         let (secrets, hops, error) = cx

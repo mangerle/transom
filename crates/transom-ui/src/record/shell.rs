@@ -116,7 +116,7 @@ fn execute_replay_events(
 ) {
     let steps = extract_replay_inputs(&events, 1.5);
     if steps.is_empty() {
-        shell.state.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
+        shell.state.ui.status = Some(rust_i18n::t!("recorder.no_inputs_in_cast").to_string());
         cx.notify();
         return;
     }
@@ -129,7 +129,7 @@ fn execute_replay_events(
     };
 
     let step_count = steps.len();
-    shell.state.status = Some(
+    shell.state.ui.status = Some(
         rust_i18n::t!(
             "recorder.replaying_start",
             title = header
@@ -153,7 +153,7 @@ fn execute_replay_events(
             });
         }
         let _ = this.update(cx, |app, cx| {
-            app.state.status = Some(rust_i18n::t!("recorder.replay_completed").to_string());
+            app.state.ui.status = Some(rust_i18n::t!("recorder.replay_completed").to_string());
             cx.notify();
         });
     })

@@ -173,12 +173,12 @@ pub(crate) fn on_container_workspace_event(
 ) {
     match event {
         ContainerWorkspaceEvent::ToggleFullscreen => {
-            shell.state.containers.fullscreen = if shell.state.containers.fullscreen == Some(tab_id)
-            {
-                None
-            } else {
-                Some(tab_id)
-            };
+            shell.state.features.containers.fullscreen =
+                if shell.state.features.containers.fullscreen == Some(tab_id) {
+                    None
+                } else {
+                    Some(tab_id)
+                };
             cx.notify();
         }
         ContainerWorkspaceEvent::OpenSystemDf => {
@@ -215,7 +215,9 @@ pub(crate) fn on_container_workspace_event(
         }
         ContainerWorkspaceEvent::PruneTarget(target) => {
             if let Some(workspace) = shell.state.container_workspace(tab_id) {
-                workspace.update(cx, |workspace, cx| workspace.prune_target(*target, true, cx));
+                workspace.update(cx, |workspace, cx| {
+                    workspace.prune_target(*target, true, cx)
+                });
             }
         }
         ContainerWorkspaceEvent::BackupVolume(volume) => {
@@ -291,6 +293,7 @@ pub(crate) fn on_container_workspace_event(
         | ContainerWorkspaceEvent::RunRowAction { .. } => {
             shell
                 .state
+                .ui
                 .window_requests
                 .push_container(tab_id, event.clone());
             cx.notify();

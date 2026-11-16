@@ -165,7 +165,11 @@ fn render_build_no_cache_toggle(
                 AppIcon::Ui(UiIcon::STOP)
             })
             .xsmall()
-            .text_color(if no_cache { p.primary } else { p.muted_foreground }),
+            .text_color(if no_cache {
+                p.primary
+            } else {
+                p.muted_foreground
+            }),
         )
         .child(
             div()

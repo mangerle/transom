@@ -104,10 +104,7 @@ pub(super) fn render_git_folder_row(
 }
 
 /// 渲染一个项目行：活动底色、拖拽源与上下半区落点。
-pub(super) fn render_git_project_row(
-    props: GitProjectRowProps<'_>,
-    p: &Palette,
-) -> AnyElement {
+pub(super) fn render_git_project_row(props: GitProjectRowProps<'_>, p: &Palette) -> AnyElement {
     let GitProjectRowProps {
         view,
         row,
@@ -169,7 +166,12 @@ pub(super) fn render_git_project_row(
             cx.new(|_| GitDragPreview::new(drag_label.clone(), icon_name))
         })
         .context_menu(move |menu, _window, _cx| {
-            render_git_project_menu(menu, menu_view.clone(), menu_project.clone(), menu_folders.clone())
+            render_git_project_menu(
+                menu,
+                menu_view.clone(),
+                menu_project.clone(),
+                menu_folders.clone(),
+            )
         });
 
     let mut band = sidebar_row_band(
@@ -218,12 +220,7 @@ pub(super) fn render_git_project_row(
                 .child(badge.dirty.to_string()),
         );
     }
-    let band = band.child(reorder_overlay(
-        view,
-        GitSidebarDrag::Project(id),
-        false,
-        p,
-    ));
+    let band = band.child(reorder_overlay(view, GitSidebarDrag::Project(id), false, p));
     element.child(band).into_any_element()
 }
 

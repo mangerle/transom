@@ -32,9 +32,7 @@ impl ContainerWorkspace {
             return;
         };
         let name = input.read(cx).value().trim().to_string();
-        let same = self
-            .state
-            .containers
+        let same = self.state.containers
             .iter()
             .any(|item| item.id == id && item.name == name);
         if name.is_empty() || same {

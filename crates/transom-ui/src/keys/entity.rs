@@ -14,9 +14,6 @@
 //! # 代价与局限
 //! 事件只携带结果，外壳不再能回读实体补数据；“部署中”“已部署”等弹窗内
 //! 文案与状态栏文案因此分成两条路径，跨域提示必须在事件里带全。
-use transom_crypto::ssh_keys::{
-    GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys,
-};
 use super::expand_home;
 use super::state::{KeyTarget, KeyWizardState};
 use crate::app::command_send_error_text;
@@ -24,6 +21,9 @@ use crate::palette::localized_error;
 use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{AppCommand, AppError, HostCommand};
+use transom_crypto::ssh_keys::{
+    GeneratedKey, KeyAlgorithm, PublicKeyInfo, generate_keypair, scan_public_keys,
+};
 use zeroize::Zeroizing;
 
 /// 密钥向导交给外壳处理的意图。

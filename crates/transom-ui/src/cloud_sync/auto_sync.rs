@@ -7,18 +7,24 @@ use transom_core::SyncTrigger;
 
 /// 每秒推进一次云同步节拍；真正的网络动作仍通过控制器单飞执行。
 pub(crate) fn tick_cloud_sync_auto(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if shell.state.cloud_sync.read(cx).is_busy_for_auto_tick() {
+    if shell
+        .state
+        .features
+        .cloud_sync
+        .read(cx)
+        .is_busy_for_auto_tick()
+    {
         return;
     }
     let settings = app_settings(cx).sync.clone();
     if !settings.endpoint_enabled() {
-        shell.state.cloud_sync.update(cx, |view, _| {
+        shell.state.features.cloud_sync.update(cx, |view, _| {
             view.state.scheduler.reset();
         });
         return;
     }
-    let catalog_revision = shell.state.catalog_revision;
-    let action = shell.state.cloud_sync.update(cx, |view, _| {
+    let catalog_revision = shell.state.session.catalog_revision;
+    let action = shell.state.features.cloud_sync.update(cx, |view, _| {
         view.state.scheduler.tick(
             std::time::Instant::now(),
             settings.enabled,

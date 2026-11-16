@@ -103,7 +103,7 @@ impl AppShell {
                 None => log::warn!("创建升级状态确认线程失败，已保留观察期标记"),
             }
         });
-        this.state.tasks.background.update_confirm = Some(confirm_task);
+        this.state.runtime.tasks.background.update_confirm = Some(confirm_task);
         this.bootstrap_subscriptions(window, cx);
 
         this.bootstrap_startup(window, cx);
@@ -163,48 +163,55 @@ impl AppShell {
 
     /// 安装面板事件订阅与输入框联动；全部订阅由 `TaskHub` 托管生命周期。
     fn bootstrap_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.tasks.subscriptions._git_focus = Some(Self::observe_window_focus(window, cx));
+        self.state.runtime.tasks.subscriptions._git_focus =
+            Some(Self::observe_window_focus(window, cx));
         self.subscribe_panel_entities(cx);
         self.subscribe_modal_entities(window, cx);
         self.subscribe_input_controls(window, cx);
     }
 
     fn subscribe_panel_entities(&mut self, cx: &mut Context<Self>) {
-        self.state.tasks.subscriptions.monitor = Some(cx.subscribe(
-            &self.state.monitor,
+        self.state.runtime.tasks.subscriptions.monitor = Some(cx.subscribe(
+            &self.state.features.monitor,
             |shell, _view, event: &crate::monitor::MonitorPanelEvent, cx| {
                 crate::monitor::MonitorOps::new(&mut shell.state).on_monitor_panel_event(event, cx);
             },
         ));
-        self.state.tasks.subscriptions.container_sidebar = Some(cx.subscribe(
-            &self.state.containers.sidebar,
+        self.state.runtime.tasks.subscriptions.container_sidebar = Some(cx.subscribe(
+            &self.state.features.containers.sidebar,
             |shell, _view, event: &crate::container::ContainerSidebarEvent, cx| {
                 shell
                     .state
+                    .ui
                     .window_requests
                     .push_container_sidebar(event.clone());
                 cx.notify();
             },
         ));
-        self.state.tasks.subscriptions.git_sidebar = Some(cx.subscribe(
-            &self.state.git_sidebar,
+        self.state.runtime.tasks.subscriptions.git_sidebar = Some(cx.subscribe(
+            &self.state.features.git_sidebar,
             |shell, _view, event: &crate::git::GitSidebarEvent, cx| {
-                shell.state.window_requests.push_git_sidebar(event.clone());
+                shell
+                    .state
+                    .ui
+                    .window_requests
+                    .push_git_sidebar(event.clone());
                 cx.notify();
             },
         ));
-        self.state.tasks.subscriptions.session_sidebar = Some(cx.subscribe(
-            &self.state.session_sidebar,
+        self.state.runtime.tasks.subscriptions.session_sidebar = Some(cx.subscribe(
+            &self.state.session.session_sidebar,
             |shell, _view, event: &crate::sidebar::SessionSidebarEvent, cx| {
                 shell
                     .state
+                    .ui
                     .window_requests
                     .push_session_sidebar(event.clone());
                 cx.notify();
             },
         ));
-        self.state.tasks.subscriptions._status_metrics = Some(cx.subscribe(
-            &self.state.status_metrics,
+        self.state.runtime.tasks.subscriptions._status_metrics = Some(cx.subscribe(
+            &self.state.features.status_metrics,
             |shell, _view, event: &crate::status_bar::metrics::StatusMetricsEvent, cx| {
                 if matches!(
                     event,
@@ -214,93 +221,94 @@ impl AppShell {
                 }
             },
         ));
-        let editor_command_tx = self.state.services.command_tx.clone();
-        self.state.tasks.subscriptions.editor = Some(cx.subscribe(
-            &self.state.editors,
+        let editor_command_tx = self.state.runtime.services.command_tx.clone();
+        self.state.runtime.tasks.subscriptions.editor = Some(cx.subscribe(
+            &self.state.features.editors,
             |shell, _panels, event: &crate::editor::EditorPanelEvent, cx| {
-                shell.state.window_requests.push_editor(event.clone());
+                shell.state.ui.window_requests.push_editor(event.clone());
                 cx.notify();
             },
         ));
         self.state
+            .features
             .editors
             .update(cx, |panels, _| panels.set_command_tx(editor_command_tx));
     }
 
     fn subscribe_modal_entities(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.state.tasks.subscriptions.known_hosts = Some(cx.subscribe(
-            &self.state.modals.connection.known_hosts,
+        self.state.runtime.tasks.subscriptions.known_hosts = Some(cx.subscribe(
+            &self.state.ui.modals.connection.known_hosts,
             |shell, _, event: &KnownHostsEvent, cx| {
                 crate::app::events::on_known_hosts_event(shell, event, cx)
             },
         ));
-        self.state.tasks.subscriptions.connection_prompts = Some(cx.subscribe(
-            &self.state.modals.connection.prompts,
+        self.state.runtime.tasks.subscriptions.connection_prompts = Some(cx.subscribe(
+            &self.state.ui.modals.connection.prompts,
             |shell, _view, event: &crate::connection::ConnectionPromptsEvent, cx| {
                 crate::connection::on_connection_prompts_event(shell, event, cx);
             },
         ));
-        self.state.tasks.subscriptions.key_wizard = Some(cx.subscribe(
-            &self.state.modals.tools.key_wizard,
+        self.state.runtime.tasks.subscriptions.key_wizard = Some(cx.subscribe(
+            &self.state.ui.modals.tools.key_wizard,
             |shell, _view, event: &crate::keys::KeyWizardEvent, cx| {
                 crate::keys::on_key_wizard_event(shell, event, cx);
             },
         ));
-        self.state.tasks.subscriptions.backup = Some(cx.subscribe(
-            &self.state.modals.tools.backup_prompt,
+        self.state.runtime.tasks.subscriptions.backup = Some(cx.subscribe(
+            &self.state.ui.modals.tools.backup_prompt,
             |shell, _view, event: &crate::backup::BackupPromptEvent, cx| {
                 shell.on_backup_event(event, cx);
             },
         ));
-        self.state.tasks.subscriptions.audit_viewer = Some(cx.subscribe_in(
-            &self.state.modals.tools.audit_viewer,
+        self.state.runtime.tasks.subscriptions.audit_viewer = Some(cx.subscribe_in(
+            &self.state.ui.modals.tools.audit_viewer,
             window,
             |shell, _view, event: &AuditViewerEvent, window, cx| {
                 crate::audit_viewer::on_audit_viewer_event(shell, event, window, cx);
             },
         ));
-        self.state.tasks.subscriptions.replay = Some(cx.subscribe_in(
-            &self.state.modals.tools.replay,
+        self.state.runtime.tasks.subscriptions.replay = Some(cx.subscribe_in(
+            &self.state.ui.modals.tools.replay,
             window,
             |shell, _view, event: &ReplayEvent, window, cx| {
                 crate::record::on_replay_event(shell, event, window, cx);
             },
         ));
-        self.state.tasks.subscriptions.settings = Some(cx.subscribe(
-            &self.state.modals.settings,
+        self.state.runtime.tasks.subscriptions.settings = Some(cx.subscribe(
+            &self.state.ui.modals.settings,
             |shell, _view, event: &crate::settings::SettingsEvent, cx| {
                 crate::settings::on_settings_event(shell, event, cx);
             },
         ));
-        self.state.tasks.subscriptions.session_form = Some(cx.subscribe_in(
-            &self.state.modals.session.form,
+        self.state.runtime.tasks.subscriptions.session_form = Some(cx.subscribe_in(
+            &self.state.ui.modals.session.form,
             window,
             |shell, _view, event: &crate::session_form::SessionFormEvent, window, cx| {
                 shell.on_session_form_event(event, window, cx);
             },
         ));
-        self.state.tasks.subscriptions.container_form = Some(cx.subscribe_in(
-            &self.state.modals.tools.container_form,
+        self.state.runtime.tasks.subscriptions.container_form = Some(cx.subscribe_in(
+            &self.state.ui.modals.tools.container_form,
             window,
             |shell, _view, event: &crate::container::ContainerFormEvent, window, cx| {
                 crate::container::on_container_form_event(shell, event, window, cx);
             },
         ));
-        self.state.tasks.subscriptions.container_run_form = Some(cx.subscribe(
-            &self.state.modals.tools.run_form,
+        self.state.runtime.tasks.subscriptions.container_run_form = Some(cx.subscribe(
+            &self.state.ui.modals.tools.run_form,
             |shell, _view, event: &crate::container::ContainerRunFormEvent, cx| {
                 crate::container::on_container_run_form_event(shell, event, cx);
             },
         ));
-        self.state.tasks.subscriptions.container_create = Some(cx.subscribe_in(
-            &self.state.modals.tools.create_dialog,
+        self.state.runtime.tasks.subscriptions.container_create = Some(cx.subscribe_in(
+            &self.state.ui.modals.tools.create_dialog,
             window,
             |shell, _view, event: &crate::container::ContainerCreateDialogEvent, window, cx| {
                 crate::container::on_container_create_event(shell, event, window, cx);
             },
         ));
-        self.state.tasks.subscriptions.cloud_sync = Some(cx.subscribe_in(
-            &self.state.cloud_sync,
+        self.state.runtime.tasks.subscriptions.cloud_sync = Some(cx.subscribe_in(
+            &self.state.features.cloud_sync,
             window,
             |shell, _view, event: &crate::cloud_sync::CloudSyncEvent, window, cx| {
                 crate::cloud_sync::on_cloud_sync_event(shell, event, window, cx);
@@ -310,7 +318,7 @@ impl AppShell {
 
     fn subscribe_input_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         cx.subscribe_in(
-            &self.state.broadcast.input,
+            &self.state.features.broadcast.input,
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
@@ -320,7 +328,7 @@ impl AppShell {
         )
         .detach();
         cx.subscribe_in(
-            &self.state.broadcast.textarea,
+            &self.state.features.broadcast.textarea,
             window,
             |this, _, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::PressEnter { shift: false, .. }) {
@@ -330,7 +338,7 @@ impl AppShell {
         )
         .detach();
         cx.subscribe(
-            &self.state.vertical_tabs_search,
+            &self.state.ui.vertical_tabs_search,
             |_, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
@@ -349,21 +357,23 @@ impl AppShell {
         self.restore_startup_tabs(window, cx);
 
         let history_path = crate::cloud_sync::sync_history_path();
-        self.state.tasks.background.sync_history_load = Some(cx.spawn(async move |this, cx| {
-            let Some(history) =
-                spawn_blocking_local(move || crate::cloud_sync::load_history(&history_path)).await
-            else {
-                return;
-            };
-            let _ = this.update(cx, |this, cx| {
-                this.state.cloud_sync.update(cx, |view, cx| {
-                    view.replace_history(history, cx);
+        self.state.runtime.tasks.background.sync_history_load =
+            Some(cx.spawn(async move |this, cx| {
+                let Some(history) =
+                    spawn_blocking_local(move || crate::cloud_sync::load_history(&history_path))
+                        .await
+                else {
+                    return;
+                };
+                let _ = this.update(cx, |this, cx| {
+                    this.state.features.cloud_sync.update(cx, |view, cx| {
+                        view.replace_history(history, cx);
+                    });
+                    cx.notify();
                 });
-                cx.notify();
-            });
-        }));
+            }));
 
-        self.state.tasks.background.git_sync = Some(cx.spawn(async move |this, cx| {
+        self.state.runtime.tasks.background.git_sync = Some(cx.spawn(async move |this, cx| {
             let mut minute_elapsed = 0u64;
             loop {
                 cx.background_executor()

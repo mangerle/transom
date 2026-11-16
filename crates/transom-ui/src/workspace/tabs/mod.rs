@@ -67,11 +67,12 @@ impl AppState {
             // 先结束对 catalog 的只读借用，再写回标签：两个字段同属
             // `self.state`，同时读写会被当成对整体的借用冲突。
             let resolved = self
+                .session
                 .catalog
                 .sessions
                 .iter()
                 .find(|session| session.id == session_id)
-                .map(|session| self.catalog.resolved_session(session));
+                .map(|session| self.session.catalog.resolved_session(session));
             if let Some(session) = resolved {
                 self.workspace.tabs[index].session = session;
             }
@@ -83,7 +84,8 @@ impl AppState {
         let index = self.workspace.tab_index(tab_id)?;
         let session_id = self.workspace.tabs[index].session_id;
         Some(
-            self.catalog
+            self.session
+                .catalog
                 .sessions
                 .iter()
                 .find(|session| session.id == session_id)

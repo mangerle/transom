@@ -15,7 +15,7 @@ pub(crate) fn on_search_buffer(
 ) {
     let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
         // 窗格还在连接/重连时没有终端视图，给出可见反馈而不是静默无响应。
-        shell.state.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
+        shell.state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
         cx.notify();
         return;
     };
@@ -47,7 +47,7 @@ pub(crate) fn on_next_prompt(
 /// 静默不动是这个动作最容易误判的失败方式——用户只会以为键位没生效。
 fn step_prompt(shell: &mut AppShell, forward: bool, cx: &mut Context<AppShell>) {
     let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
-        shell.state.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
+        shell.state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
         cx.notify();
         return;
     };
@@ -64,7 +64,7 @@ fn step_prompt(shell: &mut AppShell, forward: bool, cx: &mut Context<AppShell>) 
         } else {
             "prompt_nav.no_prev_prompt"
         };
-        shell.state.status = Some(rust_i18n::t!(key).to_string());
+        shell.state.ui.status = Some(rust_i18n::t!(key).to_string());
     }
     cx.notify();
 }
@@ -77,7 +77,7 @@ pub(crate) fn on_toggle_block_view(
     cx: &mut Context<AppShell>,
 ) {
     let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
-        shell.state.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
+        shell.state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
         cx.notify();
         return;
     };
@@ -87,6 +87,6 @@ pub(crate) fn on_toggle_block_view(
     } else {
         "block_view_status.disabled"
     };
-    shell.state.status = Some(rust_i18n::t!(key).to_string());
+    shell.state.ui.status = Some(rust_i18n::t!(key).to_string());
     cx.notify();
 }

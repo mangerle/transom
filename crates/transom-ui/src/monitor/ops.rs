@@ -41,14 +41,14 @@ impl<'a> MonitorOps<'a> {
     /// 从应用状态拆借监控域能力。
     pub(crate) fn new(state: &'a mut AppState) -> Self {
         Self {
-            monitor: &state.monitor,
+            monitor: &state.features.monitor,
             workspace: &mut state.workspace,
-            tasks: &mut state.tasks,
-            command_tx: &state.services.command_tx,
-            pending_notices: &mut state.feedback.pending_notices,
-            window_requests: &mut state.window_requests,
-            persistence: &state.persistence,
-            status: &mut state.status,
+            tasks: &mut state.runtime.tasks,
+            command_tx: &state.runtime.services.command_tx,
+            pending_notices: &mut state.ui.feedback.pending_notices,
+            window_requests: &mut state.ui.window_requests,
+            persistence: &state.runtime.persistence,
+            status: &mut state.ui.status,
         }
     }
 

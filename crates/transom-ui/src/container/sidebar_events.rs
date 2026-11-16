@@ -17,7 +17,7 @@ pub(crate) fn on_container_sidebar_event(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let sidebar = shell.state.containers.sidebar.clone();
+    let sidebar = shell.state.features.containers.sidebar.clone();
     match event {
         ContainerSidebarEvent::OpenEngine(profile) => {
             crate::container::open_engine_workspace(shell, (**profile).clone(), window, cx);
@@ -33,7 +33,7 @@ pub(crate) fn on_container_sidebar_event(
             crate::container::delete_container_profile(shell, *id, window, cx);
         }
         ContainerSidebarEvent::MoveEngineToRoot(id) => {
-            match shell.state.catalog.move_engine(*id, None) {
+            match shell.state.session.catalog.move_engine(*id, None) {
                 Ok(()) => {
                     shell.state.persist_catalog();
                 }
@@ -80,6 +80,7 @@ fn toggle_engine_folder(
 ) {
     let collapsed = shell
         .state
+        .session
         .catalog
         .engine_folder(folder_id)
         .map(|folder| !folder.collapsed);
@@ -87,6 +88,7 @@ fn toggle_engine_folder(
     if let Some(collapsed) = collapsed {
         let _ = shell
             .state
+            .session
             .catalog
             .set_engine_folder_collapsed(folder_id, collapsed);
         shell.state.persist_catalog();
@@ -105,9 +107,10 @@ fn submit_engine_folder_form(
 ) {
     log::debug!("提交引擎分组表单，编辑: {editing:?}，名称: {name}");
     let result = match editing {
-        Some(id) => shell.state.catalog.rename_engine_folder(id, &name),
+        Some(id) => shell.state.session.catalog.rename_engine_folder(id, &name),
         None => shell
             .state
+            .session
             .catalog
             .add_engine_folder(&name, parent)
             .map(|_| ()),
@@ -133,7 +136,7 @@ fn delete_engine_folder(
     cx: &mut Context<AppShell>,
 ) {
     log::info!("删除引擎分组，分组: {folder_id}");
-    match shell.state.catalog.delete_engine_folder(folder_id) {
+    match shell.state.session.catalog.delete_engine_folder(folder_id) {
         Ok(name) => {
             shell.state.persist_catalog();
             shell.show_toast(
@@ -162,6 +165,7 @@ fn handle_container_sidebar_drop(
             if let Some(folder_id) = landed
                 && let Some(folder) = shell
                     .state
+                    .session
                     .catalog
                     .engine_folders
                     .iter_mut()
@@ -184,16 +188,21 @@ fn apply_container_sidebar_drop(
 ) -> Result<Option<transom_core::FolderId>, CatalogError> {
     match (drag, target) {
         (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarTarget::Root) => {
-            shell.state.catalog.move_engine(profile_id, None)?;
+            shell.state.session.catalog.move_engine(profile_id, None)?;
             Ok(None)
         }
         (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarTarget::Root) => {
-            shell.state.catalog.move_engine_folder(folder_id, None)?;
+            shell
+                .state
+                .session
+                .catalog
+                .move_engine_folder(folder_id, None)?;
             Ok(None)
         }
         (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarTarget::Folder(folder_id)) => {
             shell
                 .state
+                .session
                 .catalog
                 .move_engine(profile_id, Some(folder_id))?;
             Ok(Some(folder_id))
@@ -204,6 +213,7 @@ fn apply_container_sidebar_drop(
             }
             shell
                 .state
+                .session
                 .catalog
                 .move_engine_folder(moved, Some(parent))?;
             Ok(Some(parent))
@@ -212,10 +222,12 @@ fn apply_container_sidebar_drop(
             (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarDrag::Engine(anchor_id)) => {
                 shell
                     .state
+                    .session
                     .catalog
                     .reorder_engine(profile_id, anchor_id, side)?;
                 Ok(shell
                     .state
+                    .session
                     .catalog
                     .engines
                     .iter()
@@ -225,10 +237,12 @@ fn apply_container_sidebar_drop(
             (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarDrag::Folder(anchor_id)) => {
                 shell
                     .state
+                    .session
                     .catalog
                     .reorder_engine_folder(folder_id, anchor_id, side)?;
                 Ok(shell
                     .state
+                    .session
                     .catalog
                     .engine_folder(folder_id)
                     .and_then(|folder| folder.parent))
@@ -236,6 +250,7 @@ fn apply_container_sidebar_drop(
             (ContainerSidebarDrag::Engine(profile_id), ContainerSidebarDrag::Folder(anchor_id)) => {
                 shell
                     .state
+                    .session
                     .catalog
                     .move_engine(profile_id, Some(anchor_id))?;
                 Ok(Some(anchor_id))
@@ -243,12 +258,17 @@ fn apply_container_sidebar_drop(
             (ContainerSidebarDrag::Folder(folder_id), ContainerSidebarDrag::Engine(anchor_id)) => {
                 let parent = shell
                     .state
+                    .session
                     .catalog
                     .engines
                     .iter()
                     .find(|profile| profile.id == anchor_id)
                     .and_then(|profile| profile.folder_id);
-                shell.state.catalog.move_engine_folder(folder_id, parent)?;
+                shell
+                    .state
+                    .session
+                    .catalog
+                    .move_engine_folder(folder_id, parent)?;
                 Ok(parent)
             }
         },
@@ -279,12 +299,12 @@ fn add_discovered_engine(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let duplicated = shell.state.catalog.engines.iter().any(|saved| {
+    let duplicated = shell.state.session.catalog.engines.iter().any(|saved| {
         saved.engine.kind == profile.engine.kind
             && saved.engine.endpoint.describe() == profile.engine.endpoint.describe()
     });
     if !duplicated {
-        shell.state.catalog.engines.push(profile.clone());
+        shell.state.session.catalog.engines.push(profile.clone());
         shell.state.persist_catalog();
     }
     let endpoint = profile.engine.endpoint.describe();

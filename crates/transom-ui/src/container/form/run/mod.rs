@@ -27,7 +27,7 @@ pub(crate) fn open_container_run_form(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.modals.tools.run_form.clone();
+    let view = shell.state.ui.modals.tools.run_form.clone();
     view.update(cx, |view, cx| view.open_new(tab_id, image_hint, window, cx));
     // 弹窗栈在外壳渲染里对账，实体变脏不会自动跑外壳的 reconcile。
     cx.notify();
@@ -41,7 +41,7 @@ pub(crate) fn open_container_clone_form(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.modals.tools.run_form.clone();
+    let view = shell.state.ui.modals.tools.run_form.clone();
     view.update(cx, |view, cx| view.open_clone(tab_id, details, window, cx));
     cx.notify();
 }
@@ -54,7 +54,7 @@ pub(crate) fn open_container_recreate_form(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.modals.tools.run_form.clone();
+    let view = shell.state.ui.modals.tools.run_form.clone();
     view.update(cx, |view, cx| {
         view.open_recreate(tab_id, details, window, cx)
     });

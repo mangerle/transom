@@ -58,7 +58,7 @@ pub(crate) fn handle_dropped_files(
             "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
             paths.len()
         );
-        shell.state.status = Some(message);
+        shell.state.ui.status = Some(message);
         cx.notify();
         return;
     }

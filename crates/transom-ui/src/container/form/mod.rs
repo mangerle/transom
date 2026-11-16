@@ -53,7 +53,7 @@ pub(crate) fn open_container_form(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.modals.tools.container_form.clone();
+    let view = shell.state.ui.modals.tools.container_form.clone();
     view.update(cx, |view, cx| view.open(profile, folder, window, cx));
     // 弹窗栈在外壳渲染里对账，实体变脏不会自动跑外壳的 reconcile。
     cx.notify();

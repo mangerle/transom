@@ -136,7 +136,12 @@ fn render_percent_bars(history: &[f32], color: Hsla, config: SparklineConfig) ->
             SparklineLayout::FixedWindow => {
                 let fraction = (val / 100.0).clamp(0.0, 1.0);
                 let bar_h = (config.height_px * fraction).max(2.0);
-                div().flex_1().min_w_0().h(px(bar_h)).rounded_t_xs().bg(color)
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(bar_h))
+                    .rounded_t_xs()
+                    .bg(color)
             }
             SparklineLayout::FlexFill => {
                 let fraction = (val / 100.0).clamp(0.02, 1.0);
@@ -267,16 +272,36 @@ fn render_network_bars(
                 let rx_h = (config.height_px * (rx as f32 / peak as f32).clamp(0.0, 1.0)).max(2.0);
                 let tx_h = (config.height_px * (tx as f32 / peak as f32).clamp(0.0, 1.0)).max(2.0);
                 (
-                    div().w_full().min_w_0().h(px(rx_h)).rounded_t_xs().bg(rx_color),
-                    div().w_full().min_w_0().h(px(tx_h)).rounded_t_xs().bg(tx_color),
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .h(px(rx_h))
+                        .rounded_t_xs()
+                        .bg(rx_color),
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .h(px(tx_h))
+                        .rounded_t_xs()
+                        .bg(tx_color),
                 )
             }
             SparklineLayout::FlexFill => {
                 let rx_frac = (rx as f32 / peak as f32).clamp(0.02, 1.0);
                 let tx_frac = (tx as f32 / peak as f32).clamp(0.02, 1.0);
                 (
-                    div().w_full().min_w_0().h(relative(rx_frac)).rounded_t_xs().bg(rx_color),
-                    div().w_full().min_w_0().h(relative(tx_frac)).rounded_t_xs().bg(tx_color),
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .h(relative(rx_frac))
+                        .rounded_t_xs()
+                        .bg(rx_color),
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .h(relative(tx_frac))
+                        .rounded_t_xs()
+                        .bg(tx_color),
                 )
             }
         };

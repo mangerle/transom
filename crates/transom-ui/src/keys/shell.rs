@@ -17,7 +17,7 @@ pub(crate) fn open_key_wizard(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.modals.tools.key_wizard.clone();
+    let view = shell.state.ui.modals.tools.key_wizard.clone();
     view.update(cx, |view, cx| view.open(window, cx));
     cx.notify();
 }
@@ -29,7 +29,7 @@ pub(crate) fn on_key_wizard_event(
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        KeyWizardEvent::Status(message) => shell.state.status = Some(message.clone()),
+        KeyWizardEvent::Status(message) => shell.state.ui.status = Some(message.clone()),
         KeyWizardEvent::Error(message) => shell.state.set_error(message.clone()),
     }
     cx.notify();
@@ -48,11 +48,11 @@ pub(crate) fn handle_public_key_deployed(
     match &error {
         Some(error) => shell.state.set_error(localized_error(error)),
         None => {
-            shell.state.status =
+            shell.state.ui.status =
                 Some(rust_i18n::t!("keys.deployed_status", key = key_name.as_str()).to_string());
         }
     }
-    let view = shell.state.modals.tools.key_wizard.clone();
+    let view = shell.state.ui.modals.tools.key_wizard.clone();
     view.update(cx, |view, cx| view.on_deployed(key_name, error, cx));
     cx.notify();
 }

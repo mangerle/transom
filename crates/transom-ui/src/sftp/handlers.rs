@@ -82,7 +82,7 @@ pub(crate) fn on_sftp_failed(
     else {
         return true;
     };
-    if let Some(modal) = shell.state.modals.sftp.sync.clone() {
+    if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
         let matched = modal.update(cx, |modal, cx| {
             if modal.state.op_id == op_id && modal.state.connection_id == connection_id {
                 modal.state.scanning = false;
@@ -143,9 +143,9 @@ pub(crate) fn sync_sftp_panel_width(
         return;
     };
     let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
-        shell.state.workspace_panels_left.clone()
+        shell.state.ui.workspace_panels_left.clone()
     } else {
-        shell.state.workspace_panels.clone()
+        shell.state.ui.workspace_panels.clone()
     };
     let current_width = panels
         .read(cx)
@@ -181,9 +181,9 @@ pub(crate) fn grow_sftp_panel_width(
         return;
     };
     let panels = if app_settings(cx).window.sftp_panel_side.is_left() {
-        shell.state.workspace_panels_left.clone()
+        shell.state.ui.workspace_panels_left.clone()
     } else {
-        shell.state.workspace_panels.clone()
+        shell.state.ui.workspace_panels.clone()
     };
     let Some(current) = panels
         .read(cx)
@@ -201,7 +201,7 @@ pub(crate) fn grow_sftp_panel_width(
 
 /// SFTP 面板在工作区分组里的面板索引。
 fn sftp_resizable_index(shell: &AppShell, settings: &AppSettings) -> Option<usize> {
-    if shell.state.immersive {
+    if shell.state.ui.immersive {
         return None;
     }
     Some(if settings.window.sftp_panel_side.is_left() {

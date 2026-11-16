@@ -130,23 +130,28 @@ impl AppShell {
             Some(PromptKind::Passphrase) => Some(SecretKind::KeyPassphrase),
             _ => None,
         };
-        self.state.modals.connection.prompts.update(cx, |view, cx| {
-            view.open_auth(
-                AuthPromptState {
-                    connection_id,
-                    name,
-                    instructions,
-                    prompts,
-                    inputs,
-                    responder,
-                    error: None,
-                    session_id,
-                    secret_kind,
-                    save: false,
-                },
-                cx,
-            );
-        });
+        self.state
+            .ui
+            .modals
+            .connection
+            .prompts
+            .update(cx, |view, cx| {
+                view.open_auth(
+                    AuthPromptState {
+                        connection_id,
+                        name,
+                        instructions,
+                        prompts,
+                        inputs,
+                        responder,
+                        error: None,
+                        session_id,
+                        secret_kind,
+                        save: false,
+                    },
+                    cx,
+                );
+            });
         true
     }
 
@@ -176,18 +181,23 @@ impl AppShell {
         if tab.connection_id != Some(connection_id) {
             return false;
         }
-        self.state.modals.connection.prompts.update(cx, |view, cx| {
-            view.open_host_key(
-                HostKeyConfirmState {
-                    host,
-                    port,
-                    key_type,
-                    fingerprint,
-                    responder,
-                },
-                cx,
-            );
-        });
+        self.state
+            .ui
+            .modals
+            .connection
+            .prompts
+            .update(cx, |view, cx| {
+                view.open_host_key(
+                    HostKeyConfirmState {
+                        host,
+                        port,
+                        key_type,
+                        fingerprint,
+                        responder,
+                    },
+                    cx,
+                );
+            });
         true
     }
 
@@ -204,9 +214,11 @@ impl AppShell {
             return true;
         };
         // 看板打开时先把统计快照推入时序历史，再移动 stats。
-        if self.state.monitor.read(cx).is_open() && self.state.workspace.active_tab == Some(tab_id)
+        if self.state.features.monitor.read(cx).is_open()
+            && self.state.workspace.active_tab == Some(tab_id)
         {
             self.state
+                .features
                 .monitor
                 .update(cx, |view, _| view.record_stats(tab_id, &stats));
         }
@@ -300,10 +312,11 @@ impl AppShell {
                 },
             )
         });
-        let provider = self.state.history_provider.clone();
+        let provider = self.state.runtime.history_provider.clone();
         let triggers = app_settings(cx).triggers.clone();
         let block_override = self
             .state
+            .session
             .catalog
             .sessions
             .iter()

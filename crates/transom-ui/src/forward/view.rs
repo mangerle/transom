@@ -301,7 +301,7 @@ pub(crate) fn render_forward_confirm_body(
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(pending) = shell.state.modals.tools.confirm_forward_any.as_ref() else {
+    let Some(pending) = shell.state.ui.modals.tools.confirm_forward_any.as_ref() else {
         return div().into_any_element();
     };
     let rule_name = pending.rule.name.clone();

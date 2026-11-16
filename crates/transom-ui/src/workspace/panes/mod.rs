@@ -235,7 +235,7 @@ impl AppShell {
             return div().size_full().child(player).into_any_element();
         }
         if self.state.workspace.tabs[index].containers().is_some() {
-            if self.state.containers.fullscreen == Some(tab_id) {
+            if self.state.features.containers.fullscreen == Some(tab_id) {
                 return v_flex()
                     .size_full()
                     .items_center()
@@ -255,7 +255,7 @@ impl AppShell {
                         .child(AppIconElement::new(AppIcon::Ui(UiIcon::MINIMIZE)).small())
                         .label(rust_i18n::t!("container.fullscreen_exit").to_string())
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.state.containers.fullscreen = None;
+                            this.state.features.containers.fullscreen = None;
                             cx.notify();
                         })),
                     )
@@ -282,7 +282,7 @@ impl AppShell {
                 target_title,
                 stats,
             };
-            return self.state.monitor.update(cx, |view, cx| {
+            return self.state.features.monitor.update(cx, |view, cx| {
                 view.render_monitor_tab_content(params, window, cx, p)
             });
         }

@@ -42,14 +42,17 @@ fn activity_item_selected(
 ) -> bool {
     let section = shell
         .state
+        .session
         .sidebar
         .section()
         .resolved_for_tab_position(app_settings(cx).window.tab_position);
     match id {
         ActivityItemId::Sessions => {
-            shell.state.sidebar.visible() && section == SidebarSection::Sessions
+            shell.state.session.sidebar.visible() && section == SidebarSection::Sessions
         }
-        ActivityItemId::Tabs => shell.state.sidebar.visible() && section == SidebarSection::Tabs,
+        ActivityItemId::Tabs => {
+            shell.state.session.sidebar.visible() && section == SidebarSection::Tabs
+        }
         ActivityItemId::Forwards => shell
             .state
             .workspace
@@ -64,13 +67,15 @@ fn activity_item_selected(
             .is_some_and(|view| view.read(cx).state.open),
         ActivityItemId::Monitor => monitor_open,
         ActivityItemId::Containers => {
-            shell.state.sidebar.visible() && section == SidebarSection::Containers
+            shell.state.session.sidebar.visible() && section == SidebarSection::Containers
         }
-        ActivityItemId::Git => shell.state.sidebar.visible() && section == SidebarSection::Git,
+        ActivityItemId::Git => {
+            shell.state.session.sidebar.visible() && section == SidebarSection::Git
+        }
         ActivityItemId::CloudSync => {
-            shell.state.sidebar.visible() && section == SidebarSection::CloudSync
+            shell.state.session.sidebar.visible() && section == SidebarSection::CloudSync
         }
-        ActivityItemId::Keys => shell.state.modals.tools.key_wizard.read(cx).is_open(),
+        ActivityItemId::Keys => shell.state.ui.modals.tools.key_wizard.read(cx).is_open(),
         _ => false,
     }
 }
@@ -134,7 +139,7 @@ pub(crate) fn render_activity_bar(
         .bg(p.sidebar);
     // 侧栏展开时，活动栏右缘就是与侧栏的分界线；侧栏收起后主面板的
     // 手柄线紧贴这条边，这里再画一条会并排成 2px，所以收起时不画。
-    if shell.state.sidebar.visible() {
+    if shell.state.session.sidebar.visible() {
         bar = bar
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Right, p.divider_width);
@@ -167,7 +172,12 @@ fn render_activity_item(
     let label = activity_item_label(id);
     let icon = activity_item_icon(id);
     let tooltip = activity_item_tooltip(shell, id, &label, app_settings(cx));
-    let selected = activity_item_selected(shell, id, shell.state.monitor.read(cx).is_open(), cx);
+    let selected = activity_item_selected(
+        shell,
+        id,
+        shell.state.features.monitor.read(cx).is_open(),
+        cx,
+    );
     let disabled = activity_item_disabled(shell, id);
     let app = cx.entity().clone();
 
@@ -230,14 +240,22 @@ fn activate_activity_item(
     match id {
         ActivityItemId::Sessions => {
             // 左侧槽位一次只展示一个视图：点击当前视图收起，点击其他视图直接切换。
-            shell.state.sidebar.toggle_section(SidebarSection::Sessions);
+            shell
+                .state
+                .session
+                .sidebar
+                .toggle_section(SidebarSection::Sessions);
             cx.notify();
         }
         ActivityItemId::Tabs => {
             if app_settings(cx).window.tab_position != TabPosition::Left {
                 return;
             }
-            shell.state.sidebar.toggle_section(SidebarSection::Tabs);
+            shell
+                .state
+                .session
+                .sidebar
+                .toggle_section(SidebarSection::Tabs);
             cx.notify();
         }
         ActivityItemId::QuickOpen => crate::connection::toggle_quick_open(shell, window, cx),
@@ -258,6 +276,7 @@ fn activate_activity_item(
         ActivityItemId::Containers => {
             shell
                 .state
+                .session
                 .sidebar
                 .toggle_section(SidebarSection::Containers);
             cx.notify();
@@ -267,6 +286,7 @@ fn activate_activity_item(
         ActivityItemId::KnownHosts => {
             shell
                 .state
+                .ui
                 .modals
                 .connection
                 .known_hosts

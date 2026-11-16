@@ -71,7 +71,7 @@ fn snippets_row(app: &Entity<AppShell>, item: &Snippet, p: &Palette) -> AnyEleme
             row_app.update(cx, |this, cx| {
                 let execute = app_settings(cx).snippets.execute_directly;
                 crate::snippets::apply_snippet(this, &item, execute, cx);
-                this.state.modals.tools.snippet_panel.open = false;
+                this.state.ui.modals.tools.snippet_panel.open = false;
                 cx.notify();
             });
         })

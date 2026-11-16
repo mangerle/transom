@@ -26,13 +26,13 @@ impl<'a> DiffViewerOps<'a> {
     /// 从应用状态拆借对比域能力。
     pub(crate) fn new(app: &'a mut AppState) -> Self {
         Self {
-            diff_viewer: &mut app.diff_viewer,
-            diff_viewer_subscription: &mut app.tasks.subscriptions.diff_viewer,
-            command_tx: &app.services.command_tx,
-            editors: &app.editors,
+            diff_viewer: &mut app.features.diff_viewer,
+            diff_viewer_subscription: &mut app.runtime.tasks.subscriptions.diff_viewer,
+            command_tx: &app.runtime.services.command_tx,
+            editors: &app.features.editors,
             workspace: &app.workspace,
-            pending_notices: &mut app.feedback.pending_notices,
-            status: &mut app.status,
+            pending_notices: &mut app.ui.feedback.pending_notices,
+            status: &mut app.ui.status,
         }
     }
 

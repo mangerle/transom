@@ -67,7 +67,7 @@ pub(crate) fn on_session_sidebar_event(
             crate::batch::toggle_session_selection(shell, *session_id, *selected, cx);
         }
         SessionSidebarEvent::SelectTreeSession(session_id) => {
-            shell.state.sidebar.tree_selection = Some(*session_id);
+            shell.state.session.sidebar.tree_selection = Some(*session_id);
             cx.notify();
         }
         SessionSidebarEvent::ConnectSession(session_id) => {
@@ -87,7 +87,7 @@ pub(crate) fn on_session_sidebar_event(
             crate::audit_viewer::open_audit_viewer_for_session(shell, *session_id, window, cx);
         }
         SessionSidebarEvent::CopyHost(host) => {
-            shell.state.status =
+            shell.state.ui.status =
                 Some(rust_i18n::t!("sidebar.host_copied", host = host).to_string());
             cx.notify();
         }
@@ -101,11 +101,17 @@ pub(crate) fn on_session_sidebar_event(
 fn toggle_folder_collapsed(shell: &mut AppShell, id: FolderId, cx: &mut Context<AppShell>) {
     let collapsed = shell
         .state
+        .session
         .catalog
         .folder(id)
         .map(|folder| !folder.collapsed);
     if let Some(collapsed) = collapsed {
-        if let Err(error) = shell.state.catalog.set_folder_collapsed(id, collapsed) {
+        if let Err(error) = shell
+            .state
+            .session
+            .catalog
+            .set_folder_collapsed(id, collapsed)
+        {
             shell.state.set_error(error.to_string());
             cx.notify();
             return;
@@ -117,10 +123,10 @@ fn toggle_folder_collapsed(shell: &mut AppShell, id: FolderId, cx: &mut Context<
 
 /// 删除文件夹但保留全部内容，子项提升到父层级。
 fn delete_folder(shell: &mut AppShell, folder_id: FolderId, cx: &mut Context<AppShell>) {
-    match shell.state.catalog.delete_folder(folder_id) {
+    match shell.state.session.catalog.delete_folder(folder_id) {
         Ok(name) => {
             shell.state.persist_catalog();
-            shell.state.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
+            shell.state.ui.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
         }
         Err(error) => shell.state.set_error(error.to_string()),
     }
@@ -134,8 +140,12 @@ fn open_new_session_in_folder(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let path = shell.state.catalog.folder_path(folder_id);
-    let defaults = shell.state.catalog.inherited_folder_defaults(folder_id);
+    let path = shell.state.session.catalog.folder_path(folder_id);
+    let defaults = shell
+        .state
+        .session
+        .catalog
+        .inherited_folder_defaults(folder_id);
     let init = crate::session_form::SessionFormInit {
         base: None,
         folder_path: path.clone(),
@@ -145,7 +155,7 @@ fn open_new_session_in_folder(
         global_proxy: app_settings(cx).proxy.clone(),
         block_view: transom_core::BlockViewOverride::FollowGlobal,
     };
-    let view = shell.state.modals.session.form.clone();
+    let view = shell.state.ui.modals.session.form.clone();
     view.update(cx, |view, cx| {
         view.open(init, window, cx);
         if let Some(folder_path) = path {
@@ -167,6 +177,7 @@ fn handle_sidebar_drop(
             if let Some(folder_id) = landed
                 && let Some(folder) = shell
                     .state
+                    .session
                     .catalog
                     .folders
                     .iter_mut()
@@ -188,16 +199,17 @@ fn apply_sidebar_drop(
 ) -> Result<Option<FolderId>, CatalogError> {
     match (drag, target) {
         (SidebarDrag::Session(session_id), SidebarTarget::Root) => {
-            shell.state.catalog.move_session(session_id, None)?;
+            shell.state.session.catalog.move_session(session_id, None)?;
             Ok(None)
         }
         (SidebarDrag::Folder(folder_id), SidebarTarget::Root) => {
-            shell.state.catalog.move_folder(folder_id, None)?;
+            shell.state.session.catalog.move_folder(folder_id, None)?;
             Ok(None)
         }
         (SidebarDrag::Session(session_id), SidebarTarget::Folder(folder_id)) => {
             shell
                 .state
+                .session
                 .catalog
                 .move_session(session_id, Some(folder_id))?;
             Ok(Some(folder_id))
@@ -206,17 +218,23 @@ fn apply_sidebar_drop(
             if moved_id == parent_id {
                 return Ok(Some(parent_id));
             }
-            shell.state.catalog.move_folder(moved_id, Some(parent_id))?;
+            shell
+                .state
+                .session
+                .catalog
+                .move_folder(moved_id, Some(parent_id))?;
             Ok(Some(parent_id))
         }
         (drag, SidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
             (SidebarDrag::Session(session_id), SidebarDrag::Session(anchor_id)) => {
                 shell
                     .state
+                    .session
                     .catalog
                     .reorder_session(session_id, anchor_id, side)?;
                 Ok(shell
                     .state
+                    .session
                     .catalog
                     .folder_of_session(anchor_id)
                     .map(|folder| folder.id))
@@ -224,10 +242,12 @@ fn apply_sidebar_drop(
             (SidebarDrag::Folder(folder_id), SidebarDrag::Folder(anchor_id)) => {
                 shell
                     .state
+                    .session
                     .catalog
                     .reorder_folder(folder_id, anchor_id, side)?;
                 Ok(shell
                     .state
+                    .session
                     .catalog
                     .folder(folder_id)
                     .and_then(|folder| folder.parent))
@@ -235,6 +255,7 @@ fn apply_sidebar_drop(
             (SidebarDrag::Session(session_id), SidebarDrag::Folder(anchor_id)) => {
                 shell
                     .state
+                    .session
                     .catalog
                     .move_session(session_id, Some(anchor_id))?;
                 Ok(Some(anchor_id))
@@ -242,10 +263,11 @@ fn apply_sidebar_drop(
             (SidebarDrag::Folder(folder_id), SidebarDrag::Session(anchor_id)) => {
                 let parent = shell
                     .state
+                    .session
                     .catalog
                     .folder_of_session(anchor_id)
                     .map(|folder| folder.id);
-                shell.state.catalog.move_folder(folder_id, parent)?;
+                shell.state.session.catalog.move_folder(folder_id, parent)?;
                 Ok(parent)
             }
         },

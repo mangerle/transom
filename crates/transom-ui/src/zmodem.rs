@@ -48,7 +48,7 @@ pub(crate) fn handle_zmodem_event(
                 total: None,
             });
             let text = rust_i18n::t!("zmodem.started").to_string();
-            shell.state.status = Some(text);
+            shell.state.ui.status = Some(text);
         }
         ZmodemEvent::Progress {
             direction,
@@ -85,7 +85,7 @@ pub(crate) fn handle_zmodem_event(
                     reason
                 }
             };
-            shell.state.status = Some(text);
+            shell.state.ui.status = Some(text);
         }
     }
     cx.notify();
@@ -227,15 +227,15 @@ fn send_zmodem_notification(success: bool, files: usize) {
 impl AppState {
     fn send_zmodem_upload(&mut self, tab_id: transom_core::TabId, files: Vec<PathBuf>) {
         let command = ZmodemCommand::ZmodemUpload { tab_id, files };
-        if let Err(error) = self.services.command_tx.try_send(command.into()) {
+        if let Err(error) = self.runtime.services.command_tx.try_send(command.into()) {
             log::warn!("ZMODEM 上传命令发送失败: {error}");
-            self.status = Some(rust_i18n::t!("zmodem.command_busy").to_string());
+            self.ui.status = Some(rust_i18n::t!("zmodem.command_busy").to_string());
         }
     }
     /// 请求取消当前标签的 ZMODEM 传输。
     pub(crate) fn send_zmodem_cancel(&mut self, tab_id: transom_core::TabId) {
         let command = ZmodemCommand::ZmodemCancel { tab_id };
-        if let Err(error) = self.services.command_tx.try_send(command.into()) {
+        if let Err(error) = self.runtime.services.command_tx.try_send(command.into()) {
             log::warn!("ZMODEM 取消命令发送失败: {error}");
         }
     }

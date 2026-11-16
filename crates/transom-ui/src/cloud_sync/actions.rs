@@ -34,14 +34,14 @@ impl<'a> CloudSyncActions<'a> {
     /// 从应用状态拆借云同步动作能力。
     pub(crate) fn new(state: &'a mut AppState) -> Self {
         Self {
-            cloud_sync: &state.cloud_sync,
-            settings_view: &state.modals.settings,
-            secret_store: &state.services.secret_store,
-            catalog: &state.catalog,
-            command_tx: &state.services.command_tx,
-            pending_notices: &mut state.feedback.pending_notices,
-            persistence: &state.persistence,
-            status: &mut state.status,
+            cloud_sync: &state.features.cloud_sync,
+            settings_view: &state.ui.modals.settings,
+            secret_store: &state.runtime.services.secret_store,
+            catalog: &state.session.catalog,
+            command_tx: &state.runtime.services.command_tx,
+            pending_notices: &mut state.ui.feedback.pending_notices,
+            persistence: &state.runtime.persistence,
+            status: &mut state.ui.status,
         }
     }
 

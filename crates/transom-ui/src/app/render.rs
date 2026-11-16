@@ -45,7 +45,7 @@ impl AppShell {
         // 沉浸模式使用独立分组：侧边栏完全不参与布局，主面板成为首面板，
         // 避免其左侧残留一条用于拖动侧边栏的 1px 分隔线；
         // 独立 key 也保证退出沉浸后原分组的全部尺寸状态原样恢复。
-        let resizable_id = if self.state.immersive {
+        let resizable_id = if self.state.ui.immersive {
             "workspace-panels-immersive"
         } else {
             "workspace-panels"
@@ -62,9 +62,9 @@ impl AppShell {
         // 本帧的面板尺寸才能反映新的宽度。
         crate::sftp::sync_sftp_panel_width(self, window, cx);
         let panels_state = if plan.side_left {
-            self.state.workspace_panels_left.clone()
+            self.state.ui.workspace_panels_left.clone()
         } else {
-            self.state.workspace_panels.clone()
+            self.state.ui.workspace_panels.clone()
         };
 
         let show_sftp = plan.show_sftp;
@@ -83,13 +83,13 @@ impl AppShell {
         );
 
         let mut main_row = h_flex().flex_1().overflow_hidden();
-        if !self.state.immersive {
+        if !self.state.ui.immersive {
             // 主内容区只在朝窗口边缘的一侧补轮廓，且只在右侧真的空到窗口边缘时
             // 才补：面板之间由可拖拽手柄画唯一的分割线，这里再叠一条轮廓/面板
             // 边框就会并排成 2px。停靠左侧时主面板右侧是监控抽屉或窗口边缘，
             // 左边一律交给手柄，不再补左轮廓。
             let has_right_panel =
-                show_sftp || show_forwards || self.state.monitor.read(cx).is_open();
+                show_sftp || show_forwards || self.state.features.monitor.read(cx).is_open();
             if !app_settings(cx).window.sftp_panel_side.is_left() && !has_right_panel {
                 main_row = main_row
                     .border_color(p.divider(p.border))
@@ -110,7 +110,7 @@ impl AppShell {
             StatusBarLayoutInput {
                 p,
                 rem,
-                sidebar_visible: self.state.sidebar.visible(),
+                sidebar_visible: self.state.session.sidebar.visible(),
                 sidebar_width,
             },
             cx,
@@ -329,8 +329,8 @@ impl Render for AppShell {
         // 按当前密度基准换算，密度切换时各面板宽度随之等比变化。
         let rem = window.rem_size();
         let top_bar =
-            (!self.state.immersive).then(|| crate::chrome::render_top_bar(self, window, cx, &p));
-        let activity_bar = (!self.state.immersive)
+            (!self.state.ui.immersive).then(|| crate::chrome::render_top_bar(self, window, cx, &p));
+        let activity_bar = (!self.state.ui.immersive)
             .then(|| crate::activity_bar::render_activity_bar(self, window, cx, &p));
 
         let workspace = self.render_workspace_body(
@@ -362,7 +362,7 @@ impl Render for AppShell {
         if let Some(status_bar) = workspace.status_bar {
             root = root.child(status_bar);
         }
-        root = root.child(self.state.editors.clone());
+        root = root.child(self.state.features.editors.clone());
         // 弹窗栈的压暗层铺在编辑面板之上：弹窗本体由组件库在窗口根上渲染，
         // 层序天然更高，这里只需要把窗面压暗并阻断下层命中。
         root = root.children(crate::dialog_host::dialog_dim(self, &p));
@@ -377,7 +377,7 @@ impl AppShell {
         input: StatusBarLayoutInput<'_>,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.state.immersive {
+        if self.state.ui.immersive {
             return None;
         }
         let StatusBarLayoutInput {

@@ -34,7 +34,7 @@ pub(crate) fn open_audit_viewer(
         None => (None, None, rust_i18n::t!("audit_viewer.title").to_string()),
     };
     let show_all = session.is_none();
-    let view = shell.state.modals.tools.audit_viewer.clone();
+    let view = shell.state.ui.modals.tools.audit_viewer.clone();
     view.update(cx, |view, cx| {
         view.open(target_title, session_name, host, show_all, window, cx);
     });
@@ -69,6 +69,7 @@ pub(crate) fn open_audit_viewer_for_session(
 ) {
     let session = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
@@ -92,7 +93,7 @@ pub(crate) fn on_audit_viewer_event(
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        AuditViewerEvent::Notice(message) => shell.state.status = Some(message.clone()),
+        AuditViewerEvent::Notice(message) => shell.state.ui.status = Some(message.clone()),
         AuditViewerEvent::Error(message) => shell.state.set_error(message.clone()),
         AuditViewerEvent::OpenSettings => shell.open_settings_modal(None, window, cx),
     }

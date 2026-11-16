@@ -108,7 +108,7 @@ pub(crate) fn execute_sftp_sync(
         .collect::<Vec<_>>();
 
     if items.is_empty() {
-        if let Some(modal) = shell.state.modals.sftp.sync.as_ref() {
+        if let Some(modal) = shell.state.ui.modals.sftp.sync.as_ref() {
             modal.update(cx, |m, cx| {
                 m.state.error = Some(rust_i18n::t!("sftp.nav.sync_no_selection").to_string());
                 cx.notify();

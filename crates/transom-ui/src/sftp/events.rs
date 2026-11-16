@@ -73,7 +73,7 @@ pub(crate) fn on_sftp_progress(
             cx.notify();
         }
     }
-    if applied && shell.state.workspace.active_tab == Some(tab_id) && !shell.state.immersive {
+    if applied && shell.state.workspace.active_tab == Some(tab_id) && !shell.state.ui.immersive {
         cx.notify();
     }
     false
@@ -150,7 +150,7 @@ pub(crate) fn on_sftp_metadata(
     {
         return false;
     }
-    shell.state.modals.sftp.open_properties(
+    shell.state.ui.modals.sftp.open_properties(
         rust_i18n::t!("sftp.modals.scope_remote").to_string(),
         remote_file_properties(&metadata),
         cx,
@@ -243,7 +243,7 @@ pub(crate) fn on_sftp_dir_compared(
     else {
         return true;
     };
-    if let Some(modal) = shell.state.modals.sftp.sync.clone() {
+    if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
         modal.update(cx, |modal, cx| {
             modal.apply_dir_compared(connection_id, op_id, &comparison, cx);
         });

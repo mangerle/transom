@@ -61,9 +61,7 @@ impl GitWorkspace {
 
     /// 打开当前改动列表里第一个文件的差异。
     pub(crate) fn open_first_worktree_diff(&mut self, cx: &mut Context<Self>) {
-        let Some((group, path)) = self
-            .state
-            .status
+        let Some((group, path)) = self.state.status
             .as_ref()
             .and_then(super::first_worktree_diff)
         else {
@@ -173,8 +171,7 @@ impl GitWorkspace {
     /// 把工作区勾选的改动创建为独立离线搁置项（Shelf）。
     pub(crate) fn shelve_checked(&mut self, cx: &mut Context<Self>) {
         let files: Vec<String> = if self.state.checked.is_empty() {
-            self.state
-                .status
+            self.state.status
                 .as_ref()
                 .map(|status| status.entries.iter().map(|e| e.path.clone()).collect())
                 .unwrap_or_default()

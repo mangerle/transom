@@ -12,11 +12,17 @@ impl AppState {
     fn unique_duplicate_name(&self, original: &str) -> String {
         let base = duplicate_base(original);
         let first = rust_i18n::t!("common.duplicate_name", name = base).to_string();
-        let taken = |candidate: &str| self.catalog.sessions.iter().any(|s| s.name == candidate);
+        let taken = |candidate: &str| {
+            self.session
+                .catalog
+                .sessions
+                .iter()
+                .any(|s| s.name == candidate)
+        };
         if !taken(&first) {
             return first;
         }
-        let limit = self.catalog.sessions.len() + 2;
+        let limit = self.session.catalog.sessions.len() + 2;
         (1..=limit)
             .map(|index| format!("{first} #{index}"))
             .find(|candidate| !taken(candidate))
@@ -28,9 +34,9 @@ impl AppState {
         for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
             let source = SecretKey::new(from, kind);
             let target = SecretKey::new(to, kind);
-            match self.services.secret_store.get(&source) {
+            match self.runtime.services.secret_store.get(&source) {
                 Ok(Some(secret)) => {
-                    if let Err(error) = self.services.secret_store.set(&target, &secret)
+                    if let Err(error) = self.runtime.services.secret_store.set(&target, &secret)
                         && error.code != ErrorCode::SecretStoreUnavailable
                     {
                         self.set_error(localized_error(&error));
@@ -65,10 +71,15 @@ impl AppShell {
             return;
         }
         self.state
+            .session
             .catalog
             .sessions
             .retain(|session| session.id != session_id);
-        self.state.sidebar.selected_sessions.remove(&session_id);
+        self.state
+            .session
+            .sidebar
+            .selected_sessions
+            .remove(&session_id);
         app_settings_mut(cx)
             .window
             .recent_sessions
@@ -107,6 +118,7 @@ impl AppShell {
         for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
             if let Err(error) = self
                 .state
+                .runtime
                 .services
                 .secret_store
                 .delete(&SecretKey::new(session_id, kind))
@@ -125,6 +137,7 @@ impl AppShell {
     pub(crate) fn duplicate_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
         let Some(mut session) = self
             .state
+            .session
             .catalog
             .sessions
             .iter()
@@ -137,7 +150,7 @@ impl AppShell {
         let name = session.name.clone();
         session.id = new_id;
         session.name = self.state.unique_duplicate_name(&name);
-        self.state.catalog.sessions.push(session);
+        self.state.session.catalog.sessions.push(session);
         self.state.copy_secrets(session_id, new_id);
         self.state.persist_catalog();
         cx.notify();

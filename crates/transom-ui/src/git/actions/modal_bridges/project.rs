@@ -27,8 +27,8 @@ pub(crate) fn open_git_project_modal(
     let subscription = cx.subscribe(&modal, |shell, _, event: &GitProjectModalEvent, cx| {
         on_project_modal_event(shell, event, cx);
     });
-    shell.state.modals.git.project = Some(modal.clone());
-    shell.state.tasks.subscriptions.git_project_modal = Some(subscription);
+    shell.state.ui.modals.git.project = Some(modal.clone());
+    shell.state.runtime.tasks.subscriptions.git_project_modal = Some(subscription);
     let focus = modal.read(cx).focus_handle(cx);
     window.focus(&focus, cx);
     modal.update(cx, |view, cx| view.trigger_probe(cx));
@@ -37,14 +37,14 @@ pub(crate) fn open_git_project_modal(
 
 /// 关闭「打开项目」弹窗。
 pub(crate) fn close_git_project_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.project = None;
-    shell.state.tasks.subscriptions.git_project_modal = None;
+    shell.state.ui.modals.git.project = None;
+    shell.state.runtime.tasks.subscriptions.git_project_modal = None;
     cx.notify();
 }
 
 /// 由全局快捷键或遮罩层触发当前「打开项目」弹窗的提交。
 pub(crate) fn commit_git_project_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(modal) = shell.state.modals.git.project.clone() else {
+    let Some(modal) = shell.state.ui.modals.git.project.clone() else {
         return;
     };
     modal.update(cx, |view, cx| view.commit(cx));
@@ -76,7 +76,7 @@ fn on_project_modal_event(
             draft.folder_id = git_folder_id_for_name(shell, folder_name, cx);
             if !already_repo && *init_if_missing {
                 let request_id = GitRequestId::new();
-                if let Some(modal) = shell.state.modals.git.project.clone() {
+                if let Some(modal) = shell.state.ui.modals.git.project.clone() {
                     modal.update(cx, |view, cx| view.begin_init(request_id, cx));
                 }
                 shell
@@ -109,7 +109,7 @@ pub(crate) fn apply_git_probe_event(
             info,
             error,
         } => {
-            let Some(modal) = shell.state.modals.git.project.clone() else {
+            let Some(modal) = shell.state.ui.modals.git.project.clone() else {
                 return;
             };
             let err_msg = error.as_ref().map(crate::palette::localized_error);
@@ -148,7 +148,7 @@ pub(crate) fn apply_git_probe_event(
                         "初始化 Git 仓库失败，路径: {}，原因: {message}",
                         path.display()
                     );
-                    if let Some(modal) = shell.state.modals.git.project.clone() {
+                    if let Some(modal) = shell.state.ui.modals.git.project.clone() {
                         modal.update(cx, |view, cx| {
                             view.apply_init_error(request_id, message, cx)
                         });

@@ -53,7 +53,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> f32 {
-        if self.state.immersive {
+        if self.state.ui.immersive {
             return 0.0;
         }
         let rem = window.rem_size();
@@ -73,13 +73,13 @@ impl AppShell {
             1
         };
         let panels = if side_left {
-            self.state.workspace_panels_left.clone()
+            self.state.ui.workspace_panels_left.clone()
         } else {
-            self.state.workspace_panels.clone()
+            self.state.ui.workspace_panels.clone()
         };
-        let sidebar_visible = self.state.sidebar.visible();
+        let sidebar_visible = self.state.session.sidebar.visible();
         sync_sidebar_slot(
-            &mut self.state.sidebar.slot,
+            &mut self.state.session.sidebar.slot,
             &panels,
             SidebarSlotLayout {
                 visible: sidebar_visible,
@@ -124,7 +124,7 @@ impl AppShell {
             .map(SftpPanelState::all_collapsed_width)
             .unwrap_or(32.0);
         let show_forwards = active_panel.is_some_and(|tab| tab.forwards_view().is_some());
-        let sidebar_width = if self.state.sidebar.visible() {
+        let sidebar_width = if self.state.session.sidebar.visible() {
             sidebar_width
         } else {
             0.0
@@ -172,18 +172,19 @@ impl AppShell {
             .size(px(sidebar_width))
             .size_range(sidebar_min_width..sidebar_max_width)
             .fixed()
-            .visible(self.state.sidebar.visible());
-        if self.state.sidebar.visible() {
+            .visible(self.state.session.sidebar.visible());
+        if self.state.session.sidebar.visible() {
             // 左侧槽位一次只承载一种内容：容器连接、Git 仓库、云同步、纵向标签或会话树。
             let section = self
                 .state
+                .session
                 .sidebar
                 .section()
                 .resolved_for_tab_position(app_settings(cx).window.tab_position);
             let content = match section {
                 SidebarSection::Containers => {
                     // 目录与连接状态由外壳按渲染快照注入，侧栏实体不反查外壳。
-                    let sidebar = self.state.containers.sidebar.clone();
+                    let sidebar = self.state.features.containers.sidebar.clone();
                     let profile_states = self.state.container_profile_states(cx);
                     let active = self.state.active_engine_profile_id();
                     let state = sidebar.read(cx);
@@ -192,7 +193,7 @@ impl AppShell {
                             view: &sidebar,
                             state: &state.state,
                             cx,
-                            catalog: &self.state.catalog,
+                            catalog: &self.state.session.catalog,
                             active,
                             profile_states: &profile_states,
                         },
@@ -219,7 +220,7 @@ impl AppShell {
                     }
                     crate::git::sidebar::render_git_sidebar(
                         crate::git::GitSidebarParams {
-                            view: &self.state.git_sidebar,
+                            view: &self.state.features.git_sidebar,
                             git: self.state.git_registry(cx),
                             active_project,
                             active_branches: &active_branches,
@@ -227,25 +228,34 @@ impl AppShell {
                         p,
                     )
                 }
-                SidebarSection::CloudSync => self.state.cloud_sync.clone().into_any_element(),
+                SidebarSection::CloudSync => {
+                    self.state.features.cloud_sync.clone().into_any_element()
+                }
                 SidebarSection::Tabs if self.show_vertical_tabs_panel(app_settings(cx)) => {
                     self.render_vertical_tabs_panel(p, cx)
                 }
                 SidebarSection::Sessions | SidebarSection::Tabs => {
-                    let query = self.state.sidebar.search.read(cx).value().to_string();
+                    let query = self
+                        .state
+                        .session
+                        .sidebar
+                        .search
+                        .read(cx)
+                        .value()
+                        .to_string();
                     let rows = self.state.sidebar_rows(&query);
                     let active_session = self.state.active_session_id();
                     crate::sidebar::render_sidebar(
                         crate::sidebar::SessionSidebarParams {
-                            view: &self.state.session_sidebar,
-                            search: &self.state.sidebar.search,
+                            view: &self.state.session.session_sidebar,
+                            search: &self.state.session.sidebar.search,
                             rows,
                             query: &query,
-                            selection_mode: self.state.sidebar.selection_mode,
-                            selected_sessions: &self.state.sidebar.selected_sessions,
-                            tree_selection: self.state.sidebar.tree_selection,
+                            selection_mode: self.state.session.sidebar.selection_mode,
+                            selected_sessions: &self.state.session.sidebar.selected_sessions,
+                            tree_selection: self.state.session.sidebar.tree_selection,
                             active_session,
-                            probe_badges: &self.state.probe_badges,
+                            probe_badges: &self.state.session.probe_badges,
                         },
                         window,
                         p,
@@ -275,7 +285,7 @@ impl AppShell {
         let side_left = plan.side_left;
         let show_sftp = plan.show_sftp;
         let show_forwards = plan.show_forwards;
-        let mut resizable_group = if self.state.immersive {
+        let mut resizable_group = if self.state.ui.immersive {
             // 沉浸模式只保留主面板，使用独立分组与临时状态；
             // 严禁复用 panels_state，否则主面板在全屏下会覆盖索引 0（侧栏）的尺寸记录，
             // 导致退出沉浸模式后侧边栏继承全屏宽度并撑满窗口。
@@ -285,11 +295,11 @@ impl AppShell {
         };
         // 抽屉之前的面板数：只有尺寸表已经包含抽屉槽位时，最后一项才是抽屉宽度。
         let mut panels_before_drawer = 0usize;
-        if !self.state.immersive {
+        if !self.state.ui.immersive {
             resizable_group = resizable_group.child(sidebar_panel);
             panels_before_drawer += 1;
         }
-        if !self.state.immersive && side_left {
+        if !self.state.ui.immersive && side_left {
             // 停靠左：SFTP 与转发整体挪到主面板之前，贴着侧栏。
             if show_sftp {
                 resizable_group = resizable_group.child(
@@ -321,7 +331,7 @@ impl AppShell {
         resizable_group =
             resizable_group.child(resizable_panel().child(self.render_main(window, cx, p)));
         panels_before_drawer += 1;
-        if !self.state.immersive && !side_left {
+        if !self.state.ui.immersive && !side_left {
             if show_sftp {
                 resizable_group = resizable_group.child(
                     resizable_panel()
@@ -362,7 +372,7 @@ impl AppShell {
                     // 与侧栏、SFTP 一样属于用户定宽的固定面板：窗口缩放时由主面板
                     // 吸收差额，抽屉宽度不被按比例重新分配。
                     .fixed()
-                    .child(self.state.monitor.clone()),
+                    .child(self.state.features.monitor.clone()),
             );
         }
 
@@ -382,7 +392,7 @@ impl AppShell {
         panels_state: &Entity<ResizableState>,
         panels_before_drawer: usize,
     ) -> Option<f32> {
-        if self.state.immersive || !self.state.monitor.read(cx).is_open() {
+        if self.state.ui.immersive || !self.state.features.monitor.read(cx).is_open() {
             return None;
         }
         let max_drawer_width = (window.viewport_size().width.as_f32() * 0.75).max(520.0);
@@ -398,9 +408,10 @@ impl AppShell {
             let actual_f32 = actual_w.as_f32();
             if actual_f32 >= 360.0
                 && actual_f32 <= max_drawer_width
-                && (self.state.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
+                && (self.state.features.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
             {
                 self.state
+                    .features
                     .monitor
                     .update(cx, |view, _| view.set_drawer_width(actual_f32));
                 update_app_settings(cx, |s| s.monitor.drawer_width = actual_f32);
@@ -408,6 +419,7 @@ impl AppShell {
         }
         Some(
             self.state
+                .features
                 .monitor
                 .read(cx)
                 .drawer_width()

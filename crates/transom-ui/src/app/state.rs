@@ -87,76 +87,68 @@ impl UiFeedbackState {
     }
 }
 
-/// 应用运行期状态。
-pub(crate) struct AppState {
+/// 进程级运行资源：服务、后台任务、持久化、历史与退出信号。
+///
+/// 生命周期与应用进程一致，不由单个面板或标签页创建。
+pub(crate) struct RuntimeState {
     pub(crate) services: UiServices,
-    /// 启动时发现的本机 Shell 目录；新建终端菜单与设置页共用同一份快照。
-    pub(crate) local_shells: Arc<Vec<ShellOption>>,
-    /// 会话与文件夹共享同一份目录快照，任何一方变化都整体持久化。
-    pub(crate) catalog: SessionCatalog,
-    /// 会话目录版本：每次持久化（= 目录被修改）递增，侧栏行缓存以此为失效键。
-    pub(crate) catalog_revision: u64,
-    /// 统一托管的侧栏核心状态与选择集。
-    pub(crate) sidebar: SidebarState,
-    /// 会话侧栏视图实体：点击、折叠、拖拽与右键菜单事件都归它。
-    pub(crate) session_sidebar: Entity<crate::sidebar::SessionSidebarView>,
-    /// 统一托管的工作区多标签与分屏网格核心状态。
-    pub(crate) workspace: WorkspaceState,
-    /// 工作区分组（侧栏、主区、SFTP、转发）的列宽状态。
-    pub(crate) workspace_panels: Entity<ResizableState>,
-    /// 停靠左/右各自独立的列宽状态。
-    pub(crate) workspace_panels_left: Entity<ResizableState>,
-    /// 纵向标签面板的搜索框状态。
-    pub(crate) vertical_tabs_search: Entity<InputState>,
-    /// 统一托管的应用顶层交互模态与表单集合。
-    pub(crate) modals: ModalHub,
-    /// 统一纳管的应用外壳后台任务与事件订阅。
     pub(crate) tasks: TaskHub,
-    /// 后台定时自动化节拍状态（Git 自动同步、容器定时清理）。
     pub(crate) automation: AutomationState,
-    /// WebDAV/S3 云同步视图实体（状态、有界历史写线程与拉取任务）。
-    pub(crate) cloud_sync: Entity<CloudSyncView>,
-    /// 命令历史内存快照：终端视图的查询回调共享它，避免每次按键都读盘。
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
-    /// 共享给每个终端视图的历史查询回调。
     pub(crate) history_provider: transom_terminal::HistoryProvider,
-    /// 会话列表行尾的拨测状态点，按会话 id 索引。
-    pub(crate) probe_badges: HashMap<SessionId, ProbeBadge>,
-    /// 主机监控看板与进程管理器状态。
-    pub(crate) monitor: Entity<crate::monitor::MonitorView>,
-    /// 容器引擎连接侧栏、表单与工作区顶层状态。
-    pub(crate) containers: crate::container::ContainerUiState,
-    /// Git 侧栏视图实体：项目折叠态、交互与右键菜单都归它。
-    pub(crate) git_sidebar: Entity<crate::git::GitSidebarView>,
-    /// 远端文本编辑面板实体：面板集合、关闭拦截与渲染都归它。
-    pub(crate) editors: Entity<EditorPanels>,
-    /// 远程与本地文件分栏对比面板；同一时刻至多一个。
-    pub(crate) diff_viewer: Option<Entity<crate::diff_viewer::DiffViewerView>>,
-    /// 底部广播输入条：目标集合、单行/多行输入与展开状态。
-    pub(crate) broadcast: BroadcastBarState,
-    /// 底栏右段的兜底状态文字（没有指标徽标时显示）。
-    pub(crate) status: Option<String>,
-    /// 会话目录与设置的覆盖式异步写盘通道。
     pub(crate) persistence: Persistence,
-    /// 沉浸式全屏：隐藏全部应用外框，仅保留终端视口。
-    pub(crate) immersive: bool,
-    /// 各面板/实体上报的窗口动作；渲染期一次取空并执行。
-    pub(crate) window_requests: super::WindowRequests,
-    /// 状态栏右侧指标簇实体：统计/流量事件只重绘它，不重建整窗。
-    pub(crate) status_metrics: Entity<crate::status_bar::StatusBarMetricsView>,
-    /// 当前是否要求控制面采样系统统计；界面完全没有消费方时置假。
-    pub(crate) stats_sampling: bool,
-    /// 快捷键域的聚合状态：生效键位过滤器、已应用键位串与改键捕获。
-    pub(crate) shortcut_recording: ShortcutRecordingState,
-    /// 组件库弹窗栈的影子记录：与容器实际栈同序，逐帧对账的依据。
-    pub(crate) open_modals: OpenModals,
-    /// 应用级界面反馈、通知队列与帧副作用调度状态。
-    pub(crate) feedback: UiFeedbackState,
-    /// 关于页请求"安装完成后立即重启"的跨层信号。
-    ///
-    /// 界面只置位并退出事件循环；真正拉起新进程必须等 `main` 完成控制器
-    /// 优雅停机，因此用进程级原子标志把意图带过 `transom_ui::run` 边界。
     pub(crate) restart_requested: Arc<AtomicBool>,
+}
+
+/// 会话目录域：本机 Shell、会话/文件夹目录、侧栏与拨测状态。
+///
+/// 生命周期与窗口中的会话目录一致，修改后需要整体持久化。
+pub(crate) struct SessionState {
+    pub(crate) local_shells: Arc<Vec<ShellOption>>,
+    pub(crate) catalog: SessionCatalog,
+    pub(crate) catalog_revision: u64,
+    pub(crate) sidebar: SidebarState,
+    pub(crate) session_sidebar: Entity<crate::sidebar::SessionSidebarView>,
+    pub(crate) probe_badges: HashMap<SessionId, ProbeBadge>,
+}
+
+/// 窗口级界面状态：弹窗、布局句柄、焦点输入与即时反馈。
+pub(crate) struct UiState {
+    pub(crate) workspace_panels: Entity<ResizableState>,
+    pub(crate) workspace_panels_left: Entity<ResizableState>,
+    pub(crate) vertical_tabs_search: Entity<InputState>,
+    pub(crate) modals: ModalHub,
+    pub(crate) status: Option<String>,
+    pub(crate) immersive: bool,
+    pub(crate) window_requests: super::WindowRequests,
+    pub(crate) shortcut_recording: ShortcutRecordingState,
+    pub(crate) open_modals: OpenModals,
+    pub(crate) feedback: UiFeedbackState,
+}
+
+/// 窗口级功能实体及其共享运行开关。
+pub(crate) struct FeatureState {
+    pub(crate) cloud_sync: Entity<CloudSyncView>,
+    pub(crate) monitor: Entity<crate::monitor::MonitorView>,
+    pub(crate) containers: crate::container::ContainerUiState,
+    pub(crate) git_sidebar: Entity<crate::git::GitSidebarView>,
+    pub(crate) editors: Entity<EditorPanels>,
+    pub(crate) diff_viewer: Option<Entity<crate::diff_viewer::DiffViewerView>>,
+    pub(crate) broadcast: BroadcastBarState,
+    pub(crate) status_metrics: Entity<crate::status_bar::StatusBarMetricsView>,
+    pub(crate) stats_sampling: bool,
+}
+
+/// 应用运行期状态。
+///
+/// 顶层只按生命周期聚合，不再平铺三十余个字段；具体业务访问继续显式写
+/// `state.runtime.xxx`、`state.session.xxx`、`state.ui.xxx` 或 `state.features.xxx`。
+pub(crate) struct AppState {
+    pub(crate) runtime: RuntimeState,
+    pub(crate) session: SessionState,
+    pub(crate) workspace: WorkspaceState,
+    pub(crate) ui: UiState,
+    pub(crate) features: FeatureState,
 }
 
 impl AppState {
@@ -198,7 +190,7 @@ impl AppState {
 
     /// 向控制器提交命令：非阻塞 `try_send`，队列满时快速失败。
     pub(crate) fn send_command(&mut self, command: impl Into<AppCommand>) -> bool {
-        match self.services.command_tx.try_send(command.into()) {
+        match self.runtime.services.command_tx.try_send(command.into()) {
             Ok(()) => true,
             Err(error) => {
                 self.set_error(super::command_send_error_text(error));
@@ -213,7 +205,7 @@ impl AppState {
     /// 单槽暂存又会让同一帧内的多次失败互相覆盖。入队后由渲染统一投递，
     /// 既保留每条错误，也让渲染只负责取队列、不再承担“暂存”职责。
     pub(crate) fn set_error(&mut self, message: impl Into<String>) {
-        self.feedback.pending_notices.push(message);
+        self.ui.feedback.pending_notices.push(message);
     }
 
     /// 持久化会话与文件夹目录。
@@ -223,10 +215,10 @@ impl AppState {
     /// 写盘让下一次渲染做无意义的全量行重建。
     pub(crate) fn persist_catalog(&mut self) -> bool {
         // 内存态先推进版本：侧栏缓存需要在本次修改后立即失效，不能等磁盘。
-        let catalog = self.catalog.clone();
-        match self.persistence.save_catalog(&catalog) {
+        let catalog = self.session.catalog.clone();
+        match self.runtime.persistence.save_catalog(&catalog) {
             Ok(()) => {
-                self.catalog_revision = self.catalog_revision.wrapping_add(1);
+                self.session.catalog_revision = self.session.catalog_revision.wrapping_add(1);
                 true
             }
             Err(error) => {
@@ -244,7 +236,7 @@ impl AppState {
         &self,
         settings: &AppSettings,
     ) -> Result<(), transom_core::AppError> {
-        self.persistence.save_settings(settings)
+        self.runtime.persistence.save_settings(settings)
     }
 
     /// 统一的“保存并上报”入口：失败时记录日志并写入应用级错误队列。
@@ -264,6 +256,6 @@ impl AppState {
 
     /// 取走后台写盘线程上报的错误。
     pub(crate) fn take_persistence_error(&self) -> Option<transom_core::AppError> {
-        self.persistence.take_error()
+        self.runtime.persistence.take_error()
     }
 }

@@ -7,9 +7,7 @@ mod slot;
 mod state;
 mod tree;
 
-pub(crate) use bridge::{
-    on_session_sidebar_event, render_folder_form_body, save_folder_form,
-};
+pub(crate) use bridge::{on_session_sidebar_event, render_folder_form_body, save_folder_form};
 pub(crate) use entity::{SessionSidebarEvent, SessionSidebarView};
 pub(crate) use folders::FolderForm;
 pub(crate) use slot::{SidebarSlotLayout, SidebarSlotSync, sync_sidebar_slot};
@@ -38,12 +36,12 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use transom_core::SessionId;
 use transom_ui_icons::{AppIcon, UiIcon};
+pub(crate) use tree::{
+    ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, SidebarRow, indent_padding,
+};
 use tree::{
     SessionRowRenderParams, SidebarDrag, SidebarTarget, build_rows, render_folder_row,
     render_session_row,
-};
-pub(crate) use tree::{
-    ROW_CHEVRON_SIZE, ROW_HEIGHT_REM, ROW_ICON_SIZE, SidebarDragPreview, SidebarRow, indent_padding,
 };
 
 /// 渲染会话侧栏所需的只读参数。
@@ -61,15 +59,15 @@ pub(crate) struct SessionSidebarParams<'a> {
 
 impl AppState {
     pub(crate) fn sidebar_rows(&mut self, query: &str) -> Rc<Vec<SidebarRow>> {
-        if let Some(cache) = &self.sidebar.rows_cache
-            && cache.revision == self.catalog_revision
+        if let Some(cache) = &self.session.sidebar.rows_cache
+            && cache.revision == self.session.catalog_revision
             && cache.query == query
         {
             return cache.rows.clone();
         }
-        let rows = Rc::new(build_rows(&self.catalog, query));
-        self.sidebar.rows_cache = Some(SidebarRowsCache {
-            revision: self.catalog_revision,
+        let rows = Rc::new(build_rows(&self.session.catalog, query));
+        self.session.sidebar.rows_cache = Some(SidebarRowsCache {
+            revision: self.session.catalog_revision,
             query: query.to_string(),
             rows: rows.clone(),
         });
@@ -118,7 +116,9 @@ pub(crate) fn render_sidebar(
                     .filter_map(|index| {
                         let row = rows.get(index)?;
                         match row {
-                            SidebarRow::Folder(row) => Some(render_folder_row(&view_handle, row, &p)),
+                            SidebarRow::Folder(row) => {
+                                Some(render_folder_row(&view_handle, row, &p))
+                            }
                             SidebarRow::Session(row) => {
                                 let session_id = row.session.id;
                                 Some(render_session_row(

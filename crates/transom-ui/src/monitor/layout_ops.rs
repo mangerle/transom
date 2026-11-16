@@ -19,9 +19,9 @@ pub(crate) fn apply_monitor_drawer_width(
     update_app_settings(cx, |s| s.monitor.drawer_width = new_width);
     shell.persist_layout_settings(cx);
     let panels_state = if app_settings(cx).window.sftp_panel_side.is_left() {
-        &shell.state.workspace_panels_left
+        &shell.state.ui.workspace_panels_left
     } else {
-        &shell.state.workspace_panels
+        &shell.state.ui.workspace_panels
     };
     let panel_count = panels_state.read(cx).sizes().len();
     if panel_count > 0 {

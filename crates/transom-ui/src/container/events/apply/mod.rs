@@ -33,11 +33,11 @@ impl ContainerWorkspace {
             ContainerSection::Containers | ContainerSection::Compose
         );
         if id_is_container_scoped {
-            let valid = self
-                .state
-                .selected
-                .as_deref()
-                .is_some_and(|id| self.state.containers.iter().any(|item| item.id == id));
+            let valid = self.state.selected.as_deref().is_some_and(|id| {
+                self.state.containers
+                    .iter()
+                    .any(|item| item.id == id)
+            });
             if !valid {
                 self.state.selected = None;
                 self.state.details = None;
@@ -45,8 +45,7 @@ impl ContainerWorkspace {
         }
         // 跨分类跳转等着列表到位再按名字定位，避免用户点了两次。
         let mut inspect_first = self.state.pending_select.take().and_then(|name| {
-            self.state
-                .containers
+            self.state.containers
                 .iter()
                 .find(|item| item.name == name)
                 .map(|item| item.id.clone())

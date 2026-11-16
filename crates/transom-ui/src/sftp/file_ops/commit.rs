@@ -44,7 +44,7 @@ pub(in crate::sftp) fn commit_sftp_input_value(
     match modal_target {
         SftpInputTarget::SudoElevation { editor } => {
             let password = (!name.trim().is_empty()).then(|| name.to_string());
-            shell.state.editors.update(cx, |panels, cx| {
+            shell.state.features.editors.update(cx, |panels, cx| {
                 panels.submit_sudo_editor_write(editor, password, cx);
             });
         }

@@ -34,7 +34,7 @@ fn open_sudo_password_modal(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.modals.sftp.open_input(
+    shell.state.ui.modals.sftp.open_input(
         SftpInputModalParams {
             tab_id: request.tab_id,
             connection_id: None,
@@ -60,7 +60,7 @@ pub(crate) fn on_editor_text_written(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(action) = shell.state.editors.update(cx, |panels, cx| {
+    let Some(action) = shell.state.features.editors.update(cx, |panels, cx| {
         panels.note_editor_text_written(op_id, meta, cx)
     }) else {
         return;
@@ -109,7 +109,7 @@ pub(crate) fn note_editor_text_conflict(
     message: String,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.editors.update(cx, |panels, cx| {
+    shell.state.features.editors.update(cx, |panels, cx| {
         panels.note_editor_text_conflict(op_id, message, cx)
     });
 }
@@ -123,7 +123,7 @@ pub(crate) fn note_editor_text_failed(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let action = shell.state.editors.update(cx, |panels, cx| {
+    let action = shell.state.features.editors.update(cx, |panels, cx| {
         panels.note_editor_text_failed(op_id, message, code, cx)
     });
     match action {
@@ -145,12 +145,12 @@ pub(crate) fn on_sudo_probed(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let outcome = shell.state.editors.update(cx, |panels, cx| {
+    let outcome = shell.state.features.editors.update(cx, |panels, cx| {
         panels.note_sudo_probed(op_id, capability, cx)
     });
     match outcome {
         SudoProbeOutcome::WritePasswordless { editor } => {
-            shell.state.editors.update(cx, |panels, cx| {
+            shell.state.features.editors.update(cx, |panels, cx| {
                 panels.submit_sudo_editor_write(&editor, None, cx);
             });
         }
@@ -195,6 +195,7 @@ fn dispatch_sudo_probe(
     if send_sudo_probe(shell, &request).is_err() {
         shell
             .state
+            .features
             .editors
             .update(cx, |panels, cx| panels.fail_sudo_probe_dispatch(op_id, cx));
     }

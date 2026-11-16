@@ -24,7 +24,7 @@ pub(super) fn handle_connection_event(
                 let workspace = &workspace.read(cx).state;
                 let profile = workspace.profile.clone();
                 let mut exists = false;
-                for saved in &mut shell.state.catalog.engines {
+                for saved in &mut shell.state.session.catalog.engines {
                     if saved.id == profile.id
                         || (saved.engine.kind == profile.engine.kind
                             && saved.engine.endpoint.describe()
@@ -41,7 +41,7 @@ pub(super) fn handle_connection_event(
                     }
                 }
                 if !exists {
-                    shell.state.catalog.engines.push(profile);
+                    shell.state.session.catalog.engines.push(profile);
                     shell.state.persist_catalog();
                     cx.notify();
                 }
@@ -67,7 +67,7 @@ pub(super) fn handle_connection_event(
         ContainerAppEvent::EnginesDiscovered {
             engines, failures, ..
         } => {
-            let sidebar = shell.state.containers.sidebar.clone();
+            let sidebar = shell.state.features.containers.sidebar.clone();
             sidebar.update(cx, |sidebar, cx| {
                 sidebar.apply_discovery(
                     ContainerDiscovery {
@@ -83,7 +83,7 @@ pub(super) fn handle_connection_event(
             info,
             error,
         } => {
-            let form = shell.state.modals.tools.container_form.clone();
+            let form = shell.state.ui.modals.tools.container_form.clone();
             form.update(cx, |form, cx| {
                 form.set_test_result(request_id, info, error, cx);
             });

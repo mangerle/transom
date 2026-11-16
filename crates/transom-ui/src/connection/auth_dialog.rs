@@ -23,13 +23,14 @@ use transom_core::{Connection, ConnectionId, ErrorCode, SecretKey, SessionId};
 impl AppState {
     pub(crate) fn discard_pending_credential(&mut self, connection_id: ConnectionId) {
         let matched = self
+            .ui
             .modals
             .connection
             .pending_credential
             .as_ref()
             .is_some_and(|pending| pending.connection_id == connection_id);
         if matched {
-            self.modals.connection.pending_credential = None;
+            self.ui.modals.connection.pending_credential = None;
         }
     }
 
@@ -38,7 +39,8 @@ impl AppState {
     /// 外壳在消费 [`crate::connection::ConnectionPromptsEvent::CredentialToSave`]
     /// 时调用：实体只上报会话标识，不接触目录，归属解析必须先回到目录侧。
     pub(crate) fn secret_owner_for(&self, session_id: SessionId) -> transom_core::SecretOwner {
-        self.catalog
+        self.session
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -51,6 +53,7 @@ impl AppState {
     fn mark_credential_saved(&mut self, owner: transom_core::SecretOwner) {
         let flipped = match &owner {
             transom_core::SecretOwner::Session(session_id) => self
+                .session
                 .catalog
                 .sessions
                 .iter_mut()
@@ -61,6 +64,7 @@ impl AppState {
                 })
                 .is_some_and(|ssh| enable_auth_save(&mut ssh.auth)),
             transom_core::SecretOwner::Identity(identity_id) => self
+                .session
                 .catalog
                 .identities
                 .iter_mut()
@@ -86,6 +90,7 @@ pub(crate) fn flush_pending_credential(
 ) {
     let matched = shell
         .state
+        .ui
         .modals
         .connection
         .pending_credential
@@ -96,12 +101,12 @@ pub(crate) fn flush_pending_credential(
     if !matched {
         return;
     }
-    let Some(pending) = shell.state.modals.connection.pending_credential.take() else {
+    let Some(pending) = shell.state.ui.modals.connection.pending_credential.take() else {
         return;
     };
     let key = SecretKey::new(pending.owner.clone(), pending.kind);
     shell.state.mark_credential_saved(pending.owner.clone());
-    let secret_store = shell.state.services.secret_store.clone();
+    let secret_store = shell.state.runtime.services.secret_store.clone();
     cx.spawn(async move |this, cx| {
         let error = cx
             .background_executor()

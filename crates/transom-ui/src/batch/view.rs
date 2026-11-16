@@ -9,7 +9,7 @@ pub(crate) fn render_batch_edit_body(
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(form) = shell.state.modals.session.batch_edit.as_ref() else {
+    let Some(form) = shell.state.ui.modals.session.batch_edit.as_ref() else {
         return div().into_any_element();
     };
     let selected_count = form.selected_count;
@@ -23,7 +23,7 @@ pub(crate) fn render_batch_edit_body(
         rust_i18n::t!("form.port").to_string(),
         Input::new(&form.port).into_any_element(),
         crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
-            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+            if let Some(form) = this.state.ui.modals.session.batch_edit.as_mut() {
                 form.change_port = *checked;
             }
             cx.notify();
@@ -37,7 +37,7 @@ pub(crate) fn render_batch_edit_body(
         rust_i18n::t!("form.username").to_string(),
         Input::new(&form.username).into_any_element(),
         crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
-            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+            if let Some(form) = this.state.ui.modals.session.batch_edit.as_mut() {
                 form.change_username = *checked;
             }
             cx.notify();
@@ -68,7 +68,7 @@ pub(crate) fn render_batch_edit_body(
             "cancel-batch-edit",
             rust_i18n::t!("common.cancel").to_string(),
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                this.state.modals.session.batch_edit = None;
+                this.state.ui.modals.session.batch_edit = None;
                 cx.notify();
             }),
         ))
@@ -104,7 +104,7 @@ fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyEle
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                        if let Some(form) = this.state.ui.modals.session.batch_edit.as_mut() {
                             form.auth = AuthChoice::Password;
                         }
                         cx.notify();
@@ -119,7 +119,7 @@ fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyEle
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                        if let Some(form) = this.state.ui.modals.session.batch_edit.as_mut() {
                             form.auth = AuthChoice::PrivateKey;
                         }
                         cx.notify();
@@ -134,7 +134,7 @@ fn render_batch_auth_buttons(auth: AuthChoice, app: &Entity<AppShell>) -> AnyEle
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, _, cx| {
-                        if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+                        if let Some(form) = this.state.ui.modals.session.batch_edit.as_mut() {
                             form.auth = AuthChoice::Agent;
                         }
                         cx.notify();
@@ -161,7 +161,7 @@ fn render_batch_auth_section(
         rust_i18n::t!("form.auth").to_string(),
         auth_buttons.into_any_element(),
         crate::dialog_host::on_event(app, |this, checked: &bool, _, cx| {
-            if let Some(form) = this.state.modals.session.batch_edit.as_mut() {
+            if let Some(form) = this.state.ui.modals.session.batch_edit.as_mut() {
                 form.change_auth = *checked;
             }
             cx.notify();
@@ -196,7 +196,7 @@ fn render_batch_auth_section(
                                     app,
                                     |this, checked: &bool, _, cx| {
                                         if let Some(form) =
-                                            this.state.modals.session.batch_edit.as_mut()
+                                            this.state.ui.modals.session.batch_edit.as_mut()
                                         {
                                             form.save_passphrase = *checked;
                                         }

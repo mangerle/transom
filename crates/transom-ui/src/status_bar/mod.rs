@@ -84,10 +84,10 @@ pub(crate) fn render_status_bar(
 ) -> AnyElement {
     let connection_pill = render_connection_pill(shell, p);
     let app = cx.entity().clone();
-    let metrics = shell.state.status_metrics.clone();
+    let metrics = shell.state.features.status_metrics.clone();
 
     let entries = status_bar_entries(shell, cx, p);
-    let front_zone = metrics::front_drop_zone(&shell.state.status_metrics, p);
+    let front_zone = metrics::front_drop_zone(&shell.state.features.status_metrics, p);
     let menu_app = app.clone();
     let badges = h_flex()
         .flex_none()
@@ -208,10 +208,11 @@ pub(crate) fn refresh_status_metrics(shell: &mut AppShell, cx: &mut Context<AppS
     let stats = tab.and_then(|tab| tab.system_stats());
     let is_ssh =
         tab.is_some_and(|tab| matches!(tab.session.connection, transom_core::Connection::Ssh(_)));
-    let status = shell.state.status.as_deref();
+    let status = shell.state.ui.status.as_deref();
     // 先借用比较：未变化时不构造快照，避免每帧克隆系统名与流量样本。
     if shell
         .state
+        .features
         .status_metrics
         .read(cx)
         .matches(traffic, stats, is_ssh, status)
@@ -223,7 +224,7 @@ pub(crate) fn refresh_status_metrics(shell: &mut AppShell, cx: &mut Context<AppS
         stats: stats.map(metrics::StatusMetricsValues::from),
         is_ssh,
     };
-    shell.state.status_metrics.update(cx, |view, cx| {
+    shell.state.features.status_metrics.update(cx, |view, cx| {
         view.set_snapshot(snapshot, status, cx);
     });
 }

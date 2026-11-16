@@ -36,6 +36,7 @@ impl AppShell {
         let session_id = self.state.workspace.tabs[index].session_id;
         let mut profile = self
             .state
+            .session
             .catalog
             .sessions
             .iter()
@@ -44,7 +45,7 @@ impl AppShell {
             .unwrap_or_else(|| self.state.workspace.tabs[index].session.terminal.clone());
         apply_global_terminal_profile(&mut profile, cx);
         let interaction = app_settings(cx).terminal_interaction;
-        let reserved = self.state.shortcut_recording.filter.clone();
+        let reserved = self.state.ui.shortcut_recording.filter.clone();
         let key_filter: KeyFilter = Arc::new(move |keystroke| {
             reserved
                 .read()
@@ -173,8 +174,8 @@ impl AppShell {
         }
         crate::startup::schedule_startup_commands(self, tab_id, connection_id, window, cx);
         crate::forward::auto_start_forwards(self, tab_id, connection_id, session_id, cx);
-        if still_active && self.state.monitor.read(cx).is_open() {
-            let collapsed = self.state.monitor.read(cx).processes_collapsed();
+        if still_active && self.state.features.monitor.read(cx).is_open() {
+            let collapsed = self.state.features.monitor.read(cx).processes_collapsed();
             crate::monitor::MonitorOps::new(&mut self.state).sample_processes(collapsed, cx);
         }
     }

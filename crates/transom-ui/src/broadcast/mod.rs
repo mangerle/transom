@@ -66,19 +66,19 @@ impl AppState {
     /// 同一视觉标签内换焦点（点窗格、切并排格）不会改变作用域，因此不会
     /// 覆盖用户手动增删的目标。
     pub(crate) fn sync_broadcast_targets(&mut self) {
-        if !self.broadcast.open {
+        if !self.features.broadcast.open {
             return;
         }
         let scope = self.current_visual_groups();
-        let same = scope.len() == self.broadcast.targets_scope.len()
+        let same = scope.len() == self.features.broadcast.targets_scope.len()
             && scope
                 .iter()
-                .all(|group| self.broadcast.targets_scope.contains(group));
+                .all(|group| self.features.broadcast.targets_scope.contains(group));
         if same {
             return;
         }
-        self.broadcast.targets = self.default_broadcast_targets_for(&scope);
-        self.broadcast.targets_scope = scope;
+        self.features.broadcast.targets = self.default_broadcast_targets_for(&scope);
+        self.features.broadcast.targets_scope = scope;
     }
 
     /// 按给定的视觉标签作用域收集默认目标：只取已有终端的窗格。
@@ -119,9 +119,9 @@ impl<'a> BroadcastOps<'a> {
     /// 从应用状态拆借广播域能力。
     pub(crate) fn new(app: &'a mut AppState) -> Self {
         Self {
-            state: &mut app.broadcast,
+            state: &mut app.features.broadcast,
             workspace: &app.workspace,
-            status: &mut app.status,
+            status: &mut app.ui.status,
         }
     }
 
@@ -409,8 +409,8 @@ impl<'a> BroadcastOps<'a> {
             .on_open_change(move |open, _window, cx| {
                 let open = *open;
                 app_open.update(cx, |this, cx| {
-                    if this.state.broadcast.targets_open != open {
-                        this.state.broadcast.targets_open = open;
+                    if this.state.features.broadcast.targets_open != open {
+                        this.state.features.broadcast.targets_open = open;
                         cx.notify();
                     }
                 });

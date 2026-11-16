@@ -17,9 +17,7 @@ impl ContainerWorkspace {
                 return;
             };
             let project_name = project.name.clone();
-            let members: Vec<String> = self
-                .state
-                .containers
+            let members: Vec<String> = self.state.containers
                 .iter()
                 .filter(|container| {
                     container.compose_project.as_deref() == Some(project_name.as_str())

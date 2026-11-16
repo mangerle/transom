@@ -46,7 +46,7 @@ fn handle_cloud_sync_checked(
     result: Result<SyncCheckReport, AppError>,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.cloud_sync.update(cx, |view, _| {
+    shell.state.features.cloud_sync.update(cx, |view, _| {
         view.state.scheduler.mark_check_finished(Instant::now());
     });
     let provider = provider_key(&app_settings(cx).sync);
@@ -67,7 +67,7 @@ fn handle_cloud_sync_checked(
                 SyncHistoryStatus::Success
             };
             let message = check_message(&report);
-            shell.state.cloud_sync.update(cx, |view, cx| {
+            shell.state.features.cloud_sync.update(cx, |view, cx| {
                 view.apply_check_result(
                     report.clone(),
                     SyncHistoryRecord {
@@ -84,7 +84,7 @@ fn handle_cloud_sync_checked(
                     cx,
                 );
             });
-            shell.state.status = Some(message);
+            shell.state.ui.status = Some(message);
             follow_up_after_check(shell, &report, meta.trigger, cx);
         }
         Err(error) => {
@@ -114,7 +114,7 @@ fn handle_cloud_sync_tested(
             } else {
                 rust_i18n::t!("sync.test_remote_missing", provider = report.provider).to_string()
             };
-            shell.state.cloud_sync.update(cx, |view, cx| {
+            shell.state.features.cloud_sync.update(cx, |view, cx| {
                 view.finish_success(
                     SyncHistoryRecord {
                         operation: SyncOperation::TestConnection,
@@ -130,7 +130,7 @@ fn handle_cloud_sync_tested(
                     cx,
                 );
             });
-            shell.state.status = Some(message);
+            shell.state.ui.status = Some(message);
         }
         Err(error) => crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
             .finish_sync_failure(
@@ -153,10 +153,10 @@ fn handle_cloud_sync_pushed(
     let provider = provider_key(&app_settings(cx).sync);
     match result {
         Ok(report) => {
-            shell.state.catalog = report.catalog;
-            shell.state.catalog.normalize();
+            shell.state.session.catalog = report.catalog;
+            shell.state.session.catalog.normalize();
             shell.state.persist_catalog();
-            let catalog_revision = shell.state.catalog_revision;
+            let catalog_revision = shell.state.session.catalog_revision;
             shell.state.refresh_tab_sessions();
             let sessions = report.sessions;
             let folders = report.folders;
@@ -176,7 +176,7 @@ fn handle_cloud_sync_pushed(
                 kb = (bytes / 1024).max(1)
             )
             .to_string();
-            shell.state.cloud_sync.update(cx, |view, cx| {
+            shell.state.features.cloud_sync.update(cx, |view, cx| {
                 view.state.scheduler.mark_catalog_synced(catalog_revision);
                 view.state.conflict = None;
                 view.finish_success(
@@ -194,7 +194,7 @@ fn handle_cloud_sync_pushed(
                     cx,
                 );
             });
-            shell.state.status = Some(message);
+            shell.state.ui.status = Some(message);
         }
         Err(error) => {
             let status = if error.code == ErrorCode::CloudSyncConflict {
@@ -204,7 +204,7 @@ fn handle_cloud_sync_pushed(
             };
             let message = localized_error(&error);
             shell.state.set_error(message.clone());
-            shell.state.cloud_sync.update(cx, |view, cx| {
+            shell.state.features.cloud_sync.update(cx, |view, cx| {
                 view.finish_success(
                     SyncHistoryRecord {
                         operation: SyncOperation::Push,
@@ -220,7 +220,7 @@ fn handle_cloud_sync_pushed(
                     cx,
                 );
             });
-            shell.state.status = Some(message);
+            shell.state.ui.status = Some(message);
         }
     }
     cx.notify();
@@ -244,7 +244,7 @@ fn handle_cloud_sync_pulled(
                     rust_i18n::t!("sync.pull_force_downloaded").to_string()
                 }
             };
-            shell.state.cloud_sync.update(cx, |view, cx| {
+            shell.state.features.cloud_sync.update(cx, |view, cx| {
                 view.finish_success(
                     SyncHistoryRecord {
                         operation: SyncOperation::Pull,
@@ -267,7 +267,7 @@ fn handle_cloud_sync_pulled(
                     cx,
                 );
             });
-            shell.state.status = Some(message);
+            shell.state.ui.status = Some(message);
             crate::cloud_sync::finish_cloud_sync_pull(shell, report, mode, window, cx);
         }
         Err(error) => {
@@ -294,8 +294,8 @@ fn handle_git_synced(
             let report = result.report;
             let at = result.at;
             let pushed = result.pushed;
-            shell.state.catalog = result.catalog;
-            shell.state.catalog.normalize();
+            shell.state.session.catalog = result.catalog;
+            shell.state.session.catalog.normalize();
             shell.state.persist_catalog();
             shell.state.refresh_tab_sessions();
             update_app_settings(cx, |settings| {
@@ -316,7 +316,7 @@ fn handle_git_synced(
                 conflicts = report.conflicts
             )
             .to_string();
-            shell.state.cloud_sync.update(cx, |view, cx| {
+            shell.state.features.cloud_sync.update(cx, |view, cx| {
                 view.finish_success(
                     SyncHistoryRecord {
                         operation: SyncOperation::Git,
@@ -332,7 +332,7 @@ fn handle_git_synced(
                     cx,
                 );
             });
-            shell.state.status = Some(message);
+            shell.state.ui.status = Some(message);
         }
         Err(error) => {
             crate::cloud_sync::CloudSyncActions::new(&mut shell.state).finish_sync_failure(
@@ -369,11 +369,11 @@ fn follow_up_after_check(
         }
         SyncRelation::RemoteAhead if settings.auto_pull_remote_changes => {
             if let Some(reason) = auto_pull_block_reason(shell, cx) {
-                shell.state.cloud_sync.update(cx, |view, cx| {
+                shell.state.features.cloud_sync.update(cx, |view, cx| {
                     view.state.message = Some(reason.clone());
                     cx.notify();
                 });
-                shell.state.status = Some(reason);
+                shell.state.ui.status = Some(reason);
             } else {
                 crate::cloud_sync::CloudSyncActions::new(&mut shell.state)
                     .dispatch_cloud_sync_pull(settings, trigger, CloudPullMode::Merge, cx);
@@ -389,7 +389,7 @@ fn follow_up_after_check(
 
 /// 自动下拉前确认没有活动终端与未关闭的设置弹窗。
 fn auto_pull_block_reason(shell: &AppShell, cx: &App) -> Option<String> {
-    if shell.state.modals.settings.read(cx).is_open() {
+    if shell.state.ui.modals.settings.read(cx).is_open() {
         return Some(rust_i18n::t!("sync.auto_pull_settings_open").to_string());
     }
     let has_active_terminal = shell.state.workspace.tabs.iter().any(|tab| {

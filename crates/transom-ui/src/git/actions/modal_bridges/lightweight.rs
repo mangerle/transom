@@ -82,8 +82,8 @@ fn open_name_modal_with(
             crate::git::GitNameModalEvent::Close => close_git_name_modal(shell, cx),
         },
     );
-    shell.state.modals.git.name = Some(modal);
-    shell.state.tasks.subscriptions.git_name_modal = Some(subscription);
+    shell.state.ui.modals.git.name = Some(modal);
+    shell.state.runtime.tasks.subscriptions.git_name_modal = Some(subscription);
     cx.notify();
 }
 
@@ -145,15 +145,15 @@ fn handle_name_modal_submit(
 
 /// 触发名称对话框提交。
 pub(crate) fn submit_git_name_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if let Some(modal) = shell.state.modals.git.name.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.name.as_ref() {
         modal.update(cx, |modal, cx| modal.submit(cx));
     }
 }
 
 /// 关闭名称对话框。
 pub(crate) fn close_git_name_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.name = None;
-    shell.state.tasks.subscriptions.git_name_modal = None;
+    shell.state.ui.modals.git.name = None;
+    shell.state.runtime.tasks.subscriptions.git_name_modal = None;
     cx.notify();
 }
 
@@ -201,21 +201,21 @@ pub(crate) fn open_git_worktree_modal(
             crate::git::GitWorktreeModalEvent::Close => close_git_worktree_modal(shell, cx),
         },
     );
-    shell.state.modals.git.worktree = Some(modal);
-    shell.state.tasks.subscriptions.git_worktree_modal = Some(subscription);
+    shell.state.ui.modals.git.worktree = Some(modal);
+    shell.state.runtime.tasks.subscriptions.git_worktree_modal = Some(subscription);
     cx.notify();
 }
 
 /// 触发工作树对话框提交。
 pub(crate) fn submit_git_worktree_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if let Some(modal) = shell.state.modals.git.worktree.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.worktree.as_ref() {
         modal.update(cx, |modal, cx| modal.submit(cx));
     }
 }
 
 /// 关闭工作树对话框。
 pub(crate) fn close_git_worktree_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.worktree = None;
-    shell.state.tasks.subscriptions.git_worktree_modal = None;
+    shell.state.ui.modals.git.worktree = None;
+    shell.state.runtime.tasks.subscriptions.git_worktree_modal = None;
     cx.notify();
 }

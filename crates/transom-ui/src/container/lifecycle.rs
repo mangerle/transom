@@ -35,7 +35,7 @@ pub(crate) fn on_container_create_event(
         )
     };
     if value.is_empty() {
-        let view = shell.state.modals.tools.create_dialog.clone();
+        let view = shell.state.ui.modals.tools.create_dialog.clone();
         view.update(cx, |view, cx| {
             view.set_error(
                 rust_i18n::t!("container.create_dialog.name_required").to_string(),
@@ -98,7 +98,7 @@ pub(crate) fn on_container_create_event(
 
 /// 关闭拉取/新建弹窗：实体丢弃本次打开期的附加输入。
 fn close_container_create_dialog(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let view = shell.state.modals.tools.create_dialog.clone();
+    let view = shell.state.ui.modals.tools.create_dialog.clone();
     view.update(cx, |view, cx| view.close(cx));
     cx.notify();
 }

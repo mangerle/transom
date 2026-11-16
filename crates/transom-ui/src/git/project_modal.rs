@@ -80,12 +80,13 @@ impl GitProjectModalView {
             folder.pick(name, window, cx);
         }
 
-        let picker_sub = cx.subscribe(&picker, |this, _, event: &GitDirBrowserEvent, cx| {
-            match event {
+        let picker_sub = cx.subscribe(
+            &picker,
+            |this, _, event: &GitDirBrowserEvent, cx| match event {
                 GitDirBrowserEvent::PathSelected(_) => this.trigger_probe(cx),
                 GitDirBrowserEvent::CloseTree => cx.notify(),
-            }
-        });
+            },
+        );
         let picker_obs = cx.observe(&picker, |_, _, cx| cx.notify());
 
         let root = picker.read(cx).browser.root.clone();
@@ -112,7 +113,14 @@ impl GitProjectModalView {
 
     /// 触发一次目录仓库探测。
     pub(crate) fn trigger_probe(&mut self, cx: &mut Context<Self>) {
-        let raw = self.picker.read(cx).path.read(cx).value().trim().to_string();
+        let raw = self
+            .picker
+            .read(cx)
+            .path
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
         if raw.is_empty() {
             return;
         }
@@ -166,7 +174,14 @@ impl GitProjectModalView {
 
     /// 校验并通过事件上报提交意图。
     pub(crate) fn commit(&mut self, cx: &mut Context<Self>) {
-        let path_value = self.picker.read(cx).path.read(cx).value().trim().to_string();
+        let path_value = self
+            .picker
+            .read(cx)
+            .path
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
         let has_error = self.picker.read(cx).error.is_some();
         if !can_confirm_project(&path_value, self.probing, has_error) {
             return;
@@ -261,12 +276,7 @@ impl Render for GitProjectModalView {
 }
 
 impl GitProjectModalView {
-    fn render_appearance_section(
-        &self,
-        view: &Entity<Self>,
-        p: &Palette,
-        cx: &App,
-    ) -> AnyElement {
+    fn render_appearance_section(&self, view: &Entity<Self>, p: &Palette, cx: &App) -> AnyElement {
         v_flex()
             .w_full()
             .gap_2()

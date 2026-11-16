@@ -25,7 +25,7 @@ pub(crate) fn on_settings_event(
             cx.notify();
         }
         SettingsEvent::CatalogChanged(catalog) => {
-            shell.state.catalog = (**catalog).clone();
+            shell.state.session.catalog = (**catalog).clone();
             shell.state.refresh_tab_sessions();
             shell.state.persist_catalog();
             cx.notify();
@@ -39,6 +39,7 @@ pub(crate) fn on_settings_event(
         SettingsEvent::MonitorSectionsChanged(collapse) => {
             shell
                 .state
+                .features
                 .monitor
                 .update(cx, |view, _| view.state.collapse = *collapse);
             cx.notify();
@@ -46,19 +47,24 @@ pub(crate) fn on_settings_event(
         SettingsEvent::MonitorDrawerWidthChanged(width) => {
             shell
                 .state
+                .features
                 .monitor
                 .update(cx, |view, _| view.set_drawer_width(*width));
             cx.notify();
         }
         SettingsEvent::TabPositionChanged(position) => {
             if *position == transom_core::TabPosition::Left {
-                let section = match shell.state.sidebar.section() {
+                let section = match shell.state.session.sidebar.section() {
                     SidebarSection::Sessions => SidebarSection::Tabs,
                     section => section,
                 };
-                shell.state.sidebar.show_section(section);
-            } else if shell.state.sidebar.section() == SidebarSection::Tabs {
-                shell.state.sidebar.select_section(SidebarSection::Sessions);
+                shell.state.session.sidebar.show_section(section);
+            } else if shell.state.session.sidebar.section() == SidebarSection::Tabs {
+                shell
+                    .state
+                    .session
+                    .sidebar
+                    .select_section(SidebarSection::Sessions);
             }
             cx.notify();
         }
@@ -93,7 +99,7 @@ pub(crate) fn on_settings_event(
             queue_settings_request(shell, SettingsRequest::GitSyncNow);
         }
         SettingsEvent::Status(message) => {
-            shell.state.status = Some(message.clone());
+            shell.state.ui.status = Some(message.clone());
             cx.notify();
         }
         SettingsEvent::Error(message) => {
@@ -105,6 +111,7 @@ pub(crate) fn on_settings_event(
             // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
             shell
                 .state
+                .runtime
                 .restart_requested
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             cx.quit();
@@ -151,7 +158,7 @@ fn apply_triggers_to_terminals(
 
 /// 设置实体要求外壳做的窗口动作统一入队。
 fn queue_settings_request(shell: &mut AppShell, request: SettingsRequest) {
-    shell.state.window_requests.push_settings(request);
+    shell.state.ui.window_requests.push_settings(request);
 }
 
 /// 执行一条设置实体排队的窗口动作。

@@ -9,6 +9,7 @@ use gpui_kit::*;
 pub(crate) fn toggle_cloud_sync_sidebar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     shell
         .state
+        .session
         .sidebar
         .toggle_section(SidebarSection::CloudSync);
     cx.notify();

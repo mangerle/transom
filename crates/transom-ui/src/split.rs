@@ -31,7 +31,7 @@ impl<'a> SplitOps<'a> {
     pub(crate) fn new(state: &'a mut crate::app::AppState) -> Self {
         Self {
             workspace: &mut state.workspace,
-            catalog: &state.catalog,
+            catalog: &state.session.catalog,
         }
     }
 

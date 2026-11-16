@@ -88,7 +88,7 @@ fn hit(needle: &str, label: &str, keywords: &[SharedString]) -> bool {
 
 impl AppState {
     fn session_items(&self, term: &str, needle: &str) -> Vec<(CommandItem, PaletteTarget)> {
-        let mut items = Vec::with_capacity(self.catalog.sessions.len() + 2);
+        let mut items = Vec::with_capacity(self.session.catalog.sessions.len() + 2);
         let local_label = rust_i18n::t!("app.new_local").to_string();
         let local_keywords = vec![
             SharedString::from("local"),
@@ -107,13 +107,13 @@ impl AppState {
             ));
         }
 
-        for session in &self.catalog.sessions {
+        for session in &self.session.catalog.sessions {
             let detail = crate::connection::display_with_port(&session.connection);
             let icon_name = crate::connection::icon(&session.connection);
 
             let mut keywords: Vec<SharedString> = vec![session.name.clone().into(), detail.into()];
             if let Some(folder_id) = session.folder_id
-                && let Some(path) = self.catalog.folder_path(folder_id)
+                && let Some(path) = self.session.catalog.folder_path(folder_id)
             {
                 keywords.push(path.into());
             }

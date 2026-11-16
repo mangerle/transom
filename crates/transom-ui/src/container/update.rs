@@ -43,7 +43,8 @@ impl ContainerWorkspace {
     /// 空白输入表示不限制对应资源；无法解析的值同样按「不限制」处理，
     /// 与迁移前的宽松口径一致。解析完成后关闭弹窗并投递更新命令。
     pub(crate) fn submit_container_update(&mut self, cx: &mut Context<Self>) {
-        let Some((name, mem_input, cpu_input)) = self.state.modals.update_container.clone() else {
+        let Some((name, mem_input, cpu_input)) = self.state.modals.update_container.clone()
+        else {
             return;
         };
 

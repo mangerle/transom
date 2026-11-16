@@ -52,7 +52,7 @@ impl AppShell {
             .h_full()
             .overflow_hidden()
             .bg(p.background);
-        if !self.state.immersive && app_settings(cx).window.tab_position != TabPosition::Left {
+        if !self.state.ui.immersive && app_settings(cx).window.tab_position != TabPosition::Left {
             main = main.child(self.render_tab_strip(window, p, cx));
         }
         if let Some(tab_id) = disconnected_tab {
@@ -60,7 +60,7 @@ impl AppShell {
         }
         main = main.child(content);
         // 广播条贴在终端区底部、状态栏之上；只对当前具备可输入终端的标签显示。
-        if self.state.broadcast.open && self.state.active_tab_has_terminal() {
+        if self.state.features.broadcast.open && self.state.active_tab_has_terminal() {
             main =
                 main.child(crate::broadcast::BroadcastOps::new(&mut self.state).render_bar(cx, p));
         }

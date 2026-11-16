@@ -93,7 +93,12 @@ impl GitCloneModalView {
                 h_flex()
                     .gap_1()
                     .items_center()
-                    .child(div().flex_1().min_w_0().child(Input::new(&path_input).w_full()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&path_input).w_full()),
+                    )
                     .child(
                         Button::new("git-clone-browse")
                             .ghost()
@@ -113,12 +118,7 @@ impl GitCloneModalView {
             .into_any_element()
     }
 
-    fn render_appearance_section(
-        &self,
-        view: &Entity<Self>,
-        p: &Palette,
-        cx: &App,
-    ) -> AnyElement {
+    fn render_appearance_section(&self, view: &Entity<Self>, p: &Palette, cx: &App) -> AnyElement {
         v_flex()
             .w_full()
             .gap_2()

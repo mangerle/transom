@@ -22,7 +22,7 @@ fn try_open_sftp_modal(
             permissions,
             octal_input,
         } => {
-            shell.state.modals.sftp.open_chmod(
+            shell.state.ui.modals.sftp.open_chmod(
                 crate::sftp::SftpChmodModalParams {
                     tab_id: *tab_id,
                     connection_id: *connection_id,
@@ -35,11 +35,17 @@ fn try_open_sftp_modal(
             );
         }
         SftpPanelEvent::OpenSearchModal(state) => {
-            shell.state.modals.sftp.open_search((**state).clone(), cx);
+            shell
+                .state
+                .ui
+                .modals
+                .sftp
+                .open_search((**state).clone(), cx);
         }
         SftpPanelEvent::ShowProperties { scope, properties } => {
             shell
                 .state
+                .ui
                 .modals
                 .sftp
                 .open_properties(scope.clone(), properties.clone(), cx);
@@ -51,11 +57,11 @@ fn try_open_sftp_modal(
                     .state
                     .set_error(crate::palette::localized_error(&error));
             }
-            shell.state.status = Some(status.clone());
+            shell.state.ui.status = Some(status.clone());
             cx.notify();
         }
         SftpPanelEvent::ConfirmLocalDelete { tab_id, paths } => {
-            shell.state.modals.sftp.open_confirm(
+            shell.state.ui.modals.sftp.open_confirm(
                 crate::sftp::SftpPendingDelete::Local {
                     tab_id: *tab_id,
                     paths: paths.clone(),
@@ -70,7 +76,7 @@ fn try_open_sftp_modal(
             connection_id,
             targets,
         } => {
-            shell.state.modals.sftp.open_confirm(
+            shell.state.ui.modals.sftp.open_confirm(
                 crate::sftp::SftpPendingDelete::Remote {
                     tab_id: *tab_id,
                     connection_id: *connection_id,
@@ -105,13 +111,13 @@ pub(super) fn on_sftp_panel_event(
         | SftpPanelEvent::OpenInputModal(_)
         | SftpPanelEvent::GrowPanelWidth(_) => {
             // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
-            shell.state.window_requests.push_sftp(event.clone());
+            shell.state.ui.window_requests.push_sftp(event.clone());
         }
         SftpPanelEvent::OpenSyncModal(state) => {
-            shell.state.modals.sftp.open_sync((**state).clone(), cx);
+            shell.state.ui.modals.sftp.open_sync((**state).clone(), cx);
         }
         SftpPanelEvent::OpenFilterModal { textarea } => {
-            shell.state.modals.sftp.open_filter(textarea.clone(), cx);
+            shell.state.ui.modals.sftp.open_filter(textarea.clone(), cx);
         }
         SftpPanelEvent::ClosePanel { tab_id } => {
             shell.state.close_sftp_panel(*tab_id);
@@ -125,7 +131,7 @@ pub(super) fn on_sftp_panel_event(
             );
         }
         SftpPanelEvent::SetStatus(message) => {
-            shell.state.status = Some(message.clone());
+            shell.state.ui.status = Some(message.clone());
             cx.notify();
         }
         SftpPanelEvent::OverlayChanged => {

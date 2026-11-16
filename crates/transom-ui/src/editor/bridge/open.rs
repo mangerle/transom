@@ -133,7 +133,7 @@ pub(crate) fn open_remote_editor_panel(
         file_name,
         permissions,
     } = params;
-    if let Some(editor) = shell.state.editors.update(cx, |panels, _| {
+    if let Some(editor) = shell.state.features.editors.update(cx, |panels, _| {
         panels.raise_existing(tab_id, connection_id, &remote_path)
     }) {
         editor.update(cx, |state, cx| state.focus(window, cx));
@@ -143,7 +143,7 @@ pub(crate) fn open_remote_editor_panel(
 
     let op_id = TransferId::new();
     let settings = editor_panel_settings(app_settings(cx));
-    let request = shell.state.editors.update(cx, |panels, cx| {
+    let request = shell.state.features.editors.update(cx, |panels, cx| {
         panels.spawn_editor_panel(
             SpawnEditorPanelParams {
                 tab_id,
@@ -159,7 +159,7 @@ pub(crate) fn open_remote_editor_panel(
         )
     });
     if let Some(request) = request {
-        shell.state.editors.update(cx, |panels, cx| {
+        shell.state.features.editors.update(cx, |panels, cx| {
             panels.request_remote_text_read(request, cx);
         });
     }
@@ -176,7 +176,7 @@ pub(crate) fn spawn_new_editor_panel(
     cx: &mut Context<AppShell>,
 ) {
     let settings = editor_panel_settings(app_settings(cx));
-    shell.state.editors.update(cx, |panels, cx| {
+    shell.state.features.editors.update(cx, |panels, cx| {
         panels.spawn_editor_panel(
             SpawnEditorPanelParams {
                 tab_id,
@@ -214,7 +214,7 @@ pub(crate) fn open_terminal_code_location(
     let remote_dir = crate::sftp::sftp_state(&shell.state.workspace, tab_id, cx)
         .map(|panel| panel.remote.path.clone());
     let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {
-        shell.state.status =
+        shell.state.ui.status =
             Some(rust_i18n::t!("editor.error_unresolved_link", path = path).to_string());
         cx.notify();
         return;
@@ -224,7 +224,7 @@ pub(crate) fn open_terminal_code_location(
         if local.is_absolute() {
             crate::audit::open_local_path(local);
         } else {
-            shell.state.status =
+            shell.state.ui.status =
                 Some(rust_i18n::t!("editor.error_local_absolute", path = resolved).to_string());
             cx.notify();
         }
@@ -258,7 +258,7 @@ pub(crate) fn open_remote_code_location(
         line,
         column,
     } = target;
-    if let Some(editor) = shell.state.editors.update(cx, |panels, _| {
+    if let Some(editor) = shell.state.features.editors.update(cx, |panels, _| {
         panels.raise_existing(tab_id, connection_id, &remote_path)
     }) {
         apply_editor_goto(&editor, line, column, window, cx);
@@ -275,7 +275,7 @@ pub(crate) fn open_remote_code_location(
         );
     let op_id = TransferId::new();
     let settings = editor_panel_settings(app_settings(cx));
-    let request = shell.state.editors.update(cx, |panels, cx| {
+    let request = shell.state.features.editors.update(cx, |panels, cx| {
         panels.spawn_editor_panel(
             SpawnEditorPanelParams {
                 tab_id,
@@ -294,7 +294,7 @@ pub(crate) fn open_remote_code_location(
         )
     });
     if let Some(request) = request {
-        shell.state.editors.update(cx, |panels, cx| {
+        shell.state.features.editors.update(cx, |panels, cx| {
             panels.request_remote_text_read(request, cx);
         });
     }

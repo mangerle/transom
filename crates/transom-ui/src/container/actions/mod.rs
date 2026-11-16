@@ -176,15 +176,15 @@ impl ContainerWorkspace {
     /// 外壳转发。
     pub(crate) fn reveal_container(&mut self, name: String, cx: &mut Context<Self>) {
         let already_visible = self.state.section == ContainerSection::Containers
-            && self.state.containers.iter().any(|item| item.name == name);
-        let visible_id = self
-            .state
-            .containers
+            && self.state.containers
+                .iter()
+                .any(|item| item.name == name);
+        let visible_id = self.state.containers
             .iter()
             .find(|item| item.name == name)
             .map(|item| item.id.clone());
-        let need_list =
-            self.state.section != ContainerSection::Containers || self.state.containers.is_empty();
+        let need_list = self.state.section != ContainerSection::Containers
+            || self.state.containers.is_empty();
         if already_visible {
             if let Some(id) = visible_id {
                 self.select_container_item(id);

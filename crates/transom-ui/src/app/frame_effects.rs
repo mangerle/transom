@@ -126,11 +126,12 @@ impl AppShell {
             .and_then(|tab_id| self.state.workspace.tab(tab_id))
             .and_then(|tab| tab.system_stats());
         // 先借用比较：快照未变化时避免每帧克隆整份统计。
-        if self.state.monitor.read(cx).stats() == stats {
+        if self.state.features.monitor.read(cx).stats() == stats {
             return;
         }
         let stats = stats.cloned();
         self.state
+            .features
             .monitor
             .update(cx, |view, _| view.set_stats(stats));
     }
@@ -183,6 +184,7 @@ impl AppShell {
         // 先借用会话里的规则做比较：未变化时不必每帧克隆整份转发列表。
         let rules = self
             .state
+            .session
             .catalog
             .sessions
             .iter()
@@ -213,7 +215,7 @@ impl AppShell {
                 crate::editor::open_remote_editor_panel(self, params, window, cx);
             }
             SftpPanelEvent::OpenInputModal(params) => {
-                self.state.modals.sftp.open_input(params, window, cx);
+                self.state.ui.modals.sftp.open_input(params, window, cx);
             }
             SftpPanelEvent::GrowPanelWidth(extra) => {
                 crate::sftp::grow_sftp_panel_width(self, extra, window, cx);
@@ -224,10 +226,10 @@ impl AppShell {
 
     pub(super) fn flush_window_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::app::WindowRequest;
-        if self.state.window_requests.is_empty() {
+        if self.state.ui.window_requests.is_empty() {
             return;
         }
-        let requests = self.state.window_requests.take();
+        let requests = self.state.ui.window_requests.take();
         for request in requests {
             match request {
                 WindowRequest::Sftp(event) => self.handle_sftp_request(event, window, cx),
@@ -300,15 +302,15 @@ impl AppShell {
     /// 投递都在 `defer_in` 回调中执行。这样 `Render::render` 不再直接修改状态，
     /// 也避免在渲染借用期间打开弹窗或更新其他实体。
     pub(super) fn schedule_frame_effects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.state.feedback.frame_effects_scheduled {
+        if self.state.ui.feedback.frame_effects_scheduled {
             return;
         }
-        self.state.feedback.frame_effects_scheduled = true;
+        self.state.ui.feedback.frame_effects_scheduled = true;
         cx.defer_in(window, |this, window, cx| {
-            this.state.feedback.frame_effects_scheduled = false;
+            this.state.ui.feedback.frame_effects_scheduled = false;
             this.run_frame_effects(window, cx);
             crate::dialog_host::reconcile_dialogs(this, window, cx);
-            let pending_errors = this.state.feedback.pending_notices.drain();
+            let pending_errors = this.state.ui.feedback.pending_notices.drain();
             for message in pending_errors {
                 window.push_notification(Notification::error(message).autohide(false), cx);
             }
@@ -331,7 +333,7 @@ impl AppShell {
 }
 
 pub(super) fn sync_stats_sampling(state: &mut crate::app::AppState, cx: &mut Context<AppShell>) {
-    let demand = state.monitor.read(cx).is_open()
+    let demand = state.features.monitor.read(cx).is_open()
         || state.workspace.tabs.iter().any(|tab| tab.is_monitor())
         || app_settings(cx).status_bar.visible_items().any(|id| {
             matches!(
@@ -344,9 +346,9 @@ pub(super) fn sync_stats_sampling(state: &mut crate::app::AppState, cx: &mut Con
                     | transom_core::StatusItemId::Uptime
             )
         });
-    if demand == state.stats_sampling {
+    if demand == state.features.stats_sampling {
         return;
     }
-    state.stats_sampling = demand;
+    state.features.stats_sampling = demand;
     state.send_command(transom_core::HostCommand::SetStatsSampling { enabled: demand });
 }

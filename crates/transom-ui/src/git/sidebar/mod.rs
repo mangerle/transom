@@ -366,22 +366,14 @@ pub(super) fn render_git_folder_menu(
         rust_i18n::t!("git.folder.new_project").to_string(),
         UiIcon::ADD,
         move |_, _, cx| {
-            emit_sidebar(
-                &view_add,
-                GitSidebarEvent::OpenProjectModal(Some(id)),
-                cx,
-            );
+            emit_sidebar(&view_add, GitSidebarEvent::OpenProjectModal(Some(id)), cx);
         },
     ))
     .item(menu_item(
         rust_i18n::t!("git.folder.rename").to_string(),
         UiIcon::FOLDER,
         move |_, _, cx| {
-            emit_sidebar(
-                &view_rename,
-                GitSidebarEvent::OpenRenameFolderModal(id),
-                cx,
-            );
+            emit_sidebar(&view_rename, GitSidebarEvent::OpenRenameFolderModal(id), cx);
         },
     ))
     .item(menu_item(

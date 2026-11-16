@@ -55,7 +55,7 @@ impl GitSidebarView {
 impl AppState {
     /// 读取 Git 全局注册表；只暴露 Git 域状态，不开放整个应用状态。
     pub(crate) fn git_registry<'a>(&self, cx: &'a App) -> &'a GitHub {
-        &self.git_sidebar.read(cx).state
+        &self.features.git_sidebar.read(cx).state
     }
 
     /// 原子更新 Git 全局注册表；回调结束即释放实体借用。
@@ -64,7 +64,8 @@ impl AppState {
         cx: &mut App,
         update: impl FnOnce(&mut GitHub) -> R,
     ) -> R {
-        self.git_sidebar
+        self.features
+            .git_sidebar
             .update(cx, |view, _| update(&mut view.state))
     }
 }

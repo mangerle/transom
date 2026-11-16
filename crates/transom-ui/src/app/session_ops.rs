@@ -13,7 +13,8 @@ use zeroize::Zeroizing;
 
 impl AppState {
     pub(crate) fn identity_options(&self) -> Vec<crate::session_form::IdentityOption> {
-        self.catalog
+        self.session
+            .catalog
             .identities
             .iter()
             .map(|identity| crate::session_form::IdentityOption {
@@ -30,8 +31,8 @@ impl AppState {
         &self,
         exclude: Option<SessionId>,
     ) -> Vec<crate::session_form::JumpOption> {
-        let mut options = Vec::with_capacity(self.catalog.sessions.len());
-        for session in &self.catalog.sessions {
+        let mut options = Vec::with_capacity(self.session.catalog.sessions.len());
+        for session in &self.session.catalog.sessions {
             if Some(session.id) == exclude {
                 continue;
             }
@@ -69,6 +70,7 @@ impl AppState {
                 return false;
             }
             let Some(next) = self
+                .session
                 .catalog
                 .sessions
                 .iter()
@@ -90,10 +92,11 @@ impl AppState {
     /// 获取目录中所有已存在的文件夹路径清单（排重且字典序）。
     pub(crate) fn folder_paths(&self) -> Vec<String> {
         let mut paths: Vec<String> = self
+            .session
             .catalog
             .folders
             .iter()
-            .filter_map(|folder| self.catalog.folder_path(folder.id))
+            .filter_map(|folder| self.session.catalog.folder_path(folder.id))
             .collect();
         paths.sort();
         paths.dedup();
@@ -111,15 +114,21 @@ impl AppShell {
     ) {
         let defaults = self
             .state
+            .session
             .catalog
             .folders
             .iter()
             .find(|folder| {
-                self.state.catalog.folder_path(folder.id).as_deref() == Some(folder_path)
+                self.state.session.catalog.folder_path(folder.id).as_deref() == Some(folder_path)
             })
-            .map(|folder| self.state.catalog.inherited_folder_defaults(folder.id))
+            .map(|folder| {
+                self.state
+                    .session
+                    .catalog
+                    .inherited_folder_defaults(folder.id)
+            })
             .unwrap_or_default();
-        let view = self.state.modals.session.form.clone();
+        let view = self.state.ui.modals.session.form.clone();
         view.update(cx, |view, cx| {
             view.apply_folder_selection(folder_path, &defaults, window, cx);
         });
@@ -136,7 +145,7 @@ impl AppShell {
             global_proxy: app_settings(cx).proxy.clone(),
             block_view: transom_core::BlockViewOverride::FollowGlobal,
         };
-        let view = self.state.modals.session.form.clone();
+        let view = self.state.ui.modals.session.form.clone();
         view.update(cx, |view, cx| view.open(init, window, cx));
         cx.notify();
     }
@@ -149,6 +158,7 @@ impl AppShell {
     ) {
         let Some(session) = self
             .state
+            .session
             .catalog
             .sessions
             .iter()
@@ -159,7 +169,7 @@ impl AppShell {
         };
         let folder_path = session
             .folder_id
-            .and_then(|id| self.state.catalog.folder_path(id));
+            .and_then(|id| self.state.session.catalog.folder_path(id));
         let is_serial = matches!(session.connection, Connection::Serial(_));
         let block_override = session.block_view;
         let init = crate::session_form::SessionFormInit {
@@ -171,7 +181,7 @@ impl AppShell {
             global_proxy: app_settings(cx).proxy.clone(),
             block_view: block_override,
         };
-        let view = self.state.modals.session.form.clone();
+        let view = self.state.ui.modals.session.form.clone();
         view.update(cx, |view, cx| view.open(init, window, cx));
         self.prefill_secrets(&view, window, cx);
         if is_serial {
@@ -181,8 +191,8 @@ impl AppShell {
 
     /// 重新枚举系统串口并写回当前会话表单。
     fn refresh_serial_ports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let result = self.state.services.serial_ports.list();
-        let view = self.state.modals.session.form.clone();
+        let result = self.state.runtime.services.serial_ports.list();
+        let view = self.state.ui.modals.session.form.clone();
         view.update(cx, |view, cx| view.apply_serial_ports(result, window, cx));
         cx.notify();
     }
@@ -217,7 +227,7 @@ impl AppShell {
         crate::app::prefill_secret_fields(
             session_id.into(),
             fields,
-            self.state.services.secret_store.clone(),
+            self.state.runtime.services.secret_store.clone(),
             window,
             cx,
         );
@@ -244,7 +254,7 @@ impl AppShell {
             }
             crate::session_form::SessionFormEvent::SelectFolder { path } => {
                 self.select_form_folder(path, window, cx);
-                let view = self.state.modals.session.form.clone();
+                let view = self.state.ui.modals.session.form.clone();
                 view.update(cx, |view, cx| view.set_folder_open(false, cx));
             }
             crate::session_form::SessionFormEvent::RefreshSerialPorts => {
@@ -257,7 +267,7 @@ impl AppShell {
                 crate::app::prefill_secret_fields(
                     SecretOwner::Identity(*id),
                     fields.clone(),
-                    self.state.services.secret_store.clone(),
+                    self.state.runtime.services.secret_store.clone(),
                     window,
                     cx,
                 );
@@ -275,6 +285,7 @@ impl AppShell {
         let identity_id = identity.id;
         if let Some(existing) = self
             .state
+            .session
             .catalog
             .identities
             .iter_mut()
@@ -282,7 +293,7 @@ impl AppShell {
         {
             *existing = identity;
         } else {
-            self.state.catalog.identities.push(identity);
+            self.state.session.catalog.identities.push(identity);
         }
         self.state.persist_catalog();
 
@@ -295,7 +306,7 @@ impl AppShell {
             })
             .collect();
         if !secret_writes.is_empty() {
-            let secret_store = self.state.services.secret_store.clone();
+            let secret_store = self.state.runtime.services.secret_store.clone();
             cx.spawn(async move |this, cx| {
                 let error = cx
                     .background_executor()
@@ -325,6 +336,7 @@ impl AppShell {
     ) {
         let editing = self
             .state
+            .session
             .catalog
             .sessions
             .iter()
@@ -333,7 +345,7 @@ impl AppShell {
         built.session.folder_id = built
             .folder_path
             .as_deref()
-            .and_then(|path| self.state.catalog.ensure_folder_path(path));
+            .and_then(|path| self.state.session.catalog.ensure_folder_path(path));
         let password_key = SecretKey::new(built.session.id, SecretKind::Password);
         let passphrase_key = SecretKey::new(built.session.id, SecretKind::KeyPassphrase);
 
@@ -360,7 +372,7 @@ impl AppShell {
                 secret_writes.push(SecretWrite::Delete(passphrase_key));
             }
         }
-        let secret_store = self.state.services.secret_store.clone();
+        let secret_store = self.state.runtime.services.secret_store.clone();
         cx.spawn(async move |this, cx| {
             let error = if secret_writes.is_empty() {
                 None
@@ -384,6 +396,7 @@ impl AppShell {
         if editing {
             if let Some(existing) = self
                 .state
+                .session
                 .catalog
                 .sessions
                 .iter_mut()
@@ -392,7 +405,7 @@ impl AppShell {
                 *existing = built.session;
             }
         } else {
-            self.state.catalog.sessions.push(built.session);
+            self.state.session.catalog.sessions.push(built.session);
         }
         self.state.persist_catalog();
         cx.notify();

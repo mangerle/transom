@@ -194,9 +194,7 @@ impl GitWorkspace {
 
     /// 「推送此前所有提交」：把选中之前的历史推到该分支的上游远端。
     pub(crate) fn push_up_to(&mut self, oid: &str, cx: &mut Context<Self>) {
-        let branch = self
-            .state
-            .status
+        let branch = self.state.status
             .as_ref()
             .and_then(|status| match &status.head {
                 HeadState::OnBranch(name) => Some(name.clone()),

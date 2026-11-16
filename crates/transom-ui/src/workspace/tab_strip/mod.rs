@@ -81,7 +81,7 @@ impl AppShell {
                                 crate::connection::open_local_terminal(this, window, cx);
                             }));
                         let menu_app = cx.entity().clone();
-                        let shells = (*self.state.local_shells).clone();
+                        let shells = (*self.state.session.local_shells).clone();
                         DropdownButton::new("tab-strip-quick-new-shells")
                             .button(action)
                             .menu_accessibility_label(

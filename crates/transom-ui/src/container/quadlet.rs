@@ -78,7 +78,9 @@ impl ContainerWorkspace {
         request_id: ContainerRequestId,
         units: Vec<transom_core::ContainerQuadletUnit>,
     ) -> bool {
-        if self.state.quadlets_request != Some(request_id) || !self.state.modals.quadlets_dialog_open {
+        if self.state.quadlets_request != Some(request_id)
+            || !self.state.modals.quadlets_dialog_open
+        {
             return false;
         }
         self.state.quadlets = units;

@@ -91,6 +91,7 @@ pub(crate) fn auto_start_forwards(
 ) {
     let rules: Vec<ForwardRule> = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
@@ -185,6 +186,7 @@ pub(crate) fn toggle_forward_panel(
     );
     shell
         .state
+        .runtime
         .tasks
         .subscriptions
         .forward
@@ -212,6 +214,7 @@ pub(crate) fn submit_forward_rule(
 
     if let Some(session) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter_mut()
@@ -223,7 +226,7 @@ pub(crate) fn submit_forward_rule(
 
     // 公网监听必须二次确认：不能因为点了一次「添加」就把端口开到公网。
     if is_public_bind_address(forward_bind_host(&rule)) {
-        shell.state.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
+        shell.state.ui.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
             tab_id,
             connection_id,
             rule,
@@ -258,6 +261,7 @@ pub(crate) fn start_forward_rule(
     let session_id = tab.session_id;
     let Some(rule) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
@@ -271,7 +275,7 @@ pub(crate) fn start_forward_rule(
     let bind_host = forward_bind_host(&rule);
 
     if is_public_bind_address(bind_host) {
-        shell.state.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
+        shell.state.ui.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
             tab_id,
             connection_id,
             rule,
@@ -282,6 +286,7 @@ pub(crate) fn start_forward_rule(
 
     if let Some(session) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter_mut()
@@ -303,7 +308,7 @@ pub(crate) fn start_forward_rule(
 }
 
 pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(pending) = shell.state.modals.tools.confirm_forward_any.take() else {
+    let Some(pending) = shell.state.ui.modals.tools.confirm_forward_any.take() else {
         return;
     };
     let PendingForwardConfirm {
@@ -315,6 +320,7 @@ pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppSh
     if let Some(session_id) = session_id {
         if let Some(session) = shell
             .state
+            .session
             .catalog
             .sessions
             .iter_mut()
@@ -337,7 +343,7 @@ pub(crate) fn confirm_forward_start(shell: &mut AppShell, cx: &mut Context<AppSh
 }
 
 pub(crate) fn cancel_forward_confirm(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.tools.confirm_forward_any = None;
+    shell.state.ui.modals.tools.confirm_forward_any = None;
     cx.notify();
 }
 
@@ -356,6 +362,7 @@ pub(crate) fn stop_forward_rule(
     let session_id = tab.session_id;
     if let Some(session) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter_mut()
@@ -415,6 +422,7 @@ pub(crate) fn delete_forward_rule(
     }
     if let Some(session) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter_mut()

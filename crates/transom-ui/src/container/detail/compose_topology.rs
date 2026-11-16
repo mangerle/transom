@@ -434,7 +434,10 @@ fn render_topology_pins_bar(
 
     if !upstream_deps.is_empty() {
         pins_bar = pins_bar.child(render_topology_pin_group(
-            &format!("↳ {}:", rust_i18n::t!("container.compose.topology_depends_on")),
+            &format!(
+                "↳ {}:",
+                rust_i18n::t!("container.compose.topology_depends_on")
+            ),
             upstream_deps,
             hovered_service,
             p.primary,
@@ -443,7 +446,10 @@ fn render_topology_pins_bar(
     }
     if !downstream_dependents.is_empty() {
         pins_bar = pins_bar.child(render_topology_pin_group(
-            &format!("↱ {}:", rust_i18n::t!("container.compose.topology_dependents")),
+            &format!(
+                "↱ {}:",
+                rust_i18n::t!("container.compose.topology_dependents")
+            ),
             downstream_dependents,
             hovered_service,
             p.warning,
@@ -460,10 +466,11 @@ fn render_topology_pin_group(
     accent: Hsla,
     p: &Palette,
 ) -> AnyElement {
-    let mut row = h_flex()
-        .gap_1p5()
-        .items_center()
-        .child(div().text_color(p.muted_foreground).child(label.to_string()));
+    let mut row = h_flex().gap_1p5().items_center().child(
+        div()
+            .text_color(p.muted_foreground)
+            .child(label.to_string()),
+    );
     for item in items {
         let focused = hovered_service == Some(item.as_str());
         row = row.child(

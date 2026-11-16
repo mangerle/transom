@@ -63,7 +63,7 @@ pub(super) fn render_target_rows(
                         .on_click(move |&checked, _window, cx| {
                             app.update(cx, |this, cx| {
                                 crate::broadcast::set_broadcast_target(
-                                    &mut this.state.broadcast,
+                                    &mut this.state.features.broadcast,
                                     tab_id,
                                     checked,
                                     cx,

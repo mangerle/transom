@@ -25,7 +25,7 @@ impl ModalKind {
     /// 量级是二十来个字符串，可忽略。
     pub(super) fn is_dirty(self, shell: &AppShell, cx: &App) -> bool {
         let current = self.field_values(shell, cx);
-        !current.is_empty() && current != shell.state.open_modals.baseline(self)
+        !current.is_empty() && current != shell.state.ui.open_modals.baseline(self)
     }
 
     /// 该种类需要跟踪的文本项；返回空表示不参与脏判定（确认与授权类）。
@@ -52,12 +52,12 @@ impl ModalKind {
     ) -> bool {
         if self.is_dirty(shell, cx) {
             // 拦截必须可见：文案说明为什么按了没反应，行为与提示一致。
-            shell.state.feedback.dialog_hint =
+            shell.state.ui.feedback.dialog_hint =
                 Some(rust_i18n::t!("dialog.dirty_block_hint").to_string());
             cx.notify();
             return false;
         }
-        shell.state.feedback.dialog_hint = None;
+        shell.state.ui.feedback.dialog_hint = None;
         if let Some(handled) = self.container_cancel(shell, cx) {
             return handled;
         }
@@ -89,7 +89,7 @@ impl ModalKind {
     ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                shell.state.modals.sftp.close_confirm();
+                shell.state.ui.modals.sftp.close_confirm();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
@@ -97,6 +97,7 @@ impl ModalKind {
             ModalKind::HostKeyConfirm => {
                 shell
                     .state
+                    .ui
                     .modals
                     .connection
                     .prompts
@@ -106,6 +107,7 @@ impl ModalKind {
             ModalKind::ClipboardPrompt => {
                 shell
                     .state
+                    .ui
                     .modals
                     .connection
                     .prompts
@@ -119,6 +121,7 @@ impl ModalKind {
             ModalKind::AuthPrompt => {
                 shell
                     .state
+                    .ui
                     .modals
                     .connection
                     .prompts
@@ -126,37 +129,37 @@ impl ModalKind {
                 true
             }
             ModalKind::SftpInput => {
-                shell.state.modals.sftp.close_input();
+                shell.state.ui.modals.sftp.close_input();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpChmod => {
-                shell.state.modals.sftp.close_chmod();
+                shell.state.ui.modals.sftp.close_chmod();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpProperties => {
-                shell.state.modals.sftp.close_properties();
+                shell.state.ui.modals.sftp.close_properties();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpFilter => {
-                shell.state.modals.sftp.close_filter();
+                shell.state.ui.modals.sftp.close_filter();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpSearch => {
-                shell.state.modals.sftp.close_search();
+                shell.state.ui.modals.sftp.close_search();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
             }
             ModalKind::SftpSync => {
-                shell.state.modals.sftp.close_sync();
+                shell.state.ui.modals.sftp.close_sync();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
                 true
@@ -180,6 +183,7 @@ impl ModalKind {
             ModalKind::ContainerForm => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .container_form
@@ -189,6 +193,7 @@ impl ModalKind {
             ModalKind::ContainerFolderForm => {
                 shell
                     .state
+                    .features
                     .containers
                     .sidebar
                     .update(cx, |sidebar, cx| sidebar.dismiss_folder_form(cx));
@@ -197,6 +202,7 @@ impl ModalKind {
             ModalKind::ContainerRunForm => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .run_form
@@ -206,6 +212,7 @@ impl ModalKind {
             ModalKind::ContainerCreate => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .create_dialog
@@ -215,6 +222,7 @@ impl ModalKind {
             ModalKind::SessionForm => {
                 shell
                     .state
+                    .ui
                     .modals
                     .session
                     .form
@@ -222,20 +230,21 @@ impl ModalKind {
                 true
             }
             ModalKind::FolderForm => {
-                shell.state.modals.session.folder_form = None;
+                shell.state.ui.modals.session.folder_form = None;
                 true
             }
             ModalKind::BatchEdit => {
-                shell.state.modals.session.batch_edit = None;
+                shell.state.ui.modals.session.batch_edit = None;
                 true
             }
             ModalKind::SnippetForm => {
-                shell.state.modals.tools.snippet_panel.form = None;
+                shell.state.ui.modals.tools.snippet_panel.form = None;
                 true
             }
             ModalKind::KnownHosts => {
                 shell
                     .state
+                    .ui
                     .modals
                     .connection
                     .known_hosts
@@ -245,6 +254,7 @@ impl ModalKind {
             ModalKind::KeyWizard => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .key_wizard
@@ -254,6 +264,7 @@ impl ModalKind {
             ModalKind::BackupPrompt => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .backup_prompt
@@ -263,6 +274,7 @@ impl ModalKind {
             ModalKind::AuditViewer => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .audit_viewer
@@ -272,6 +284,7 @@ impl ModalKind {
             ModalKind::Replay => {
                 shell
                     .state
+                    .ui
                     .modals
                     .tools
                     .replay
@@ -283,7 +296,7 @@ impl ModalKind {
                 true
             }
             ModalKind::ShortcutCapture => {
-                shell.state.shortcut_recording.capture = None;
+                shell.state.ui.shortcut_recording.capture = None;
                 true
             }
             ModalKind::DiffViewer => {

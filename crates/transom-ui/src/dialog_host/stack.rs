@@ -12,7 +12,7 @@ pub(super) fn cancel_modal(
     let closed = app.update(cx, |shell, cx| kind.cancel(shell, window, cx));
     app.update(cx, |shell, cx| {
         if closed {
-            shell.state.open_modals.drop(kind);
+            shell.state.ui.open_modals.drop(kind);
         }
         cx.notify();
     });
@@ -28,7 +28,7 @@ pub(super) fn commit_modal(
     let closed = app.update(cx, |shell, cx| kind.commit(shell, window, cx));
     app.update(cx, |shell, cx| {
         if closed {
-            shell.state.open_modals.drop(kind);
+            shell.state.ui.open_modals.drop(kind);
         }
         cx.notify();
     });
@@ -37,7 +37,7 @@ pub(super) fn commit_modal(
 
 pub(super) fn close_layer(app: &Entity<AppShell>, kind: ModalKind, cx: &mut App) {
     app.update(cx, |shell, cx| {
-        shell.state.open_modals.drop(kind);
+        shell.state.ui.open_modals.drop(kind);
         cx.notify();
     });
 }
@@ -94,6 +94,7 @@ pub(crate) fn reconcile_dialogs(
     let desired = desired_modal_stack(shell, cx);
     let actual: Vec<ModalKind> = shell
         .state
+        .ui
         .open_modals
         .layers
         .iter()
@@ -125,7 +126,7 @@ pub(crate) fn reconcile_dialogs(
         }
     });
     // 影子栈先按期望落定：延后执行的那批开关完成后即与之一致。
-    shell.state.open_modals.layers.truncate(common);
+    shell.state.ui.open_modals.layers.truncate(common);
     for kind in missing {
         // 基线在开弹窗这一刻取：此后任何文本变化都算未提交内容。
         let baseline = kind.field_values(shell, cx);
@@ -139,7 +140,7 @@ pub(crate) fn reconcile_dialogs(
                 _observe: observe,
             }
         });
-        shell.state.open_modals.layers.push(ModalLayer {
+        shell.state.ui.open_modals.layers.push(ModalLayer {
             kind,
             body,
             baseline,
@@ -156,6 +157,7 @@ fn push_dialog(
 ) {
     let Some(body) = shell
         .state
+        .ui
         .open_modals
         .layers
         .iter()
@@ -242,7 +244,7 @@ fn push_dialog(
 /// 于是压暗层上沿正好卡在顶栏中间。宿主元素铺满整个窗面，层序在编辑面板
 /// 之上、弹窗层之下，与迁移前的自绘遮罩一致。
 pub(crate) fn dialog_dim(shell: &AppShell, p: &Palette) -> Option<AnyElement> {
-    if shell.state.open_modals.layers.is_empty() {
+    if shell.state.ui.open_modals.layers.is_empty() {
         return None;
     }
     Some(

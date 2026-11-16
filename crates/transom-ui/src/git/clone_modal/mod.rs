@@ -90,11 +90,7 @@ impl EventEmitter<GitCloneModalEvent> for GitCloneModalView {}
 
 impl GitCloneModalView {
     /// 创建克隆弹窗实体并绑定 URL 与目录选择器的联动订阅。
-    pub(crate) fn new(
-        folders: Vec<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub(crate) fn new(folders: Vec<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let picker = cx.new(|cx| DirPicker::new(window, cx, ""));
         let url_placeholder = rust_i18n::t!("git.clone.url_placeholder").to_string();
         let folder_placeholder = rust_i18n::t!("git.project.folder_placeholder").to_string();
@@ -107,20 +103,19 @@ impl GitCloneModalView {
                 this.sync_auto_dest(window, cx);
             }
         });
-        let picker_sub =
-            cx.subscribe_in(
-                &picker,
-                window,
-                |this, _, event: &GitDirBrowserEvent, window, cx| match event {
-                    GitDirBrowserEvent::PathSelected(path) => {
-                        this.apply_selected_parent(path.clone(), window, cx);
-                    }
-                    GitDirBrowserEvent::CloseTree => {
-                        this.tree_open = false;
-                        cx.notify();
-                    }
-                },
-            );
+        let picker_sub = cx.subscribe_in(
+            &picker,
+            window,
+            |this, _, event: &GitDirBrowserEvent, window, cx| match event {
+                GitDirBrowserEvent::PathSelected(path) => {
+                    this.apply_selected_parent(path.clone(), window, cx);
+                }
+                GitDirBrowserEvent::CloseTree => {
+                    this.tree_open = false;
+                    cx.notify();
+                }
+            },
+        );
         let picker_obs = cx.observe(&picker, |_, _, cx| cx.notify());
 
         Self {
@@ -190,13 +185,21 @@ impl GitCloneModalView {
         };
         self.auto_repo = Some(repo.clone());
         let joined = parent.join(repo);
-        self.picker.update(cx, |p, cx| p.set_path_text(&joined, window, cx));
+        self.picker
+            .update(cx, |p, cx| p.set_path_text(&joined, window, cx));
     }
 
     /// 校验表单输入并在通过后发出启动克隆事件。
     pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
         let url = self.url.read(cx).value().trim().to_string();
-        let raw_dest = self.picker.read(cx).path.read(cx).value().trim().to_string();
+        let raw_dest = self
+            .picker
+            .read(cx)
+            .path
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
         if url.is_empty() || raw_dest.is_empty() {
             self.error = Some(rust_i18n::t!("git.clone.need_fields").to_string());
             cx.notify();

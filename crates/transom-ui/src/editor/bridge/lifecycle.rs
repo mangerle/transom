@@ -16,7 +16,7 @@ use transom_ui_icons::{AppIcon, UiIcon};
 
 /// 丢弃标签已不存在的对比面板。
 pub(crate) fn prune_tab_diff_overlay(shell: &mut AppShell, cx: &App) {
-    let Some(view) = shell.state.diff_viewer.as_ref() else {
+    let Some(view) = shell.state.features.diff_viewer.as_ref() else {
         return;
     };
     let tab_id = view.read(cx).state.tab_id;
@@ -27,8 +27,8 @@ pub(crate) fn prune_tab_diff_overlay(shell: &mut AppShell, cx: &App) {
         .iter()
         .any(|tab| tab.id == tab_id);
     if !alive {
-        shell.state.diff_viewer = None;
-        shell.state.tasks.subscriptions.diff_viewer = None;
+        shell.state.features.diff_viewer = None;
+        shell.state.runtime.tasks.subscriptions.diff_viewer = None;
     }
 }
 
@@ -43,14 +43,21 @@ pub(crate) fn prune_tab_overlays(shell: &mut AppShell, cx: &mut Context<AppShell
         .collect();
     shell
         .state
+        .features
         .editors
         .update(cx, |panels, _| panels.prune_dead_tabs(&alive));
     shell
         .state
+        .runtime
         .tasks
         .subscriptions
         .prune_container_workspaces(&alive);
-    shell.state.tasks.subscriptions.prune_git_workspaces(&alive);
+    shell
+        .state
+        .runtime
+        .tasks
+        .subscriptions
+        .prune_git_workspaces(&alive);
     prune_tab_diff_overlay(shell, cx);
 }
 
@@ -63,6 +70,7 @@ pub(crate) fn block_close_for_dirty_editors(
 ) -> bool {
     shell
         .state
+        .features
         .editors
         .update(cx, |panels, cx| panels.block_close(tab_ids, intent, cx))
 }
@@ -73,10 +81,10 @@ pub(crate) fn resume_pending_editor_close(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(intent) = shell.state.editors.read(cx).pending_close() else {
+    let Some(intent) = shell.state.features.editors.read(cx).pending_close() else {
         return;
     };
-    let dirty_tabs = shell.state.editors.read(cx).dirty_tabs();
+    let dirty_tabs = shell.state.features.editors.read(cx).dirty_tabs();
     try_finish_pending_close(shell, intent, &dirty_tabs, window, cx);
 }
 
@@ -122,6 +130,7 @@ pub(crate) fn try_finish_pending_close(
 fn clear_editor_pending_close(shell: &mut AppShell, cx: &mut Context<AppShell>) {
     shell
         .state
+        .features
         .editors
         .update(cx, |panels, _| panels.clear_pending_close());
 }
@@ -174,7 +183,7 @@ pub(crate) fn open_editor_goto_line(
             commit_editor_goto_line(this, window, cx);
         }
     });
-    shell.state.modals.tools.editor_goto_line = Some(EditorGotoLineModalState {
+    shell.state.ui.modals.tools.editor_goto_line = Some(EditorGotoLineModalState {
         editor,
         input,
         error: None,
@@ -191,6 +200,7 @@ pub(crate) fn cancel_editor_goto_line(
 ) {
     let editor = shell
         .state
+        .ui
         .modals
         .tools
         .editor_goto_line
@@ -208,20 +218,20 @@ pub(crate) fn commit_editor_goto_line(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(modal) = shell.state.modals.tools.editor_goto_line.as_ref() else {
+    let Some(modal) = shell.state.ui.modals.tools.editor_goto_line.as_ref() else {
         return;
     };
     let editor = modal.editor.clone();
     let raw = modal.input.read(cx).value().trim().to_string();
     let Some(line) = raw.parse::<usize>().ok().filter(|line| *line >= 1) else {
-        if let Some(modal) = shell.state.modals.tools.editor_goto_line.as_mut() {
+        if let Some(modal) = shell.state.ui.modals.tools.editor_goto_line.as_mut() {
             modal.error = Some(rust_i18n::t!("editor.goto_error").to_string());
         }
         cx.notify();
         return;
     };
     apply_editor_goto(&editor, line as u32, None, window, cx);
-    shell.state.modals.tools.editor_goto_line = None;
+    shell.state.ui.modals.tools.editor_goto_line = None;
     cx.notify();
 }
 
@@ -232,7 +242,7 @@ pub(crate) fn render_editor_goto_line_body(
     cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(modal) = shell.state.modals.tools.editor_goto_line.as_ref() else {
+    let Some(modal) = shell.state.ui.modals.tools.editor_goto_line.as_ref() else {
         return div().into_any_element();
     };
     let editor = modal.editor.clone();

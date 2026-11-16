@@ -32,7 +32,7 @@ impl AppShell {
                 }
             }
             ContainerWorkspaceEvent::OpenCreateDialog(section) => {
-                let view = self.state.modals.tools.create_dialog.clone();
+                let view = self.state.ui.modals.tools.create_dialog.clone();
                 view.update(cx, |view, cx| view.open(tab_id, *section, window, cx));
                 cx.notify();
             }

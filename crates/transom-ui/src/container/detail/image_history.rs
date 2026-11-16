@@ -92,11 +92,9 @@ fn render_history_summary_bar(
         .p_2()
         .rounded(p.radius.md)
         .bg(p.surface.pressed)
-        .child(
-            div().text_xs().text_color(p.muted_foreground).child(
-                rust_i18n::t!("container.detail.history_total", count = layer_count).to_string(),
-            ),
-        )
+        .child(div().text_xs().text_color(p.muted_foreground).child(
+            rust_i18n::t!("container.detail.history_total", count = layer_count).to_string(),
+        ))
         .children((total_advice_count > 0).then(|| {
             div()
                 .text_xs()
@@ -286,9 +284,12 @@ fn render_layer_digests_fallback(
             .bg(p.primary.opacity(0.1))
             .border_1()
             .border_color(p.primary.opacity(0.3))
-            .child(div().text_xs().text_color(p.primary).child(
-                rust_i18n::t!("container.detail.history_fallback_hint").to_string(),
-            )),
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.primary)
+                    .child(rust_i18n::t!("container.detail.history_fallback_hint").to_string()),
+            ),
     );
 
     for (index, digest) in layer_digests.iter().enumerate() {

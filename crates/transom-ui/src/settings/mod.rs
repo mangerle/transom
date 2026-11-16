@@ -204,6 +204,7 @@ pub(crate) fn apply_block_view_settings(shell: &AppShell, cx: &mut Context<AppSh
             let terminal = tab.terminal()?;
             let override_ = shell
                 .state
+                .session
                 .catalog
                 .sessions
                 .iter()

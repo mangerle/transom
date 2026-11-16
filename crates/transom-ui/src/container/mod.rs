@@ -191,7 +191,8 @@ pub(crate) fn on_container_overlay_key(
     if !event.keystroke.key.eq_ignore_ascii_case("escape") {
         return;
     }
-    let Some(tab) = fullscreen_tab.filter(|tab| shell.state.containers.fullscreen == Some(*tab))
+    let Some(tab) =
+        fullscreen_tab.filter(|tab| shell.state.features.containers.fullscreen == Some(*tab))
     else {
         return;
     };
@@ -204,6 +205,6 @@ pub(crate) fn on_container_overlay_key(
     if in_terminal {
         return;
     }
-    shell.state.containers.fullscreen = None;
+    shell.state.features.containers.fullscreen = None;
     cx.notify();
 }

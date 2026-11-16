@@ -40,8 +40,8 @@ pub(crate) fn open_git_rebase_modal(
     let subscription = cx.subscribe(&modal, |shell, _, event: &GitRebaseModalEvent, cx| {
         on_rebase_modal_event(shell, event, cx);
     });
-    shell.state.modals.git.rebase = Some(modal);
-    shell.state.tasks.subscriptions.git_rebase_modal = Some(subscription);
+    shell.state.ui.modals.git.rebase = Some(modal);
+    shell.state.runtime.tasks.subscriptions.git_rebase_modal = Some(subscription);
     shell.send_command(GitCommand::RebaseTodo {
         project: project.clone(),
         request_id,
@@ -81,7 +81,7 @@ pub(crate) fn apply_git_rebase_todo(
     steps: Vec<GitRebaseStep>,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.rebase.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.rebase.as_ref() {
         modal.update(cx, |modal, cx| modal.apply_todo(base, steps, cx));
     }
 }
@@ -94,7 +94,7 @@ pub(crate) fn fail_git_rebase_modal(
     message: String,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.rebase.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.rebase.as_ref() {
         modal.update(cx, |modal, cx| {
             modal.set_failed(project_id, action, message, cx)
         });
@@ -103,15 +103,15 @@ pub(crate) fn fail_git_rebase_modal(
 
 /// 触发当前交互式变基弹窗提交。
 pub(crate) fn run_git_rebase_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if let Some(modal) = shell.state.modals.git.rebase.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.rebase.as_ref() {
         modal.update(cx, |modal, cx| modal.run(cx));
     }
 }
 
 /// 关闭交互式变基弹窗（取消不改历史）。
 pub(crate) fn close_git_rebase_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.rebase = None;
-    shell.state.tasks.subscriptions.git_rebase_modal = None;
+    shell.state.ui.modals.git.rebase = None;
+    shell.state.runtime.tasks.subscriptions.git_rebase_modal = None;
     cx.notify();
 }
 
@@ -147,8 +147,8 @@ pub(crate) fn open_git_conflict_modal(
     let subscription = cx.subscribe(&modal, |shell, _, event: &GitConflictModalEvent, cx| {
         on_conflict_modal_event(shell, event, cx);
     });
-    shell.state.modals.git.conflict = Some(modal);
-    shell.state.tasks.subscriptions.git_conflict_modal = Some(subscription);
+    shell.state.ui.modals.git.conflict = Some(modal);
+    shell.state.runtime.tasks.subscriptions.git_conflict_modal = Some(subscription);
 
     shell.send_command(GitCommand::LoadConflictSides {
         project: project.clone(),
@@ -205,7 +205,7 @@ pub(crate) fn apply_git_conflict_sides(
     sides: ConflictSides,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.conflict.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.conflict.as_ref() {
         modal.update(cx, |modal, cx| {
             modal.apply_sides(project_id, path, sides, cx)
         });
@@ -218,15 +218,15 @@ pub(crate) fn handle_git_conflict_resolve_done(
     error_message: Option<String>,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.conflict.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.conflict.as_ref() {
         modal.update(cx, |modal, cx| modal.handle_resolve_done(error_message, cx));
     }
 }
 
 /// 关闭冲突解决模态框。
 pub(crate) fn close_git_conflict_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.conflict = None;
-    shell.state.tasks.subscriptions.git_conflict_modal = None;
+    shell.state.ui.modals.git.conflict = None;
+    shell.state.runtime.tasks.subscriptions.git_conflict_modal = None;
     cx.notify();
 }
 
@@ -282,8 +282,8 @@ pub(crate) fn open_git_push_modal(
     let subscription = cx.subscribe(&modal, |shell, _, event: &GitPushModalEvent, cx| {
         on_push_modal_event(shell, event, cx);
     });
-    shell.state.modals.git.push = Some(modal);
-    shell.state.tasks.subscriptions.git_push_modal = Some(subscription);
+    shell.state.ui.modals.git.push = Some(modal);
+    shell.state.runtime.tasks.subscriptions.git_push_modal = Some(subscription);
 
     let request_id = GitRequestId::new();
     if let Some(workspace) = shell.state.git_workspace_of_project(project.id, cx) {
@@ -351,7 +351,7 @@ pub(crate) fn apply_git_outgoing_commits(
     commits: Vec<CommitEntry>,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.push.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.push.as_ref() {
         modal.update(cx, |modal, cx| {
             modal.apply_outgoing_commits(project_id, branch, remote_branch, commits, cx)
         });
@@ -365,7 +365,7 @@ pub(crate) fn apply_git_push_commit_files(
     files: Vec<CommitFile>,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.push.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.push.as_ref() {
         modal.update(cx, |modal, cx| modal.apply_commit_files(oid, files, cx));
     }
 }
@@ -377,7 +377,7 @@ pub(crate) fn handle_git_push_result(
     error: Option<String>,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(modal) = shell.state.modals.git.push.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.push.as_ref() {
         modal.update(cx, |modal, cx| {
             modal.handle_push_result(project_id, error, cx)
         });
@@ -386,15 +386,15 @@ pub(crate) fn handle_git_push_result(
 
 /// 触发推送弹窗提交。
 pub(crate) fn submit_git_push_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if let Some(modal) = shell.state.modals.git.push.as_ref() {
+    if let Some(modal) = shell.state.ui.modals.git.push.as_ref() {
         modal.update(cx, |modal, cx| modal.submit(cx));
     }
 }
 
 /// 关闭推送模态弹窗。
 pub(crate) fn close_git_push_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.push = None;
-    shell.state.tasks.subscriptions.git_push_modal = None;
+    shell.state.ui.modals.git.push = None;
+    shell.state.runtime.tasks.subscriptions.git_push_modal = None;
     cx.notify();
 }
 

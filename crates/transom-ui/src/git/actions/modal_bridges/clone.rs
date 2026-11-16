@@ -17,8 +17,8 @@ pub(crate) fn open_git_clone_modal(
     let subscription = cx.subscribe(&modal, |shell, _, event: &GitCloneModalEvent, cx| {
         on_clone_modal_event(shell, event, cx);
     });
-    shell.state.modals.git.clone = Some(modal.clone());
-    shell.state.tasks.subscriptions.git_clone_modal = Some(subscription);
+    shell.state.ui.modals.git.clone = Some(modal.clone());
+    shell.state.runtime.tasks.subscriptions.git_clone_modal = Some(subscription);
     let focus = modal.read(cx).focus_handle(cx);
     window.focus(&focus, cx);
     cx.notify();
@@ -26,14 +26,14 @@ pub(crate) fn open_git_clone_modal(
 
 /// 关闭「克隆仓库」弹窗。克隆一旦开始就由进度卡接管，这里不取消在途任务。
 pub(crate) fn close_git_clone_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.git.clone = None;
-    shell.state.tasks.subscriptions.git_clone_modal = None;
+    shell.state.ui.modals.git.clone = None;
+    shell.state.runtime.tasks.subscriptions.git_clone_modal = None;
     cx.notify();
 }
 
 /// 由全局快捷键触发当前「克隆仓库」弹窗的提交。
 pub(crate) fn submit_git_clone_modal(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(modal) = shell.state.modals.git.clone.clone() else {
+    let Some(modal) = shell.state.ui.modals.git.clone.clone() else {
         return;
     };
     modal.update(cx, |view, cx| view.submit(cx));
@@ -56,7 +56,7 @@ fn on_clone_modal_event(
         } => {
             // 一次只跑一个克隆：覆盖任务表会让旧子进程失去取消入口。
             if shell.state.git_registry(cx).clone_task.is_some() {
-                if let Some(modal) = shell.state.modals.git.clone.clone() {
+                if let Some(modal) = shell.state.ui.modals.git.clone.clone() {
                     let message = rust_i18n::t!("git.clone.busy").to_string();
                     modal.update(cx, |view, cx| view.set_error(message, cx));
                 }

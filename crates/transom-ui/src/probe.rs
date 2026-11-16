@@ -58,7 +58,8 @@ impl ProbeBadge {
 
 impl AppState {
     fn session_label(&self, session_id: SessionId) -> String {
-        self.catalog
+        self.session
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -69,14 +70,15 @@ impl AppState {
     /// 该会话是否有在途拨测。
     fn is_probe_pending(&self, session_id: SessionId) -> bool {
         matches!(
-            self.probe_badges.get(&session_id),
+            self.session.probe_badges.get(&session_id),
             Some(ProbeBadge::Pending)
         )
     }
 
     /// 会话的 `host:port` 描述；会话已删除时退回空串，tooltip 只剩结果本身。
     fn session_target(&self, session_id: SessionId) -> String {
-        self.catalog
+        self.session
+            .catalog
             .sessions
             .iter()
             .find(|session| session.id == session_id)
@@ -104,10 +106,11 @@ pub(crate) fn probe_session(
 pub(crate) fn probe_folder(shell: &mut AppShell, folder_id: FolderId, cx: &mut Context<AppShell>) {
     let targets = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
-        .filter(|session| session_in_folder(&shell.state.catalog, session, folder_id))
+        .filter(|session| session_in_folder(&shell.state.session.catalog, session, folder_id))
         .map(|session| session.id)
         .collect::<Vec<_>>();
     dispatch_probes(shell, &targets, cx);
@@ -122,6 +125,7 @@ fn dispatch_probes(shell: &mut AppShell, targets: &[SessionId], cx: &mut Context
     // 本地 Shell 与串口没有网络地址，派生即落空，静默跳过。
     let probeable: Vec<HostAction> = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
@@ -214,22 +218,29 @@ fn set_probe_badge(
     // 自己的 TTL，不能被上一批的定时器抹掉。
     shell
         .state
+        .runtime
         .tasks
         .background
         .probe_expiry
         .remove(&session_id);
-    shell.state.probe_badges.insert(session_id, badge);
+    shell.state.session.probe_badges.insert(session_id, badge);
     if let Some(ttl) = ttl {
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(ttl).await;
             let _ = this.update(cx, |this, cx| {
-                this.state.probe_badges.remove(&session_id);
-                this.state.tasks.background.probe_expiry.remove(&session_id);
+                this.state.session.probe_badges.remove(&session_id);
+                this.state
+                    .runtime
+                    .tasks
+                    .background
+                    .probe_expiry
+                    .remove(&session_id);
                 cx.notify();
             });
         });
         shell
             .state
+            .runtime
             .tasks
             .background
             .probe_expiry

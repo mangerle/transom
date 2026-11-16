@@ -97,7 +97,7 @@ impl AppShell {
                 if !crate::diff_viewer::DiffViewerOps::new(&mut self.state)
                     .handle_remote_read(op_id, &content, meta, cx)
                 {
-                    self.state.editors.update(cx, |panels, cx| {
+                    self.state.features.editors.update(cx, |panels, cx| {
                         panels.apply_editor_text(op_id, content, meta, window, cx)
                     });
                 }
@@ -133,7 +133,7 @@ impl AppShell {
                 true
             }
             SftpAppEvent::SftpSearchResults { items, .. } => {
-                if let Some(modal) = self.state.modals.sftp.search.clone() {
+                if let Some(modal) = self.state.ui.modals.sftp.search.clone() {
                     modal.update(cx, |m, cx| m.apply_results(items, None, cx));
                 }
                 true
@@ -322,9 +322,9 @@ impl AppShell {
                 // 动作，统一在这里响应才不会漏掉某个出口。
                 let hint = rust_i18n::t!("copy_mode.hint").to_string();
                 if *active {
-                    self.state.status = Some(hint);
-                } else if self.state.status.as_deref() == Some(hint.as_str()) {
-                    self.state.status = None;
+                    self.state.ui.status = Some(hint);
+                } else if self.state.ui.status.as_deref() == Some(hint.as_str()) {
+                    self.state.ui.status = None;
                 }
             }
             TerminalEvent::Exit => {
@@ -364,7 +364,7 @@ impl AppShell {
             }
             TerminalEvent::TriggerFired { rule_name, action } => match action {
                 transom_core::TriggerAction::AutoResponse(reply) => {
-                    self.state.status = Some(
+                    self.state.ui.status = Some(
                         rust_i18n::t!(
                             "trigger.auto_response_notice",
                             name = rule_name,
@@ -374,7 +374,7 @@ impl AppShell {
                     );
                 }
                 transom_core::TriggerAction::Bell => {
-                    self.state.status = Some(rust_i18n::t!("status.bell").to_string());
+                    self.state.ui.status = Some(rust_i18n::t!("status.bell").to_string());
                 }
                 _ => {}
             },

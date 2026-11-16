@@ -112,6 +112,7 @@ impl ModalKind {
         let element = match self {
             ModalKind::GitProject => shell
                 .state
+                .ui
                 .modals
                 .git
                 .project
@@ -120,6 +121,7 @@ impl ModalKind {
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitClone => shell
                 .state
+                .ui
                 .modals
                 .git
                 .clone
@@ -128,6 +130,7 @@ impl ModalKind {
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitWorktree => shell
                 .state
+                .ui
                 .modals
                 .git
                 .worktree
@@ -136,6 +139,7 @@ impl ModalKind {
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitName => shell
                 .state
+                .ui
                 .modals
                 .git
                 .name
@@ -144,6 +148,7 @@ impl ModalKind {
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitRebase => shell
                 .state
+                .ui
                 .modals
                 .git
                 .rebase
@@ -152,6 +157,7 @@ impl ModalKind {
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitPush => shell
                 .state
+                .ui
                 .modals
                 .git
                 .push
@@ -160,6 +166,7 @@ impl ModalKind {
                 .unwrap_or_else(|| div().into_any_element()),
             ModalKind::GitConflict => shell
                 .state
+                .ui
                 .modals
                 .git
                 .conflict

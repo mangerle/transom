@@ -38,41 +38,41 @@ impl ModalKind {
     ) -> bool {
         match self {
             ModalKind::SftpConfirm => {
-                if let Some(modal) = shell.state.modals.sftp.confirm.clone() {
+                if let Some(modal) = shell.state.ui.modals.sftp.confirm.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpInput => {
-                if let Some(modal) = shell.state.modals.sftp.input.clone() {
+                if let Some(modal) = shell.state.ui.modals.sftp.input.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
             }
             ModalKind::SftpChmod => {
-                if let Some(modal) = shell.state.modals.sftp.chmod.clone() {
+                if let Some(modal) = shell.state.ui.modals.sftp.chmod.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             // 属性与搜索弹窗只有"关闭"这一个主按钮，Enter 与它同义。
             ModalKind::SftpProperties => {
-                shell.state.modals.sftp.close_properties();
+                shell.state.ui.modals.sftp.close_properties();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpSearch => {
-                shell.state.modals.sftp.close_search();
+                shell.state.ui.modals.sftp.close_search();
                 cx.notify();
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpFilter => {
-                if let Some(modal) = shell.state.modals.sftp.filter.clone() {
+                if let Some(modal) = shell.state.ui.modals.sftp.filter.clone() {
                     modal.update(cx, |m, cx| m.submit(window, cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
             }
             ModalKind::SftpSync => {
-                if let Some(modal) = shell.state.modals.sftp.sync.clone() {
+                if let Some(modal) = shell.state.ui.modals.sftp.sync.clone() {
                     modal.update(cx, |m, cx| m.submit(cx));
                 }
                 crate::sftp::focus_active_sftp_panel(shell, window, cx);
@@ -86,12 +86,14 @@ impl ModalKind {
         match self {
             ModalKind::HostKeyConfirm => shell
                 .state
+                .ui
                 .modals
                 .connection
                 .prompts
                 .update(cx, |view, cx| view.accept_host_key(cx)),
             ModalKind::ClipboardPrompt => shell
                 .state
+                .ui
                 .modals
                 .connection
                 .prompts
@@ -99,12 +101,14 @@ impl ModalKind {
             ModalKind::ForwardConfirm => crate::forward::confirm_forward_start(shell, cx),
             ModalKind::AuthPrompt => shell
                 .state
+                .ui
                 .modals
                 .connection
                 .prompts
                 .update(cx, |view, cx| view.submit_auth(cx)),
             ModalKind::KnownHosts => shell
                 .state
+                .ui
                 .modals
                 .connection
                 .known_hosts
@@ -124,29 +128,34 @@ impl ModalKind {
             ModalKind::EditorGotoLine => crate::editor::commit_editor_goto_line(shell, window, cx),
             ModalKind::ContainerForm => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .container_form
                 .update(cx, |view, cx| view.save(cx)),
             ModalKind::ContainerFolderForm => shell
                 .state
+                .features
                 .containers
                 .sidebar
                 .update(cx, |sidebar, cx| sidebar.submit_folder_form(cx)),
             ModalKind::ContainerRunForm => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .run_form
                 .update(cx, |view, cx| view.submit(cx)),
             ModalKind::ContainerCreate => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .create_dialog
                 .update(cx, |view, cx| view.submit(cx)),
             ModalKind::SessionForm => shell
                 .state
+                .ui
                 .modals
                 .session
                 .form
@@ -156,18 +165,21 @@ impl ModalKind {
             ModalKind::SnippetForm => crate::snippets::save_snippet_form(shell, cx),
             ModalKind::BackupPrompt => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .backup_prompt
                 .update(cx, |view, cx| view.submit(window, cx)),
             ModalKind::KeyWizard => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .key_wizard
                 .update(cx, |view, cx| view.close(cx)),
             ModalKind::AuditViewer => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .audit_viewer
@@ -175,12 +187,13 @@ impl ModalKind {
             // Enter 与原实现一致只关闭弹窗；打开播放器由页脚主按钮显式触发。
             ModalKind::Replay => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .replay
                 .update(cx, |view, cx| view.close(cx)),
             ModalKind::Settings => shell.save_settings(window, cx),
-            ModalKind::ShortcutCapture => shell.state.shortcut_recording.capture = None,
+            ModalKind::ShortcutCapture => shell.state.ui.shortcut_recording.capture = None,
             ModalKind::DiffViewer => {
                 crate::diff_viewer::DiffViewerOps::new(&mut shell.state).close(cx)
             }
@@ -206,24 +219,21 @@ impl ModalKind {
     fn sftp_focus_target(self, shell: &AppShell, cx: &App) -> Option<ModalFocus> {
         let focus = match self {
             ModalKind::SftpInput => input_focus(shell, |state| {
-                state
-                    .modals
+                state.ui.modals
                     .sftp
                     .input
                     .as_ref()
                     .map(|modal| modal.read(cx).input.clone())
             }),
             ModalKind::SftpChmod => input_focus(shell, |state| {
-                state
-                    .modals
+                state.ui.modals
                     .sftp
                     .chmod
                     .as_ref()
                     .map(|modal| modal.read(cx).octal_input.clone())
             }),
             ModalKind::SftpSearch => input_focus(shell, |state| {
-                state
-                    .modals
+                state.ui.modals
                     .sftp
                     .search
                     .as_ref()
@@ -231,6 +241,7 @@ impl ModalKind {
             }),
             ModalKind::SftpFilter => shell
                 .state
+                .ui
                 .modals
                 .sftp
                 .filter
@@ -246,8 +257,7 @@ impl ModalKind {
     fn tool_and_session_focus_target(self, shell: &AppShell, cx: &App) -> ModalFocus {
         match self {
             ModalKind::EditorGotoLine => input_focus(shell, |state| {
-                state
-                    .modals
+                state.ui.modals
                     .tools
                     .editor_goto_line
                     .as_ref()
@@ -255,6 +265,7 @@ impl ModalKind {
             }),
             ModalKind::ContainerForm => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .container_form
@@ -265,6 +276,7 @@ impl ModalKind {
                 }),
             ModalKind::ContainerFolderForm => shell
                 .state
+                .features
                 .containers
                 .sidebar
                 .read(cx)
@@ -276,6 +288,7 @@ impl ModalKind {
                 }),
             ModalKind::ContainerRunForm => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .run_form
@@ -286,6 +299,7 @@ impl ModalKind {
                 }),
             ModalKind::ContainerCreate => shell
                 .state
+                .ui
                 .modals
                 .tools
                 .create_dialog
@@ -298,6 +312,7 @@ impl ModalKind {
                 .map_or(ModalFocus::None, ModalFocus::Input),
             ModalKind::SessionForm => shell
                 .state
+                .ui
                 .modals
                 .session
                 .form
@@ -307,16 +322,14 @@ impl ModalKind {
                     ModalFocus::Input(form.name.clone())
                 }),
             ModalKind::FolderForm => input_focus(shell, |state| {
-                state
-                    .modals
+                state.ui.modals
                     .session
                     .folder_form
                     .as_ref()
                     .map(|form| form.name.clone())
             }),
             ModalKind::SnippetForm => input_focus(shell, |state| {
-                state
-                    .modals
+                state.ui.modals
                     .tools
                     .snippet_panel
                     .form
@@ -326,6 +339,7 @@ impl ModalKind {
             // 改键录入面板自己持有焦点句柄：录键期间按键要落在这块面板上。
             ModalKind::ShortcutCapture => shell
                 .state
+                .ui
                 .shortcut_recording
                 .capture
                 .as_ref()

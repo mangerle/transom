@@ -100,8 +100,7 @@ pub(crate) fn build_tab_context_menu(
     // 若会话为 SSH 连接，提供一键直通其远端 Docker 工作区的捷径
     let is_ssh = app_entity
         .read(cx)
-        .state
-        .catalog
+        .state.session.catalog
         .sessions
         .iter()
         .any(|s| s.id == session_id && matches!(s.connection, Connection::Ssh(_)));
@@ -128,7 +127,7 @@ fn append_session_menu_items(
                 let text = host.clone();
                 cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
                 copy_app.update(cx, |this, cx| {
-                    this.state.status =
+                    this.state.ui.status =
                         Some(rust_i18n::t!("menu.copied_host", host = text).to_string());
                     cx.notify();
                 });

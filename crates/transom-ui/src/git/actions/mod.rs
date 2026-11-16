@@ -67,7 +67,7 @@ pub(crate) fn persist_git_projects(shell: &mut AppShell, cx: &mut Context<AppShe
         projects: shell.state.git_registry(cx).projects.clone(),
         folders: shell.state.git_registry(cx).folders.clone(),
     };
-    if let Err(error) = shell.state.services.git_projects.save(&registry) {
+    if let Err(error) = shell.state.runtime.services.git_projects.save(&registry) {
         shell.set_error(localized_error(&error));
     }
     cx.notify();
@@ -75,7 +75,11 @@ pub(crate) fn persist_git_projects(shell: &mut AppShell, cx: &mut Context<AppShe
 
 /// 活动栏点击：切换左侧槽位的 Git 项目列表。
 pub(crate) fn toggle_git_sidebar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let opening = shell.state.sidebar.toggle_section(SidebarSection::Git);
+    let opening = shell
+        .state
+        .session
+        .sidebar
+        .toggle_section(SidebarSection::Git);
     if opening {
         // 展开即刷一遍所有项目：列表里的分支与脏数必须是当下的。
         refresh_all_git_projects(shell, cx);
@@ -156,13 +160,14 @@ pub(crate) fn open_git_tab(
     let session_id = session.id;
     let title = project.display_name();
     let state = GitWorkspaceState::new(project.clone(), window, cx);
-    let command_tx = shell.state.services.command_tx.clone();
+    let command_tx = shell.state.runtime.services.command_tx.clone();
     let workspace = cx.new(|_| GitWorkspace::new(state, tab_id, command_tx));
     let subscription = cx.subscribe(&workspace, |shell, _, event, cx| {
         handle_git_workspace_event(shell, event, cx);
     });
     shell
         .state
+        .runtime
         .tasks
         .subscriptions
         .git_workspaces
@@ -210,7 +215,7 @@ fn handle_git_workspace_event(
             }
         }
         GitWorkspaceEvent::OpenNameModal { .. } | GitWorkspaceEvent::OpenWorktreeModal { .. } => {
-            shell.state.window_requests.push_git(event.clone());
+            shell.state.ui.window_requests.push_git(event.clone());
             cx.notify();
         }
         GitWorkspaceEvent::OpenRebaseModal { project, upstream } => {
@@ -234,6 +239,7 @@ fn handle_git_workspace_event(
         GitWorkspaceEvent::OpenSettings => {
             shell
                 .state
+                .ui
                 .window_requests
                 .push_git(GitWorkspaceEvent::OpenSettings);
             cx.notify();

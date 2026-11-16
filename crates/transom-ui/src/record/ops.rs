@@ -45,7 +45,7 @@ pub(crate) fn toggle_recording(
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("session.cast");
-            shell.state.status =
+            shell.state.ui.status =
                 Some(rust_i18n::t!("recorder.saved_notice", name = name).to_string());
         }
     } else {
@@ -68,7 +68,7 @@ pub(crate) fn toggle_recording(
                 .state
                 .set_error(rust_i18n::t!("recorder.start_failed").to_string());
         } else {
-            shell.state.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
+            shell.state.ui.status = Some(rust_i18n::t!("recorder.started_notice").to_string());
         }
     }
     cx.notify();
@@ -81,7 +81,7 @@ pub(crate) fn open_replay_modal(
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let view = shell.state.modals.tools.replay.clone();
+    let view = shell.state.ui.modals.tools.replay.clone();
     view.update(cx, |view, cx| view.open(tab_id, cx));
     cx.notify();
 }

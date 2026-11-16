@@ -111,7 +111,8 @@ fn build_header_actions(params: &ContainerHeaderView<'_>) -> AnyElement {
         }
         ContainerSection::Images => {
             if let Some(image) = params.image {
-                actions = actions.children(super::header_actions::image_header_actions(view, image));
+                actions =
+                    actions.children(super::header_actions::image_header_actions(view, image));
             }
         }
         ContainerSection::Volumes => {

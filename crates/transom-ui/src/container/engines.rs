@@ -34,7 +34,7 @@ pub(crate) fn open_engine_workspace(
     tab.status = TabStatus::Connecting;
     tab.title = profile.display_name();
     let state = ContainerWorkspaceState::new(profile.clone(), window, cx);
-    let command_tx = shell.state.services.command_tx.clone();
+    let command_tx = shell.state.runtime.services.command_tx.clone();
     let workspace = cx.new(|_| ContainerWorkspace::new(state, tab_id, command_tx));
     // 订阅一次并在标签存续期间持有：头部把需要外壳配合的动作发成事件，
     // 处理时按这里捕获的标签 id 定位，避免回读正在派发事件的实体。
@@ -46,6 +46,7 @@ pub(crate) fn open_engine_workspace(
     );
     shell
         .state
+        .runtime
         .tasks
         .subscriptions
         .container_workspaces
@@ -69,6 +70,7 @@ pub(crate) fn open_container_workspace_for_session(
 ) {
     let Some(session) = shell
         .state
+        .session
         .catalog
         .sessions
         .iter()
@@ -81,7 +83,7 @@ pub(crate) fn open_container_workspace_for_session(
     };
 
     let (secrets, _) = crate::connection::collect_connection_secrets(
-        shell.state.services.secret_store.as_ref(),
+        shell.state.runtime.services.secret_store.as_ref(),
         session,
     );
 
@@ -93,6 +95,7 @@ pub(crate) fn open_container_workspace_for_session(
 
     let (use_sudo, sudo_password) = shell
         .state
+        .session
         .catalog
         .engines
         .iter()
@@ -137,6 +140,7 @@ pub(crate) fn open_container_workspace_for_session(
     // 若已有相同端点的已保存引擎配置则优先复用，否则生成按会话命名的专属临时 Profile。
     let profile = shell
         .state
+        .session
         .catalog
         .engines
         .iter()
@@ -167,6 +171,7 @@ pub(crate) fn save_container_profile(
 ) {
     if let Some(existing) = shell
         .state
+        .session
         .catalog
         .engines
         .iter_mut()
@@ -174,7 +179,7 @@ pub(crate) fn save_container_profile(
     {
         *existing = profile;
     } else {
-        shell.state.catalog.engines.push(profile);
+        shell.state.session.catalog.engines.push(profile);
     }
     shell.state.persist_catalog();
     cx.notify();
@@ -208,6 +213,7 @@ pub(crate) fn delete_container_profile(
 ) {
     shell
         .state
+        .session
         .catalog
         .engines
         .retain(|profile| profile.id != id);

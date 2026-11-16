@@ -43,7 +43,10 @@ pub(super) fn on_container_action_finished(
     }
     let (pods_open, quadlets_open) = {
         let state = &workspace.read(cx).state;
-        (state.modals.pods_dialog_open, state.modals.quadlets_dialog_open)
+        (
+            state.modals.pods_dialog_open,
+            state.modals.quadlets_dialog_open,
+        )
     };
     if pods_open {
         workspace.update(cx, |workspace, cx| workspace.refresh_pods(cx));

@@ -17,8 +17,8 @@ use transom_core::{
 impl AppShell {
     /// 打开导出弹窗：注入当前目录快照后交给实体。
     pub(crate) fn open_backup_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let catalog = self.state.catalog.clone();
-        let view = self.state.modals.tools.backup_prompt.clone();
+        let catalog = self.state.session.catalog.clone();
+        let view = self.state.ui.modals.tools.backup_prompt.clone();
         view.update(cx, |view, cx| {
             view.set_catalog(catalog);
             view.open_export(window, cx);
@@ -35,8 +35,8 @@ impl AppShell {
         else {
             return;
         };
-        let catalog = self.state.catalog.clone();
-        let view = self.state.modals.tools.backup_prompt.clone();
+        let catalog = self.state.session.catalog.clone();
+        let view = self.state.ui.modals.tools.backup_prompt.clone();
         view.update(cx, |view, cx| {
             view.set_catalog(catalog);
             view.open_import(path, window, cx);
@@ -51,7 +51,7 @@ impl AppShell {
     pub(crate) fn on_backup_event(&mut self, event: &BackupPromptEvent, cx: &mut Context<Self>) {
         match event {
             BackupPromptEvent::Exported { path, report } => {
-                self.state.status = Some(exported_status(path, report));
+                self.state.ui.status = Some(exported_status(path, report));
             }
             BackupPromptEvent::Imported { catalog, secrets } => {
                 self.apply_imported_catalog(catalog, secrets.clone());
@@ -73,9 +73,13 @@ impl AppShell {
         catalog: &SessionCatalog,
         secrets: Result<SecretRestoreReport, AppError>,
     ) {
-        let (merged, report) =
-            merge_catalogs(None, &self.state.catalog, catalog, MergePreference::Remote);
-        self.state.catalog = merged;
+        let (merged, report) = merge_catalogs(
+            None,
+            &self.state.session.catalog,
+            catalog,
+            MergePreference::Remote,
+        );
+        self.state.session.catalog = merged;
         let saved = self.state.persist_catalog();
         self.state.refresh_tab_sessions();
         let mut message = rust_i18n::t!(
@@ -92,7 +96,7 @@ impl AppShell {
         }
         message.push_str(&secret_restore_note(secrets));
         if saved {
-            self.state.status = Some(message);
+            self.state.ui.status = Some(message);
         }
     }
 }

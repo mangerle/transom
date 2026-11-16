@@ -90,9 +90,8 @@ impl ContainerWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(input) = self
-            .state
-            .modals.hub_dialog
+        let Some(input) = self.state.modals
+            .hub_dialog
             .as_ref()
             .map(|hub| hub.search_input.clone())
         else {

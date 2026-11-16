@@ -128,12 +128,13 @@ fn session_context_menu(
     view: Entity<SessionSidebarView>,
 ) -> impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static {
     move |menu, _window, _cx| {
-        let emit_item = |menu: PopupMenu, label: String, icon: AppIcon, event: SessionSidebarEvent| {
-            let view = view.clone();
-            menu.item(crate::widgets::menu_item(label, icon, move |_, _, cx| {
-                view.update(cx, |this, cx| this.emit_action(event.clone(), cx));
-            }))
-        };
+        let emit_item =
+            |menu: PopupMenu, label: String, icon: AppIcon, event: SessionSidebarEvent| {
+                let view = view.clone();
+                menu.item(crate::widgets::menu_item(label, icon, move |_, _, cx| {
+                    view.update(cx, |this, cx| this.emit_action(event.clone(), cx));
+                }))
+            };
 
         let mut menu = emit_item(
             menu,

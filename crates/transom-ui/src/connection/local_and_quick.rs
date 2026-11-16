@@ -30,10 +30,11 @@ pub(crate) fn toggle_quick_open(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    shell.state.modals.tools.show_quick_open = !shell.state.modals.tools.show_quick_open;
-    if shell.state.modals.tools.show_quick_open {
+    shell.state.ui.modals.tools.show_quick_open = !shell.state.ui.modals.tools.show_quick_open;
+    if shell.state.ui.modals.tools.show_quick_open {
         shell
             .state
+            .ui
             .modals
             .tools
             .quick_open_state
@@ -210,14 +211,14 @@ pub(crate) fn record_history_command(
         return;
     }
     let recorded = {
-        let mut snapshot = shell.state.history.write();
+        let mut snapshot = shell.state.runtime.history.write();
         transom_core::record_command(&mut snapshot, command)
     };
     if !recorded {
         return;
     }
-    let snapshot: Vec<String> = shell.state.history.read().clone();
-    let store = shell.state.services.history.clone();
+    let snapshot: Vec<String> = shell.state.runtime.history.read().clone();
+    let store = shell.state.runtime.services.history.clone();
     cx.spawn(async move |_, cx| {
         let error = cx
             .background_executor()
@@ -282,29 +283,30 @@ fn finish_import_ssh_config(shell: &mut AppShell, content: String, cx: &mut Cont
         return;
     }
 
-    let folder = shell.state.catalog.ensure_folder_path("SSH Config");
+    let folder = shell.state.session.catalog.ensure_folder_path("SSH Config");
     let mut added_count = 0;
     for mut session in parsed {
         if !shell
             .state
+            .session
             .catalog
             .sessions
             .iter()
             .any(|s| s.name == session.name)
         {
             session.folder_id = folder;
-            shell.state.catalog.sessions.push(session);
+            shell.state.session.catalog.sessions.push(session);
             added_count += 1;
         }
     }
 
     if added_count > 0 {
         if shell.state.persist_catalog() {
-            shell.state.status =
+            shell.state.ui.status =
                 Some(rust_i18n::t!("app.import_success", count = added_count).to_string());
         }
     } else {
-        shell.state.status = Some(rust_i18n::t!("app.import_none").to_string());
+        shell.state.ui.status = Some(rust_i18n::t!("app.import_none").to_string());
     }
     cx.notify();
 }

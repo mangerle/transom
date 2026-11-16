@@ -69,10 +69,11 @@ pub(crate) fn on_toggle_snippets(
 /// 沉浸模式没有底栏，卡片失去锚点，因此直接忽略；已在沉浸模式时打开的卡片
 /// 会在进入沉浸的那一刻关闭。
 pub(crate) fn toggle_snippets_panel(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    if shell.state.immersive {
+    if shell.state.ui.immersive {
         return;
     }
-    shell.state.modals.tools.snippet_panel.open = !shell.state.modals.tools.snippet_panel.open;
+    shell.state.ui.modals.tools.snippet_panel.open =
+        !shell.state.ui.modals.tools.snippet_panel.open;
     cx.notify();
 }
 
@@ -140,26 +141,26 @@ pub(crate) fn open_snippet_form(
     });
     command_input.update(cx, |state, cx| state.set_value(command, window, cx));
     let focus = name_input.read(cx).focus_handle(cx);
-    shell.state.modals.tools.snippet_panel.form = Some(SnippetFormState {
+    shell.state.ui.modals.tools.snippet_panel.form = Some(SnippetFormState {
         id,
         name: name_input,
         command: command_input,
         error: None,
     });
     // 卡片先收起：编辑弹窗是独立浮层，不应该和卡片叠在一起。
-    shell.state.modals.tools.snippet_panel.open = false;
+    shell.state.ui.modals.tools.snippet_panel.open = false;
     window.focus(&focus, cx);
     cx.notify();
 }
 
 pub(crate) fn close_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    shell.state.modals.tools.snippet_panel.form = None;
+    shell.state.ui.modals.tools.snippet_panel.form = None;
     cx.notify();
 }
 
 /// 校验并保存单条命令。名称或命令不合法时保留弹窗并就地提示。
 pub(crate) fn save_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(form) = shell.state.modals.tools.snippet_panel.form.as_ref() else {
+    let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_ref() else {
         return;
     };
     let id = form.id;
@@ -171,14 +172,14 @@ pub(crate) fn save_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>
         command,
     };
     if !candidate.is_valid() {
-        if let Some(form) = shell.state.modals.tools.snippet_panel.form.as_mut() {
+        if let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_mut() {
             form.error = Some(rust_i18n::t!("snippets.form_invalid").to_string());
         }
         cx.notify();
         return;
     }
     if id.is_none() && app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
-        if let Some(form) = shell.state.modals.tools.snippet_panel.form.as_mut() {
+        if let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_mut() {
             form.error = Some(rust_i18n::t!("snippets.too_many").to_string());
         }
         cx.notify();
@@ -196,13 +197,13 @@ pub(crate) fn save_snippet_form(shell: &mut AppShell, cx: &mut Context<AppShell>
     }
     let settings_snapshot = app_settings(cx).clone();
     if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
-        if let Some(form) = shell.state.modals.tools.snippet_panel.form.as_mut() {
+        if let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_mut() {
             form.error = Some(localized_error(&error));
         }
         cx.notify();
         return;
     }
-    shell.state.modals.tools.snippet_panel.form = None;
+    shell.state.ui.modals.tools.snippet_panel.form = None;
     shell.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
     cx.notify();
 }
@@ -228,7 +229,7 @@ pub(crate) fn render_snippets_popover(
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> AnyElement {
-    let open = shell.state.modals.tools.snippet_panel.open;
+    let open = shell.state.ui.modals.tools.snippet_panel.open;
     let items = app_settings(cx).snippets.items.clone();
     let execute_directly = app_settings(cx).snippets.execute_directly;
     let app = cx.entity().clone();
@@ -263,8 +264,8 @@ pub(crate) fn render_snippets_popover(
         .on_open_change(move |open, _window, cx| {
             let open = *open;
             app_open.update(cx, |this, cx| {
-                if this.state.modals.tools.snippet_panel.open != open {
-                    this.state.modals.tools.snippet_panel.open = open;
+                if this.state.ui.modals.tools.snippet_panel.open != open {
+                    this.state.ui.modals.tools.snippet_panel.open = open;
                     cx.notify();
                 }
             });
@@ -284,7 +285,7 @@ pub(crate) fn render_snippet_form_body(
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(form) = shell.state.modals.tools.snippet_panel.form.as_ref() else {
+    let Some(form) = shell.state.ui.modals.tools.snippet_panel.form.as_ref() else {
         return div().into_any_element();
     };
     let title = if form.id.is_some() {

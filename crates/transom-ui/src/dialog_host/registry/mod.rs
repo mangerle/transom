@@ -64,10 +64,10 @@ impl<'a> DialogCheckState<'a> {
     /// 从应用状态构造只读判定视图；不持有外壳引用，确保判定函数只能读取登记字段。
     pub(super) fn from_state(state: &'a AppState) -> Self {
         Self {
-            modals: &state.modals,
-            shortcut_recording: &state.shortcut_recording,
-            diff_viewer: &state.diff_viewer,
-            containers: &state.containers,
+            modals: &state.ui.modals,
+            shortcut_recording: &state.ui.shortcut_recording,
+            diff_viewer: &state.features.diff_viewer,
+            containers: &state.features.containers,
             workspace: &state.workspace,
         }
     }

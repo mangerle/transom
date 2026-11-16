@@ -27,7 +27,7 @@ pub(crate) fn open_new_folder(
     });
     let default_key_path =
         cx.new(|cx| InputState::new(window, cx).placeholder("~/.ssh/id_ed25519".to_string()));
-    shell.state.modals.session.folder_form = Some(FolderForm {
+    shell.state.ui.modals.session.folder_form = Some(FolderForm {
         base: None,
         parent,
         name,
@@ -45,7 +45,7 @@ pub(super) fn open_rename_folder(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(folder) = shell.state.catalog.folder(folder_id) else {
+    let Some(folder) = shell.state.session.catalog.folder(folder_id) else {
         return;
     };
     let name = folder.name.clone();
@@ -80,7 +80,7 @@ pub(super) fn open_rename_folder(
             .default_value(key_text)
             .placeholder("~/.ssh/id_ed25519".to_string())
     });
-    shell.state.modals.session.folder_form = Some(FolderForm {
+    shell.state.ui.modals.session.folder_form = Some(FolderForm {
         base: Some(folder_id),
         parent: None,
         name: input,
@@ -97,7 +97,7 @@ fn pick_folder_default_key_path(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(form) = shell.state.modals.session.folder_form.as_mut() else {
+    let Some(form) = shell.state.ui.modals.session.folder_form.as_mut() else {
         return;
     };
     let title = rust_i18n::t!("form.pick_key").to_string();
@@ -115,7 +115,7 @@ fn pick_folder_default_key_path(
 }
 
 pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>) {
-    let Some(form) = shell.state.modals.session.folder_form.as_ref() else {
+    let Some(form) = shell.state.ui.modals.session.folder_form.as_ref() else {
         return;
     };
     let name = form.name.read(cx).value().trim().to_string();
@@ -141,7 +141,7 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
     let base = form.base;
     let parent = form.parent;
     let result = match base {
-        Some(folder_id) => shell.state.catalog.update_folder(
+        Some(folder_id) => shell.state.session.catalog.update_folder(
             folder_id,
             &name,
             default_port,
@@ -150,6 +150,7 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
         ),
         None => shell
             .state
+            .session
             .catalog
             .add_folder_with_defaults(
                 &name,
@@ -162,6 +163,7 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
                 if let Some(parent_id) = parent
                     && let Some(folder) = shell
                         .state
+                        .session
                         .catalog
                         .folders
                         .iter_mut()
@@ -173,16 +175,16 @@ pub(crate) fn save_folder_form(shell: &mut AppShell, cx: &mut Context<AppShell>)
     };
     match result {
         Ok(()) => {
-            shell.state.modals.session.folder_form = None;
+            shell.state.ui.modals.session.folder_form = None;
             shell.state.persist_catalog();
-            shell.state.status = Some(if base.is_some() {
+            shell.state.ui.status = Some(if base.is_some() {
                 rust_i18n::t!("folder.renamed").to_string()
             } else {
                 rust_i18n::t!("folder.created").to_string()
             });
         }
         Err(error) => {
-            if let Some(form) = shell.state.modals.session.folder_form.as_mut() {
+            if let Some(form) = shell.state.ui.modals.session.folder_form.as_mut() {
                 form.error = Some(error.to_string());
             }
         }
@@ -256,7 +258,7 @@ pub(crate) fn render_folder_form_body(
     _cx: &App,
     p: &Palette,
 ) -> AnyElement {
-    let Some(form) = shell.state.modals.session.folder_form.as_ref() else {
+    let Some(form) = shell.state.ui.modals.session.folder_form.as_ref() else {
         return div().into_any_element();
     };
     let editing = form.base.is_some();
@@ -267,7 +269,7 @@ pub(crate) fn render_folder_form_body(
     };
     let description = form
         .parent
-        .and_then(|parent| shell.state.catalog.folder_path(parent))
+        .and_then(|parent| shell.state.session.catalog.folder_path(parent))
         .map(|path| rust_i18n::t!("folder.parent_hint", path = path).to_string())
         .unwrap_or_else(|| rust_i18n::t!("folder.root_hint").to_string());
 
@@ -290,7 +292,7 @@ pub(crate) fn render_folder_form_body(
             "cancel-folder",
             rust_i18n::t!("common.cancel").to_string(),
             crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                this.state.modals.session.folder_form = None;
+                this.state.ui.modals.session.folder_form = None;
                 cx.notify();
             }),
         ))

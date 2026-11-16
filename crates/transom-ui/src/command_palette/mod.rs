@@ -41,7 +41,7 @@ fn palette_command(shell: &AppShell, input: PaletteCommandInput) -> Command {
         placeholder,
         muted,
     } = input;
-    Command::new(&shell.state.modals.tools.quick_open_state)
+    Command::new(&shell.state.ui.modals.tools.quick_open_state)
         .placeholder(placeholder)
         // 外框由宿主面板提供：组件自带的圆角边框会在直角浮层里套出一层内圆角。
         .bordered(false)
@@ -70,7 +70,7 @@ fn palette_command(shell: &AppShell, input: PaletteCommandInput) -> Command {
                     .and_then(|group| group.get(index_path.row))
                     .cloned();
                 app.update(cx, |this, cx| {
-                    this.state.modals.tools.show_quick_open = false;
+                    this.state.ui.modals.tools.show_quick_open = false;
                     apply_palette_target(this, target, window, cx);
                     cx.notify();
                 });
@@ -80,7 +80,7 @@ fn palette_command(shell: &AppShell, input: PaletteCommandInput) -> Command {
             let app = app.clone();
             move |_window, cx| {
                 app.update(cx, |this, cx| {
-                    this.state.modals.tools.show_quick_open = false;
+                    this.state.ui.modals.tools.show_quick_open = false;
                     cx.notify();
                 });
             }
@@ -98,6 +98,7 @@ pub(crate) fn render_command_palette_modal(
     // 只要 on_query 触发一次重绘，列表就与输入框内容保持同步。
     let query = shell
         .state
+        .ui
         .modals
         .tools
         .quick_open_state
@@ -221,6 +222,7 @@ fn apply_palette_target(
             // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
             let host = shell
                 .state
+                .ui
                 .modals
                 .tools
                 .quick_open_state

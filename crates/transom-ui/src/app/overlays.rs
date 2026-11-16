@@ -61,7 +61,7 @@ impl AppShell {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.sidebar.toggle_visible();
+        self.state.session.sidebar.toggle_visible();
         cx.notify();
     }
 
@@ -72,12 +72,12 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.immersive = !self.state.immersive;
+        self.state.ui.immersive = !self.state.ui.immersive;
         window.toggle_fullscreen();
-        if self.state.immersive {
-            self.state.modals.close_transient();
+        if self.state.ui.immersive {
+            self.state.ui.modals.close_transient();
         }
-        if self.state.immersive
+        if self.state.ui.immersive
             && let Some(focus_handle) = self
                 .state
                 .workspace
@@ -113,12 +113,12 @@ impl AppShell {
         {
             overlays.push(preview);
         }
-        if self.state.modals.tools.show_quick_open {
+        if self.state.ui.modals.tools.show_quick_open {
             overlays.push(crate::command_palette::render_command_palette_modal(
                 self, window, cx, &p,
             ));
         }
-        if let Some(tab_id) = self.state.containers.fullscreen {
+        if let Some(tab_id) = self.state.features.containers.fullscreen {
             overlays.push(self.render_container_fullscreen(tab_id, window, cx, &p));
         }
         if let Some(clone_task) =

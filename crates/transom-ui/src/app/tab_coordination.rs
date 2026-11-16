@@ -28,6 +28,7 @@ impl AppShell {
         } else {
             let session = self
                 .state
+                .session
                 .catalog
                 .sessions
                 .iter()
@@ -143,12 +144,13 @@ impl AppShell {
         let app = cx.entity().clone();
         window.defer(cx, move |_window, cx| {
             app.update(cx, |shell, cx| {
-                if shell.state.monitor.read(cx).is_open() {
+                if shell.state.features.monitor.read(cx).is_open() {
                     shell
                         .state
+                        .features
                         .monitor
                         .update(cx, |view, _| view.reset_history());
-                    let collapsed = shell.state.monitor.read(cx).processes_collapsed();
+                    let collapsed = shell.state.features.monitor.read(cx).processes_collapsed();
                     crate::monitor::MonitorOps::new(&mut shell.state)
                         .sample_processes(collapsed, cx);
                 }

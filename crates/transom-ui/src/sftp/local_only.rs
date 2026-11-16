@@ -59,11 +59,11 @@ pub(crate) fn open_local_file_panel(
 
     // 主连接与命令通道在挂载之前取好：面板之后自己解析目标列与投递命令。
     let main_connection = shell.state.workspace.tabs[index].connection_id;
-    let command_tx = Some(shell.state.services.command_tx.clone());
+    let command_tx = Some(shell.state.runtime.services.command_tx.clone());
     let state = SftpPanelState {
         main_connection,
         command_tx,
-        editors: Some(shell.state.editors.clone()),
+        editors: Some(shell.state.features.editors.clone()),
         mount_candidates: Vec::new(),
         open: true,
         remote: SftpRemotePaneState::new_main(

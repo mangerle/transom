@@ -26,7 +26,7 @@ pub(crate) fn save_window_state(
     // 崩溃后三者一起退到上次正常退出，不会出现标签组是旧的、侧栏是新的那种
     // 半新半旧；也不必为一次点击写一次配置文件。
     update_app_settings(cx, |s| {
-        s.window.last_sidebar_visible = shell.state.sidebar.visible()
+        s.window.last_sidebar_visible = shell.state.session.sidebar.visible()
     });
     let sessions: Vec<_> = shell.state.workspace.tabs.iter().map(session_key).collect();
     update_app_settings(cx, |s| s.window.previous_tab_sessions = sessions);
@@ -86,7 +86,13 @@ pub(crate) fn save_window_state(
         saved_groups.into_iter().map(|(_, group)| group).collect();
     // 退出路径必须同步落盘：异步写盘线程虽然会在 Drop 时 join，但这里
     // 是最后一次状态快照，直接写能保证进程退出前已经落定。
-    if let Err(error) = shell.state.services.settings_store.save(app_settings(cx)) {
+    if let Err(error) = shell
+        .state
+        .runtime
+        .services
+        .settings_store
+        .save(app_settings(cx))
+    {
         // 这一处原先是静默丢弃的：保存失败等于下次启动窗口位置与标签组全丢，
         // 用户只会说"我上次开的那几个标签没了"，日志是唯一能回溯的现场。
         log::warn!("退出前保存窗口与标签组状态失败，下次启动将沿用上一次的记录，原因: {error}");

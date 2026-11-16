@@ -80,7 +80,14 @@ impl AppShell {
             .window
             .recent_sessions
             .iter()
-            .filter_map(|id| self.state.catalog.sessions.iter().find(|s| s.id == *id))
+            .filter_map(|id| {
+                self.state
+                    .session
+                    .catalog
+                    .sessions
+                    .iter()
+                    .find(|s| s.id == *id)
+            })
             .collect();
 
         let mut cards = Vec::with_capacity(MAX_CARDS);
@@ -136,6 +143,7 @@ impl AppShell {
         let shell_desc = match app_settings(cx).local_shell.as_deref() {
             Some(shell) => self
                 .state
+                .session
                 .local_shells
                 .iter()
                 .find(|option| option.program == shell)
@@ -144,7 +152,7 @@ impl AppShell {
             None => rust_i18n::t!("app.empty_local_shell").to_string(),
         };
         let menu_app = cx.entity().clone();
-        let shells = (*self.state.local_shells).clone();
+        let shells = (*self.state.session.local_shells).clone();
 
         empty_card_shell(
             ElementId::Name("empty-quick-local".into()),

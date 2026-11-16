@@ -60,6 +60,7 @@ impl AppState {
 
     fn new_session_menu_data(&self) -> NewSessionMenuData {
         let mut folders: Vec<NewSessionFolder> = self
+            .session
             .catalog
             .folders
             .iter()
@@ -70,7 +71,7 @@ impl AppState {
             })
             .collect();
         let mut root = Vec::new();
-        for session in &self.catalog.sessions {
+        for session in &self.session.catalog.sessions {
             let entry = NewSessionEntry {
                 session_id: session.id,
                 label: if session.name.trim().is_empty() {
@@ -99,7 +100,7 @@ impl AppState {
         NewSessionMenuData {
             root,
             folders,
-            shells: (*self.local_shells).clone(),
+            shells: (*self.session.local_shells).clone(),
         }
     }
     fn folder_menu_label(&self, folder: &transom_core::SessionFolder) -> String {
@@ -112,6 +113,7 @@ impl AppState {
                 break;
             }
             let Some(parent) = self
+                .session
                 .catalog
                 .folders
                 .iter()
@@ -140,10 +142,13 @@ impl AppShell {
         if app_settings(cx).window.tab_position != TabPosition::Left {
             return;
         }
-        if self.state.sidebar.is_showing(SidebarSection::Tabs) {
+        if self.state.session.sidebar.is_showing(SidebarSection::Tabs) {
             return;
         }
-        self.state.sidebar.show_section(SidebarSection::Tabs);
+        self.state
+            .session
+            .sidebar
+            .show_section(SidebarSection::Tabs);
         cx.notify();
     }
 
@@ -153,7 +158,13 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let query = self.state.vertical_tabs_search.read(cx).value().to_string();
+        let query = self
+            .state
+            .ui
+            .vertical_tabs_search
+            .read(cx)
+            .value()
+            .to_string();
         let query_lower = query.trim().to_lowercase();
         let total = self.state.workspace.groups.len();
         let mut visible: Vec<GroupId> = Vec::with_capacity(total);
@@ -216,7 +227,7 @@ impl AppShell {
             .border_color(p.sidebar_border)
             .child(
                 div().flex_1().min_w_0().child(
-                    Input::new(&self.state.vertical_tabs_search)
+                    Input::new(&self.state.ui.vertical_tabs_search)
                         .small()
                         .w_full(),
                 ),
@@ -257,7 +268,7 @@ impl AppShell {
 
     pub(crate) fn show_vertical_tabs_panel(&self, settings: &AppSettings) -> bool {
         settings.window.tab_position == TabPosition::Left
-            && self.state.sidebar.is_showing(SidebarSection::Tabs)
+            && self.state.session.sidebar.is_showing(SidebarSection::Tabs)
     }
 }
 
@@ -347,7 +358,10 @@ fn build_new_session_menu(
             AppIcon::Domain(DomainIcon::SSH),
             move |_, _, cx| {
                 tree_app.update(cx, |this, cx| {
-                    this.state.sidebar.show_section(SidebarSection::Sessions);
+                    this.state
+                        .session
+                        .sidebar
+                        .show_section(SidebarSection::Sessions);
                     cx.notify();
                 });
             },

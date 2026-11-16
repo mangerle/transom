@@ -93,7 +93,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let msg = message.into();
-        if self.state.feedback.should_dedup_toast(&msg) {
+        if self.state.ui.feedback.should_dedup_toast(&msg) {
             return;
         }
         let notification = if success {
@@ -112,7 +112,7 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let msg = message.into();
-        if self.state.feedback.should_dedup_toast(&msg) {
+        if self.state.ui.feedback.should_dedup_toast(&msg) {
             return;
         }
         self.push_toast(Notification::info(msg), window, cx);
@@ -124,8 +124,8 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.state.feedback.toast_seq = self.state.feedback.toast_seq.wrapping_add(1);
-        let sequence = self.state.feedback.toast_seq;
+        self.state.ui.feedback.toast_seq = self.state.ui.feedback.toast_seq.wrapping_add(1);
+        let sequence = self.state.ui.feedback.toast_seq;
         let key = format!("transom-toast-{sequence}");
         window.push_notification(
             notification.id1::<ToastMarker>(key.clone()).autohide(false),
@@ -139,10 +139,11 @@ impl AppShell {
                 window.remove_notification1::<ToastMarker>(key, cx);
             });
         });
-        if self.state.tasks.background.toast_tasks.len() >= 32 {
-            self.state.tasks.background.toast_tasks.pop_front();
+        if self.state.runtime.tasks.background.toast_tasks.len() >= 32 {
+            self.state.runtime.tasks.background.toast_tasks.pop_front();
         }
         self.state
+            .runtime
             .tasks
             .background
             .toast_tasks
@@ -170,24 +171,24 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let text = message.into();
-        self.state.status = Some(text.clone());
-        self.state.feedback.status_seq = self.state.feedback.status_seq.wrapping_add(1);
-        let seq = self.state.feedback.status_seq;
+        self.state.ui.status = Some(text.clone());
+        self.state.ui.feedback.status_seq = self.state.ui.feedback.status_seq.wrapping_add(1);
+        let seq = self.state.ui.feedback.status_seq;
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_secs(4))
                 .await;
             let _ = this.update(cx, |this, cx| {
-                if this.state.feedback.status_seq == seq
-                    && this.state.status.as_deref() == Some(text.as_str())
+                if this.state.ui.feedback.status_seq == seq
+                    && this.state.ui.status.as_deref() == Some(text.as_str())
                 {
-                    this.state.status = None;
+                    this.state.ui.status = None;
                     crate::status_bar::refresh_status_metrics(this, cx);
                     cx.notify();
                 }
             });
         });
-        self.state.tasks.background.status_clear = Some(task);
+        self.state.runtime.tasks.background.status_clear = Some(task);
     }
 
     /// 打开偏好设置弹窗；`page` 为 `Some` 时直接定位到指定页。
@@ -200,9 +201,9 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let view = self.state.modals.settings.clone();
-        let catalog = self.state.catalog.clone();
-        let interval = self.state.monitor.read(cx).interval_mode();
+        let view = self.state.ui.modals.settings.clone();
+        let catalog = self.state.session.catalog.clone();
+        let interval = self.state.features.monitor.read(cx).interval_mode();
         view.update(cx, |view, cx| {
             view.set_catalog(catalog);
             view.set_monitor_interval(interval);
@@ -213,13 +214,13 @@ impl AppShell {
 
     /// 让设置实体执行保存；弹窗容器与快捷键提交共用这一入口。
     pub(crate) fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let view = self.state.modals.settings.clone();
+        let view = self.state.ui.modals.settings.clone();
         view.update(cx, |view, cx| view.save_settings(window, cx));
     }
 
     /// 让设置实体执行取消（外观回滚 + 关闭）。
     pub(crate) fn cancel_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let view = self.state.modals.settings.clone();
+        let view = self.state.ui.modals.settings.clone();
         view.update(cx, |view, cx| view.cancel_settings(window, cx));
     }
 
@@ -241,8 +242,8 @@ impl AppShell {
         update_app_settings(cx, |s| s.window.sftp_panel_side = side);
         let state = &mut self.state;
         std::mem::swap(
-            &mut state.workspace_panels,
-            &mut state.workspace_panels_left,
+            &mut state.ui.workspace_panels,
+            &mut state.ui.workspace_panels_left,
         );
         let snapshot = app_settings(cx).clone();
         self.state.persist_settings_reported(&snapshot);
@@ -279,6 +280,7 @@ impl AppShell {
                             crate::connection::open_local_terminal(self, window, cx);
                         } else if let Some(session) = self
                             .state
+                            .session
                             .catalog
                             .sessions
                             .iter()
@@ -301,13 +303,13 @@ impl AppShell {
     fn tick_container_cleanup(&mut self, cx: &mut Context<Self>) {
         const INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
         if !app_settings(cx).container_automation.auto_prune_enabled {
-            self.state.automation.container_auto_prune_last = None;
+            self.state.runtime.automation.container_auto_prune_last = None;
             return;
         }
         let now = std::time::Instant::now();
-        let Some(last) = self.state.automation.container_auto_prune_last else {
+        let Some(last) = self.state.runtime.automation.container_auto_prune_last else {
             // 首次启用只开始计时，不立即执行破坏性清理。
-            self.state.automation.container_auto_prune_last = Some(now);
+            self.state.runtime.automation.container_auto_prune_last = Some(now);
             return;
         };
         if now.duration_since(last) < INTERVAL {
@@ -325,7 +327,7 @@ impl AppShell {
                     .then_some(tab.id)
             })
             .collect();
-        self.state.automation.container_auto_prune_last = Some(now);
+        self.state.runtime.automation.container_auto_prune_last = Some(now);
         for tab_id in tabs {
             let workspace = self.state.container_workspace(tab_id);
             if let Some(workspace) = workspace {
@@ -341,7 +343,13 @@ impl AppShell {
             .git
             .as_ref()
             .map_or(0, |git| git.interval_minutes);
-        if self.state.automation.git_sync_schedule.tick(interval) {
+        if self
+            .state
+            .runtime
+            .automation
+            .git_sync_schedule
+            .tick(interval)
+        {
             crate::cloud_sync::CloudSyncActions::new(&mut self.state).start_git_sync_scheduled(cx);
         }
     }

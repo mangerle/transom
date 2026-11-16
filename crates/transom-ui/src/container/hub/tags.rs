@@ -107,7 +107,12 @@ const TAG_PRESET_TABLE: &[(&[&str], &[ImageTagPreset])] = &[
             preset("3.12", "Python 3.12 现代主流版", "amd64 / arm64", true),
             preset("3.11", "Python 3.11 性能成熟版", "amd64 / arm64", true),
             preset("3.10", "Python 3.10 长期稳定版", "amd64 / arm64", false),
-            preset("slim", "Debian 裁剪版 (体积小兼容佳)", "amd64 / arm64", true),
+            preset(
+                "slim",
+                "Debian 裁剪版 (体积小兼容佳)",
+                "amd64 / arm64",
+                true,
+            ),
             preset("alpine", "极简 Musl 基础构建", "amd64 / arm64", false),
         ],
     ),
@@ -124,9 +129,24 @@ const TAG_PRESET_TABLE: &[(&[&str], &[ImageTagPreset])] = &[
         &["ubuntu"],
         &[
             preset("latest", "当前默认 Ubuntu 发行版", "amd64 / arm64", false),
-            preset("24.04", "Noble Numbat (最新 24.04 LTS)", "amd64 / arm64", true),
-            preset("22.04", "Jammy Jellyfish (主流 22.04 LTS)", "amd64 / arm64", true),
-            preset("20.04", "Focal Fossa (经典 20.04 LTS)", "amd64 / arm64", false),
+            preset(
+                "24.04",
+                "Noble Numbat (最新 24.04 LTS)",
+                "amd64 / arm64",
+                true,
+            ),
+            preset(
+                "22.04",
+                "Jammy Jellyfish (主流 22.04 LTS)",
+                "amd64 / arm64",
+                true,
+            ),
+            preset(
+                "20.04",
+                "Focal Fossa (经典 20.04 LTS)",
+                "amd64 / arm64",
+                false,
+            ),
         ],
     ),
     (

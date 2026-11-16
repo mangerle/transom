@@ -411,12 +411,7 @@ fn indented_note(text: String, depth: usize, p: &Palette) -> AnyElement {
 }
 
 /// 行首三角：点击不冒泡到行身，避免「展开顺带选中」。
-fn chevron(
-    path: &Path,
-    expanded: bool,
-    p: &Palette,
-    view: &Entity<DirPicker>,
-) -> AnyElement {
+fn chevron(path: &Path, expanded: bool, p: &Palette, view: &Entity<DirPicker>) -> AnyElement {
     let path = path.to_path_buf();
     let click_view = view.clone();
     div()

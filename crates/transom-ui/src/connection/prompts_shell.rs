@@ -24,7 +24,7 @@ pub(crate) fn on_connection_prompts_event(
             kind,
             value,
         } => {
-            shell.state.modals.connection.pending_credential = Some(PendingCredential {
+            shell.state.ui.modals.connection.pending_credential = Some(PendingCredential {
                 session_id: *session_id,
                 // 归属解析留在外壳：引用凭据模板时会话可能只是模板别名。
                 owner: shell.state.secret_owner_for(*session_id),
@@ -37,7 +37,7 @@ pub(crate) fn on_connection_prompts_event(
             apply_clipboard_allowed(shell, *tab_id, text, cx);
         }
         ConnectionPromptsEvent::Denied => {
-            shell.state.status = Some(rust_i18n::t!("clipboard_consent.denied").to_string());
+            shell.state.ui.status = Some(rust_i18n::t!("clipboard_consent.denied").to_string());
         }
     }
     cx.notify();
@@ -64,7 +64,7 @@ fn apply_clipboard_allowed(
         terminal.update(cx, |view, _| view.allow_remote_clipboard_write());
     }
     cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
-    shell.state.status = Some(rust_i18n::t!("clipboard_consent.allowed").to_string());
+    shell.state.ui.status = Some(rust_i18n::t!("clipboard_consent.allowed").to_string());
 }
 
 /// 登记一次远端剪贴板写入请求。
@@ -78,7 +78,7 @@ pub(crate) fn request_clipboard_permission(
     text: String,
     cx: &mut Context<AppShell>,
 ) {
-    let prompts = shell.state.modals.connection.prompts.clone();
+    let prompts = shell.state.ui.modals.connection.prompts.clone();
     if let Some(pending) = prompts.read(cx).clipboard() {
         log::debug!(
             "已有待裁决的远端剪贴板请求，本次请求被忽略，窗格: {tab_id}，待裁决窗格: {}",

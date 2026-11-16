@@ -75,27 +75,18 @@ impl ContainerWorkspaceModal {
     pub(crate) fn focus_input(self, state: &ContainerWorkspaceState) -> Option<Entity<InputState>> {
         let m = &state.modals;
         match self {
-            Self::Rename => m
-                .rename_container
-                .as_ref()
-                .map(|(_, input)| input.clone()),
+            Self::Rename => m.rename_container.as_ref().map(|(_, input)| input.clone()),
             Self::TagImage => m.tag_image.as_ref().map(|(_, input)| input.clone()),
             Self::Commit => m
                 .commit_container
                 .as_ref()
                 .map(|commit| commit.repo.clone()),
             Self::Update => m.update_container.as_ref().map(|(_, mem, _)| mem.clone()),
-            Self::NetworkConnect => m
-                .connect_network
-                .as_ref()
-                .map(|(_, input)| input.clone()),
+            Self::NetworkConnect => m.connect_network.as_ref().map(|(_, input)| input.clone()),
             Self::FileRename => state.files.prompt_input.clone(),
             Self::FileNewDir => state.files.new_dir_input.clone(),
             Self::Hub => m.hub_dialog.as_ref().map(|hub| hub.search_input.clone()),
-            Self::Push => m
-                .push_dialog
-                .as_ref()
-                .map(|push| push.target_repo.clone()),
+            Self::Push => m.push_dialog.as_ref().map(|push| push.target_repo.clone()),
             Self::Build => m
                 .build_dialog
                 .as_ref()
@@ -104,11 +95,9 @@ impl ContainerWorkspaceModal {
                 .forward_dialog
                 .as_ref()
                 .map(|fwd| fwd.local_port_input.clone()),
-            Self::Confirm
-            | Self::ExportConfig
-            | Self::SystemDf
-            | Self::Pods
-            | Self::Quadlet => None,
+            Self::Confirm | Self::ExportConfig | Self::SystemDf | Self::Pods | Self::Quadlet => {
+                None
+            }
         }
     }
 
