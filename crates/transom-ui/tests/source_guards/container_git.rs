@@ -1771,3 +1771,46 @@ fn logs_sidebar_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_logs_sidebar 超过 80 行：{lines}");
 }
+
+/// 运行预览面板必须拆分：主方法只组装预设、镜像元数据与命令预览三块。
+#[test]
+fn run_preview_panel_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/form/run/preview.rs"))
+        .expect("读取 container/form/run/preview.rs 失败");
+    for helper in [
+        "fn run_preset_section",
+        "fn run_image_meta_section",
+        "fn meta_row",
+        "fn run_command_section",
+    ] {
+        assert!(
+            source.contains(helper),
+            "运行预览面板缺少拆分函数：{helper}"
+        );
+    }
+    let start = source
+        .find("fn render_run_preview_panel")
+        .expect("缺少 render_run_preview_panel");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_run_preview_panel 超过 80 行：{lines}");
+}

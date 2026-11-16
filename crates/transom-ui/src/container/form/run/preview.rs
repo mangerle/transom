@@ -34,11 +34,8 @@ impl ContainerRunFormView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let preview_cmd = form.generate_preview_command(cx);
-        let cmd_to_copy = preview_cmd.clone();
         let copy_toast = form.copy_toast;
-        let current_preset = form.preset;
         let image_raw = form.image.read(cx).value().trim().to_string();
-
         v_flex()
             .w(px(270.0))
             .min_w(px(240.0))
@@ -46,187 +43,200 @@ impl ContainerRunFormView {
             .pl_3()
             .border_l_1()
             .border_color(p.border.opacity(0.18))
-            // 1. 快速预设模式切换
-            .child(
-                v_flex()
-                    .gap_1p5()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.foreground)
-                            .child(rust_i18n::t!("container.run.preset_title").to_string()),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_1p5()
-                            .child(
-                                action_button(
-                                    "preset-daemon-btn",
-                                    CustomIcon::PROCESS,
-                                    rust_i18n::t!("container.run.preset_daemon").to_string(),
-                                )
-                                .ghost()
-                                .selected(current_preset == RunPreset::Daemon)
-                                .on_click(cx.listener(
-                                    |this, _: &ClickEvent, _, cx| {
-                                        this.set_preset(RunPreset::Daemon, cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                action_button(
-                                    "preset-interactive-btn",
-                                    DomainIcon::TERMINAL,
-                                    rust_i18n::t!("container.run.preset_interactive").to_string(),
-                                )
-                                .ghost()
-                                .selected(current_preset == RunPreset::Interactive)
-                                .on_click(cx.listener(
-                                    |this, _: &ClickEvent, _, cx| {
-                                        this.set_preset(RunPreset::Interactive, cx);
-                                    },
-                                )),
-                            ),
-                    ),
-            )
-            // 2. 镜像元数据简要看板
-            .child(
-                v_flex()
-                    .gap_1p5()
-                    .p_2p5()
-                    .rounded(p.radius.md)
-                    .bg(p.muted.opacity(0.06))
-                    .border_1()
-                    .border_color(p.stroke.faint)
-                    .child(
-                        h_flex()
-                            .gap_1p5()
-                            .items_center()
-                            .child(
-                                AppIconElement::new(AppIcon::Ui(UiIcon::DEPENDENCIES))
-                                    .with_size(px(13.0))
-                                    .text_color(p.primary),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(p.foreground)
-                                    .child(rust_i18n::t!("container.run.meta_title").to_string()),
-                            ),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(
-                                h_flex()
-                                    .justify_between()
-                                    .text_xs()
-                                    .child(
-                                        div().text_color(p.muted_foreground).child(
-                                            rust_i18n::t!("container.run.image").to_string(),
-                                        ),
-                                    )
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(p.foreground)
-                                            .child(if image_raw.is_empty() {
-                                                "—".to_string()
-                                            } else {
-                                                image_raw
-                                            }),
-                                    ),
-                            )
-                            .when_some(image_meta, |this, meta| {
-                                this.child(
-                                    h_flex()
-                                        .justify_between()
-                                        .text_xs()
-                                        .child(div().text_color(p.muted_foreground).child(
-                                            rust_i18n::t!("container.run.meta_size").to_string(),
-                                        ))
-                                        .child(
-                                            div()
-                                                .font_family(p.mono_font_family.clone())
-                                                .text_color(p.muted_foreground)
-                                                .child(format_size(meta.size)),
-                                        ),
-                                )
-                                .child(
-                                    h_flex()
-                                        .justify_between()
-                                        .text_xs()
-                                        .child(div().text_color(p.muted_foreground).child(
-                                            rust_i18n::t!("container.run.meta_id").to_string(),
-                                        ))
-                                        .child(
-                                            div()
-                                                .font_family(p.mono_font_family.clone())
-                                                .text_color(p.muted_foreground)
-                                                .child(transom_core::short_id(&meta.id)),
-                                        ),
-                                )
-                            }),
-                    ),
-            )
-            // 3. 实时 Docker CLI 命令行预览黑盒
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_h(px(130.0))
-                    .gap_1p5()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(p.foreground)
-                                    .child(
-                                        rust_i18n::t!("container.run.preview_title").to_string(),
-                                    ),
-                            )
-                            .child(
-                                action_button(
-                                    "copy-run-cmd-btn",
-                                    if copy_toast {
-                                        UiIcon::CHECK
-                                    } else {
-                                        UiIcon::COPY
-                                    },
-                                    if copy_toast {
-                                        rust_i18n::t!("container.run.copied").to_string()
-                                    } else {
-                                        rust_i18n::t!("container.run.copy_command").to_string()
-                                    },
-                                )
-                                .ghost()
-                                .on_click(cx.listener(
-                                    move |this, _: &ClickEvent, _, cx| {
-                                        this.copy_command(&cmd_to_copy, cx);
-                                    },
-                                )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .p_2p5()
-                            .rounded(p.radius.md)
-                            .bg(p.background.opacity(0.85))
-                            .border_1()
-                            .border_color(p.border.opacity(0.25))
-                            .font_family(p.mono_font_family.clone())
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .overflow_x_scrollbar()
-                            .child(preview_cmd),
-                    ),
-            )
+            .child(run_preset_section(form.preset, p, cx))
+            .child(run_image_meta_section(&image_raw, image_meta, p))
+            .child(run_command_section(&preview_cmd, copy_toast, p, cx))
             .into_any_element()
     }
+}
+
+fn run_preset_section(
+    current_preset: RunPreset,
+    p: &Palette,
+    cx: &mut Context<ContainerRunFormView>,
+) -> AnyElement {
+    v_flex()
+        .gap_1p5()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
+                .child(rust_i18n::t!("container.run.preset_title").to_string()),
+        )
+        .child(
+            h_flex()
+                .gap_1p5()
+                .child(
+                    action_button(
+                        "preset-daemon-btn",
+                        CustomIcon::PROCESS,
+                        rust_i18n::t!("container.run.preset_daemon").to_string(),
+                    )
+                    .ghost()
+                    .selected(current_preset == RunPreset::Daemon)
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.set_preset(RunPreset::Daemon, cx);
+                    })),
+                )
+                .child(
+                    action_button(
+                        "preset-interactive-btn",
+                        DomainIcon::TERMINAL,
+                        rust_i18n::t!("container.run.preset_interactive").to_string(),
+                    )
+                    .ghost()
+                    .selected(current_preset == RunPreset::Interactive)
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.set_preset(RunPreset::Interactive, cx);
+                    })),
+                ),
+        )
+        .into_any_element()
+}
+
+fn run_image_meta_section(
+    image_raw: &str,
+    image_meta: Option<&ContainerImageSummary>,
+    p: &Palette,
+) -> AnyElement {
+    let image_value = if image_raw.is_empty() {
+        "—".to_string()
+    } else {
+        image_raw.to_string()
+    };
+    v_flex()
+        .gap_1p5()
+        .p_2p5()
+        .rounded(p.radius.md)
+        .bg(p.muted.opacity(0.06))
+        .border_1()
+        .border_color(p.stroke.faint)
+        .child(
+            h_flex()
+                .gap_1p5()
+                .items_center()
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::DEPENDENCIES))
+                        .with_size(px(13.0))
+                        .text_color(p.primary),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.foreground)
+                        .child(rust_i18n::t!("container.run.meta_title").to_string()),
+                ),
+        )
+        .child(
+            v_flex()
+                .gap_1()
+                .child(meta_row(
+                    "container.run.image",
+                    image_value,
+                    p.foreground,
+                    p,
+                ))
+                .when_some(image_meta, |this, meta| {
+                    this.child(meta_row(
+                        "container.run.meta_size",
+                        format_size(meta.size),
+                        p.muted_foreground,
+                        p,
+                    ))
+                    .child(meta_row(
+                        "container.run.meta_id",
+                        transom_core::short_id(&meta.id),
+                        p.muted_foreground,
+                        p,
+                    ))
+                }),
+        )
+        .into_any_element()
+}
+
+fn meta_row(
+    label_key: &'static str,
+    value: String,
+    value_color: gpui_kit::Hsla,
+    p: &Palette,
+) -> AnyElement {
+    h_flex()
+        .justify_between()
+        .text_xs()
+        .child(
+            div()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!(label_key).to_string()),
+        )
+        .child(
+            div()
+                .font_family(p.mono_font_family.clone())
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(value_color)
+                .child(value),
+        )
+        .into_any_element()
+}
+
+fn run_command_section(
+    preview_cmd: &str,
+    copy_toast: bool,
+    p: &Palette,
+    cx: &mut Context<ContainerRunFormView>,
+) -> AnyElement {
+    let cmd_to_copy = preview_cmd.to_string();
+    v_flex()
+        .flex_1()
+        .min_h(px(130.0))
+        .gap_1p5()
+        .child(
+            h_flex()
+                .justify_between()
+                .items_center()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(rust_i18n::t!("container.run.preview_title").to_string()),
+                )
+                .child(
+                    action_button(
+                        "copy-run-cmd-btn",
+                        if copy_toast {
+                            UiIcon::CHECK
+                        } else {
+                            UiIcon::COPY
+                        },
+                        if copy_toast {
+                            rust_i18n::t!("container.run.copied").to_string()
+                        } else {
+                            rust_i18n::t!("container.run.copy_command").to_string()
+                        },
+                    )
+                    .ghost()
+                    .on_click(cx.listener(
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.copy_command(&cmd_to_copy, cx);
+                        },
+                    )),
+                ),
+        )
+        .child(
+            div()
+                .w_full()
+                .p_2p5()
+                .rounded(p.radius.md)
+                .bg(p.background.opacity(0.85))
+                .border_1()
+                .border_color(p.border.opacity(0.25))
+                .font_family(p.mono_font_family.clone())
+                .text_xs()
+                .text_color(p.foreground)
+                .overflow_x_scrollbar()
+                .child(preview_cmd.to_string()),
+        )
+        .into_any_element()
 }
