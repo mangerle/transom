@@ -163,29 +163,102 @@ pub(crate) fn render_container_push_dialog_body(
     let Some(push) = state.modals.push_dialog.as_ref() else {
         return div().into_any_element();
     };
-
-    let source_tag = push.source_tag.clone();
-    let selected_reg_id = push.selected_registry_id.clone();
-    let target_repo = push.target_repo.clone();
-    let target_tag = push.target_tag.clone();
-    let error = push.error.clone();
-
     let current_registry = registries
         .iter()
-        .find(|registry| registry.id == selected_reg_id)
+        .find(|registry| registry.id == push.selected_registry_id)
         .cloned()
         .unwrap_or_else(ContainerRegistry::docker_hub);
+    let content = v_flex()
+        .w_full()
+        .gap_3()
+        .child(push_source_section(&push.source_tag, p))
+        .child(push_registry_section(
+            view,
+            registries,
+            push,
+            &current_registry,
+            p,
+        ))
+        .child(push_input_section(
+            "container.push.target_path",
+            &push.target_repo,
+            p,
+        ))
+        .child(push_input_section(
+            "container.push.target_tag",
+            &push.target_tag,
+            p,
+        ))
+        .child(push_auth_tip(&current_registry, p))
+        .when_some(push.error.clone(), |this, error| {
+            this.child(push_error_banner(&error, p))
+        })
+        .child(push_footer(view));
+    content.into_any_element()
+}
 
-    let registries_snapshot = registries.to_vec();
+fn push_source_section(source_tag: &str, p: &Palette) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(field_label("container.push.source_image", p))
+        .child(
+            h_flex()
+                .p_3()
+                .gap_2()
+                .items_center()
+                .rounded(p.radius.lg)
+                .bg(p.surface.ghost)
+                .border_1()
+                .border_color(p.border.opacity(0.18))
+                .child(
+                    AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
+                        .small()
+                        .text_color(p.primary),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .font_family(p.mono_font_family.clone())
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(source_tag.to_string()),
+                ),
+        )
+        .into_any_element()
+}
+
+fn push_registry_section(
+    view: &Entity<ContainerWorkspace>,
+    registries: &[ContainerRegistry],
+    push: &crate::container::types::ContainerPushDialog,
+    current_registry: &ContainerRegistry,
+    p: &Palette,
+) -> AnyElement {
+    let menu = push_registry_dropdown(view, registries, push, &current_registry.name);
+    v_flex()
+        .gap_1()
+        .child(field_label("container.push.target_registry", p))
+        .child(menu)
+        .into_any_element()
+}
+
+fn push_registry_dropdown(
+    view: &Entity<ContainerWorkspace>,
+    registries: &[ContainerRegistry],
+    push: &crate::container::types::ContainerPushDialog,
+    current_name: &str,
+) -> AnyElement {
+    let registries = registries.to_vec();
+    let selected_reg_id = push.selected_registry_id.clone();
     let view_for_menu = view.clone();
-    let reg_menu = dropdown_trigger(
+    dropdown_trigger(
         "container-push-registry-select",
-        current_registry.name.clone(),
+        current_name.to_string(),
         AppIcon::Ui(UiIcon::CHEVRON_DOWN),
         None,
         move |menu, _, _| {
             let mut menu = menu;
-            for registry in &registries_snapshot {
+            for registry in &registries {
                 let view_item = view_for_menu.clone();
                 let registry_item = registry.clone();
                 let selected = registry.id == selected_reg_id;
@@ -202,152 +275,101 @@ pub(crate) fn render_container_push_dialog_body(
             }
             menu
         },
-    );
+    )
+}
 
-    let auth_tip = if !current_registry.username.is_empty() {
-        rust_i18n::t!(
-            "container.push.auth_user_hint",
-            user = current_registry.username
-        )
-        .to_string()
+fn push_input_section(
+    label_key: &'static str,
+    input: &Entity<InputState>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(field_label(label_key, p))
+        .child(Input::new(input).w_full())
+        .into_any_element()
+}
+
+fn field_label(label_key: &'static str, p: &Palette) -> AnyElement {
+    div()
+        .text_xs()
+        .text_color(p.muted_foreground)
+        .child(rust_i18n::t!(label_key).to_string())
+        .into_any_element()
+}
+
+fn push_auth_tip(registry: &ContainerRegistry, p: &Palette) -> AnyElement {
+    let auth_tip = if !registry.username.is_empty() {
+        rust_i18n::t!("container.push.auth_user_hint", user = registry.username).to_string()
     } else {
         rust_i18n::t!("container.push.auth_anonymous_hint").to_string()
     };
+    h_flex()
+        .px_3()
+        .py_2()
+        .gap_2()
+        .items_center()
+        .rounded(p.radius.md)
+        .bg(p.surface.ghost)
+        .child(
+            AppIconElement::new(AppIcon::Custom(CustomIcon::INFO))
+                .xsmall()
+                .text_color(p.muted_foreground),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(auth_tip),
+        )
+        .into_any_element()
+}
 
-    v_flex()
+fn push_error_banner(error: &str, p: &Palette) -> AnyElement {
+    h_flex()
         .w_full()
-        .gap_3()
+        .p_3()
+        .gap_2()
+        .items_center()
+        .rounded(p.radius.lg)
+        .bg(p.tone.danger_subtle)
+        .text_color(p.danger)
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).small())
         .child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.push.source_image").to_string()),
-                )
-                .child(
-                    h_flex()
-                        .p_3()
-                        .gap_2()
-                        .items_center()
-                        .rounded(p.radius.lg)
-                        .bg(p.surface.ghost)
-                        .border_1()
-                        .border_color(p.border.opacity(0.18))
-                        .child(
-                            AppIconElement::new(AppIcon::Domain(DomainIcon::CONTAINER))
-                                .small()
-                                .text_color(p.primary),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_family(p.mono_font_family.clone())
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(p.foreground)
-                                .child(source_tag),
-                        ),
-                ),
+            div()
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .child(error.to_string()),
         )
-        .child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.push.target_registry").to_string()),
-                )
-                .child(reg_menu),
-        )
-        .child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.push.target_path").to_string()),
-                )
-                .child(Input::new(&target_repo).w_full()),
-        )
-        .child(
-            v_flex()
-                .gap_1()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.push.target_tag").to_string()),
-                )
-                .child(Input::new(&target_tag).w_full()),
-        )
-        .child(
-            h_flex()
-                .px_3()
-                .py_2()
-                .gap_2()
-                .items_center()
-                .rounded(p.radius.md)
-                .bg(p.surface.ghost)
-                .child(
-                    AppIconElement::new(AppIcon::Custom(CustomIcon::INFO))
-                        .xsmall()
-                        .text_color(p.muted_foreground),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(auth_tip),
-                ),
-        )
-        .when_some(error, |this, err| {
-            this.child(
-                h_flex()
-                    .w_full()
-                    .p_3()
-                    .gap_2()
-                    .items_center()
-                    .rounded(p.radius.lg)
-                    .bg(p.tone.danger_subtle)
-                    .text_color(p.danger)
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).small())
-                    .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(err)),
-            )
-        })
-        .child(
-            h_flex()
-                .justify_end()
-                .gap_2()
-                .child(dialog_cancel_button(
-                    "container-push-cancel",
-                    rust_i18n::t!("container.push.cancel").to_string(),
-                    {
-                        let view = view.clone();
-                        move |_, _, cx| {
-                            view.update(cx, |workspace, cx| {
-                                workspace.cancel_push_dialog(cx);
-                            });
-                        }
-                    },
-                ))
-                .child(dialog_confirm_button(
-                    "container-push-confirm",
-                    rust_i18n::t!("container.push.submit").to_string(),
-                    Some(AppIcon::Ui(UiIcon::UPLOAD)),
-                    DialogConfirmKind::Primary,
-                    {
-                        let view = view.clone();
-                        move |_, _, cx| {
-                            view.update(cx, |workspace, cx| {
-                                workspace.submit_push_dialog(cx);
-                            });
-                        }
-                    },
-                )),
-        )
+        .into_any_element()
+}
+
+fn push_footer(view: &Entity<ContainerWorkspace>) -> AnyElement {
+    let cancel_view = view.clone();
+    let confirm_view = view.clone();
+    h_flex()
+        .justify_end()
+        .gap_2()
+        .child(dialog_cancel_button(
+            "container-push-cancel",
+            rust_i18n::t!("container.push.cancel").to_string(),
+            move |_, _, cx| {
+                cancel_view.update(cx, |workspace, cx| {
+                    workspace.cancel_push_dialog(cx);
+                });
+            },
+        ))
+        .child(dialog_confirm_button(
+            "container-push-confirm",
+            rust_i18n::t!("container.push.submit").to_string(),
+            Some(AppIcon::Ui(UiIcon::UPLOAD)),
+            DialogConfirmKind::Primary,
+            move |_, _, cx| {
+                confirm_view.update(cx, |workspace, cx| {
+                    workspace.submit_push_dialog(cx);
+                });
+            },
+        ))
         .into_any_element()
 }
 

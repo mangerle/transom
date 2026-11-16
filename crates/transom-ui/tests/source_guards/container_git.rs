@@ -1855,3 +1855,44 @@ fn processes_card_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "processes_card 超过 80 行：{lines}");
 }
+
+/// 推送弹窗必须拆分：主函数只组装源镜像、仓库、输入与页脚，不超过 80 行。
+#[test]
+fn push_dialog_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/push_dialog.rs"))
+        .expect("读取 container/push_dialog.rs 失败");
+    for helper in [
+        "fn push_source_section",
+        "fn push_registry_section",
+        "fn push_registry_dropdown",
+        "fn push_input_section",
+        "fn push_footer",
+    ] {
+        assert!(source.contains(helper), "推送弹窗缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_container_push_dialog_body")
+        .expect("缺少推送弹窗主渲染函数");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "推送弹窗主函数超过 80 行：{lines}");
+}
