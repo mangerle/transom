@@ -69,6 +69,29 @@ impl GitHub {
         badge.loading = false;
         badge.error = error.map(str::to_string);
     }
+
+    /// 把仓库状态快照写进侧栏徽标：分支名、脏文件数、领先/落后与加载态。
+    pub(crate) fn apply_repo_status_badge(
+        &mut self,
+        project_id: transom_core::GitProjectId,
+        status: &transom_core::RepoStatus,
+    ) {
+        let branch = match &status.head {
+            transom_core::HeadState::OnBranch(name) => Some(name.clone()),
+            transom_core::HeadState::Initial { branch } => Some(branch.clone()),
+            transom_core::HeadState::Detached => status
+                .oid
+                .as_deref()
+                .map(|oid| oid.chars().take(7).collect()),
+        };
+        let badge = self.badges.entry(project_id).or_default();
+        badge.branch = branch;
+        badge.dirty = status.entries.len();
+        badge.ahead = status.ahead;
+        badge.behind = status.behind;
+        badge.loading = false;
+        badge.error = None;
+    }
 }
 
 /// 侧栏行缓存的键：`GitProjectId` 的薄封装，避免直接依赖其可见性。

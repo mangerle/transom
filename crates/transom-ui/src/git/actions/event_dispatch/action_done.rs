@@ -5,7 +5,6 @@ use crate::git::commit_modal::worktree_diff_request;
 use crate::git::types::first_worktree_diff;
 use crate::palette::localized_error;
 use gpui_kit::*;
-use std::collections::HashSet;
 use transom_core::{GitAction, GitCommand, GitProjectId};
 
 pub(super) fn handle_git_action_done(
@@ -42,7 +41,7 @@ pub(super) fn handle_git_action_done(
         let pending = app_state
             .git_workspace_of_project(project_id, cx)
             .and_then(|workspace| {
-                workspace.update(cx, |workspace, _| workspace.state.pending_worktree.take())
+                workspace.update(cx, |workspace, _| workspace.take_pending_worktree())
             });
         if let Some((path, _checkout)) = pending {
             crate::git::actions::GitActions::new(app_state).add_git_project(
@@ -124,23 +123,15 @@ pub(super) fn handle_git_action_done(
         && let Some(tab_id) =
             crate::git::actions::GitActions::new(app_state).git_tab_for_project(project_id, cx)
     {
-        let mut should_push = false;
-        if let Some(workspace) = app_state.git_workspace(tab_id) {
-            workspace.update(cx, |workspace, cx| {
-                let state = &mut workspace.state;
-                state.commit_submitting = false;
-                if message.is_none() {
-                    state.checked = HashSet::new();
-                    state.commit_amend = false;
-                    state.commit_clear_pending =
-                        crate::app::app_settings(cx).git.clear_message_on_commit;
-                    // 让下一次状态刷新重新选中第一个改动并拉差异。
-                    state.diff = None;
-                    state.last_diff = None;
-                    should_push = std::mem::take(&mut state.push_after_commit);
-                }
-            });
-        }
+        let clear_message_on_commit = crate::app::app_settings(cx).git.clear_message_on_commit;
+        let should_push = app_state
+            .git_workspace(tab_id)
+            .map(|workspace| {
+                workspace.update(cx, |workspace, _| {
+                    workspace.apply_commit_done(message.is_none(), clear_message_on_commit)
+                })
+            })
+            .unwrap_or(false);
         if message.is_none() {
             if let Some(workspace) = app_state.git_workspace(tab_id) {
                 workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
@@ -176,32 +167,9 @@ pub(super) fn apply_git_status(
     status: transom_core::RepoStatus,
     cx: &mut Context<AppShell>,
 ) {
-    let dirty = status.entries.len();
-    let branch = match &status.head {
-        transom_core::HeadState::OnBranch(name) => Some(name.clone()),
-        transom_core::HeadState::Initial { branch } => Some(branch.clone()),
-        transom_core::HeadState::Detached => status
-            .oid
-            .as_deref()
-            .map(|oid| oid.chars().take(7).collect()),
-    };
-    app_state.update_git_registry(cx, |git| {
-        let badge = git.badges.entry(project_id).or_default();
-        badge.branch = branch;
-        badge.dirty = dirty;
-        badge.ahead = status.ahead;
-        badge.behind = status.behind;
-        badge.loading = false;
-        badge.error = None;
-    });
+    app_state.update_git_registry(cx, |git| git.apply_repo_status_badge(project_id, &status));
     if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
-        workspace.update(cx, |workspace, _| {
-            let state = &mut workspace.state;
-            state.status_error = None;
-            state.status_loading = false;
-            state.not_repo = false;
-            state.status = Some(status);
-        });
+        workspace.update(cx, |workspace, _| workspace.apply_repo_status(status));
     }
     // 提交页首屏直接给第一个改动的差异：用户不用先点一下才知道右侧能看什么。
     if let Some(tab_id) =

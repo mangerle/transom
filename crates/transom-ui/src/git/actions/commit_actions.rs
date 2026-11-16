@@ -5,9 +5,36 @@ use crate::git::GitCommitTab;
 use crate::git::commit_modal::{ChangeGroup, worktree_diff_request};
 use crate::git::entity::{GitWorkspace, GitWorkspaceEvent};
 use gpui_kit::{Context, Window};
+use std::collections::HashSet;
 use transom_core::{
     GitAction, GitCommand, GitRequestId, GitSide, HeadState, ShelfEntry, StashFile, StatusRecord,
 };
+
+impl GitWorkspace {
+    /// 提交动作完成后的状态收尾。
+    ///
+    /// 结束提交中标记；成功时清空勾选与 amend、按设置决定是否清空留言、丢弃
+    /// 旧差异快照，并返回「提交后是否继续推送」的意图。失败时保留输入，便于
+    /// 用户直接修正后重试。
+    pub(crate) fn apply_commit_done(
+        &mut self,
+        success: bool,
+        clear_message_on_commit: bool,
+    ) -> bool {
+        let state = &mut self.state;
+        state.commit_submitting = false;
+        if !success {
+            return false;
+        }
+        state.checked = HashSet::new();
+        state.commit_amend = false;
+        state.commit_clear_pending = clear_message_on_commit;
+        // 让下一次状态刷新重新选中第一个改动并拉差异。
+        state.diff = None;
+        state.last_diff = None;
+        std::mem::take(&mut state.push_after_commit)
+    }
+}
 
 impl GitWorkspace {
     /// 切换单条改动路径的勾选状态。

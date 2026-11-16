@@ -963,3 +963,44 @@ fn git_read_results_applied_by_entity() {
         );
     }
 }
+
+/// Git 动作完成结果必须由实体落地：提交收尾、状态快照与徽标都不得在
+/// action_done 桥接里直接改字段。
+#[test]
+fn git_action_results_applied_by_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (file, methods) in [
+        (
+            "src/git/actions/commit_actions.rs",
+            vec!["fn apply_commit_done"],
+        ),
+        (
+            "src/git/entity.rs",
+            vec!["fn apply_repo_status", "fn take_pending_worktree"],
+        ),
+        (
+            "src/git/types/sidebar.rs",
+            vec!["fn apply_repo_status_badge"],
+        ),
+    ] {
+        let content = std::fs::read_to_string(root.join(file)).expect("读取 Git 实体文件失败");
+        for method in methods {
+            assert!(content.contains(method), "{file} 缺少实体方法：{method}");
+        }
+    }
+    let bridge =
+        std::fs::read_to_string(root.join("src/git/actions/event_dispatch/action_done.rs"))
+            .expect("读取 git/actions/event_dispatch/action_done.rs 失败");
+    for forbidden in [
+        "workspace.state",
+        "state.commit_submitting",
+        "state.checked",
+        "state.not_repo",
+        "badge.branch",
+    ] {
+        assert!(
+            !bridge.contains(forbidden),
+            "action_done 桥接不得直接改实体字段：{forbidden}"
+        );
+    }
+}

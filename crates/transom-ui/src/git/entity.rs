@@ -78,6 +78,22 @@ pub(crate) struct GitWorkspace {
 }
 
 impl GitWorkspace {
+    /// 取出待登记的 worktree（路径, 是否检出分支）。
+    ///
+    /// 由动作完成事件在工作树创建成功后调用；返回 `None` 表示没有待登记项。
+    pub(crate) fn take_pending_worktree(&mut self) -> Option<(String, bool)> {
+        self.state.pending_worktree.take()
+    }
+
+    /// 应用仓库状态快照：清掉错误与未初始化标记，写入最新状态。
+    pub(crate) fn apply_repo_status(&mut self, status: transom_core::RepoStatus) {
+        let state = &mut self.state;
+        state.status_error = None;
+        state.status_loading = false;
+        state.not_repo = false;
+        state.status = Some(status);
+    }
+
     /// 应用仓库补初始化结果。
     ///
     /// 失败时把原因同时落到状态栏与日志区，并结束加载态；成功时清掉错误与
