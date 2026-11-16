@@ -1328,3 +1328,44 @@ fn local_context_menu_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 60, "build_local_context_menu 超过 60 行：{lines}");
 }
+
+/// 容器转发表单渲染必须按区块拆分：主函数只组装内容与页脚，
+/// 单函数不超过 80 行。
+#[test]
+fn container_forward_dialog_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/modals/forward.rs"))
+        .expect("读取 container/modals/forward.rs 失败");
+    for helper in [
+        "fn forward_info_card",
+        "fn forward_session_section",
+        "fn forward_inputs",
+        "fn forward_footer",
+    ] {
+        assert!(source.contains(helper), "转发表单缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_container_forward_dialog_body")
+        .expect("缺少主渲染函数");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "转发表单主函数超过 80 行：{lines}");
+}
