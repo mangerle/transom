@@ -56,6 +56,8 @@ pub(crate) enum WindowRequest {
     LocalTerminal(Option<std::path::PathBuf>),
     /// 底栏瞬态提示：由外壳在渲染期设置并自动清除。
     TransientStatus(String),
+    /// 打开会话表单：`None` 为新建，`Some` 为编辑对应会话。
+    OpenSessionForm(Option<transom_core::SessionId>),
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -149,6 +151,11 @@ impl WindowRequests {
     pub(crate) fn push_transient_status(&mut self, message: impl Into<String>) {
         self.items
             .push(WindowRequest::TransientStatus(message.into()));
+    }
+
+    /// 打开会话表单：`None` 为新建，`Some` 为编辑。
+    pub(crate) fn push_open_session_form(&mut self, session_id: Option<transom_core::SessionId>) {
+        self.items.push(WindowRequest::OpenSessionForm(session_id));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

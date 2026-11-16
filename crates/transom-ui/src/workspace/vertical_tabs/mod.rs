@@ -130,28 +130,6 @@ impl AppState {
 }
 
 impl AppShell {
-    /// 左侧槽位当前是否显示纵向标签面板。
-    ///
-    /// 标签面板与会话树共用同一个槽位，面板可见时主区顶部不再绘制横向标签条；
-    /// 顶部模式下该入口整体不可用，活动栏也不渲染对应图标。
-    /// 切到左侧槽位的标签面板；顶部模式或面板已可见时为空操作。
-    ///
-    /// 会话树里的连接动作完成后调用：连接入口在会话树，连接完成后用户要看
-    /// 的是终端列表，因此自动把槽位切到标签面板。
-    pub(crate) fn reveal_vertical_tabs_panel(&mut self, cx: &mut Context<Self>) {
-        if app_settings(cx).window.tab_position != TabPosition::Left {
-            return;
-        }
-        if self.state.session.sidebar.is_showing(SidebarSection::Tabs) {
-            return;
-        }
-        self.state
-            .session
-            .sidebar
-            .show_section(SidebarSection::Tabs);
-        cx.notify();
-    }
-
     /// 渲染纵向标签面板：控制条（搜索、新增会话菜单）与按组展开的标签列表。
     pub(crate) fn render_vertical_tabs_panel(
         &mut self,
@@ -181,7 +159,7 @@ impl AppShell {
         } else {
             let mut rows = Vec::with_capacity(visible.len());
             for group_id in visible {
-                if let Some(row) = item::render_vertical_tab_row(self, group_id, p, cx) {
+                if let Some(row) = item::render_vertical_tab_row(&self.state, group_id, p, cx) {
                     rows.push(row);
                 }
             }
@@ -382,6 +360,23 @@ fn session_menu_item(entry: &NewSessionEntry, app: &Entity<AppShell>) -> PopupMe
 /// 大小写不敏感的包含匹配；查询词已由调用方转小写。
 fn text_matches_query(query_lower: &str, text: &str) -> bool {
     text.to_lowercase().contains(query_lower)
+}
+
+impl AppState {
+    /// 切到左侧槽位的标签面板；顶部模式或面板已可见时为空操作。
+    ///
+    /// 会话树里的连接动作完成后调用：连接入口在会话树，连接完成后用户要看
+    /// 的是终端列表，因此自动把槽位切到标签面板。
+    pub(crate) fn reveal_vertical_tabs_panel(&mut self, cx: &mut Context<AppShell>) {
+        if app_settings(cx).window.tab_position != TabPosition::Left {
+            return;
+        }
+        if self.session.sidebar.is_showing(SidebarSection::Tabs) {
+            return;
+        }
+        self.session.sidebar.show_section(SidebarSection::Tabs);
+        cx.notify();
+    }
 }
 
 #[cfg(test)]

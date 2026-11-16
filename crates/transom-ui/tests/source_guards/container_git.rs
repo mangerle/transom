@@ -1160,3 +1160,33 @@ fn git_actions_is_narrow_context() {
         "GitActions 不得再持有整份 AppState 字段"
     );
 }
+
+/// 全仓携壳参数只允许出现在窗口生命周期文件；其余模块必须清零。
+#[test]
+fn shell_parameters_are_registered() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        for line in content.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if line.contains("shell: &mut AppShell") || line.contains("shell: &AppShell") {
+                let relative = entry.strip_prefix(root.join("src")).unwrap_or(&entry);
+                offenders.push(crate::common::normalized_path(relative));
+            }
+        }
+    }
+    assert_eq!(
+        offenders,
+        vec!["window_state.rs".to_string(), "window_state.rs".to_string()],
+        "携壳参数只允许留在窗口生命周期（保存窗口状态与关闭应用）"
+    );
+}

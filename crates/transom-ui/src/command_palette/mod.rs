@@ -10,9 +10,9 @@
 
 mod items;
 
-use crate::app::AppShell;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
+use crate::app::{AppShell, AppState};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::v_flex;
 use gpui_kit::component::command::Command;
@@ -34,14 +34,14 @@ struct PaletteCommandInput {
 }
 
 /// 构建面板命令组件：查询重建、确认应用与取消关闭。
-fn palette_command(shell: &AppShell, input: PaletteCommandInput) -> Command {
+fn palette_command(app_state: &AppState, input: PaletteCommandInput) -> Command {
     let PaletteCommandInput {
         app,
         targets,
         placeholder,
         muted,
     } = input;
-    Command::new(&shell.state.ui.modals.tools.quick_open_state)
+    Command::new(&app_state.ui.modals.tools.quick_open_state)
         .placeholder(placeholder)
         // 外框由宿主面板提供：组件自带的圆角边框会在直角浮层里套出一层内圆角。
         .bordered(false)
@@ -71,7 +71,7 @@ fn palette_command(shell: &AppShell, input: PaletteCommandInput) -> Command {
                     .cloned();
                 app.update(cx, |this, cx| {
                     this.state.ui.modals.tools.show_quick_open = false;
-                    apply_palette_target(this, target, window, cx);
+                    apply_palette_target(&mut this.state, target, window, cx);
                     cx.notify();
                 });
             }
@@ -88,7 +88,7 @@ fn palette_command(shell: &AppShell, input: PaletteCommandInput) -> Command {
 }
 
 pub(crate) fn render_command_palette_modal(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
     p: &Palette,
@@ -96,8 +96,7 @@ pub(crate) fn render_command_palette_modal(
     let app_entity = cx.entity().clone();
     // 渲染期读取查询词：面板的条目集合由本函数按当前查询重建，因此
     // 只要 on_query 触发一次重绘，列表就与输入框内容保持同步。
-    let query = shell
-        .state
+    let query = app_state
         .ui
         .modals
         .tools
@@ -114,7 +113,7 @@ pub(crate) fn render_command_palette_modal(
         query.as_str()
     };
 
-    let model = items::build_palette_model(shell, action_mode, term, cx);
+    let model = items::build_palette_model(app_state, action_mode, term, cx);
     let targets = Rc::new(model.targets);
 
     let placeholder = if action_mode {
@@ -125,7 +124,7 @@ pub(crate) fn render_command_palette_modal(
 
     let muted = p.muted_foreground;
     let mut command = palette_command(
-        shell,
+        app_state,
         PaletteCommandInput {
             app: app_entity,
             targets,
@@ -158,7 +157,7 @@ pub(crate) fn render_command_palette_modal(
 /// 与设置页的"选择即预览"不同：命令面板没有保存/取消的闭环，因此必须
 /// 当场持久化，否则用户以为已切换、重启后却回退。明暗模式跟随主题自带
 /// 属性，避免"选了深色主题但界面仍是浅色"的假死状态。
-fn apply_ui_theme_choice(shell: &mut AppShell, name: &str, cx: &mut Context<AppShell>) {
+fn apply_ui_theme_choice(app_state: &mut AppState, name: &str, cx: &mut Context<AppShell>) {
     let Some(config) = ThemeRegistry::global(cx)
         .sorted_themes()
         .into_iter()
@@ -173,55 +172,54 @@ fn apply_ui_theme_choice(shell: &mut AppShell, name: &str, cx: &mut Context<AppS
         ThemeMode::Light => UiThemeMode::Light,
     };
     crate::settings::update_appearance(
-        &mut shell.state,
+        app_state,
         |appearance| {
             appearance.ui_theme = name.to_string();
             appearance.mode = mode;
         },
         cx,
     );
-    persist_theme_choice(shell, cx);
+    persist_theme_choice(app_state, cx);
 }
 
 /// 应用终端配色并热下发到全部窗格，随后落盘。
-fn apply_terminal_theme_choice(shell: &mut AppShell, name: &str, cx: &mut Context<AppShell>) {
+fn apply_terminal_theme_choice(app_state: &mut AppState, name: &str, cx: &mut Context<AppShell>) {
     let Some(theme) = preset_themes().into_iter().find(|theme| theme.name == name) else {
         log::warn!("命令面板选择终端配色失败，配色不在预设中: {name}");
         return;
     };
     update_app_settings(cx, |s| s.terminal_profile.theme_name = theme.name);
     update_app_settings(cx, |s| s.terminal_profile.palette = theme.palette);
-    crate::settings::apply_appearance_to_live_panes(&shell.state, cx);
-    persist_theme_choice(shell, cx);
+    crate::settings::apply_appearance_to_live_panes(app_state, cx);
+    persist_theme_choice(app_state, cx);
 }
 
-fn persist_theme_choice(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+fn persist_theme_choice(app_state: &mut AppState, cx: &mut Context<AppShell>) {
     let settings_snapshot = app_settings(cx).clone();
-    if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
+    if let Err(error) = app_state.persist_settings(&settings_snapshot) {
         log::error!("保存主题选择失败，界面仍是新主题但下次启动会回退，原因: {error}");
-        shell.state.set_error(localized_error(&error));
+        app_state.set_error(localized_error(&error));
     }
     cx.notify();
 }
 
 /// 执行命令面板选中的目标；动作已由组件派发，其余在此路由。
 fn apply_palette_target(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     target: Option<PaletteTarget>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     match target {
         Some(PaletteTarget::Local) => {
-            crate::connection::open_local_terminal(&mut shell.state, window, cx);
+            crate::connection::open_local_terminal(app_state, window, cx);
         }
         Some(PaletteTarget::Session(session_id)) => {
-            crate::connection::connect_session(&mut shell.state, session_id, window, cx);
+            crate::connection::connect_session(app_state, session_id, window, cx);
         }
         Some(PaletteTarget::QuickConnect) => {
             // 主机词以确认时刻的输入框为准，避免渲染期快照过期。
-            let host = shell
-                .state
+            let host = app_state
                 .ui
                 .modals
                 .tools
@@ -230,16 +228,16 @@ fn apply_palette_target(
                 .query(cx)
                 .trim()
                 .to_string();
-            crate::connection::connect_quick_host(&mut shell.state, &host, cx);
+            crate::connection::connect_quick_host(app_state, &host, cx);
         }
         Some(PaletteTarget::SettingsPage(page)) => {
-            shell.open_settings_modal(Some(page), window, cx);
+            app_state.ui.window_requests.push_open_settings(Some(page));
         }
         Some(PaletteTarget::UiTheme(name)) => {
-            apply_ui_theme_choice(shell, &name, cx);
+            apply_ui_theme_choice(app_state, &name, cx);
         }
         Some(PaletteTarget::TerminalTheme(name)) => {
-            apply_terminal_theme_choice(shell, &name, cx);
+            apply_terminal_theme_choice(app_state, &name, cx);
         }
         Some(PaletteTarget::Snippet(id)) => {
             let snippet = app_settings(cx)
@@ -250,22 +248,22 @@ fn apply_palette_target(
                 .cloned();
             if let Some(snippet) = snippet {
                 let execute = app_settings(cx).snippets.execute_directly;
-                crate::snippets::apply_snippet(&mut shell.state, &snippet, execute, cx);
+                crate::snippets::apply_snippet(app_state, &snippet, execute, cx);
             }
         }
         Some(PaletteTarget::Container {
             tab_id,
             container_id,
         }) => {
-            shell.activate_tab(tab_id, window, cx);
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            app_state.ui.window_requests.push_activate_tab(tab_id);
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, _| {
                     workspace
                         .state
                         .apply_section(crate::container::ContainerSection::Containers);
                 });
             }
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, _| {
                     workspace.select_container_item(container_id)
                 });
@@ -277,7 +275,7 @@ fn apply_palette_target(
             container_name,
             action,
         }) => {
-            if let Some(workspace) = shell.state.container_workspace(tab_id) {
+            if let Some(workspace) = app_state.container_workspace(tab_id) {
                 workspace.update(cx, |workspace, cx| {
                     workspace.container_lifecycle(container_name, action, cx);
                 });

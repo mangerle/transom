@@ -3,17 +3,17 @@
 //! 判定刻意做成纯函数（[`should_notify`]），这样"该不该弹"能在没有窗口环境的情况下测；
 //! 只有真正发通知的那一步才依赖 gpui 与 notify-rust。
 
-use crate::app::AppShell;
 use crate::app::app_settings;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use transom_core::TabId;
 
 /// 阈值秒数上限：超过 1 小时的阈值等价于"永远不通知"，直接拒绝写入设置。
 const NOTIFY_THRESHOLD_MAX_SECS: u64 = 3600;
 
-/// shell 集成报告一条命令跑完。
+/// app_state 集成报告一条命令跑完。
 pub(crate) fn on_command_finished(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     exit_code: Option<i32>,
     duration_ms: u64,
@@ -21,7 +21,7 @@ pub(crate) fn on_command_finished(
     cx: &mut Context<AppShell>,
 ) {
     let settings = &app_settings(cx).window;
-    let pane_active = shell.state.workspace.active_tab == Some(tab_id);
+    let pane_active = app_state.workspace.active_tab == Some(tab_id);
     if !should_notify(
         settings.desktop_notifications,
         duration_ms,
@@ -31,8 +31,7 @@ pub(crate) fn on_command_finished(
     ) {
         return;
     }
-    let pane_name = shell
-        .state
+    let pane_name = app_state
         .workspace
         .tab(tab_id)
         .map(|tab| tab.display_name())
@@ -40,7 +39,7 @@ pub(crate) fn on_command_finished(
     let exit_text = match exit_code {
         Some(0) => rust_i18n::t!("notify.exit_code_zero").to_string(),
         Some(code) => rust_i18n::t!("notify.exit_code", code = code).to_string(),
-        // 只有 A/B 标记的 shell 集成拿不到退出码，此时宁可不写也不写个假的 0。
+        // 只有 A/B 标记的 app_state 集成拿不到退出码，此时宁可不写也不写个假的 0。
         None => rust_i18n::t!("notify.exit_code_unknown").to_string(),
     };
     let duration_text = format_command_duration(duration_ms);
@@ -54,14 +53,14 @@ pub(crate) fn on_command_finished(
         )
         .as_ref(),
     );
-    shell.set_transient_status(rust_i18n::t!("notify.command_done_status"), cx);
+    app_state.set_transient_status(rust_i18n::t!("notify.command_done_status"), cx);
     cx.notify();
 }
 
 /// 终端程序通过 OSC 777 / OSC 9 显式请求的通知：程序自己决定了"值得看一眼"，
 /// 因此不加耗时阈值，只受总开关约束。
 pub(crate) fn on_desktop_notification(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     title: &str,
     body: &str,
     cx: &mut Context<AppShell>,
@@ -75,7 +74,7 @@ pub(crate) fn on_desktop_notification(
         format!("Transom · {title}")
     };
     send_desktop_notification(&summary, body);
-    shell.set_transient_status(rust_i18n::t!("notify.desktop_sent"), cx);
+    app_state.set_transient_status(rust_i18n::t!("notify.desktop_sent"), cx);
     cx.notify();
 }
 

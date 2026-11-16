@@ -1,7 +1,7 @@
 //! 活动栏右键上下文菜单与条目可见性控制。
 
-use crate::app::AppShell;
 use crate::app::app_settings_mut;
+use crate::app::{AppShell, AppState};
 use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::*;
 use transom_core::ActivityItemId;
@@ -30,7 +30,7 @@ pub(super) fn activity_context_menu(
             rust_i18n::t!("activity.hide_item").to_string(),
             AppIcon::Ui(UiIcon::HIDE),
             move |_, _, cx| {
-                app_hide.update(cx, |this, cx| hide_activity_item(this, id, cx));
+                app_hide.update(cx, |this, cx| hide_activity_item(&mut this.state, id, cx));
             },
         ));
     }
@@ -40,7 +40,9 @@ pub(super) fn activity_context_menu(
             rust_i18n::t!("activity.restore_default").to_string(),
             AppIcon::Ui(UiIcon::UNDO),
             move |_, _, cx| {
-                app_restore.update(cx, crate::activity_bar::restore_activity_bar);
+                app_restore.update(cx, |this, cx| {
+                    crate::activity_bar::restore_activity_bar(&mut this.state, cx)
+                });
             },
         ))
 }
@@ -52,22 +54,24 @@ pub(super) fn activity_bar_context_menu(menu: PopupMenu, app: &Entity<AppShell>)
         rust_i18n::t!("activity.restore_default").to_string(),
         AppIcon::Ui(UiIcon::UNDO),
         move |_, _, cx| {
-            app_restore.update(cx, crate::activity_bar::restore_activity_bar);
+            app_restore.update(cx, |this, cx| {
+                crate::activity_bar::restore_activity_bar(&mut this.state, cx)
+            });
         },
     ))
 }
 
-fn hide_activity_item(shell: &mut AppShell, id: ActivityItemId, cx: &mut Context<AppShell>) {
+fn hide_activity_item(app_state: &mut AppState, id: ActivityItemId, cx: &mut Context<AppShell>) {
     if app_settings_mut(cx).activity_bar.set_visible(id, false) {
-        shell.state.persist_layout_settings(cx);
+        app_state.persist_layout_settings(cx);
     } else {
         cx.notify();
     }
 }
 
-pub(crate) fn restore_activity_bar(shell: &mut AppShell, cx: &mut Context<AppShell>) {
+pub(crate) fn restore_activity_bar(app_state: &mut AppState, cx: &mut Context<AppShell>) {
     if app_settings_mut(cx).activity_bar.restore_defaults() {
-        shell.state.persist_layout_settings(cx);
+        app_state.persist_layout_settings(cx);
     } else {
         cx.notify();
     }

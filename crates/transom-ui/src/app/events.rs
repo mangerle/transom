@@ -282,7 +282,7 @@ impl AppShell {
                 session_id,
                 outcome,
             } => {
-                crate::probe::handle_probe_result(self, session_id, outcome, cx);
+                crate::probe::handle_probe_result(&mut self.state, session_id, outcome, cx);
             }
         }
     }
@@ -377,7 +377,7 @@ impl AppShell {
                 duration_ms,
             } => {
                 crate::notify::on_command_finished(
-                    self,
+                    &mut self.state,
                     tab_id,
                     *exit_code,
                     *duration_ms,
@@ -386,7 +386,7 @@ impl AppShell {
                 );
             }
             TerminalEvent::DesktopNotification { title, body } => {
-                crate::notify::on_desktop_notification(self, title, body, cx);
+                crate::notify::on_desktop_notification(&mut self.state, title, body, cx);
             }
             TerminalEvent::OpenCodeLocation { path, line, column } => {
                 crate::editor::open_terminal_code_location(
@@ -422,16 +422,16 @@ impl AppShell {
 
 /// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
 pub(crate) fn on_known_hosts_event(
-    shell: &mut AppShell,
+    app_state: &mut crate::app::AppState,
     event: &crate::keys::KnownHostsEvent,
     cx: &mut Context<AppShell>,
 ) {
     match event {
-        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => shell
-            .state
-            .set_error(crate::palette::localized_error(error)),
+        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => {
+            app_state.set_error(crate::palette::localized_error(error))
+        }
         crate::keys::KnownHostsEvent::Removed { error: None } => {
-            shell.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
+            app_state.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
         }
     }
     cx.notify();

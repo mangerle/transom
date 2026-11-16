@@ -5,8 +5,8 @@
 //! 右键复用横向标签栏的上下文菜单，拖拽上下换序由 `drag` 模块处理。
 
 use super::drag::attach_vertical_tab_drag;
-use crate::app::AppShell;
 use crate::app::app_settings;
+use crate::app::{AppShell, AppState};
 use crate::connection::session_host;
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -30,13 +30,13 @@ const ROW_ICON_SIZE: Rems = rems(size::TREE_ROW_ICON);
 
 /// 渲染纵向标签面板中的单个标签组行。
 pub(super) fn render_vertical_tab_row(
-    shell: &AppShell,
+    app_state: &AppState,
     group_id: GroupId,
     p: &Palette,
     cx: &mut Context<AppShell>,
 ) -> Option<AnyElement> {
-    let group = shell.state.workspace.group(group_id)?;
-    let tab = shell.state.workspace.tab(group.active_pane)?;
+    let group = app_state.workspace.group(group_id)?;
+    let tab = app_state.workspace.tab(group.active_pane)?;
     let app_entity = cx.entity().clone();
     let palette = p.clone();
     let active_pane = group.active_pane;
@@ -46,8 +46,7 @@ pub(super) fn render_vertical_tab_row(
     let pane_axis = group.root.root_axis();
     // 激活判定用"组包含活动窗格"而不是比较活动窗格本身：组内切窗格后，
     // 行仍然保持高亮，不会短暂熄灭。
-    let active = shell
-        .state
+    let active = app_state
         .workspace
         .active_tab
         .is_some_and(|tab_id| group.contains(tab_id));
@@ -60,12 +59,12 @@ pub(super) fn render_vertical_tab_row(
     let is_local = matches!(tab.session.connection, Connection::Local(_));
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
     let (icon, icon_color) =
-        crate::workspace::tab_presentation::tab_icon(&shell.state, tab, active, p, cx);
-    let tiled = shell.state.tiling_of_group(group_id);
+        crate::workspace::tab_presentation::tab_icon(app_state, tab, active, p, cx);
+    let tiled = app_state.tiling_of_group(group_id);
     let tiled_badge = tiled.is_some();
     let this_set_id = tiled.map(|tiled| tiled.id);
     let menu_host = session_host(&tab.session).map(str::to_string);
-    let can_tile = shell.state.workspace.groups.len() >= 2;
+    let can_tile = app_state.workspace.groups.len() >= 2;
 
     // 右键菜单与横向标签栏共用同一套参数：并排、多选、复制主机等动作的
     // 可用性判断必须与标签栏完全一致，避免两个入口给出不同结果。
@@ -76,7 +75,7 @@ pub(super) fn render_vertical_tab_row(
         touched_sets,
         show_add_to_tiling,
         show_multi_tile,
-    } = crate::workspace::tab_selection::selection_model(&shell.state.workspace, group_id, tiled);
+    } = crate::workspace::tab_selection::selection_model(&app_state.workspace, group_id, tiled);
     let tile_enabled = this_set_id.is_none() && can_tile;
 
     let mut band = h_flex()

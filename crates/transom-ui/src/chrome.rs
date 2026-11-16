@@ -1,6 +1,6 @@
 //! 窗口顶栏（Top Bar）渲染模块。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::brand;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -18,7 +18,7 @@ use gpui_kit::*;
 const LOGO_SIZE: f32 = 1.5;
 
 pub(crate) fn render_top_bar(
-    _shell: &mut AppShell,
+    _app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
     p: &Palette,

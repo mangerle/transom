@@ -10,7 +10,7 @@ use gpui_kit::*;
 use transom_core::FolderId;
 
 pub(crate) fn open_new_folder(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     parent: Option<FolderId>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -27,7 +27,7 @@ pub(crate) fn open_new_folder(
     });
     let default_key_path =
         cx.new(|cx| InputState::new(window, cx).placeholder("~/.ssh/id_ed25519".to_string()));
-    shell.state.ui.modals.session.folder_form = Some(FolderForm {
+    app_state.ui.modals.session.folder_form = Some(FolderForm {
         base: None,
         parent,
         name,
@@ -40,12 +40,12 @@ pub(crate) fn open_new_folder(
 }
 
 pub(super) fn open_rename_folder(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     folder_id: FolderId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(folder) = shell.state.session.catalog.folder(folder_id) else {
+    let Some(folder) = app_state.session.catalog.folder(folder_id) else {
         return;
     };
     let name = folder.name.clone();
@@ -80,7 +80,7 @@ pub(super) fn open_rename_folder(
             .default_value(key_text)
             .placeholder("~/.ssh/id_ed25519".to_string())
     });
-    shell.state.ui.modals.session.folder_form = Some(FolderForm {
+    app_state.ui.modals.session.folder_form = Some(FolderForm {
         base: Some(folder_id),
         parent: None,
         name: input,
@@ -93,11 +93,11 @@ pub(super) fn open_rename_folder(
 }
 
 fn pick_folder_default_key_path(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(form) = shell.state.ui.modals.session.folder_form.as_mut() else {
+    let Some(form) = app_state.ui.modals.session.folder_form.as_mut() else {
         return;
     };
     let title = rust_i18n::t!("form.pick_key").to_string();
@@ -202,7 +202,7 @@ fn render_folder_defaults(form: &FolderForm, app: &Entity<AppShell>, p: &Palette
                 .on_click(crate::dialog_host::on_event(
                     app,
                     |this, _: &ClickEvent, window, cx| {
-                        pick_folder_default_key_path(this, window, cx);
+                        pick_folder_default_key_path(&mut this.state, window, cx);
                     },
                 )),
         );

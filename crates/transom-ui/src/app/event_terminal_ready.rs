@@ -172,7 +172,13 @@ impl AppShell {
         if still_active {
             window.focus(&focus_handle, cx);
         }
-        crate::startup::schedule_startup_commands(self, tab_id, connection_id, window, cx);
+        crate::startup::schedule_startup_commands(
+            &mut self.state,
+            tab_id,
+            connection_id,
+            window,
+            cx,
+        );
         crate::forward::auto_start_forwards(&mut self.state, tab_id, connection_id, session_id, cx);
         if still_active && self.state.features.monitor.read(cx).is_open() {
             let collapsed = self.state.features.monitor.read(cx).processes_collapsed();

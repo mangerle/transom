@@ -5,7 +5,7 @@
 //! 远端 PAM/MOTD 输出可能晚于连接握手完成，发送前保留一个短暂的稳定窗口；
 //! 每条命令之间也留出间隔，降低多行粘贴被 Shell 合并解析的概率。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use std::time::Duration;
 use transom_core::{ConnectionId, TabId};
@@ -20,14 +20,13 @@ const STARTUP_INTERVAL: Duration = Duration::from_millis(250);
 /// 任务在标签关闭、重连或连接切换时通过 `_startup_task` 句柄取消；
 /// 每轮写入前都会校验 `connection_id`，避免旧连接的命令误写到新连接。
 pub(crate) fn schedule_startup_commands(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     tab_id: TabId,
     connection_id: ConnectionId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(commands) = shell
-        .state
+    let Some(commands) = app_state
         .workspace
         .tabs
         .iter()
@@ -65,8 +64,7 @@ pub(crate) fn schedule_startup_commands(
         }
     });
 
-    if let Some(pane) = shell
-        .state
+    if let Some(pane) = app_state
         .workspace
         .tabs
         .iter_mut()

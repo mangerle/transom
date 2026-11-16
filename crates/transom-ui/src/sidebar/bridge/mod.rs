@@ -11,161 +11,156 @@ pub(crate) use folder_form::{open_new_folder, render_folder_form_body, save_fold
 
 use super::entity::SessionSidebarEvent;
 use super::tree::{SidebarDrag, SidebarTarget};
-use crate::app::{AppShell, app_settings};
+use crate::app::{AppShell, AppState, app_settings};
 use folder_form::open_rename_folder;
 use gpui_kit::*;
 use transom_core::{CatalogError, FolderId};
 
 /// 处理会话侧栏发往外壳的意图事件。
 pub(crate) fn on_session_sidebar_event(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     event: &SessionSidebarEvent,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
     match event {
         SessionSidebarEvent::ToggleSelectionMode => {
-            crate::batch::toggle_selection_mode(&mut shell.state, cx);
+            crate::batch::toggle_selection_mode(app_state, cx);
         }
         SessionSidebarEvent::SelectAllSessions => {
-            crate::batch::select_all_sessions(&mut shell.state, cx);
+            crate::batch::select_all_sessions(app_state, cx);
         }
         SessionSidebarEvent::OpenBatchEdit => {
-            crate::batch::open_batch_edit(&mut shell.state, window, cx);
+            crate::batch::open_batch_edit(app_state, window, cx);
         }
         SessionSidebarEvent::OpenNewFolder(parent) => {
-            open_new_folder(shell, *parent, window, cx);
+            open_new_folder(app_state, *parent, window, cx);
         }
         SessionSidebarEvent::OpenRenameFolder(folder_id) => {
-            open_rename_folder(shell, *folder_id, window, cx);
+            open_rename_folder(app_state, *folder_id, window, cx);
         }
         SessionSidebarEvent::DeleteFolder(folder_id) => {
-            delete_folder(shell, *folder_id, cx);
+            delete_folder(app_state, *folder_id, cx);
         }
         SessionSidebarEvent::ToggleFolderCollapsed(folder_id) => {
-            toggle_folder_collapsed(shell, *folder_id, cx);
+            toggle_folder_collapsed(app_state, *folder_id, cx);
         }
         SessionSidebarEvent::OpenNewSession(None) => {
-            shell.open_new_session(window, cx);
+            app_state.ui.window_requests.push_open_session_form(None);
         }
         SessionSidebarEvent::OpenNewSession(Some(folder_id)) => {
-            open_new_session_in_folder(shell, *folder_id, window, cx);
+            open_new_session_in_folder(app_state, *folder_id, window, cx);
         }
         SessionSidebarEvent::ProbeFolder(folder_id) => {
-            crate::probe::probe_folder(shell, *folder_id, cx);
+            crate::probe::probe_folder(app_state, *folder_id, cx);
         }
         SessionSidebarEvent::ProbeSession(session_id) => {
-            crate::probe::probe_session(shell, *session_id, cx);
+            crate::probe::probe_session(app_state, *session_id, cx);
         }
         SessionSidebarEvent::Drop(drag, target) => {
-            handle_sidebar_drop(shell, *drag, *target, cx);
+            handle_sidebar_drop(app_state, *drag, *target, cx);
         }
         SessionSidebarEvent::ToggleSessionSelection {
             session_id,
             selected,
         } => {
-            crate::batch::toggle_session_selection(&mut shell.state, *session_id, *selected, cx);
+            crate::batch::toggle_session_selection(app_state, *session_id, *selected, cx);
         }
         SessionSidebarEvent::SelectTreeSession(session_id) => {
-            shell.state.session.sidebar.tree_selection = Some(*session_id);
+            app_state.session.sidebar.tree_selection = Some(*session_id);
             cx.notify();
         }
         SessionSidebarEvent::ConnectSession(session_id) => {
-            crate::connection::connect_session(&mut shell.state, *session_id, window, cx);
-            shell.reveal_vertical_tabs_panel(cx);
+            crate::connection::connect_session(app_state, *session_id, window, cx);
+            app_state.reveal_vertical_tabs_panel(cx);
         }
         SessionSidebarEvent::OpenContainerWorkspace(session_id) => {
             crate::container::open_container_workspace_for_session(
-                &mut shell.state,
+                app_state,
                 *session_id,
                 window,
                 cx,
             );
         }
         SessionSidebarEvent::DuplicateSession(session_id) => {
-            shell.duplicate_session(*session_id, cx);
+            app_state.duplicate_session(*session_id, cx);
         }
         SessionSidebarEvent::EditSession(session_id) => {
-            shell.open_edit_session(*session_id, window, cx);
+            app_state
+                .ui
+                .window_requests
+                .push_open_session_form(Some(*session_id));
         }
         SessionSidebarEvent::OpenAuditViewer(session_id) => {
-            crate::audit_viewer::open_audit_viewer_for_session(
-                &mut shell.state,
-                *session_id,
-                window,
-                cx,
-            );
+            crate::audit_viewer::open_audit_viewer_for_session(app_state, *session_id, window, cx);
         }
         SessionSidebarEvent::CopyHost(host) => {
-            shell.state.ui.status =
+            app_state.ui.status =
                 Some(rust_i18n::t!("sidebar.host_copied", host = host).to_string());
             cx.notify();
         }
         SessionSidebarEvent::DeleteSession(session_id) => {
-            shell.delete_session_by_id(*session_id, cx);
+            app_state.delete_session_by_id(*session_id, cx);
         }
     }
 }
 
 /// 折叠或展开文件夹，并持久化收纳状态。
-fn toggle_folder_collapsed(shell: &mut AppShell, id: FolderId, cx: &mut Context<AppShell>) {
-    let collapsed = shell
-        .state
+fn toggle_folder_collapsed(app_state: &mut AppState, id: FolderId, cx: &mut Context<AppShell>) {
+    let collapsed = app_state
         .session
         .catalog
         .folder(id)
         .map(|folder| !folder.collapsed);
     if let Some(collapsed) = collapsed {
-        if let Err(error) = shell
-            .state
+        if let Err(error) = app_state
             .session
             .catalog
             .set_folder_collapsed(id, collapsed)
         {
-            shell.state.set_error(error.to_string());
+            app_state.set_error(error.to_string());
             cx.notify();
             return;
         }
-        shell.state.persist_catalog();
+        app_state.persist_catalog();
     }
     cx.notify();
 }
 
 /// 删除文件夹但保留全部内容，子项提升到父层级。
-fn delete_folder(shell: &mut AppShell, folder_id: FolderId, cx: &mut Context<AppShell>) {
-    match shell.state.session.catalog.delete_folder(folder_id) {
+fn delete_folder(app_state: &mut AppState, folder_id: FolderId, cx: &mut Context<AppShell>) {
+    match app_state.session.catalog.delete_folder(folder_id) {
         Ok(name) => {
-            shell.state.persist_catalog();
-            shell.state.ui.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
+            app_state.persist_catalog();
+            app_state.ui.status = Some(rust_i18n::t!("folder.deleted", name = name).to_string());
         }
-        Err(error) => shell.state.set_error(error.to_string()),
+        Err(error) => app_state.set_error(error.to_string()),
     }
     cx.notify();
 }
 
 /// 在指定文件夹下新建会话，表单预填该文件夹路径。
 fn open_new_session_in_folder(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     folder_id: FolderId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let path = shell.state.session.catalog.folder_path(folder_id);
-    let defaults = shell
-        .state
+    let path = app_state.session.catalog.folder_path(folder_id);
+    let defaults = app_state
         .session
         .catalog
         .inherited_folder_defaults(folder_id);
     let init = crate::session_form::SessionFormInit {
         base: None,
         folder_path: path.clone(),
-        identities: shell.state.identity_options(),
-        jump_options: shell.state.jump_options(None),
-        folder_options: shell.state.folder_paths(),
+        identities: app_state.identity_options(),
+        jump_options: app_state.jump_options(None),
+        folder_options: app_state.folder_paths(),
         global_proxy: app_settings(cx).proxy.clone(),
         block_view: transom_core::BlockViewOverride::FollowGlobal,
     };
-    let view = shell.state.ui.modals.session.form.clone();
+    let view = app_state.ui.modals.session.form.clone();
     view.update(cx, |view, cx| {
         view.open(init, window, cx);
         if let Some(folder_path) = path {
@@ -177,16 +172,15 @@ fn open_new_session_in_folder(
 
 /// 处理会话/文件夹拖放：换父级或调整同级顺序。
 fn handle_sidebar_drop(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     drag: SidebarDrag,
     target: SidebarTarget,
     cx: &mut Context<AppShell>,
 ) {
-    match apply_sidebar_drop(shell, drag, target) {
+    match apply_sidebar_drop(app_state, drag, target) {
         Ok(landed) => {
             if let Some(folder_id) = landed
-                && let Some(folder) = shell
-                    .state
+                && let Some(folder) = app_state
                     .session
                     .catalog
                     .folders
@@ -195,30 +189,29 @@ fn handle_sidebar_drop(
             {
                 folder.collapsed = false;
             }
-            shell.state.persist_catalog();
+            app_state.persist_catalog();
         }
-        Err(error) => shell.state.set_error(error.to_string()),
+        Err(error) => app_state.set_error(error.to_string()),
     }
     cx.notify();
 }
 
 fn apply_sidebar_drop(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     drag: SidebarDrag,
     target: SidebarTarget,
 ) -> Result<Option<FolderId>, CatalogError> {
     match (drag, target) {
         (SidebarDrag::Session(session_id), SidebarTarget::Root) => {
-            shell.state.session.catalog.move_session(session_id, None)?;
+            app_state.session.catalog.move_session(session_id, None)?;
             Ok(None)
         }
         (SidebarDrag::Folder(folder_id), SidebarTarget::Root) => {
-            shell.state.session.catalog.move_folder(folder_id, None)?;
+            app_state.session.catalog.move_folder(folder_id, None)?;
             Ok(None)
         }
         (SidebarDrag::Session(session_id), SidebarTarget::Folder(folder_id)) => {
-            shell
-                .state
+            app_state
                 .session
                 .catalog
                 .move_session(session_id, Some(folder_id))?;
@@ -228,8 +221,7 @@ fn apply_sidebar_drop(
             if moved_id == parent_id {
                 return Ok(Some(parent_id));
             }
-            shell
-                .state
+            app_state
                 .session
                 .catalog
                 .move_folder(moved_id, Some(parent_id))?;
@@ -237,47 +229,41 @@ fn apply_sidebar_drop(
         }
         (drag, SidebarTarget::Relative { anchor, side }) => match (drag, anchor) {
             (SidebarDrag::Session(session_id), SidebarDrag::Session(anchor_id)) => {
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .reorder_session(session_id, anchor_id, side)?;
-                Ok(shell
-                    .state
+                Ok(app_state
                     .session
                     .catalog
                     .folder_of_session(anchor_id)
                     .map(|folder| folder.id))
             }
             (SidebarDrag::Folder(folder_id), SidebarDrag::Folder(anchor_id)) => {
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .reorder_folder(folder_id, anchor_id, side)?;
-                Ok(shell
-                    .state
+                Ok(app_state
                     .session
                     .catalog
                     .folder(folder_id)
                     .and_then(|folder| folder.parent))
             }
             (SidebarDrag::Session(session_id), SidebarDrag::Folder(anchor_id)) => {
-                shell
-                    .state
+                app_state
                     .session
                     .catalog
                     .move_session(session_id, Some(anchor_id))?;
                 Ok(Some(anchor_id))
             }
             (SidebarDrag::Folder(folder_id), SidebarDrag::Session(anchor_id)) => {
-                let parent = shell
-                    .state
+                let parent = app_state
                     .session
                     .catalog
                     .folder_of_session(anchor_id)
                     .map(|folder| folder.id);
-                shell.state.session.catalog.move_folder(folder_id, parent)?;
+                app_state.session.catalog.move_folder(folder_id, parent)?;
                 Ok(parent)
             }
         },

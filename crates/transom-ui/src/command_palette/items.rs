@@ -7,8 +7,8 @@
 //! - 代价与局限：每个新能力需要一个"能被枚举"的入口；面板不做模糊评分，只做
 //!   大小写无关的子串匹配，排序沿用来源顺序。
 
+use crate::app::AppState;
 use crate::app::app_settings;
-use crate::app::{AppShell, AppState};
 use crate::keymap;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::command::{CommandGroup, CommandItem};
@@ -265,7 +265,7 @@ impl AppState {
 /// 普通模式先给会话（含本地终端与直连），再给命令类条目；动作模式只保留
 /// 可执行条目——会话在动作模式里既不是动作也没有可派发的行为。
 pub(super) fn build_palette_model(
-    shell: &AppShell,
+    app_state: &AppState,
     action_mode: bool,
     term: &str,
     cx: &App,
@@ -281,20 +281,20 @@ pub(super) fn build_palette_model(
         );
         model.push(
             rust_i18n::t!("app.palette_snippets").to_string(),
-            snippet_items(shell, &needle, cx),
+            snippet_items(app_state, &needle, cx),
         );
     } else {
         model.push(
             rust_i18n::t!("app.sessions").to_string(),
-            shell.state.session_items(term, &needle),
+            app_state.session_items(term, &needle),
         );
         model.push(
             rust_i18n::t!("app.palette_containers").to_string(),
-            shell.state.container_items(&needle, cx),
+            app_state.container_items(&needle, cx),
         );
         model.push(
             rust_i18n::t!("app.palette_snippets").to_string(),
-            snippet_items(shell, &needle, cx),
+            snippet_items(app_state, &needle, cx),
         );
         model.push(
             rust_i18n::t!("app.palette_actions").to_string(),
@@ -311,12 +311,16 @@ pub(super) fn build_palette_model(
     );
     model.push(
         rust_i18n::t!("app.palette_terminal_themes").to_string(),
-        terminal_theme_items(shell, &needle, app_settings(cx)),
+        terminal_theme_items(app_state, &needle, app_settings(cx)),
     );
     model
 }
 
-fn snippet_items(_shell: &AppShell, needle: &str, cx: &App) -> Vec<(CommandItem, PaletteTarget)> {
+fn snippet_items(
+    _app_state: &AppState,
+    needle: &str,
+    cx: &App,
+) -> Vec<(CommandItem, PaletteTarget)> {
     app_settings(cx)
         .snippets
         .items
@@ -340,7 +344,7 @@ fn snippet_items(_shell: &AppShell, needle: &str, cx: &App) -> Vec<(CommandItem,
         .collect()
 }
 fn terminal_theme_items(
-    _shell: &AppShell,
+    _app_state: &AppState,
     needle: &str,
     settings: &AppSettings,
 ) -> Vec<(CommandItem, PaletteTarget)> {

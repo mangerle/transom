@@ -3,19 +3,19 @@
 //! 检索状态、语义块导航都归属 `TerminalView`（每个窗格一份），这里只负责"哪一个窗格"
 //! 的解析：布局与焦点由工作区决定，终端本身不知道窗格之外的概念。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, AppState};
 use crate::keymap;
 use gpui_kit::*;
 
 pub(crate) fn on_search_buffer(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::SearchBuffer,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
+    let Some(terminal) = app_state.workspace.active_pane_terminal() else {
         // 窗格还在连接/重连时没有终端视图，给出可见反馈而不是静默无响应。
-        shell.state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
+        app_state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
         cx.notify();
         return;
     };
@@ -24,30 +24,30 @@ pub(crate) fn on_search_buffer(
 
 /// 视口跳到上一条命令提示符。
 pub(crate) fn on_prev_prompt(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::PrevPrompt,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    step_prompt(shell, false, cx);
+    step_prompt(app_state, false, cx);
 }
 
 /// 视口跳到下一条命令提示符（已到最后一条时回到实时提示符）。
 pub(crate) fn on_next_prompt(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::NextPrompt,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    step_prompt(shell, true, cx);
+    step_prompt(app_state, true, cx);
 }
 
 /// 提示符跳跃的共同通路：无可跳转目标时把原因写在状态栏。
 ///
 /// 静默不动是这个动作最容易误判的失败方式——用户只会以为键位没生效。
-fn step_prompt(shell: &mut AppShell, forward: bool, cx: &mut Context<AppShell>) {
-    let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
-        shell.state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
+fn step_prompt(app_state: &mut AppState, forward: bool, cx: &mut Context<AppShell>) {
+    let Some(terminal) = app_state.workspace.active_pane_terminal() else {
+        app_state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
         cx.notify();
         return;
     };
@@ -64,20 +64,20 @@ fn step_prompt(shell: &mut AppShell, forward: bool, cx: &mut Context<AppShell>) 
         } else {
             "prompt_nav.no_prev_prompt"
         };
-        shell.state.ui.status = Some(rust_i18n::t!(key).to_string());
+        app_state.ui.status = Some(rust_i18n::t!(key).to_string());
     }
     cx.notify();
 }
 
 /// 运行时一键切换语义块/经典连续流，不重启会话。
 pub(crate) fn on_toggle_block_view(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     _: &keymap::ToggleBlockView,
     _window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(terminal) = shell.state.workspace.active_pane_terminal() else {
-        shell.state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
+    let Some(terminal) = app_state.workspace.active_pane_terminal() else {
+        app_state.ui.status = Some(rust_i18n::t!("search.terminal_unavailable").to_string());
         cx.notify();
         return;
     };
@@ -87,6 +87,6 @@ pub(crate) fn on_toggle_block_view(
     } else {
         "block_view_status.disabled"
     };
-    shell.state.ui.status = Some(rust_i18n::t!(key).to_string());
+    app_state.ui.status = Some(rust_i18n::t!(key).to_string());
     cx.notify();
 }

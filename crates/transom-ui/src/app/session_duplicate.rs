@@ -52,108 +52,7 @@ impl AppState {
 
 impl AppShell {
     pub(crate) fn delete_session_by_id(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        // 会话下任一标签存在未保存的编辑面板时，删除会被闸门挂起，
-        // 待用户处理完毕后续行（同关闭标签组的保护水位）。
-        let removed_tabs: Vec<TabId> = self
-            .state
-            .workspace
-            .tabs
-            .iter()
-            .filter(|tab| tab.session_id == session_id)
-            .map(|tab| tab.id)
-            .collect();
-        if crate::editor::block_close_for_dirty_editors(
-            &mut self.state,
-            &removed_tabs,
-            PendingEditorClose::Session(session_id),
-            cx,
-        ) {
-            return;
-        }
-        self.state
-            .session
-            .catalog
-            .sessions
-            .retain(|session| session.id != session_id);
-        self.state
-            .session
-            .sidebar
-            .selected_sessions
-            .remove(&session_id);
-        app_settings_mut(cx)
-            .window
-            .recent_sessions
-            .retain(|id| *id != session_id);
-        for tab_id in &removed_tabs {
-            self.state
-                .send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
-        }
-        self.state
-            .workspace
-            .tabs
-            .retain(|tab| tab.session_id != session_id);
-        crate::editor::prune_tab_overlays(&mut self.state, cx);
-        let tiled_focus = self
-            .state
-            .active_tiling()
-            .and_then(|tiled| tiled.focused_group());
-        let mut replacement = None;
-        for tab_id in removed_tabs {
-            if let Some(next) = self.state.detach_pane_from_group(tab_id) {
-                replacement = Some(next);
-            }
-        }
-        self.state.prune_tilings();
-        if self
-            .state
-            .workspace
-            .active_tab
-            .is_none_or(|id| !self.state.workspace.has_tab(id))
-        {
-            self.state.workspace.active_tab =
-                self.state.fallback_active_pane(replacement, tiled_focus);
-        }
-        self.state.prune_tab_selection();
-        self.state.sync_broadcast_targets();
-        for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
-            if let Err(error) = self
-                .state
-                .runtime
-                .services
-                .secret_store
-                .delete(&SecretKey::new(session_id, kind))
-            {
-                // 删除会话已经成功，钥匙串清理失败只留下孤儿凭据，不应阻断
-                // 主流程；但必须留痕，便于后续手动清理。
-                log::warn!(
-                    "删除会话后清理钥匙串条目失败，会话: {session_id}，类型: {kind:?}，原因: {error}"
-                );
-            }
-        }
-        self.state.persist_catalog();
-        cx.notify();
-    }
-
-    pub(crate) fn duplicate_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) {
-        let Some(mut session) = self
-            .state
-            .session
-            .catalog
-            .sessions
-            .iter()
-            .find(|s| s.id == session_id)
-            .cloned()
-        else {
-            return;
-        };
-        let new_id = SessionId::new();
-        let name = session.name.clone();
-        session.id = new_id;
-        session.name = self.state.unique_duplicate_name(&name);
-        self.state.session.catalog.sessions.push(session);
-        self.state.copy_secrets(session_id, new_id);
-        self.state.persist_catalog();
-        cx.notify();
+        self.state.delete_session_by_id(session_id, cx);
     }
 }
 
@@ -178,6 +77,104 @@ pub(super) fn duplicate_base(name: &str) -> String {
 /// 去掉本地化的"副本"后缀；不是我们生成的后缀就返回 None，不猜测用户命名。
 pub(super) fn strip_copy_suffix<'a>(text: &'a str, suffix: &str) -> Option<&'a str> {
     text.strip_suffix(suffix).map(str::trim_end)
+}
+
+impl AppState {
+    pub(crate) fn duplicate_session(&mut self, session_id: SessionId, cx: &mut Context<AppShell>) {
+        let Some(mut session) = self
+            .session
+            .catalog
+            .sessions
+            .iter()
+            .find(|s| s.id == session_id)
+            .cloned()
+        else {
+            return;
+        };
+        let new_id = SessionId::new();
+        let name = session.name.clone();
+        session.id = new_id;
+        session.name = self.unique_duplicate_name(&name);
+        self.session.catalog.sessions.push(session);
+        self.copy_secrets(session_id, new_id);
+        self.persist_catalog();
+        cx.notify();
+    }
+}
+
+impl AppState {
+    pub(crate) fn delete_session_by_id(
+        &mut self,
+        session_id: SessionId,
+        cx: &mut Context<AppShell>,
+    ) {
+        // 会话下任一标签存在未保存的编辑面板时，删除会被闸门挂起，
+        // 待用户处理完毕后续行（同关闭标签组的保护水位）。
+        let removed_tabs: Vec<TabId> = self
+            .workspace
+            .tabs
+            .iter()
+            .filter(|tab| tab.session_id == session_id)
+            .map(|tab| tab.id)
+            .collect();
+        if crate::editor::block_close_for_dirty_editors(
+            self,
+            &removed_tabs,
+            PendingEditorClose::Session(session_id),
+            cx,
+        ) {
+            return;
+        }
+        self.session
+            .catalog
+            .sessions
+            .retain(|session| session.id != session_id);
+        self.session.sidebar.selected_sessions.remove(&session_id);
+        app_settings_mut(cx)
+            .window
+            .recent_sessions
+            .retain(|id| *id != session_id);
+        for tab_id in &removed_tabs {
+            self.send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
+        }
+        self.workspace
+            .tabs
+            .retain(|tab| tab.session_id != session_id);
+        crate::editor::prune_tab_overlays(self, cx);
+        let tiled_focus = self.active_tiling().and_then(|tiled| tiled.focused_group());
+        let mut replacement = None;
+        for tab_id in removed_tabs {
+            if let Some(next) = self.detach_pane_from_group(tab_id) {
+                replacement = Some(next);
+            }
+        }
+        self.prune_tilings();
+        if self
+            .workspace
+            .active_tab
+            .is_none_or(|id| !self.workspace.has_tab(id))
+        {
+            self.workspace.active_tab = self.fallback_active_pane(replacement, tiled_focus);
+        }
+        self.prune_tab_selection();
+        self.sync_broadcast_targets();
+        for kind in [SecretKind::Password, SecretKind::KeyPassphrase] {
+            if let Err(error) = self
+                .runtime
+                .services
+                .secret_store
+                .delete(&SecretKey::new(session_id, kind))
+            {
+                // 删除会话已经成功，钥匙串清理失败只留下孤儿凭据，不应阻断
+                // 主流程；但必须留痕，便于后续手动清理。
+                log::warn!(
+                    "删除会话后清理钥匙串条目失败，会话: {session_id}，类型: {kind:?}，原因: {error}"
+                );
+            }
+        }
+        self.persist_catalog();
+        cx.notify();
+    }
 }
 
 #[cfg(test)]

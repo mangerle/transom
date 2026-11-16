@@ -12,8 +12,8 @@
 mod drag;
 mod menu;
 
-use crate::app::AppShell;
 use crate::app::app_settings;
+use crate::app::{AppShell, AppState};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::monitor::{MonitorOps, MonitorTerminalPlan};
 use crate::palette::Palette;
@@ -55,60 +55,56 @@ pub(crate) use self::labels::{activity_item_icon, activity_item_label};
 pub(crate) use menu::restore_activity_bar;
 
 fn activity_item_selected(
-    shell: &AppShell,
+    app_state: &AppState,
     id: ActivityItemId,
     monitor_open: bool,
     cx: &App,
 ) -> bool {
-    let section = shell
-        .state
+    let section = app_state
         .session
         .sidebar
         .section()
         .resolved_for_tab_position(app_settings(cx).window.tab_position);
     match id {
         ActivityItemId::Sessions => {
-            shell.state.session.sidebar.visible() && section == SidebarSection::Sessions
+            app_state.session.sidebar.visible() && section == SidebarSection::Sessions
         }
         ActivityItemId::Tabs => {
-            shell.state.session.sidebar.visible() && section == SidebarSection::Tabs
+            app_state.session.sidebar.visible() && section == SidebarSection::Tabs
         }
-        ActivityItemId::Forwards => shell
-            .state
+        ActivityItemId::Forwards => app_state
             .workspace
             .active_tab
-            .and_then(|tab_id| shell.state.workspace.tab(tab_id))
+            .and_then(|tab_id| app_state.workspace.tab(tab_id))
             .is_some_and(|tab| tab.forwards_view().is_some()),
-        ActivityItemId::Sftp => shell
-            .state
+        ActivityItemId::Sftp => app_state
             .workspace
             .active_tab
-            .and_then(|tab_id| shell.state.workspace.tab(tab_id)?.sftp_view())
+            .and_then(|tab_id| app_state.workspace.tab(tab_id)?.sftp_view())
             .is_some_and(|view| view.read(cx).state.open),
         ActivityItemId::Monitor => monitor_open,
         ActivityItemId::Containers => {
-            shell.state.session.sidebar.visible() && section == SidebarSection::Containers
+            app_state.session.sidebar.visible() && section == SidebarSection::Containers
         }
         ActivityItemId::Git => {
-            shell.state.session.sidebar.visible() && section == SidebarSection::Git
+            app_state.session.sidebar.visible() && section == SidebarSection::Git
         }
         ActivityItemId::CloudSync => {
-            shell.state.session.sidebar.visible() && section == SidebarSection::CloudSync
+            app_state.session.sidebar.visible() && section == SidebarSection::CloudSync
         }
-        ActivityItemId::Keys => shell.state.ui.modals.tools.key_wizard.read(cx).is_open(),
+        ActivityItemId::Keys => app_state.ui.modals.tools.key_wizard.read(cx).is_open(),
         _ => false,
     }
 }
 
-fn activity_item_disabled(shell: &AppShell, id: ActivityItemId) -> bool {
+fn activity_item_disabled(app_state: &AppState, id: ActivityItemId) -> bool {
     if !matches!(id, ActivityItemId::Forwards | ActivityItemId::Sftp) {
         return false;
     }
-    let Some(tab) = shell
-        .state
+    let Some(tab) = app_state
         .workspace
         .active_tab
-        .and_then(|tab_id| shell.state.workspace.tab(tab_id))
+        .and_then(|tab_id| app_state.workspace.tab(tab_id))
     else {
         return true;
     };
@@ -123,7 +119,7 @@ fn activity_item_disabled(shell: &AppShell, id: ActivityItemId) -> bool {
 }
 
 pub(crate) fn render_activity_bar(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &mut Window,
     cx: &mut Context<AppShell>,
     p: &Palette,
@@ -131,20 +127,20 @@ pub(crate) fn render_activity_bar(
     let top: Vec<ActivityItemId> = app_settings(cx)
         .activity_bar
         .top_items()
-        .filter(|id| activity_item_available(shell, *id, app_settings(cx)))
+        .filter(|id| activity_item_available(app_state, *id, app_settings(cx)))
         .collect();
     let bottom: Vec<ActivityItemId> = app_settings(cx)
         .activity_bar
         .bottom_items()
-        .filter(|id| activity_item_available(shell, *id, app_settings(cx)))
+        .filter(|id| activity_item_available(app_state, *id, app_settings(cx)))
         .collect();
     let mut top_children = Vec::with_capacity(top.len());
     for id in top {
-        top_children.push(render_activity_item(shell, window, id, p, cx));
+        top_children.push(render_activity_item(app_state, window, id, p, cx));
     }
     let mut bottom_children = Vec::with_capacity(bottom.len());
     for id in bottom {
-        bottom_children.push(render_activity_item(shell, window, id, p, cx));
+        bottom_children.push(render_activity_item(app_state, window, id, p, cx));
     }
 
     let app = cx.entity().clone();
@@ -159,7 +155,7 @@ pub(crate) fn render_activity_bar(
         .bg(p.sidebar);
     // 侧栏展开时，活动栏右缘就是与侧栏的分界线；侧栏收起后主面板的
     // 手柄线紧贴这条边，这里再画一条会并排成 2px，所以收起时不画。
-    if shell.state.session.sidebar.visible() {
+    if app_state.session.sidebar.visible() {
         bar = bar
             .border_color(p.divider(p.border))
             .divider_edge(DividerEdge::Right, p.divider_width);
@@ -183,7 +179,7 @@ pub(crate) fn render_activity_bar(
 }
 
 fn render_activity_item(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     window: &Window,
     id: ActivityItemId,
     p: &Palette,
@@ -191,14 +187,14 @@ fn render_activity_item(
 ) -> AnyElement {
     let label = activity_item_label(id);
     let icon = activity_item_icon(id);
-    let tooltip = activity_item_tooltip(shell, id, &label, app_settings(cx));
+    let tooltip = activity_item_tooltip(app_state, id, &label, app_settings(cx));
     let selected = activity_item_selected(
-        shell,
+        app_state,
         id,
-        shell.state.features.monitor.read(cx).is_open(),
+        app_state.features.monitor.read(cx).is_open(),
         cx,
     );
-    let disabled = activity_item_disabled(shell, id);
+    let disabled = activity_item_disabled(app_state, id);
     let app = cx.entity().clone();
 
     let mut button = div()
@@ -239,7 +235,7 @@ fn render_activity_item(
 
     if !disabled {
         button = button.on_click(cx.listener(move |this, _, window, cx| {
-            activate_activity_item(this, id, window, cx);
+            activate_activity_item(&mut this.state, id, window, cx);
         }));
     }
 
@@ -252,7 +248,7 @@ fn render_activity_item(
 }
 
 fn activate_activity_item(
-    shell: &mut AppShell,
+    app_state: &mut AppState,
     id: ActivityItemId,
     window: &mut Window,
     cx: &mut Context<AppShell>,
@@ -260,8 +256,7 @@ fn activate_activity_item(
     match id {
         ActivityItemId::Sessions => {
             // 左侧槽位一次只展示一个视图：点击当前视图收起，点击其他视图直接切换。
-            shell
-                .state
+            app_state
                 .session
                 .sidebar
                 .toggle_section(SidebarSection::Sessions);
@@ -271,67 +266,56 @@ fn activate_activity_item(
             if app_settings(cx).window.tab_position != TabPosition::Left {
                 return;
             }
-            shell
-                .state
+            app_state
                 .session
                 .sidebar
                 .toggle_section(SidebarSection::Tabs);
             cx.notify();
         }
-        ActivityItemId::QuickOpen => {
-            crate::connection::toggle_quick_open(&mut shell.state, window, cx)
-        }
-        ActivityItemId::Forwards => {
-            crate::forward::toggle_forward_panel(&mut shell.state, window, cx)
-        }
-        ActivityItemId::Sftp => crate::sftp::toggle_sftp(&mut shell.state, window, cx),
+        ActivityItemId::QuickOpen => crate::connection::toggle_quick_open(app_state, window, cx),
+        ActivityItemId::Forwards => crate::forward::toggle_forward_panel(app_state, window, cx),
+        ActivityItemId::Sftp => crate::sftp::toggle_sftp(app_state, window, cx),
         ActivityItemId::Monitor => {
-            let plan = MonitorOps::new(&mut shell.state).toggle_monitor(cx);
+            let plan = MonitorOps::new(app_state).toggle_monitor(cx);
             match plan {
                 Some(MonitorTerminalPlan::Activate(tab_id)) => {
-                    shell.activate_tab(tab_id, window, cx)
+                    app_state.ui.window_requests.push_activate_tab(tab_id)
                 }
                 Some(MonitorTerminalPlan::OpenLocal) => {
-                    crate::connection::open_local_terminal(&mut shell.state, window, cx)
+                    crate::connection::open_local_terminal(app_state, window, cx)
                 }
                 None => {}
             }
         }
         ActivityItemId::Containers => {
-            shell
-                .state
+            app_state
                 .session
                 .sidebar
                 .toggle_section(SidebarSection::Containers);
             cx.notify();
         }
-        ActivityItemId::Language => shell.toggle_language(cx),
-        ActivityItemId::ImportSshConfig => {
-            crate::connection::import_ssh_config(&mut shell.state, cx)
-        }
+        ActivityItemId::Language => app_state.toggle_language(cx),
+        ActivityItemId::ImportSshConfig => crate::connection::import_ssh_config(app_state, cx),
         ActivityItemId::KnownHosts => {
-            shell
-                .state
+            app_state
                 .ui
                 .modals
                 .connection
                 .known_hosts
                 .update(cx, |view, cx| view.open(cx));
         }
-        ActivityItemId::Keys => crate::keys::open_key_wizard(&mut shell.state, window, cx),
-        ActivityItemId::Settings => shell.open_settings_modal(None, window, cx),
+        ActivityItemId::Keys => crate::keys::open_key_wizard(app_state, window, cx),
+        ActivityItemId::Settings => app_state.ui.window_requests.push_open_settings(None),
         ActivityItemId::Git => {
-            crate::git::actions::GitActions::new(&mut shell.state).toggle_git_sidebar(cx)
+            crate::git::actions::GitActions::new(app_state).toggle_git_sidebar(cx)
         }
-        ActivityItemId::CloudSync => {
-            crate::cloud_sync::toggle_cloud_sync_sidebar(&mut shell.state, cx)
-        }
+        ActivityItemId::CloudSync => crate::cloud_sync::toggle_cloud_sync_sidebar(app_state, cx),
         ActivityItemId::Unknown => {}
     }
 }
 
 fn activity_item_tooltip(
-    shell: &AppShell,
+    app_state: &AppState,
     id: ActivityItemId,
     label: &str,
     settings: &AppSettings,
@@ -343,11 +327,10 @@ fn activity_item_tooltip(
             rust_i18n::t!("activity.switch_to_chinese").to_string()
         }
     } else if id == ActivityItemId::Sftp
-        && shell
-            .state
+        && app_state
             .workspace
             .active_tab
-            .and_then(|tab_id| shell.state.workspace.tab(tab_id))
+            .and_then(|tab_id| app_state.workspace.tab(tab_id))
             .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
     {
         rust_i18n::t!("sftp.local_files_title").to_string()
@@ -359,7 +342,11 @@ fn activity_item_tooltip(
 ///
 /// 纵向标签条目只在"标签位置 = 左侧"时有意义；顶部模式下直接不渲染，
 /// 避免保留一个点击无反应的图标。设置页仍保留该条目，方便用户调整顺序。
-fn activity_item_available(_shell: &AppShell, id: ActivityItemId, settings: &AppSettings) -> bool {
+fn activity_item_available(
+    _app_state: &AppState,
+    id: ActivityItemId,
+    settings: &AppSettings,
+) -> bool {
     id != ActivityItemId::Tabs || settings.window.tab_position == TabPosition::Left
 }
 

@@ -115,7 +115,10 @@ impl AppShell {
         }
         if self.state.ui.modals.tools.show_quick_open {
             overlays.push(crate::command_palette::render_command_palette_modal(
-                self, window, cx, &p,
+                &mut self.state,
+                window,
+                cx,
+                &p,
             ));
         }
         if let Some(tab_id) = self.state.features.containers.fullscreen {

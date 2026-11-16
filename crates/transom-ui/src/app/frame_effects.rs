@@ -259,7 +259,7 @@ impl AppShell {
                     crate::git::actions::on_git_sidebar_event(&mut self.state, &event, window, cx);
                 }
                 WindowRequest::SessionSidebar(event) => {
-                    crate::sidebar::on_session_sidebar_event(self, &event, window, cx);
+                    crate::sidebar::on_session_sidebar_event(&mut self.state, &event, window, cx);
                 }
                 WindowRequest::ActivateTab(tab_id) => self.activate_tab(tab_id, window, cx),
                 WindowRequest::OpenSettings(page) => self.open_settings_modal(page, window, cx),
@@ -269,6 +269,10 @@ impl AppShell {
                 WindowRequest::CloseTab(tab_id) => self.close_tab(tab_id, window, cx),
                 WindowRequest::CloseGroup(group_id) => self.close_group(group_id, window, cx),
                 WindowRequest::ClosePane(tab_id) => self.close_pane(tab_id, window, cx),
+                WindowRequest::OpenSessionForm(session_id) => match session_id {
+                    Some(session_id) => self.open_edit_session(session_id, window, cx),
+                    None => self.open_new_session(window, cx),
+                },
                 WindowRequest::TransientStatus(message) => {
                     self.state.set_transient_status(message, cx)
                 }

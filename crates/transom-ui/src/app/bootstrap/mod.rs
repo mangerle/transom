@@ -241,7 +241,7 @@ impl AppShell {
         self.state.runtime.tasks.subscriptions.known_hosts = Some(cx.subscribe(
             &self.state.ui.modals.connection.known_hosts,
             |shell, _, event: &KnownHostsEvent, cx| {
-                crate::app::events::on_known_hosts_event(shell, event, cx)
+                crate::app::events::on_known_hosts_event(&mut shell.state, event, cx)
             },
         ));
         self.state.runtime.tasks.subscriptions.connection_prompts = Some(cx.subscribe(
