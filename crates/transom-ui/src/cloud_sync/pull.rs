@@ -1,6 +1,7 @@
 //! 云同步拉取后的合并、安全副本与本地回填。
 
 use super::common::*;
+use crate::app::AppState;
 use crate::app::app_settings;
 use crate::app::update_app_settings;
 use transom_core::{CloudPullMode, SyncPullReport, sync_catalog_hash};
@@ -17,18 +18,18 @@ struct CloudPullApply {
 
 /// 处理下载结果：常规模式合并，冲突裁决模式以远端目录整体替换。
 pub(crate) fn finish_cloud_sync_pull(
-    shell: &mut AppShell,
+    state: &mut AppState,
     report: SyncPullReport,
     mode: CloudPullMode,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let safety_path = write_sync_safety_copy(shell);
+    let safety_path = write_sync_safety_copy(state);
     if let Some(path) = &safety_path {
         log::info!("下载合并前已保存本机安全副本，路径: {}", path.display());
     }
 
-    let backup = shell.state.runtime.services.backup.clone();
+    let backup = state.runtime.services.backup.clone();
     let SyncPullReport {
         mut document,
         remote_version: _,
@@ -50,7 +51,7 @@ pub(crate) fn finish_cloud_sync_pull(
             .await;
         let _ = this.update(cx, |this, cx| {
             apply_cloud_sync_pull(
-                this,
+                &mut this.state,
                 CloudPullApply {
                     remote_catalog,
                     secrets,
@@ -63,22 +64,21 @@ pub(crate) fn finish_cloud_sync_pull(
             );
         });
     });
-    shell.state.features.cloud_sync.update(cx, |view, _| {
+    state.features.cloud_sync.update(cx, |view, _| {
         view.pull_task = Some(task);
     });
 }
 
 /// 把合并前的本机目录导出为明文安全副本；失败不阻断合并，只记日志。
-fn write_sync_safety_copy(shell: &AppShell) -> Option<PathBuf> {
+fn write_sync_safety_copy(state: &AppState) -> Option<PathBuf> {
     let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let path = transom_platform::paths::config_dir().join(format!("sync-safety-{timestamp}.json"));
     let options = BackupExportOptions::default();
-    match shell
-        .state
+    match state
         .runtime
         .services
         .backup
-        .export(&path, &shell.state.session.catalog, &options)
+        .export(&path, &state.session.catalog, &options)
     {
         Ok(_) => Some(path),
         Err(error) => {
@@ -93,7 +93,7 @@ fn write_sync_safety_copy(shell: &AppShell) -> Option<PathBuf> {
 }
 
 /// 合并或替换远端快照，并回填同步基线与状态栏提示。
-fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut Context<AppShell>) {
+fn apply_cloud_sync_pull(state: &mut AppState, input: CloudPullApply, cx: &mut Context<AppShell>) {
     let CloudPullApply {
         remote_catalog,
         secrets,
@@ -105,17 +105,17 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
     let (catalog, report) = match mode {
         CloudPullMode::Merge => merge_catalogs(
             None,
-            &shell.state.session.catalog,
+            &state.session.catalog,
             &remote_catalog,
             MergePreference::Remote,
         ),
         CloudPullMode::ForceRemote => (remote_catalog, transom_core::SyncMergeReport::default()),
     };
-    shell.state.session.catalog = catalog;
-    let saved = shell.state.persist_catalog();
-    let catalog_revision = shell.state.session.catalog_revision;
-    shell.state.refresh_tab_sessions();
-    let local_hash = sync_catalog_hash(&shell.state.session.catalog).ok();
+    state.session.catalog = catalog;
+    let saved = state.persist_catalog();
+    let catalog_revision = state.session.catalog_revision;
+    state.refresh_tab_sessions();
+    let local_hash = sync_catalog_hash(&state.session.catalog).ok();
     update_app_settings(cx, |s| {
         if let Some(baseline) = s.sync.active_baseline_mut() {
             baseline.last_pull_at = Some(at);
@@ -127,8 +127,8 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
         }
     });
     let settings_snapshot = app_settings(cx).clone();
-    if let Err(error) = shell.state.persist_settings(&settings_snapshot) {
-        shell.state.set_error(localized_error(&error));
+    if let Err(error) = state.persist_settings(&settings_snapshot) {
+        state.set_error(localized_error(&error));
     }
 
     let mut message = match mode {
@@ -155,9 +155,9 @@ fn apply_cloud_sync_pull(shell: &mut AppShell, input: CloudPullApply, cx: &mut C
         );
     }
     if saved {
-        shell.state.ui.status = Some(message.clone());
+        state.ui.status = Some(message.clone());
     }
-    shell.state.features.cloud_sync.update(cx, |view, cx| {
+    state.features.cloud_sync.update(cx, |view, cx| {
         view.finish_pull_apply(catalog_revision, message, cx);
     });
     cx.notify();

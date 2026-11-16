@@ -268,7 +268,7 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        crate::cloud_sync::handle_sync_app_event(self, event, window, cx);
+        crate::cloud_sync::handle_sync_app_event(&mut self.state, event, window, cx);
     }
 
     /// ZMODEM 传输事件分发。

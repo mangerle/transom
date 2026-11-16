@@ -23,7 +23,7 @@ mod state;
 
 pub(crate) use actions::CloudSyncActions;
 pub(crate) use auto_sync::tick_cloud_sync_auto;
-pub(crate) use bridge::{on_cloud_sync_event, toggle_cloud_sync_sidebar};
+pub(crate) use bridge::{CloudSyncRequest, on_cloud_sync_event, toggle_cloud_sync_sidebar};
 pub(crate) use entity::{CloudSyncEvent, CloudSyncView};
 pub(crate) use events::handle_sync_app_event;
 pub(crate) use form::{DEFAULT_SYNC_DIRECTORY, SyncFormInputs};

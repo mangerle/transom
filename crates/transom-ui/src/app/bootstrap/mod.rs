@@ -5,6 +5,7 @@ use crate::app::app_settings;
 use crate::app::update_app_settings;
 use crate::audit_viewer::AuditViewerEvent;
 use crate::backup::BackupPromptView;
+use crate::cloud_sync::CloudSyncRequest;
 use crate::keys::{KeyWizardView, KnownHostsEvent, KnownHostsView, default_ssh_dir};
 use crate::record::ReplayEvent;
 use crate::sidebar::SidebarSection;
@@ -311,7 +312,11 @@ impl AppShell {
             &self.state.features.cloud_sync,
             window,
             |shell, _view, event: &crate::cloud_sync::CloudSyncEvent, window, cx| {
-                crate::cloud_sync::on_cloud_sync_event(shell, event, window, cx);
+                if let Some(CloudSyncRequest::OpenSettings) =
+                    crate::cloud_sync::on_cloud_sync_event(&mut shell.state, event, window, cx)
+                {
+                    shell.open_settings_modal(None, window, cx);
+                }
             },
         ));
     }
@@ -382,7 +387,7 @@ impl AppShell {
                 minute_elapsed = minute_elapsed.saturating_add(1);
                 if this
                     .update(cx, |this, cx| {
-                        crate::cloud_sync::tick_cloud_sync_auto(this, cx);
+                        crate::cloud_sync::tick_cloud_sync_auto(&mut this.state, cx);
                         if minute_elapsed >= 60 {
                             minute_elapsed = 0;
                             this.tick_git_sync(cx);
