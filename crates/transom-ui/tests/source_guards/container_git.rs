@@ -1574,3 +1574,47 @@ fn vertical_tab_row_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_vertical_tab_row 超过 80 行：{lines}");
 }
+
+/// 引擎侧栏行必须拆分并参数化：入口只做快照、菜单装配与行体拼接。
+#[test]
+fn engine_row_is_split_and_parameterized() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/sidebar/engine_row.rs"))
+        .expect("读取 container/sidebar/engine_row.rs 失败");
+    assert!(
+        source.contains("struct EngineRowParams"),
+        "引擎行渲染必须使用参数对象"
+    );
+    for helper in [
+        "fn engine_row_outline",
+        "fn engine_row_shell",
+        "fn engine_context_menu",
+        "fn engine_row_band",
+    ] {
+        assert!(source.contains(helper), "引擎行缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_engine_row")
+        .expect("缺少 render_engine_row");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_engine_row 超过 80 行：{lines}");
+}

@@ -121,9 +121,16 @@ pub(crate) fn render_container_sidebar(
     for row in &rows {
         list = list.child(match row {
             ContainerSidebarRow::Folder(row) => folder_row::render_engine_folder_row(view, row, p),
-            ContainerSidebarRow::Engine(row) => {
-                engine_row::render_engine_row(view, row, active, selected, profile_states, p)
-            }
+            ContainerSidebarRow::Engine(row) => engine_row::render_engine_row(
+                crate::container::sidebar::engine_row::EngineRowParams {
+                    view,
+                    row,
+                    active,
+                    selected,
+                    states: profile_states,
+                    palette: p,
+                },
+            ),
         });
     }
 
