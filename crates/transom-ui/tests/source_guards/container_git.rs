@@ -1369,3 +1369,48 @@ fn container_forward_dialog_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "转发表单主函数超过 80 行：{lines}");
 }
+
+/// 镜像结果卡片必须按部件拆分，主渲染函数不超过 80 行，并继续使用参数对象。
+#[test]
+fn hub_result_card_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/hub/card.rs"))
+        .expect("读取 container/hub/card.rs 失败");
+    for helper in [
+        "fn image_avatar",
+        "fn image_name_row",
+        "fn image_meta_row",
+        "fn tag_chip_row",
+        "fn card_actions",
+    ] {
+        assert!(source.contains(helper), "镜像卡片缺少拆分函数：{helper}");
+    }
+    assert!(
+        source.contains("struct HubResultCardParams"),
+        "镜像卡片渲染必须使用参数对象"
+    );
+    let start = source
+        .find("fn render_hub_result_card")
+        .expect("缺少 render_hub_result_card");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_hub_result_card 超过 80 行：{lines}");
+}

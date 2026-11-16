@@ -66,7 +66,9 @@ apps/transom (组合根 + 控制平面)
 
 编辑器关闭续行的决策已收归 `EditorPanels`：桥接只传工作区快照与脏标签集合，实体返回 `EditorCloseRequest` 后由外壳排期执行。
 
-编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。容器转发表单渲染拆为信息卡片、会话选择、输入区与页脚四个具名函数（守卫 `container_forward_dialog_is_split`）。
+编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。镜像搜索结果卡片拆为头像、名称行、元信息徽标、标签胶囊与动作组，并改用 `HubResultCardParams` 参数对象（守卫 `hub_result_card_is_split`）。
+
+容器转发表单渲染拆为信息卡片、会话选择、输入区与页脚四个具名函数（守卫 `container_forward_dialog_is_split`）。
 
 SFTP 本地右键菜单按动作域拆为具名构造器（`sftp/local_pane_view/context_menu.rs`），主构造器只决定顺序与条件，守卫 `local_context_menu_is_split` 固定其不超过 60 行。
 

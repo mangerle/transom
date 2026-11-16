@@ -380,10 +380,10 @@ fn render_hub_results_body(
         let item_for_tag = img_name.clone();
         let item_for_pull = img_name.clone();
 
-        let card = render_hub_result_card(
+        let card = render_hub_result_card(crate::container::hub::card::HubResultCardParams {
             item,
-            &active_tag,
-            move |tag_to_pull, _window, cx| {
+            current_selected_tag: &active_tag,
+            on_pull: move |tag_to_pull: &str, _window: &mut Window, cx: &mut App| {
                 let repository = item_for_pull.clone();
                 let registry = registry.clone();
                 let tag = tag_to_pull.to_string();
@@ -391,21 +391,21 @@ fn render_hub_results_body(
                     workspace.enqueue_image_pull(repository, tag, registry, cx);
                 });
             },
-            move |new_tag, _, cx| {
+            on_select_tag: move |new_tag: &str, _: &mut Window, cx: &mut App| {
                 let img = item_for_tag.clone();
                 let tag = new_tag.to_string();
                 view_tag.update(cx, move |workspace, cx| {
                     workspace.set_hub_selected_tag(img, tag, cx);
                 });
             },
-            move |window, cx| {
+            on_open_detail: move |window: &mut Window, cx: &mut App| {
                 let it = item_clone.clone();
                 view_detail.update(cx, move |workspace, cx| {
                     workspace.select_hub_image_detail(it, window, cx);
                 });
             },
-            p,
-        );
+            palette: p,
+        });
 
         list = list.child(card);
     }
