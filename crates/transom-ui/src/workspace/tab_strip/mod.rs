@@ -42,9 +42,17 @@ impl AppShell {
         let can_tile = entries.len() >= 2;
 
         for entry in &entries {
-            if let Some(element) =
-                item::render_tab_entry(self, entry, can_tile, window, p, &app_entity, cx)
-            {
+            if let Some(element) = item::render_tab_entry(item::TabEntryRenderParams {
+                model: item::TabEntryModelParams {
+                    shell: self,
+                    entry,
+                    can_tile,
+                    window,
+                    palette: p,
+                    app: &app_entity,
+                },
+                cx,
+            }) {
                 tab_strip = tab_strip.child(element);
             }
         }

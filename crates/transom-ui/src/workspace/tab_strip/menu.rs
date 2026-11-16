@@ -12,6 +12,7 @@ use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
 /// 标签条目右键上下文菜单的配置参数对象。
+#[derive(Clone)]
 pub(crate) struct TabContextMenuParams {
     pub(crate) active_pane: TabId,
     pub(crate) session_id: transom_core::SessionId,
