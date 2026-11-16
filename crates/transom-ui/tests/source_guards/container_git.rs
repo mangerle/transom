@@ -1245,3 +1245,45 @@ fn no_source_file_over_500_lines() {
         "单文件超过 500 行必须拆分为子模块: {offenders:?}"
     );
 }
+
+/// 容器详情渲染必须保持分阶段拆分：主函数只做空态、头部与内容分发，
+/// 单函数不超过 80 行。
+#[test]
+fn container_detail_render_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/detail/render.rs"))
+        .expect("读取 container/detail/render.rs 失败");
+    for helper in [
+        "fn render_empty_detail",
+        "fn render_detail_header_block",
+        "fn render_detail_content",
+        "fn render_containers_content",
+    ] {
+        assert!(source.contains(helper), "详情渲染缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_container_detail")
+        .expect("缺少 render_container_detail");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let end = end.expect("函数体未闭合");
+    let lines = source[start..end].lines().count();
+    assert!(lines <= 80, "render_container_detail 超过 80 行：{lines}");
+}
