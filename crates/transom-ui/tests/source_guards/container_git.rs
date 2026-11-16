@@ -1067,3 +1067,15 @@ fn cloud_sync_events_use_entity_methods() {
         "cloud_sync/events.rs 不得直接写实体字段，应调用 CloudSyncView 方法"
     );
 }
+
+/// SFTP 输入提交的参数必须收敛为参数对象，避免平铺七个参数造成顺序错误。
+#[test]
+fn sftp_commit_uses_params_object() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let commit = std::fs::read_to_string(root.join("src/sftp/file_ops/commit.rs"))
+        .expect("读取 sftp/file_ops/commit.rs 失败");
+    assert!(
+        commit.contains("params: SftpInputCommit<'_>") && commit.contains("struct SftpInputCommit"),
+        "commit_sftp_input_value 必须使用 SftpInputCommit 参数对象"
+    );
+}

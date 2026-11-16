@@ -186,10 +186,12 @@ impl SftpModals {
                 } => {
                     if let Err(err) = crate::sftp::file_ops::commit_sftp_input_value(
                         &mut shell.state,
-                        *tab_id,
-                        *connection_id,
-                        target,
-                        value,
+                        crate::sftp::file_ops::SftpInputCommit {
+                            tab_id: *tab_id,
+                            connection_id: *connection_id,
+                            target,
+                            name: value,
+                        },
                         window,
                         cx,
                     ) {

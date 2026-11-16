@@ -7,17 +7,28 @@ use gpui_kit::*;
 use std::path::PathBuf;
 use transom_core::{ConnectionId, SftpOperation, TabId};
 
+/// SFTP 输入弹窗提交一次的参数集合，避免七个平铺参数造成顺序错误。
+pub(in crate::sftp) struct SftpInputCommit<'a> {
+    pub tab_id: TabId,
+    pub connection_id: Option<ConnectionId>,
+    pub target: &'a SftpInputTarget,
+    pub name: &'a str,
+}
+
 /// 执行已通过基础名称校验的 SFTP 输入弹窗提交动作。
 pub(in crate::sftp) fn commit_sftp_input_value(
     app_state: &mut AppState,
-    tab_id: TabId,
-    connection_id: Option<ConnectionId>,
-    modal_target: &SftpInputTarget,
-    name: &str,
+    params: SftpInputCommit<'_>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) -> Result<(), String> {
-    let target = match connection_id {
+    let SftpInputCommit {
+        tab_id,
+        connection_id,
+        target: modal_target,
+        name,
+    } = params;
+    let pane = match connection_id {
         Some(connection_id) => SftpRemotePaneRef::Side(connection_id),
         None => SftpRemotePaneRef::Main,
     };
@@ -26,7 +37,7 @@ pub(in crate::sftp) fn commit_sftp_input_value(
         .tab(tab_id)
         .and_then(|tab| tab.connection_id);
     let scope = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
-        .and_then(|panel| panel.remote_pane_scope(target, fallback_main))
+        .and_then(|panel| panel.remote_pane_scope(pane, fallback_main))
         .map(|scope| SftpInputScope {
             connection_id: scope.connection_id,
             base_path: scope.pane.path.clone(),
