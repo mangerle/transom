@@ -13,7 +13,7 @@ mod ops;
 pub(crate) use lifecycle::{
     block_close_for_dirty_editors, cancel_editor_goto_line, commit_editor_goto_line,
     defer_editor_close_resume, open_editor_goto_line, prune_tab_overlays,
-    render_editor_goto_line_body, try_finish_pending_close,
+    render_editor_goto_line_body,
 };
 pub(crate) use open::{
     RemoteEditorOpen, open_remote_editor_panel, open_terminal_code_location,

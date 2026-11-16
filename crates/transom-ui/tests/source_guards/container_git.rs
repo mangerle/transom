@@ -883,3 +883,22 @@ fn panels_take_app_state_not_shell() {
         "这些模块不得再接收外壳参数，改为 &mut AppState: {offenders:?}"
     );
 }
+
+/// 编辑器关闭续行的决策必须留在实体侧：桥接只借工作区快照、脏标签集合，
+/// 不再在桥接里解析标签组。
+#[test]
+fn editor_close_resolution_lives_on_entity() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let close = std::fs::read_to_string(root.join("src/editor/close.rs"))
+        .expect("读取 editor/close.rs 失败");
+    assert!(
+        close.contains("fn finish_close_intent") && close.contains("fn tabs_for_pending_close"),
+        "关闭续行决策必须由 EditorPanels 自行完成（finish_close_intent / tabs_for_pending_close）"
+    );
+    let bridge = std::fs::read_to_string(root.join("src/editor/bridge/lifecycle.rs"))
+        .expect("读取 editor/bridge/lifecycle.rs 失败");
+    assert!(
+        !bridge.contains("fn tabs_for_pending_close"),
+        "标签解析不得回退到 editor/bridge/lifecycle.rs"
+    );
+}

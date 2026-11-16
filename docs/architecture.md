@@ -62,6 +62,8 @@ apps/transom (组合根 + 控制平面)
 
 状态查询与变更优先写在 `impl AppState` 或对应 feature 实体；跨域协调不接收整个 `AppShell`，而是使用只借用所需字段的窄上下文（如 `MonitorOps`、`CloudSyncActions`、`DiffViewerOps`、`BroadcastOps`、`SplitOps`）。`AppShell` 只保留渲染、事件路由、连接补建与窗口聚焦等生命周期入口。
 
+编辑器关闭续行的决策已收归 `EditorPanels`：桥接只传工作区快照与脏标签集合，实体返回 `EditorCloseRequest` 后由外壳排期执行。
+
 编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。源码守卫 `container_modules_take_app_state_not_shell`、`git_modules_take_app_state_not_shell`、`connection_modules_take_app_state_not_shell`、`dialog_host_modules_take_app_state_not_shell`、`tiling_modules_take_app_state_not_shell`、`record_modules_take_app_state_not_shell` 与 `panels_take_app_state_not_shell` 阻止对应模块重新接收外壳参数。
 
 三条回归闸门固化上述约定：`app_shell_keeps_single_state_field` 禁止外壳重新平铺字段；`widgets_use_design_tokens` 禁止组件层写裸字号与间距；`menu_items_use_widget_constructor` 禁止手写菜单项链。

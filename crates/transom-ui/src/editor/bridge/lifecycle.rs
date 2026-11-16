@@ -1,9 +1,7 @@
 //! 编辑器关闭拦截、订阅裁剪与“跳转到行”弹窗桥接。
 
 use crate::app::{AppShell, AppState};
-use crate::editor::{
-    EditorCloseRequest, EditorGotoLineModalState, PendingEditorClose, apply_editor_goto,
-};
+use crate::editor::{EditorGotoLineModalState, PendingEditorClose, apply_editor_goto};
 use crate::palette::Palette;
 use crate::palette::sftp_text_input;
 use gpui_kit::base::{h_flex, v_flex};
@@ -63,14 +61,15 @@ pub(crate) fn block_close_for_dirty_editors(
 
 /// 脏面板全部处理完毕后续行挂起的关闭。
 ///
-/// 实体回调期间外壳已被租借，不能在原处执行关闭动作；这里只把关闭意图
-/// 排进窗口请求队列，由外壳在渲染期统一消费。
+/// 实体回调期间外壳已被租借，不能在原处执行关闭动作；实体按工作区快照解析
+/// 受影响标签并产出关闭请求，这里只负责排进窗口请求队列。
 pub(crate) fn resume_pending_editor_close(app_state: &mut AppState, cx: &mut Context<AppShell>) {
-    let Some(intent) = app_state.features.editors.read(cx).pending_close() else {
-        return;
-    };
     let dirty_tabs = app_state.features.editors.read(cx).dirty_tabs();
-    if let Some(request) = try_finish_pending_close(app_state, intent, &dirty_tabs, cx) {
+    let editors = app_state.features.editors.clone();
+    let request = editors.update(cx, |panels, cx| {
+        panels.finish_pending_close(&app_state.workspace, &dirty_tabs, cx)
+    });
+    if let Some(request) = request {
         app_state.ui.window_requests.push_editor_close(request);
     }
 }
@@ -84,73 +83,6 @@ pub(crate) fn defer_editor_close_resume(
     cx.defer_in(window, |shell, _window, cx| {
         resume_pending_editor_close(&mut shell.state, cx)
     });
-}
-
-/// 按挂起意图与当前脏标签快照决定是否续行；由保存成功等外壳事件复用。
-///
-/// 返回外壳需要执行的关闭请求：脏标签未处理完或目标标签已消失时返回
-/// `None`。关闭请求交回外壳能保证关闭动作与实体回调分离，避免在实体
-/// 更新期间回读外壳。
-pub(crate) fn try_finish_pending_close(
-    app_state: &mut AppState,
-    intent: PendingEditorClose,
-    dirty_tabs: &[TabId],
-    cx: &mut Context<AppShell>,
-) -> Option<EditorCloseRequest> {
-    let tab_ids = tabs_for_pending_close(app_state, &intent);
-    if tab_ids.is_empty() {
-        clear_editor_pending_close(app_state, cx);
-        cx.notify();
-        return None;
-    }
-    if tab_ids.iter().any(|tab_id| dirty_tabs.contains(tab_id)) {
-        return None;
-    }
-    clear_editor_pending_close(app_state, cx);
-    Some(match intent {
-        PendingEditorClose::Group(group_id) => EditorCloseRequest::Group(group_id),
-        PendingEditorClose::Pane(tab_id) => EditorCloseRequest::Pane(tab_id),
-        PendingEditorClose::Session(session_id) => EditorCloseRequest::Session(session_id),
-        PendingEditorClose::Tiling(groups) => EditorCloseRequest::Tiling(groups),
-    })
-}
-
-fn clear_editor_pending_close(app_state: &mut AppState, cx: &mut Context<AppShell>) {
-    app_state
-        .features
-        .editors
-        .update(cx, |panels, _| panels.clear_pending_close());
-}
-
-fn tabs_for_pending_close(app_state: &AppState, intent: &PendingEditorClose) -> Vec<TabId> {
-    match intent {
-        PendingEditorClose::Group(group_id) => app_state
-            .workspace
-            .groups
-            .iter()
-            .find(|group| group.id == *group_id)
-            .map(|group| group.pane_ids())
-            .unwrap_or_default(),
-        PendingEditorClose::Pane(tab_id) => Vec::from([*tab_id]),
-        PendingEditorClose::Session(session_id) => app_state
-            .workspace
-            .tabs
-            .iter()
-            .filter(|tab| tab.session_id == *session_id)
-            .map(|tab| tab.id)
-            .collect(),
-        PendingEditorClose::Tiling(groups) => groups
-            .iter()
-            .filter_map(|group_id| {
-                app_state
-                    .workspace
-                    .groups
-                    .iter()
-                    .find(|group| group.id == *group_id)
-            })
-            .flat_map(|group| group.pane_ids())
-            .collect(),
-    }
 }
 
 /// 打开"跳转到行"模态。

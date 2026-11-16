@@ -96,9 +96,11 @@ fn apply_editor_written(
         crate::sftp::focus_active_sftp_panel(app_state, window, cx);
     }
     if let Some(intent) = action.pending_close {
-        if let Some(request) =
-            super::try_finish_pending_close(app_state, intent, &action.dirty_tabs, cx)
-        {
+        let editors = app_state.features.editors.clone();
+        let request = editors.update(cx, |panels, cx| {
+            panels.finish_close_intent(&app_state.workspace, intent, &action.dirty_tabs, cx)
+        });
+        if let Some(request) = request {
             app_state.ui.window_requests.push_editor_close(request);
         }
     } else {

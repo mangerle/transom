@@ -17,6 +17,7 @@
 
 use super::entity::EditorPanels;
 use super::panel::PanelConfirm;
+use crate::workspace::WorkspaceState;
 use gpui_kit::*;
 use transom_core::{GroupId, SessionId, TabId};
 
@@ -75,8 +76,84 @@ impl EditorPanels {
 /// 脏面板处理完成后需要外壳执行的关闭动作。
 #[derive(Debug, Clone)]
 pub(crate) enum EditorCloseRequest {
-    Group(transom_core::GroupId),
-    Pane(transom_core::TabId),
-    Session(transom_core::SessionId),
-    Tiling(Vec<transom_core::GroupId>),
+    Group(GroupId),
+    Pane(TabId),
+    Session(SessionId),
+    Tiling(Vec<GroupId>),
+}
+
+impl From<PendingEditorClose> for EditorCloseRequest {
+    fn from(intent: PendingEditorClose) -> Self {
+        match intent {
+            PendingEditorClose::Group(group_id) => EditorCloseRequest::Group(group_id),
+            PendingEditorClose::Pane(tab_id) => EditorCloseRequest::Pane(tab_id),
+            PendingEditorClose::Session(session_id) => EditorCloseRequest::Session(session_id),
+            PendingEditorClose::Tiling(groups) => EditorCloseRequest::Tiling(groups),
+        }
+    }
+}
+
+impl EditorPanels {
+    /// 按挂起意图与当前脏标签快照续行关闭。
+    ///
+    /// 只借工作区快照与实体自身的脏面板集合，不触碰外壳其余状态；
+    /// 返回 `None` 表示仍需等待（仍有脏面板未处理），`Some` 表示已清空挂起
+    /// 并把关闭动作交给外壳排期。
+    pub(crate) fn finish_pending_close(
+        &mut self,
+        workspace: &WorkspaceState,
+        dirty_tabs: &[TabId],
+        cx: &mut Context<Self>,
+    ) -> Option<EditorCloseRequest> {
+        let intent = self.pending_close()?;
+        self.finish_close_intent(workspace, intent, dirty_tabs, cx)
+    }
+
+    /// 按指定意图续行关闭；由保存成功等事件复用。
+    pub(crate) fn finish_close_intent(
+        &mut self,
+        workspace: &WorkspaceState,
+        intent: PendingEditorClose,
+        dirty_tabs: &[TabId],
+        cx: &mut Context<Self>,
+    ) -> Option<EditorCloseRequest> {
+        let tabs = tabs_for_pending_close(workspace, &intent);
+        if tabs.is_empty() {
+            self.clear_pending_close();
+            cx.notify();
+            return None;
+        }
+        if tabs.iter().any(|tab_id| dirty_tabs.contains(tab_id)) {
+            return None;
+        }
+        self.clear_pending_close();
+        Some(EditorCloseRequest::from(intent))
+    }
+}
+
+/// 按意图标识解析当前受影响标签集合。
+///
+/// 只读工作区快照：挂起期间窗格可能被拆分或重组，续行时必须按最新结构解析，
+/// 不能沿用挂起时的旧集合。
+fn tabs_for_pending_close(workspace: &WorkspaceState, intent: &PendingEditorClose) -> Vec<TabId> {
+    match intent {
+        PendingEditorClose::Group(group_id) => workspace
+            .groups
+            .iter()
+            .find(|group| group.id == *group_id)
+            .map(|group| group.pane_ids())
+            .unwrap_or_default(),
+        PendingEditorClose::Pane(tab_id) => Vec::from([*tab_id]),
+        PendingEditorClose::Session(session_id) => workspace
+            .tabs
+            .iter()
+            .filter(|tab| tab.session_id == *session_id)
+            .map(|tab| tab.id)
+            .collect(),
+        PendingEditorClose::Tiling(groups) => groups
+            .iter()
+            .filter_map(|group_id| workspace.groups.iter().find(|group| group.id == *group_id))
+            .flat_map(|group| group.pane_ids())
+            .collect(),
+    }
 }
