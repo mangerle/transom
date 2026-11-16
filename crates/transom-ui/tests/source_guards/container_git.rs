@@ -1222,3 +1222,26 @@ fn hotspot_functions_use_params_objects() {
         );
     }
 }
+
+/// 生产源码单文件不得超过 500 行：超限必须按关注点拆分子模块。
+#[test]
+fn no_source_file_over_500_lines() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("src")) {
+        if entry.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        let lines = content.lines().count();
+        if lines > 500 {
+            offenders.push(format!("{}: {lines}", entry.display()));
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "单文件超过 500 行必须拆分为子模块: {offenders:?}"
+    );
+}
