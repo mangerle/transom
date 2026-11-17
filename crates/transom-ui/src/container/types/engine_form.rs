@@ -101,150 +101,11 @@ impl ContainerFormState {
         } else {
             EndpointChoice::Auto
         };
-
-        // 从端点中提取各字段回填值
-        let endpoint_main_value = EndpointChoice::value_for(&engine.endpoint);
-        let (
-            cli_args_value,
-            ssh_port,
-            ssh_user,
-            ssh_identity_file,
-            ssh_password,
-            ssh_use_sudo,
-            ssh_sudo_password,
-            tls_enabled,
-            tls_ca,
-            tls_cert,
-            tls_key,
-        ) = match &engine.endpoint {
-            ContainerEndpoint::Cli { args, .. } => (
-                args.join(" "),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                false,
-                String::new(),
-                false,
-                String::new(),
-                String::new(),
-                String::new(),
-            ),
-            ContainerEndpoint::Ssh {
-                port,
-                user,
-                identity_file,
-                password,
-                use_sudo,
-                sudo_password,
-                ..
-            } => (
-                String::new(),
-                port.map(|p| p.to_string()).unwrap_or_default(),
-                user.clone().unwrap_or_default(),
-                identity_file.clone().unwrap_or_default(),
-                password.clone().unwrap_or_default(),
-                *use_sudo,
-                sudo_password.clone().unwrap_or_default(),
-                false,
-                String::new(),
-                String::new(),
-                String::new(),
-            ),
-            ContainerEndpoint::Tcp { tls, .. } => {
-                let tls = tls.as_ref();
-                (
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    false,
-                    String::new(),
-                    tls.is_some(),
-                    tls.map(|t| t.ca_cert.clone()).unwrap_or_default(),
-                    tls.map(|t| t.client_cert.clone()).unwrap_or_default(),
-                    tls.map(|t| t.client_key.clone()).unwrap_or_default(),
-                )
-            }
-            _ => (
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                false,
-                String::new(),
-                false,
-                String::new(),
-                String::new(),
-                String::new(),
-            ),
-        };
-
-        let name = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(name_value)
-                .placeholder(rust_i18n::t!("container.form.name_placeholder").to_string())
-        });
-        let endpoint = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(endpoint_main_value)
-                .placeholder(rust_i18n::t!(endpoint_choice.placeholder_key()).to_string())
-        });
-        let cli_args = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(cli_args_value)
-                .placeholder(rust_i18n::t!("container.form.cli_args_placeholder").to_string())
-        });
-        let ssh_port_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .min(1.0)
-                .max(65535.0)
-                .step(1.0)
-                .default_value(ssh_port)
-                .placeholder("22".to_string())
-        });
-        let ssh_user_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(ssh_user)
-                .placeholder(rust_i18n::t!("container.form.ssh_user_placeholder").to_string())
-        });
-        let ssh_identity_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(ssh_identity_file)
-                .placeholder(rust_i18n::t!("container.form.ssh_identity_placeholder").to_string())
-        });
-        let ssh_password_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(ssh_password)
-                .masked(true)
-                .placeholder(rust_i18n::t!("container.form.ssh_password_placeholder").to_string())
-        });
-        let ssh_sudo_password_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(ssh_sudo_password)
-                .masked(true)
-                .placeholder(
-                    rust_i18n::t!("container.form.ssh_sudo_password_placeholder").to_string(),
-                )
-        });
-        let tls_ca_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(tls_ca)
-                .placeholder(rust_i18n::t!("container.form.tls_ca_placeholder").to_string())
-        });
-        let tls_cert_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(tls_cert)
-                .placeholder(rust_i18n::t!("container.form.tls_cert_placeholder").to_string())
-        });
-        let tls_key_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .default_value(tls_key)
-                .placeholder(rust_i18n::t!("container.form.tls_key_placeholder").to_string())
-        });
-
+        let values = endpoint_form_values(&engine.endpoint);
+        let (name, endpoint, cli_args) =
+            build_basic_inputs(window, cx, &values, &name_value, endpoint_choice);
+        let ssh = build_ssh_inputs(window, cx, &values);
+        let tls = build_tls_inputs(window, cx, &values);
         Self {
             editing: profile.map(|profile| profile.id),
             name,
@@ -262,20 +123,8 @@ impl ContainerFormState {
             endpoint_choice,
             endpoint_value: endpoint,
             cli_args,
-            ssh: SshFormFields {
-                port: ssh_port_input,
-                user: ssh_user_input,
-                identity_file: ssh_identity_input,
-                password: ssh_password_input,
-                use_sudo: ssh_use_sudo,
-                sudo_password: ssh_sudo_password_input,
-            },
-            tls: TlsFormFields {
-                enabled: tls_enabled,
-                ca_cert: tls_ca_input,
-                client_cert: tls_cert_input,
-                client_key: tls_key_input,
-            },
+            ssh,
+            tls,
             test_status: None,
             test_ok: false,
             test_request: None,
@@ -399,5 +248,155 @@ impl ContainerFormState {
         profile.icon = self.icon;
         profile.color = self.color;
         Ok(profile)
+    }
+}
+
+/// 由端点推导出的表单回填值。
+#[derive(Default)]
+struct EngineFormValues {
+    endpoint_main: String,
+    cli_args: String,
+    ssh_port: String,
+    ssh_user: String,
+    ssh_identity: String,
+    ssh_password: String,
+    ssh_use_sudo: bool,
+    ssh_sudo_password: String,
+    tls_enabled: bool,
+    tls_ca: String,
+    tls_cert: String,
+    tls_key: String,
+}
+
+fn endpoint_form_values(endpoint: &ContainerEndpoint) -> EngineFormValues {
+    let mut values = EngineFormValues {
+        endpoint_main: EndpointChoice::value_for(endpoint),
+        ..Default::default()
+    };
+    match endpoint {
+        ContainerEndpoint::Cli { args, .. } => values.cli_args = args.join(" "),
+        ContainerEndpoint::Ssh {
+            port,
+            user,
+            identity_file,
+            password,
+            use_sudo,
+            sudo_password,
+            ..
+        } => {
+            values.ssh_port = port.map(|p| p.to_string()).unwrap_or_default();
+            values.ssh_user = user.clone().unwrap_or_default();
+            values.ssh_identity = identity_file.clone().unwrap_or_default();
+            values.ssh_password = password.clone().unwrap_or_default();
+            values.ssh_use_sudo = *use_sudo;
+            values.ssh_sudo_password = sudo_password.clone().unwrap_or_default();
+        }
+        ContainerEndpoint::Tcp { tls, .. } => {
+            let tls = tls.as_ref();
+            values.tls_enabled = tls.is_some();
+            values.tls_ca = tls.map(|t| t.ca_cert.clone()).unwrap_or_default();
+            values.tls_cert = tls.map(|t| t.client_cert.clone()).unwrap_or_default();
+            values.tls_key = tls.map(|t| t.client_key.clone()).unwrap_or_default();
+        }
+        _ => {}
+    }
+    values
+}
+
+fn build_basic_inputs(
+    window: &mut Window,
+    cx: &mut Context<impl Sized>,
+    values: &EngineFormValues,
+    name_value: &str,
+    endpoint_choice: EndpointChoice,
+) -> (Entity<InputState>, Entity<InputState>, Entity<InputState>) {
+    let name = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(name_value.to_string())
+            .placeholder(rust_i18n::t!("container.form.name_placeholder").to_string())
+    });
+    let endpoint = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.endpoint_main.clone())
+            .placeholder(rust_i18n::t!(endpoint_choice.placeholder_key()).to_string())
+    });
+    let cli_args = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.cli_args.clone())
+            .placeholder(rust_i18n::t!("container.form.cli_args_placeholder").to_string())
+    });
+    (name, endpoint, cli_args)
+}
+
+fn build_ssh_inputs(
+    window: &mut Window,
+    cx: &mut Context<impl Sized>,
+    values: &EngineFormValues,
+) -> SshFormFields {
+    let port = cx.new(|cx| {
+        InputState::new(window, cx)
+            .min(1.0)
+            .max(65535.0)
+            .step(1.0)
+            .default_value(values.ssh_port.clone())
+            .placeholder("22".to_string())
+    });
+    let user = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.ssh_user.clone())
+            .placeholder(rust_i18n::t!("container.form.ssh_user_placeholder").to_string())
+    });
+    let identity_file = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.ssh_identity.clone())
+            .placeholder(rust_i18n::t!("container.form.ssh_identity_placeholder").to_string())
+    });
+    let password = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.ssh_password.clone())
+            .masked(true)
+            .placeholder(rust_i18n::t!("container.form.ssh_password_placeholder").to_string())
+    });
+    let sudo_password = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.ssh_sudo_password.clone())
+            .masked(true)
+            .placeholder(rust_i18n::t!("container.form.ssh_sudo_password_placeholder").to_string())
+    });
+    SshFormFields {
+        port,
+        user,
+        identity_file,
+        password,
+        use_sudo: values.ssh_use_sudo,
+        sudo_password,
+    }
+}
+
+fn build_tls_inputs(
+    window: &mut Window,
+    cx: &mut Context<impl Sized>,
+    values: &EngineFormValues,
+) -> TlsFormFields {
+    let ca_cert = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.tls_ca.clone())
+            .placeholder(rust_i18n::t!("container.form.tls_ca_placeholder").to_string())
+    });
+    let client_cert = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.tls_cert.clone())
+            .placeholder(rust_i18n::t!("container.form.tls_cert_placeholder").to_string())
+    });
+    let client_key = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(values.tls_key.clone())
+            .placeholder(rust_i18n::t!("container.form.tls_key_placeholder").to_string())
+    });
+    TlsFormFields {
+        enabled: values.tls_enabled,
+        ca_cert,
+        client_cert,
+        client_key,
     }
 }

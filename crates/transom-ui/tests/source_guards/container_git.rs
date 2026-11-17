@@ -1937,3 +1937,42 @@ fn container_changes_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_container_changes 超过 80 行：{lines}");
 }
+
+/// 引擎表单构造必须拆分：入口只推导默认值并组装实体，单函数不超过 80 行。
+#[test]
+fn engine_form_new_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/types/engine_form.rs"))
+        .expect("读取 container/types/engine_form.rs 失败");
+    for helper in [
+        "struct EngineFormValues",
+        "fn endpoint_form_values",
+        "fn build_basic_inputs",
+        "fn build_ssh_inputs",
+        "fn build_tls_inputs",
+    ] {
+        assert!(source.contains(helper), "引擎表单构造缺少拆分：{helper}");
+    }
+    let start = source.find("pub(crate) fn new(").expect("缺少 new");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "引擎表单 new 超过 80 行：{lines}");
+}
