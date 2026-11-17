@@ -200,10 +200,12 @@ impl SftpSearchModalView {
         } else {
             for (idx, item) in self.state.results.iter().enumerate() {
                 results_container = results_container.child(search_result_row(
-                    idx,
-                    item,
-                    self.state.tab_id,
-                    self.state.connection_id,
+                    SearchResultRow {
+                        index: idx,
+                        item,
+                        tab_id: self.state.tab_id,
+                        connection_id: self.state.connection_id,
+                    },
                     cx,
                     p,
                 ));
@@ -296,15 +298,26 @@ fn render_search_header(
     header.into_any_element()
 }
 
-/// 单条检索结果：路径、行号、匹配内容与跳转。
-fn search_result_row(
-    idx: usize,
-    item: &RemoteSearchResultItem,
+/// 单条检索结果的参数集合，避免六个平铺参数。
+struct SearchResultRow<'a> {
+    index: usize,
+    item: &'a RemoteSearchResultItem,
     tab_id: TabId,
     connection_id: Option<ConnectionId>,
+}
+
+/// 单条检索结果：路径、行号、匹配内容与跳转。
+fn search_result_row(
+    row: SearchResultRow<'_>,
     cx: &mut Context<SftpSearchModalView>,
     p: &Palette,
 ) -> AnyElement {
+    let SearchResultRow {
+        index: idx,
+        item,
+        tab_id,
+        connection_id,
+    } = row;
     let target_path = item.path.clone();
     let line_info = item
         .line_number

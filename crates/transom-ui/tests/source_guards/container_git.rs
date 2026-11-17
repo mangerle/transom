@@ -2017,3 +2017,44 @@ fn render_helpers_use_params_objects() {
         );
     }
 }
+
+/// SFTP 渲染与动作辅助不得平铺 6 个参数：必须使用参数对象。
+#[test]
+fn sftp_helpers_use_params_objects() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let cases = [
+        (
+            "src/sftp/search_modal.rs",
+            "struct SearchResultRow",
+            "fn search_result_row(\n    row: SearchResultRow<'_>",
+        ),
+        (
+            "src/sftp/queue_view/row.rs",
+            "struct QueueActionSpec<F>",
+            "fn queue_action_btn<F>(spec: QueueActionSpec<F>, cx: &mut Context<SftpPanelView>)",
+        ),
+        (
+            "src/sftp/task.rs",
+            "pub struct RemoteCopyRequest",
+            "pub fn new_remote_copy(request: RemoteCopyRequest)",
+        ),
+        (
+            "src/sftp/file_ops/commit.rs",
+            "struct NewRemoteFileParams",
+            "params: NewRemoteFileParams<'_>",
+        ),
+        (
+            "src/sftp/remote_content/context_menu/transfer.rs",
+            "struct ArchiveFormatItem",
+            "fn append_archive_format_item(menu: PopupMenu, params: ArchiveFormatItem<'_>)",
+        ),
+    ];
+    for (file, marker, param) in cases {
+        let content = std::fs::read_to_string(root.join(file)).expect("读取 SFTP 参数对象文件失败");
+        assert!(content.contains(marker), "{file} 缺少参数对象：{marker}");
+        assert!(
+            content.contains(param),
+            "{file} 函数未使用参数对象：{param}"
+        );
+    }
+}

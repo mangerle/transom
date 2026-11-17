@@ -199,14 +199,14 @@ impl SftpPanelView {
     ) {
         let src_path = params.source_path.clone();
         let tgt_path = params.target_path.clone();
-        let task = TransferTask::new_remote_copy(
-            params.source_connection_id,
-            params.source_path,
-            params.target_connection_id,
-            params.target_path,
-            None,
-            params.is_dir,
-        );
+        let task = TransferTask::new_remote_copy(crate::sftp::RemoteCopyRequest {
+            source_connection_id: params.source_connection_id,
+            source_path: params.source_path,
+            target_connection_id: params.target_connection_id,
+            target_path: params.target_path,
+            size: None,
+            is_dir: params.is_dir,
+        });
         self.state.queue.tasks.push(task);
         self.state.set_status(
             rust_i18n::t!(

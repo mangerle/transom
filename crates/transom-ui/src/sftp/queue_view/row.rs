@@ -114,14 +114,26 @@ fn queue_tag_badge(label: impl Into<SharedString>, p: &Palette) -> AnyElement {
         .into_any_element()
 }
 
-fn queue_action_btn(
+/// 队列行动作按钮的参数集合，避免六个平铺参数。
+struct QueueActionSpec<F> {
     id: String,
     icon: UiIcon,
     label: String,
     show_tooltip: bool,
-    on_click: impl Fn(&mut SftpPanelView, &mut Context<SftpPanelView>) + 'static,
-    cx: &mut Context<SftpPanelView>,
-) -> AnyElement {
+    on_click: F,
+}
+
+fn queue_action_btn<F>(spec: QueueActionSpec<F>, cx: &mut Context<SftpPanelView>) -> AnyElement
+where
+    F: Fn(&mut SftpPanelView, &mut Context<SftpPanelView>) + 'static,
+{
+    let QueueActionSpec {
+        id,
+        icon,
+        label,
+        show_tooltip,
+        on_click,
+    } = spec;
     crate::widgets::IconButton::new(id, AppIcon::Ui(icon), label)
         .size(crate::widgets::IconButtonSize::Compact)
         .show_tooltip(show_tooltip)
@@ -138,52 +150,72 @@ fn render_queue_task_actions(
 ) -> AnyElement {
     let pause = |cx: &mut Context<SftpPanelView>| {
         queue_action_btn(
-            format!("queue-pause-{task_id}"),
-            UiIcon::PAUSE,
-            rust_i18n::t!("sftp.queue.pause_task").to_string(),
-            true,
-            move |this, cx| this.pause_task(tab_id, task_id, cx),
+            QueueActionSpec {
+                id: format!("queue-pause-{task_id}"),
+                icon: UiIcon::PAUSE,
+                label: rust_i18n::t!("sftp.queue.pause_task").to_string(),
+                show_tooltip: true,
+                on_click: move |this: &mut SftpPanelView, cx: &mut Context<SftpPanelView>| {
+                    this.pause_task(tab_id, task_id, cx)
+                },
+            },
             cx,
         )
     };
     let cancel = |show_tip: bool, cx: &mut Context<SftpPanelView>| {
         queue_action_btn(
-            format!("queue-cancel-{task_id}"),
-            UiIcon::CLOSE,
-            rust_i18n::t!("sftp.queue.cancel_task").to_string(),
-            show_tip,
-            move |this, cx| this.cancel_task(tab_id, task_id, cx),
+            QueueActionSpec {
+                id: format!("queue-cancel-{task_id}"),
+                icon: UiIcon::CLOSE,
+                label: rust_i18n::t!("sftp.queue.cancel_task").to_string(),
+                show_tooltip: show_tip,
+                on_click: move |this: &mut SftpPanelView, cx: &mut Context<SftpPanelView>| {
+                    this.cancel_task(tab_id, task_id, cx)
+                },
+            },
             cx,
         )
     };
     let prioritize = |cx: &mut Context<SftpPanelView>| {
         queue_action_btn(
-            format!("queue-prioritize-{task_id}"),
-            UiIcon::UPLOAD,
-            rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
-            true,
-            move |this, cx| this.prioritize_task(tab_id, task_id, cx),
+            QueueActionSpec {
+                id: format!("queue-prioritize-{task_id}"),
+                icon: UiIcon::UPLOAD,
+                label: rust_i18n::t!("sftp.queue.prioritize_task").to_string(),
+                show_tooltip: true,
+                on_click: move |this: &mut SftpPanelView, cx: &mut Context<SftpPanelView>| {
+                    this.prioritize_task(tab_id, task_id, cx)
+                },
+            },
             cx,
         )
     };
     let resume =
         |label_key: &str, id_prefix: &str, icon: UiIcon, cx: &mut Context<SftpPanelView>| {
             queue_action_btn(
-                format!("{id_prefix}-{task_id}"),
-                icon,
-                rust_i18n::t!(label_key).to_string(),
-                true,
-                move |this, cx| this.resume_task(tab_id, task_id, cx),
+                QueueActionSpec {
+                    id: format!("{id_prefix}-{task_id}"),
+                    icon,
+                    label: rust_i18n::t!(label_key).to_string(),
+                    show_tooltip: true,
+                    on_click: move |this: &mut SftpPanelView, cx: &mut Context<SftpPanelView>| {
+                        this.resume_task(tab_id, task_id, cx)
+                    },
+                },
                 cx,
             )
         };
     let remove = |cx: &mut Context<SftpPanelView>| {
         queue_action_btn(
-            format!("queue-remove-{task_id}"),
-            UiIcon::DELETE,
-            rust_i18n::t!("sftp.overlay_remove").to_string(),
-            true,
-            move |this, cx| this.remove_task(task_id, cx),
+            QueueActionSpec {
+                id: format!("queue-remove-{task_id}"),
+                icon: UiIcon::DELETE,
+                label: rust_i18n::t!("sftp.overlay_remove").to_string(),
+                show_tooltip: true,
+                on_click: move |this: &mut SftpPanelView, cx: &mut Context<SftpPanelView>| {
+                    this.remove_task(task_id, cx)
+                },
+            },
             cx,
         )
     };

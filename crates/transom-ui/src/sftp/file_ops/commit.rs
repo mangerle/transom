@@ -46,7 +46,16 @@ pub(in crate::sftp) fn commit_sftp_input_value(
 
     if matches!(modal_target, SftpInputTarget::RemoteEditorNewFile) {
         if let Some(scope) = scope {
-            return commit_new_remote_file(app_state, tab_id, name, &scope, window, cx);
+            return commit_new_remote_file(
+                app_state,
+                NewRemoteFileParams {
+                    tab_id,
+                    name,
+                    scope: &scope,
+                },
+                window,
+                cx,
+            );
         }
         return Ok(());
     }
@@ -86,15 +95,25 @@ pub(in crate::sftp) fn commit_sftp_input_value(
     Ok(())
 }
 
+/// 远端新建文件的参数集合，避免六个平铺参数。
+struct NewRemoteFileParams<'a> {
+    tab_id: TabId,
+    name: &'a str,
+    scope: &'a SftpInputScope,
+}
+
 /// 远端新建文件：同名目录报错，同名文件直接打开，全新路径生成空编辑面板。
 fn commit_new_remote_file(
     app_state: &mut AppState,
-    tab_id: TabId,
-    name: &str,
-    scope: &SftpInputScope,
+    params: NewRemoteFileParams<'_>,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) -> Result<(), String> {
+    let NewRemoteFileParams {
+        tab_id,
+        name,
+        scope,
+    } = params;
     let path = join_remote(&scope.base_path, name);
     let existing_is_dir = scope
         .entries

@@ -72,7 +72,8 @@ pub(crate) use self::state::{
     SftpRemotePaneState, SftpSyncModalState,
 };
 pub(crate) use self::task::{
-    SftpTransferRequest, TransferFailure, TransferKind, TransferStatus, TransferTask,
+    RemoteCopyRequest, SftpTransferRequest, TransferFailure, TransferKind, TransferStatus,
+    TransferTask,
 };
 pub(crate) use crate::editor::PendingEditorClose;
 use crate::palette::Palette;

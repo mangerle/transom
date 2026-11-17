@@ -120,15 +120,24 @@ fn append_extract_items(
     ))
 }
 
-/// 构建单个压缩格式菜单项；选中项优先作为压缩源。
-fn append_archive_format_item(
-    menu: PopupMenu,
-    app: &Entity<SftpPanelView>,
+/// 压缩格式菜单项的参数集合，避免六个平铺参数。
+struct ArchiveFormatItem<'a> {
+    app: &'a Entity<SftpPanelView>,
     target: SftpRemotePaneRef,
-    entry_path: &str,
+    entry_path: &'a str,
     extension: &'static str,
     label_key: &'static str,
-) -> PopupMenu {
+}
+
+/// 构建单个压缩格式菜单项；选中项优先作为压缩源。
+fn append_archive_format_item(menu: PopupMenu, params: ArchiveFormatItem<'_>) -> PopupMenu {
+    let ArchiveFormatItem {
+        app,
+        target,
+        entry_path,
+        extension,
+        label_key,
+    } = params;
     let selected_path = entry_path.to_string();
     menu.item(crate::widgets::menu_item(
         rust_i18n::t!(label_key).to_string(),
@@ -198,19 +207,23 @@ pub(super) fn append_archive_and_transfer_items(
     }
     menu = append_archive_format_item(
         menu,
-        app,
-        target,
-        entry_path,
-        "tar.gz",
-        "sftp.menu.compress_tar_gz",
+        ArchiveFormatItem {
+            app,
+            target,
+            entry_path,
+            extension: "tar.gz",
+            label_key: "sftp.menu.compress_tar_gz",
+        },
     );
     menu = append_archive_format_item(
         menu,
-        app,
-        target,
-        entry_path,
-        "zip",
-        "sftp.menu.compress_zip",
+        ArchiveFormatItem {
+            app,
+            target,
+            entry_path,
+            extension: "zip",
+            label_key: "sftp.menu.compress_zip",
+        },
     );
     if target != SftpRemotePaneRef::Main && has_main_remote {
         menu = append_copy_to_main_item(menu, app, target, entry_path, is_dir);

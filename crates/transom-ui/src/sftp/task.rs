@@ -120,6 +120,17 @@ pub struct TransferTask {
     pub preserve_attributes: bool,
 }
 
+/// 跨远端互传任务的参数集合，避免六个平铺参数。
+#[derive(Debug, Clone)]
+pub struct RemoteCopyRequest {
+    pub source_connection_id: ConnectionId,
+    pub source_path: String,
+    pub target_connection_id: ConnectionId,
+    pub target_path: String,
+    pub size: Option<u64>,
+    pub is_dir: bool,
+}
+
 impl TransferTask {
     pub fn new(
         direction: TransferDirection,
@@ -174,14 +185,15 @@ impl TransferTask {
     }
 
     /// 创建跨远端互传任务（客户端流式中转）。
-    pub fn new_remote_copy(
-        source_connection_id: ConnectionId,
-        source_path: String,
-        target_connection_id: ConnectionId,
-        target_path: String,
-        size: Option<u64>,
-        is_dir: bool,
-    ) -> Self {
+    pub fn new_remote_copy(request: RemoteCopyRequest) -> Self {
+        let RemoteCopyRequest {
+            source_connection_id,
+            source_path,
+            target_connection_id,
+            target_path,
+            size,
+            is_dir,
+        } = request;
         let mut task = Self::new(
             TransferDirection::RemoteCopy,
             PathBuf::from(&source_path),
@@ -237,21 +249,24 @@ impl TransferTask {
 
 #[cfg(test)]
 mod tests {
-    use super::{TransferFailure, TransferKind, TransferStart, TransferStatus, TransferTask};
+    use super::{
+        RemoteCopyRequest, TransferFailure, TransferKind, TransferStart, TransferStatus,
+        TransferTask,
+    };
     use transom_core::{AppError, ConnectionId, ErrorCode, TransferDirection};
 
     #[test]
     fn remote_copy_task_carries_both_endpoints() {
         let conn_a = ConnectionId::new();
         let conn_b = ConnectionId::new();
-        let task = TransferTask::new_remote_copy(
-            conn_a,
-            "/remote/a/file.txt".into(),
-            conn_b,
-            "/remote/b/file.txt".into(),
-            Some(1024),
-            false,
-        );
+        let task = TransferTask::new_remote_copy(RemoteCopyRequest {
+            source_connection_id: conn_a,
+            source_path: "/remote/a/file.txt".into(),
+            target_connection_id: conn_b,
+            target_path: "/remote/b/file.txt".into(),
+            size: Some(1024),
+            is_dir: false,
+        });
         assert_eq!(task.direction, TransferDirection::RemoteCopy);
         assert_eq!(task.kind, TransferKind::File);
         assert_eq!(task.status, TransferStatus::Pending);
