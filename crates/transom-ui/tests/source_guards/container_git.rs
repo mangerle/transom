@@ -2144,3 +2144,45 @@ fn git_file_tree_menu_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_file_tree_menu 超过 80 行：{lines}");
 }
+
+/// 镜像概览必须拆分：主函数只做原始视图与详情/摘要分发，不超过 80 行。
+#[test]
+fn image_overview_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/container/detail/image.rs"))
+        .expect("读取 container/detail/image.rs 失败");
+    for helper in [
+        "fn image_detail_rows",
+        "fn image_id_row",
+        "fn image_runtime_rows",
+        "fn image_digests_row",
+        "fn image_parent_row",
+        "fn image_summary_fallback",
+    ] {
+        assert!(source.contains(helper), "镜像概览缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_image_overview")
+        .expect("缺少 render_image_overview");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_image_overview 超过 80 行：{lines}");
+}

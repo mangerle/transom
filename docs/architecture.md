@@ -68,7 +68,9 @@ apps/transom (组合根 + 控制平面)
 
 编辑器关闭续行的决策已收归 `EditorPanels`：桥接只传工作区快照与脏标签集合，实体返回 `EditorCloseRequest` 后由外壳排期执行。
 
-编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。Git 文件树右键菜单按动作域拆为差异、编辑源、回滚、禁用项、补丁、历史与智能体上下文构造器（守卫 `git_file_tree_menu_is_split`）。
+编辑器、SFTP、容器、Git、连接与弹窗宿主的桥接函数只接收 `&mut AppState`（只读路径用 `&AppState`），不再把外壳传进领域逻辑；需要窗口的动作（编辑器关闭、激活标签、关闭标签组、打开本地终端、右上角提示）统一经 `WindowRequest` 队列交给外壳在渲染期执行，避免在实体回调中重入读写外壳。设置保存与取消已下沉为 `AppState::save_settings` / `AppState::cancel_settings`。镜像概览拆为详情行（ID、基础元数据、运行时信息、摘要与父层）、概览卡片与摘要降级（守卫 `image_overview_is_split`）。
+
+Git 文件树右键菜单按动作域拆为差异、编辑源、回滚、禁用项、补丁、历史与智能体上下文构造器（守卫 `git_file_tree_menu_is_split`）。
 
 Git 日志过滤栏拆为标签推导、搜索框、作用域/日期/路径下拉与重载/应用按钮（守卫 `git_filter_bar_is_split`）。
 

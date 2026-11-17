@@ -56,182 +56,219 @@ fn render_image_overview(
     inspect: InspectSearch<'_>,
     p: &Palette,
 ) -> AnyElement {
-    if let Some(details) = details {
-        // 原始 Inspect JSON 视图
-        if raw {
-            return render_raw_inspect(view, &details.inspect, inspect, p);
-        }
+    let Some(details) = details else {
+        return match summary {
+            Some(summary) => image_summary_fallback(summary, p),
+            None => centered_hint(
+                rust_i18n::t!("container.detail.no_selection").to_string(),
+                p,
+            ),
+        };
+    };
+    if raw {
+        return render_raw_inspect(view, &details.inspect, inspect, p);
+    }
+    let rows = image_detail_rows(view, details, p);
+    scroll_body(
+        v_flex().gap_3().child(image_overview_card(view, rows, p)),
+        p,
+    )
+    .into_any_element()
+}
 
-        let mut rows = v_flex().gap_2();
+fn image_detail_rows(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerImageDetails,
+    p: &Palette,
+) -> Div {
+    let mut rows = v_flex().gap_2().child(image_id_row(view, &details.id, p));
+    rows = rows
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.tags"),
+            if details.tags.is_empty() {
+                "<none>".to_string()
+            } else {
+                details.tags.join("\n")
+            },
+        ))
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.size"),
+            crate::format::format_size(details.size),
+        ));
+    if details.virtual_size > 0 && details.virtual_size != details.size {
+        rows = rows.child(kv(
+            p,
+            rust_i18n::t!("container.field.virtual_size"),
+            crate::format::format_size(details.virtual_size),
+        ));
+    }
+    rows = rows.child(image_runtime_rows(details, p));
+    if let Some(row) = image_digests_row(view, details, p) {
+        rows = rows.child(row);
+    }
+    if let Some(row) = image_parent_row(view, details, p) {
+        rows = rows.child(row);
+    }
+    rows
+}
 
-        // 结构化基础元数据
-        let id_copy = copy_button(
+fn image_id_row(view: &Entity<ContainerWorkspace>, id: &str, p: &Palette) -> AnyElement {
+    h_flex()
+        .justify_between()
+        .items_start()
+        .child(
+            div()
+                .flex_1()
+                .child(kv(p, rust_i18n::t!("container.field.id"), id.to_string())),
+        )
+        .child(copy_button(
             view,
             ElementId::Name("image-copy-id".into()),
-            details.id.clone(),
+            id.to_string(),
             rust_i18n::t!("container.row.copy_id").to_string(),
-        );
-        rows = rows
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_start()
-                    .child(div().flex_1().child(kv(
-                        p,
-                        rust_i18n::t!("container.field.id"),
-                        details.id.clone(),
-                    )))
-                    .child(id_copy),
-            )
-            .child(kv(
-                p,
-                rust_i18n::t!("container.field.tags"),
-                if details.tags.is_empty() {
-                    "<none>".to_string()
-                } else {
-                    details.tags.join("\n")
-                },
-            ))
-            .child(kv(
-                p,
-                rust_i18n::t!("container.field.size"),
-                crate::format::format_size(details.size),
-            ));
+        ))
+        .into_any_element()
+}
 
-        if details.virtual_size > 0 && details.virtual_size != details.size {
-            rows = rows.child(kv(
-                p,
-                rust_i18n::t!("container.field.virtual_size"),
-                crate::format::format_size(details.virtual_size),
-            ));
-        }
+fn image_runtime_rows(details: &ContainerImageDetails, p: &Palette) -> Div {
+    v_flex()
+        .gap_2()
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.created"),
+            format_unix(details.created),
+        ))
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.os_arch"),
+            format!(
+                "{}/{}",
+                details.os.clone().unwrap_or_else(|| "linux".to_string()),
+                details
+                    .architecture
+                    .clone()
+                    .unwrap_or_else(|| "amd64".to_string())
+            ),
+        ))
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.layers"),
+            rust_i18n::t!("container.detail.layer_count", count = details.layers).to_string(),
+        ))
+}
 
-        rows = rows
-            .child(kv(
+fn image_digests_row(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerImageDetails,
+    p: &Palette,
+) -> Option<AnyElement> {
+    if details.repo_digests.is_empty() {
+        return None;
+    }
+    let digests_str = details.repo_digests.join("\n");
+    Some(
+        h_flex()
+            .justify_between()
+            .items_start()
+            .child(div().flex_1().child(kv(
                 p,
-                rust_i18n::t!("container.field.created"),
-                format_unix(details.created),
-            ))
-            .child(kv(
-                p,
-                rust_i18n::t!("container.field.os_arch"),
-                format!(
-                    "{}/{}",
-                    details.os.clone().unwrap_or_else(|| "linux".to_string()),
-                    details
-                        .architecture
-                        .clone()
-                        .unwrap_or_else(|| "amd64".to_string())
-                ),
-            ))
-            .child(kv(
-                p,
-                rust_i18n::t!("container.field.layers"),
-                rust_i18n::t!("container.detail.layer_count", count = details.layers).to_string(),
-            ));
-
-        if !details.repo_digests.is_empty() {
-            let digests_str = details.repo_digests.join("\n");
-            let digest_copy = copy_button(
+                rust_i18n::t!("container.field.repo_digests"),
+                digests_str.clone(),
+            )))
+            .child(copy_button(
                 view,
                 ElementId::Name("image-copy-digests".into()),
-                digests_str.clone(),
+                digests_str,
                 rust_i18n::t!("common.copy").to_string(),
-            );
-            rows = rows.child(
-                h_flex()
-                    .justify_between()
-                    .items_start()
-                    .child(div().flex_1().child(kv(
-                        p,
-                        rust_i18n::t!("container.field.repo_digests"),
-                        digests_str,
-                    )))
-                    .child(digest_copy),
-            );
-        }
+            ))
+            .into_any_element(),
+    )
+}
 
-        if !details.parent.is_empty() {
-            let parent_copy = copy_button(
+fn image_parent_row(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerImageDetails,
+    p: &Palette,
+) -> Option<AnyElement> {
+    if details.parent.is_empty() {
+        return None;
+    }
+    Some(
+        h_flex()
+            .justify_between()
+            .items_start()
+            .child(div().flex_1().child(kv(
+                p,
+                rust_i18n::t!("container.field.parent"),
+                details.parent.clone(),
+            )))
+            .child(copy_button(
                 view,
                 ElementId::Name("image-copy-parent".into()),
                 details.parent.clone(),
                 rust_i18n::t!("common.copy").to_string(),
-            );
-            rows = rows.child(
-                h_flex()
-                    .justify_between()
-                    .items_start()
-                    .child(div().flex_1().child(kv(
-                        p,
-                        rust_i18n::t!("container.field.parent"),
-                        details.parent.clone(),
-                    )))
-                    .child(parent_copy),
-            );
-        }
+            ))
+            .into_any_element(),
+    )
+}
 
-        let raw_view = view.clone();
-        let raw_btn = action_button(
-            "image-overview-raw-inspect",
-            UiIcon::EDITOR_ONLY,
-            rust_i18n::t!("container.field.inspect").to_string(),
-        )
-        .ghost()
-        .on_click(move |_, _, cx| {
-            raw_view.update(cx, |workspace, cx| {
-                workspace.state.overview_raw = true;
-                cx.notify();
-            });
-        })
-        .into_any_element();
+fn image_overview_card(view: &Entity<ContainerWorkspace>, rows: Div, p: &Palette) -> AnyElement {
+    let raw_view = view.clone();
+    let raw_btn = action_button(
+        "image-overview-raw-inspect",
+        UiIcon::EDITOR_ONLY,
+        rust_i18n::t!("container.field.inspect").to_string(),
+    )
+    .ghost()
+    .on_click(move |_, _, cx| {
+        raw_view.update(cx, |workspace, cx| {
+            workspace.state.overview_raw = true;
+            cx.notify();
+        });
+    })
+    .into_any_element();
+    super::overview_cards::overview_card(
+        rust_i18n::t!("container.detail.category_identity").to_string(),
+        AppIcon::Custom(CustomIcon::IMAGE),
+        p,
+        Some(raw_btn),
+        rows,
+    )
+}
 
-        let card = super::overview_cards::overview_card(
-            rust_i18n::t!("container.detail.category_identity").to_string(),
-            AppIcon::Custom(CustomIcon::IMAGE),
+fn image_summary_fallback(
+    summary: &transom_core::ContainerImageSummary,
+    p: &Palette,
+) -> AnyElement {
+    let rows = v_flex()
+        .gap_2()
+        .child(kv(
             p,
-            Some(raw_btn),
-            rows,
+            rust_i18n::t!("container.field.id"),
+            summary.id.clone(),
+        ))
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.tags"),
+            if summary.tags.is_empty() {
+                "<none>".to_string()
+            } else {
+                summary.tags.join("\n")
+            },
+        ))
+        .child(kv(
+            p,
+            rust_i18n::t!("container.field.size"),
+            crate::format::format_size(summary.size),
+        ))
+        .child(
+            div()
+                .pt_2()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.detail.loading_metadata").to_string()),
         );
-
-        return scroll_body(v_flex().gap_3().child(card), p).into_any_element();
-    }
-
-    match summary {
-        Some(summary) => {
-            let rows = v_flex()
-                .gap_2()
-                .child(kv(
-                    p,
-                    rust_i18n::t!("container.field.id"),
-                    summary.id.clone(),
-                ))
-                .child(kv(
-                    p,
-                    rust_i18n::t!("container.field.tags"),
-                    if summary.tags.is_empty() {
-                        "<none>".to_string()
-                    } else {
-                        summary.tags.join("\n")
-                    },
-                ))
-                .child(kv(
-                    p,
-                    rust_i18n::t!("container.field.size"),
-                    crate::format::format_size(summary.size),
-                ))
-                .child(
-                    div()
-                        .pt_2()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.detail.loading_metadata").to_string()),
-                );
-            scroll_body(rows, p).into_any_element()
-        }
-        None => centered_hint(
-            rust_i18n::t!("container.detail.no_selection").to_string(),
-            p,
-        ),
-    }
+    scroll_body(rows, p).into_any_element()
 }
