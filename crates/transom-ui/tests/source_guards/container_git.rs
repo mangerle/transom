@@ -2058,3 +2058,46 @@ fn sftp_helpers_use_params_objects() {
         );
     }
 }
+
+/// Git 日志过滤栏必须拆分：主函数只组合输入框与各按钮，不超过 80 行。
+#[test]
+fn git_filter_bar_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/git/log_view/mod.rs"))
+        .expect("读取 git/log_view/mod.rs 失败");
+    for helper in [
+        "fn filter_labels",
+        "fn search_input",
+        "fn scope_button",
+        "fn date_button",
+        "fn path_button",
+        "fn rebase_abort_button",
+        "fn apply_filter_button",
+    ] {
+        assert!(source.contains(helper), "Git 过滤栏缺少拆分函数：{helper}");
+    }
+    let start = source
+        .find("fn render_filter_bar")
+        .expect("缺少 render_filter_bar");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_filter_bar 超过 80 行：{lines}");
+}

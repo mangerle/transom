@@ -25,7 +25,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::menu::PopupMenuItem;
+use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::HeadState;
@@ -62,35 +62,76 @@ pub(crate) fn render_filter_bar(
     workspace: Entity<GitWorkspace>,
     p: &Palette,
 ) -> AnyElement {
-    let branch_names: Vec<String> = state
-        .branches
-        .iter()
-        .filter(|branch| !branch.remote)
-        .map(|branch| branch.name.clone())
-        .collect();
+    let labels = filter_labels(state);
+    h_flex()
+        .id("git-filter-bar")
+        .h(rems(LOG_TOOLBAR_HEIGHT))
+        .px_2()
+        .py_0()
+        .gap_2()
+        .items_center()
+        .flex_none()
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .child(search_input(state, workspace.clone(), p))
+        .child(scope_button(state, workspace.clone(), &labels.scope))
+        .child(
+            div()
+                .w(px(140.0))
+                .child(Input::new(&state.author_input).xsmall()),
+        )
+        .child(date_button(workspace.clone(), &labels.date))
+        .child(path_button(state, workspace.clone(), &labels.path))
+        .child(rebase_abort_button(workspace.clone()))
+        .child(apply_filter_button(workspace))
+        .into_any_element()
+}
+
+struct FilterLabels {
+    scope: String,
+    date: String,
+    path: String,
+}
+
+fn filter_labels(state: &State) -> FilterLabels {
     let scope_name = match &state.query.scope {
         transom_core::LogScope::CurrentBranch => current_head_name(state)
             .unwrap_or_else(|| rust_i18n::t!("git.scope.current").to_string()),
         transom_core::LogScope::AllRefs => rust_i18n::t!("git.scope.all").to_string(),
         transom_core::LogScope::Ref(name) => name.clone(),
     };
-    let scope_label =
-        rust_i18n::t!("git.filter.branch_scope", branch = scope_name.as_str()).to_string();
-    let date_label = match state.query.since.as_deref() {
+    let scope = rust_i18n::t!("git.filter.branch_scope", branch = scope_name.as_str()).to_string();
+    let date = match state.query.since.as_deref() {
         None => rust_i18n::t!("git.filter.date_all").to_string(),
         Some(since) => since.to_string(),
     };
-    let path_label = match state.query.paths.first() {
+    let path = match state.query.paths.first() {
         None => rust_i18n::t!("git.filter.path_all").to_string(),
         Some(path) => path.clone(),
     };
-    let search_state = state.search_input.clone();
-    let author_state = state.author_input.clone();
+    FilterLabels { scope, date, path }
+}
+
+fn search_input(state: &State, workspace: Entity<GitWorkspace>, _p: &Palette) -> AnyElement {
+    let search_suffix = search_toggle_buttons(state, workspace);
+    div()
+        .w(px(240.0))
+        .flex_none()
+        .min_w_0()
+        .child(
+            Input::new(&state.search_input)
+                .xsmall()
+                .suffix(search_suffix),
+        )
+        .into_any_element()
+}
+
+fn search_toggle_buttons(state: &State, workspace: Entity<GitWorkspace>) -> AnyElement {
     let regex_tooltip = rust_i18n::t!("git.filter.regex_tooltip").to_string();
     let case_tooltip = rust_i18n::t!("git.filter.case_tooltip").to_string();
     let regex_ws = workspace.clone();
-    let case_ws = workspace.clone();
-    let search_suffix = h_flex()
+    let case_ws = workspace;
+    h_flex()
         .gap_0p5()
         .items_center()
         .child(
@@ -118,132 +159,123 @@ pub(crate) fn render_filter_bar(
                 .on_click(move |_, _, cx| {
                     case_ws.update(cx, |ws, cx| ws.toggle_filter_flag(false, cx));
                 }),
-        );
-    h_flex()
-        .id("git-filter-bar")
-        .h(rems(LOG_TOOLBAR_HEIGHT))
-        .px_2()
-        .py_0()
-        .gap_2()
-        .items_center()
-        .flex_none()
-        .border_color(p.divider(p.border))
-        .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(
-            div()
-                .w(px(240.0))
-                .flex_none()
-                .min_w_0()
-                .child(Input::new(&search_state).xsmall().suffix(search_suffix)),
         )
-        .child(
-            Button::new("git-filter-scope")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::VCS).small())
-                .label(scope_label)
-                .dropdown_menu({
-                    let menu_ws = workspace.clone();
-                    let menu_branches = branch_names.clone();
-                    move |menu, _window, _cx| {
-                        let current_ws = menu_ws.clone();
-                        let branch_names = menu_branches.clone();
-                        let mut menu = menu
-                            .item(menu_item(
-                                rust_i18n::t!("git.scope.current").to_string(),
-                                UiIcon::VCS,
-                                move |_, _, cx| {
-                                    current_ws.update(cx, |ws, cx| {
-                                        ws.set_log_scope(transom_core::LogScope::CurrentBranch, cx);
-                                    });
-                                },
-                            ))
-                            .item(menu_item(
-                                rust_i18n::t!("git.scope.all").to_string(),
-                                UiIcon::VCS,
-                                {
-                                    let all_ws = menu_ws.clone();
-                                    move |_, _, cx| {
-                                        all_ws.update(cx, |ws, cx| {
-                                            ws.set_log_scope(transom_core::LogScope::AllRefs, cx);
-                                        });
-                                    }
-                                },
-                            ))
-                            .item(PopupMenuItem::separator());
-                        for name in branch_names {
-                            let item_ws = menu_ws.clone();
-                            menu =
-                                menu.item(menu_item(name.clone(), UiIcon::VCS, move |_, _, cx| {
-                                    let name = name.clone();
-                                    item_ws.update(cx, |ws, cx| {
-                                        ws.set_log_scope(transom_core::LogScope::Ref(name), cx);
-                                    });
-                                }));
-                        }
-                        menu
-                    }
-                }),
-        )
-        .child(div().w(px(140.0)).child(Input::new(&author_state).xsmall()))
-        .child(
-            Button::new("git-filter-date")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::HISTORY))
-                .label(date_label)
-                .dropdown_menu({
-                    let date_ws = workspace.clone();
-                    move |menu, _window, _cx| render_date_menu(menu, date_ws.clone())
-                }),
-        )
-        .child(
-            Button::new("git-filter-path")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(
-                    state
-                        .query
-                        .paths
-                        .first()
-                        .map_or(UiIcon::FILTER.into(), |path| AppIcon::for_file(path)),
-                ))
-                .label(path_label)
-                .dropdown_menu({
-                    let path_ws = workspace.clone();
-                    let paths = state.tracked_paths.clone();
-                    move |menu, _window, _cx| render_path_menu(menu, path_ws.clone(), paths.clone())
-                }),
-        )
-        .child(
-            Button::new("git-filter-rebase-abort")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::ABORT))
-                .accessibility_label(rust_i18n::t!("git.menu.rebase_abort").to_string())
-                .tooltip(rust_i18n::t!("git.menu.rebase_abort").to_string())
-                .on_click({
-                    let abort_ws = workspace.clone();
-                    move |_, _, cx| {
-                        abort_ws.update(cx, |ws, cx| {
-                            ws.history_action(GitHistoryAction::RebaseAbort, cx);
-                        });
-                    }
-                }),
-        )
-        .child(
-            Button::new("git-filter-apply")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::SEARCH))
-                .accessibility_label("Apply filter")
-                .on_click({
-                    let apply_ws = workspace;
-                    move |_, _, cx| {
-                        apply_ws.update(cx, |ws, cx| ws.apply_filter_inputs(cx));
-                    }
-                }),
-        )
+        .into_any_element()
+}
+
+fn scope_button(state: &State, workspace: Entity<GitWorkspace>, scope_label: &str) -> AnyElement {
+    let branch_names: Vec<String> = state
+        .branches
+        .iter()
+        .filter(|branch| !branch.remote)
+        .map(|branch| branch.name.clone())
+        .collect();
+    let menu_ws = workspace.clone();
+    Button::new("git-filter-scope")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(UiIcon::VCS).small())
+        .label(scope_label.to_string())
+        .dropdown_menu(move |menu, _window, _cx| {
+            render_scope_menu(menu, menu_ws.clone(), branch_names.clone())
+        })
+        .into_any_element()
+}
+
+fn render_scope_menu(
+    menu: PopupMenu,
+    workspace: Entity<GitWorkspace>,
+    branch_names: Vec<String>,
+) -> PopupMenu {
+    let current_ws = workspace.clone();
+    let mut menu = menu
+        .item(menu_item(
+            rust_i18n::t!("git.scope.current").to_string(),
+            UiIcon::VCS,
+            move |_, _, cx| {
+                current_ws.update(cx, |ws, cx| {
+                    ws.set_log_scope(transom_core::LogScope::CurrentBranch, cx);
+                });
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("git.scope.all").to_string(),
+            UiIcon::VCS,
+            {
+                let all_ws = workspace.clone();
+                move |_, _, cx| {
+                    all_ws.update(cx, |ws, cx| {
+                        ws.set_log_scope(transom_core::LogScope::AllRefs, cx);
+                    });
+                }
+            },
+        ))
+        .item(PopupMenuItem::separator());
+    for name in branch_names {
+        let item_ws = workspace.clone();
+        menu = menu.item(menu_item(name.clone(), UiIcon::VCS, move |_, _, cx| {
+            let name = name.clone();
+            item_ws.update(cx, |ws, cx| {
+                ws.set_log_scope(transom_core::LogScope::Ref(name), cx);
+            });
+        }));
+    }
+    menu
+}
+
+fn date_button(workspace: Entity<GitWorkspace>, date_label: &str) -> AnyElement {
+    Button::new("git-filter-date")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(UiIcon::HISTORY))
+        .label(date_label.to_string())
+        .dropdown_menu(move |menu, _window, _cx| render_date_menu(menu, workspace.clone()))
+        .into_any_element()
+}
+
+fn path_button(state: &State, workspace: Entity<GitWorkspace>, path_label: &str) -> AnyElement {
+    let paths = state.tracked_paths.clone();
+    Button::new("git-filter-path")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(
+            state
+                .query
+                .paths
+                .first()
+                .map_or(UiIcon::FILTER.into(), |path| AppIcon::for_file(path)),
+        ))
+        .label(path_label.to_string())
+        .dropdown_menu(move |menu, _window, _cx| {
+            render_path_menu(menu, workspace.clone(), paths.clone())
+        })
+        .into_any_element()
+}
+
+fn rebase_abort_button(workspace: Entity<GitWorkspace>) -> AnyElement {
+    Button::new("git-filter-rebase-abort")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(UiIcon::ABORT))
+        .accessibility_label(rust_i18n::t!("git.menu.rebase_abort").to_string())
+        .tooltip(rust_i18n::t!("git.menu.rebase_abort").to_string())
+        .on_click(move |_, _, cx| {
+            workspace.update(cx, |ws, cx| {
+                ws.history_action(GitHistoryAction::RebaseAbort, cx);
+            });
+        })
+        .into_any_element()
+}
+
+fn apply_filter_button(workspace: Entity<GitWorkspace>) -> AnyElement {
+    Button::new("git-filter-apply")
+        .ghost()
+        .xsmall()
+        .child(AppIconElement::new(UiIcon::SEARCH))
+        .accessibility_label("Apply filter")
+        .on_click(move |_, _, cx| {
+            workspace.update(cx, |ws, cx| ws.apply_filter_inputs(cx));
+        })
         .into_any_element()
 }
 
