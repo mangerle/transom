@@ -145,15 +145,15 @@ pub(super) fn render_git_commit_page(
                 p,
                 cx,
             );
-            let upper_tree = render_upper_change_tree(
+            let upper_tree = render_upper_change_tree(UpperChangeTree {
                 count,
                 amend,
                 amend_files_loading,
-                &amend_files,
-                amend_head.as_ref(),
+                amend_files: &amend_files,
+                amend_head: amend_head.as_ref(),
                 files,
-                p,
-            );
+                palette: p,
+            });
             let tree_panel = resizable_panel()
                 .size(px(280.0))
                 .size_range(px(100.0)..px(800.0))
@@ -385,15 +385,28 @@ fn render_commit_toolbar(
         .child(grouping)
 }
 
-fn render_upper_change_tree(
+/// 上半区变更树的参数集合，避免七个平铺参数。
+struct UpperChangeTree<'a> {
     count: usize,
     amend: bool,
     amend_files_loading: bool,
-    amend_files: &[CommitFile],
-    amend_head: Option<&(String, String)>,
+    amend_files: &'a [CommitFile],
+    amend_head: Option<&'a (String, String)>,
     files: AnyElement,
-    p: &Palette,
-) -> impl IntoElement {
+    palette: &'a Palette,
+}
+
+fn render_upper_change_tree(params: UpperChangeTree<'_>) -> impl IntoElement {
+    let p = params.palette;
+    let UpperChangeTree {
+        count,
+        amend,
+        amend_files_loading,
+        amend_files,
+        amend_head,
+        files,
+        palette: _,
+    } = params;
     v_flex()
         .w_full()
         .h_full()

@@ -37,15 +37,15 @@ pub(super) fn render_history_layer_card(
         .bg(p.surface.active)
         .border_1()
         .border_color(p.stroke.strong)
-        .child(render_layer_card_header(
+        .child(render_layer_card_header(LayerCardHeader {
             index,
-            &size_str,
-            item.size > 0,
-            item.created,
-            &tags_str,
+            size: &size_str,
+            has_size: item.size > 0,
+            created: item.created,
+            tags: &tags_str,
             copy_cmd,
-            p,
-        ))
+            palette: p,
+        }))
         .child(
             div()
                 .p_1p5()
@@ -63,15 +63,28 @@ pub(super) fn render_history_layer_card(
     card.into_any_element()
 }
 
-fn render_layer_card_header(
+/// 层卡片头部的参数集合，避免七个平铺参数。
+struct LayerCardHeader<'a> {
     index: usize,
-    size_str: &str,
+    size: &'a str,
     has_size: bool,
     created: i64,
-    tags_str: &str,
+    tags: &'a str,
     copy_cmd: AnyElement,
-    p: &Palette,
-) -> AnyElement {
+    palette: &'a Palette,
+}
+
+fn render_layer_card_header(params: LayerCardHeader<'_>) -> AnyElement {
+    let p = params.palette;
+    let LayerCardHeader {
+        index,
+        size,
+        has_size,
+        created,
+        tags,
+        copy_cmd,
+        palette: _,
+    } = params;
     h_flex()
         .justify_between()
         .items_center()
@@ -97,7 +110,7 @@ fn render_layer_card_header(
                         } else {
                             p.muted_foreground
                         })
-                        .child(size_str.to_string()),
+                        .child(size.to_string()),
                 )
                 .child(
                     div()
@@ -105,7 +118,7 @@ fn render_layer_card_header(
                         .text_color(p.muted_foreground)
                         .child(format_unix(created)),
                 )
-                .children((!tags_str.is_empty()).then(|| {
+                .children((!tags.is_empty()).then(|| {
                     div()
                         .px_1p5()
                         .py_0p5()
@@ -113,7 +126,7 @@ fn render_layer_card_header(
                         .bg(p.muted)
                         .text_xs()
                         .text_color(p.foreground)
-                        .child(tags_str.to_string())
+                        .child(tags.to_string())
                 })),
         )
         .child(copy_cmd)

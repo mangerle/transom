@@ -1976,3 +1976,44 @@ fn engine_form_new_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "引擎表单 new 超过 80 行：{lines}");
 }
+
+/// 渲染辅助函数不得再平铺 6+ 个数据参数：必须使用参数对象或窄上下文。
+#[test]
+fn render_helpers_use_params_objects() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let cases = [
+        (
+            "src/container/hub/card.rs",
+            "struct CardLeftColumn",
+            "fn card_left_column(params: CardLeftColumn<'_>)",
+        ),
+        (
+            "src/container/detail/image_history/layer_card.rs",
+            "struct LayerCardHeader",
+            "fn render_layer_card_header(params: LayerCardHeader<'_>)",
+        ),
+        (
+            "src/git/commit_page/mod.rs",
+            "struct UpperChangeTree",
+            "fn render_upper_change_tree(params: UpperChangeTree<'_>)",
+        ),
+        (
+            "src/container/sidebar/engine_row.rs",
+            "struct EngineMenuTarget",
+            "fn engine_context_menu(menu: PopupMenu, target: &EngineMenuTarget)",
+        ),
+        (
+            "src/container/detail/render.rs",
+            "fn detail_title(ctx: &DetailContentCtx<'_>)",
+            "fn detail_title(ctx: &DetailContentCtx<'_>)",
+        ),
+    ];
+    for (file, marker, param) in cases {
+        let content = std::fs::read_to_string(root.join(file)).expect("读取参数对象文件失败");
+        assert!(content.contains(marker), "{file} 缺少参数对象：{marker}");
+        assert!(
+            content.contains(param),
+            "{file} 函数未使用参数对象：{param}"
+        );
+    }
+}

@@ -26,23 +26,15 @@ pub(crate) struct EngineRowParams<'a> {
 pub(crate) fn render_engine_row(params: EngineRowParams<'_>) -> AnyElement {
     let outline = engine_row_outline(&params);
     let row = engine_row_shell(&params, &outline);
-    let menu_view = params.view.clone();
-    let menu_name = outline.name.clone();
-    let menu_endpoint = outline.description.clone();
-    let menu_profile = outline.profile.clone();
-    let menu_folder = outline.folder_id;
-    let menu_id = outline.id;
-    let row = row.context_menu(move |menu, _window, _cx| {
-        engine_context_menu(
-            menu,
-            menu_view.clone(),
-            menu_id,
-            &menu_profile,
-            menu_folder,
-            &menu_name,
-            &menu_endpoint,
-        )
-    });
+    let menu_ctx = EngineMenuTarget {
+        view: params.view.clone(),
+        id: outline.id,
+        profile: outline.profile.clone(),
+        folder_id: outline.folder_id,
+        name: outline.name.clone(),
+        endpoint: outline.description.clone(),
+    };
+    let row = row.context_menu(move |menu, _window, _cx| engine_context_menu(menu, &menu_ctx));
     row.child(engine_row_band(&params, &outline))
         .into_any_element()
 }
@@ -153,24 +145,26 @@ fn engine_row_shell(params: &EngineRowParams<'_>, outline: &EngineRowOutline) ->
         })
 }
 
-fn engine_context_menu(
-    menu: PopupMenu,
+/// 右键菜单所需的全部上下文，避免七个平铺参数。
+struct EngineMenuTarget {
     view: Entity<ContainerSidebarView>,
     id: EngineProfileId,
-    profile: &ContainerEngineProfile,
+    profile: ContainerEngineProfile,
     folder_id: Option<FolderId>,
-    name: &str,
-    endpoint: &str,
-) -> PopupMenu {
-    let mut menu = engine_menu_open(menu, &view, profile);
-    if folder_id.is_some() {
-        menu = engine_menu_move_to_root(menu, &view, id);
+    name: String,
+    endpoint: String,
+}
+
+fn engine_context_menu(menu: PopupMenu, target: &EngineMenuTarget) -> PopupMenu {
+    let mut menu = engine_menu_open(menu, &target.view, &target.profile);
+    if target.folder_id.is_some() {
+        menu = engine_menu_move_to_root(menu, &target.view, target.id);
     }
-    let menu = engine_menu_edit(menu, &view, profile);
-    let menu = engine_menu_copy_endpoint(menu, &view, endpoint);
-    let menu = engine_menu_copy_name(menu, &view, name);
+    let menu = engine_menu_edit(menu, &target.view, &target.profile);
+    let menu = engine_menu_copy_endpoint(menu, &target.view, &target.endpoint);
+    let menu = engine_menu_copy_name(menu, &target.view, &target.name);
     let menu = menu.item(PopupMenuItem::separator());
-    engine_menu_delete(menu, &view, id)
+    engine_menu_delete(menu, &target.view, target.id)
 }
 
 fn engine_menu_open(

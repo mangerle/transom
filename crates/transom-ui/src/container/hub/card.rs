@@ -76,20 +76,39 @@ where
     let name_row = image_name_row(namespace_part, repo_part, p);
     let meta_row = image_meta_row(is_official, is_automated, stars_str, p);
     let tag_chips = tag_chip_row(&name, &presets, &active_tag, on_select_tag);
-    let left = card_left_column(avatar, name_row, meta_row, desc, tag_chips, p);
+    let left = card_left_column(CardLeftColumn {
+        avatar,
+        name_row,
+        meta_row,
+        desc,
+        tag_chips,
+        palette: p,
+    });
     let actions = card_actions(&name, &active_tag, on_pull, on_open_detail);
     card_frame(&name, left, actions, p)
 }
 
-/// 卡片左侧：图标 + 名称元信息 + 描述 + 标签选择。
-fn card_left_column(
+/// 卡片左栏的参数集合，避免六个平铺参数。
+struct CardLeftColumn<'a> {
     avatar: AnyElement,
     name_row: AnyElement,
     meta_row: AnyElement,
     desc: String,
     tag_chips: AnyElement,
-    p: &Palette,
-) -> AnyElement {
+    palette: &'a Palette,
+}
+
+/// 卡片左侧：图标 + 名称元信息 + 描述 + 标签选择。
+fn card_left_column(params: CardLeftColumn<'_>) -> AnyElement {
+    let p = params.palette;
+    let CardLeftColumn {
+        avatar,
+        name_row,
+        meta_row,
+        desc,
+        tag_chips,
+        palette: _,
+    } = params;
     h_flex()
         .flex_1()
         .min_w_0()

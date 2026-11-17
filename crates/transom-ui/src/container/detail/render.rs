@@ -6,7 +6,6 @@
 //! 一个函数里堆满几十个局部快照。
 
 use super::*;
-use transom_core::{ContainerNetworkSummary, ContainerVolumeSummary};
 
 /// 渲染容器详情区。
 pub(crate) fn render_container_detail(
@@ -112,14 +111,7 @@ fn render_detail_header_block(ctx: &DetailContentCtx<'_>, p: &Palette) -> AnyEle
     let selected_volume = ctx.workspace.selected_volume().cloned();
     let selected_network = ctx.workspace.selected_network().cloned();
     let selected_compose = ctx.workspace.selected_compose().cloned();
-    let title = detail_title(
-        ctx.section,
-        selected_container.as_ref(),
-        selected_image.as_ref(),
-        selected_volume.as_ref(),
-        selected_network.as_ref(),
-        selected_compose.as_ref(),
-    );
+    let title = detail_title(ctx);
     let tabs = render_detail_tab_buttons(
         ctx.view,
         ctx.workspace,
@@ -153,20 +145,18 @@ fn render_detail_header_block(ctx: &DetailContentCtx<'_>, p: &Palette) -> AnyEle
     )
 }
 
-fn detail_title(
-    section: ContainerSection,
-    container: Option<&ContainerSummary>,
-    image: Option<&transom_core::ContainerImageSummary>,
-    volume: Option<&ContainerVolumeSummary>,
-    network: Option<&ContainerNetworkSummary>,
-    compose: Option<&ComposeProject>,
-) -> String {
-    let title = match section {
-        ContainerSection::Containers => container.map(|i| i.name.clone()),
-        ContainerSection::Images => image.map(|i| i.display_name()),
-        ContainerSection::Volumes => volume.map(|i| i.name.clone()),
-        ContainerSection::Networks => network.map(|i| i.name.clone()),
-        ContainerSection::Compose => compose.map(|i| i.name.clone()),
+fn detail_title(ctx: &DetailContentCtx<'_>) -> String {
+    let workspace = ctx.workspace;
+    let title = match ctx.section {
+        ContainerSection::Containers => workspace
+            .containers
+            .iter()
+            .find(|item| workspace.selected.as_deref() == Some(item.id.as_str()))
+            .map(|item| item.name.clone()),
+        ContainerSection::Images => workspace.selected_image().map(|i| i.display_name()),
+        ContainerSection::Volumes => workspace.selected_volume().map(|i| i.name.clone()),
+        ContainerSection::Networks => workspace.selected_network().map(|i| i.name.clone()),
+        ContainerSection::Compose => workspace.selected_compose().map(|i| i.name.clone()),
     };
     title.unwrap_or_else(|| rust_i18n::t!("container.detail.no_selection").to_string())
 }
