@@ -20,182 +20,169 @@ pub(crate) fn render_file_tree_menu(
     workspace: Entity<GitWorkspace>,
     full_path: String,
 ) -> PopupMenu {
-    let diff_ws = workspace.clone();
-    let modal_ws = workspace.clone();
-    let compare_ws = workspace.clone();
-    let before_ws = workspace.clone();
-    let edit_ws = workspace.clone();
-    let repo_ws = workspace.clone();
-    let revert_ws = workspace.clone();
-    let delete_ws = workspace.clone();
-    let history_ws = workspace.clone();
-    let parent_ws = workspace.clone();
-    let patch_ws = workspace.clone();
-    let ai_ws = workspace;
+    let menu = append_diff_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.show_diff",
+        UiIcon::DIFF,
+    );
+    let menu = append_diff_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.show_diff_in_new_tab",
+        UiIcon::EXTERNAL_LINK,
+    );
+    let menu = append_diff_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.compare_with_local",
+        UiIcon::DIFF,
+    );
+    let menu = append_diff_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.compare_before_with_local",
+        UiIcon::DIFF,
+    );
+    let menu = menu.item(PopupMenuItem::separator());
+    let menu = append_edit_source(menu, workspace.clone(), &full_path);
+    let menu = append_diff_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.open_repo_version",
+        UiIcon::DIFF,
+    );
+    let menu = menu.item(PopupMenuItem::separator());
+    let menu = append_rollback_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.revert_selected_changes",
+        UiIcon::UNDO,
+    );
+    let menu = append_disabled_item(
+        menu,
+        "git.menu.cherry_pick_selected_changes",
+        UiIcon::COMMIT,
+    );
+    let menu = append_disabled_item(menu, "git.menu.extract_to_commit", UiIcon::COMMIT);
+    let menu = append_rollback_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.delete_selected_changes",
+        UiIcon::DELETE,
+    );
+    let menu = append_create_patch(menu, workspace.clone(), &full_path);
+    let menu = append_disabled_item(menu, "git.menu.get_from_revision", UiIcon::DOWNLOAD);
+    let menu = menu.item(PopupMenuItem::separator());
+    let menu = append_history_item(menu, workspace.clone(), &full_path);
+    let menu = append_diff_action(
+        menu,
+        workspace.clone(),
+        &full_path,
+        "git.menu.show_parent_changes",
+        UiIcon::DIFF,
+    );
+    append_agent_context(menu, workspace, &full_path)
+}
 
-    let path_diff = full_path.clone();
-    let path_new_tab = full_path.clone();
-    let path_compare = full_path.clone();
-    let path_before = full_path.clone();
-    let path_edit = full_path.clone();
-    let path_repo = full_path.clone();
-    let path_revert = full_path.clone();
-    let path_delete = full_path.clone();
-    let path_history = full_path.clone();
-    let path_parent = full_path.clone();
-    let path_patch = full_path.clone();
-    let path_ai = full_path;
+fn append_diff_action(
+    menu: PopupMenu,
+    workspace: Entity<GitWorkspace>,
+    path: &str,
+    label_key: &'static str,
+    icon: UiIcon,
+) -> PopupMenu {
+    let path = path.to_string();
+    menu.item(menu_item(
+        rust_i18n::t!(label_key).to_string(),
+        AppIcon::Ui(icon),
+        move |_, _, cx| {
+            let path = path.clone();
+            workspace.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
+        },
+    ))
+}
 
-    menu
-        // 1. 显示差异
-        .item(menu_item(
-            rust_i18n::t!("git.menu.show_diff").to_string(),
-            AppIcon::Ui(UiIcon::DIFF),
+fn append_edit_source(menu: PopupMenu, workspace: Entity<GitWorkspace>, path: &str) -> PopupMenu {
+    let path = path.to_string();
+    menu.item(menu_item(
+        rust_i18n::t!("git.menu.edit_source").to_string(),
+        AppIcon::Ui(UiIcon::DIFF),
+        move |_, _, cx| {
+            let path = path.clone();
+            workspace.update(cx, |ws, cx| {
+                let full_file_path = ws.state.project.path.join(&path);
+                ws.copy_to_clipboard(&full_file_path.to_string_lossy(), cx);
+            });
+        },
+    ))
+}
+
+fn append_rollback_action(
+    menu: PopupMenu,
+    workspace: Entity<GitWorkspace>,
+    path: &str,
+    label_key: &'static str,
+    icon: UiIcon,
+) -> PopupMenu {
+    let path = path.to_string();
+    menu.item(
+        MenuItem::new(rust_i18n::t!(label_key).to_string(), AppIcon::Ui(icon)).render(
             move |_, _, cx| {
-                let path = path_diff.clone();
-                diff_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
+                let path = path.clone();
+                workspace.update(cx, |ws, cx| ws.rollback_single_path(&path, cx));
             },
-        ))
-        // 2. 在新标签页中显示差异
-        .item(menu_item(
-            rust_i18n::t!("git.menu.show_diff_in_new_tab").to_string(),
-            AppIcon::Ui(UiIcon::EXTERNAL_LINK),
-            move |_, _, cx| {
-                let path = path_new_tab.clone();
-                modal_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
-            },
-        ))
-        // 3. 与本地比较
-        .item(menu_item(
-            rust_i18n::t!("git.menu.compare_with_local").to_string(),
-            AppIcon::Ui(UiIcon::DIFF),
-            move |_, _, cx| {
-                let path = path_compare.clone();
-                compare_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
-            },
-        ))
-        // 4. 将之前版本与本地版本进行比较
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.compare_before_with_local").to_string(),
-                AppIcon::Ui(UiIcon::DIFF),
-            )
-            .render(move |_, _, cx| {
-                let path = path_before.clone();
-                before_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
-            }),
-        )
-        .item(PopupMenuItem::separator())
-        // 5. 编辑源
-        .item(menu_item(
-            rust_i18n::t!("git.menu.edit_source").to_string(),
-            AppIcon::Ui(UiIcon::DIFF),
-            move |_, _, cx| {
-                let path = path_edit.clone();
-                edit_ws.update(cx, |ws, cx| {
-                    let full_file_path = ws.state.project.path.join(&path);
-                    ws.copy_to_clipboard(&full_file_path.to_string_lossy(), cx);
-                });
-            },
-        ))
-        // 6. 打开仓库版本
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.open_repo_version").to_string(),
-                AppIcon::Ui(UiIcon::DIFF),
-            )
-            .render(move |_, _, cx| {
-                let path = path_repo.clone();
-                repo_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
-            }),
-        )
-        .item(PopupMenuItem::separator())
-        // 7. 还原所选更改
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.revert_selected_changes").to_string(),
-                AppIcon::Ui(UiIcon::UNDO),
-            )
-            .render(move |_, _, cx| {
-                let path = path_revert.clone();
-                revert_ws.update(cx, |ws, cx| ws.rollback_single_path(&path, cx));
-            }),
-        )
-        // 8. 优选所选更改
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.cherry_pick_selected_changes").to_string(),
-                AppIcon::Ui(UiIcon::COMMIT),
-            )
+        ),
+    )
+}
+
+fn append_disabled_item(menu: PopupMenu, label_key: &'static str, icon: UiIcon) -> PopupMenu {
+    menu.item(
+        MenuItem::new(rust_i18n::t!(label_key).to_string(), AppIcon::Ui(icon))
             .disabled(true)
             .render(|_, _, _| {}),
-        )
-        // 9. 将所选更改提取到单独的提交...
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.extract_to_commit").to_string(),
-                AppIcon::Ui(UiIcon::COMMIT),
-            )
-            .disabled(true)
-            .render(|_, _, _| {}),
-        )
-        // 10. 删除所选更改
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.delete_selected_changes").to_string(),
-                AppIcon::Ui(UiIcon::DELETE),
-            )
-            .render(move |_, _, cx| {
-                let path = path_delete.clone();
-                delete_ws.update(cx, |ws, cx| ws.rollback_single_path(&path, cx));
-            }),
-        )
-        // 11. 创建补丁...
-        .item(menu_item(
-            rust_i18n::t!("git.menu.create_patch").to_string(),
-            AppIcon::Ui(UiIcon::DOWNLOAD),
-            move |_, _, cx| {
-                let path = path_patch.clone();
-                patch_ws.update(cx, |ws, cx| ws.create_patch(&path, cx));
-            },
-        ))
-        // 12. 从修订中获取
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.get_from_revision").to_string(),
-                AppIcon::Ui(UiIcon::DOWNLOAD),
-            )
-            .disabled(true)
-            .render(|_, _, _| {}),
-        )
-        .item(PopupMenuItem::separator())
-        // 13. 迄今为止的历史记录
-        .item(menu_item(
-            rust_i18n::t!("git.menu.history_up_to_here").to_string(),
-            AppIcon::Ui(UiIcon::HISTORY),
-            move |_, _, cx| {
-                let path = path_history.clone();
-                history_ws.update(cx, |ws, cx| ws.set_log_path(Some(path), cx));
-            },
-        ))
-        // 14. 显示对父项的更改
-        .item(
-            MenuItem::new(
-                rust_i18n::t!("git.menu.show_parent_changes").to_string(),
-                AppIcon::Ui(UiIcon::DIFF),
-            )
-            .render(move |_, _, cx| {
-                let path = path_parent.clone();
-                parent_ws.update(cx, |ws, cx| ws.diff_commit_file(&path, cx));
-            }),
-        )
-        // 15. 添加到智能体上下文
-        .item(menu_item(
-            rust_i18n::t!("git.menu.add_to_agent_context").to_string(),
-            AppIcon::Ui(UiIcon::AI_INTENTION),
-            move |_, _, cx| {
-                let path = path_ai.clone();
-                ai_ws.update(cx, |ws, cx| ws.copy_to_clipboard(&format!("@{path}"), cx));
-            },
-        ))
+    )
+}
+
+fn append_create_patch(menu: PopupMenu, workspace: Entity<GitWorkspace>, path: &str) -> PopupMenu {
+    let path = path.to_string();
+    menu.item(menu_item(
+        rust_i18n::t!("git.menu.create_patch").to_string(),
+        AppIcon::Ui(UiIcon::DOWNLOAD),
+        move |_, _, cx| {
+            let path = path.clone();
+            workspace.update(cx, |ws, cx| ws.create_patch(&path, cx));
+        },
+    ))
+}
+
+fn append_history_item(menu: PopupMenu, workspace: Entity<GitWorkspace>, path: &str) -> PopupMenu {
+    let path = path.to_string();
+    menu.item(menu_item(
+        rust_i18n::t!("git.menu.history_up_to_here").to_string(),
+        AppIcon::Ui(UiIcon::HISTORY),
+        move |_, _, cx| {
+            let path = path.clone();
+            workspace.update(cx, |ws, cx| ws.set_log_path(Some(path), cx));
+        },
+    ))
+}
+
+fn append_agent_context(menu: PopupMenu, workspace: Entity<GitWorkspace>, path: &str) -> PopupMenu {
+    let path = path.to_string();
+    menu.item(menu_item(
+        rust_i18n::t!("git.menu.add_to_agent_context").to_string(),
+        AppIcon::Ui(UiIcon::AI_INTENTION),
+        move |_, _, cx| {
+            let path = path.clone();
+            workspace.update(cx, |ws, cx| ws.copy_to_clipboard(&format!("@{path}"), cx));
+        },
+    ))
 }

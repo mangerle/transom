@@ -2101,3 +2101,46 @@ fn git_filter_bar_is_split() {
     let lines = source[start..end.expect("函数体未闭合")].lines().count();
     assert!(lines <= 80, "render_filter_bar 超过 80 行：{lines}");
 }
+
+/// Git 文件树右键菜单必须按动作域拆分：主函数只决定顺序与分隔线。
+#[test]
+fn git_file_tree_menu_is_split() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = std::fs::read_to_string(root.join("src/git/log_view/menus/file_menu.rs"))
+        .expect("读取 git/log_view/menus/file_menu.rs 失败");
+    for helper in [
+        "fn append_diff_action",
+        "fn append_edit_source",
+        "fn append_rollback_action",
+        "fn append_disabled_item",
+        "fn append_create_patch",
+        "fn append_history_item",
+        "fn append_agent_context",
+    ] {
+        assert!(source.contains(helper), "Git 文件树菜单缺少拆分：{helper}");
+    }
+    let start = source
+        .find("fn render_file_tree_menu")
+        .expect("缺少 render_file_tree_menu");
+    let brace = source[start..]
+        .find('{')
+        .map(|i| start + i)
+        .expect("缺少函数体");
+    let mut depth = 0i32;
+    let mut end = None;
+    for (offset, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(brace + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let lines = source[start..end.expect("函数体未闭合")].lines().count();
+    assert!(lines <= 80, "render_file_tree_menu 超过 80 行：{lines}");
+}
