@@ -78,6 +78,7 @@ pub(super) const PROXY: (&str, &[&str]) = (
     ],
 );
 
+#[cfg(target_os = "linux")]
 pub(super) const DESKTOP_INTEGRATION: (&str, &[&str]) = (
     "settings.desktop_integration_group",
     &[

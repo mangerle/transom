@@ -279,6 +279,7 @@ impl GroupSearch {
             GroupSearch::Language => super::table_workspace::LANGUAGE,
             GroupSearch::Notify => super::table_workspace::NOTIFY,
             GroupSearch::Proxy => super::table_workspace::PROXY,
+            #[cfg(target_os = "linux")]
             GroupSearch::DesktopIntegration => super::table_workspace::DESKTOP_INTEGRATION,
             GroupSearch::Backup => super::table_workspace::BACKUP,
             GroupSearch::Sync => super::table_workspace::SYNC,
