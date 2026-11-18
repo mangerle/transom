@@ -1,3 +1,13 @@
+transom (1.8.2) unstable; urgency=medium
+
+  * 完成 UI 实体化与窄上下文治理，收敛状态、事件与命令边界，拆分超长
+    渲染、动作和弹窗模块，并新增源码架构守卫防止边界回退。
+  * 修复 Windows 与 macOS 平台设置搜索的条件编译错误，并兼容 Windows
+    CRLF 源码检出下的架构守卫匹配。
+  * 修复终端 Ctrl+V 图片粘贴，并统一短临界区同步锁选型。
+
+ -- wangle <wangle@agree.com.cn>  Wed, 18 Nov 2026 16:01:31 +0800
+
 transom (1.8.1) unstable; urgency=medium
 
   * 优化 Git 提交文件树为多级压缩目录、独立折叠及 IDEA 风格三态勾选。
