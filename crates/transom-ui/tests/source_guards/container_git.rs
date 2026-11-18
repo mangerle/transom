@@ -2050,7 +2050,10 @@ fn sftp_helpers_use_params_objects() {
         ),
     ];
     for (file, marker, param) in cases {
-        let content = std::fs::read_to_string(root.join(file)).expect("读取 SFTP 参数对象文件失败");
+        // Windows 工作区可能将源码检出为 CRLF，多行模式匹配前统一规范化为 LF。
+        let content = std::fs::read_to_string(root.join(file))
+            .expect("读取 SFTP 参数对象文件失败")
+            .replace("\r\n", "\n");
         assert!(content.contains(marker), "{file} 缺少参数对象：{marker}");
         assert!(
             content.contains(param),
