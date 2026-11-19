@@ -244,28 +244,40 @@ fn render_commit_tabs(
         .items_center()
         .child(underline_tab_bar_line(p))
         .child(commit_tab_btn(
-            "git-commit-tab-commit",
-            rust_i18n::t!("git.commit.title").to_string(),
-            commit_tab == GitCommitTab::Commit,
-            p,
+            CommitTabParams {
+                id: "git-commit-tab-commit",
+                label: rust_i18n::t!("git.commit.title").to_string(),
+                active: commit_tab == GitCommitTab::Commit,
+                position: 1,
+                size: 3,
+                palette: p,
+            },
             move |_, _, cx| {
                 ws_commit.update(cx, |ws, cx| ws.set_commit_tab(GitCommitTab::Commit, cx));
             },
         ))
         .child(commit_tab_btn(
-            "git-commit-tab-shelf",
-            shelf_label,
-            commit_tab == GitCommitTab::Shelf,
-            p,
+            CommitTabParams {
+                id: "git-commit-tab-shelf",
+                label: shelf_label,
+                active: commit_tab == GitCommitTab::Shelf,
+                position: 2,
+                size: 3,
+                palette: p,
+            },
             move |_, _, cx| {
                 ws_shelf.update(cx, |ws, cx| ws.set_commit_tab(GitCommitTab::Shelf, cx));
             },
         ))
         .child(commit_tab_btn(
-            "git-commit-tab-stash",
-            stash_label,
-            commit_tab == GitCommitTab::Stash,
-            p,
+            CommitTabParams {
+                id: "git-commit-tab-stash",
+                label: stash_label,
+                active: commit_tab == GitCommitTab::Stash,
+                position: 3,
+                size: 3,
+                palette: p,
+            },
             move |_, _, cx| {
                 ws_stash.update(cx, |ws, cx| ws.set_commit_tab(GitCommitTab::Stash, cx));
             },
@@ -489,4 +501,4 @@ fn render_upper_change_tree(params: UpperChangeTree<'_>) -> impl IntoElement {
 }
 
 mod layout;
-use layout::commit_tab_btn;
+use layout::{CommitTabParams, commit_tab_btn};

@@ -57,14 +57,32 @@ pub(super) fn render_commit_page_split(
         .into_any_element()
 }
 
+/// 提交页顶部页签的装配参数。
+///
+/// 页签位置与总数用于辅助技术播报“第几项、共几项”，不能再从按钮外观
+/// 反推；与标题、选中态一起收进参数对象，避免调用点平铺过多位置参数。
+pub(super) struct CommitTabParams<'a> {
+    pub(super) id: &'static str,
+    pub(super) label: String,
+    pub(super) active: bool,
+    pub(super) position: usize,
+    pub(super) size: usize,
+    pub(super) palette: &'a Palette,
+}
+
 /// 提交页顶部单个页签胶囊按钮。
 pub(super) fn commit_tab_btn(
-    id: &'static str,
-    label: String,
-    active: bool,
-    p: &Palette,
+    params: CommitTabParams<'_>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Tab {
+    let CommitTabParams {
+        id,
+        label,
+        active,
+        position,
+        size,
+        palette,
+    } = params;
     Tab::new(id)
         .relative()
         .h_full()
@@ -76,7 +94,10 @@ pub(super) fn commit_tab_btn(
         } else {
             FontWeight::NORMAL
         })
-        .when(active, |el| el.child(underline_tab_active_line(p)))
+        .selected(active)
+        .accessibility_label(label.clone())
+        .set_position(position, size)
+        .when(active, |el| el.child(underline_tab_active_line(palette)))
         .child(label)
         .on_click(on_click)
 }

@@ -308,6 +308,7 @@ fn render_section_tabs(
                     } else {
                         p.muted_foreground
                     };
+                    let label = rust_i18n::t!(section.label_key()).to_string();
                     let mut tab = Tab::new(ElementId::Name(
                         format!("container-section-{}", section.label_key()).into(),
                     ))
@@ -320,6 +321,8 @@ fn render_section_tabs(
                     .when(is_selected, |this| this.font_weight(FontWeight::MEDIUM))
                     .cursor_pointer()
                     .text_color(text_color)
+                    .selected(is_selected)
+                    .accessibility_label(label.clone())
                     .set_position(index + 1, tab_count);
 
                     if !is_selected {
@@ -331,7 +334,7 @@ fn render_section_tabs(
                             .with_rems(rems(control::COMPACT_ICON))
                             .text_color(icon_color),
                     )
-                    .child(rust_i18n::t!(section.label_key()).to_string())
+                    .child(label)
                     .when(count > 0, |this| {
                         this.child(
                             div()
