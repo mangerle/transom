@@ -4,7 +4,7 @@
 //! 画的东西：图标资产名与色值。映射集中在一处，标签栏、侧栏与新建表单读的是
 //! 同一份定义，不会出现"表单里选了数据库、标签栏画成服务器"的分裂。
 
-use crate::app::TerminalTab;
+use crate::app::WorkspaceTab;
 use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex};
 use gpui_kit::component::Sizable;
@@ -102,14 +102,21 @@ impl crate::app::AppState {
     ///
     /// 优先读目录里的会话定义：改了图标与颜色，已打开的标签立刻跟着变，不必
     /// 重连；本地终端没有目录条目，用标签自带的会话快照。
-    pub(crate) fn session_appearance(&self, tab: &TerminalTab) -> SessionAppearance {
+    pub(crate) fn session_appearance(&self, tab: &WorkspaceTab) -> SessionAppearance {
+        let (session_id, fallback) = if let Some(session) = tab.session() {
+            (session.id, session)
+        } else if let Some(monitor) = tab.monitor() {
+            (monitor.target_session_id, &monitor.target_session)
+        } else {
+            return SessionAppearance::default();
+        };
         let session = self
             .session
             .catalog
             .sessions
             .iter()
-            .find(|session| session.id == tab.session_id)
-            .unwrap_or(&tab.session);
+            .find(|session| session.id == session_id)
+            .unwrap_or(fallback);
         SessionAppearance {
             icon: session_icon(session.icon),
             color: session_color(session.color),

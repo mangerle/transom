@@ -35,7 +35,7 @@ pub(in crate::sftp) fn commit_sftp_input_value(
     let fallback_main = app_state
         .workspace
         .tab(tab_id)
-        .and_then(|tab| tab.connection_id);
+        .and_then(|tab| tab.connection_id());
     let scope = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
         .and_then(|panel| panel.remote_pane_scope(pane, fallback_main))
         .map(|scope| SftpInputScope {

@@ -101,7 +101,7 @@ impl AppState {
     pub(crate) fn active_session_id(&self) -> Option<SessionId> {
         self.workspace
             .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id).map(|tab| tab.session_id))
+            .and_then(|tab_id| self.workspace.tab(tab_id).and_then(|tab| tab.session_id()))
     }
 }
 

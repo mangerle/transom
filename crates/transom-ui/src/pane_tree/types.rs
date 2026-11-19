@@ -56,7 +56,7 @@ pub(crate) enum RemoveOutcome {
 /// 分割树节点。
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LayoutNode {
-    /// 叶子窗格，值为 `TerminalTab` 的标识。
+    /// 叶子窗格，值为 `WorkspaceTab` 的标识。
     Pane(TabId),
     /// 内部节点：沿 `axis` 把可用空间分给两个子节点。
     Split {

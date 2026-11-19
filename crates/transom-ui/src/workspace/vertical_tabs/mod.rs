@@ -51,9 +51,9 @@ impl AppState {
         if group.serial > 0 {
             text.push_str(&format!(" #{}", group.serial));
         }
-        if let Some(host) = session_host(&tab.session) {
+        if let Some(host) = tab.session_menu().and_then(|menu| menu.host) {
             text.push(' ');
-            text.push_str(host);
+            text.push_str(&host);
         }
         text_matches_query(query_lower, &text)
     }

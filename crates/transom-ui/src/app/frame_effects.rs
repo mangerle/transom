@@ -19,12 +19,14 @@ impl AppShell {
             .state
             .workspace
             .tab(tab_id)
-            .and_then(|tab| tab.connection_id);
+            .and_then(|tab| tab.connection_id());
         let has_other_remote = self.state.workspace.tabs.iter().any(|tab| {
             tab.id != tab_id
-                && tab.connection_id.is_some()
-                && tab.connection_id != current_conn
-                && !matches!(&tab.session.connection, Connection::Local(_))
+                && tab.connection_id().is_some()
+                && tab.connection_id() != current_conn
+                && tab
+                    .session()
+                    .is_some_and(|session| !matches!(session.connection, Connection::Local(_)))
         });
         if !has_other_remote {
             if !view.read(cx).mount_candidates().is_empty() {
@@ -34,7 +36,11 @@ impl AppShell {
         }
         let is_local_only = crate::sftp::sftp_state(&self.state.workspace, tab_id, cx)
             .is_some_and(|panel| panel.local.only);
-        let current_session = self.state.workspace.tab(tab_id).map(|tab| tab.session.id);
+        let current_session = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.session_id());
 
         // 先只比较连接标识：大多数帧候选不变，此时不必克隆显示名与 cwd。
         let mut seen = std::collections::HashSet::new();
@@ -46,16 +52,19 @@ impl AppShell {
             if tab.id == tab_id {
                 continue;
             }
-            let Some(connection_id) = tab.connection_id else {
+            let Some(connection_id) = tab.connection_id() else {
                 continue;
             };
             if Some(connection_id) == current_conn {
                 continue;
             }
-            if matches!(&tab.session.connection, Connection::Local(_)) {
+            let Some(session) = tab.session() else {
+                continue;
+            };
+            if matches!(session.connection, Connection::Local(_)) {
                 continue;
             }
-            if !seen.insert(tab.session.id) {
+            if !seen.insert(session.id) {
                 continue;
             }
             candidate_indices.push(index);
@@ -66,7 +75,7 @@ impl AppShell {
             !candidate_indices.is_empty()
                 && current.len() == candidate_indices.len()
                 && current.iter().zip(&candidate_indices).all(|(old, index)| {
-                    self.state.workspace.tabs[*index].connection_id == Some(old.connection_id)
+                    self.state.workspace.tabs[*index].connection_id() == Some(old.connection_id)
                 })
         };
         if unchanged {
@@ -76,14 +85,14 @@ impl AppShell {
         let mut candidates = Vec::with_capacity(candidate_indices.len());
         for index in candidate_indices {
             let tab = &self.state.workspace.tabs[index];
-            let Some(connection_id) = tab.connection_id else {
+            let Some(connection_id) = tab.connection_id() else {
                 continue;
             };
             candidates.push(crate::sftp::SftpMountCandidate {
                 connection_id,
                 display_name: tab.display_name(),
                 view: tab.sftp_view(),
-                cwd: tab.cwd.clone(),
+                cwd: tab.cwd().map(str::to_string),
             });
         }
         view.update(cx, |view, _| view.set_mount_candidates(candidates));
@@ -183,7 +192,7 @@ impl AppShell {
         };
         let Some((session_id, statuses)) = self.state.workspace.tab(tab_id).and_then(|tab| {
             let pane = tab.session_pane()?;
-            Some((tab.session_id, pane.forward_statuses.clone()))
+            Some((tab.session_id()?, pane.forward_statuses.clone()))
         }) else {
             return;
         };

@@ -148,12 +148,12 @@ pub(super) fn reorder_groups(
 #[cfg(test)]
 mod tests {
     use super::reorder_groups;
-    use crate::app::TabGroup;
+    use crate::app::{TabGroup, TabGroupOwner};
     use transom_core::{GroupId, SessionId, TabId};
 
     fn three_groups() -> (Vec<TabGroup>, Vec<GroupId>) {
         let groups: Vec<TabGroup> = (0..3)
-            .map(|_| TabGroup::new(TabId::new(), SessionId::new(), 1))
+            .map(|_| TabGroup::new(TabId::new(), TabGroupOwner::Session(SessionId::new()), 1))
             .collect();
         let ids = groups.iter().map(|group| group.id).collect();
         (groups, ids)

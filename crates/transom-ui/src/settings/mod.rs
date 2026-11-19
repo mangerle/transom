@@ -199,13 +199,15 @@ pub(crate) fn apply_block_view_settings(app_state: &AppState, cx: &mut Context<A
         .iter()
         .filter_map(|tab| {
             let terminal = tab.terminal()?;
+            let session = tab.session()?;
+            let session_id = tab.session_id()?;
             let override_ = app_state
                 .session
                 .catalog
                 .sessions
                 .iter()
-                .find(|session| session.id == tab.session_id)
-                .map_or(tab.session.block_view, |session| session.block_view);
+                .find(|candidate| candidate.id == session_id)
+                .map_or(session.block_view, |candidate| candidate.block_view);
             Some((terminal, global.resolved(override_)))
         })
         .collect();

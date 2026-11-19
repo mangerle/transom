@@ -18,17 +18,13 @@ use super::entity::GitWorkspaceEvent;
 use super::form::GitProjectDraft;
 use super::types::{GitBadge, GitWorkspaceState};
 use crate::UiServices;
-use crate::app::{
-    AppShell, GitModals, PendingNotices, Persistence, TaskHub, TerminalTab, WindowRequests,
-};
+use crate::app::{AppShell, GitModals, PendingNotices, Persistence, TaskHub, WindowRequests};
 use crate::git::GitSidebarView;
 use crate::palette::localized_error;
 use crate::sidebar::{SidebarSection, SidebarState};
 use crate::workspace::WorkspaceState;
 use gpui_kit::*;
-use transom_core::{
-    Connection, GitCommand, GitProject, GitProjectId, GitRequestId, LocalConnection, Session, TabId,
-};
+use transom_core::{GitCommand, GitProject, GitProjectId, GitRequestId, TabId};
 
 mod commit_actions;
 mod diff_actions;
@@ -160,7 +156,7 @@ impl<'a> GitActions<'a> {
     }
 
     fn git_workspace(&self, tab_id: TabId) -> Option<Entity<GitWorkspace>> {
-        self.workspace.tab(tab_id)?.git()
+        self.workspace.tab(tab_id)?.git_workspace()
     }
 
     fn git_workspace_of_project(
@@ -169,7 +165,7 @@ impl<'a> GitActions<'a> {
         cx: &App,
     ) -> Option<Entity<GitWorkspace>> {
         self.workspace.tabs.iter().find_map(|tab| {
-            let workspace = tab.git()?;
+            let workspace = tab.git_workspace()?;
             (workspace.read(cx).state.project.id == project_id).then_some(workspace)
         })
     }
@@ -263,8 +259,6 @@ impl<'a> GitActions<'a> {
             return;
         }
         let tab_id = TabId::new();
-        let session = git_placeholder_session(&project);
-        let session_id = session.id;
         let title = project.display_name();
         let state = GitWorkspaceState::new(project.clone(), window, cx);
         let command_tx = self.services.command_tx.clone();
@@ -276,13 +270,9 @@ impl<'a> GitActions<'a> {
             .subscriptions
             .git_workspaces
             .insert(tab_id, subscription);
-        self.workspace.tabs.push(TerminalTab::git_tab(
-            tab_id,
-            session,
-            title,
-            workspace.clone(),
-        ));
-        self.workspace.create_group(tab_id, session_id);
+        let tab = crate::app::WorkspaceTab::new_git(tab_id, title, workspace.clone());
+        self.workspace.create_group_for_tab(&tab);
+        self.workspace.tabs.push(tab);
         self.window_requests.push_activate_tab(tab_id);
         self.git_refresh(&project, cx);
         workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
@@ -412,23 +402,4 @@ impl<'a> GitActions<'a> {
         self.window_requests
             .push_open_settings(Some(crate::settings::GIT_PAGE_INDEX));
     }
-}
-
-/// Git 标签页需要的占位会话。
-///
-/// 设计原理（Why）：工作区的标签、分组与关闭逻辑都以 `Session` 为轴，Git 面板
-/// 不是终端但必须复用这套容器；用 `Connection::Local` 且工作目录指向仓库根，
-/// 语义上就是「这个仓库在本机」，不引入第三种连接类型去牵动转发/SFTP 的分支。
-fn git_placeholder_session(project: &GitProject) -> Session {
-    Session::new(
-        project.display_name(),
-        Connection::Local(LocalConnection {
-            shell: None,
-            shell_args: Vec::new(),
-            run_as_admin: false,
-            working_dir: Some(project.path.clone()),
-            command: None,
-            ..Default::default()
-        }),
-    )
 }

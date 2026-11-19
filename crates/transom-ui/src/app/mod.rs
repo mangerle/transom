@@ -22,6 +22,7 @@ mod secret_prefill;
 mod session_duplicate;
 mod session_ops;
 mod state;
+mod tab;
 mod tab_coordination;
 mod task_hub;
 mod types;
@@ -33,6 +34,10 @@ pub(crate) use persistence::Persistence;
 pub(crate) use runtime::spawn_blocking_local;
 pub(crate) use secret_prefill::prefill_secret_fields;
 pub(crate) use state::AppState;
+pub(crate) use tab::{
+    SessionMenuData, SessionTab, TabCloseAction, TabContent, TabGroup, TabGroupOwner, TabStatus,
+    WorkspaceTab,
+};
 pub(crate) use task_hub::TaskHub;
 
 use crate::UiServices;
@@ -262,7 +267,7 @@ impl AppShell {
             .tabs
             .iter()
             .filter_map(|tab| {
-                let workspace = tab.containers()?;
+                let workspace = tab.container_workspace()?;
                 (workspace.read(cx).state.status
                     == crate::container::ContainerWorkspaceStatus::Connected)
                     .then_some(tab.id)

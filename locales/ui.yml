@@ -166,6 +166,19 @@ activity:
   cloud_sync:
     en: Cloud Sync
     zh-CN: 云同步
+tab_subtitle:
+  player:
+    en: Session replay
+    zh-CN: 会话回放
+  monitor:
+    en: Host monitor
+    zh-CN: 主机监控
+  containers:
+    en: Container engine
+    zh-CN: 容器引擎
+  git:
+    en: Git workspace
+    zh-CN: Git 工作区
 common:
   close:
     en: Close

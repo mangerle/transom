@@ -2,11 +2,11 @@
 
 use crate::app::app_settings;
 use crate::app::spawn_blocking_local;
-use crate::app::{AppShell, AppState, TerminalTab};
+use crate::app::{AppShell, AppState};
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use gpui_kit::*;
 use std::path::PathBuf;
-use transom_core::{Connection, Session, TabId};
+use transom_core::TabId;
 use transom_platform::paths;
 use transom_terminal::parse_cast_file;
 
@@ -185,23 +185,8 @@ fn finish_open_cast_player(
     });
 
     let tab_id = TabId::new();
-    let mut dummy_session = Session::new(
-        tab_title.clone(),
-        Connection::Local(transom_core::LocalConnection {
-            shell: None,
-            shell_args: Vec::new(),
-            run_as_admin: false,
-            working_dir: None,
-            command: None,
-            ..Default::default()
-        }),
-    );
-    let session_id = dummy_session.id;
-    dummy_session.terminal = app_settings(cx).terminal_profile.clone();
-
-    let tab = TerminalTab::player_tab(tab_id, dummy_session, tab_title, player);
-
-    app_state.workspace.create_group(tab_id, session_id);
+    let tab = crate::app::WorkspaceTab::new_player(tab_id, tab_title, player);
+    app_state.workspace.create_group_for_tab(&tab);
     app_state.workspace.tabs.push(tab);
     app_state.ui.window_requests.push_activate_tab(tab_id);
     cx.notify();

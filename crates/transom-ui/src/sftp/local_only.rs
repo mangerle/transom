@@ -42,7 +42,7 @@ pub(crate) fn open_local_file_panel(
     log::info!(
         "打开本地文件面板，窗格: {tab_id}，初始目录: {}，终端 cwd: {:?}",
         local_path.display(),
-        tab.cwd
+        tab.cwd()
     );
     let inputs = LocalPanelInputs::new(window, cx, &local_path);
     let local_enter_sub = cx.subscribe_in(
@@ -58,7 +58,7 @@ pub(crate) fn open_local_file_panel(
     );
 
     // 主连接与命令通道在挂载之前取好：面板之后自己解析目标列与投递命令。
-    let main_connection = app_state.workspace.tabs[index].connection_id;
+    let main_connection = app_state.workspace.tabs[index].connection_id();
     let command_tx = Some(app_state.runtime.services.command_tx.clone());
     let state = SftpPanelState {
         main_connection,
@@ -230,13 +230,12 @@ impl SftpPanelView {
 }
 
 /// 本地面板初始目录：OSC 7 cwd → 会话工作目录 → Home → 下载目录。
-fn initial_local_path(tab: &crate::app::TerminalTab, quick_paths: &LocalQuickPaths) -> PathBuf {
-    let session_dir = match &tab.session.connection {
+fn initial_local_path(tab: &crate::app::WorkspaceTab, quick_paths: &LocalQuickPaths) -> PathBuf {
+    let session_dir = tab.session().and_then(|session| match &session.connection {
         Connection::Local(local) => local.working_dir.clone().filter(|path| path.is_dir()),
         _ => None,
-    };
-    tab.cwd
-        .as_deref()
+    });
+    tab.cwd()
         .and_then(normalize_local_cwd)
         .or(session_dir)
         .or_else(|| quick_paths.home.clone())

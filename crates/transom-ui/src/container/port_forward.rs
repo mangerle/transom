@@ -44,14 +44,15 @@ pub(crate) fn open_container_port_forward(
         .tabs
         .iter()
         .filter_map(|tab| {
-            let connection_id = tab.connection_id?;
-            if matches!(&tab.session.connection, Connection::Local(_)) {
+            let connection_id = tab.connection_id()?;
+            let session = tab.session()?;
+            if matches!(&session.connection, Connection::Local(_)) {
                 return None;
             }
-            let name = if tab.session.name.trim().is_empty() {
+            let name = if session.name.trim().is_empty() {
                 tab.title.clone()
             } else {
-                tab.session.name.clone()
+                session.name.clone()
             };
             Some((name, tab.id, connection_id))
         })

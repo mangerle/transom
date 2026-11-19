@@ -234,7 +234,10 @@ impl AppShell {
         if let Some(player) = self.state.workspace.tabs[index].player() {
             return div().size_full().child(player).into_any_element();
         }
-        if self.state.workspace.tabs[index].containers().is_some() {
+        if self.state.workspace.tabs[index]
+            .container_workspace()
+            .is_some()
+        {
             if self.state.features.containers.fullscreen == Some(tab_id) {
                 return v_flex()
                     .size_full()
@@ -263,7 +266,9 @@ impl AppShell {
             }
             return self.render_container_tab(tab_id, window, cx, p);
         }
-        if let crate::app::TabContent::Monitor(target_id) = self.state.workspace.tabs[index].content
+        if let Some(target_id) = self.state.workspace.tabs[index]
+            .monitor()
+            .map(|monitor| monitor.target_tab_id)
         {
             let target_title = self
                 .state
@@ -286,10 +291,7 @@ impl AppShell {
                 view.render_monitor_tab_content(params, window, cx, p)
             });
         }
-        if matches!(
-            &self.state.workspace.tabs[index].content,
-            crate::app::TabContent::Git(_)
-        ) {
+        if self.state.workspace.tabs[index].git_workspace().is_some() {
             let Some(workspace) = self.state.git_workspace(tab_id) else {
                 return div().into_any_element();
             };
@@ -341,11 +343,8 @@ fn pane_context_menu(
     let maybe_ssh_session_id = {
         let shell = app.read(cx);
         shell.state.workspace.tab(tab_id).and_then(|tab| {
-            if matches!(tab.session.connection, Connection::Ssh(_)) {
-                Some(tab.session.id)
-            } else {
-                None
-            }
+            let session = tab.session()?;
+            matches!(&session.connection, Connection::Ssh(_)).then_some(session.id)
         })
     };
 

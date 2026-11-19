@@ -73,7 +73,7 @@ pub(in crate::dialog_host) fn container_create_values(
     if let Some(workspace) = state
         .workspace
         .tab(dialog.tab_id)
-        .and_then(|tab| tab.containers())
+        .and_then(|tab| tab.container_workspace())
     {
         values.push(
             workspace

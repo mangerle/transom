@@ -3,7 +3,7 @@
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
 use crate::app::update_app_settings;
-use crate::app::{AppShell, TerminalTab};
+use crate::app::{AppShell, WorkspaceTab};
 use gpui_kit::*;
 use transom_core::{Connection, SavedTabGroup, SavedTabTiling};
 
@@ -28,7 +28,13 @@ pub(crate) fn save_window_state(
     update_app_settings(cx, |s| {
         s.window.last_sidebar_visible = shell.state.session.sidebar.visible()
     });
-    let sessions: Vec<_> = shell.state.workspace.tabs.iter().map(session_key).collect();
+    let sessions: Vec<_> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .filter_map(session_key)
+        .collect();
     update_app_settings(cx, |s| s.window.previous_tab_sessions = sessions);
     shell.state.prune_tilings();
     // 先建立"组 ID → 落盘下标"的映射：并排快照用下标引用标签组，
@@ -48,7 +54,7 @@ pub(crate) fn save_window_state(
             Some((
                 group.id,
                 SavedTabGroup {
-                    session: session_key(tab),
+                    session: session_key(tab)?,
                     layout: group.root.to_saved(),
                 },
             ))
@@ -111,10 +117,43 @@ pub(crate) fn close_app(shell: &mut AppShell, window: &mut Window, cx: &mut Cont
 }
 
 /// 窗口恢复使用的会话键：本地终端固定为 `local`，其余使用持久化会话 ID。
-pub(crate) fn session_key(tab: &TerminalTab) -> String {
-    if matches!(tab.session.connection, Connection::Local(_)) {
-        "local".to_string()
+pub(crate) fn session_key(tab: &WorkspaceTab) -> Option<String> {
+    let session = tab.session()?;
+    if matches!(&session.connection, Connection::Local(_)) {
+        Some("local".to_string())
     } else {
-        tab.session_id.to_string()
+        tab.session_id().map(|session_id| session_id.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::session_key;
+    use crate::app::WorkspaceTab;
+    use transom_core::{AuthMethod, Connection, LocalConnection, Session, SshConnection, TabId};
+
+    #[test]
+    fn local_session_keeps_legacy_restore_key() {
+        let session = Session::new("本地终端", Connection::Local(LocalConnection::default()));
+        let tab = WorkspaceTab::new_session(TabId::new(), session);
+        assert_eq!(session_key(&tab), Some("local".to_string()));
+    }
+
+    #[test]
+    fn ssh_session_uses_persistent_session_id() {
+        let session = Session::new(
+            "生产主机",
+            Connection::Ssh(SshConnection {
+                host: "10.0.0.8".to_string(),
+                port: 22,
+                username: "deploy".to_string(),
+                auth: AuthMethod::Agent,
+                options: Default::default(),
+                proxy_jump: None,
+            }),
+        );
+        let expected = session.id.to_string();
+        let tab = WorkspaceTab::new_session(TabId::new(), session);
+        assert_eq!(session_key(&tab), Some(expected));
     }
 }

@@ -194,7 +194,7 @@ impl AppShell {
                     .workspace
                     .tabs
                     .iter_mut()
-                    .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
+                    .find(|tab| tab.id == tab_id && tab.connection_id() == Some(connection_id))
                 {
                     error_message = status.error.as_ref().map(localized_error);
                     if let Some(pane) = tab.session_pane_mut() {
@@ -329,7 +329,7 @@ impl AppShell {
             TerminalEvent::Cwd(path) => {
                 log::debug!("收到终端 OSC 7 cwd，窗格: {tab_id}，路径: {path}");
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
-                    tab.cwd = Some(path.clone());
+                    tab.set_cwd(Some(path.clone()));
                 }
                 crate::sftp::sftp_sync_with_terminal_cwd(&mut self.state, tab_id, path, window, cx);
             }

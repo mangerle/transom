@@ -21,12 +21,14 @@ impl AppState {
             .iter()
             .filter(|tab| {
                 matches!(tab.status, TabStatus::Connected)
-                    && matches!(tab.session.connection, Connection::Ssh(_))
+                    && tab
+                        .session()
+                        .is_some_and(|session| matches!(&session.connection, Connection::Ssh(_)))
             })
             .filter_map(|tab| {
                 Some(state::KeyTarget {
                     tab_id: tab.id,
-                    connection_id: tab.connection_id?,
+                    connection_id: tab.connection_id()?,
                     title: tab.display_name(),
                 })
             })

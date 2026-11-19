@@ -141,7 +141,7 @@ impl SftpModals {
                             .state
                             .workspace
                             .tab(*tab_id)
-                            .and_then(|tab| tab.connection_id)
+                            .and_then(|tab| tab.connection_id())
                     }) else {
                         return;
                     };
@@ -278,7 +278,7 @@ impl SftpModals {
                             .state
                             .workspace
                             .tab(*tab_id)
-                            .and_then(|tab| tab.connection_id)
+                            .and_then(|tab| tab.connection_id())
                     }) else {
                         return;
                     };

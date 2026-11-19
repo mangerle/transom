@@ -30,8 +30,11 @@ pub(crate) fn schedule_startup_commands(
         .workspace
         .tabs
         .iter()
-        .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
-        .map(|tab| tab.session.startup.commands.clone())
+        .find(|tab| tab.id == tab_id && tab.connection_id() == Some(connection_id))
+        .and_then(|tab| {
+            tab.session()
+                .map(|session| session.startup.commands.clone())
+        })
         .filter(|commands| !commands.is_empty())
     else {
         return;
@@ -45,7 +48,7 @@ pub(crate) fn schedule_startup_commands(
                     .state
                     .workspace
                     .tab(tab_id)
-                    .filter(|tab| tab.connection_id == Some(connection_id))
+                    .filter(|tab| tab.connection_id() == Some(connection_id))
                 else {
                     return false;
                 };
@@ -68,7 +71,7 @@ pub(crate) fn schedule_startup_commands(
         .workspace
         .tabs
         .iter_mut()
-        .find(|tab| tab.id == tab_id && tab.connection_id == Some(connection_id))
+        .find(|tab| tab.id == tab_id && tab.connection_id() == Some(connection_id))
         .and_then(|tab| tab.session_pane_mut())
     {
         pane._startup_task = Some(task);

@@ -88,7 +88,10 @@ pub(crate) fn request_clipboard_permission(
     let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
-    let session_name = tab.session.name.clone();
+    let Some(session) = tab.session() else {
+        return;
+    };
+    let session_name = session.name.clone();
     prompts.update(cx, |view, cx| {
         view.open_clipboard(
             super::ClipboardWritePrompt {

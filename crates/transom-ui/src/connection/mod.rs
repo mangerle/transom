@@ -25,7 +25,7 @@ pub(crate) use secrets::{collect_connection_secrets, session_host};
 
 use crate::app::app_settings;
 use crate::app::app_settings_mut;
-use crate::app::{AppShell, AppState, TabStatus, TerminalTab};
+use crate::app::{AppShell, AppState, TabStatus, WorkspaceTab};
 use crate::palette::localized_error;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
@@ -112,11 +112,9 @@ pub(crate) fn connect_session(
     crate::connection::record_recent_session(app_state, session_id, cx);
 
     let tab_id = TabId::new();
-    app_state.workspace.create_group(tab_id, session_id);
-    app_state
-        .workspace
-        .tabs
-        .push(TerminalTab::pending(tab_id, session.clone()));
+    let tab = WorkspaceTab::new_session(tab_id, session.clone());
+    app_state.workspace.create_group_for_tab(&tab);
+    app_state.workspace.tabs.push(tab);
     app_state.workspace.active_tab = Some(tab_id);
     app_state.present_active_group();
     crate::connection::start_connection(app_state, tab_id, session, cx);
@@ -133,10 +131,16 @@ pub(crate) fn schedule_auto_reconnect(
     let Some(tab) = app_state.workspace.tab_mut(tab_id) else {
         return;
     };
-    if tab.connection_id != Some(failed_connection) {
+    if tab.connection_id() != Some(failed_connection) {
         return;
     }
-    let auto_reconnect = match &tab.session.connection {
+    let Some(session_id) = tab.session_id() else {
+        return;
+    };
+    let Some(session) = tab.session().cloned() else {
+        return;
+    };
+    let auto_reconnect = match &session.connection {
         Connection::Ssh(ssh) => ssh.options.auto_reconnect,
         Connection::Telnet(telnet) => telnet.options.auto_reconnect,
         _ => false,
@@ -162,13 +166,12 @@ pub(crate) fn schedule_auto_reconnect(
             attempt + 1
         ),
     ));
+    let session_name = session.name.clone();
     log::warn!(
         "已安排自动重连，窗格: {tab_id}，会话: {}，延迟 {delay_secs} 秒（第 {}/3 次），原因: {reason}",
-        tab.session.name,
+        session_name,
         attempt + 1
     );
-    let session = tab.session.clone();
-    let session_id = tab.session_id;
     let executor = cx.background_executor().clone();
     let Some(pane) = tab.session_pane_mut() else {
         return;
@@ -182,7 +185,9 @@ pub(crate) fn schedule_auto_reconnect(
             let Some(tab) = this.state.workspace.tab(tab_id) else {
                 return;
             };
-            if tab.connection_id != Some(failed_connection) || tab.session_id != session_id {
+            if tab.connection_id() != Some(failed_connection)
+                || tab.session_id() != Some(session_id)
+            {
                 return;
             }
             crate::connection::start_connection(&mut this.state, tab_id, session, cx);
@@ -194,10 +199,10 @@ pub(crate) fn schedule_auto_reconnect(
 /// 新连接建立前清空旧通道残留：连接标识、cwd 与面板快照。
 fn reset_tab_connection(app_state: &mut AppState, tab_id: TabId, connection_id: ConnectionId) {
     if let Some(tab) = app_state.workspace.tab_mut(tab_id) {
-        tab.connection_id = Some(connection_id);
+        tab.set_connection_id(Some(connection_id));
         // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
         // 等新连接上的提示符钩子回报后再恢复 SFTP 跟随。
-        tab.cwd = None;
+        tab.set_cwd(None);
         if let Some(pane) = tab.session_pane_mut() {
             pane.sftp_view = None;
             pane.forward_statuses.clear();

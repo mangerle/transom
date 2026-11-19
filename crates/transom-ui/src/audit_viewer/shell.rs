@@ -51,7 +51,7 @@ pub(crate) fn open_audit_viewer_for_tab(
     let session = app_state
         .workspace
         .tab(tab_id)
-        .map(|tab| tab.session.clone());
+        .and_then(|tab| tab.session().cloned());
     if let Some(s) = session {
         crate::audit_viewer::open_audit_viewer(app_state, Some(&s), window, cx);
     } else {

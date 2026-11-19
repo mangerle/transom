@@ -49,10 +49,10 @@ pub(crate) fn handle_dropped_files(
     let Some(index) = app_state.workspace.tab_index(tab_id) else {
         return;
     };
-    if let Some(key) = drop_rejection(
-        &app_state.workspace.tabs[index].session,
-        &app_state.workspace.tabs[index].status,
-    ) {
+    let Some(session) = app_state.workspace.tabs[index].session().cloned() else {
+        return;
+    };
+    if let Some(key) = drop_rejection(&session, &app_state.workspace.tabs[index].status) {
         let message = rust_i18n::t!(key).to_string();
         log::warn!(
             "拒绝拖拽上传，窗格: {tab_id}，文件数: {}，原因: {message}",
@@ -81,7 +81,7 @@ pub(crate) fn handle_dropped_files(
     log::info!(
         "拖拽上传已入队，窗格: {tab_id}，文件数: {}，目标会话: {}",
         paths.len(),
-        crate::connection::describe_target(&app_state.workspace.tabs[index].session)
+        crate::connection::describe_target(&session)
     );
     if let Some(view) = app_state.sftp_view(tab_id) {
         view.update(cx, |view, cx| view.show_drop_overlay(cx));

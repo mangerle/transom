@@ -6,12 +6,12 @@
 //!
 //! 代价与局限：只覆盖视觉映射，标签布局仍各按横向/纵向排版。
 
-use crate::app::{AppState, TerminalTab};
+use crate::app::{AppState, TabContent, WorkspaceTab};
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
 use crate::workspace::pane_status_indicator;
 use gpui_kit::*;
-use transom_core::{Connection, ContainerEngineKind, GitProject};
+use transom_core::{ContainerEngineKind, GitProject};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
@@ -21,7 +21,7 @@ use transom_ui_icons::UiIcon;
 /// 其余按会话外观回落连接类型。
 pub(crate) fn tab_icon(
     state: &AppState,
-    tab: &TerminalTab,
+    tab: &WorkspaceTab,
     active: bool,
     p: &Palette,
     cx: &App,
@@ -32,7 +32,7 @@ pub(crate) fn tab_icon(
     if tab.is_monitor() {
         return (AppIcon::Domain(DomainIcon::MONITOR), p.primary);
     }
-    if let Some(workspace) = tab.git() {
+    if let Some(workspace) = tab.git_workspace() {
         let state = &workspace.read(cx).state;
         let icon = git_project_icon(&state.project);
         let color = git_project_color(&state.project).unwrap_or(if active {
@@ -42,7 +42,7 @@ pub(crate) fn tab_icon(
         });
         return (icon, color);
     }
-    if let Connection::ContainerEngine(profile) = &tab.session.connection {
+    if let Some(profile) = tab.container_profile() {
         let icon = session_icon(profile.icon).unwrap_or_else(|| {
             if profile.engine.kind == ContainerEngineKind::Docker {
                 CustomIcon::DOCKER.into()
@@ -58,9 +58,19 @@ pub(crate) fn tab_icon(
         return (icon, color);
     }
     let appearance = state.session_appearance(tab);
+    let Some(session) = tab.session() else {
+        return (
+            appearance.icon.unwrap_or(AppIcon::Ui(UiIcon::ERROR)),
+            appearance.color.unwrap_or(if active {
+                p.sidebar_accent_foreground
+            } else {
+                p.muted_foreground
+            }),
+        );
+    };
     let icon = appearance
         .icon
-        .unwrap_or_else(|| crate::connection::icon(&tab.session.connection));
+        .unwrap_or_else(|| crate::connection::icon(&session.connection));
     let color = appearance.color.unwrap_or(if active {
         p.sidebar_accent_foreground
     } else {
@@ -70,8 +80,8 @@ pub(crate) fn tab_icon(
 }
 
 /// 用户为会话配置的环境色；未配置时不画强调条。
-pub(crate) fn tab_accent(state: &AppState, tab: &TerminalTab, cx: &App) -> Option<Hsla> {
-    if let Some(workspace) = tab.git() {
+pub(crate) fn tab_accent(state: &AppState, tab: &WorkspaceTab, cx: &App) -> Option<Hsla> {
+    if let Some(workspace) = tab.git_workspace() {
         return git_project_color(&workspace.read(cx).state.project);
     }
     state.session_appearance(tab).color
@@ -88,7 +98,7 @@ fn git_project_color(project: &GitProject) -> Option<Hsla> {
 }
 
 /// 标签状态点颜色：ZMODEM 传输中优先用强调色，其余按连接状态。
-pub(crate) fn tab_status_dot(tab: &TerminalTab, p: &Palette) -> Hsla {
+pub(crate) fn tab_status_dot(tab: &WorkspaceTab, p: &Palette) -> Hsla {
     if tab.zmodem().is_some() {
         return p.primary;
     }
@@ -96,7 +106,7 @@ pub(crate) fn tab_status_dot(tab: &TerminalTab, p: &Palette) -> Hsla {
 }
 
 /// 标签显示标题：会话标题优先，分屏序号大于零时追加 `#N`。
-pub(crate) fn tab_title(tab: &TerminalTab, serial: usize) -> String {
+pub(crate) fn tab_title(tab: &WorkspaceTab, serial: usize) -> String {
     let title = tab.tab_label();
     if serial > 0 {
         format!("{title} #{serial}")
@@ -106,8 +116,17 @@ pub(crate) fn tab_title(tab: &TerminalTab, serial: usize) -> String {
 }
 
 /// 标签副标题：连接类型的紧凑描述（本地/SSH/串口等）。
-pub(crate) fn tab_subtitle(tab: &TerminalTab) -> String {
-    crate::connection::display_compact(&tab.session.connection)
+pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
+    match &tab.content {
+        TabContent::Session(_) => tab
+            .session()
+            .map(|session| crate::connection::display_compact(&session.connection))
+            .unwrap_or_default(),
+        TabContent::Player(_) => rust_i18n::t!("tab_subtitle.player").to_string(),
+        TabContent::Monitor(_) => rust_i18n::t!("tab_subtitle.monitor").to_string(),
+        TabContent::Containers(_) => rust_i18n::t!("tab_subtitle.containers").to_string(),
+        TabContent::Git(_) => rust_i18n::t!("tab_subtitle.git").to_string(),
+    }
 }
 
 #[cfg(test)]

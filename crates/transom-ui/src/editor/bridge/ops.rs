@@ -178,7 +178,7 @@ pub(crate) fn editor_reject(
     if let Some(main_connection) = app_state
         .workspace
         .tab(tab_id)
-        .and_then(|tab| tab.connection_id)
+        .and_then(|tab| tab.connection_id())
         && let Some(mut panel) = crate::sftp::sftp_view_mut(&app_state.workspace, tab_id, cx)
         && let Some(target) = panel
             .state

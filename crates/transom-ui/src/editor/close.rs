@@ -147,7 +147,7 @@ fn tabs_for_pending_close(workspace: &WorkspaceState, intent: &PendingEditorClos
         PendingEditorClose::Session(session_id) => workspace
             .tabs
             .iter()
-            .filter(|tab| tab.session_id == *session_id)
+            .filter(|tab| tab.session_id() == Some(*session_id))
             .map(|tab| tab.id)
             .collect(),
         PendingEditorClose::Tiling(groups) => groups

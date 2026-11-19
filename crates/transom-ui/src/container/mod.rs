@@ -79,7 +79,7 @@ pub(crate) use view::{
     render_container_connection_state, render_container_list_content, render_container_tab_body,
 };
 
-use crate::app::{AppShell, AppState, TabContent, TabStatus, TerminalTab, app_settings};
+use crate::app::{AppShell, AppState, TabStatus, app_settings};
 use crate::container::toast::{toast_failed, toast_succeeded};
 use crate::container::types::{
     ContainerCreateDialog, ContainerPruneTarget, STATS_HISTORY_LIMIT, row_key,
@@ -91,7 +91,7 @@ use std::sync::Arc;
 use transom_core::{
     AppError, Connection, ContainerAppEvent, ContainerCommand, ContainerConnection,
     ContainerEngineProfile, ContainerLifecycleAction, ContainerNetworkSpec, ContainerRequestId,
-    Session, TabId, TerminalIo, TerminalSize,
+    TabId, TerminalIo, TerminalSize,
 };
 use transom_terminal::{KeyFilter, TerminalEvent, TerminalView};
 
@@ -107,10 +107,7 @@ impl AppState {
     /// 返回的是句柄而不是引用：调用方自行决定 `read` 还是 `update`，避免同一
     /// 标签页在渲染期与动作期各持一份状态。
     pub(crate) fn container_workspace(&self, tab_id: TabId) -> Option<Entity<ContainerWorkspace>> {
-        match &self.workspace.tab(tab_id)?.content {
-            TabContent::Containers(workspace) => Some(workspace.clone()),
-            _ => None,
-        }
+        self.workspace.tab(tab_id)?.container_workspace()
     }
 
     /// 当前活动标签对应的引擎连接 id；不是容器标签时返回 `None`。
@@ -121,10 +118,7 @@ impl AppState {
             .workspace
             .active_tab
             .and_then(|tab_id| self.workspace.tab(tab_id))?;
-        match &tab.session.connection {
-            Connection::ContainerEngine(profile) => Some(profile.id),
-            _ => None,
-        }
+        tab.container_profile().map(|profile| profile.id)
     }
 
     /// 汇总每个引擎连接当前的工作区状态，供侧栏行首的状态点使用。
@@ -136,10 +130,10 @@ impl AppState {
     ) -> std::collections::HashMap<transom_core::EngineProfileId, ContainerWorkspaceStatus> {
         let mut states = std::collections::HashMap::default();
         for tab in self.workspace.tabs.iter() {
-            let Connection::ContainerEngine(profile) = &tab.session.connection else {
+            let Some(profile) = tab.container_profile() else {
                 continue;
             };
-            let Some(workspace) = tab.containers() else {
+            let Some(workspace) = tab.container_workspace() else {
                 continue;
             };
             states.insert(profile.id, workspace.read(cx).state.status.clone());
@@ -171,7 +165,7 @@ where
         return Some(found);
     }
     for tab in app_state.workspace.tabs.iter() {
-        let Some(workspace) = tab.containers() else {
+        let Some(workspace) = tab.container_workspace() else {
             continue;
         };
         if let Some(found) = search(tab.id, workspace) {

@@ -151,7 +151,7 @@ impl AppState {
     ) -> Vec<(CommandItem, PaletteTarget)> {
         let mut items = Vec::new();
         for tab in self.workspace.tabs.iter() {
-            let Some(workspace) = tab.containers() else {
+            let Some(workspace) = tab.container_workspace() else {
                 continue;
             };
             for container in &workspace.read(cx).state.containers {

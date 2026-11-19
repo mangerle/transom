@@ -290,10 +290,13 @@ fn panel_event_handlers_do_not_read_back() {
 #[test]
 fn git_workspace_is_owned_by_entity() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let types = std::fs::read_to_string(root.join("src/app/types.rs")).expect("读取 tags 类型失败");
+    let types =
+        std::fs::read_to_string(root.join("src/app/tab/model.rs")).expect("读取标签模型失败");
+    let specialized = std::fs::read_to_string(root.join("src/app/tab/specialized.rs"))
+        .expect("读取专用标签类型失败");
     assert!(
-        types.contains("Git(Entity<crate::git::GitWorkspace>)"),
-        "TabContent::Git 必须持有 Entity<GitWorkspace>"
+        types.contains("Git(GitTab)") && specialized.contains("workspace: Entity<GitWorkspace>"),
+        "TabContent::Git 必须通过 GitTab 持有 Entity<GitWorkspace>"
     );
     let state = std::fs::read_to_string(root.join("src/app/state.rs")).expect("读取 AppState 失败");
     for forbidden in [
@@ -320,10 +323,14 @@ fn git_workspace_is_owned_by_entity() {
 #[test]
 fn container_workspace_is_owned_by_entity() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let types = std::fs::read_to_string(root.join("src/app/types.rs")).expect("读取标签类型失败");
+    let types =
+        std::fs::read_to_string(root.join("src/app/tab/model.rs")).expect("读取标签模型失败");
+    let specialized = std::fs::read_to_string(root.join("src/app/tab/specialized.rs"))
+        .expect("读取专用标签类型失败");
     assert!(
-        types.contains("Containers(Entity<crate::container::ContainerWorkspace>)"),
-        "TabContent::Containers 必须持有 Entity<ContainerWorkspace>"
+        types.contains("Containers(Box<ContainerTab>)")
+            && specialized.contains("workspace: Entity<ContainerWorkspace>"),
+        "TabContent::Containers 必须通过 ContainerTab 持有 Entity<ContainerWorkspace>"
     );
     let container = std::fs::read_to_string(root.join("src/container/mod.rs"))
         .expect("读取 container/mod.rs 失败");

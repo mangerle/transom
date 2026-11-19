@@ -56,13 +56,14 @@ impl<'a> MonitorOps<'a> {
     fn active_monitor_target(&self) -> Option<(TabId, ConnectionId)> {
         let tab_id = self.workspace.active_tab?;
         let tab = self.workspace.tab(tab_id)?;
+        let session = tab.session()?;
         if !matches!(
-            tab.session.connection,
+            &session.connection,
             transom_core::Connection::Ssh(_) | transom_core::Connection::Local(_)
         ) {
             return None;
         }
-        Some((tab_id, tab.connection_id?))
+        Some((tab_id, tab.connection_id()?))
     }
 
     /// 处理监控面板发来的意图。
@@ -134,8 +135,9 @@ impl<'a> MonitorOps<'a> {
             return None;
         }
         let existing_local = self.workspace.tabs.iter().find_map(|tab| {
-            (matches!(tab.session.connection, transom_core::Connection::Local(_))
-                && tab.session_pane().is_some())
+            (tab.session().is_some_and(|session| {
+                matches!(&session.connection, transom_core::Connection::Local(_))
+            }) && tab.session_pane().is_some())
             .then_some(tab.id)
         });
         Some(existing_local.map_or(

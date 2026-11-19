@@ -9,19 +9,20 @@
 //! - 代价与局限：一个会话一个文件、按连接次数累积，不做保留策略（条数/容量
 //!   上限属于另一件事），磁盘占用由 `cat` 大输出这类操作决定，用户可自行清理。
 
-use crate::app::TerminalTab;
+use crate::app::WorkspaceTab;
 use chrono::Local;
 use std::path::{Path, PathBuf};
 use transom_core::{Connection, Session, TabId};
 use transom_platform::paths;
 
 /// 本会话的审计文件路径；未开启审计时返回 `None`。
-pub(crate) fn audit_path_for(tab: &TerminalTab, enabled: bool) -> Option<PathBuf> {
+pub(crate) fn audit_path_for(tab: &WorkspaceTab, enabled: bool) -> Option<PathBuf> {
     if !enabled {
         return None;
     }
+    let session = tab.session()?;
     Some(build_audit_path(
-        &tab.session,
+        session,
         tab.id,
         &paths::audit_dir(),
         Local::now().format("%Y%m%d-%H%M%S").to_string(),

@@ -176,7 +176,7 @@ impl AppState {
     /// 返回 `None`。
     pub(crate) fn git_workspace(&self, tab_id: TabId) -> Option<Entity<GitWorkspace>> {
         let index = self.workspace.tab_index(tab_id)?;
-        self.workspace.tabs[index].git()
+        self.workspace.tabs[index].git_workspace()
     }
 
     /// 按项目 id 取 Git 工作区实体句柄。
@@ -189,7 +189,7 @@ impl AppState {
         cx: &App,
     ) -> Option<Entity<GitWorkspace>> {
         self.workspace.tabs.iter().find_map(|tab| {
-            let workspace = tab.git()?;
+            let workspace = tab.git_workspace()?;
             (workspace.read(cx).state.project.id == project_id).then_some(workspace)
         })
     }

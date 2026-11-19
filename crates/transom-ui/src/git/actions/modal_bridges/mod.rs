@@ -88,7 +88,7 @@ impl<'a> GitModalActions<'a> {
 
     /// 按标签 id 取 Git 工作区实体句柄。
     fn git_workspace(&self, tab_id: transom_core::TabId) -> Option<Entity<GitWorkspace>> {
-        self.workspace.tab(tab_id)?.git()
+        self.workspace.tab(tab_id)?.git_workspace()
     }
 
     /// 按项目 id 取第一个打开该项目的 Git 工作区实体句柄。
@@ -98,7 +98,7 @@ impl<'a> GitModalActions<'a> {
         cx: &App,
     ) -> Option<Entity<GitWorkspace>> {
         self.workspace.tabs.iter().find_map(|tab| {
-            let workspace = tab.git()?;
+            let workspace = tab.git_workspace()?;
             (workspace.read(cx).state.project.id == project_id).then_some(workspace)
         })
     }

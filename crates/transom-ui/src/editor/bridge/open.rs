@@ -42,7 +42,7 @@ pub(crate) fn sftp_edit_remote_file_on(
         .tab(tab_id)
         .and_then(|tab| {
             let panel = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)?;
-            let entries = if tab.connection_id == Some(connection_id) {
+            let entries = if tab.connection_id() == Some(connection_id) {
                 &panel.remote.entries
             } else {
                 &panel
@@ -202,9 +202,10 @@ pub(crate) fn open_terminal_code_location(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let Some(connection_id) = app_state.workspace.tab(tab_id).map(|tab| tab.connection_id) else {
-        return;
-    };
+    let connection_id = app_state
+        .workspace
+        .tab(tab_id)
+        .and_then(|tab| tab.connection_id());
     let remote_dir = crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
         .map(|panel| panel.remote.path.clone());
     let Some(resolved) = resolve_code_path(path, remote_dir.as_deref()) else {

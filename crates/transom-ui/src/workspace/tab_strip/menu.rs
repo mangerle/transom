@@ -1,6 +1,6 @@
 //! 标签栏右键上下文菜单构建。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, SessionMenuData};
 use crate::palette::Palette;
 use crate::tiling::{MAX_TILING_SLOTS, TilingId};
 use gpui_kit::component::Icon;
@@ -15,8 +15,8 @@ use transom_ui_icons::UiIcon;
 #[derive(Clone)]
 pub(crate) struct TabContextMenuParams {
     pub(crate) active_pane: TabId,
-    pub(crate) session_id: transom_core::SessionId,
-    pub(crate) is_local: bool,
+    pub(crate) session_menu: Option<SessionMenuData>,
+    pub(crate) can_split: bool,
     pub(crate) pane_count: usize,
     pub(crate) tile_enabled: bool,
     pub(crate) group_id: GroupId,
@@ -28,8 +28,6 @@ pub(crate) struct TabContextMenuParams {
     pub(crate) entry_selected: bool,
     pub(crate) touched_sets_count: usize,
     pub(crate) selected_singles_count: usize,
-    /// 会话对端主机地址；本地终端与串口为 `None`，此时不渲染"复制主机地址"项。
-    pub(crate) host: Option<String>,
 }
 
 /// 构建标签条目的右键上下文菜单。
@@ -41,78 +39,92 @@ pub(crate) fn build_tab_context_menu(
     params: TabContextMenuParams,
 ) -> PopupMenu {
     let active_pane = params.active_pane;
-    let session_id = params.session_id;
-    let is_local = params.is_local;
+    let session_menu = params.session_menu.clone();
     let pane_count = params.pane_count;
     let group_id = params.group_id;
     let this_set_id = params.this_set_id;
     let palette = params.palette.clone();
-    let host = params.host.clone();
-    let app = app_entity.clone();
-    let mut menu = menu
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("menu.reconnect").to_string(),
-            AppIcon::Ui(UiIcon::REFRESH),
-            {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.reconnect_tab(active_pane, window, cx);
-                    });
-                }
-            },
-        ))
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("menu.duplicate").to_string(),
-            AppIcon::Ui(UiIcon::ADD),
-            {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        this.activate_tab(active_pane, window, cx);
-                        if is_local {
-                            crate::connection::open_local_terminal(&mut this.state, window, cx);
-                        } else {
-                            crate::connection::connect_session(
+    let mut menu = menu;
+    if let Some(session) = session_menu {
+        let app = app_entity.clone();
+        menu = menu
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.reconnect").to_string(),
+                AppIcon::Ui(UiIcon::REFRESH),
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.reconnect_tab(active_pane, window, cx);
+                        });
+                    }
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("menu.duplicate").to_string(),
+                AppIcon::Ui(UiIcon::ADD),
+                {
+                    let app = app.clone();
+                    let is_local = session.is_local;
+                    let session_id = session.session_id;
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.activate_tab(active_pane, window, cx);
+                            if is_local {
+                                crate::connection::open_local_terminal(&mut this.state, window, cx);
+                            } else {
+                                crate::connection::connect_session(
+                                    &mut this.state,
+                                    session_id,
+                                    window,
+                                    cx,
+                                );
+                            }
+                        });
+                    }
+                },
+            ))
+            .item(crate::widgets::menu_item(
+                rust_i18n::t!("audit_viewer.menu_item").to_string(),
+                AppIcon::Ui(UiIcon::DIFF),
+                {
+                    let app = app.clone();
+                    move |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            crate::audit_viewer::open_audit_viewer_for_tab(
                                 &mut this.state,
-                                session_id,
+                                active_pane,
                                 window,
                                 cx,
                             );
-                        }
-                    });
-                }
-            },
-        ))
-        .item(crate::widgets::menu_item(
-            rust_i18n::t!("audit_viewer.menu_item").to_string(),
-            AppIcon::Ui(UiIcon::DIFF),
-            {
-                let app = app.clone();
-                move |_, window, cx| {
-                    app.update(cx, |this, cx| {
-                        crate::audit_viewer::open_audit_viewer_for_tab(
-                            &mut this.state,
-                            active_pane,
-                            window,
-                            cx,
-                        );
-                    });
-                }
-            },
-        ));
+                        });
+                    }
+                },
+            ));
 
-    // 若会话为 SSH 连接，提供一键直通其远端 Docker 工作区的捷径
-    let is_ssh = app_entity
-        .read(cx)
-        .state
-        .session
-        .catalog
-        .sessions
-        .iter()
-        .any(|s| s.id == session_id && matches!(s.connection, Connection::Ssh(_)));
-    menu = append_session_menu_items(menu, app_entity, session_id, active_pane, host, is_ssh);
-    menu = append_split_menu_items(menu, app_entity, active_pane, pane_count);
+        let session_id = session.session_id;
+        let is_ssh = app_entity
+            .read(cx)
+            .state
+            .session
+            .catalog
+            .sessions
+            .iter()
+            .any(|candidate| {
+                candidate.id == session_id && matches!(candidate.connection, Connection::Ssh(_))
+            });
+        menu = append_session_menu_items(
+            menu,
+            app_entity,
+            session_id,
+            active_pane,
+            session.host,
+            is_ssh,
+        );
+    }
+    if params.can_split {
+        menu = append_split_menu_items(menu, app_entity, active_pane, pane_count);
+    }
     menu = append_tiling_menu_items(menu, &params, app_entity, &palette, window, cx);
     append_close_menu_items(menu, app_entity, group_id, active_pane, this_set_id)
 }

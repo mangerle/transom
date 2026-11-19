@@ -273,7 +273,12 @@ impl<'a> BroadcastOps<'a> {
                     tab_id: *pane_id,
                     title,
                     dot_color,
-                    icon: crate::connection::icon(&tab.session.connection),
+                    icon: tab
+                        .session()
+                        .map(|session| crate::connection::icon(&session.connection))
+                        .unwrap_or(transom_ui_icons::AppIcon::Ui(
+                            transom_ui_icons::UiIcon::ERROR,
+                        )),
                     selected: self.state.targets.contains(pane_id),
                 });
             }

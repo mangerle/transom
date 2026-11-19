@@ -84,7 +84,7 @@ pub(crate) fn selection_model(
 #[cfg(test)]
 mod tests {
     use super::selection_model;
-    use crate::app::TabGroup;
+    use crate::app::{TabGroup, TabGroupOwner};
     use crate::workspace::WorkspaceState;
     use transom_core::{GroupId, SessionId, TabId};
 
@@ -93,7 +93,7 @@ mod tests {
         let mut ids = Vec::with_capacity(count);
         for _ in 0..count {
             let pane = TabId::new();
-            let group = TabGroup::new(pane, SessionId::new(), 0);
+            let group = TabGroup::new(pane, TabGroupOwner::Session(SessionId::new()), 0);
             ids.push(group.id);
             workspace.groups.push(group);
         }

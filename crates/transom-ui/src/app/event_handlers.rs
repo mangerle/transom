@@ -30,18 +30,26 @@ impl AppShell {
             return true;
         };
         if let Some(tab) = self.state.workspace.tab_mut(tab_id)
-            && tab.connection_id == Some(connection_id)
+            && tab.connection_id() == Some(connection_id)
         {
+            let session_context = tab.session().map(|session| {
+                (
+                    session.name.clone(),
+                    crate::connection::describe_target(session),
+                )
+            });
             tab.status = TabStatus::Failed(error.clone());
             if let Some(pane) = tab.session_pane_mut() {
                 pane.network_traffic = None;
             }
             let message = localized_error(&error);
-            log::error!(
-                "连接建立失败，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}，原因: {message}",
-                tab.session.name,
-                crate::connection::describe_target(&tab.session)
-            );
+            if let Some((session_name, target)) = session_context {
+                log::error!(
+                    "连接建立失败，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}，原因: {message}",
+                    session_name,
+                    target
+                );
+            }
             self.state.set_error(message);
         }
         self.state.discard_pending_credential(connection_id);
@@ -64,18 +72,26 @@ impl AppShell {
             return true;
         };
         if let Some(tab) = self.state.workspace.tab_mut(tab_id)
-            && tab.connection_id == Some(connection_id)
+            && tab.connection_id() == Some(connection_id)
             && !matches!(tab.status, TabStatus::Failed(_))
         {
+            let session_context = tab.session().map(|session| {
+                (
+                    session.name.clone(),
+                    crate::connection::describe_target(session),
+                )
+            });
             tab.status = TabStatus::Disconnected;
             if let Some(pane) = tab.session_pane_mut() {
                 pane.network_traffic = None;
             }
-            log::info!(
-                "连接已断开，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
-                tab.session.name,
-                crate::connection::describe_target(&tab.session)
-            );
+            if let Some((session_name, target)) = session_context {
+                log::info!(
+                    "连接已断开，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
+                    session_name,
+                    target
+                );
+            }
         }
         self.state.mark_forwards_stopped(tab_id);
         crate::connection::schedule_auto_reconnect(&mut self.state, tab_id, connection_id, cx);
@@ -105,10 +121,12 @@ impl AppShell {
         let Some(tab) = self.state.workspace.tab(tab_id) else {
             return false;
         };
-        if tab.connection_id != Some(connection_id) {
+        if tab.connection_id() != Some(connection_id) {
             return false;
         }
-        let session_id = tab.session_id;
+        let Some(session_id) = tab.session_id() else {
+            return false;
+        };
         // 同一连接的新问题会作废上一次答案的保存意图：只有最后一次提交的
         // 凭据才可能认证成功，留着旧值会把已被拒绝的口令写进钥匙串。
         self.state.discard_pending_credential(connection_id);
@@ -178,7 +196,7 @@ impl AppShell {
         let Some(tab) = self.state.workspace.tab(tab_id) else {
             return false;
         };
-        if tab.connection_id != Some(connection_id) {
+        if tab.connection_id() != Some(connection_id) {
             return false;
         }
         self.state
@@ -225,7 +243,7 @@ impl AppShell {
 
         let mut applied = false;
         if let Some(tab) = self.state.workspace.tab_mut(tab_id)
-            && tab.connection_id == Some(connection_id)
+            && tab.connection_id() == Some(connection_id)
             && let Some(pane) = tab.session_pane_mut()
         {
             if pane.system_stats.as_ref() == Some(&stats) {
@@ -260,7 +278,7 @@ impl AppShell {
         };
         let mut applied = false;
         if let Some(tab) = self.state.workspace.tab_mut(tab_id)
-            && tab.connection_id == Some(connection_id)
+            && tab.connection_id() == Some(connection_id)
             && let Some(pane) = tab.session_pane_mut()
         {
             if pane.network_traffic == Some(traffic) {

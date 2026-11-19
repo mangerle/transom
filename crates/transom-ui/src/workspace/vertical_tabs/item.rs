@@ -6,8 +6,7 @@
 
 use super::drag::attach_vertical_tab_drag;
 use crate::app::app_settings;
-use crate::app::{AppShell, AppState};
-use crate::connection::session_host;
+use crate::app::{AppShell, AppState, SessionMenuData};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
 
@@ -16,7 +15,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
-use transom_core::{Connection, GroupId, SplitAxis};
+use transom_core::{GroupId, SplitAxis};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
@@ -71,7 +70,8 @@ pub(super) fn render_vertical_tab_row(
 struct VerticalTabRowData {
     group_id: GroupId,
     active_pane: transom_core::TabId,
-    session_id: transom_core::SessionId,
+    session_menu: Option<SessionMenuData>,
+    can_split: bool,
     pane_count: usize,
     pane_axis: SplitAxis,
     active: bool,
@@ -79,13 +79,11 @@ struct VerticalTabRowData {
     title: String,
     labeled: String,
     subtitle: String,
-    is_local: bool,
     dot_color: gpui_kit::Hsla,
     icon: AppIcon,
     icon_color: gpui_kit::Hsla,
     tiled_badge: bool,
     this_set_id: Option<crate::tiling::TilingId>,
-    menu_host: Option<String>,
     can_tile: bool,
     selection_groups: Vec<GroupId>,
     selected_singles: Vec<GroupId>,
@@ -105,7 +103,8 @@ fn collect_row_data(
     let group = app_state.workspace.group(group_id)?;
     let tab = app_state.workspace.tab(group.active_pane)?;
     let active_pane = group.active_pane;
-    let session_id = tab.session_id;
+    let session_menu = tab.session_menu();
+    let can_split = tab.can_split();
     let pane_count = group.pane_count();
     let pane_axis = group.root.root_axis();
     // 激活判定用"组包含活动窗格"而不是比较活动窗格本身：组内切窗格后，
@@ -118,14 +117,12 @@ fn collect_row_data(
     let title = tab.tab_label();
     let labeled = crate::workspace::tab_presentation::tab_title(tab, group.serial);
     let subtitle = crate::workspace::tab_presentation::tab_subtitle(tab);
-    let is_local = matches!(tab.session.connection, Connection::Local(_));
     let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
     let (icon, icon_color) =
         crate::workspace::tab_presentation::tab_icon(app_state, tab, active, p, cx);
     let tiled = app_state.tiling_of_group(group_id);
     let tiled_badge = tiled.is_some();
     let this_set_id = tiled.map(|tiled| tiled.id);
-    let menu_host = session_host(&tab.session).map(str::to_string);
     let can_tile = app_state.workspace.groups.len() >= 2;
     let crate::workspace::tab_selection::TabSelectionModel {
         selection_groups,
@@ -145,7 +142,8 @@ fn collect_row_data(
     Some(VerticalTabRowData {
         group_id,
         active_pane,
-        session_id,
+        session_menu: session_menu.clone(),
+        can_split,
         pane_count,
         pane_axis,
         active,
@@ -153,13 +151,11 @@ fn collect_row_data(
         title,
         labeled,
         subtitle,
-        is_local,
         dot_color,
         icon,
         icon_color,
         tiled_badge,
         this_set_id,
-        menu_host,
         can_tile,
         selection_groups,
         selected_singles,
@@ -304,8 +300,7 @@ fn apply_row_events(
     let selection_groups = data.selection_groups.clone();
     let tooltip_label = data.tooltip_label.clone();
     let menu_active_pane = data.active_pane;
-    let menu_session_id = data.session_id;
-    let menu_is_local = data.is_local;
+    let menu_session_menu = data.session_menu.clone();
     let menu_pane_count = data.pane_count;
     let menu_tile_enabled = data.this_set_id.is_none() && data.can_tile;
     let menu_group_id = data.group_id;
@@ -317,7 +312,7 @@ fn apply_row_events(
     let menu_entry_selected = data.entry_selected;
     let menu_touched_sets_count = data.touched_sets_count;
     let menu_selected_singles_count = data.selected_singles_count;
-    let menu_host = data.menu_host.clone();
+    let menu_can_split = data.can_split;
     row.child(
         band.on_mouse_down(
             MouseButton::Middle,
@@ -342,8 +337,8 @@ fn apply_row_events(
                 &app_entity,
                 TabContextMenuParams {
                     active_pane: menu_active_pane,
-                    session_id: menu_session_id,
-                    is_local: menu_is_local,
+                    session_menu: menu_session_menu.clone(),
+                    can_split: menu_can_split,
                     pane_count: menu_pane_count,
                     tile_enabled: menu_tile_enabled,
                     group_id: menu_group_id,
@@ -355,7 +350,6 @@ fn apply_row_events(
                     entry_selected: menu_entry_selected,
                     touched_sets_count: menu_touched_sets_count,
                     selected_singles_count: menu_selected_singles_count,
-                    host: menu_host.clone(),
                 },
             )
         }),

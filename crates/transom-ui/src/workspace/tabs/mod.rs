@@ -6,7 +6,7 @@
 
 mod close_ops;
 
-use crate::app::{AppState, TabGroup};
+use crate::app::{AppState, TabGroup, TabGroupOwner, WorkspaceTab};
 use crate::workspace::WorkspaceState;
 use transom_core::{Connection, GroupId, Session, SessionId, TabId};
 
@@ -18,16 +18,37 @@ impl WorkspaceState {
         self.group_index_of(tab_id)
     }
 
-    /// 新建标签组并返回组 ID；调用方随后把首个窗格加入 `tabs`。
-    pub(crate) fn create_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
+    /// 新建会话标签组并返回组 ID。
+    pub(crate) fn create_session_group(&mut self, tab_id: TabId, session_id: SessionId) -> GroupId {
+        self.create_group(tab_id, TabGroupOwner::Session(session_id))
+    }
+
+    /// 新建单工作区标签组并返回组 ID。
+    pub(crate) fn create_workspace_group(&mut self, tab_id: TabId) -> GroupId {
+        self.create_group(tab_id, TabGroupOwner::Workspace(tab_id))
+    }
+
+    /// 按标签内容选择分组归属并建组。
+    ///
+    /// 设计原理（Why）：调用方只持有标签本身，归属规则集中在
+    /// [`WorkspaceTab::group_owner`]，避免每个打开入口重复判断会话与工作区类型。
+    pub(crate) fn create_group_for_tab(&mut self, tab: &WorkspaceTab) -> GroupId {
+        let tab_id = tab.id;
+        match tab.group_owner() {
+            TabGroupOwner::Session(session_id) => self.create_session_group(tab_id, session_id),
+            TabGroupOwner::Workspace(_) => self.create_workspace_group(tab_id),
+        }
+    }
+
+    fn create_group(&mut self, tab_id: TabId, owner: TabGroupOwner) -> GroupId {
         let serial = self
             .groups
             .iter()
-            .filter(|group| group.session_id == session_id)
+            .filter(|group| group.owner == owner)
             .map(|group| group.serial)
             .max()
             .map_or(0, |max| max + 1);
-        let group = TabGroup::new(tab_id, session_id, serial);
+        let group = TabGroup::new(tab_id, owner, serial);
         let id = group.id;
         self.groups.push(group);
         id
@@ -45,14 +66,15 @@ impl WorkspaceState {
             .iter()
             .filter_map(|group| {
                 let tab = self.tabs.iter().find(|tab| tab.id == group.active_pane)?;
-                if !matches!(tab.session.connection, Connection::Local(_)) {
+                let session = tab.session()?;
+                if !matches!(&session.connection, Connection::Local(_)) {
                     return None;
                 }
-                (tab.session.name == base_title).then_some(group.serial)
+                (session.name == base_title).then_some(group.serial)
             })
             .max()
             .map_or(0, |max| max + 1);
-        let id = self.create_group(tab_id, session_id);
+        let id = self.create_session_group(tab_id, session_id);
         if let Some(group) = self.groups.iter_mut().find(|group| group.id == id) {
             group.serial = serial;
         }
@@ -63,7 +85,9 @@ impl WorkspaceState {
 impl AppState {
     pub(crate) fn refresh_tab_sessions(&mut self) {
         for index in 0..self.workspace.tabs.len() {
-            let session_id = self.workspace.tabs[index].session_id;
+            let Some(session_id) = self.workspace.tabs[index].session_id() else {
+                continue;
+            };
             // 先结束对 catalog 的只读借用，再写回标签：两个字段同属
             // `self.state`，同时读写会被当成对整体的借用冲突。
             let resolved = self
@@ -73,8 +97,10 @@ impl AppState {
                 .iter()
                 .find(|session| session.id == session_id)
                 .map(|session| self.session.catalog.resolved_session(session));
-            if let Some(session) = resolved {
-                self.workspace.tabs[index].session = session;
+            if let Some(session) = resolved
+                && let Some(session_tab) = self.workspace.tabs[index].session_tab_mut()
+            {
+                session_tab.session = session;
             }
         }
     }
@@ -82,7 +108,8 @@ impl AppState {
     /// 取窗格应当使用的会话配置：优先目录里的最新记录，退回标签上的快照。
     pub(crate) fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
         let index = self.workspace.tab_index(tab_id)?;
-        let session_id = self.workspace.tabs[index].session_id;
+        let session_id = self.workspace.tabs[index].session_id()?;
+        let fallback = self.workspace.tabs[index].session().cloned()?;
         Some(
             self.session
                 .catalog
@@ -90,7 +117,7 @@ impl AppState {
                 .iter()
                 .find(|session| session.id == session_id)
                 .cloned()
-                .unwrap_or_else(|| self.workspace.tabs[index].session.clone()),
+                .unwrap_or(fallback),
         )
     }
 

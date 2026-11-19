@@ -1,6 +1,6 @@
 //! 标签栏辅助徽标组件与辅助结构体。
 
-use crate::app::AppShell;
+use crate::app::{AppShell, TabContent};
 use crate::palette::Palette;
 use crate::tiling::TiledTabs;
 use crate::workspace::WorkspaceState;
@@ -13,7 +13,7 @@ use gpui_kit::*;
 use transom_core::{GroupId, TabId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{CustomIcon, DomainIcon, UiIcon};
 
 /// 窗格列表里的一行预渲染数据。
 ///
@@ -70,7 +70,7 @@ pub(super) fn build_tiled_group_badge(
             ordinal: slot + 1,
             title,
             dot_color,
-            icon: crate::connection::icon(&tab.session.connection),
+            icon: compact_tab_icon(tab),
             focused: slot == tiled.focused,
         });
     }
@@ -189,6 +189,25 @@ pub(super) fn build_tiled_group_badge(
             }
         })
         .into_any_element()
+}
+
+/// 并排列表只需要静态图标，不读取工作区实体或会话目录。
+fn compact_tab_icon(tab: &crate::app::WorkspaceTab) -> AppIcon {
+    match &tab.content {
+        TabContent::Session(_) => tab
+            .session()
+            .map(|session| crate::connection::icon(&session.connection))
+            .unwrap_or_else(|| AppIcon::Ui(UiIcon::ERROR)),
+        TabContent::Player(_) | TabContent::Monitor(_) => AppIcon::Domain(DomainIcon::MONITOR),
+        TabContent::Containers(container) => {
+            if container.profile.engine.kind == transom_core::ContainerEngineKind::Docker {
+                CustomIcon::DOCKER.into()
+            } else {
+                AppIcon::Domain(DomainIcon::CONTAINER)
+            }
+        }
+        TabContent::Git(_) => AppIcon::Ui(UiIcon::VCS),
+    }
 }
 
 /// 构建悬浮提示内容。

@@ -1,7 +1,7 @@
 //! 本地终端启动、快捷连接、桌面深链与命令历史记录。
 
 use crate::app::app_settings;
-use crate::app::{AppShell, AppState, TerminalTab};
+use crate::app::{AppShell, AppState, WorkspaceTab};
 use crate::keymap;
 use gpui_kit::*;
 use transom_core::{DeepLinkRequest, LocalConnection, Session, TabId, parse_ssh_config};
@@ -151,7 +151,7 @@ fn spawn_local_request(
     app_state
         .workspace
         .tabs
-        .push(TerminalTab::pending(tab_id, session.clone()));
+        .push(WorkspaceTab::new_session(tab_id, session.clone()));
     app_state.workspace.active_tab = Some(tab_id);
     app_state.present_active_group();
     crate::connection::start_connection(app_state, tab_id, session, cx);
@@ -168,11 +168,9 @@ pub(crate) fn connect_quick_host(app_state: &mut AppState, host: &str, cx: &mut 
         }
     };
     let tab_id = TabId::new();
-    app_state.workspace.create_group(tab_id, session.id);
-    app_state
-        .workspace
-        .tabs
-        .push(TerminalTab::pending(tab_id, session.clone()));
+    let tab = WorkspaceTab::new_session(tab_id, session.clone());
+    app_state.workspace.create_group_for_tab(&tab);
+    app_state.workspace.tabs.push(tab);
     app_state.workspace.active_tab = Some(tab_id);
     app_state.present_active_group();
     crate::connection::start_connection(app_state, tab_id, session, cx);

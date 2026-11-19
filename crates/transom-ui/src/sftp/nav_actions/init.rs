@@ -118,14 +118,12 @@ pub(crate) fn toggle_sftp(
         }
         None => {}
     }
-    let is_local = matches!(
-        &app_state.workspace.tabs[index].session.connection,
-        Connection::Local(_)
-    );
-    let is_ssh = matches!(
-        &app_state.workspace.tabs[index].session.connection,
-        Connection::Ssh(_)
-    );
+    let is_local = app_state.workspace.tabs[index]
+        .session()
+        .is_some_and(|session| matches!(&session.connection, Connection::Local(_)));
+    let is_ssh = app_state.workspace.tabs[index]
+        .session()
+        .is_some_and(|session| matches!(&session.connection, Connection::Ssh(_)));
     if is_local {
         crate::sftp::open_local_file_panel(app_state, index, window, cx);
         return;
@@ -155,13 +153,12 @@ fn sftp_initial_paths(app_state: &AppState, index: usize) -> (LocalQuickPaths, P
         .unwrap_or_else(|| PathBuf::from("."));
     // 初始远端目录优先用终端 OSC 7 上报的 cwd；还没上报时回落到远端 Home。
     let initial_remote_path = app_state.workspace.tabs[index]
-        .cwd
-        .as_deref()
+        .cwd()
         .and_then(normalize_remote_cwd)
         .unwrap_or_else(|| ".".to_string());
     log::info!(
         "打开远端文件面板，窗格: {tab_id}，初始目录: {initial_remote_path}，终端 cwd: {:?}",
-        app_state.workspace.tabs[index].cwd
+        app_state.workspace.tabs[index].cwd()
     );
     (quick_paths, local_path, initial_remote_path)
 }
@@ -284,7 +281,7 @@ pub(crate) fn build_sftp_panel(
         },
     );
     // 主连接与命令通道在借用窗格之前取好：面板之后自己解析目标列与投递命令。
-    let main_connection = app_state.workspace.tabs[index].connection_id;
+    let main_connection = app_state.workspace.tabs[index].connection_id();
     let command_tx = Some(app_state.runtime.services.command_tx.clone());
     let state = build_sftp_state(
         app_state,

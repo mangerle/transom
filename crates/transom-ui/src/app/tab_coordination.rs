@@ -5,12 +5,12 @@
 //! - 涉及控制面命令发送、编辑器脏状态拦截、SFTP 预览收起、监控面板同步以及
 //!   窗口关闭的协调动作集中留在 `app/`，彻底消除 `workspace/tabs/` 对 `AppShell` 的反向耦合。
 
-use super::{AppShell, TabContent, TabStatus, TerminalTab, app_settings};
+use super::{AppShell, SessionTab, TabContent, TabStatus, WorkspaceTab, app_settings};
 use crate::pane_tree::LayoutNode;
 use crate::sftp::PendingEditorClose;
 use crate::tiling::StripEntry;
 use gpui_kit::*;
-use transom_core::{Connection, GroupId, SavedTabGroup, TabId, TerminalCommand};
+use transom_core::{Connection, ContainerCommand, GroupId, SavedTabGroup, TabId, TerminalCommand};
 
 impl AppShell {
     /// 根据窗口设置恢复一个标签组及其分割树布局，返回实际创建的标签组。
@@ -61,7 +61,7 @@ impl AppShell {
             self.state
                 .workspace
                 .tabs
-                .push(TerminalTab::pending(pane_id, session.clone()));
+                .push(WorkspaceTab::new_session(pane_id, session.clone()));
             crate::connection::start_connection(&mut self.state, pane_id, session.clone(), cx);
         }
         cx.notify();
@@ -82,12 +82,18 @@ impl AppShell {
             return;
         };
         let tab = &mut self.state.workspace.tabs[index];
-        tab.content = TabContent::Session(Box::default());
-        tab.connection_id = None;
+        tab.content = TabContent::Session(Box::new(SessionTab {
+            session_id: session.id,
+            session: session.clone(),
+            connection_id: None,
+            cwd: None,
+            pane: Default::default(),
+        }));
+        tab.set_connection_id(None);
         tab.status = TabStatus::Connecting;
         // 新连接尚未收到 OSC 0/2 与 OSC 7：标签回落会话名，SFTP 重新等待上报。
         tab.title.clear();
-        tab.cwd = None;
+        tab.set_cwd(None);
         self.state.workspace.active_tab = Some(tab_id);
         if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
             self.state.workspace.groups[group_index].active_pane = tab_id;
@@ -225,8 +231,24 @@ impl AppShell {
             .and_then(|tiled| tiled.focused_group());
         self.state.workspace.groups.remove(index);
         for tab_id in &panes {
-            self.state
-                .send_command(TerminalCommand::CloseTab { tab_id: *tab_id });
+            let action = self
+                .state
+                .workspace
+                .tab(*tab_id)
+                .map(WorkspaceTab::close_action);
+            if let Some(action) = action {
+                match action {
+                    super::TabCloseAction::CloseTerminal { tab_id } => {
+                        self.state
+                            .send_command(TerminalCommand::CloseTab { tab_id });
+                    }
+                    super::TabCloseAction::DisconnectContainer { tab_id } => {
+                        self.state
+                            .send_command(ContainerCommand::Disconnect { tab_id });
+                    }
+                    super::TabCloseAction::DropOnly => {}
+                }
+            }
         }
         self.state
             .workspace

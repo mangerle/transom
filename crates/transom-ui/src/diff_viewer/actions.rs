@@ -93,7 +93,10 @@ impl<'a> DiffViewerOps<'a> {
             remote_text,
             remote_meta,
         } = source;
-        let Some(connection_id) = self.workspace.tab(tab_id).and_then(|tab| tab.connection_id)
+        let Some(connection_id) = self
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.connection_id())
         else {
             *self.status = Some(rust_i18n::t!("diff.error_no_connection").to_string());
             cx.notify();

@@ -7,8 +7,7 @@
 use super::badges::{build_tab_tooltip, build_tiled_group_badge};
 use super::item_parts::{render_pane_badge, render_tab_close_button};
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
-use crate::app::{AppShell, TabGroup, TerminalTab, app_settings};
-use crate::connection::session_host;
+use crate::app::{AppShell, SessionMenuData, TabGroup, WorkspaceTab, app_settings};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -19,7 +18,7 @@ use crate::workspace::tab_selection::TabSelectionModel;
 use gpui_kit::base::{Tab, h_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::*;
-use transom_core::{Connection, GroupId, SessionId, SplitAxis, TabId};
+use transom_core::{GroupId, SplitAxis, TabId};
 use transom_ui_icons::{AppIcon, AppIconElement};
 
 /// 单个标签条目的渲染参数包，避免七个平铺入参发生顺序错位。
@@ -53,7 +52,6 @@ struct TabEntryDisplayState {
     pane_count: usize,
     root_axis: SplitAxis,
     serial: usize,
-    is_local: bool,
     divider_px: f32,
     accent_px: f32,
 }
@@ -77,9 +75,9 @@ struct TabVisuals {
 struct TabEntryModel<'a> {
     group_id: GroupId,
     active_pane: TabId,
-    session_id: SessionId,
+    session_menu: Option<SessionMenuData>,
+    can_split: bool,
     group: &'a TabGroup,
-    tab: &'a TerminalTab,
     tiled_set: Option<TiledTabs>,
     this_set_id: Option<crate::tiling::TilingId>,
     composite: bool,
@@ -148,22 +146,16 @@ fn resolve_tab_entry_model<'a>(
         tiled_set.as_ref(),
     );
     let active_pane = group.active_pane;
-    let display = resolve_tab_display_state(
-        &shell.state.workspace,
-        group,
-        tab,
-        composite,
-        can_tile,
-        palette,
-    );
+    let display =
+        resolve_tab_display_state(&shell.state.workspace, group, composite, can_tile, palette);
     let labels = resolve_tab_labels(tab, display.serial, display.pane_count);
     let visuals = resolve_tab_visuals(&shell.state, tab, display.active, palette, cx);
     Some(TabEntryModel {
         group_id,
         active_pane,
-        session_id: tab.session_id,
+        session_menu: tab.session_menu(),
+        can_split: tab.can_split(),
         group,
-        tab,
         this_set_id: tiled_set.as_ref().map(|tiled| tiled.id),
         tiled_set,
         composite,
@@ -181,7 +173,6 @@ fn resolve_tab_entry_model<'a>(
 fn resolve_tab_display_state(
     workspace: &WorkspaceState,
     group: &TabGroup,
-    tab: &TerminalTab,
     composite: bool,
     can_tile: bool,
     palette: &Palette,
@@ -193,7 +184,6 @@ fn resolve_tab_display_state(
         pane_count: group.pane_count(),
         root_axis: group.root.root_axis(),
         serial: group.serial,
-        is_local: matches!(tab.session.connection, Connection::Local(_)),
         divider_px,
         accent_px: divider_px.max(2.0),
     }
@@ -219,7 +209,7 @@ fn resolve_tab_entry_target(
 }
 
 /// 统一计算标签标题、提示文本与会话副标题。
-fn resolve_tab_labels(tab: &TerminalTab, serial: usize, pane_count: usize) -> TabLabels {
+fn resolve_tab_labels(tab: &WorkspaceTab, serial: usize, pane_count: usize) -> TabLabels {
     let title = tab.tab_label();
     let labeled = crate::workspace::tab_presentation::tab_title(tab, serial);
     let session_name = tab.display_name();
@@ -239,7 +229,7 @@ fn resolve_tab_labels(tab: &TerminalTab, serial: usize, pane_count: usize) -> Ta
 /// 统一计算标签图标、状态点与会话强调色。
 fn resolve_tab_visuals(
     state: &crate::app::AppState,
-    tab: &TerminalTab,
+    tab: &WorkspaceTab,
     active: bool,
     palette: &Palette,
     cx: &App,
@@ -340,8 +330,8 @@ fn build_tab_entry_tab(
 fn build_tab_context_menu_params(model: &TabEntryModel<'_>) -> TabContextMenuParams {
     TabContextMenuParams {
         active_pane: model.active_pane,
-        session_id: model.session_id,
-        is_local: model.display.is_local,
+        session_menu: model.session_menu.clone(),
+        can_split: model.can_split,
         pane_count: model.display.pane_count,
         tile_enabled: model.display.tile_enabled,
         group_id: model.group_id,
@@ -353,7 +343,6 @@ fn build_tab_context_menu_params(model: &TabEntryModel<'_>) -> TabContextMenuPar
         entry_selected: model.selection.entry_selected,
         touched_sets_count: model.selection.touched_sets.len(),
         selected_singles_count: model.selection.selected_singles.len(),
-        host: session_host(&model.tab.session).map(str::to_string),
     }
 }
 

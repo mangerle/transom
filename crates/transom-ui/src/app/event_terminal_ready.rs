@@ -32,8 +32,11 @@ impl AppShell {
         &self,
         index: usize,
         cx: &mut Context<Self>,
-    ) -> TerminalReadySpawnSettings {
-        let session_id = self.state.workspace.tabs[index].session_id;
+    ) -> Option<TerminalReadySpawnSettings> {
+        let session_id = self.state.workspace.tabs[index].session_id()?;
+        let fallback_terminal = self.state.workspace.tabs[index]
+            .session()
+            .map(|session| session.terminal.clone())?;
         let mut profile = self
             .state
             .session
@@ -42,7 +45,7 @@ impl AppShell {
             .iter()
             .find(|session| session.id == session_id)
             .map(|session| session.terminal.clone())
-            .unwrap_or_else(|| self.state.workspace.tabs[index].session.terminal.clone());
+            .unwrap_or(fallback_terminal);
         apply_global_terminal_profile(&mut profile, cx);
         let interaction = app_settings(cx).terminal_interaction;
         let reserved = self.state.ui.shortcut_recording.filter.clone();
@@ -61,18 +64,18 @@ impl AppShell {
         // 命令执行标签（X-TerminalArgExec）不是交互式 Shell：集成探针会直接写进
         // 目标程序，必须关闭，否则 htop 这类全屏程序会收到一串注入序列。
         let exec_local = matches!(
-            &self.state.workspace.tabs[index].session.connection,
-            transom_core::Connection::Local(local) if local.command.is_some()
+            self.state.workspace.tabs[index].session().map(|session| &session.connection),
+            Some(transom_core::Connection::Local(local)) if local.command.is_some()
         );
         let shell_integration_enabled =
             app_settings(cx).block_view.shell_integration && !exec_local;
-        TerminalReadySpawnSettings {
+        Some(TerminalReadySpawnSettings {
             profile,
             interaction,
             key_filter,
             audit_path,
             shell_integration_enabled,
-        }
+        })
     }
 
     pub(crate) fn on_terminal_ready(
@@ -92,11 +95,15 @@ impl AppShell {
         let Some(index) = self.state.workspace.tab_index(tab_id) else {
             return false;
         };
-        if self.state.workspace.tabs[index].connection_id != Some(connection_id) {
+        if self.state.workspace.tabs[index].connection_id() != Some(connection_id) {
             return false;
         }
-        let session_id = self.state.workspace.tabs[index].session_id;
-        let spawn_settings = self.terminal_ready_spawn_settings(index, cx);
+        let Some(session_id) = self.state.workspace.tabs[index].session_id() else {
+            return false;
+        };
+        let Some(spawn_settings) = self.terminal_ready_spawn_settings(index, cx) else {
+            return false;
+        };
         let terminal = self.spawn_terminal_view(
             window,
             cx,
@@ -120,6 +127,12 @@ impl AppShell {
                 this.handle_terminal_event(tab_id, event, window, cx)
             },
         );
+        let session_context = self.state.workspace.tabs[index].session().map(|session| {
+            (
+                session.name.clone(),
+                crate::connection::describe_target(session),
+            )
+        });
         let tab = &mut self.state.workspace.tabs[index];
         tab.status = TabStatus::Connected;
         if let Some(pane) = tab.session_pane_mut() {
@@ -128,11 +141,13 @@ impl AppShell {
             pane.network_traffic = None;
             pane._subscription = Some(subscription);
         }
-        log::info!(
-            "连接建立完成，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
-            tab.session.name,
-            crate::connection::describe_target(&tab.session)
-        );
+        if let Some((session_name, target)) = session_context {
+            log::info!(
+                "连接建立完成，窗格: {tab_id}，连接: {connection_id:?}，会话: {}，目标: {}",
+                session_name,
+                target
+            );
+        }
         self.finish_terminal_ready(
             TerminalReadyFinish {
                 tab_id,

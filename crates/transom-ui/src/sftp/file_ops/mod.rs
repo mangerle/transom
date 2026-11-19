@@ -22,7 +22,7 @@ pub(crate) fn perform_sftp_delete(
         app_state
             .workspace
             .tab(tab_id)
-            .and_then(|tab| tab.connection_id)
+            .and_then(|tab| tab.connection_id())
     }) else {
         return;
     };

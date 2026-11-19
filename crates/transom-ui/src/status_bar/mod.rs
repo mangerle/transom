@@ -202,8 +202,9 @@ pub(crate) fn refresh_status_metrics(app_state: &mut AppState, cx: &mut Context<
         .and_then(|tab_id| app_state.workspace.tab(tab_id));
     let traffic = tab.and_then(|tab| tab.network_traffic());
     let stats = tab.and_then(|tab| tab.system_stats());
-    let is_ssh =
-        tab.is_some_and(|tab| matches!(tab.session.connection, transom_core::Connection::Ssh(_)));
+    let is_ssh = tab
+        .and_then(|tab| tab.session())
+        .is_some_and(|session| matches!(&session.connection, transom_core::Connection::Ssh(_)));
     let status = app_state.ui.status.as_deref();
     // 先借用比较：未变化时不构造快照，避免每帧克隆系统名与流量样本。
     if app_state

@@ -2,7 +2,7 @@
 
 use crate::app::app_settings;
 use crate::app::update_app_settings;
-use crate::app::{AppShell, AppState, TabContent, TerminalTab};
+use crate::app::{AppShell, AppState, WorkspaceTab};
 use gpui_kit::{Context, Window};
 use transom_core::TabId;
 
@@ -44,9 +44,9 @@ pub(crate) fn maximize_monitor_to_tab(
     let target_tab_id = active_tab_id
         .and_then(|id| app_state.workspace.tab(id))
         .and_then(|tab| {
-            if let TabContent::Monitor(tid) = tab.content {
-                Some(tid)
-            } else if !tab.is_player() {
+            if let Some(monitor) = tab.monitor() {
+                Some(monitor.target_tab_id)
+            } else if tab.is_session() {
                 Some(tab.id)
             } else {
                 None
@@ -57,7 +57,7 @@ pub(crate) fn maximize_monitor_to_tab(
                 .workspace
                 .tabs
                 .iter()
-                .find(|tab| !tab.is_player() && !tab.is_monitor())
+                .find(|tab| tab.is_session())
                 .map(|tab| tab.id)
         });
 
@@ -66,12 +66,9 @@ pub(crate) fn maximize_monitor_to_tab(
     };
 
     // 2. 如果已经存在针对该 target_tab_id 的监控 Tab，直接切过去
-    if let Some(existing) = app_state.workspace.tabs.iter().find(|t| {
-        if let TabContent::Monitor(tid) = t.content {
-            tid == target_tab_id
-        } else {
-            false
-        }
+    if let Some(existing) = app_state.workspace.tabs.iter().find(|tab| {
+        tab.monitor()
+            .is_some_and(|monitor| monitor.target_tab_id == target_tab_id)
     }) {
         let existing_id = existing.id;
         app_state.ui.window_requests.push_activate_tab(existing_id);
@@ -84,24 +81,17 @@ pub(crate) fn maximize_monitor_to_tab(
         return;
     };
     let target_title = target_tab.display_name();
-    let target_session = target_tab.session.clone();
-    let target_connection_id = target_tab.connection_id;
-    let target_session_id = target_tab.session_id;
+    let Some(target_session) = target_tab.session().cloned() else {
+        return;
+    };
 
     let monitor_tab_id = TabId::new();
     let tab_title = rust_i18n::t!("monitor.view.tab_name", host = &target_title).to_string();
 
-    let new_tab = TerminalTab::monitor_tab(
-        monitor_tab_id,
-        target_session,
-        tab_title,
-        target_tab_id,
-        target_connection_id,
-    );
+    let new_tab =
+        WorkspaceTab::new_monitor(monitor_tab_id, tab_title, target_tab_id, target_session);
 
-    app_state
-        .workspace
-        .create_group(monitor_tab_id, target_session_id);
+    app_state.workspace.create_group_for_tab(&new_tab);
     app_state.workspace.tabs.push(new_tab);
     app_state
         .ui

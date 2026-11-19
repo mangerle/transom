@@ -114,7 +114,7 @@ impl AppState {
             .workspace
             .tabs
             .iter()
-            .filter(|tab| tab.session_id == session_id)
+            .filter(|tab| tab.session_id() == Some(session_id))
             .map(|tab| tab.id)
             .collect();
         if crate::editor::block_close_for_dirty_editors(
@@ -139,7 +139,7 @@ impl AppState {
         }
         self.workspace
             .tabs
-            .retain(|tab| tab.session_id != session_id);
+            .retain(|tab| tab.session_id() != Some(session_id));
         crate::editor::prune_tab_overlays(self, cx);
         let tiled_focus = self.active_tiling().and_then(|tiled| tiled.focused_group());
         let mut replacement = None;

@@ -161,7 +161,7 @@ pub(crate) fn request_sftp_list_pane(
     let Some(main_connection) = app_state
         .workspace
         .tab(tab_id)
-        .and_then(|tab| tab.connection_id)
+        .and_then(|tab| tab.connection_id())
     else {
         return;
     };
@@ -193,7 +193,7 @@ pub(crate) fn request_sftp_list(
     let Some(main_connection) = app_state
         .workspace
         .tab(tab_id)
-        .and_then(|tab| tab.connection_id)
+        .and_then(|tab| tab.connection_id())
     else {
         return;
     };
@@ -239,7 +239,7 @@ pub(crate) fn request_sftp_list_for_connection(
 ) {
     let target = app_state.workspace.tab(tab_id).and_then(|tab| {
         crate::sftp::sftp_state(&app_state.workspace, tab_id, cx)
-            .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id))
+            .and_then(|panel| panel.remote_pane_of_connection(connection_id, tab.connection_id()))
     });
     let Some(target) = target else {
         return;

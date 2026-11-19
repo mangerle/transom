@@ -10,7 +10,7 @@
 //!      跨组件访问仍需显式写出 `workspace` 路径；
 //! - 代价与局限：跨组件需要访问全局设置或持久化目录时，仍需上层 `AppShell` 协调。
 
-use crate::app::{TabGroup, TerminalTab};
+use crate::app::{TabGroup, WorkspaceTab};
 use crate::tiling::TiledTabs;
 use gpui_kit::Entity;
 use gpui_kit::component::resizable::ResizableState;
@@ -19,7 +19,7 @@ use transom_core::{GroupId, SplitId, TabId};
 
 /// 工作区核心状态：聚合全部活动标签、分割树分组、并排平铺网格与焦点追踪。
 pub struct WorkspaceState {
-    pub(crate) tabs: Vec<TerminalTab>,
+    pub(crate) tabs: Vec<WorkspaceTab>,
     pub(crate) groups: Vec<TabGroup>,
     pub(crate) tiled_sets: Vec<TiledTabs>,
     pub(crate) tab_selection: HashSet<GroupId>,
@@ -47,12 +47,12 @@ impl WorkspaceState {
     }
 
     /// 按窗格 id 查找标签。
-    pub(crate) fn tab(&self, id: TabId) -> Option<&TerminalTab> {
+    pub(crate) fn tab(&self, id: TabId) -> Option<&WorkspaceTab> {
         self.tabs.iter().find(|tab| tab.id == id)
     }
 
     /// 按窗格 id 可变查找标签。
-    pub(crate) fn tab_mut(&mut self, id: TabId) -> Option<&mut TerminalTab> {
+    pub(crate) fn tab_mut(&mut self, id: TabId) -> Option<&mut WorkspaceTab> {
         self.tabs.iter_mut().find(|tab| tab.id == id)
     }
 
@@ -222,6 +222,7 @@ impl WorkspaceState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::TabGroupOwner;
     use transom_core::{AuthMethod, Connection, Session, SessionId, SshConnection};
 
     /// 查询 API 与底层集合保持一致：标签、分组与归属关系都能按 id 命中。
@@ -240,10 +241,12 @@ mod tests {
                 proxy_jump: None,
             }),
         );
-        let group = TabGroup::new(pane, session.id, 0);
+        let group = TabGroup::new(pane, TabGroupOwner::Session(session.id), 0);
         let group_id = group.id;
         workspace.groups.push(group);
-        workspace.tabs.push(TerminalTab::pending(pane, session));
+        workspace
+            .tabs
+            .push(WorkspaceTab::new_session(pane, session));
 
         assert!(workspace.tab(pane).is_some());
         assert_eq!(workspace.tab_index(pane), Some(0));
@@ -270,7 +273,7 @@ mod tests {
     #[test]
     fn reconcile_selection_drops_dead_groups() {
         let mut ws = WorkspaceState::new();
-        let group = TabGroup::new(TabId::new(), SessionId::new(), 0);
+        let group = TabGroup::new(TabId::new(), TabGroupOwner::Session(SessionId::new()), 0);
         let alive = group.id;
         ws.groups.push(group);
         ws.tab_selection.insert(alive);
@@ -285,8 +288,8 @@ mod tests {
     #[test]
     fn reconcile_tilings_drops_grid_below_two_groups() {
         let mut ws = WorkspaceState::new();
-        let first = TabGroup::new(TabId::new(), SessionId::new(), 0);
-        let second = TabGroup::new(TabId::new(), SessionId::new(), 1);
+        let first = TabGroup::new(TabId::new(), TabGroupOwner::Session(SessionId::new()), 0);
+        let second = TabGroup::new(TabId::new(), TabGroupOwner::Session(SessionId::new()), 1);
         let first_id = first.id;
         ws.groups.push(first);
         ws.groups.push(second);
@@ -308,8 +311,8 @@ mod tests {
     #[test]
     fn reconcile_layout_prunes_grid_before_split_states() {
         let mut ws = WorkspaceState::new();
-        let first = TabGroup::new(TabId::new(), SessionId::new(), 0);
-        let second = TabGroup::new(TabId::new(), SessionId::new(), 1);
+        let first = TabGroup::new(TabId::new(), TabGroupOwner::Session(SessionId::new()), 0);
+        let second = TabGroup::new(TabId::new(), TabGroupOwner::Session(SessionId::new()), 1);
         let first_id = first.id;
         ws.groups.push(first);
         ws.groups.push(second);

@@ -18,7 +18,7 @@ impl AppState {
         cx: &mut App,
     ) -> Option<TabId> {
         for tab in self.workspace.tabs.iter() {
-            let Some(workspace) = tab.containers() else {
+            let Some(workspace) = tab.container_workspace() else {
                 continue;
             };
             if !workspace.read(cx).has_request(request_id) {
@@ -42,7 +42,7 @@ impl AppState {
         cx: &App,
     ) -> Option<TabId> {
         self.workspace.tabs.iter().find_map(|tab| {
-            let workspace = tab.containers()?;
+            let workspace = tab.container_workspace()?;
             workspace.read(cx).has_request(request_id).then_some(tab.id)
         })
     }
@@ -57,7 +57,7 @@ impl AppState {
         cx: &App,
     ) -> Option<String> {
         self.workspace.tabs.iter().find_map(|tab| {
-            tab.containers()
+            tab.container_workspace()
                 .and_then(|workspace| workspace.read(cx).request_label(request_id))
         })
     }

@@ -1,6 +1,7 @@
 //! 引擎连接的发现、保存、删除与工作区打开。
 
 use super::*;
+use crate::app::WorkspaceTab;
 use transom_core::{ContainerEndpoint, ContainerEngineKind, ContainerEngineRef, SessionId};
 
 /// 打开（或聚焦）一个引擎连接的工作区标签。
@@ -10,28 +11,16 @@ pub(crate) fn open_engine_workspace(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(existing) =
-        app_state
-            .workspace
-            .tabs
-            .iter()
-            .find_map(|tab| match &tab.session.connection {
-                Connection::ContainerEngine(existing) if existing.id == profile.id => Some(tab.id),
-                _ => None,
-            })
-    {
+    if let Some(existing) = app_state.workspace.tabs.iter().find_map(|tab| {
+        tab.container_profile()
+            .is_some_and(|existing| existing.id == profile.id)
+            .then_some(tab.id)
+    }) {
         app_state.ui.window_requests.push_activate_tab(existing);
         return;
     }
     let tab_id = TabId::new();
-    let session = Session::new(
-        profile.display_name(),
-        Connection::ContainerEngine(profile.clone()),
-    );
-    app_state.workspace.create_group(tab_id, session.id);
-    let mut tab = TerminalTab::pending(tab_id, session);
-    tab.status = TabStatus::Connecting;
-    tab.title = profile.display_name();
+    let title = profile.display_name();
     let state = ContainerWorkspaceState::new(profile.clone(), window, cx);
     let command_tx = app_state.runtime.services.command_tx.clone();
     let workspace = cx.new(|_| ContainerWorkspace::new(state, tab_id, command_tx));
@@ -49,7 +38,8 @@ pub(crate) fn open_engine_workspace(
         .subscriptions
         .container_workspaces
         .insert(tab_id, subscription);
-    tab.content = TabContent::Containers(workspace);
+    let tab = WorkspaceTab::new_container(tab_id, title, profile.clone(), workspace);
+    app_state.workspace.create_group_for_tab(&tab);
     app_state.workspace.tabs.push(tab);
     app_state.workspace.active_tab = Some(tab_id);
     app_state.present_active_group();
@@ -213,9 +203,10 @@ pub(crate) fn delete_container_profile(
         .workspace
         .tabs
         .iter()
-        .filter_map(|tab| match &tab.session.connection {
-            Connection::ContainerEngine(profile) if profile.id == id => Some(tab.id),
-            _ => None,
+        .filter_map(|tab| {
+            tab.container_profile()
+                .filter(|profile| profile.id == id)
+                .map(|_| tab.id)
         })
         .collect();
     for tab_id in tabs {

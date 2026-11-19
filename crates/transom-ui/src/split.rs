@@ -3,7 +3,7 @@
 //! 设计原理（Why）：分屏状态完全属于工作区，本模块只借用工作区与会话目录，
 //! 不接收 `AppShell`。窗口聚焦、建立连接和跨并排组导航由外壳键盘入口协调。
 
-use crate::app::TerminalTab;
+use crate::app::WorkspaceTab;
 use crate::pane_tree::{MAX_PANES, PaneDirection, RemoveOutcome};
 use crate::workspace::WorkspaceState;
 use transom_core::{Connection, Session, SessionCatalog, SplitAxis, TabId};
@@ -72,7 +72,7 @@ impl<'a> SplitOps<'a> {
         group.zoomed = None;
         self.workspace
             .tabs
-            .push(TerminalTab::pending(pane_id, session.clone()));
+            .push(WorkspaceTab::new_session(pane_id, session.clone()));
         self.workspace.active_tab = Some(pane_id);
         Ok(Some(SplitPanePlan { pane_id, session }))
     }
@@ -133,18 +133,18 @@ impl<'a> SplitOps<'a> {
         }
         // 摘出后的标签仍属于原会话：SSH 按会话序号继续排；本地终端每次都是
         // 新 Session，改按基础标题序号排，否则会与已有本地标签重名。
-        let (session_id, base_title, is_local) = self.workspace.tab(tab_id).map(|tab| {
-            (
-                tab.session_id,
-                tab.session.name.clone(),
-                matches!(tab.session.connection, Connection::Local(_)),
-            )
-        })?;
+        let tab = self.workspace.tab(tab_id)?;
+        let session = tab.session()?;
+        let (session_id, base_title, is_local) = (
+            tab.session_id()?,
+            session.name.clone(),
+            matches!(&session.connection, Connection::Local(_)),
+        );
         if is_local {
             self.workspace
                 .create_local_group(tab_id, session_id, &base_title);
         } else {
-            self.workspace.create_group(tab_id, session_id);
+            self.workspace.create_session_group(tab_id, session_id);
         }
         self.workspace.reconcile_split_states();
         Some(tab_id)
@@ -184,13 +184,15 @@ impl<'a> SplitOps<'a> {
 
     fn session_for_tab(&self, tab_id: TabId) -> Option<Session> {
         let tab = self.workspace.tab(tab_id)?;
+        let session_id = tab.session_id()?;
+        let fallback = tab.session().cloned()?;
         Some(
             self.catalog
                 .sessions
                 .iter()
-                .find(|session| session.id == tab.session_id)
+                .find(|session| session.id == session_id)
                 .cloned()
-                .unwrap_or_else(|| tab.session.clone()),
+                .unwrap_or(fallback),
         )
     }
 }

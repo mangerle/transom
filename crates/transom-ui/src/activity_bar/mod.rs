@@ -109,10 +109,12 @@ fn activity_item_disabled(app_state: &AppState, id: ActivityItemId) -> bool {
         return true;
     };
     match id {
-        ActivityItemId::Forwards => !matches!(tab.session.connection, Connection::Ssh(_)),
+        ActivityItemId::Forwards => !tab
+            .session()
+            .is_some_and(|session| matches!(&session.connection, Connection::Ssh(_))),
         ActivityItemId::Sftp => !matches!(
-            tab.session.connection,
-            Connection::Ssh(_) | Connection::Local(_)
+            tab.session().map(|session| &session.connection),
+            Some(Connection::Ssh(_) | Connection::Local(_))
         ),
         _ => false,
     }
@@ -331,7 +333,8 @@ fn activity_item_tooltip(
             .workspace
             .active_tab
             .and_then(|tab_id| app_state.workspace.tab(tab_id))
-            .is_some_and(|tab| matches!(tab.session.connection, Connection::Local(_)))
+            .and_then(|tab| tab.session())
+            .is_some_and(|session| matches!(&session.connection, Connection::Local(_)))
     {
         rust_i18n::t!("sftp.local_files_title").to_string()
     } else {

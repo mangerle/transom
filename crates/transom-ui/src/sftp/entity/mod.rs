@@ -188,7 +188,7 @@ fn sftp_connection_matches(
     connection_id: ConnectionId,
     view: &SftpPanelView,
 ) -> bool {
-    let main_connection = workspace.tab(tab_id).and_then(|tab| tab.connection_id);
+    let main_connection = workspace.tab(tab_id).and_then(|tab| tab.connection_id());
     main_connection == Some(connection_id)
         || view
             .state

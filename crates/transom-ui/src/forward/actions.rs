@@ -141,8 +141,10 @@ pub(crate) fn toggle_forward_panel(
         return;
     }
     if !matches!(
-        app_state.workspace.tabs[index].session.connection,
-        Connection::Ssh(_)
+        app_state.workspace.tabs[index]
+            .session()
+            .map(|session| &session.connection),
+        Some(Connection::Ssh(_))
     ) {
         app_state.set_error(rust_i18n::t!("error.forward_requires_ssh").to_string());
         cx.notify();
@@ -196,10 +198,12 @@ pub(crate) fn submit_forward_rule(
     let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
-    let Some(connection_id) = tab.connection_id else {
+    let Some(connection_id) = tab.connection_id() else {
         return;
     };
-    let session_id = tab.session_id;
+    let Some(session_id) = tab.session_id() else {
+        return;
+    };
 
     if let Some(session) = app_state
         .session
@@ -241,10 +245,12 @@ pub(crate) fn start_forward_rule(
     let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
-    let Some(connection_id) = tab.connection_id else {
+    let Some(connection_id) = tab.connection_id() else {
         return;
     };
-    let session_id = tab.session_id;
+    let Some(session_id) = tab.session_id() else {
+        return;
+    };
     let Some(rule) = app_state
         .session
         .catalog
@@ -298,7 +304,7 @@ pub(crate) fn confirm_forward_start(app_state: &mut AppState, cx: &mut Context<A
         connection_id,
         rule,
     } = pending;
-    let session_id = app_state.workspace.tab(tab_id).map(|t| t.session_id);
+    let session_id = app_state.workspace.tab(tab_id).and_then(|t| t.session_id());
     if let Some(session_id) = session_id {
         if let Some(session) = app_state
             .session
@@ -335,10 +341,12 @@ pub(crate) fn stop_forward_rule(
     let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
-    let Some(connection_id) = tab.connection_id else {
+    let Some(connection_id) = tab.connection_id() else {
         return;
     };
-    let session_id = tab.session_id;
+    let Some(session_id) = tab.session_id() else {
+        return;
+    };
     if let Some(session) = app_state
         .session
         .catalog
@@ -368,8 +376,10 @@ pub(crate) fn delete_forward_rule(
     let Some(tab) = app_state.workspace.tab(tab_id) else {
         return;
     };
-    let connection_id = tab.connection_id;
-    let session_id = tab.session_id;
+    let connection_id = tab.connection_id();
+    let Some(session_id) = tab.session_id() else {
+        return;
+    };
     if let (Some(connection_id), Some(status)) = (
         connection_id,
         app_state
