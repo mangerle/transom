@@ -73,6 +73,15 @@ fn new_container_tab(
     WorkspaceTab::new_container(TabId::new(), title, profile, workspace)
 }
 
+fn assert_no_session_side_effects(tab: &WorkspaceTab) {
+    assert!(tab.terminal().is_none());
+    assert!(tab.sftp_view().is_none());
+    assert!(tab.forwards_view().is_none());
+    assert!(tab.zmodem().is_none());
+    assert!(tab.system_stats().is_none());
+    assert!(tab.network_traffic().is_none());
+}
+
 fn ssh_session() -> Session {
     Session::new(
         "生产主机",
@@ -189,6 +198,7 @@ fn monitor_target_is_a_session_tab() {
     );
 
     assert!(monitor.session().is_none(), "监控标签本身不是会话标签");
+    assert_no_session_side_effects(&monitor);
     assert_eq!(
         monitor.group_owner(),
         TabGroupOwner::Session(target_session_id)
@@ -257,6 +267,7 @@ fn git_tab_open_and_close_are_typed() {
     assert!(tab.session_pane().is_none());
     assert_eq!(tab.group_owner(), TabGroupOwner::Workspace(tab.id));
     assert!(matches!(tab.close_action(), TabCloseAction::DropOnly));
+    assert_no_session_side_effects(&tab);
     assert!(tab.git_workspace().is_some());
     let workspace = tab.git_workspace().expect("Git 标签必须持有工作区实体");
     cx.update(|window, cx| {
@@ -307,6 +318,7 @@ fn container_tab_open_and_close_are_typed() {
         tab.close_action(),
         TabCloseAction::DisconnectContainer { .. }
     ));
+    assert_no_session_side_effects(&tab);
     assert!(tab.container_workspace().is_some());
     assert!(tab.container_profile().is_some());
 }
@@ -370,6 +382,7 @@ fn player_tab_open_and_close_are_typed() {
     assert!(tab.session_pane().is_none());
     assert_eq!(tab.group_owner(), TabGroupOwner::Workspace(tab.id));
     assert!(matches!(tab.close_action(), TabCloseAction::DropOnly));
+    assert_no_session_side_effects(&tab);
     assert!(tab.player().is_some());
     let player = tab.player().expect("播放器标签必须持有实体");
     cx.update(|window, cx| {
