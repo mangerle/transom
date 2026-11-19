@@ -16,7 +16,7 @@ use crate::tiling::{StripEntry, TiledTabs};
 use crate::workspace::WorkspaceState;
 use crate::workspace::tab_drag::attach_tab_drag;
 use crate::workspace::tab_selection::TabSelectionModel;
-use gpui_kit::base::h_flex;
+use gpui_kit::base::{Tab, h_flex};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::*;
 use transom_core::{Connection, GroupId, SessionId, SplitAxis, TabId};
@@ -25,6 +25,8 @@ use transom_ui_icons::{AppIcon, AppIconElement};
 /// 单个标签条目的渲染参数包，避免七个平铺入参发生顺序错位。
 pub(super) struct TabEntryRenderParams<'model, 'cx_ref, 'ctx> {
     pub(super) model: TabEntryModelParams<'model>,
+    pub(super) position: usize,
+    pub(super) size: usize,
     pub(super) cx: &'cx_ref mut Context<'ctx, AppShell>,
 }
 
@@ -33,7 +35,6 @@ pub(super) struct TabEntryModelParams<'a> {
     pub(super) shell: &'a AppShell,
     pub(super) entry: &'a StripEntry,
     pub(super) can_tile: bool,
-    pub(super) window: &'a mut Window,
     pub(super) palette: &'a Palette,
     pub(super) app: &'a Entity<AppShell>,
 }
@@ -82,7 +83,6 @@ struct TabEntryModel<'a> {
     tiled_set: Option<TiledTabs>,
     this_set_id: Option<crate::tiling::TilingId>,
     composite: bool,
-    focus: FocusHandle,
     selection: TabSelectionModel,
     display: TabEntryDisplayState,
     labels: TabLabels,
@@ -96,20 +96,25 @@ struct TabEntryModel<'a> {
 pub(super) fn render_tab_entry<'model, 'cx_ref, 'ctx>(
     params: TabEntryRenderParams<'model, 'cx_ref, 'ctx>,
 ) -> Option<AnyElement> {
-    let TabEntryRenderParams { model, cx } = params;
+    let TabEntryRenderParams {
+        model,
+        position,
+        size,
+        cx,
+    } = params;
     let model = resolve_tab_entry_model(model, cx)?;
     let element = build_tab_entry_base(&model);
-    let element = attach_tab_entry_interactions(element, &model, cx);
+    let element = attach_tab_entry_interactions(element, &model);
     let element = append_tab_entry_content(element, &model);
     let element = append_tab_entry_chrome(element, &model, cx);
+    let tab = build_tab_entry_tab(element, &model, position, size, cx);
     let menu_params = build_tab_context_menu_params(&model);
     let menu_app = model.app.clone();
     Some(
-        element
-            .context_menu(move |menu, window, cx| {
-                build_tab_context_menu(menu, window, cx, &menu_app, menu_params.clone())
-            })
-            .into_any_element(),
+        tab.context_menu(move |menu, window, cx| {
+            build_tab_context_menu(menu, window, cx, &menu_app, menu_params.clone())
+        })
+        .into_any_element(),
     )
 }
 
@@ -122,7 +127,6 @@ fn resolve_tab_entry_model<'a>(
         shell,
         entry,
         can_tile,
-        window,
         palette,
         app,
     } = params;
@@ -138,7 +142,6 @@ fn resolve_tab_entry_model<'a>(
         .tabs
         .iter()
         .find(|tab| tab.id == group.active_pane)?;
-    let focus = resolve_tab_focus(window, group_id, cx);
     let selection = crate::workspace::tab_selection::selection_model(
         &shell.state.workspace,
         group_id,
@@ -164,7 +167,6 @@ fn resolve_tab_entry_model<'a>(
         this_set_id: tiled_set.as_ref().map(|tiled| tiled.id),
         tiled_set,
         composite,
-        focus,
         selection,
         display,
         labels,
@@ -216,20 +218,6 @@ fn resolve_tab_entry_target(
     }
 }
 
-/// 创建稳定 identity 的标签焦点句柄。
-fn resolve_tab_focus(
-    window: &mut Window,
-    group_id: GroupId,
-    cx: &mut Context<AppShell>,
-) -> FocusHandle {
-    window
-        .use_keyed_state(format!("workspace-tab-focus-{group_id}"), cx, |_, cx| {
-            cx.focus_handle().tab_stop(true)
-        })
-        .read(cx)
-        .clone()
-}
-
 /// 统一计算标签标题、提示文本与会话副标题。
 fn resolve_tab_labels(tab: &TerminalTab, serial: usize, pane_count: usize) -> TabLabels {
     let title = tab.tab_label();
@@ -263,7 +251,10 @@ fn resolve_tab_visuals(
     }
 }
 
-/// 构建标签条目的基础尺寸、焦点与颜色状态。
+/// 构建标签条目的基础尺寸与颜色状态。
+///
+/// 页签角色、焦点与键盘激活由外层 `Tab` 负责；这里只保留鼠标命中区域、
+/// 拖拽句柄和视觉状态，避免内部再声明一份会与 roving focus 冲突的 Tab 语义。
 fn build_tab_entry_base(model: &TabEntryModel<'_>) -> Stateful<Div> {
     let p = model.palette;
     let mut element = h_flex()
@@ -278,12 +269,7 @@ fn build_tab_entry_base(model: &TabEntryModel<'_>) -> Stateful<Div> {
         .min_w(rems(size::TAB_MIN_WIDTH))
         .overflow_hidden()
         .border_color(p.divider(p.border))
-        .cursor_pointer()
-        .track_focus(&model.focus)
-        .role(Role::Tab)
-        .aria_selected(model.display.active)
-        .aria_label(model.labels.title.clone())
-        .tab_index(0);
+        .cursor_pointer();
     if model.display.active {
         element = element.bg(p.tab_active).text_color(p.tab_active_foreground);
     } else {
@@ -296,11 +282,10 @@ fn build_tab_entry_base(model: &TabEntryModel<'_>) -> Stateful<Div> {
     element.divider_edge(DividerEdge::Right, p.divider_width)
 }
 
-/// 挂载拖拽、点击、键盘与右键菜单交互。
+/// 挂载拖拽与提示交互。
 fn attach_tab_entry_interactions(
     element: Stateful<Div>,
     model: &TabEntryModel<'_>,
-    cx: &mut Context<AppShell>,
 ) -> Stateful<Div> {
     let element = if model.composite {
         element
@@ -314,18 +299,32 @@ fn attach_tab_entry_interactions(
             model.palette,
         )
     };
-    let focus = model.focus.clone();
+    element.tooltip(build_tab_tooltip(
+        model.labels.tooltip_title.clone(),
+        model.labels.session_name.clone(),
+        model.labels.show_session,
+        model.palette.muted_foreground,
+    ))
+}
+
+/// 用外层 `Tab` 包裹视觉条目，统一页签角色、焦点和激活行为。
+fn build_tab_entry_tab(
+    element: Stateful<Div>,
+    model: &TabEntryModel<'_>,
+    position: usize,
+    size: usize,
+    cx: &mut Context<AppShell>,
+) -> Tab {
     let active_pane = model.active_pane;
     let selection_groups = model.selection.selection_groups.clone();
-    element
-        .tooltip(build_tab_tooltip(
-            model.labels.tooltip_title.clone(),
-            model.labels.session_name.clone(),
-            model.labels.show_session,
-            model.palette.muted_foreground,
-        ))
+    Tab::new(ElementId::Name(format!("tab-{}", model.group_id).into()))
+        .h_full()
+        .flex_none()
+        .cursor_pointer()
+        .selected(model.display.active)
+        .accessibility_label(model.labels.title.clone())
+        .set_position(position, size)
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-            window.focus(&focus, cx);
             let modifiers = event.modifiers();
             if modifiers.control || modifiers.platform {
                 crate::tiling::toggle_tab_selection(&mut this.state, &selection_groups, cx);
@@ -334,12 +333,7 @@ fn attach_tab_entry_interactions(
                 this.activate_tab(active_pane, window, cx);
             }
         }))
-        .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                this.activate_tab(active_pane, window, cx);
-                cx.stop_propagation();
-            }
-        }))
+        .child(element)
 }
 
 /// 组装右键菜单参数快照。

@@ -10,7 +10,7 @@ use crate::app::AppShell;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::{control, size};
-use gpui_kit::base::h_flex;
+use gpui_kit::base::{Tabs, h_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants, DropdownButton};
 use gpui_kit::*;
@@ -22,42 +22,49 @@ impl AppShell {
     /// 渲染主工作区顶部标签栏。
     pub(super) fn render_tab_strip(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         // 底边不画在容器上：活动标签的强调线要顶替自己那一段底边，容器级
         // 边框无法被条目内元素覆盖，改为条目与右侧空白区各自画一段。
-        let mut tab_strip = h_flex()
-            .h(rems(size::TAB_BAR_HEIGHT))
+        let mut tab_list = Tabs::new("workspace-tab-list")
+            .h_full()
             .flex_none()
-            .items_center()
-            .bg(p.tab_bar)
-            .overflow_hidden();
+            .flex()
+            .items_center();
         let app_entity = cx.entity().clone();
         // 并排菜单在每个标签上都显示：条目不足两个时置灰，避免用户以为功能
         // 不存在；右键标签时由 `tile_tab` 取标签栏左边那一条作搭档，左边是
         // 并排合并条目则整组加入，不会把网格里的成员拆出来。
         let entries = self.state.strip_entries();
         let can_tile = entries.len() >= 2;
+        let tab_count = entries.len();
 
-        for entry in &entries {
+        for (index, entry) in entries.iter().enumerate() {
             if let Some(element) = item::render_tab_entry(item::TabEntryRenderParams {
                 model: item::TabEntryModelParams {
                     shell: self,
                     entry,
                     can_tile,
-                    window,
                     palette: p,
                     app: &app_entity,
                 },
+                position: index + 1,
+                size: tab_count,
                 cx,
             }) {
-                tab_strip = tab_strip.child(element);
+                tab_list = tab_list.child(element);
             }
         }
 
-        tab_strip
+        h_flex()
+            .h(rems(size::TAB_BAR_HEIGHT))
+            .flex_none()
+            .items_center()
+            .bg(p.tab_bar)
+            .overflow_hidden()
+            .child(tab_list)
             .child(
                 div()
                     .h_full()
