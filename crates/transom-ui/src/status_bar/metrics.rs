@@ -58,20 +58,17 @@ pub(crate) enum StatusMetricsEvent {
 
 pub(crate) struct StatusBarMetricsView {
     snapshot: StatusMetricsSnapshot,
-    fallback: String,
-    /// 状态文案为空时使用的版本兜底，只构造一次。
-    version_fallback: String,
+    /// 没有实时指标可显示时使用的瞬态状态文案；空值时不占用右侧空间。
+    status_text: Option<String>,
 }
 
 impl EventEmitter<StatusMetricsEvent> for StatusBarMetricsView {}
 
 impl StatusBarMetricsView {
     pub(crate) fn new() -> Self {
-        let version_fallback = format!("{} v{}", crate::APP_NAME, crate::APP_VERSION);
         Self {
             snapshot: StatusMetricsSnapshot::default(),
-            fallback: version_fallback.clone(),
-            version_fallback,
+            status_text: None,
         }
     }
 
@@ -82,11 +79,11 @@ impl StatusBarMetricsView {
         status: Option<&str>,
         cx: &mut Context<Self>,
     ) {
-        let expected = status.unwrap_or(&self.version_fallback);
-        let changed = self.snapshot != snapshot || self.fallback != expected;
+        let expected_status = status.map(str::to_string);
+        let changed = self.snapshot != snapshot || self.status_text != expected_status;
         if changed {
             self.snapshot = snapshot;
-            self.fallback = expected.to_string();
+            self.status_text = expected_status;
             // 只有快照或状态文案真的变化才重绘指标簇；帧循环每帧都会注入
             // 同一快照，无条件 notify 会让六个徽标每帧重建一次。
             cx.notify();
@@ -105,8 +102,7 @@ impl StatusBarMetricsView {
         if self.snapshot.traffic.as_ref() != traffic || self.snapshot.is_ssh != is_ssh {
             return false;
         }
-        let expected = status.unwrap_or(&self.version_fallback);
-        if self.fallback != expected {
+        if self.status_text.as_deref() != status {
             return false;
         }
         match (self.snapshot.stats.as_ref(), stats) {
@@ -144,13 +140,15 @@ impl Render for StatusBarMetricsView {
                 badges.push(badge);
             }
         }
-        if badges.is_empty() {
+        if badges.is_empty()
+            && let Some(status) = self.status_text.as_ref()
+        {
             badges.push(
                 div()
                     .text_xs()
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(p.muted_foreground)
-                    .child(self.fallback.clone())
+                    .child(status.clone())
                     .into_any_element(),
             );
         }

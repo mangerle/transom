@@ -194,7 +194,7 @@ pub(crate) fn render_status_bar(
     bar.into_any_element()
 }
 
-/// 把活动标签的指标快照推进状态栏指标实体；无可见数据时给出版本兜底。
+/// 把活动标签的指标快照推进状态栏指标实体；无可见数据时只保留瞬态状态文案。
 pub(crate) fn refresh_status_metrics(app_state: &mut AppState, cx: &mut Context<AppShell>) {
     let tab = app_state
         .workspace

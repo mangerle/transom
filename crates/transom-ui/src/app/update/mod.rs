@@ -1,17 +1,17 @@
-//! 窗口级应用更新实体：启动检查、侧栏提示、更新弹窗与安装闭环。
+//! 窗口级应用更新实体：启动检查、标题栏提示、更新弹窗与安装闭环。
 //!
 //! # 设计原理（Why）
 //! - 更新状态的生命周期属于窗口，而不是设置页。设置弹窗关闭后，启动检查结果
-//!   仍要驱动左侧提示；因此状态机、任务句柄与弹窗开关集中在本实体，设置页只
-//!   负责发出“检查更新”意图。
-//! - 启动检查只读取一次远端清单，发现新版本时仅点亮侧栏图标，不主动打断用户；
-//!   从设置页发起检查时则直接打开同一弹窗，保证两个入口共享唯一状态。
+//!   仍要驱动标题栏版本徽标；因此状态机、任务句柄与弹窗开关集中在本实体，
+//!   设置页只负责发出“检查更新”意图。
+//! - 启动检查只读取一次远端清单，发现新版本时仅点亮标题栏版本徽标，不主动
+//!   打断用户；从设置页发起检查时则直接打开同一弹窗，保证入口共享唯一状态。
 //! - 网络、下载、验签与安装全部交给 [`spawn_blocking_local`]，UI 线程只消费
 //!   有界通道消息，避免阻塞渲染。
 //!
 //! # 代价与局限
-//! 下载进度只保留最新值，不保存历史曲线；关闭弹窗不会取消后台下载，但侧栏
-//! 图标会继续提示，用户可随时重新打开查看进度。
+//! 下载进度只保留最新值，不保存历史曲线；关闭弹窗不会取消后台下载，但标题栏
+//! 徽标会继续提示，用户可随时重新打开查看进度。
 
 use crate::app::spawn_blocking_local;
 use gpui_kit::*;
@@ -112,7 +112,7 @@ impl UpdateView {
         self.begin_check(cx, false);
     }
 
-    /// 用户从侧栏或设置页打开更新弹窗；没有结果时立即发起检查。
+    /// 用户从标题栏或设置页打开更新弹窗；没有结果时立即发起检查。
     pub(crate) fn open_and_check(&mut self, cx: &mut Context<Self>) {
         self.open = true;
         if self.available.is_none() && self.downloaded.is_none() && !self.is_busy() {
@@ -122,13 +122,7 @@ impl UpdateView {
         }
     }
 
-    /// 仅打开更新弹窗，不发起重复网络请求。
-    pub(crate) fn open(&mut self, cx: &mut Context<Self>) {
-        self.open = true;
-        cx.notify();
-    }
-
-    /// 关闭弹窗；后台任务继续运行，侧栏提示仍表示可继续查看的更新状态。
+    /// 关闭弹窗；后台任务继续运行，标题栏提示仍表示可继续查看的更新状态。
     pub(crate) fn close(&mut self, cx: &mut Context<Self>) {
         self.open = false;
         cx.notify();
@@ -139,7 +133,7 @@ impl UpdateView {
         self.open
     }
 
-    /// 是否需要在左侧活动栏显示更新提示。
+    /// 是否需要在标题栏版本徽标上显示更新提示。
     pub(crate) fn has_update(&self) -> bool {
         self.available.is_some() || self.installed.is_some()
     }

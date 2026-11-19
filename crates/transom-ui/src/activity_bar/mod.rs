@@ -23,13 +23,12 @@ use drag::{
     ActivityDrag, ActivityDragPreview, render_activity_blank_zone, render_activity_reorder_overlay,
 };
 use gpui_kit::base::v_flex;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_core::AppSettings;
 use transom_core::{ActivityItemId, Connection, TabPosition};
-use transom_ui_icons::{AppIconElement, UiIcon};
+use transom_ui_icons::AppIconElement;
 
 /// 活动栏的布局度量统一从这里取值。
 ///
@@ -139,10 +138,7 @@ pub(crate) fn render_activity_bar(
     for id in top {
         top_children.push(render_activity_item(app_state, window, id, p, cx));
     }
-    let mut bottom_children = Vec::with_capacity(bottom.len() + 1);
-    if let Some(update) = render_update_indicator(app_state, window, p, cx) {
-        bottom_children.push(update);
-    }
+    let mut bottom_children = Vec::with_capacity(bottom.len());
     for id in bottom {
         bottom_children.push(render_activity_item(app_state, window, id, p, cx));
     }
@@ -180,59 +176,6 @@ pub(crate) fn render_activity_bar(
     )
     .context_menu(move |menu, _window, _cx| menu::activity_bar_context_menu(menu, &menu_app))
     .into_any_element()
-}
-
-/// 有新版本时在底部工具区顶部显示更新入口；没有更新时不占位。
-fn render_update_indicator(
-    app_state: &AppState,
-    window: &Window,
-    p: &Palette,
-    cx: &mut Context<AppShell>,
-) -> Option<AnyElement> {
-    let update = app_state.features.update.clone();
-    let (has_update, version) = {
-        let view = update.read(cx);
-        (view.has_update(), view.available_version())
-    };
-    if !has_update {
-        return None;
-    }
-    let version = version?;
-    let tooltip =
-        rust_i18n::t!("activity.update_available", version = version.as_str()).to_string();
-    let accessibility_label = tooltip.clone();
-    let update_view = update.clone();
-
-    Some(
-        Button::new("activity-update")
-            .ghost()
-            .relative()
-            .w(rems(METRICS.button))
-            .h(rems(METRICS.button))
-            .rounded(p.radius.md)
-            .bg(p.tone.primary_subtle)
-            .tooltip(tooltip)
-            .accessibility_label(accessibility_label)
-            .on_click(move |_, _, cx| {
-                update_view.update(cx, |view, cx| view.open(cx));
-            })
-            .child(
-                AppIconElement::new(UiIcon::UPDATE).with_size(crate::theme::tokens::rem_px(
-                    METRICS.icon,
-                    window.rem_size(),
-                )),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .top(rems(0.25))
-                    .right(rems(0.25))
-                    .size(rems(0.375))
-                    .rounded_full()
-                    .bg(p.primary),
-            )
-            .into_any_element(),
-    )
 }
 
 fn render_activity_item(

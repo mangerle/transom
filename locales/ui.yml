@@ -3,6 +3,12 @@ app:
   name:
     en: Transom
     zh-CN: Transom
+  version_update_available:
+    en: "v%{current} · v%{latest} available"
+    zh-CN: "v%{current} · 可更新至 v%{latest}"
+  update_available:
+    en: "Version v%{version} is available. Open the update details."
+    zh-CN: "发现新版本 v%{version}，点击查看更新内容。"
   new_session:
     en: New Session
     zh-CN: 新建会话
@@ -160,9 +166,6 @@ activity:
   cloud_sync:
     en: Cloud Sync
     zh-CN: 云同步
-  update_available:
-    en: "Version v%{version} is available. Open the update details."
-    zh-CN: "发现新版本 v%{version}，点击查看更新内容。"
 common:
   close:
     en: Close

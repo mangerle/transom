@@ -823,3 +823,27 @@ fn main_window_hides_native_titlebar() {
         "主窗口必须隐藏系统标题栏，避免 Windows/macOS 出现重复窗口控件"
     );
 }
+
+/// 当前版本与更新入口必须集中在标题栏，不得回到活动栏或状态栏形成重复入口。
+#[test]
+fn version_and_update_entry_live_in_titlebar() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let chrome = std::fs::read_to_string(root.join("src/chrome.rs")).expect("读取 chrome.rs 失败");
+    let activity =
+        std::fs::read_to_string(root.join("src/activity_bar/mod.rs")).expect("读取活动栏源码失败");
+    let metrics = std::fs::read_to_string(root.join("src/status_bar/metrics.rs"))
+        .expect("读取状态栏指标源码失败");
+
+    assert!(
+        chrome.contains("render_version_badge") && chrome.contains("app.version_update_available"),
+        "标题栏必须承载当前版本与更新提示"
+    );
+    assert!(
+        !activity.contains("activity-update") && !activity.contains("render_update_indicator"),
+        "活动栏不得恢复独立更新图标"
+    );
+    assert!(
+        !metrics.contains("version_fallback"),
+        "状态栏不得恢复版本号兜底，避免与标题栏重复"
+    );
+}
