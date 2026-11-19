@@ -14,7 +14,7 @@
 //!   仍是那份内容，直到用户点新的文件；这样做省掉两份 diff 状态，但不会自动清空。
 
 use super::commit_box::CommitBoxProps;
-use super::commit_modal::{GroupDisplay, amend_file_row};
+use super::commit_modal::GroupDisplay;
 use super::diff_view;
 use super::{DIFF_FOLD_ROW_HEIGHT, GitCommitTab, GitWorkspace};
 use crate::divider::{DividerEdge, DividerStyled, h_resizable, v_resizable};
@@ -27,7 +27,6 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_core::CommitFile;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
@@ -397,108 +396,7 @@ fn render_commit_toolbar(
         .child(grouping)
 }
 
-/// 上半区变更树的参数集合，避免七个平铺参数。
-struct UpperChangeTree<'a> {
-    count: usize,
-    amend: bool,
-    amend_files_loading: bool,
-    amend_files: &'a [CommitFile],
-    amend_head: Option<&'a (String, String)>,
-    files: AnyElement,
-    palette: &'a Palette,
-}
-
-fn render_upper_change_tree(params: UpperChangeTree<'_>) -> impl IntoElement {
-    let p = params.palette;
-    let UpperChangeTree {
-        count,
-        amend,
-        amend_files_loading,
-        amend_files,
-        amend_head,
-        files,
-        palette: _,
-    } = params;
-    v_flex()
-        .w_full()
-        .h_full()
-        .min_h_0()
-        .child(
-            h_flex()
-                .w_full()
-                .h(rems(DIFF_FOLD_ROW_HEIGHT))
-                .flex_none()
-                .px_2()
-                .gap_2()
-                .items_center()
-                .child(
-                    div().text_xs().text_color(p.muted_foreground).child(
-                        rust_i18n::t!("git.commit.changes_count", count = count).to_string(),
-                    ),
-                )
-                .child(div().flex_1()),
-        )
-        // 修正时在上方只读展示目标提交的文件，方便核对这次会追加到哪次提交。
-        .when(amend, |el| {
-            let mut group = v_flex().w_full().gap_1().child(
-                h_flex()
-                    .w_full()
-                    .px_2()
-                    .py_1()
-                    .gap_2()
-                    .items_center()
-                    .bg(p.surface.active)
-                    .child(
-                        AppIconElement::new(UiIcon::PATCH)
-                            .xsmall()
-                            .text_color(p.primary),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(
-                                amend_head
-                                    .map(|(oid, subject)| {
-                                        rust_i18n::t!(
-                                            "git.commit.amend_group",
-                                            oid = oid.as_str(),
-                                            subject = subject.as_str()
-                                        )
-                                        .to_string()
-                                    })
-                                    .unwrap_or_else(|| {
-                                        rust_i18n::t!("git.commit.last_commit").to_string()
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div().text_xs().text_color(p.muted_foreground).child(
-                            rust_i18n::t!("git.commit.file_count", count = amend_files.len())
-                                .to_string(),
-                        ),
-                    ),
-            );
-            if amend_files_loading {
-                group = group.child(super::workspace::hint(
-                    rust_i18n::t!("git.overview.loading").to_string(),
-                    p,
-                ));
-            } else if amend_files.is_empty() {
-                group = group.child(super::workspace::hint(
-                    rust_i18n::t!("git.commit.amend_empty").to_string(),
-                    p,
-                ));
-            } else {
-                group = group.children(amend_files.iter().map(|file| amend_file_row(file, p)));
-            }
-            el.child(group)
-        })
-        .child(files)
-}
-
 mod layout;
+mod upper_tree;
 use layout::{CommitTabParams, commit_tab_btn};
+use upper_tree::{UpperChangeTree, render_upper_change_tree};

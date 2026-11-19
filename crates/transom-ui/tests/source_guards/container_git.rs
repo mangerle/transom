@@ -1993,7 +1993,7 @@ fn render_helpers_use_params_objects() {
             "fn render_layer_card_header(params: LayerCardHeader<'_>)",
         ),
         (
-            "src/git/commit_page/mod.rs",
+            "src/git/commit_page/upper_tree.rs",
             "struct UpperChangeTree",
             "fn render_upper_change_tree(params: UpperChangeTree<'_>)",
         ),
