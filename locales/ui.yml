@@ -1494,9 +1494,6 @@ sftp:
     select_all:
       en: Select All
       zh-CN: 全选
-    select_none:
-      en: Select None
-      zh-CN: 全不选
     start:
       en: Start Sync (%{count})
       zh-CN: 开始同步 (%{count})
