@@ -12,6 +12,7 @@ use crate::tokens::{space, typography};
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::label::Label;
 use gpui_kit::*;
 
 /// 标签列宽（rem，标准档 72px）：与批量编辑原有排版一致。
@@ -26,20 +27,23 @@ pub fn checkbox_field_row(
     on_toggle: impl Fn(&bool, &mut Window, &mut App) + 'static,
     _p: &Palette,
 ) -> AnyElement {
+    let id: ElementId = id.into();
+    let label: SharedString = label.into();
     h_flex()
         .gap(rems(space::SM))
         .items_center()
         .child(
-            Checkbox::new(id)
+            Checkbox::new(id.clone())
                 .small()
                 .checked(checked)
+                .accessibility_label(label.clone())
                 .on_click(move |checked, window, cx| on_toggle(checked, window, cx)),
         )
         .child(
-            div()
+            Label::new(label)
+                .id(ElementId::from((id, "label")))
                 .w(rems(CHECKBOX_LABEL_WIDTH))
-                .text_size(rems(typography::BODY))
-                .child(label.into()),
+                .text_size(rems(typography::BODY)),
         )
         .child(div().flex_1().child(control))
         .into_any_element()

@@ -12,12 +12,14 @@ use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::tokens::{size, space, typography};
 use gpui_kit::base::h_flex;
+use gpui_kit::component::label::Label;
 use gpui_kit::*;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 
 /// 面板标题栏参数。
 pub struct PanelHeader {
+    id: ElementId,
     title: SharedString,
     icon: Option<AppIcon>,
     border: Hsla,
@@ -25,9 +27,13 @@ pub struct PanelHeader {
 }
 
 impl PanelHeader {
-    /// 以标题与当前调色板创建标题栏；默认使用侧栏边框色。
-    pub fn new(title: impl Into<SharedString>, p: &Palette) -> Self {
+    /// 以稳定标识、标题与当前调色板创建标题栏；默认使用侧栏边框色。
+    ///
+    /// 标题会渲染为进入可访问树的 `Label`，标识必须由调用方保证同一窗口内
+    /// 唯一，避免多个同标题面板并排时发生节点冲突。
+    pub fn new(id: impl Into<ElementId>, title: impl Into<SharedString>, p: &Palette) -> Self {
         Self {
+            id: id.into(),
             title: title.into(),
             icon: None,
             border: p.sidebar_border,
@@ -66,15 +72,15 @@ impl PanelHeader {
             left = left.child(AppIconElement::new(icon).small().text_color(p.primary));
         }
         left = left.child(
-            div()
+            Label::new(title)
+                .id(self.id)
                 .flex_1()
                 .min_w_0()
                 .overflow_hidden()
                 .whitespace_nowrap()
                 .truncate()
                 .text_size(rems(typography::BODY))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(title),
+                .font_weight(FontWeight::SEMIBOLD),
         );
 
         h_flex()

@@ -62,12 +62,15 @@ impl MonitorView {
         // 顶栏工具条：标题、采样档位芯片、刷新、关闭
         let current_interval = self.state.interval_mode;
         let actions = self.render_header_actions(current_interval, drawer_width, cx);
-        let header =
-            crate::widgets::PanelHeader::new(rust_i18n::t!("monitor.title").to_string(), p)
-                .icon(AppIcon::Domain(DomainIcon::MONITOR))
-                .border(p.border)
-                .action(actions)
-                .render(p);
+        let header = crate::widgets::PanelHeader::new(
+            "monitor-panel-header",
+            rust_i18n::t!("monitor.title").to_string(),
+            p,
+        )
+        .icon(AppIcon::Domain(DomainIcon::MONITOR))
+        .border(p.border)
+        .action(actions)
+        .render(p);
 
         panel = panel.child(header);
 

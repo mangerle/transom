@@ -33,7 +33,11 @@ impl SftpPanelView {
             cx.notify();
         }));
 
-        let mut header = crate::widgets::PanelHeader::new(title, p);
+        let mut header = crate::widgets::PanelHeader::new(
+            format!("sftp-panel-header-{}", self.tab_id),
+            title,
+            p,
+        );
         if let Some(extra_element) = extra {
             header = header.action(extra_element);
         }

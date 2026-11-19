@@ -3,15 +3,19 @@
 //! 只定义“标题 + 说明 + 控件”的布局和分割线；控件本身仍由调用方传入，
 //! 因此开关、下拉、输入框、按钮都共用同一套行距与对齐。
 
+use std::panic::Location;
+
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::tokens::{space, typography};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::label::Label;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
 /// 与 [`setting_text_row`] 同构，但标题与说明由调用方传入已本地化文本。
+#[track_caller]
 pub fn setting_text_row(
     title: String,
     description: Option<String>,
@@ -25,6 +29,7 @@ pub fn setting_text_row(
 ///
 /// 字体页用它在同一设置行内展示“所选字体缺少中文字形”等动态警告，使提示
 /// 与触发它的控件保持同一边框和分割线，不必在行外另起一块视觉区域。
+#[track_caller]
 pub fn setting_text_row_with_extra(
     title: String,
     description: Option<String>,
@@ -33,6 +38,7 @@ pub fn setting_text_row_with_extra(
     p: &Palette,
 ) -> AnyElement {
     h_flex()
+        .id(ElementId::CodeLocation(*Location::caller()))
         .w_full()
         .py(rems(space::SM))
         .border_color(p.divider(p.border))
@@ -45,13 +51,12 @@ pub fn setting_text_row_with_extra(
                 .flex_1()
                 .min_w_0()
                 .gap(rems(space::XXS))
-                .child(div().text_size(rems(typography::BODY)).child(title))
+                .child(Label::new(title).text_size(rems(typography::BODY)))
                 .when_some(description, |this, description| {
                     this.child(
-                        div()
+                        Label::new(description)
                             .text_size(rems(typography::CAPTION))
-                            .text_color(p.muted_foreground)
-                            .child(description),
+                            .text_color(p.muted_foreground),
                     )
                 })
                 .when_some(extra, |this, extra| this.child(extra)),
@@ -72,17 +77,18 @@ pub fn setting_frame(content: AnyElement, p: &Palette) -> AnyElement {
 }
 
 /// 带分割线的输入行：输入框与其说明同属一行。
+#[track_caller]
 pub fn setting_field_row(field: AnyElement, note: Option<String>, p: &Palette) -> AnyElement {
     let inner = v_flex()
+        .id(ElementId::CodeLocation(*Location::caller()))
         .w_full()
         .gap(rems(space::MD))
         .child(field)
         .when_some(note, |this, note| {
             this.child(
-                div()
+                Label::new(note)
                     .text_size(rems(typography::CAPTION))
-                    .text_color(p.muted_foreground)
-                    .child(note),
+                    .text_color(p.muted_foreground),
             )
         })
         .into_any_element();
@@ -106,14 +112,15 @@ pub fn field_with_reveal(
     reveal: bool,
     p: &Palette,
 ) -> AnyElement {
+    let field_id = ElementId::from(("form-field-row", input.entity_id()));
     let field = Input::new(&input).w_full();
     v_flex()
+        .id(field_id)
         .gap(rems(space::XS))
         .child(
-            div()
+            Label::new(label)
                 .text_size(rems(typography::CAPTION))
-                .text_color(p.muted_foreground)
-                .child(label),
+                .text_color(p.muted_foreground),
         )
         .child(if reveal { field.mask_toggle() } else { field })
         .into_any_element()

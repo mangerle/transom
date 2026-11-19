@@ -59,9 +59,13 @@ impl ForwardView {
             cx.emit(super::ForwardPanelEvent::ClosePanel);
             cx.notify();
         }));
-        crate::widgets::PanelHeader::new(rust_i18n::t!("forward.title").to_string(), p)
-            .action(close)
-            .render(p)
+        crate::widgets::PanelHeader::new(
+            format!("forward-panel-header-{}", self.tab_id()),
+            rust_i18n::t!("forward.title").to_string(),
+            p,
+        )
+        .action(close)
+        .render(p)
     }
 
     /// 端口转发规则列表渲染。
