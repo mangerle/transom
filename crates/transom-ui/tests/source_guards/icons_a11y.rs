@@ -293,26 +293,38 @@ fn tabs_have_keyboard_semantics() {
     let workspace_tabs = std::fs::read_to_string(root.join("src/workspace/tab_strip/item.rs"))
         .expect("读取主标签栏失败");
     for required in [
-        ".track_focus(",
-        ".role(Role::Tab)",
-        ".aria_selected(",
-        ".on_key_down(",
+        "Tab::new(",
+        ".selected(",
+        ".accessibility_label(",
+        ".set_position(",
+        "Tabs::new(",
     ] {
+        let source = if required == "Tabs::new(" {
+            std::fs::read_to_string(root.join("src/workspace/tab_strip/mod.rs"))
+                .expect("读取主标签栏入口失败")
+        } else {
+            workspace_tabs.clone()
+        };
         assert!(
-            workspace_tabs.contains(required),
-            "主标签栏缺少键盘/可访问语义：{required}"
+            source.contains(required),
+            "主标签栏缺少 gpui-kit Tab 键盘/可访问语义：{required}"
         );
     }
     let diff_tabs = std::fs::read_to_string(root.join("src/git/diff_view/tabs.rs"))
         .expect("读取 Git diff 标签栏失败");
-    assert!(
-        diff_tabs.contains("Button::new("),
-        "Git diff 标签必须使用 Button"
-    );
-    assert!(
-        diff_tabs.contains("IconButton::new("),
-        "Git diff 标签关闭动作必须使用 IconButton"
-    );
+    for required in [
+        "Tabs::new(",
+        "Tab::new(",
+        ".selected(",
+        ".accessibility_label(",
+        ".set_position(",
+        "IconButton::new(",
+    ] {
+        assert!(
+            diff_tabs.contains(required),
+            "Git diff 标签栏缺少 gpui-kit Tab 键盘/可访问语义：{required}"
+        );
+    }
 }
 
 /// 直接构造的图标按钮必须提供可访问名；tooltip 不能替代 accessibility_label。
