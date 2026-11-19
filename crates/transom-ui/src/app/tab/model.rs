@@ -3,16 +3,12 @@
 use super::{
     ContainerTab, GitTab, MonitorTab, PlayerTab, SessionPaneState, SessionTab, TabGroupOwner,
 };
-use crate::cast_player::CastPlayerView;
-use crate::container::ContainerWorkspace;
-use crate::git::GitWorkspace;
-use gpui_kit::Entity;
-use transom_core::{AppError, ContainerEngineProfile, Session, SessionId, TabId};
+use transom_core::{AppError, Session, SessionId, TabId};
 
 /// 标签栏的展示状态。
 ///
 /// 该状态只服务标签栏、纵向标签与状态栏，不用于判断标签是否拥有终端会话。
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum TabStatus {
     Connecting,
     Connected,
@@ -39,6 +35,41 @@ pub(crate) enum TabContent {
     Monitor(Box<MonitorTab>),
     Containers(Box<ContainerTab>),
     Git(GitTab),
+}
+
+/// 标签内容类型；只用于不持有实体即可验证的纯策略。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TabContentKind {
+    Session,
+    Player,
+    Monitor,
+    Container,
+    Git,
+}
+
+impl TabContent {
+    /// 返回内容类型。
+    pub(crate) fn kind(&self) -> TabContentKind {
+        match self {
+            Self::Session(_) => TabContentKind::Session,
+            Self::Player(_) => TabContentKind::Player,
+            Self::Monitor(_) => TabContentKind::Monitor,
+            Self::Containers(_) => TabContentKind::Container,
+            Self::Git(_) => TabContentKind::Git,
+        }
+    }
+}
+
+impl TabContentKind {
+    /// 只有真实会话标签支持分屏和终端专属副作用。
+    pub(crate) const fn is_session(self) -> bool {
+        matches!(self, Self::Session)
+    }
+
+    /// 是否支持分屏。
+    pub(crate) const fn supports_split(self) -> bool {
+        self.is_session()
+    }
 }
 
 /// 标签关闭时由外壳执行的控制器动作。
@@ -73,60 +104,6 @@ impl WorkspaceTab {
         }
     }
 
-    /// 构造录像回放标签。
-    pub(crate) fn new_player(id: TabId, title: String, player: Entity<CastPlayerView>) -> Self {
-        Self {
-            id,
-            title,
-            status: TabStatus::Connected,
-            content: TabContent::Player(PlayerTab { player }),
-        }
-    }
-
-    /// 构造独立监控标签。
-    pub(crate) fn new_monitor(
-        id: TabId,
-        title: String,
-        target_tab_id: TabId,
-        target_session: Session,
-    ) -> Self {
-        Self {
-            id,
-            title,
-            status: TabStatus::Connected,
-            content: TabContent::Monitor(Box::new(MonitorTab {
-                target_tab_id,
-                target_session_id: target_session.id,
-                target_session,
-            })),
-        }
-    }
-
-    /// 构造容器工作区标签。
-    pub(crate) fn new_container(
-        id: TabId,
-        title: String,
-        profile: ContainerEngineProfile,
-        workspace: Entity<ContainerWorkspace>,
-    ) -> Self {
-        Self {
-            id,
-            title,
-            status: TabStatus::Connecting,
-            content: TabContent::Containers(Box::new(ContainerTab { profile, workspace })),
-        }
-    }
-
-    /// 构造 Git 工作区标签。
-    pub(crate) fn new_git(id: TabId, title: String, workspace: Entity<GitWorkspace>) -> Self {
-        Self {
-            id,
-            title,
-            status: TabStatus::Connected,
-            content: TabContent::Git(GitTab { workspace }),
-        }
-    }
-
     /// 返回标签组归属键。
     pub(crate) fn group_owner(&self) -> TabGroupOwner {
         match &self.content {
@@ -140,17 +117,23 @@ impl WorkspaceTab {
 
     /// 返回关闭标签时需要执行的控制器动作。
     pub(crate) fn close_action(&self) -> TabCloseAction {
-        match &self.content {
-            TabContent::Session(_) => TabCloseAction::CloseTerminal { tab_id: self.id },
-            TabContent::Containers(_) => TabCloseAction::DisconnectContainer { tab_id: self.id },
-            TabContent::Player(_) | TabContent::Monitor(_) | TabContent::Git(_) => {
-                TabCloseAction::DropOnly
-            }
-        }
+        TabCloseAction::for_kind(self.content.kind(), self.id)
     }
 
     /// 只有真实会话标签可以分屏。
     pub(crate) fn can_split(&self) -> bool {
-        self.is_session()
+        self.content.kind().supports_split()
+    }
+}
+
+impl TabCloseAction {
+    pub(crate) fn for_kind(kind: TabContentKind, tab_id: TabId) -> Self {
+        match kind {
+            TabContentKind::Session => Self::CloseTerminal { tab_id },
+            TabContentKind::Container => Self::DisconnectContainer { tab_id },
+            TabContentKind::Player | TabContentKind::Monitor | TabContentKind::Git => {
+                Self::DropOnly
+            }
+        }
     }
 }

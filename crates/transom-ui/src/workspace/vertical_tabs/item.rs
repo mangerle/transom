@@ -103,8 +103,6 @@ fn collect_row_data(
     let group = app_state.workspace.group(group_id)?;
     let tab = app_state.workspace.tab(group.active_pane)?;
     let active_pane = group.active_pane;
-    let session_menu = tab.session_menu();
-    let can_split = tab.can_split();
     let pane_count = group.pane_count();
     let pane_axis = group.root.root_axis();
     // 激活判定用"组包含活动窗格"而不是比较活动窗格本身：组内切窗格后，
@@ -113,13 +111,14 @@ fn collect_row_data(
         .workspace
         .active_tab
         .is_some_and(|tab_id| group.contains(tab_id));
-    // 与横向标签栏同一口径：优先运行期 OSC 标题，空标题回落到会话名。
     let title = tab.tab_label();
-    let labeled = crate::workspace::tab_presentation::tab_title(tab, group.serial);
-    let subtitle = crate::workspace::tab_presentation::tab_subtitle(tab);
-    let dot_color = crate::workspace::tab_presentation::tab_status_dot(tab, p);
-    let (icon, icon_color) =
-        crate::workspace::tab_presentation::tab_icon(app_state, tab, active, p, cx);
+    let presentation = tab.presentation(app_state, group.serial, active, p, cx);
+    let labeled = presentation.title.clone();
+    let subtitle = presentation.subtitle.clone();
+    let dot_color = presentation.status_color;
+    let (icon, icon_color) = (presentation.icon, presentation.icon_color);
+    let session_menu = presentation.session_menu.clone();
+    let can_split = presentation.can_split;
     let tiled = app_state.tiling_of_group(group_id);
     let tiled_badge = tiled.is_some();
     let this_set_id = tiled.map(|tiled| tiled.id);

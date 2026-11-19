@@ -107,7 +107,27 @@ fn window_state_saves_only_session_tabs() {
 #[test]
 fn tab_close_actions_are_type_specific() {
     let model = read("src/app/tab/model.rs");
-    assert!(model.contains("TabCloseAction::CloseTerminal"));
-    assert!(model.contains("TabCloseAction::DisconnectContainer"));
-    assert!(model.contains("TabCloseAction::DropOnly"));
+    let close = read("src/app/tab_coordination.rs");
+    assert!(model.contains("Self::CloseTerminal"));
+    assert!(model.contains("Self::DisconnectContainer"));
+    assert!(model.contains("Self::DropOnly"));
+    assert!(close.contains("TabCloseAction::CloseTerminal"));
+    assert!(close.contains("ContainerCommand::Disconnect"));
+    assert!(close.contains("TabCloseAction::DropOnly"));
+}
+
+#[test]
+fn tab_presentation_same_for_horizontal_and_vertical() {
+    let horizontal = read("src/workspace/tab_strip/item.rs");
+    let vertical = read("src/workspace/vertical_tabs/item.rs");
+    let presentation = read("src/app/tab/presentation.rs");
+    assert!(
+        presentation.contains("pub(crate) struct TabPresentation")
+            && presentation.contains("pub(crate) fn presentation("),
+        "必须存在统一的 TabPresentation 生成入口"
+    );
+    assert!(
+        horizontal.contains("tab.presentation(") && vertical.contains("tab.presentation("),
+        "横向标签与纵向标签必须共享 WorkspaceTab::presentation"
+    );
 }

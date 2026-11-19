@@ -292,10 +292,10 @@ fn git_workspace_is_owned_by_entity() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let types =
         std::fs::read_to_string(root.join("src/app/tab/model.rs")).expect("读取标签模型失败");
-    let specialized = std::fs::read_to_string(root.join("src/app/tab/specialized.rs"))
-        .expect("读取专用标签类型失败");
+    let git =
+        std::fs::read_to_string(root.join("src/app/tab/git.rs")).expect("读取 Git 标签类型失败");
     assert!(
-        types.contains("Git(GitTab)") && specialized.contains("workspace: Entity<GitWorkspace>"),
+        types.contains("Git(GitTab)") && git.contains("workspace: Entity<GitWorkspace>"),
         "TabContent::Git 必须通过 GitTab 持有 Entity<GitWorkspace>"
     );
     let state = std::fs::read_to_string(root.join("src/app/state.rs")).expect("读取 AppState 失败");
@@ -325,11 +325,11 @@ fn container_workspace_is_owned_by_entity() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let types =
         std::fs::read_to_string(root.join("src/app/tab/model.rs")).expect("读取标签模型失败");
-    let specialized = std::fs::read_to_string(root.join("src/app/tab/specialized.rs"))
-        .expect("读取专用标签类型失败");
+    let container = std::fs::read_to_string(root.join("src/app/tab/container.rs"))
+        .expect("读取容器标签类型失败");
     assert!(
         types.contains("Containers(Box<ContainerTab>)")
-            && specialized.contains("workspace: Entity<ContainerWorkspace>"),
+            && container.contains("workspace: Entity<ContainerWorkspace>"),
         "TabContent::Containers 必须通过 ContainerTab 持有 Entity<ContainerWorkspace>"
     );
     let container = std::fs::read_to_string(root.join("src/container/mod.rs"))
@@ -610,10 +610,10 @@ fn workspace_has_no_mut_shell_free_functions() {
         }
     }
     let tab_presentation =
-        std::fs::read_to_string(root.join("../tab_presentation.rs")).unwrap_or_default();
+        std::fs::read_to_string(root.join("app/tab/presentation.rs")).unwrap_or_default();
     assert!(
         !tab_presentation.contains("AppShell"),
-        "workspace/tab_presentation.rs 不得再依赖 AppShell"
+        "app/tab/presentation.rs 不得再依赖 AppShell"
     );
     assert!(
         offenders.is_empty(),

@@ -22,7 +22,7 @@ mod secret_prefill;
 mod session_duplicate;
 mod session_ops;
 mod state;
-mod tab;
+pub(crate) mod tab;
 mod tab_coordination;
 mod task_hub;
 mod types;
@@ -219,15 +219,10 @@ impl AppShell {
                     for key in session_keys {
                         if key == "local" {
                             crate::connection::open_local_terminal(&mut self.state, window, cx);
-                        } else if let Some(session) = self
-                            .state
-                            .session
-                            .catalog
-                            .sessions
-                            .iter()
-                            .find(|s| s.id.to_string() == key)
-                            .cloned()
-                        {
+                        } else if let Some(session) = tab_coordination::saved_session_for_key(
+                            &self.state.session.catalog,
+                            &key,
+                        ) {
                             crate::connection::connect_session(
                                 &mut self.state,
                                 session.id,

@@ -164,10 +164,7 @@ impl<'a> GitActions<'a> {
         project_id: GitProjectId,
         cx: &App,
     ) -> Option<Entity<GitWorkspace>> {
-        self.workspace.tabs.iter().find_map(|tab| {
-            let workspace = tab.git_workspace()?;
-            (workspace.read(cx).state.project.id == project_id).then_some(workspace)
-        })
+        self.workspace.git_workspace_of_project(project_id, cx)
     }
 }
 
@@ -357,8 +354,7 @@ impl<'a> GitActions<'a> {
 
     /// 按项目 id 找已打开的标签页。
     pub(crate) fn git_tab_for_project(&self, project_id: GitProjectId, cx: &App) -> Option<TabId> {
-        self.git_workspace_of_project(project_id, cx)
-            .map(|workspace| workspace.read(cx).tab_id)
+        self.workspace.git_tab_for_project(project_id, cx)
     }
 
     /// 按草稿添加项目到列表（探测或初始化通过后调用）。

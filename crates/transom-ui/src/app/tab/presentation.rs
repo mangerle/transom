@@ -1,21 +1,65 @@
-//! 标签条目的图标与状态色口径。
+//! 横向与纵向标签共享的展示快照。
 //!
-//! 设计原理（Why）：横向标签栏与纵向标签面板分别计算图标与状态点，纵向
-//! 漏掉 ZMODEM 传输色、横向的图标回落顺序也不同；同一标签在两个入口可能
-//! 显示不同颜色。把图标/状态色收敛为纯函数，两个入口只消费结果。
+//! 设计原理（Why）：标签标题、图标、状态点、强调色、可分屏能力和会话菜单必须
+//! 横向标签栏与纵向标签面板使用同一口径；在这里一次性解析，避免两个入口各写
+//! 一套 `TabContent` 分支后逐渐漂移。
 //!
-//! 代价与局限：只覆盖视觉映射，标签布局仍各按横向/纵向排版。
+//! 代价与局限：Git 图标与强调色需要读取工作区实体，因此生成快照需要 `App`；
+//! 快照本身是拥有型数据，不能跨帧复用，但可在同一标签条目的多个子元素间共享。
 
-use crate::app::{AppState, TabContent, WorkspaceTab};
+use super::{SessionMenuData, TabContent, TabStatus, WorkspaceTab};
+use crate::app::AppState;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
 use crate::workspace::pane_status_indicator;
 use gpui_kit::*;
 use transom_core::{ContainerEngineKind, GitProject};
 use transom_ui_icons::AppIcon;
-use transom_ui_icons::CustomIcon;
-use transom_ui_icons::DomainIcon;
-use transom_ui_icons::UiIcon;
+use transom_ui_icons::{CustomIcon, DomainIcon, UiIcon};
+
+/// 单个标签条目的完整展示数据。
+pub(crate) struct TabPresentation {
+    pub(crate) title: String,
+    pub(crate) subtitle: String,
+    pub(crate) icon: AppIcon,
+    pub(crate) icon_color: Hsla,
+    pub(crate) status: TabStatus,
+    pub(crate) status_color: Hsla,
+    pub(crate) accent: Option<Hsla>,
+    pub(crate) can_split: bool,
+    pub(crate) closeable: bool,
+    pub(crate) session_menu: Option<SessionMenuData>,
+}
+
+impl WorkspaceTab {
+    /// 按标签类型生成展示快照。
+    pub(crate) fn presentation(
+        &self,
+        state: &AppState,
+        serial: usize,
+        active: bool,
+        palette: &Palette,
+        cx: &App,
+    ) -> TabPresentation {
+        let (icon, icon_color) = tab_icon(state, self, active, palette, cx);
+        let mut title = self.tab_label();
+        if serial > 0 {
+            title = format!("{title} #{serial}");
+        }
+        TabPresentation {
+            title,
+            subtitle: tab_subtitle(self),
+            icon,
+            icon_color,
+            status: self.status.clone(),
+            status_color: tab_status_dot(self, palette),
+            accent: tab_accent(state, self, cx),
+            can_split: self.can_split(),
+            closeable: true,
+            session_menu: self.session_menu(),
+        }
+    }
+}
 
 /// 标签图标与图标颜色：播放器/监控看板有专属图标，Git 标签跟随仓库项目外观，
 /// 其余按会话外观回落连接类型。
@@ -33,9 +77,9 @@ pub(crate) fn tab_icon(
         return (AppIcon::Domain(DomainIcon::MONITOR), p.primary);
     }
     if let Some(workspace) = tab.git_workspace() {
-        let state = &workspace.read(cx).state;
-        let icon = git_project_icon(&state.project);
-        let color = git_project_color(&state.project).unwrap_or(if active {
+        let workspace_state = &workspace.read(cx).state;
+        let icon = git_project_icon(&workspace_state.project);
+        let color = git_project_color(&workspace_state.project).unwrap_or(if active {
             p.sidebar_accent_foreground
         } else {
             p.muted_foreground
@@ -79,7 +123,7 @@ pub(crate) fn tab_icon(
     (icon, color)
 }
 
-/// 用户为会话配置的环境色；未配置时不画强调条。
+/// 用户为会话、Git 项目或监控目标配置的环境色；未配置时不画强调条。
 pub(crate) fn tab_accent(state: &AppState, tab: &WorkspaceTab, cx: &App) -> Option<Hsla> {
     if let Some(workspace) = tab.git_workspace() {
         return git_project_color(&workspace.read(cx).state.project);
@@ -97,7 +141,7 @@ fn git_project_color(project: &GitProject) -> Option<Hsla> {
     session_color(project.color)
 }
 
-/// 标签状态点颜色：ZMODEM 传输中优先用强调色，其余按连接状态。
+/// 标签状态点颜色：ZMODEM 传输中优先用强调色，其余按展示状态。
 pub(crate) fn tab_status_dot(tab: &WorkspaceTab, p: &Palette) -> Hsla {
     if tab.zmodem().is_some() {
         return p.primary;
@@ -105,17 +149,7 @@ pub(crate) fn tab_status_dot(tab: &WorkspaceTab, p: &Palette) -> Hsla {
     pane_status_indicator(&tab.status, p).0
 }
 
-/// 标签显示标题：会话标题优先，分屏序号大于零时追加 `#N`。
-pub(crate) fn tab_title(tab: &WorkspaceTab, serial: usize) -> String {
-    let title = tab.tab_label();
-    if serial > 0 {
-        format!("{title} #{serial}")
-    } else {
-        title
-    }
-}
-
-/// 标签副标题：连接类型的紧凑描述（本地/SSH/串口等）。
+/// 标签副标题：按标签类型生成稳定语义，而不是把所有非会话标签都显示成本地终端。
 pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
     match &tab.content {
         TabContent::Session(_) => tab
@@ -129,6 +163,25 @@ pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
     }
 }
 
+/// 并排列表所需的静态图标；不读取 Git/容器实体。
+pub(crate) fn compact_tab_icon(tab: &WorkspaceTab) -> AppIcon {
+    match &tab.content {
+        TabContent::Session(_) => tab
+            .session()
+            .map(|session| crate::connection::icon(&session.connection))
+            .unwrap_or_else(|| AppIcon::Ui(UiIcon::ERROR)),
+        TabContent::Player(_) | TabContent::Monitor(_) => AppIcon::Domain(DomainIcon::MONITOR),
+        TabContent::Containers(container) => {
+            if container.profile.engine.kind == ContainerEngineKind::Docker {
+                CustomIcon::DOCKER.into()
+            } else {
+                AppIcon::Domain(DomainIcon::CONTAINER)
+            }
+        }
+        TabContent::Git(_) => AppIcon::Ui(UiIcon::VCS),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{git_project_color, git_project_icon};
@@ -137,7 +190,6 @@ mod tests {
     use transom_ui_icons::AppIcon;
     use transom_ui_icons::UiIcon;
 
-    /// Git 项目未配置专属图标时，标签栏必须使用与仓库行相同的分支图标。
     #[test]
     fn git_project_default_icon_matches_repository_row() {
         let project = GitProject::new(PathBuf::from("/tmp/transom-git-icon"));
@@ -147,7 +199,6 @@ mod tests {
         ));
     }
 
-    /// Git 仓库始终使用统一 Git 图标，环境色仍可单独配置。
     #[test]
     fn git_project_icon_stays_unified_while_color_is_configurable() {
         let mut project = GitProject::new(PathBuf::from("/tmp/transom-git-icon"));
@@ -157,6 +208,9 @@ mod tests {
             git_project_icon(&project),
             AppIcon::Ui(UiIcon::VCS)
         ));
-        assert!(git_project_color(&project).is_some());
+        assert_eq!(
+            git_project_color(&project),
+            super::session_color(SessionColor::Blue)
+        );
     }
 }

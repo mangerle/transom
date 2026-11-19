@@ -7,7 +7,8 @@
 use super::badges::{build_tab_tooltip, build_tiled_group_badge};
 use super::item_parts::{render_pane_badge, render_tab_close_button};
 use super::menu::{TabContextMenuParams, build_tab_context_menu};
-use crate::app::{AppShell, SessionMenuData, TabGroup, WorkspaceTab, app_settings};
+use crate::app::tab::presentation::TabPresentation;
+use crate::app::{AppShell, TabGroup, WorkspaceTab, app_settings};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
 use crate::theme::tokens::size;
@@ -75,8 +76,7 @@ struct TabVisuals {
 struct TabEntryModel<'a> {
     group_id: GroupId,
     active_pane: TabId,
-    session_menu: Option<SessionMenuData>,
-    can_split: bool,
+    presentation: TabPresentation,
     group: &'a TabGroup,
     tiled_set: Option<TiledTabs>,
     this_set_id: Option<crate::tiling::TilingId>,
@@ -148,13 +148,17 @@ fn resolve_tab_entry_model<'a>(
     let active_pane = group.active_pane;
     let display =
         resolve_tab_display_state(&shell.state.workspace, group, composite, can_tile, palette);
-    let labels = resolve_tab_labels(tab, display.serial, display.pane_count);
-    let visuals = resolve_tab_visuals(&shell.state, tab, display.active, palette, cx);
+    let presentation = tab.presentation(&shell.state, display.serial, display.active, palette, cx);
+    let labels = resolve_tab_labels(tab, &presentation, display.pane_count);
+    let visuals = TabVisuals {
+        icon: presentation.icon,
+        dot_color: presentation.status_color,
+        session_color: presentation.accent,
+    };
     Some(TabEntryModel {
         group_id,
         active_pane,
-        session_menu: tab.session_menu(),
-        can_split: tab.can_split(),
+        presentation,
         group,
         this_set_id: tiled_set.as_ref().map(|tiled| tiled.id),
         tiled_set,
@@ -209,35 +213,28 @@ fn resolve_tab_entry_target(
 }
 
 /// 统一计算标签标题、提示文本与会话副标题。
-fn resolve_tab_labels(tab: &WorkspaceTab, serial: usize, pane_count: usize) -> TabLabels {
-    let title = tab.tab_label();
-    let labeled = crate::workspace::tab_presentation::tab_title(tab, serial);
+fn resolve_tab_labels(
+    tab: &WorkspaceTab,
+    presentation: &TabPresentation,
+    pane_count: usize,
+) -> TabLabels {
+    let labeled = presentation.title.clone();
     let session_name = tab.display_name();
     let tooltip_title = if pane_count > 1 {
-        rust_i18n::t!("tab.pane_count", title = labeled, count = pane_count).to_string()
+        rust_i18n::t!(
+            "tab.pane_count",
+            title = labeled.clone(),
+            count = pane_count
+        )
+        .to_string()
     } else {
-        labeled
+        labeled.clone()
     };
     TabLabels {
-        show_session: !session_name.is_empty() && session_name != title,
-        title,
+        show_session: !session_name.is_empty() && session_name != labeled,
+        title: labeled,
         tooltip_title,
         session_name,
-    }
-}
-
-/// 统一计算标签图标、状态点与会话强调色。
-fn resolve_tab_visuals(
-    state: &crate::app::AppState,
-    tab: &WorkspaceTab,
-    active: bool,
-    palette: &Palette,
-    cx: &App,
-) -> TabVisuals {
-    TabVisuals {
-        icon: crate::workspace::tab_presentation::tab_icon(state, tab, active, palette, cx).0,
-        dot_color: crate::workspace::tab_presentation::tab_status_dot(tab, palette),
-        session_color: crate::workspace::tab_presentation::tab_accent(state, tab, cx),
     }
 }
 
@@ -330,8 +327,8 @@ fn build_tab_entry_tab(
 fn build_tab_context_menu_params(model: &TabEntryModel<'_>) -> TabContextMenuParams {
     TabContextMenuParams {
         active_pane: model.active_pane,
-        session_menu: model.session_menu.clone(),
-        can_split: model.can_split,
+        session_menu: model.presentation.session_menu.clone(),
+        can_split: model.presentation.can_split,
         pane_count: model.display.pane_count,
         tile_enabled: model.display.tile_enabled,
         group_id: model.group_id,
@@ -425,20 +422,27 @@ fn append_tab_entry_footer(
     cx: &mut Context<AppShell>,
 ) -> Stateful<Div> {
     let p = model.palette;
-    let mut element = if app_settings(cx).window.show_tab_close_button {
-        element.child(render_tab_close_button(
-            model.group_id,
-            model.display.active,
-            model.tiled_set.as_ref(),
-            model.app,
-            p,
-            cx,
-        ))
-    } else {
-        element
-    };
+    let mut element =
+        if app_settings(cx).window.show_tab_close_button && model.presentation.closeable {
+            element.child(render_tab_close_button(
+                model.group_id,
+                model.display.active,
+                model.tiled_set.as_ref(),
+                model.app,
+                p,
+                cx,
+            ))
+        } else {
+            element
+        };
+    let status_color = crate::workspace::pane_status_indicator(&model.presentation.status, p).0;
     let (bar_height, bar_color) = if model.display.active {
         (model.display.accent_px, p.primary)
+    } else if matches!(
+        &model.presentation.status,
+        crate::app::TabStatus::Failed(_) | crate::app::TabStatus::Disconnected
+    ) {
+        (model.display.accent_px, status_color)
     } else if model.composite {
         (model.display.divider_px, p.muted_foreground.opacity(0.6))
     } else {

@@ -10,14 +10,21 @@
 //! `tab.session` 字段；标签组也需要同时支持会话归属与单工作区归属。
 
 mod accessors;
+mod container;
+mod git;
 mod group;
 mod model;
+mod monitor;
+mod player;
+pub(crate) mod presentation;
 mod session;
-mod specialized;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use container::ContainerTab;
+pub(crate) use git::GitTab;
 pub(crate) use group::{TabGroup, TabGroupOwner};
 pub(crate) use model::{SessionMenuData, TabCloseAction, TabContent, TabStatus, WorkspaceTab};
+pub(crate) use monitor::MonitorTab;
+pub(crate) use player::PlayerTab;
 pub(crate) use session::{SessionPaneState, SessionTab};
-pub(crate) use specialized::{ContainerTab, GitTab, MonitorTab, PlayerTab};

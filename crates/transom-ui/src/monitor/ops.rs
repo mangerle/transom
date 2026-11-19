@@ -56,6 +56,11 @@ impl<'a> MonitorOps<'a> {
     fn active_monitor_target(&self) -> Option<(TabId, ConnectionId)> {
         let tab_id = self.workspace.active_tab?;
         let tab = self.workspace.tab(tab_id)?;
+        if let Some(monitor) = tab.monitor()
+            && let Some(connection_id) = tab.monitor_target_connection_id()
+        {
+            return Some((monitor.target_tab_id, connection_id));
+        }
         let session = tab.session()?;
         if !matches!(
             &session.connection,

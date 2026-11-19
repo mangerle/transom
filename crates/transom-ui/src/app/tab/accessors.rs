@@ -2,18 +2,11 @@
 
 use super::{SessionPaneState, SessionTab, TabContent, WorkspaceTab};
 use crate::app::SessionMenuData;
-use crate::cast_player::CastPlayerView;
-use crate::container::ContainerWorkspace;
-use crate::git::GitWorkspace;
 use gpui_kit::Entity;
-use transom_core::{Connection, ConnectionId, ContainerEngineProfile, Session, SessionId};
+use transom_core::{Connection, ConnectionId, Session, SessionId};
 use transom_terminal::TerminalView;
 
 impl WorkspaceTab {
-    pub(crate) fn is_session(&self) -> bool {
-        matches!(self.content, TabContent::Session(_))
-    }
-
     pub(crate) fn is_player(&self) -> bool {
         matches!(self.content, TabContent::Player(_))
     }
@@ -98,41 +91,6 @@ impl WorkspaceTab {
     pub(crate) fn network_traffic(&self) -> Option<&transom_core::NetworkTraffic> {
         self.session_pane()
             .and_then(|pane| pane.network_traffic.as_ref())
-    }
-
-    pub(crate) fn player(&self) -> Option<Entity<CastPlayerView>> {
-        match &self.content {
-            TabContent::Player(player) => Some(player.player.clone()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn monitor(&self) -> Option<&super::MonitorTab> {
-        match &self.content {
-            TabContent::Monitor(monitor) => Some(monitor.as_ref()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn git_workspace(&self) -> Option<Entity<GitWorkspace>> {
-        match &self.content {
-            TabContent::Git(git) => Some(git.workspace.clone()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn container_workspace(&self) -> Option<Entity<ContainerWorkspace>> {
-        match &self.content {
-            TabContent::Containers(container) => Some(container.workspace.clone()),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn container_profile(&self) -> Option<&ContainerEngineProfile> {
-        match &self.content {
-            TabContent::Containers(container) => Some(&container.profile),
-            _ => None,
-        }
     }
 
     pub(crate) fn display_name(&self) -> String {

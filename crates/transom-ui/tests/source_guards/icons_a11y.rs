@@ -223,7 +223,7 @@ fn git_identity_uses_one_icon() {
         "src/git/log_view/mod.rs",
         "src/git/workspace.rs",
         "src/git/sidebar/rows.rs",
-        "src/workspace/tab_presentation.rs",
+        "src/app/tab/presentation.rs",
     ] {
         let content = std::fs::read_to_string(root.join(relative)).expect("读取 Git 图标源码失败");
         assert!(

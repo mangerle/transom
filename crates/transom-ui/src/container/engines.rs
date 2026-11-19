@@ -11,11 +11,7 @@ pub(crate) fn open_engine_workspace(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    if let Some(existing) = app_state.workspace.tabs.iter().find_map(|tab| {
-        tab.container_profile()
-            .is_some_and(|existing| existing.id == profile.id)
-            .then_some(tab.id)
-    }) {
+    if let Some(existing) = app_state.workspace.container_tab_for_profile(profile.id) {
         app_state.ui.window_requests.push_activate_tab(existing);
         return;
     }

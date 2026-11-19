@@ -10,7 +10,10 @@ use crate::pane_tree::LayoutNode;
 use crate::sftp::PendingEditorClose;
 use crate::tiling::StripEntry;
 use gpui_kit::*;
-use transom_core::{Connection, ContainerCommand, GroupId, SavedTabGroup, TabId, TerminalCommand};
+use transom_core::{
+    Connection, ContainerCommand, GroupId, SavedTabGroup, Session, SessionCatalog, TabId,
+    TerminalCommand,
+};
 
 impl AppShell {
     /// 根据窗口设置恢复一个标签组及其分割树布局，返回实际创建的标签组。
@@ -26,14 +29,7 @@ impl AppShell {
         if saved.session == "local" {
             crate::connection::open_local_terminal(&mut self.state, window, cx);
         } else {
-            let session = self
-                .state
-                .session
-                .catalog
-                .sessions
-                .iter()
-                .find(|session| session.id.to_string() == saved.session)
-                .cloned()?;
+            let session = saved_session_for_key(&self.state.session.catalog, &saved.session)?;
             crate::connection::connect_session(&mut self.state, session.id, window, cx);
         }
         if self.state.workspace.groups.len() <= groups_before {
@@ -360,4 +356,16 @@ impl AppShell {
             crate::tiling::activate_group(&mut self.state, group, window, cx);
         }
     }
+}
+
+/// 按持久化会话键解析启动恢复目标。
+///
+/// 设计原理（Why）：旧设置中的未知键（包括历史 Git/容器占位 ID）必须安全跳过，
+/// 不能阻断其他标签恢复；本地终端由调用方单独处理。
+pub(crate) fn saved_session_for_key(catalog: &SessionCatalog, key: &str) -> Option<Session> {
+    catalog
+        .sessions
+        .iter()
+        .find(|session| session.id.to_string() == key)
+        .cloned()
 }

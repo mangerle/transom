@@ -4,7 +4,8 @@
 //! 与拖拽比例在并排视图里原样生效；空槽显示“选择标签”占位，点开后可以把
 //! 尚未并排的独立标签填进来。
 
-use crate::app::{AppShell, TabContent};
+use crate::app::AppShell;
+use crate::app::tab::presentation::compact_tab_icon;
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::tiling::{TiledTabs, TilingId, TilingNode};
@@ -14,11 +15,11 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
-use transom_core::{Connection, GroupId, SplitAxis};
+use transom_core::{GroupId, SplitAxis};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
-use transom_ui_icons::{CustomIcon, UiIcon};
+use transom_ui_icons::UiIcon;
 
 impl AppShell {
     /// 渲染并排网格；没有任何有效槽位时返回 `None`，由调用方退回单标签。
@@ -104,32 +105,7 @@ impl AppShell {
                 if serial > 0 {
                     title = format!("{title} #{serial}");
                 }
-                let tab_icon = match &tab.content {
-                    TabContent::Session(_) => tab
-                        .session()
-                        .map(|session| match &session.connection {
-                            Connection::Local(_) => AppIcon::Domain(DomainIcon::TERMINAL),
-                            Connection::Serial(_) | Connection::Telnet(_) => {
-                                AppIcon::Domain(DomainIcon::SSH)
-                            }
-                            Connection::Mosh(_) => AppIcon::Ui(UiIcon::RUN),
-                            _ => AppIcon::Domain(DomainIcon::SSH),
-                        })
-                        .unwrap_or_else(|| AppIcon::Ui(UiIcon::ERROR)),
-                    TabContent::Player(_) | TabContent::Monitor(_) => {
-                        AppIcon::Domain(DomainIcon::MONITOR)
-                    }
-                    TabContent::Containers(container) => {
-                        if container.profile.engine.kind
-                            == transom_core::ContainerEngineKind::Docker
-                        {
-                            CustomIcon::DOCKER.into()
-                        } else {
-                            AppIcon::Domain(DomainIcon::CONTAINER)
-                        }
-                    }
-                    TabContent::Git(_) => AppIcon::Ui(UiIcon::VCS),
-                };
+                let tab_icon = compact_tab_icon(tab);
                 (title, dot_color, tab_icon)
             }
             None => (

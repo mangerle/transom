@@ -12,10 +12,10 @@
 
 use crate::app::{TabGroup, WorkspaceTab};
 use crate::tiling::TiledTabs;
-use gpui_kit::Entity;
 use gpui_kit::component::resizable::ResizableState;
+use gpui_kit::{App, Entity};
 use std::collections::{HashMap, HashSet};
-use transom_core::{GroupId, SplitId, TabId};
+use transom_core::{EngineProfileId, GitProjectId, GroupId, SplitId, TabId};
 
 /// 工作区核心状态：聚合全部活动标签、分割树分组、并排平铺网格与焦点追踪。
 pub struct WorkspaceState {
@@ -64,6 +64,54 @@ impl WorkspaceState {
     /// 标签是否存在。
     pub(crate) fn has_tab(&self, id: TabId) -> bool {
         self.tabs.iter().any(|tab| tab.id == id)
+    }
+
+    /// 按项目 ID 查找已打开的 Git 标签。
+    pub(crate) fn git_tab_for_project(&self, project_id: GitProjectId, cx: &App) -> Option<TabId> {
+        self.tabs.iter().find_map(|tab| {
+            let workspace = tab.git_workspace()?;
+            (workspace.read(cx).state.project.id == project_id).then_some(tab.id)
+        })
+    }
+
+    /// 按项目 ID 查找 Git 工作区实体。
+    pub(crate) fn git_workspace_of_project(
+        &self,
+        project_id: GitProjectId,
+        cx: &App,
+    ) -> Option<Entity<crate::git::GitWorkspace>> {
+        let tab_id = self.git_tab_for_project(project_id, cx)?;
+        self.tab(tab_id)?.git_workspace()
+    }
+
+    /// 按引擎配置 ID 查找已打开的容器标签。
+    pub(crate) fn container_tab_for_profile(&self, profile_id: EngineProfileId) -> Option<TabId> {
+        self.tabs.iter().find_map(|tab| {
+            tab.container_profile()
+                .is_some_and(|profile| profile.id == profile_id)
+                .then_some(tab.id)
+        })
+    }
+
+    /// 选择监控标签页的采样目标：已有监控跟随其目标，否则只选真实会话标签。
+    pub(crate) fn monitor_target_tab(&self, active_tab: Option<TabId>) -> Option<TabId> {
+        active_tab
+            .and_then(|id| self.tab(id))
+            .and_then(|tab| {
+                if let Some(monitor) = tab.monitor() {
+                    Some(monitor.target_tab_id)
+                } else if tab.content.kind().is_session() {
+                    Some(tab.id)
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                self.tabs
+                    .iter()
+                    .find(|tab| tab.content.kind().is_session())
+                    .map(|tab| tab.id)
+            })
     }
 
     /// 按分组 id 查找标签组。

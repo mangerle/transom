@@ -6,7 +6,6 @@ mod panes;
 pub(crate) mod render;
 pub(crate) mod state;
 mod tab_drag;
-pub(crate) mod tab_presentation;
 pub(crate) mod tab_selection;
 mod tab_strip;
 pub(crate) mod tabs;

@@ -188,10 +188,7 @@ impl AppState {
         project_id: GitProjectId,
         cx: &App,
     ) -> Option<Entity<GitWorkspace>> {
-        self.workspace.tabs.iter().find_map(|tab| {
-            let workspace = tab.git_workspace()?;
-            (workspace.read(cx).state.project.id == project_id).then_some(workspace)
-        })
+        self.workspace.git_workspace_of_project(project_id, cx)
     }
 
     /// 让设置实体执行保存：表单收集、主题校验与窗口外观落定都在实体内部完成。
