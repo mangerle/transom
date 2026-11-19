@@ -82,7 +82,7 @@ impl SettingsView {
             .child(
                 div()
                     .w(rems(FONT_FIELD_WIDTH))
-                    .child(Select::new(&select).w_full()),
+                    .child(Select::new(&select).w_full().highlight_matches(true)),
             )
             .child(
                 Button::new(format!("{id}-import"))
