@@ -14,15 +14,14 @@ use crate::git::GitWorkspace;
 use crate::git::actions::DiffTabCloseScope;
 use crate::git::types::{GitDiffState, GitWorkspaceState as State};
 use crate::palette::Palette;
-use crate::theme::tokens::{control, size};
+use crate::theme::tokens::{control, size, typography};
 use crate::widgets::{
     IconButton, IconButtonSize, underline_tab_active_line, underline_tab_bar_line,
 };
-use gpui_kit::base::h_flex;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::base::{Tab, Tabs, h_flex};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_core::GitRequestId;
@@ -80,33 +79,39 @@ pub(crate) fn render_diff_tab_bar(
     }
     let total_tabs = state.diff_tabs.len();
     let titles = disambiguated_tab_titles(&state.diff_tabs);
-    let bar = h_flex()
-        .id("git-diff-tab-bar")
-        .relative()
-        .w_full()
-        .h(rems(size::TAB_BAR_HEIGHT))
+    let mut tab_list = Tabs::new("git-diff-tab-list")
+        .h_full()
         .flex_none()
+        .flex()
         .items_center()
         .px_1()
-        .gap_1()
-        .overflow_x_scrollbar()
-        .child(underline_tab_bar_line(p))
-        .children(state.diff_tabs.iter().zip(titles).enumerate().map(
-            |(idx, (tab_item, display_title))| {
-                render_single_diff_tab(
-                    DiffTabItemParams {
-                        idx,
-                        total_tabs,
-                        is_active: state.active_diff_tab == Some(idx),
-                        tab_item,
-                        display_title,
-                    },
-                    workspace.clone(),
-                    p,
-                )
+        .gap_1();
+    for (idx, (tab_item, display_title)) in state.diff_tabs.iter().zip(titles).enumerate() {
+        tab_list = tab_list.child(render_single_diff_tab(
+            DiffTabItemParams {
+                idx,
+                total_tabs,
+                is_active: state.active_diff_tab == Some(idx),
+                tab_item,
+                display_title,
             },
+            workspace.clone(),
+            p,
         ));
-    Some(bar.into_any_element())
+    }
+    Some(
+        h_flex()
+            .id("git-diff-tab-bar")
+            .relative()
+            .w_full()
+            .h(rems(size::TAB_BAR_HEIGHT))
+            .flex_none()
+            .items_center()
+            .overflow_x_scrollbar()
+            .child(underline_tab_bar_line(p))
+            .child(tab_list)
+            .into_any_element(),
+    )
 }
 
 struct DiffTabItemParams<'a> {
@@ -130,7 +135,6 @@ fn render_single_diff_tab(
         display_title,
     } = params;
     let request_id: GitRequestId = tab_item.request_id;
-    let tab_ws = workspace.clone();
     let outer_tab_ws = workspace.clone();
     let middle_ws = workspace.clone();
     let close_ws = workspace.clone();
@@ -143,139 +147,127 @@ fn render_single_diff_tab(
     )
     .to_string();
 
-    h_flex()
-        .id(ElementId::Name(
-            format!("git-diff-tab-item-{request_id}").into(),
-        ))
-        .relative()
-        .h_full()
-        .flex_none()
-        .items_center()
-        .gap_1()
-        .pl_2()
-        .pr_1()
-        .cursor_pointer()
-        .bg(if is_active {
-            p.tab_active
-        } else {
-            gpui::transparent_black()
-        })
-        .when(!is_active, |el| el.hover(|s| s.bg(p.list_hover)))
-        .when(is_active, |el| el.child(underline_tab_active_line(p)))
-        .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
-            cx.stop_propagation();
-            middle_ws.update(cx, |ws, cx| {
-                ws.close_diff_tab_by_request(request_id, cx);
-            });
-        })
-        .on_click(move |_, _, cx| {
-            outer_tab_ws.update(cx, |ws, cx| {
-                ws.select_diff_tab_by_request(request_id, cx);
-            });
-        })
-        .context_menu(move |menu, _window, _cx| {
-            let close_self = menu_ws.clone();
-            let close_others = menu_ws.clone();
-            let close_left = menu_ws.clone();
-            let close_right = menu_ws.clone();
-            let close_all = menu_ws.clone();
-            menu.item(
-                PopupMenuItem::new(rust_i18n::t!("git.diff.close_tab").to_string()).on_click(
-                    move |_, _, cx| {
-                        close_self.update(cx, |ws, cx| {
-                            ws.close_diff_tab_by_request(request_id, cx);
-                        });
-                    },
-                ),
-            )
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("git.diff.close_other_tabs").to_string())
-                    .disabled(total_tabs <= 1)
-                    .on_click(move |_, _, cx| {
-                        close_others.update(cx, |ws, cx| {
-                            ws.close_diff_tabs_scope(
-                                Some(request_id),
-                                DiffTabCloseScope::Other,
-                                cx,
-                            );
-                        });
-                    }),
-            )
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("git.diff.close_left_tabs").to_string())
-                    .disabled(idx == 0)
-                    .on_click(move |_, _, cx| {
-                        close_left.update(cx, |ws, cx| {
-                            ws.close_diff_tabs_scope(Some(request_id), DiffTabCloseScope::Left, cx);
-                        });
-                    }),
-            )
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("git.diff.close_right_tabs").to_string())
-                    .disabled(idx + 1 >= total_tabs)
-                    .on_click(move |_, _, cx| {
-                        close_right.update(cx, |ws, cx| {
-                            ws.close_diff_tabs_scope(
-                                Some(request_id),
-                                DiffTabCloseScope::Right,
-                                cx,
-                            );
-                        });
-                    }),
-            )
-            .separator()
-            .item(
-                PopupMenuItem::new(rust_i18n::t!("git.diff.close_all_tabs").to_string()).on_click(
-                    move |_, _, cx| {
-                        close_all.update(cx, |ws, cx| {
-                            ws.close_diff_tabs_scope(None, DiffTabCloseScope::All, cx);
-                        });
-                    },
-                ),
-            )
-        })
-        .child(
-            Button::new(ElementId::Name(format!("git-diff-tab-{request_id}").into()))
-                .text()
-                .xsmall()
-                .accessibility_label(display_title.clone())
-                .tooltip(tooltip_text)
-                .child(
-                    AppIconElement::new(AppIcon::for_file(&tab_item.path))
-                        .with_rems(rems(control::COMPACT_ICON)),
-                )
-                .child(
-                    div()
-                        .text_color(if is_active {
-                            p.tab_active_foreground
-                        } else {
-                            p.tab_foreground
-                        })
-                        .child(display_title),
-                )
+    Tab::new(ElementId::Name(
+        format!("git-diff-tab-item-{request_id}").into(),
+    ))
+    .relative()
+    .h_full()
+    .flex_none()
+    .items_center()
+    .gap_1()
+    .pl_2()
+    .pr_1()
+    .text_size(rems(typography::CAPTION))
+    .cursor_pointer()
+    .selected(is_active)
+    .accessibility_label(display_title.clone())
+    .set_position(idx + 1, total_tabs)
+    .bg(if is_active {
+        p.tab_active
+    } else {
+        gpui::transparent_black()
+    })
+    .when(!is_active, |el| el.hover(|s| s.bg(p.list_hover)))
+    .when(is_active, |el| el.child(underline_tab_active_line(p)))
+    .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
+        cx.stop_propagation();
+        middle_ws.update(cx, |ws, cx| {
+            ws.close_diff_tab_by_request(request_id, cx);
+        });
+    })
+    .on_click(move |_, _, cx| {
+        outer_tab_ws.update(cx, |ws, cx| {
+            ws.select_diff_tab_by_request(request_id, cx);
+        });
+    })
+    .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx))
+    .context_menu(move |menu, _window, _cx| {
+        let close_self = menu_ws.clone();
+        let close_others = menu_ws.clone();
+        let close_left = menu_ws.clone();
+        let close_right = menu_ws.clone();
+        let close_all = menu_ws.clone();
+        menu.item(
+            PopupMenuItem::new(rust_i18n::t!("git.diff.close_tab").to_string()).on_click(
+                move |_, _, cx| {
+                    close_self.update(cx, |ws, cx| {
+                        ws.close_diff_tab_by_request(request_id, cx);
+                    });
+                },
+            ),
+        )
+        .item(
+            PopupMenuItem::new(rust_i18n::t!("git.diff.close_other_tabs").to_string())
+                .disabled(total_tabs <= 1)
                 .on_click(move |_, _, cx| {
-                    cx.stop_propagation();
-                    tab_ws.update(cx, |ws, cx| {
-                        ws.select_diff_tab_by_request(request_id, cx);
+                    close_others.update(cx, |ws, cx| {
+                        ws.close_diff_tabs_scope(Some(request_id), DiffTabCloseScope::Other, cx);
                     });
                 }),
         )
-        .child(
-            IconButton::new(
-                ElementId::Name(format!("git-diff-tab-close-{request_id}").into()),
-                UiIcon::CLOSE,
-                "Close diff tab",
-            )
-            .size(IconButtonSize::Compact)
-            .render()
-            .on_click(move |_, _, cx| {
-                cx.stop_propagation();
-                close_ws.update(cx, |ws, cx| {
-                    ws.close_diff_tab_by_request(request_id, cx);
-                });
-            }),
+        .item(
+            PopupMenuItem::new(rust_i18n::t!("git.diff.close_left_tabs").to_string())
+                .disabled(idx == 0)
+                .on_click(move |_, _, cx| {
+                    close_left.update(cx, |ws, cx| {
+                        ws.close_diff_tabs_scope(Some(request_id), DiffTabCloseScope::Left, cx);
+                    });
+                }),
         )
-        .into_any_element()
+        .item(
+            PopupMenuItem::new(rust_i18n::t!("git.diff.close_right_tabs").to_string())
+                .disabled(idx + 1 >= total_tabs)
+                .on_click(move |_, _, cx| {
+                    close_right.update(cx, |ws, cx| {
+                        ws.close_diff_tabs_scope(Some(request_id), DiffTabCloseScope::Right, cx);
+                    });
+                }),
+        )
+        .separator()
+        .item(
+            PopupMenuItem::new(rust_i18n::t!("git.diff.close_all_tabs").to_string()).on_click(
+                move |_, _, cx| {
+                    close_all.update(cx, |ws, cx| {
+                        ws.close_diff_tabs_scope(None, DiffTabCloseScope::All, cx);
+                    });
+                },
+            ),
+        )
+    })
+    .child(
+        h_flex()
+            .gap_1()
+            .items_center()
+            .child(
+                AppIconElement::new(AppIcon::for_file(&tab_item.path))
+                    .with_rems(rems(control::COMPACT_ICON)),
+            )
+            .child(
+                div()
+                    .text_color(if is_active {
+                        p.tab_active_foreground
+                    } else {
+                        p.tab_foreground
+                    })
+                    .child(display_title),
+            ),
+    )
+    .child(
+        IconButton::new(
+            ElementId::Name(format!("git-diff-tab-close-{request_id}").into()),
+            UiIcon::CLOSE,
+            "Close diff tab",
+        )
+        .size(IconButtonSize::Compact)
+        .render()
+        .on_click(move |_, _, cx| {
+            cx.stop_propagation();
+            close_ws.update(cx, |ws, cx| {
+                ws.close_diff_tab_by_request(request_id, cx);
+            });
+        }),
+    )
+    .into_any_element()
 }
 
 /// 渲染双栏对比列头：左侧基准版本，右侧当前版本（对齐 IDEA 样式，去除长路径重复截断）。
