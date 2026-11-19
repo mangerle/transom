@@ -8459,6 +8459,15 @@ git:
     collapse_unchanged:
       en: Collapse Unchanged Lines
       zh-CN: 折叠未变更行
+    split_ratio_balanced:
+      en: Equal Split Width (50/50)
+      zh-CN: 左右等宽 (50/50)
+    split_ratio_left_wider:
+      en: Wider Original Side (60/40)
+      zh-CN: 左侧基准更宽 (60/40)
+    split_ratio_right_wider:
+      en: Wider Modified Side (40/60)
+      zh-CN: 右侧当前更宽 (40/60)
     no_changes:
       en: No differences under current ignore settings
       zh-CN: 当前忽略规则下无差异

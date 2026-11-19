@@ -19,7 +19,9 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::{AppIconElement, UiIcon};
 
-use super::types::{DiffHighlight, DiffUiAction, DiffViewOptions, IgnoreWhitespace};
+use super::types::{
+    DiffHighlight, DiffSplitRatio, DiffUiAction, DiffViewOptions, IgnoreWhitespace,
+};
 use crate::widgets::menu_item;
 
 /// 选项更新回调类型：修改 `DiffViewOptions` 的闭包会被派发到具体宿主的状态更新中。
@@ -33,6 +35,7 @@ pub(crate) fn render_diff_body(state: &Entity<DiffState>, options: DiffViewOptio
         .header_visible(false)
         .line_number(options.show_line_numbers)
         .soft_wrap(options.wrap_lines)
+        .split_ratio(options.split_ratio.value())
         .syntax_highlight(true)
         .change_background(show_colors)
         .change_indicator(if show_colors {
@@ -176,8 +179,16 @@ fn highlight_level_key(level: DiffHighlight) -> &'static str {
     }
 }
 
+fn split_ratio_key(ratio: DiffSplitRatio) -> &'static str {
+    match ratio {
+        DiffSplitRatio::Balanced => "git.diff.split_ratio_balanced",
+        DiffSplitRatio::LeftWider => "git.diff.split_ratio_left_wider",
+        DiffSplitRatio::RightWider => "git.diff.split_ratio_right_wider",
+    }
+}
+
 fn appearance_tooltip(options: DiffViewOptions) -> String {
-    let mut active = Vec::with_capacity(3);
+    let mut active = Vec::with_capacity(4);
     if options.show_line_numbers {
         active.push(rust_i18n::t!("git.diff.show_line_numbers").to_string());
     }
@@ -186,6 +197,9 @@ fn appearance_tooltip(options: DiffViewOptions) -> String {
     }
     if options.collapse_unchanged {
         active.push(rust_i18n::t!("git.diff.collapse_unchanged").to_string());
+    }
+    if options.split_ratio != DiffSplitRatio::default() {
+        active.push(rust_i18n::t!(split_ratio_key(options.split_ratio)).to_string());
     }
     if active.is_empty() {
         rust_i18n::t!("git.diff.settings").to_string()
@@ -296,7 +310,7 @@ pub(crate) fn render_highlight_menu(
         .into_any_element()
 }
 
-/// 渲染「外观」子菜单：显示行号 / 自动换行 / 折叠未变更上下文。
+/// 渲染「外观」子菜单：显示行号 / 自动换行 / 折叠未变更上下文 / 并排栏宽。
 pub(crate) fn render_appearance_menu(
     id_prefix: &'static str,
     options: DiffViewOptions,
@@ -305,7 +319,8 @@ pub(crate) fn render_appearance_menu(
     let defaults = DiffViewOptions::default();
     let is_custom = options.show_line_numbers != defaults.show_line_numbers
         || options.wrap_lines != defaults.wrap_lines
-        || options.collapse_unchanged != defaults.collapse_unchanged;
+        || options.collapse_unchanged != defaults.collapse_unchanged
+        || options.split_ratio != defaults.split_ratio;
     let tooltip = appearance_tooltip(options);
     Button::new(format!("{id_prefix}-appearance"))
         .ghost()
@@ -318,48 +333,78 @@ pub(crate) fn render_appearance_menu(
             let numbers_cb = on_update.clone();
             let wrap_cb = on_update.clone();
             let collapse_cb = on_update.clone();
+            let ratio_cb = on_update.clone();
             let numbers_on = options.show_line_numbers;
             let wrap_on = options.wrap_lines;
             let collapse_on = options.collapse_unchanged;
-            menu.item(choice_item(
-                rust_i18n::t!("git.diff.show_line_numbers").to_string(),
-                numbers_on,
-                move |_, window, cx| {
-                    numbers_cb(
-                        Box::new(move |opts| {
-                            opts.show_line_numbers = !numbers_on;
-                        }),
-                        window,
-                        cx,
-                    );
-                },
-            ))
-            .item(choice_item(
-                rust_i18n::t!("git.diff.wrap_lines").to_string(),
-                wrap_on,
-                move |_, window, cx| {
-                    wrap_cb(
-                        Box::new(move |opts| {
-                            opts.wrap_lines = !wrap_on;
-                        }),
-                        window,
-                        cx,
-                    );
-                },
-            ))
-            .item(choice_item(
-                rust_i18n::t!("git.diff.collapse_unchanged").to_string(),
-                collapse_on,
-                move |_, window, cx| {
-                    collapse_cb(
-                        Box::new(move |opts| {
-                            opts.collapse_unchanged = !collapse_on;
-                        }),
-                        window,
-                        cx,
-                    );
-                },
-            ))
+            let ratio = options.split_ratio;
+            let side_by_side = options.side_by_side;
+            let mut menu = menu
+                .item(choice_item(
+                    rust_i18n::t!("git.diff.show_line_numbers").to_string(),
+                    numbers_on,
+                    move |_, window, cx| {
+                        numbers_cb(
+                            Box::new(move |opts| {
+                                opts.show_line_numbers = !numbers_on;
+                            }),
+                            window,
+                            cx,
+                        );
+                    },
+                ))
+                .item(choice_item(
+                    rust_i18n::t!("git.diff.wrap_lines").to_string(),
+                    wrap_on,
+                    move |_, window, cx| {
+                        wrap_cb(
+                            Box::new(move |opts| {
+                                opts.wrap_lines = !wrap_on;
+                            }),
+                            window,
+                            cx,
+                        );
+                    },
+                ))
+                .item(choice_item(
+                    rust_i18n::t!("git.diff.collapse_unchanged").to_string(),
+                    collapse_on,
+                    move |_, window, cx| {
+                        collapse_cb(
+                            Box::new(move |opts| {
+                                opts.collapse_unchanged = !collapse_on;
+                            }),
+                            window,
+                            cx,
+                        );
+                    },
+                ))
+                .separator();
+            for level in [
+                DiffSplitRatio::Balanced,
+                DiffSplitRatio::LeftWider,
+                DiffSplitRatio::RightWider,
+            ] {
+                let cb = ratio_cb.clone();
+                let checked = ratio == level;
+                menu = menu.item(
+                    choice_item(
+                        rust_i18n::t!(split_ratio_key(level)).to_string(),
+                        checked,
+                        move |_, window, cx| {
+                            cb(
+                                Box::new(move |opts| {
+                                    opts.split_ratio = level;
+                                }),
+                                window,
+                                cx,
+                            );
+                        },
+                    )
+                    .disabled(!side_by_side),
+                );
+            }
+            menu
         })
         .into_any_element()
 }

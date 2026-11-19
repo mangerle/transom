@@ -2,7 +2,7 @@
 //!
 //! 设计原理（Why）：
 //! - Git 差异视图与 SFTP 远程文件编辑的保存前预览都需要同一套展示配置
-//!   （并排/统一、忽略空白、高亮粒度、行号、换行、折叠未变更上下文），
+//!   （并排/统一、左右栏宽、忽略空白、高亮粒度、行号、换行、折叠未变更上下文），
 //!   收拢到此共享层后两边行为、菜单与快捷键口径完全一致，杜绝重复定义。
 
 use std::rc::Rc;
@@ -28,6 +28,50 @@ pub(crate) enum IgnoreWhitespace {
     BlankLines,
 }
 
+/// 并排差异的左右栏宽比例档位。
+///
+/// 用语义档位而不是直接保存浮点数：配置与 UI 选项都保持可比较、可穷举，
+/// 未知旧值也能稳定回落到 50/50，不把展示常量泄漏到设置层。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum DiffSplitRatio {
+    /// 左右各占一半。
+    #[default]
+    Balanced,
+    /// 左侧基准版本更宽。
+    LeftWider,
+    /// 右侧当前版本更宽。
+    RightWider,
+}
+
+impl DiffSplitRatio {
+    /// 转换为 `gpui-kit::Diff::split_ratio` 需要的原始比例。
+    pub(crate) fn value(self) -> f32 {
+        match self {
+            Self::Balanced => 0.5,
+            Self::LeftWider => 0.6,
+            Self::RightWider => 0.4,
+        }
+    }
+
+    /// 持久化使用的稳定字符串键。
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Self::Balanced => "balanced",
+            Self::LeftWider => "left_wider",
+            Self::RightWider => "right_wider",
+        }
+    }
+
+    /// 从持久化键解析；未知值回落到均分。
+    pub(crate) fn from_key(key: &str) -> Self {
+        match key {
+            "left_wider" => Self::LeftWider,
+            "right_wider" => Self::RightWider,
+            _ => Self::Balanced,
+        }
+    }
+}
+
 /// 差异高亮粒度（对应工具条的「高亮显示差异」）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum DiffHighlight {
@@ -49,6 +93,8 @@ pub(crate) struct DiffViewOptions {
     pub show_line_numbers: bool,
     /// 长行是否自动换行。
     pub wrap_lines: bool,
+    /// 并排模式下的左右栏宽比例。
+    pub split_ratio: DiffSplitRatio,
     /// 空白处理档位。
     pub ignore_whitespace: IgnoreWhitespace,
     /// 高亮粒度。
@@ -62,9 +108,10 @@ impl Default for DiffViewOptions {
         Self {
             side_by_side: true,
             show_line_numbers: true,
-            // `gpui_kit::Diff` 仅在开启软换行时按视口 50%/50% 均分左右栏；
-            // 关闭后单栏会按全文件最长行撑宽并把右栏挤出视口，故默认开启以保并排均分。
+            // `gpui_kit::Diff` 的软换行决定左右栏是否按视口比例分配；
+            // 关闭后单栏会按全文件最长行撑宽并把右栏挤出视口，故默认开启。
             wrap_lines: true,
+            split_ratio: DiffSplitRatio::default(),
             ignore_whitespace: IgnoreWhitespace::default(),
             highlight: DiffHighlight::default(),
             collapse_unchanged: true,
@@ -97,6 +144,7 @@ impl DiffViewOptions {
             side_by_side,
             show_line_numbers: git.diff_show_line_numbers,
             wrap_lines: git.diff_wrap_lines,
+            split_ratio: DiffSplitRatio::from_key(&git.diff_split_ratio),
             ignore_whitespace,
             highlight,
             collapse_unchanged: git.diff_collapse_unchanged,
@@ -120,6 +168,7 @@ impl DiffViewOptions {
         git.diff_ignore_whitespace_level = Some(level_str.to_string());
         git.diff_show_line_numbers = self.show_line_numbers;
         git.diff_wrap_lines = self.wrap_lines;
+        git.diff_split_ratio = self.split_ratio.key().to_string();
         git.diff_highlight = match self.highlight {
             DiffHighlight::Line => "line".to_string(),
             DiffHighlight::Word => "word".to_string(),
@@ -152,12 +201,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn split_ratio_keys_roundtrip_and_unknown_values_fall_back_to_balanced() {
+        for ratio in [
+            DiffSplitRatio::Balanced,
+            DiffSplitRatio::LeftWider,
+            DiffSplitRatio::RightWider,
+        ] {
+            assert_eq!(DiffSplitRatio::from_key(ratio.key()), ratio);
+        }
+        assert_eq!(
+            DiffSplitRatio::from_key("future_value"),
+            DiffSplitRatio::Balanced
+        );
+    }
+
+    #[test]
     fn diff_view_options_roundtrip_with_git_settings() {
         let mut settings = transom_core::GitSettings::default();
         let original = DiffViewOptions {
             side_by_side: false,
             show_line_numbers: false,
             wrap_lines: false,
+            split_ratio: DiffSplitRatio::LeftWider,
             ignore_whitespace: IgnoreWhitespace::BlankLines,
             highlight: DiffHighlight::Line,
             collapse_unchanged: false,
@@ -167,5 +232,6 @@ mod tests {
         assert_eq!(restored, original);
         assert!(settings.ignore_whitespace);
         assert_eq!(settings.default_diff_mode, "unified");
+        assert_eq!(settings.diff_split_ratio, "left_wider");
     }
 }

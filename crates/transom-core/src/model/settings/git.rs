@@ -30,6 +30,10 @@ fn default_auto_fetch() -> u32 {
     15
 }
 
+fn default_diff_split_ratio() -> String {
+    "balanced".to_string()
+}
+
 fn default_diff_highlight() -> String {
     "word".to_string()
 }
@@ -73,6 +77,9 @@ pub struct GitSettings {
     /// 差异视图长行自动换行。
     #[serde(default = "default_true")]
     pub diff_wrap_lines: bool,
+    /// 并排差异左右栏宽比例（"balanced" / "left_wider" / "right_wider"）。
+    #[serde(default = "default_diff_split_ratio")]
+    pub diff_split_ratio: String,
     /// 差异高亮粒度（"word" / "line" / "none"）。
     #[serde(default = "default_diff_highlight")]
     pub diff_highlight: String,
@@ -105,6 +112,7 @@ impl Default for GitSettings {
             diff_ignore_whitespace_level: None,
             diff_show_line_numbers: true,
             diff_wrap_lines: true,
+            diff_split_ratio: default_diff_split_ratio(),
             diff_highlight: default_diff_highlight(),
             diff_collapse_unchanged: true,
             protected_branches: default_protected_branches(),
@@ -136,5 +144,6 @@ mod tests {
         let legacy: GitSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(legacy.executable_path, "git");
         assert!(legacy.warn_uncommitted);
+        assert_eq!(legacy.diff_split_ratio, "balanced");
     }
 }
