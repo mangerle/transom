@@ -160,6 +160,9 @@ activity:
   cloud_sync:
     en: Cloud Sync
     zh-CN: 云同步
+  update_available:
+    en: "Version v%{version} is available. Open the update details."
+    zh-CN: "发现新版本 v%{version}，点击查看更新内容。"
 common:
   close:
     en: Close
@@ -2525,8 +2528,8 @@ settings:
     en: Application update
     zh-CN: 应用更新
   update_desc:
-    en: Check GitHub Releases, verify the Ed25519 signature, then install and restart.
-    zh-CN: 从 GitHub Releases 检查新版本，验签通过后安装并重启。
+    en: Check GitHub Releases. New versions open in the update dialog with release notes; verified packages can then be installed and restarted.
+    zh-CN: 从 GitHub Releases 检查新版本；有新版本时弹窗显示更新日志，验签通过后可安装并重启。
   update_idle:
     en: Not checked yet
     zh-CN: 尚未检查更新
@@ -2611,6 +2614,21 @@ settings:
   update_notes_title:
     en: Release notes
     zh-CN: 更新日志
+  update_current_version:
+    en: Current version
+    zh-CN: 当前版本
+  update_latest_version:
+    en: Latest version
+    zh-CN: 最新版本
+  update_published:
+    en: "Published: %{date}"
+    zh-CN: "发布日期：%{date}"
+  update_notes_empty:
+    en: No release notes were provided for this version.
+    zh-CN: 该版本没有提供更新日志。
+  update_notes_truncated:
+    en: "\n\n[Release notes truncated because the manifest is too large.]"
+    zh-CN: "\n\n[更新日志过长，已截断显示。]"
   tab_general:
     en: General & Sound
     zh-CN: 通用与声音

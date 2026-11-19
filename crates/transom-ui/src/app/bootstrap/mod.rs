@@ -238,6 +238,22 @@ impl AppShell {
     }
 
     fn subscribe_modal_entities(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // 更新状态变化时，活动栏提示必须随实体通知重绘；这里只负责转发脏标记。
+        cx.observe(&self.state.features.update, |_, _, cx| cx.notify())
+            .detach();
+        self.state.runtime.tasks.subscriptions.update = Some(cx.subscribe(
+            &self.state.features.update,
+            |shell, _view, event: &crate::app::update::UpdateEvent, cx| {
+                if matches!(event, crate::app::update::UpdateEvent::RestartRequested) {
+                    shell
+                        .state
+                        .runtime
+                        .restart_requested
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    cx.quit();
+                }
+            },
+        ));
         self.state.runtime.tasks.subscriptions.known_hosts = Some(cx.subscribe(
             &self.state.ui.modals.connection.known_hosts,
             |shell, _, event: &KnownHostsEvent, cx| {
@@ -361,6 +377,11 @@ impl AppShell {
         }
         crate::settings::sync_terminal_palette(cx);
         self.restore_startup_tabs(window, cx);
+
+        // 每次进程启动只检查一次远端清单；发现新版本时仅点亮左侧提示，
+        // 不主动打断用户当前工作，设置页与侧栏点击共用同一个更新实体。
+        let update = self.state.features.update.clone();
+        update.update(cx, |view, cx| view.start_startup_check(cx));
 
         let history_path = crate::cloud_sync::sync_history_path();
         self.state.runtime.tasks.background.sync_history_load =

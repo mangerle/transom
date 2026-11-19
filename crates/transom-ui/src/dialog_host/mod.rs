@@ -121,6 +121,8 @@ pub(crate) enum ModalKind {
     Replay,
     /// 偏好设置。
     Settings,
+    /// 应用更新：版本摘要、Markdown 更新日志与安装闭环。
+    Update,
     /// 改键录入。
     ShortcutCapture,
     /// 分栏差异对比。
@@ -199,6 +201,10 @@ impl ModalKind {
         if self == ModalKind::Settings {
             let settings = app.read(cx).state.ui.modals.settings.clone();
             return settings.update(cx, |view, cx| view.render_body(&settings, window, cx, p));
+        }
+        if self == ModalKind::Update {
+            let update = app.read(cx).state.features.update.clone();
+            return update.update(cx, |view, _cx| view.render_body(&update, p));
         }
         if self == ModalKind::KnownHosts {
             let view = app.read(cx).state.ui.modals.connection.known_hosts.clone();

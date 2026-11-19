@@ -81,6 +81,8 @@ pub mod size {
     pub const COMPACT_TREE_ROW_HEIGHT: f32 = 1.5;
     /// 双行/复合信息头部高度（标准档 48px，用于容器列表与详情头等带次级信息的头部）。
     pub const LARGE_HEADER_HEIGHT: f32 = 3.0;
+    /// 更新日志可视区高度（标准档 320px）；Markdown 正文在上限内独立滚动。
+    pub const UPDATE_NOTES_HEIGHT: f32 = 20.0;
 }
 /// 间距档位：以 rem 表达，供组件层替换 `gap_2` / `py_2` 这类魔法数字。
 ///
@@ -146,6 +148,7 @@ pub mod dialog {
     pub const AUDIT: f32 = 56.25;
     pub const CONTAINER_RUN: f32 = 54.0;
     pub const REPLAY: f32 = 35.0;
+    pub const UPDATE: f32 = 42.0;
     pub const GIT_FORM: f32 = 41.25;
     pub const GIT_CLONE: f32 = 45.0;
     pub const GIT_PUSH: f32 = 48.0;

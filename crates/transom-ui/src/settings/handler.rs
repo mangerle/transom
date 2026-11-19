@@ -103,14 +103,10 @@ pub(crate) fn on_settings_event(
             app_state.set_error(message.clone());
             cx.notify();
         }
-        SettingsEvent::RestartForUpdate => {
-            // 这里只置位并退出事件循环；新进程必须等 `main` 完成控制器
-            // 优雅停机后再拉起，避免 SSH 连接与审计写入被直接截断。
-            app_state
-                .runtime
-                .restart_requested
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-            cx.quit();
+        SettingsEvent::CheckForUpdates => {
+            let update = app_state.features.update.clone();
+            update.update(cx, |view, cx| view.open_and_check(cx));
+            cx.notify();
         }
     }
 }

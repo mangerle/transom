@@ -46,6 +46,7 @@ const ALL: &[ModalKind] = &[
     ModalKind::AuditViewer,
     ModalKind::Replay,
     ModalKind::Settings,
+    ModalKind::Update,
     ModalKind::ShortcutCapture,
     ModalKind::DiffViewer,
     ModalKind::GitProject,

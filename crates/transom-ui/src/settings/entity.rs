@@ -17,7 +17,6 @@
 use super::SettingsModalState;
 use super::event::SettingsEvent;
 use super::theme_editor::ThemeEditorState;
-use super::update::UpdatePanel;
 use crate::app::Persistence;
 use gpui_kit::*;
 use std::sync::Arc;
@@ -51,8 +50,6 @@ pub(crate) struct SettingsView {
     pub(crate) catalog: SessionCatalog,
     /// 弹窗内部输入控件的订阅：随实体生死，不再挂在外壳的任务容器里。
     pub(crate) _subscriptions: Vec<Subscription>,
-    /// 关于页自更新状态机与在途任务。
-    pub(crate) update: UpdatePanel,
     /// 主题文档编辑器与即时预览任务。
     pub(crate) theme_editor: ThemeEditorState,
 }
@@ -78,7 +75,6 @@ impl SettingsView {
             services,
             catalog,
             _subscriptions: Vec::new(),
-            update: UpdatePanel::default(),
             theme_editor,
         };
         this.install_subscriptions(window, cx);

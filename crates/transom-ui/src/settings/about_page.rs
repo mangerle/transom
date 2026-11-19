@@ -95,6 +95,34 @@ fn openable_row(
 }
 
 impl SettingsView {
+    /// 渲染"软件更新"分组：只保留入口，不在这里展开状态或更新日志。
+    ///
+    /// 更新日志需要 Markdown 渲染、下载进度与安装闭环，统一交给窗口级更新
+    /// 弹窗；设置页只发出检查意图，避免出现第二套更新状态与重复下载入口。
+    pub(crate) fn render_settings_update(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let check = cx.listener(|_, _, _, cx| {
+            cx.emit(crate::settings::SettingsEvent::CheckForUpdates);
+        });
+        crate::widgets::setting_row(
+            "settings.update_title",
+            Some("settings.update_desc"),
+            h_flex()
+                .items_center()
+                .child(
+                    Button::new("about-update-check")
+                        .small()
+                        .label(rust_i18n::t!("settings.update_check_action").to_string())
+                        .on_click(check),
+                )
+                .into_any_element(),
+            p,
+        )
+    }
+
     /// 渲染"关于"分组：标志与名称头部，外加版本、构建、许可、作者、主页、
     /// 配置目录与运行环境各行。
     ///

@@ -182,6 +182,10 @@ impl ModalKind {
                 .replay
                 .update(cx, |view, cx| view.close(cx)),
             ModalKind::Settings => app_state.save_settings(window, cx),
+            ModalKind::Update => {
+                let update = app_state.features.update.clone();
+                update.update(cx, |view, cx| view.perform_primary_action_for_dialog(cx));
+            }
             ModalKind::ShortcutCapture => app_state.ui.shortcut_recording.capture = None,
             ModalKind::DiffViewer => crate::diff_viewer::DiffViewerOps::new(app_state).close(cx),
             _ => {}

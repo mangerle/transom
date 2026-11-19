@@ -74,6 +74,7 @@ pub(super) fn assemble_state(
     let container_run_form = cx.new(|_| crate::container::ContainerRunFormView::new());
     let container_create_dialog = cx.new(|_| crate::container::ContainerCreateDialogView::new());
     let cloud_sync = cx.new(|_| CloudSyncView::new(SyncHistoryWriter::spawn(sync_history_path())));
+    let update = cx.new(|_| crate::app::update::UpdateView::new());
     AppState {
         runtime: super::super::state::RuntimeState {
             services,
@@ -130,6 +131,7 @@ pub(super) fn assemble_state(
         },
         features: super::super::state::FeatureState {
             cloud_sync,
+            update,
             monitor,
             containers: crate::container::ContainerUiState::new(window, cx),
             git_sidebar: cx.new(move |_| {

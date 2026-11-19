@@ -25,6 +25,7 @@ mod state;
 mod tab_coordination;
 mod task_hub;
 mod types;
+pub(crate) mod update;
 mod window_requests;
 
 pub(crate) use modal_hub::{GitModals, ModalHub, ToolModalEntities};

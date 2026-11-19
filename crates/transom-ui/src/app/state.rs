@@ -133,6 +133,8 @@ pub(crate) struct UiState {
 /// 窗口级功能实体及其共享运行开关。
 pub(crate) struct FeatureState {
     pub(crate) cloud_sync: Entity<CloudSyncView>,
+    /// 窗口级应用更新状态：启动检查、侧栏提示与更新弹窗共享同一份状态机。
+    pub(crate) update: Entity<crate::app::update::UpdateView>,
     pub(crate) monitor: Entity<crate::monitor::MonitorView>,
     pub(crate) containers: crate::container::ContainerUiState,
     pub(crate) git_sidebar: Entity<crate::git::GitSidebarView>,

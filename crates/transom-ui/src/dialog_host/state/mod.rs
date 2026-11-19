@@ -286,6 +286,11 @@ impl ModalKind {
                 app_state.cancel_settings(window, cx);
                 true
             }
+            ModalKind::Update => {
+                let update = app_state.features.update.clone();
+                update.update(cx, |view, cx| view.close(cx));
+                true
+            }
             ModalKind::ShortcutCapture => {
                 app_state.ui.shortcut_recording.capture = None;
                 true

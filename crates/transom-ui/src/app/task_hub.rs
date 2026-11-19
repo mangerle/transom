@@ -61,6 +61,8 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) session_sidebar: Option<Subscription>,
     /// 云同步视图发往外壳的意图事件：单例实体。
     pub(crate) cloud_sync: Option<Subscription>,
+    /// 窗口级更新实体：安装完成后的重启意图由外壳接收。
+    pub(crate) update: Option<Subscription>,
     pub(crate) settings: Option<Subscription>,
     /// 会话表单：保存落目录与删除会话由外壳处理。
     pub(crate) session_form: Option<Subscription>,
@@ -107,6 +109,7 @@ impl PanelSubscriptions {
             git_sidebar: None,
             session_sidebar: None,
             cloud_sync: None,
+            update: None,
             settings: None,
             session_form: None,
             container_form: None,

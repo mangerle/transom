@@ -102,6 +102,10 @@ pub(in crate::dialog_host) fn settings_open(state: &DialogCheckState, cx: &App) 
     state.modals.settings.read(cx).is_open()
 }
 
+pub(in crate::dialog_host) fn update_open(state: &DialogCheckState, cx: &App) -> bool {
+    state.update.read(cx).is_open()
+}
+
 pub(in crate::dialog_host) fn shortcut_capture_open(state: &DialogCheckState, _: &App) -> bool {
     state.shortcut_recording.capture.is_some()
 }

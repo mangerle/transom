@@ -56,6 +56,7 @@ pub(super) struct DialogCheckState<'a> {
     pub(super) modals: &'a ModalHub,
     pub(super) shortcut_recording: &'a ShortcutRecordingState,
     pub(super) diff_viewer: &'a Option<Entity<DiffViewerView>>,
+    pub(super) update: &'a Entity<crate::app::update::UpdateView>,
     pub(super) containers: &'a ContainerUiState,
     pub(super) workspace: &'a WorkspaceState,
 }
@@ -67,6 +68,7 @@ impl<'a> DialogCheckState<'a> {
             modals: &state.ui.modals,
             shortcut_recording: &state.ui.shortcut_recording,
             diff_viewer: &state.features.diff_viewer,
+            update: &state.features.update,
             containers: &state.features.containers,
             workspace: &state.workspace,
         }
@@ -155,6 +157,13 @@ pub(super) static MODALS: &[ModalEntry] = &[
         slug: "settings",
         width: ModalWidth::Token(crate::theme::tokens::size::SETTINGS_DIALOG_WIDTH),
         is_open: checks::settings_open,
+        field_values: checks::no_values,
+    },
+    ModalEntry {
+        kind: ModalKind::Update,
+        slug: "app-update",
+        width: ModalWidth::Token(crate::theme::tokens::dialog::UPDATE),
+        is_open: checks::update_open,
         field_values: checks::no_values,
     },
     ModalEntry {
