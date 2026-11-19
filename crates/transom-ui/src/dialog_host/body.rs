@@ -135,10 +135,12 @@ where
     }
 }
 
-/// 多行输入框的提交键位绑定：容器只绑了裸 `enter`。
+/// 多行输入框的次级提交键位绑定。
 ///
-/// 绑在 `"Dialog"` 上下文里，只在弹窗打开时生效，不会抢走终端与编辑器
-/// 面板的 Ctrl+字母控制码；与 `keymap::bindings()` 一起注册。
+/// gpui-kit 0.10 起，焦点在 `Textarea` 内时组件自身会把 Ctrl+Enter 作为
+/// 次 Enter 上报为 `InputEnter`；这里保留容器 `Confirm` 路径，使焦点在弹窗
+/// 其他控件或外壳时仍有同一提交语义。绑定只在 `"Dialog"` 上下文生效，不会
+/// 抢走终端与编辑器面板的 Ctrl+字母控制码；与 `keymap::bindings()` 一起注册。
 pub(crate) const DIALOG_CONTEXT: &str = "Dialog";
 
 pub(crate) fn dialog_bindings() -> Vec<KeyBinding> {

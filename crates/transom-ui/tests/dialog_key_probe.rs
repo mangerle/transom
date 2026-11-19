@@ -257,7 +257,7 @@ fn enter_在多行输入框内只换行不提交() {
 }
 
 #[test]
-fn ctrl_enter_默认不落到容器的_confirm() {
+fn ctrl_enter_在多行输入框内上报次提交动作而不落到容器_confirm() {
     let mut app = TestAppContext::single();
     let cx = probe_window(&mut app);
     let log = new_log();
@@ -267,12 +267,13 @@ fn ctrl_enter_默认不落到容器的_confirm() {
     cx.simulate_keystrokes("ctrl-enter");
     cx.run_until_parked();
 
-    // 实测：容器只绑了裸 enter，没有 ctrl-enter。多行框的提交口径
-    // （Ctrl+Enter）要宿主在 "Dialog" 上下文里补这条键位。
+    // 实测：gpui-kit 0.10 会把多行框的 Ctrl+Enter 作为次 Enter
+    // 上报为 InputEnter，且不插入换行。它不会落到容器的 Confirm；
+    // 是否提交由宿主接住 InputEnter 后决定。
     assert_eq!(
         hits(&log),
-        Vec::<String>::new(),
-        "宿主补绑之前，Ctrl+Enter 不应有任何落点"
+        vec!["input-enter".to_string()],
+        "Ctrl+Enter 应作为输入框次提交动作上报"
     );
     assert!(dialog_open(cx), "未补绑时弹窗保持打开");
 }
