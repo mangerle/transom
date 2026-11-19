@@ -133,6 +133,8 @@ pub(super) struct ContainerDetailParams<'a> {
     pub(super) workspace: &'a ContainerWorkspaceState,
     /// Compose YAML 编辑器当前文本快照。
     pub(super) compose_yaml_text: &'a str,
+    /// Compose YAML 行号槽与文本排版同步所需的布局快照。
+    pub(super) compose_yaml_line_numbers: compose_yaml::LineNumberMetrics,
     /// 日志搜索关键词快照。
     pub(super) logs_filter: &'a str,
     /// 变更页搜索关键词快照。

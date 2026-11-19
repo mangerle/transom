@@ -122,6 +122,8 @@ pub(crate) struct ContainerWorkspaceState {
     /// Compose 项目的 YAML 编辑状态：(项目名, 配置文件路径, 编辑器 Entity, 是否正在保存)。
     pub(crate) compose_yaml_editor:
         Option<(String, std::path::PathBuf, Entity<TextareaState>, bool)>,
+    /// 编排编辑器状态订阅：滚动或排版变化时让父实体重绘行号槽。
+    pub(crate) compose_yaml_subscription: Option<Subscription>,
     /// 正在读取 YAML 的项目名：读盘完成前拦重复请求，避免每帧重复读文件。
     pub(crate) compose_yaml_loading: Option<String>,
     /// Compose 项目的微服务依赖图：(服务名 -> 上游依赖的服务名列表)。
@@ -144,6 +146,12 @@ pub(crate) struct ContainerWorkspaceState {
 }
 
 impl ContainerWorkspaceState {
+    /// 关闭 Compose YAML 编辑器并同时释放状态订阅。
+    pub(crate) fn clear_compose_yaml_editor(&mut self) {
+        self.compose_yaml_editor = None;
+        self.compose_yaml_subscription = None;
+    }
+
     pub(crate) fn new<V: 'static>(
         profile: ContainerEngineProfile,
         window: &mut Window,
@@ -277,6 +285,7 @@ impl ContainerWorkspaceState {
             quadlets_request: None,
             quadlets_action_request: None,
             compose_yaml_editor: None,
+            compose_yaml_subscription: None,
             compose_yaml_loading: None,
             compose_dependencies: HashMap::new(),
             compose_dependencies_loading: None,

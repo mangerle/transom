@@ -6,9 +6,10 @@
 //! - 行号槽与编辑器等高对齐，语法错误发生时将错误行号标红聚焦，极大提升开发者就地排障效率。
 
 use crate::palette::Palette;
-use crate::theme::tokens::typography;
+use crate::theme::tokens::{space, typography};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, px, rems};
+use gpui_kit::component::input::TextareaState;
+use gpui_kit::{AnyElement, FontWeight, IntoElement, ParentElement, Pixels, Styled, div, px, rems};
 
 /// YAML 行级语法校验错误。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,28 +93,67 @@ pub(crate) fn render_path_breadcrumbs(
     crumbs.into_any_element()
 }
 
+/// 行号槽与文本排版的同步度量。
+///
+/// `TextareaState` 没有公开 `EditorState::text_origin_offset()`；后者也只描述
+/// 水平原点。这里改用文本区真实的 `line_height()`、`scroll_offset()` 和首行
+/// 渲染边界推导垂直原点，首帧尚未布局时才回退到设计令牌。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LineNumberMetrics {
+    line_height: Pixels,
+    top_padding: Pixels,
+    scroll_y: Pixels,
+}
+
+impl LineNumberMetrics {
+    /// 首帧布局前的设计令牌回退值。
+    pub(crate) fn fallback(rem_size: Pixels) -> Self {
+        Self {
+            line_height: rems(typography::BODY + space::COMPACT).to_pixels(rem_size),
+            top_padding: rems(space::SM + space::COMPACT).to_pixels(rem_size),
+            scroll_y: px(0.),
+        }
+    }
+}
+
+/// 从文本区最近一次布局读取行号槽所需度量。
+pub(crate) fn line_number_metrics(editor: &TextareaState, rem_size: Pixels) -> LineNumberMetrics {
+    let fallback = LineNumberMetrics::fallback(rem_size);
+    let line_height = editor.line_height().unwrap_or(fallback.line_height);
+    let scroll_y = editor.scroll_offset().y;
+    let outer_padding = rems(space::SM).to_pixels(rem_size);
+    let top_padding = editor
+        .range_to_bounds(&(0..0))
+        .map(|bounds| {
+            (bounds.origin.y - editor.input_bounds().origin.y - scroll_y + outer_padding)
+                .max(px(0.))
+        })
+        .unwrap_or(fallback.top_padding);
+    LineNumberMetrics {
+        line_height,
+        top_padding,
+        scroll_y,
+    }
+}
+
 /// 渲染编辑器左侧等宽行号槽。
 pub(crate) fn render_line_numbers(
     line_count: usize,
     error_line: Option<usize>,
+    metrics: LineNumberMetrics,
     p: &Palette,
 ) -> AnyElement {
-    let mut gutter = v_flex()
-        .w(px(38.0))
-        .h_full()
-        .py_2()
-        .pr_1p5()
-        .items_end()
-        .overflow_hidden()
-        .bg(p.surface.faint)
-        .border_r_1()
-        .border_color(p.stroke.muted);
+    let mut numbers = v_flex()
+        .w_full()
+        .pt(metrics.top_padding)
+        .mt(metrics.scroll_y)
+        .items_end();
 
     for line_num in 1..=line_count.max(1) {
         let is_err = error_line == Some(line_num);
-        gutter = gutter.child(
+        numbers = numbers.child(
             div()
-                .h(px(20.0))
+                .h(metrics.line_height)
                 .text_size(rems(typography::CAPTION))
                 .font_family(p.mono_font_family.clone())
                 .font_weight(if is_err {
@@ -130,12 +170,34 @@ pub(crate) fn render_line_numbers(
         );
     }
 
-    gutter.into_any_element()
+    v_flex()
+        .w(px(38.0))
+        .h_full()
+        .pr_1p5()
+        .items_end()
+        .overflow_hidden()
+        .bg(p.surface.faint)
+        .border_r_1()
+        .border_color(p.stroke.muted)
+        .child(numbers)
+        .into_any_element()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn line_number_fallback_scales_with_rem_size() {
+        let metrics = LineNumberMetrics::fallback(px(16.));
+        assert_eq!(metrics.line_height, px(20.));
+        assert_eq!(metrics.top_padding, px(14.));
+        assert_eq!(metrics.scroll_y, px(0.));
+
+        let scaled = LineNumberMetrics::fallback(px(20.));
+        assert_eq!(scaled.line_height, px(25.));
+        assert_eq!(scaled.top_padding, px(17.5));
+    }
 
     #[test]
     fn test_validate_empty_yaml() {

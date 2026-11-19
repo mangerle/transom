@@ -91,8 +91,11 @@ impl AppShell {
                         .selected_compose()
                         .is_some_and(|item| &item.name == project)
                     {
+                        workspace.state.compose_yaml_subscription = None;
+                        let subscription = cx.observe(&editor, |_, _, cx| cx.notify());
                         workspace.state.compose_yaml_editor =
                             Some((project.clone(), path.clone(), editor, false));
+                        workspace.state.compose_yaml_subscription = Some(subscription);
                         cx.notify();
                     }
                 });

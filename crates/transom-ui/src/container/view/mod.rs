@@ -7,6 +7,7 @@
 
 mod header;
 
+use crate::container::detail::compose_yaml::{LineNumberMetrics, line_number_metrics};
 use crate::container::detail::{ContainerDetailParams, render_container_detail};
 use crate::container::list::render_container_list;
 use crate::container::types::ContainerWorkspaceStatus;
@@ -15,6 +16,7 @@ use crate::divider::h_resizable;
 use crate::palette::Palette;
 use crate::widgets::action_button;
 use gpui_kit::base::v_flex;
+use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::*;
@@ -45,6 +47,11 @@ pub(crate) fn render_container_tab_body(
         .as_ref()
         .map(|(_, _, editor, _)| editor.read(cx).value())
         .unwrap_or_default();
+    let compose_yaml_line_numbers = state
+        .compose_yaml_editor
+        .as_ref()
+        .map(|(_, _, editor, _)| line_number_metrics(editor.read(cx), cx.theme().font_size))
+        .unwrap_or_else(|| LineNumberMetrics::fallback(cx.theme().font_size));
     let logs_filter = state.logs_search_query(cx);
     let changes_search_value = state.changes_search.read(cx).value().to_string();
     let inspect_keyword = state.inspect_search.read(cx).value().trim().to_string();
@@ -54,6 +61,7 @@ pub(crate) fn render_container_tab_body(
             view,
             workspace: state,
             compose_yaml_text: &compose_yaml_text,
+            compose_yaml_line_numbers,
             logs_filter: &logs_filter,
             changes_search_value: &changes_search_value,
             inspect_keyword: &inspect_keyword,

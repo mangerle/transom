@@ -47,6 +47,8 @@ pub(crate) struct ComposeDetailParams<'a> {
     pub(crate) compose_yaml_editor: Option<&'a (String, PathBuf, Entity<TextareaState>, bool)>,
     /// 编辑器当前文本快照：行号与语法校验在纯渲染阶段使用。
     pub(crate) compose_yaml_text: &'a str,
+    /// 行号槽与文本排版的同步度量。
+    pub(crate) compose_yaml_line_numbers: compose_yaml::LineNumberMetrics,
     pub(crate) dependencies: &'a std::collections::HashMap<String, Vec<String>>,
     pub(crate) hovered_service: Option<&'a str>,
 }
@@ -69,6 +71,7 @@ pub(crate) fn render_compose_detail(
             project,
             params.compose_yaml_editor,
             params.compose_yaml_text,
+            params.compose_yaml_line_numbers,
             p,
         ),
         _ => render_compose_overview_and_topology(
@@ -97,6 +100,7 @@ fn render_compose_yaml_editor(
     project: &ComposeProject,
     compose_yaml_editor: Option<&(String, PathBuf, Entity<TextareaState>, bool)>,
     current_text: &str,
+    line_number_metrics: compose_yaml::LineNumberMetrics,
     p: &Palette,
 ) -> AnyElement {
     let Some((_, path, editor, saving)) = compose_yaml_editor else {
@@ -167,7 +171,7 @@ fn render_compose_yaml_editor(
                     .render()
                     .on_click(move |_, _, cx| {
                         reload_view.update(cx, |workspace, cx| {
-                            workspace.state.compose_yaml_editor = None;
+                            workspace.state.clear_compose_yaml_editor();
                             workspace.ensure_compose_yaml_loaded(cx);
                             cx.notify();
                         });
@@ -223,6 +227,7 @@ fn render_compose_yaml_editor(
         .child(render_line_numbers(
             line_count,
             validation_err.as_ref().map(|e| e.line),
+            line_number_metrics,
             p,
         ))
         .child(

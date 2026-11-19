@@ -190,7 +190,7 @@ impl ContainerWorkspace {
         self.state.section = ContainerSection::Compose;
         self.state.selected = Some(name.clone());
         self.state.detail_tab = ContainerDetailTab::Yaml;
-        self.state.compose_yaml_editor = None;
+        self.state.clear_compose_yaml_editor();
         self.ensure_compose_yaml_loaded(cx);
         self.state.notice =
             Some(rust_i18n::t!("container.compose.created_hint", name = name).to_string());
@@ -223,7 +223,7 @@ impl ContainerWorkspace {
         if let Some((current_name, _, _, _)) = &self.state.compose_yaml_editor
             && current_name != name
         {
-            self.state.compose_yaml_editor = None;
+            self.state.clear_compose_yaml_editor();
         }
         self.ensure_compose_yaml_loaded(cx);
         cx.notify();
