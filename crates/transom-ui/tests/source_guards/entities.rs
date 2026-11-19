@@ -809,3 +809,17 @@ fn cloud_sync_app_shell_is_confined_to_bridges() {
         ],
     );
 }
+
+/// Windows/macOS 必须隐藏系统标题栏，只保留基于应用主题的自绘标题栏。
+///
+/// 否则系统标题栏会与自绘标题栏叠成两套窗口按钮，并且上沿颜色由操作系统
+/// 决定，无法与其他平台保持同一视觉层级。Linux 的装饰模式不受该字段影响。
+#[test]
+fn main_window_hides_native_titlebar() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+    let content = std::fs::read_to_string(path).expect("读取 lib.rs 失败");
+    assert!(
+        content.contains("appears_transparent: true"),
+        "主窗口必须隐藏系统标题栏，避免 Windows/macOS 出现重复窗口控件"
+    );
+}

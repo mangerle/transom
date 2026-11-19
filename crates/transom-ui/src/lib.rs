@@ -218,8 +218,13 @@ pub fn run(services: UiServices) -> bool {
             window_min_size: Some(size(px(900.0 * density_scale), px(560.0 * density_scale))),
             // 窗口背景按设置处理：透明或毛玻璃。
             window_background: window_appearance::background_appearance(&settings.window),
+            // Windows/macOS 默认会再画一条系统标题栏；应用已有基于主题色的
+            // 自绘标题栏，必须让系统标题栏透明消失，否则 Windows 会出现上下
+            // 两套最小化/最大化/关闭按钮，且上沿颜色由操作系统而不是 Transom
+            // 主题决定。Linux 的装饰选择不受该字段影响。
             titlebar: Some(TitlebarOptions {
                 title: Some("Transom".into()),
+                appears_transparent: true,
                 ..Default::default()
             }),
             ..Default::default()
