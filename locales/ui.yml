@@ -2858,8 +2858,8 @@ settings:
     en: Roomy
     zh-CN: 宽松
   ui_theme_note:
-    en: Selecting a theme also switches the appearance mode to match. Changes preview immediately; they persist on Save and revert on Cancel.
-    zh-CN: 选择主题会同步切换明暗模式；改动立即预览，保存后生效持久化，取消则恢复原状。
+    en: Selecting a theme also switches the appearance mode to match. Changes preview immediately; they persist on Save and revert on Cancel. To make Windows, macOS and Linux look identical, choose a fixed Light or Dark mode and the same theme; Follow System intentionally changes with each OS appearance.
+    zh-CN: 选择主题会同步切换明暗模式；改动立即预览，保存后生效持久化，取消则恢复原状。要让 Windows、macOS 与 Linux 视觉完全一致，请选择固定的浅色或深色模式并使用同一主题；跟随系统会有意随各操作系统的外观变化。
   appearance_contrast:
     en: The interface theme and the terminal color scheme have opposite light/dark modes, which may look jarring. Pick a matching terminal color scheme below.
     zh-CN: 界面主题与终端配色的明暗模式相反，观感可能突兀，可在下方"终端配色"中选一套明暗一致的主题。
