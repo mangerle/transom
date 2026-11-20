@@ -1,3 +1,16 @@
+transom (1.8.4) unstable; urgency=medium
+
+  * 升级 gpui-kit 至 0.10.0，并将主标签栏、Git 差异页签、通用表单、
+    面板标题与复选行迁移至可访问组件语义。
+  * 重构工作区标签模型，以 WorkspaceTab 隔离会话、监控、Git、容器与
+    播放器状态，统一标签访问、关闭与窗口恢复逻辑。
+  * Diff 并排视图新增均分、左侧更宽和右侧更宽三档可持久化比例；
+    SFTP 同步改为组级三态全选，字体搜索启用命中高亮。
+  * Compose YAML 行号槽跟随编辑器真实行高、滚动位置与首行渲染边界，
+    并继续拆分 Git 与 SFTP 超长模块，补充架构守卫与回归测试。
+
+ -- wangle <wangle@agree.com.cn>  Thu, 19 Nov 2026 23:52:04 +0800
+
 transom (1.8.3) unstable; urgency=medium
 
   * 应用启动后自动检查一次更新；标题栏版本徽标承载当前版本与更新入口，
