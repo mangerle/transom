@@ -1,5 +1,6 @@
 //! 网络流量与上下行波形监控板块。
 
+use crate::monitor::MonitorPalette;
 use crate::monitor::components::{CollapsibleCard, render_network_dual_sparkline};
 use crate::monitor::types::format_size;
 use crate::palette::Palette;
@@ -20,6 +21,7 @@ impl MonitorView {
         p: &Palette,
     ) -> AnyElement {
         let collapsed = self.state.collapse.network;
+        let colors = MonitorPalette::new(p);
 
         // 计算当前总上行与总下行
         let (total_rx, total_tx) = stats
@@ -38,18 +40,18 @@ impl MonitorView {
             .text_xs()
             .child(
                 div()
-                    .text_color(p.primary)
+                    .text_color(colors.network_in)
                     .child(format!("↓ {}/s", format_size(total_rx))),
             )
             .child(
                 div()
-                    .text_color(p.sidebar_accent_foreground)
+                    .text_color(colors.network_out)
                     .child(format!("↑ {}/s", format_size(total_tx))),
             );
 
         // 展开态详细内容
         let mut content = v_flex().gap_2p5();
-        if let Some(trend) = self.render_network_trend(total_rx, total_tx, p) {
+        if let Some(trend) = self.render_network_trend(total_rx, total_tx, &colors, p) {
             content = content.child(trend);
         }
 
@@ -64,7 +66,7 @@ impl MonitorView {
             );
         }
         for interface in &stats.interfaces {
-            interface_rows.push(interface_row(interface, p));
+            interface_rows.push(interface_row(interface, &colors, p));
         }
         content = content.children(interface_rows);
 
@@ -73,6 +75,7 @@ impl MonitorView {
             AppIcon::Custom(CustomIcon::NETWORK),
             rust_i18n::t!("monitor.network").to_string(),
         )
+        .accent(colors.network_in)
         .collapsed(collapsed)
         .summary(summary)
         .summary_always(true)
@@ -100,6 +103,7 @@ impl MonitorView {
         total_tx: u64,
         rx_peak: u64,
         tx_peak: u64,
+        colors: &MonitorPalette,
         p: &Palette,
     ) -> AnyElement {
         h_flex()
@@ -118,8 +122,14 @@ impl MonitorView {
                         h_flex()
                             .gap_1()
                             .items_center()
-                            .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(p.primary))
-                            .child(div().text_xs().text_color(p.primary).child(
+                            .child(
+                                div()
+                                    .w(px(6.0))
+                                    .h(px(6.0))
+                                    .rounded_full()
+                                    .bg(colors.network_in),
+                            )
+                            .child(div().text_xs().text_color(colors.network_in).child(
                                 rust_i18n::t!("monitor.network_section.downlink").to_string(),
                             )),
                     )
@@ -132,23 +142,18 @@ impl MonitorView {
                                     .w(px(6.0))
                                     .h(px(6.0))
                                     .rounded_full()
-                                    .bg(p.sidebar_accent_foreground),
+                                    .bg(colors.network_out),
                             )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.sidebar_accent_foreground)
-                                    .child(
-                                        rust_i18n::t!("monitor.network_section.uplink").to_string(),
-                                    ),
-                            ),
+                            .child(div().text_xs().text_color(colors.network_out).child(
+                                rust_i18n::t!("monitor.network_section.uplink").to_string(),
+                            )),
                     ),
             )
             .child(
                 h_flex()
                     .gap_2()
                     .child(
-                        div().text_color(p.primary).child(
+                        div().text_color(colors.network_in).child(
                             rust_i18n::t!(
                                 "monitor.network_section.rx_peak",
                                 rate = format_size(total_rx),
@@ -158,7 +163,7 @@ impl MonitorView {
                         ),
                     )
                     .child(
-                        div().text_color(p.sidebar_accent_foreground).child(
+                        div().text_color(colors.network_out).child(
                             rust_i18n::t!(
                                 "monitor.network_section.tx_peak",
                                 rate = format_size(total_tx),
@@ -175,6 +180,7 @@ impl MonitorView {
         &self,
         total_rx: u64,
         total_tx: u64,
+        colors: &MonitorPalette,
         p: &Palette,
     ) -> Option<AnyElement> {
         let rx_hist: Vec<u64> = self.state.rx_history.iter().copied().collect();
@@ -187,13 +193,17 @@ impl MonitorView {
         Some(
             v_flex()
                 .gap_1p5()
-                .child(self.render_network_trend_header(total_rx, total_tx, rx_peak, tx_peak, p))
+                .child(
+                    self.render_network_trend_header(
+                        total_rx, total_tx, rx_peak, tx_peak, colors, p,
+                    ),
+                )
                 .child(render_network_dual_sparkline(
                     &rx_hist,
                     &tx_hist,
                     48.0,
-                    p.primary,
-                    p.sidebar_accent_foreground,
+                    colors.network_in,
+                    colors.network_out,
                     p.muted,
                     self.state.chart_type,
                 ))
@@ -203,7 +213,11 @@ impl MonitorView {
 }
 
 /// 单个网卡的上下行速率行。
-fn interface_row(interface: &transom_core::InterfaceRate, p: &Palette) -> AnyElement {
+fn interface_row(
+    interface: &transom_core::InterfaceRate,
+    colors: &MonitorPalette,
+    p: &Palette,
+) -> AnyElement {
     h_flex()
         .justify_between()
         .items_center()
@@ -223,12 +237,12 @@ fn interface_row(interface: &transom_core::InterfaceRate, p: &Palette) -> AnyEle
                 .gap_2()
                 .child(
                     div()
-                        .text_color(p.muted_foreground)
+                        .text_color(colors.network_in)
                         .child(format!("↓ {}/s", format_size(interface.rx_bytes_per_sec))),
                 )
                 .child(
                     div()
-                        .text_color(p.muted_foreground)
+                        .text_color(colors.network_out)
                         .child(format!("↑ {}/s", format_size(interface.tx_bytes_per_sec))),
                 ),
         )

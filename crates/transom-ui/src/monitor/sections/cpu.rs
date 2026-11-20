@@ -1,7 +1,8 @@
 //! CPU 监控板块（包含负载、细分状态、走势与核心图表）。
 
+use crate::monitor::MonitorPalette;
 use crate::monitor::components::{CollapsibleCard, render_percent_sparkline};
-use crate::monitor::types::{usage_bar, usage_color};
+use crate::monitor::types::usage_bar;
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
@@ -21,7 +22,8 @@ impl MonitorView {
         p: &Palette,
     ) -> AnyElement {
         let collapsed = self.state.collapse.cpu;
-        let color = usage_color(stats.cpu_percent, p);
+        let colors = MonitorPalette::new(p);
+        let color = colors.cpu_color(stats.cpu_percent, p);
 
         // 折叠态紧凑摘要
         let summary = h_flex()
@@ -52,7 +54,7 @@ impl MonitorView {
             content = content.child(trend);
         }
 
-        if let Some(cores) = render_cpu_cores(stats, p) {
+        if let Some(cores) = render_cpu_cores(stats, &colors, p) {
             content = content.child(cores);
         }
 
@@ -61,6 +63,7 @@ impl MonitorView {
             AppIcon::Custom(CustomIcon::CPU),
             rust_i18n::t!("monitor.cpu").to_string(),
         )
+        .accent(colors.cpu)
         .collapsed(collapsed)
         .summary(summary)
         .summary_always(true)
@@ -205,7 +208,11 @@ fn render_cpu_metrics(stats: &SystemStats, color: Hsla, p: &Palette) -> AnyEleme
 }
 
 /// 各核心负载分布柱；无核心数据时返回 None。
-fn render_cpu_cores(stats: &SystemStats, p: &Palette) -> Option<AnyElement> {
+fn render_cpu_cores(
+    stats: &SystemStats,
+    colors: &MonitorPalette,
+    p: &Palette,
+) -> Option<AnyElement> {
     if stats.cpu_cores.is_empty() {
         return None;
     }
@@ -228,14 +235,14 @@ fn render_cpu_cores(stats: &SystemStats, p: &Palette) -> Option<AnyElement> {
                     .overflow_hidden()
                     .items_end()
                     .gap_0p5()
-                    .children(stats.cpu_cores.iter().map(|core| {
+                    .children(stats.cpu_cores.iter().enumerate().map(|(index, core)| {
                         let fraction = (core.percent / 100.0).clamp(0.0, 1.0);
                         div()
                             .flex_1()
                             .min_w_0()
                             .h(px((32.0 * fraction).max(2.0)))
                             .rounded_t_xs()
-                            .bg(usage_color(core.percent, p))
+                            .bg(colors.core_color(index, core.percent, p))
                     })),
             )
             .into_any_element(),

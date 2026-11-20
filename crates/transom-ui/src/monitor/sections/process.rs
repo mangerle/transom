@@ -1,5 +1,6 @@
 //! 进程管理板块（虚拟滚动列表、完整命令行详情条、终端追踪与防误杀保护）。
 
+use crate::monitor::MonitorPalette;
 use crate::monitor::components::CollapsibleCard;
 use crate::monitor::types::ProcessSort;
 use crate::palette::Palette;
@@ -59,6 +60,7 @@ impl MonitorView {
         scope: &'static str,
     ) -> AnyElement {
         let collapsed = self.state.collapse.processes;
+        let colors = MonitorPalette::new(p);
         let total = self.state.process_total;
         let sort = self.state.sort;
         let ascending = self.state.sort_ascending;
@@ -85,6 +87,7 @@ impl MonitorView {
                 scope,
             },
             cx,
+            &colors,
             p,
         );
 
@@ -117,6 +120,7 @@ impl MonitorView {
         &mut self,
         content_input: ProcessContent,
         cx: &mut Context<Self>,
+        colors: &MonitorPalette,
         p: &Palette,
     ) -> AnyElement {
         let ProcessContent {
@@ -174,7 +178,7 @@ impl MonitorView {
                             .child(rust_i18n::t!("monitor.command").to_string()),
                     ),
             )
-            .child(self.render_process_list(cx, order, p, scope));
+            .child(self.render_process_list(cx, order, colors, p, scope));
 
         // 选中行后在卡片底部展示完整命令行：行内展开会破坏等高行，撑乱虚拟滚动。
         if let Some(detail) = self.render_process_detail(p) {

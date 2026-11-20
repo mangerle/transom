@@ -12,6 +12,8 @@ use transom_ui_icons::UiIcon;
 pub(crate) struct CollapsibleCard {
     id: ElementId,
     icon: AppIcon,
+    /// 标题图标的类别色；不设置时沿用全局主强调色。
+    accent: Option<Hsla>,
     title: String,
     collapsed: bool,
     summary: Option<AnyElement>,
@@ -28,6 +30,7 @@ impl CollapsibleCard {
         Self {
             id: id.into(),
             icon,
+            accent: None,
             title: title.into(),
             collapsed: false,
             summary: None,
@@ -38,6 +41,12 @@ impl CollapsibleCard {
 
     pub(crate) fn collapsed(mut self, collapsed: bool) -> Self {
         self.collapsed = collapsed;
+        self
+    }
+
+    /// 设置标题图标的资源类别色。
+    pub(crate) fn accent(mut self, accent: Hsla) -> Self {
+        self.accent = Some(accent);
         self
     }
 
@@ -93,7 +102,11 @@ impl CollapsibleCard {
                     .items_center()
                     .min_w_0()
                     .flex_shrink_1()
-                    .child(AppIconElement::new(self.icon).small().text_color(p.primary))
+                    .child(
+                        AppIconElement::new(self.icon)
+                            .small()
+                            .text_color(self.accent.unwrap_or(p.primary)),
+                    )
                     .child(
                         div()
                             .text_xs()

@@ -242,14 +242,4 @@ pub(crate) fn usage_bar(fraction: f32, color: Hsla, p: &crate::palette::Palette)
         .into_any_element()
 }
 
-pub(crate) fn usage_color(percent: f32, p: &crate::palette::Palette) -> Hsla {
-    if percent > 85.0 {
-        p.danger
-    } else if percent > 65.0 {
-        p.warning
-    } else {
-        p.primary
-    }
-}
-
 pub(crate) use crate::format::format_compact_size as format_size;

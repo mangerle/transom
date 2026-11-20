@@ -14,7 +14,8 @@ pub(crate) fn cpu_card(
     chrome: &StatsChrome,
 ) -> AnyElement {
     let p = chrome.p;
-    let color = usage_color(stats.cpu_percent, p);
+    let colors = MonitorPalette::new(p);
+    let color = colors.cpu_color(stats.cpu_percent, p);
     let mut content = v_flex().flex_1().min_h_0().gap_2();
 
     let (cpu_val, cpu_unit) = if chrome.waiting {
@@ -58,14 +59,14 @@ pub(crate) fn cpu_card(
                         .w_full()
                         .gap_0p5()
                         .items_end()
-                        .children(stats.cpu_cores.iter().map(|percent| {
+                        .children(stats.cpu_cores.iter().enumerate().map(|(index, percent)| {
                             let fraction = (percent / 100.0).clamp(0.0, 1.0);
                             div()
                                 .flex_1()
                                 .min_w_0()
                                 .h(px((24.0 * fraction).max(2.0)))
                                 .rounded_t_xs()
-                                .bg(usage_color(*percent, p))
+                                .bg(colors.core_color(index, *percent, p))
                         })),
                 ),
         );
@@ -120,7 +121,8 @@ pub(crate) fn memory_card(
     chrome: &StatsChrome,
 ) -> AnyElement {
     let p = chrome.p;
-    let color = usage_color(stats.memory_percent, p);
+    let colors = MonitorPalette::new(p);
+    let color = colors.memory_color(stats.memory_percent, p);
     let mut content = v_flex().flex_1().min_h_0().gap_2();
 
     let (mem_val, mem_unit) = if chrome.waiting {
@@ -239,6 +241,7 @@ pub(crate) fn network_card(
     chrome: &StatsChrome,
 ) -> AnyElement {
     let p = chrome.p;
+    let colors = MonitorPalette::new(p);
 
     let (rx_val, rx_unit) = if chrome.waiting {
         ("—".to_string(), String::new())
@@ -262,10 +265,10 @@ pub(crate) fn network_card(
                     div()
                         .text_xs()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(p.primary)
+                        .text_color(colors.network_in)
                         .child("↓"),
                 )
-                .child(hero_stat(&rx_val, &rx_unit, p.primary, p)),
+                .child(hero_stat(&rx_val, &rx_unit, colors.network_in, p)),
         )
         .child(
             h_flex()
@@ -275,10 +278,10 @@ pub(crate) fn network_card(
                     div()
                         .text_xs()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(p.warning)
+                        .text_color(colors.network_out)
                         .child("↑"),
                 )
-                .child(hero_stat(&tx_val, &tx_unit, p.warning, p)),
+                .child(hero_stat(&tx_val, &tx_unit, colors.network_out, p)),
         );
 
     let mut content = v_flex()
@@ -291,8 +294,8 @@ pub(crate) fn network_card(
             rx_rates,
             tx_rates,
             STAT_SPARKLINE_HEIGHT,
-            p.primary,
-            p.warning,
+            colors.network_in,
+            colors.network_out,
             p.muted,
             chrome.chart,
         ));
@@ -331,6 +334,7 @@ pub(crate) fn network_card(
 
 pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElement {
     let p = chrome.p;
+    let colors = MonitorPalette::new(p);
     let DiskCardData {
         details,
         read_rate,
@@ -361,10 +365,10 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
                     div()
                         .text_xs()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(p.primary)
+                        .text_color(colors.disk)
                         .child("R"),
                 )
-                .child(hero_stat(&r_val, &r_unit, p.primary, p)),
+                .child(hero_stat(&r_val, &r_unit, colors.disk, p)),
         )
         .child(
             h_flex()
@@ -374,10 +378,10 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
                     div()
                         .text_xs()
                         .font_weight(FontWeight::BOLD)
-                        .text_color(p.warning)
+                        .text_color(colors.disk)
                         .child("W"),
                 )
-                .child(hero_stat(&w_val, &w_unit, p.warning, p)),
+                .child(hero_stat(&w_val, &w_unit, colors.disk, p)),
         );
 
     let mut content = v_flex()
@@ -390,8 +394,8 @@ pub(crate) fn disk_card(data: DiskCardData<'_>, chrome: &StatsChrome) -> AnyElem
             read_rates,
             write_rates,
             STAT_SPARKLINE_HEIGHT,
-            p.primary,
-            p.warning,
+            colors.disk,
+            colors.disk,
             p.muted,
             chrome.chart,
         ));

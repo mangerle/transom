@@ -1,7 +1,8 @@
 //! 内存与交换分区监控板块。
 
+use crate::monitor::MonitorPalette;
 use crate::monitor::components::{CollapsibleCard, render_percent_sparkline};
-use crate::monitor::types::{format_size, usage_bar, usage_color};
+use crate::monitor::types::{format_size, usage_bar};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
@@ -26,7 +27,8 @@ impl MonitorView {
         } else {
             stats.mem_used_bytes as f32 / stats.mem_total_bytes as f32
         };
-        let mem_color = usage_color(mem_fraction * 100.0, p);
+        let colors = MonitorPalette::new(p);
+        let mem_color = colors.memory_color(mem_fraction * 100.0, p);
 
         // 折叠态紧凑摘要
         let summary = h_flex()
@@ -47,7 +49,13 @@ impl MonitorView {
         // 展开态详细内容
         let mut content = v_flex().gap_2p5();
 
-        content = content.child(render_memory_usage(stats, mem_fraction, mem_color, p));
+        content = content.child(render_memory_usage(
+            stats,
+            mem_fraction,
+            mem_color,
+            &colors,
+            p,
+        ));
 
         if let Some(trend) = self.render_memory_trend(mem_color, p) {
             content = content.child(trend);
@@ -58,6 +66,7 @@ impl MonitorView {
             AppIcon::Custom(CustomIcon::MEMORY),
             rust_i18n::t!("monitor.mem").to_string(),
         )
+        .accent(colors.memory)
         .collapsed(collapsed)
         .summary(summary)
         .summary_always(true)
@@ -150,6 +159,7 @@ fn render_memory_usage(
     stats: &SystemStats,
     mem_fraction: f32,
     mem_color: Hsla,
+    colors: &MonitorPalette,
     p: &Palette,
 ) -> AnyElement {
     let mut content = v_flex().gap_2p5();
@@ -176,7 +186,7 @@ fn render_memory_usage(
     // Swap 交换分区（若配置了 Swap）
     if stats.swap_total_bytes > 0 {
         let swap_fraction = stats.swap_used_bytes as f32 / stats.swap_total_bytes as f32;
-        let swap_color = usage_color(swap_fraction * 100.0, p);
+        let swap_color = colors.memory_color(swap_fraction * 100.0, p);
         content = content
             .child(
                 h_flex()

@@ -1,8 +1,9 @@
 use super::process::{
     COL_CPU, COL_MEM, COL_PID, COL_USER, PROCESS_LIST_HEIGHT, PROCESS_ROW_HEIGHT, SortColumn,
 };
+use crate::monitor::MonitorPalette;
 use crate::monitor::MonitorView;
-use crate::monitor::types::{ProcessSort, format_size, usage_color};
+use crate::monitor::types::{ProcessSort, format_size};
 use crate::palette::Palette;
 use gpui_kit::base::{ScrollBounce, h_flex, v_virtual_list};
 use gpui_kit::component::list::ListItem;
@@ -67,6 +68,7 @@ impl MonitorView {
         &mut self,
         cx: &mut Context<Self>,
         order: Vec<usize>,
+        colors: &MonitorPalette,
         p: &Palette,
         scope: &'static str,
     ) -> AnyElement {
@@ -86,6 +88,7 @@ impl MonitorView {
 
         let rows = self.state.processes.clone();
         let palette = p.clone();
+        let colors = *colors;
         let scroll = self.state.process_scroll.clone();
         let list_id = format!("process-virtual-list-{scope}");
         // 申报高度必须与行内实际高度一致：虚拟列表按这里定位每一行，
@@ -115,7 +118,11 @@ impl MonitorView {
                                 .filter_map(|index| {
                                     let row = *order.get(index)?;
                                     let process = rows.get(row)?;
-                                    Some(this.render_process_row(index, process, &palette, cx))
+                                    Some(
+                                        this.render_process_row(
+                                            index, process, &colors, &palette, cx,
+                                        ),
+                                    )
                                 })
                                 .collect()
                         },
@@ -135,6 +142,7 @@ impl MonitorView {
         &mut self,
         index: usize,
         process: &ProcessInfo,
+        colors: &MonitorPalette,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -148,7 +156,7 @@ impl MonitorView {
         let click_app = cx.entity();
         let menu_app = cx.entity();
 
-        let list_item = process_list_item(selected, pid, process, click_app, p);
+        let list_item = process_list_item(selected, pid, process, click_app, colors, p);
 
         let bg_color = if index % 2 == 1 {
             p.list_even
@@ -234,6 +242,7 @@ fn process_list_item(
     pid: u32,
     process: &ProcessInfo,
     click_app: Entity<MonitorView>,
+    colors: &MonitorPalette,
     p: &Palette,
 ) -> ListItem {
     ListItem::new(ElementId::Name(format!("process-row-{pid}").into()))
@@ -274,7 +283,7 @@ fn process_list_item(
                 .child(
                     div()
                         .w(px(COL_CPU))
-                        .text_color(usage_color(process.cpu_percent, p))
+                        .text_color(colors.cpu_color(process.cpu_percent, p))
                         .child(format!("{:.1}", process.cpu_percent)),
                 )
                 .child(

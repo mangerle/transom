@@ -1,7 +1,8 @@
 //! 磁盘存储与挂载点文件系统监控板块。
 
+use crate::monitor::MonitorPalette;
 use crate::monitor::components::CollapsibleCard;
-use crate::monitor::types::{format_size, usage_bar, usage_color};
+use crate::monitor::types::{format_size, usage_bar};
 use crate::palette::Palette;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
@@ -34,6 +35,8 @@ impl MonitorView {
                 0.0,
             ),
         };
+        let colors = MonitorPalette::new(p);
+        let root_color = colors.disk_color(root_pct, p);
 
         let summary = h_flex()
             .gap_2()
@@ -46,18 +49,19 @@ impl MonitorView {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(usage_color(root_pct, p))
+                    .text_color(root_color)
                     .child(format!("{root_pct:.0}%")),
             );
 
         // 展开态详细挂载点列表
-        let content = disk_content(stats, p);
+        let content = disk_content(stats, &colors, p);
 
         CollapsibleCard::new(
             "card-disk",
             AppIcon::Custom(CustomIcon::DISK),
             rust_i18n::t!("monitor.disk").to_string(),
         )
+        .accent(colors.disk)
         .collapsed(collapsed)
         .summary(summary)
         .summary_always(true)
@@ -79,7 +83,7 @@ impl MonitorView {
 }
 
 /// 磁盘内容：空态或最多八个挂载点的占用条。
-fn disk_content(stats: &SystemStats, p: &Palette) -> AnyElement {
+fn disk_content(stats: &SystemStats, colors: &MonitorPalette, p: &Palette) -> AnyElement {
     let mut content = v_flex().gap_2();
 
     if stats.filesystems.is_empty() {
@@ -97,7 +101,7 @@ fn disk_content(stats: &SystemStats, p: &Palette) -> AnyElement {
         } else {
             filesystem.used_bytes as f32 / filesystem.total_bytes as f32
         };
-        let color = usage_color(fraction * 100.0, p);
+        let color = colors.disk_color(fraction * 100.0, p);
         content = content.child(
             v_flex()
                 .gap_1()

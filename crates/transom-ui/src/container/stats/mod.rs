@@ -9,7 +9,7 @@
 //! 卡片。
 
 use crate::container::ContainerWorkspace;
-use crate::monitor::{SampleIntervalMode, SparklineChartType, usage_color};
+use crate::monitor::{MonitorPalette, SampleIntervalMode, SparklineChartType};
 use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;

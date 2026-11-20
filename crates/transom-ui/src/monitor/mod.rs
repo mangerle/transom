@@ -6,6 +6,8 @@ pub(crate) use layout_ops::{
 };
 mod ops;
 pub(crate) use ops::{MonitorOps, MonitorTerminalPlan};
+mod palette;
+pub(crate) use palette::MonitorPalette;
 mod panel_event;
 mod sections;
 mod types;
@@ -13,6 +15,5 @@ mod view;
 
 pub(crate) use entity::MonitorView;
 pub(crate) use panel_event::MonitorPanelEvent;
-pub(crate) use types::usage_color;
 pub(crate) use types::{MonitorSectionCollapse, SampleIntervalMode, SparklineChartType};
 pub(crate) use view::MonitorTabParams;

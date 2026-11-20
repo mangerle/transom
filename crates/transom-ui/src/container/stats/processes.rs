@@ -244,6 +244,7 @@ fn process_table_header(p: &Palette) -> AnyElement {
 }
 
 pub(crate) fn process_row(process: &ContainerProcess, p: &Palette) -> AnyElement {
+    let colors = MonitorPalette::new(p);
     h_flex()
         .w_full()
         .px_3()
@@ -273,7 +274,7 @@ pub(crate) fn process_row(process: &ContainerProcess, p: &Palette) -> AnyElement
                 .flex_none()
                 .text_right()
                 .font_family(p.mono_font_family.clone())
-                .text_color(usage_color(process.cpu_percent, p))
+                .text_color(colors.cpu_color(process.cpu_percent, p))
                 .child(format!("{:.1}%", process.cpu_percent)),
         )
         .child(
