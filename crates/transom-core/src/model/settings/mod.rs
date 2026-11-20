@@ -44,6 +44,9 @@ pub struct AppSettings {
     /// 界面外观（明暗、主题、密度）；旧配置缺少该字段时使用内置默认。
     #[serde(default)]
     pub appearance: AppearanceSettings,
+    /// 本地窗口性能 HUD；旧配置缺少该字段时默认关闭。
+    #[serde(default)]
+    pub performance: PerformanceSettings,
     /// 本地终端启动的 shell；`None` 时跟随系统默认。
     ///
     /// 为什么是全局而不是会话级：本地终端从侧栏一键创建、没有会话表单，
@@ -188,6 +191,21 @@ pub struct MonitorSettings {
     pub drawer_width: f32,
 }
 
+/// 本地窗口性能监视设置。
+///
+/// 设计原理（Why）：FPS、帧耗时与本进程资源读数描述的是 Transom 自身窗口，
+/// 不是远端主机指标，因此与 [`MonitorSettings`] 分开保存，避免把本地性能
+/// 开关混进 SSH 主机监控偏好。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct PerformanceSettings {
+    /// 是否在标题栏显示轻量性能 HUD。
+    ///
+    /// 默认关闭：这种读数属于排障工具，持续采样会带来额外 wakeup 与进程扫描，
+    /// 不应在所有正常使用场景中常驻。
+    #[serde(default)]
+    pub show_fps_hud: bool,
+}
+
 impl Default for MonitorSettings {
     fn default() -> Self {
         Self {
@@ -208,6 +226,7 @@ impl Default for AppSettings {
         Self {
             language: default_language(),
             appearance: AppearanceSettings::default(),
+            performance: PerformanceSettings::default(),
             local_shell: None,
             local_shell_args: Vec::new(),
             local_terminal_run_as_admin: false,

@@ -171,6 +171,14 @@ pub(super) const MONITOR_BEHAVIOR: (&str, &[&str]) = (
     ],
 );
 
+pub(super) const PERFORMANCE: (&str, &[&str]) = (
+    "settings.performance_group",
+    &[
+        "settings.local_host_monitor",
+        "settings.local_host_monitor_desc",
+    ],
+);
+
 pub(super) const ABOUT: (&str, &[&str]) = (
     "settings.about_group",
     &[

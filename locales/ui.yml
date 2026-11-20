@@ -3563,6 +3563,15 @@ settings:
   monitor_default_interval_desc:
     en: Frequency for gathering background host diagnostic metrics
     zh-CN: 后台采集主机各项硬件与系统指标的时间间隔
+  performance_group:
+    en: Performance
+    zh-CN: 性能
+  local_host_monitor:
+    en: Local Host Monitor
+    zh-CN: 主机监控
+  local_host_monitor_desc:
+    en: Show FPS, frame time, this process CPU and memory in the title bar; disabled by default
+    zh-CN: 在标题栏显示 FPS、帧耗时、本进程 CPU 与内存读数；默认关闭
   ui_font_group:
     en: Interface Font
     zh-CN: 界面字体
@@ -9016,3 +9025,14 @@ git:
     footer_tip:
       en: "Accepting a side will checkout and stage that file automatically"
       zh-CN: "选择采用任一侧版本将自动检出并加入暂存区"
+
+performance:
+  frame:
+    en: FRAME
+    zh-CN: 耗时
+  memory:
+    en: MEM
+    zh-CN: 内存
+  sampling:
+    en: Sampling
+    zh-CN: 采样中

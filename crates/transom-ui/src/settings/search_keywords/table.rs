@@ -286,6 +286,7 @@ impl GroupSearch {
             GroupSearch::Logs => super::table_workspace::LOGS,
             GroupSearch::MonitorSections => super::table_workspace::MONITOR_SECTIONS,
             GroupSearch::MonitorBehavior => super::table_workspace::MONITOR_BEHAVIOR,
+            GroupSearch::Performance => super::table_workspace::PERFORMANCE,
             GroupSearch::About => super::table_workspace::ABOUT,
             GroupSearch::Update => super::table_workspace::UPDATE,
             GroupSearch::ContainerRegistries => super::table_workspace::CONTAINER_REGISTRIES,

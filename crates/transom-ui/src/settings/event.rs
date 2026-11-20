@@ -31,6 +31,8 @@ pub(crate) enum SettingsEvent {
     MonitorSectionsChanged(MonitorSectionCollapse),
     /// 监控抽屉默认宽度变化；外壳同步到已打开的面板。
     MonitorDrawerWidthChanged(f32),
+    /// 标题栏性能 HUD 开关变化；外壳同步所有已创建的 HUD 实体。
+    PerformanceHudChanged(bool),
     /// 标签位置切换；外壳同步左侧标签槽位与会话树可见性。
     TabPositionChanged(TabPosition),
     /// 请求打开改键录制弹窗。

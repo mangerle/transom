@@ -50,6 +50,10 @@ pub(crate) fn on_settings_event(
                 .update(cx, |view, _| view.set_drawer_width(*width));
             cx.notify();
         }
+        SettingsEvent::PerformanceHudChanged(enabled) => {
+            crate::performance::set_enabled(*enabled, cx);
+            cx.notify();
+        }
         SettingsEvent::TabPositionChanged(position) => {
             if *position == transom_core::TabPosition::Left {
                 let section = match app_state.session.sidebar.section() {
@@ -117,6 +121,7 @@ fn on_settings_saved(
     settings: &transom_core::AppSettings,
     cx: &mut Context<AppShell>,
 ) {
+    crate::performance::set_enabled(settings.performance.show_fps_hud, cx);
     crate::settings::apply_appearance_to_live_panes(app_state, cx);
     crate::shortcuts::apply_shortcut_settings(app_state, cx);
     crate::settings::apply_block_view_settings(app_state, cx);

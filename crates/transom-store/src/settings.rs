@@ -76,12 +76,15 @@ mod tests {
             language: "en".into(),
             ..Default::default()
         };
+        assert!(!settings.performance.show_fps_hud);
         settings.terminal_interaction.copy_on_select = false;
+        settings.performance.show_fps_hud = true;
         store.save(&settings).unwrap();
 
         let loaded = store.load().unwrap();
         assert_eq!(loaded.language, "en");
         assert!(!loaded.terminal_interaction.copy_on_select);
+        assert!(loaded.performance.show_fps_hud);
     }
 
     /// 版本超前的设置文件必须隔离保留：旧版程序空启动后的保存不能把它覆盖。

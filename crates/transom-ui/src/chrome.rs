@@ -1,6 +1,6 @@
 //! 窗口顶栏（Top Bar）渲染模块。
 
-use crate::app::{AppShell, AppState};
+use crate::app::{AppShell, AppState, app_settings};
 use crate::brand;
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -9,6 +9,7 @@ use gpui_kit::base::h_flex;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::{AppIconElement, UiIcon};
 
@@ -26,6 +27,24 @@ pub(crate) fn render_top_bar(
     p: &Palette,
 ) -> AnyElement {
     let app_entity = cx.entity().clone();
+    let performance_hud = app_settings(cx)
+        .performance
+        .show_fps_hud
+        .then(|| crate::performance::performance_hud(window, true, cx));
+    let brand = h_flex()
+        .items_center()
+        .gap_2()
+        .child(brand::logo_mark(LOGO_SIZE, window, cx))
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::BOLD)
+                .child(rust_i18n::t!("app.name").to_string()),
+        )
+        .child(render_version_badge(app_state, window, p, cx))
+        .when_some(performance_hud, |this, hud| {
+            this.child(div().ml(rems(space::LG)).child(hud))
+        });
 
     let title_bar_border = cx.theme().title_bar_border;
     TitleBar::new()
@@ -46,19 +65,8 @@ pub(crate) fn render_top_bar(
                 .items_center()
                 .pl_0()
                 .pr_2()
-                .child(
-                    h_flex()
-                        .items_center()
-                        .gap_2()
-                        .child(brand::logo_mark(LOGO_SIZE, window, cx))
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_weight(FontWeight::BOLD)
-                                .child(rust_i18n::t!("app.name").to_string()),
-                        )
-                        .child(render_version_badge(app_state, window, p, cx)),
-                ),
+                .child(brand)
+                .child(div().flex_1().min_w_0()),
         )
         .into_any_element()
 }

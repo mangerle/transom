@@ -72,6 +72,37 @@ const MONITOR_SECTION_TOGGLES: &[MonitorSectionToggle] = &[
 ];
 
 impl SettingsView {
+    /// 本地窗口性能组：标题栏 HUD 开关。
+    pub(crate) fn render_settings_performance(
+        &mut self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        v_flex()
+            .gap_2()
+            .child(crate::widgets::setting_row(
+                "settings.local_host_monitor",
+                Some("settings.local_host_monitor_desc"),
+                Switch::new("toggle-titlebar-fps-hud")
+                    .small()
+                    .checked(app_settings(cx).performance.show_fps_hud)
+                    .on_click(cx.listener(|this, &checked, _, cx| {
+                        update_app_settings(cx, |settings| {
+                            settings.performance.show_fps_hud = checked;
+                        });
+                        let snapshot = app_settings(cx).clone();
+                        this.persist_settings_reported(&snapshot, cx);
+                        cx.emit(crate::settings::SettingsEvent::PerformanceHudChanged(
+                            checked,
+                        ));
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                p,
+            ))
+            .into_any_element()
+    }
+
     /// 监控板块默认展开/收起设置分组。
     pub(crate) fn render_settings_monitor_sections(
         &mut self,

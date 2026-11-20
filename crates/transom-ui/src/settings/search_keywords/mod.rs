@@ -99,6 +99,8 @@ pub(super) enum GroupSearch {
     MonitorSections,
     /// 监控页：抽屉与采样设置组。
     MonitorBehavior,
+    /// 监控页：本地窗口性能设置组。
+    Performance,
     /// 关于页：应用信息组。
     About,
     /// 关于页：软件更新组。
@@ -142,7 +144,7 @@ impl GroupSearch {
             Language | Notify | Proxy | Backup | Sync | Logs => "settings.tab_general",
             #[cfg(target_os = "linux")]
             DesktopIntegration => "settings.tab_general",
-            MonitorSections | MonitorBehavior => "settings.tab_monitor",
+            MonitorSections | MonitorBehavior | Performance => "settings.tab_monitor",
             GitExecutable | GitCommitPush | GitDiff => "settings.tab_git",
             ContainerRegistries => "settings.tab_containers",
             About | Update => "settings.tab_about",
@@ -216,6 +218,7 @@ mod tests {
         GroupSearch::Logs,
         GroupSearch::MonitorSections,
         GroupSearch::MonitorBehavior,
+        GroupSearch::Performance,
         GroupSearch::About,
         GroupSearch::Update,
         GroupSearch::ContainerRegistries,

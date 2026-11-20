@@ -219,6 +219,10 @@ static SETTINGS_PAGES: &[PageSpec] = &[
         icon: AppIcon::Custom(CustomIcon::CPU),
         groups: &[
             plain(
+                GroupSearch::Performance,
+                SettingsView::render_settings_performance,
+            ),
+            plain(
                 GroupSearch::MonitorSections,
                 SettingsView::render_settings_monitor_sections,
             ),

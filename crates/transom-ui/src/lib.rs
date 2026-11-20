@@ -55,6 +55,7 @@ pub(crate) mod keys;
 pub(crate) mod known_hosts_modal;
 pub(crate) mod monitor;
 pub(crate) mod notify;
+pub(crate) mod performance;
 pub(crate) mod probe;
 pub(crate) mod record;
 pub(crate) mod session_appearance;
