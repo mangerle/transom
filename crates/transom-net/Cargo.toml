@@ -27,6 +27,11 @@ async-trait.workspace = true
 sha2.workspace = true
 md-5 = { workspace = true }
 serialport.workspace = true
+# FTP/FTPS 客户端内核：异步后端选 tokio，TLS 走 rustls，特性口径见根 Cargo.toml。
+suppaftp.workspace = true
+tokio-rustls.workspace = true
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
 # 编辑器非 UTF-8 文本的 GBK 兜底解码（锁内已有 0.8.42，无新增传递依赖树）。
 encoding_rs = "0.8"
 # HTTP CONNECT 代理 Basic 认证头的编码。

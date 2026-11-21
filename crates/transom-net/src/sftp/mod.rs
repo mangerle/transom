@@ -15,11 +15,14 @@ mod scan;
 pub mod sudo_write;
 pub(crate) mod sync;
 pub(crate) mod text;
-mod transfer;
+pub(crate) mod transfer;
 
 #[cfg(test)]
 mod tests;
 
 pub use client::SftpClient;
-pub(crate) use client::{TRANSFER_CHUNK, notify_shared_progress, sftp_error, sftp_io_error};
+pub(crate) use client::{
+    MAX_LIST_ENTRIES, TRANSFER_CHUNK, notify_shared_progress, sftp_error, sftp_io_error,
+};
+pub(crate) use text::BACKUP_SLACK_BYTES;
 pub use transfer::TransferProgressResult;

@@ -20,7 +20,7 @@ use transom_core::{AppError, ErrorCode, RemoteTextMeta};
 
 const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
 /// 备份读取的尺寸余量：防止 stat 与读取之间文件被替换成更大的内容导致误判。
-const BACKUP_SLACK_BYTES: u64 = 64 * 1024;
+pub(crate) const BACKUP_SLACK_BYTES: u64 = 64 * 1024;
 
 impl SftpClient {
     /// 读取远端文本文件全文，供内置编辑器打开；返回规整后的文本与读取时刻的
@@ -352,7 +352,7 @@ pub(crate) fn restore_write_payload(content: &[u8], meta: Option<&RemoteTextMeta
 /// 把远端 stat 结果折算成版本指纹；缺少字节数时返回 `None`，调用方据此跳过
 /// 比对而不是误判冲突（无法验证不等于发生了冲突）。只取两个所需字段而非
 /// 整个 stat 对象，避免为一次折算引入协议层类型依赖。
-fn remote_text_meta_of(size: Option<u64>, mtime: Option<u32>) -> Option<RemoteTextMeta> {
+pub(crate) fn remote_text_meta_of(size: Option<u64>, mtime: Option<u32>) -> Option<RemoteTextMeta> {
     Some(RemoteTextMeta {
         size: size?,
         mtime,

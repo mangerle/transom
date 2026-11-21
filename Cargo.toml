@@ -135,6 +135,14 @@ shipup = { version = "0.5.1", default-features = false, features = [
     "archive",
     "rustls-tls",
 ] }
+# FTP/FTPS 客户端：关闭默认特性避免拉入 native-tls，异步后端选 tokio，
+# TLS 统一走 rustls（aws-lc-rs 加密后端），与工作区 reqwest/shipup 的 TLS 口径一致。
+suppaftp = { version = "13.0", default-features = false, features = ["tokio-rustls-aws-lc-rs"] }
+# FTPS 显式 TLS（AUTH TLS）的连接器构造：三个 crate 均已在锁内（reqwest 引入），
+# 这里只是显式声明复用，证书校验统一走平台验证器，与 reqwest 行为一致。
+tokio-rustls = "0.26"
+rustls = "0.23"
+rustls-platform-verifier = "0.7"
 
 transom-core = { path = "crates/transom-core" }
 transom-platform = { path = "crates/transom-platform" }

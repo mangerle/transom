@@ -1,4 +1,4 @@
-//! SSH transport, authentication, SFTP, and port forwarding.
+//! SSH transport, authentication, SFTP, FTP, and port forwarding.
 
 mod agent;
 mod auth;
@@ -6,6 +6,7 @@ mod bridge;
 mod client;
 mod error;
 mod forward;
+pub mod ftp;
 mod host;
 mod keys;
 pub mod mosh;
@@ -25,6 +26,7 @@ pub use client::{
 };
 pub use error::NetError;
 pub use forward::{ForwardTask, start_forward};
+pub use ftp::FtpClient;
 pub use host::{probe_ssh, probe_tcp, send_wake_on_lan};
 pub use keys::deploy_public_key;
 pub use mosh::{

@@ -339,7 +339,7 @@ struct UploadTarget {
 ///
 /// 覆盖模式打开时已经截断，这里的截断等价于取当前长度；续传模式下本地可能
 /// 比源更长，多出的旧尾部必须显式裁掉，否则落盘结果比源文件更长。
-async fn finish_download_target(
+pub(crate) async fn finish_download_target(
     local_path: &Path,
     local: &mut tokio::fs::File,
     transferred: u64,
@@ -366,7 +366,7 @@ async fn finish_download_target(
 /// 因此偏移必须落在远端文件长度之内，且本地文件不能短于该偏移；任一条件不
 /// 满足都说明本地是无关的旧文件（或被外部清理过），只能截断重写。覆盖模式
 /// 则不检查本地内容——本地存在什么与本次传输无关。
-async fn open_local_download_target(
+pub(crate) async fn open_local_download_target(
     local_path: &Path,
     start: TransferStart,
     remote_total: Option<u64>,
