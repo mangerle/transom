@@ -19,7 +19,7 @@ use transom_core::{
     KnownHostsStore, SecretStore, SftpOperation, TabId, TerminalCommand, TerminalIo, TransferId,
 };
 use transom_git::{GitConfig, GitService};
-use transom_net::{ForwardTask, SftpClient, SshSession};
+use transom_net::{ForwardTask, FtpClient, SftpClient, SshSession};
 use transom_sync::CloudSyncService;
 use transom_zmodem::ZmodemConfig;
 
@@ -241,6 +241,10 @@ enum ReadyConnection {
         io: TerminalIo,
         join: tokio::sync::oneshot::Receiver<()>,
     },
+    /// FTP 会话：只携带登录完成的客户端，没有终端流与断线哨兵。
+    Ftp {
+        client: FtpClient,
+    },
 }
 
 impl ReadyConnection {
@@ -251,6 +255,7 @@ impl ReadyConnection {
             Self::Local { .. } => "本地终端",
             Self::Serial { .. } => "串口",
             Self::Telnet { .. } => "Telnet",
+            Self::Ftp { .. } => "FTP",
         }
     }
 }

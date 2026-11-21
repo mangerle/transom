@@ -62,6 +62,7 @@ impl AppShell {
     ) {
         let should_notify = match event {
             TerminalAppEvent::TerminalReady { .. } => self.on_terminal_ready(event, window, cx),
+            TerminalAppEvent::FtpReady { .. } => self.on_ftp_ready(event, window, cx),
             TerminalAppEvent::ConnectionFailed { .. } => self.on_connection_failed(event, cx),
             TerminalAppEvent::Disconnected { .. } => self.on_disconnected(event, cx),
             TerminalAppEvent::AuthPrompt { .. } => self.on_auth_prompt(event, window, cx),

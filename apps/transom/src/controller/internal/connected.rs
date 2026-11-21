@@ -1,4 +1,4 @@
-//! 连接接入：连接意图裁决、SSH/本地/串口/Telnet 的统一落地与本地采样订阅。
+//! 连接接入：连接意图裁决、SSH/本地/串口/Telnet 的统一落地、FTP 独立接入与本地采样订阅。
 
 use crate::controller::lifecycle::{
     Admission, AdoptConnection, admit_connection, adopt_connection,
@@ -6,10 +6,11 @@ use crate::controller::lifecycle::{
 use crate::controller::samplers::{
     run_local_host_sampler, spawn_remote_stats_sampler, spawn_traffic_sampler,
 };
+use crate::controller::session_context::ManagedSessionContext;
 use crate::controller::state::{ControllerCtx, ControllerState};
 use crate::controller::{Internal, ReadyConnection};
-use transom_core::{ConnectionId, TabId, TerminalIo};
-use transom_net::{SshRemote, SshSession};
+use transom_core::{ConnectionId, TabId, TerminalAppEvent, TerminalIo};
+use transom_net::{FtpClient, SshRemote, SshSession};
 use transom_zmodem::ZmodemConfig;
 
 /// 连接接入：先按连接意图裁决，再走统一的落地路径。
@@ -104,6 +105,9 @@ async fn adopt_ready_connection(
         ReadyConnection::Telnet { io, join } => {
             let adoption = PlainStreamAdoption::telnet(tab_id, connection_id, io, join, zmodem);
             adopt_plain_stream(state, ctx, adoption).await;
+        }
+        ReadyConnection::Ftp { client } => {
+            adopt_ftp_connection(state, ctx, tab_id, connection_id, client).await;
         }
     }
 }
@@ -269,6 +273,7 @@ async fn adopt_plain_stream(
 
 /// 拒收过期连接：SSH 主动断开释放（服务器侧不必等 keepalive 超时），
 /// 其余类型丢弃 IO 即关闭 PTY/串口/TCP 流，退出通知因连接不再现任被忽略。
+/// FTP 客户端整条 Drop 即关闭 TCP，尽力 QUIT 放进收尾任务组。
 fn reject_connection(state: &mut ControllerState, kind: ReadyConnection) {
     match kind {
         ReadyConnection::Ssh(session) => {
@@ -279,10 +284,49 @@ fn reject_connection(state: &mut ControllerState, kind: ReadyConnection) {
                     .await;
             });
         }
+        ReadyConnection::Ftp { client } => {
+            state.cleanup_set.spawn(async move {
+                client.close().await;
+            });
+        }
         ReadyConnection::Local { .. }
         | ReadyConnection::Serial { .. }
         | ReadyConnection::Telnet { .. } => {}
     }
+}
+
+/// FTP 会话接入：登记客户端、清理旧会话并广播就绪事件。
+///
+/// 设计原理（Why）：FTP 没有终端流，不走 `adopt_connection` 的 ZMODEM/采样/
+/// 断线哨兵路径——断线感知依赖"下次操作失败重连"，会话的生命周期由用户
+/// 显式断开或标签关闭驱动。宿主收到 `FtpReady` 后置标签为已连接并打开
+/// 文件面板（FTP 的唯一交互面）。
+async fn adopt_ftp_connection(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    client: FtpClient,
+) {
+    // 顶掉同标签的旧会话：停掉全部后台任务并断开旧远端。
+    if let Some(old_session) = state.sessions.remove(&tab_id) {
+        old_session.shutdown(&mut state.cleanup_set, "reconnected");
+    }
+    let mut session = ManagedSessionContext::new(connection_id, None);
+    session.ftp_client = Some(client);
+    state.sessions.insert(tab_id, session);
+
+    log::info!("FTP 会话就绪，窗格: {tab_id}，连接: {connection_id:?}");
+    let _ = ctx
+        .event_tx
+        .send_async(
+            TerminalAppEvent::FtpReady {
+                tab_id,
+                connection_id,
+            }
+            .into(),
+        )
+        .await;
 }
 
 /// 三类"字节流"连接的接入描述：参数超过五个后收敛为结构体。

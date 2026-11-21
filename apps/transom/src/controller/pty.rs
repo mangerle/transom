@@ -3,15 +3,17 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use transom_core::{
-    AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, KnownHostsStore,
-    LocalConnection, MoshConnection, OutboundProxy, PromptInfo, SerialConnection, Session,
-    SshConnection, SshHop, TabId, TelnetConnection, TerminalAppEvent, TerminalIo, TerminalSize,
+    AppError, AppEvent, Connection, ConnectionId, ConnectionSecrets, ErrorCode, FtpConnection,
+    KnownHostsStore, LocalConnection, MoshConnection, OutboundProxy, PromptInfo, SerialConnection,
+    Session, SshConnection, SshHop, TabId, TelnetConnection, TerminalAppEvent, TerminalIo,
+    TerminalSize,
 };
 use transom_net::{
-    AuthPrompter, SshConnectParams, build_mosh_server_command, connect_ssh, connect_telnet,
-    local_mosh_client, open_serial, parse_mosh_server_output,
+    AuthPrompter, FtpClient, SshConnectParams, build_mosh_server_command, connect_ssh,
+    connect_telnet, local_mosh_client, open_serial, parse_mosh_server_output,
 };
 use transom_zmodem::ZmodemConfig;
+use zeroize::Zeroizing;
 
 use super::{Internal, ReadyConnection};
 
@@ -212,6 +214,9 @@ pub(super) fn dispatch_connect(dispatch: ConnectDispatch) -> tokio::task::JoinHa
             }
             Connection::Serial(serial) => connect_serial_task(serial.clone()).await,
             Connection::Telnet(telnet) => connect_telnet_task(telnet.clone(), dispatch.size).await,
+            Connection::Ftp(ftp) => {
+                connect_ftp_task(ftp.clone(), dispatch.secrets.password.clone()).await
+            }
             _ => Err(AppError::with_detail(
                 ErrorCode::Configuration,
                 "不支持的连接类型",
@@ -314,6 +319,16 @@ async fn connect_telnet_task(
             io: connected.io,
             join: connected.exit,
         })
+}
+
+/// FTP 建连：拨号、可选 TLS 升级与登录都在异步栈内完成（tokio 线程池自会
+/// 处理 DNS），成功即携带登录就绪的客户端回流，不产出终端流。
+async fn connect_ftp_task(
+    ftp: FtpConnection,
+    password: Option<Zeroizing<String>>,
+) -> Result<ReadyConnection, AppError> {
+    let client = FtpClient::open(&ftp, password.as_ref().map(|value| value.as_str())).await?;
+    Ok(ReadyConnection::Ftp { client })
 }
 
 async fn connect_mosh_task(

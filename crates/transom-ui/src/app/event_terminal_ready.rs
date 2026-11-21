@@ -161,6 +161,45 @@ impl AppShell {
         true
     }
 
+    /// FTP 会话就绪：没有终端流可挂，文件面板就是本会话的正文。
+    ///
+    /// 设计原理（Why）：FTP 标签的交互面只有 SFTP 文件面板，连接成功立即
+    /// 打开面板，正文渲染层（`render_pane_body`）检测到 FTP 会话后面板实体
+    /// 存在时直接以面板作为窗格正文，不再占用侧槽。
+    pub(crate) fn on_ftp_ready(
+        &mut self,
+        event: TerminalAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let TerminalAppEvent::FtpReady {
+            tab_id,
+            connection_id,
+        } = event
+        else {
+            return true;
+        };
+        let Some(index) = self.state.workspace.tab_index(tab_id) else {
+            return false;
+        };
+        if self.state.workspace.tabs[index].connection_id() != Some(connection_id) {
+            return false;
+        }
+        let target = self.state.workspace.tabs[index]
+            .session()
+            .map(crate::connection::describe_target);
+        let tab = &mut self.state.workspace.tabs[index];
+        tab.status = TabStatus::Connected;
+        if let Some(pane) = tab.session_pane_mut() {
+            pane.reconnect_attempts = 0;
+        }
+        if let Some(target) = target {
+            log::info!("FTP 会话就绪，窗格: {tab_id}，连接: {connection_id:?}，目标: {target}");
+        }
+        crate::sftp::build_sftp_panel(&mut self.state, tab_id, index, true, window, cx);
+        true
+    }
+
     /// 终端就绪收尾：焦点/组内激活、凭据落盘、启动命令、转发与进程采样。
     pub(super) fn finish_terminal_ready(
         &mut self,

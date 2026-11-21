@@ -1,5 +1,6 @@
 //! SFTP 命令调度分发与客户端缓存处理。
 
+use super::ftp_exec::spawn_ftp_op;
 use super::ops::{SftpExecutionContext, execute_sftp_op};
 use super::remote_transfer::{
     RemoteTransferParams, execute_remote_transfer_op, spawn_remote_transfer_op,
@@ -95,6 +96,31 @@ pub(crate) fn dispatch_sftp_op(dispatch: SftpDispatch<'_>) {
     }
 
     let is_transfer = op.is_transfer();
+    // FTP 会话按客户端类型分流：上下文挂了 FTP 客户端即 FTP 后端，与 SSH
+    // 的 remote/sftp_client 互斥存在。资源查找口径与 SSH 相同（先本标签
+    // 主连接，再按连接号归属），事件与任务登记同样留在发起请求的标签上。
+    let ftp_client = if let Some(session) = sessions.get(&tab_id)
+        && session.connection_id == connection_id
+        && session.ftp_client.is_some()
+    {
+        session.ftp_client.clone()
+    } else {
+        find_session_by_connection(sessions, connection_id)
+            .and_then(|(_, session)| session.ftp_client.clone())
+    };
+    if let Some(client) = ftp_client {
+        spawn_ftp_op(
+            sftp_tasks,
+            event_tx,
+            tab_id,
+            connection_id,
+            op_id,
+            client,
+            op,
+        );
+        return;
+    }
+
     // 资源（远端句柄与 SFTP 客户端缓存）按连接归属查找，事件与任务登记却必须
     // 留在发起请求的标签上：并列远端列挂在请求标签的面板里，若按归属标签派发，
     // 列表、进度与完成事件都会落到另一标签的主远端，发起列永远收不到回填。

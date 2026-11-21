@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use tokio::task::{JoinHandle, JoinSet};
 use transom_core::{ConnectionId, ForwardId};
-use transom_net::{ForwardTask, SftpClient, SshRemote};
+use transom_net::{ForwardTask, FtpClient, SftpClient, SshRemote};
 use transom_zmodem::ZmodemControl;
 
 /// 托管会话上下文。
@@ -21,6 +21,9 @@ pub(crate) struct ManagedSessionContext {
     pub(crate) remote: Option<SshRemote>,
     pub(crate) sftp_client: Option<SftpClient>,
     pub(crate) transfer_sftp_client: Option<SftpClient>,
+    /// FTP 会话的交互客户端；有值即代表该会话是 FTP 后端（SSH 会话此字段
+    /// 恒为 `None`），文件面板操作按此分流到 FTP 执行器。
+    pub(crate) ftp_client: Option<FtpClient>,
     pub(crate) forwards: HashMap<ForwardId, ForwardTask>,
     pub(crate) traffic_task: Option<JoinHandle<()>>,
     pub(crate) key_deploy_task: Option<JoinHandle<()>>,
@@ -37,6 +40,7 @@ impl ManagedSessionContext {
             remote,
             sftp_client: None,
             transfer_sftp_client: None,
+            ftp_client: None,
             forwards: HashMap::new(),
             traffic_task: None,
             key_deploy_task: None,
@@ -93,6 +97,14 @@ impl ManagedSessionContext {
         self.stop_forwards(cleanup);
         self.sftp_client = None;
         self.transfer_sftp_client = None;
+
+        // FTP 关闭是网络往返（QUIT），放进收尾任务组限时等待；连接整体
+        // Drop 也兜底关闭 TCP，不会因为 QUIT 失败残留会话。
+        if let Some(client) = self.ftp_client.take() {
+            cleanup.spawn(async move {
+                client.close().await;
+            });
+        }
 
         if let Some(remote) = self.remote.take() {
             let reason = disconnect_reason.to_string();

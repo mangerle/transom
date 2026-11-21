@@ -39,6 +39,12 @@ pub enum TerminalAppEvent {
         connection_id: ConnectionId,
         io: TerminalIo,
     },
+    /// FTP 会话登录成功：不产生终端流，宿主据此把标签置为已连接并打开
+    /// 文件面板（FTP 的主交互面就是文件面板，没有终端可渲染）。
+    FtpReady {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+    },
     ConnectionFailed {
         tab_id: TabId,
         connection_id: ConnectionId,
