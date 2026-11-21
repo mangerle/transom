@@ -124,8 +124,21 @@ pub(crate) fn toggle_sftp(
     let is_ssh = app_state.workspace.tabs[index]
         .session()
         .is_some_and(|session| matches!(&session.connection, Connection::Ssh(_)));
+    let is_ftp = app_state.workspace.tabs[index]
+        .session()
+        .is_some_and(|session| matches!(&session.connection, Connection::Ftp(_)));
     if is_local {
         crate::sftp::open_local_file_panel(app_state, index, window, cx);
+        return;
+    }
+    // FTP 标签的面板即正文；关闭后经此入口重开，同样要求会话在线。
+    if is_ftp {
+        if !matches!(app_state.workspace.tabs[index].status, TabStatus::Connected) {
+            app_state.set_error(rust_i18n::t!("error.channel_failed").to_string());
+            cx.notify();
+            return;
+        }
+        crate::sftp::build_sftp_panel(app_state, tab_id, index, true, window, cx);
         return;
     }
     if !is_ssh {

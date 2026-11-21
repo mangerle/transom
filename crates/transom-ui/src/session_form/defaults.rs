@@ -3,8 +3,8 @@ use super::types::{
     SessionTargetDefaults,
 };
 use transom_core::{
-    AuthMethod, Connection, OutboundProxy, SerialDataBits, SerialFlowControl, SerialParity,
-    SerialStopBits, TextEncoding,
+    AuthMethod, Connection, FtpSecurity, OutboundProxy, SerialDataBits, SerialFlowControl,
+    SerialParity, SerialStopBits, TextEncoding,
 };
 
 /// 由认证方式推导表单默认值：选择、保存开关、私钥与证书路径。
@@ -66,6 +66,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         Some(Connection::Serial(_)) => ConnectionChoice::Serial,
         Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
         Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
+        Some(Connection::Ftp(_)) => ConnectionChoice::Ftp,
         _ => ConnectionChoice::Ssh,
     };
     let local = base.as_ref().and_then(|session| match &session.connection {
@@ -130,6 +131,13 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
     let telnet_encoding = telnet
         .map(|telnet| telnet.encoding)
         .unwrap_or(TextEncoding::Utf8);
+    let (ftp_security, ftp_passive) = base
+        .as_ref()
+        .and_then(|session| match &session.connection {
+            Connection::Ftp(ftp) => Some((ftp.security, ftp.passive)),
+            _ => None,
+        })
+        .unwrap_or((FtpSecurity::Plain, true));
     let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
     let serial_baud = serial
         .map(|serial| serial.baud_rate)
@@ -168,6 +176,8 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         serial_stop_bits,
         serial_flow_control,
         telnet_encoding,
+        ftp_security,
+        ftp_passive,
         local_working_dir,
         local_shell,
         local_shell_args,
@@ -201,6 +211,10 @@ fn target_defaults(
         Connection::Telnet(telnet) => Some(telnet),
         _ => None,
     });
+    let ftp = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Ftp(ftp) => Some(ftp),
+        _ => None,
+    });
     let name = base
         .as_ref()
         .map(|session| session.name.clone())
@@ -209,19 +223,23 @@ fn target_defaults(
         .map(|ssh| ssh.host.clone())
         .or_else(|| mosh.map(|mosh| mosh.host.clone()))
         .or_else(|| telnet.map(|telnet| telnet.host.clone()))
+        .or_else(|| ftp.map(|ftp| ftp.host.clone()))
         .unwrap_or_default();
     let port = ssh
         .map(|ssh| ssh.port)
         .or_else(|| mosh.map(|mosh| mosh.ssh_port))
         .or_else(|| telnet.map(|telnet| telnet.port))
+        .or_else(|| ftp.map(|ftp| ftp.port))
         .unwrap_or(match connection {
             ConnectionChoice::Telnet => 23,
+            ConnectionChoice::Ftp => 21,
             _ => 22,
         })
         .to_string();
     let username = ssh
         .map(|ssh| ssh.username.clone())
         .or_else(|| mosh.map(|mosh| mosh.username.clone()))
+        .or_else(|| ftp.map(|ftp| ftp.username.clone()))
         .unwrap_or_default();
     // Self 字面量会移走 base，需要读的字段先取出来。
     let identity_choice = base.as_ref().and_then(|session| session.identity_id);

@@ -4,8 +4,10 @@
 
 mod appearance;
 mod builder;
+mod connection_builders;
 mod defaults;
 mod entity;
+mod ftp;
 mod init;
 mod local;
 mod proxy;

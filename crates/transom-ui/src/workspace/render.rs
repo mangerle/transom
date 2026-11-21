@@ -13,6 +13,7 @@ mod layout;
 use gpui_kit::base::{ResizablePanel, ResizablePanelGroup, h_resizable};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
+use transom_core::Connection;
 
 /// 外层布局的派生尺寸与可见性：把窗口宽度、侧栏实测宽度与面板折叠状态
 /// 折算成 resizable 面板需要的像素值。
@@ -116,7 +117,15 @@ impl AppShell {
             .state
             .workspace
             .active_tab
-            .and_then(|tab_id| crate::sftp::sftp_state(&self.state.workspace, tab_id, cx));
+            .and_then(|tab_id| crate::sftp::sftp_state(&self.state.workspace, tab_id, cx))
+            // FTP 会话的面板渲染在窗格正文（见 render_pane_body），
+            // 不进侧槽，避免同一实体在一帧内出现两份。
+            .filter(|_| {
+                !active_panel.is_some_and(|tab| {
+                    tab.session()
+                        .is_some_and(|session| matches!(session.connection, Connection::Ftp(_)))
+                })
+            });
         let sftp_plan = layout::sftp_layout_plan(sftp_panel, rem);
         let show_sftp = sftp_plan.show;
         let sftp_width = sftp_plan.width;

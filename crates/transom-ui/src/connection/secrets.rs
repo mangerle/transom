@@ -20,6 +20,7 @@ pub(crate) fn session_host(session: &Session) -> Option<&str> {
         Connection::Ssh(ssh) => ssh.host.as_str(),
         Connection::Mosh(mosh) => mosh.host.as_str(),
         Connection::Telnet(telnet) => telnet.host.as_str(),
+        Connection::Ftp(ftp) => ftp.host.as_str(),
         _ => return None,
     };
     (!host.is_empty()).then_some(host)
@@ -32,6 +33,17 @@ pub(crate) fn collect_connection_secrets(
 ) -> (ConnectionSecrets, Option<String>) {
     let mut secrets = ConnectionSecrets::default();
     let mut error = None;
+    // FTP 会话没有认证方式枚举，密码与 SSH 密码认证同机制存取（同一
+    // SecretKind），登录失败时由 FTP 客户端按 AuthFailed 归类提示。
+    if matches!(session.connection, Connection::Ftp(_)) {
+        let key = SecretKey::new(session.secret_owner(), SecretKind::Password);
+        match secret_store.get(&key) {
+            Ok(Some(secret)) => secrets.password = Some(secret),
+            Ok(None) => {}
+            Err(err) => error = Some(localized_error(&err)),
+        }
+        return (secrets, error);
+    }
     let auth = match &session.connection {
         Connection::Ssh(ssh) => &ssh.auth,
         Connection::Mosh(mosh) => &mosh.auth,

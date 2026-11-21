@@ -72,6 +72,8 @@ pub(crate) fn localized_error(error: &AppError) -> String {
         ErrorCode::Protocol => rust_i18n::t!("error.protocol"),
         ErrorCode::Io => rust_i18n::t!("error.io"),
         ErrorCode::SftpFailed => rust_i18n::t!("error.sftp_failed"),
+        ErrorCode::FtpFailed => rust_i18n::t!("error.ftp_failed"),
+        ErrorCode::NotSupported => rust_i18n::t!("error.not_supported"),
         ErrorCode::PermissionDenied => rust_i18n::t!("error.permission_denied"),
         ErrorCode::SftpVerifyFailed => rust_i18n::t!("error.sftp_verify_failed"),
         ErrorCode::ForwardFailed => rust_i18n::t!("error.forward_failed"),

@@ -358,5 +358,6 @@ fn connection_supported(session: &Session) -> bool {
             | Connection::Local(_)
             | Connection::Serial(_)
             | Connection::Telnet(_)
+            | Connection::Ftp(_)
     )
 }

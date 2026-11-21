@@ -5,6 +5,7 @@
 //! 反查外壳。
 
 use super::entity::SessionFormView;
+use super::ftp::{render_ftp_basic_fields, render_ftp_network_fields};
 use super::local::render_local_fields;
 use super::serial::render_serial_fields;
 use super::ssh::{render_ssh_basic_fields, render_ssh_network_fields};
@@ -99,6 +100,7 @@ impl SessionFormView {
                     ConnectionChoice::Local => render_local_fields(form, cx, p),
                     ConnectionChoice::Serial => render_serial_fields(form, cx, p),
                     ConnectionChoice::Telnet => render_telnet_basic_fields(form, cx, p),
+                    ConnectionChoice::Ftp => render_ftp_basic_fields(form, cx, p),
                 };
                 v_flex()
                     .gap_3()
@@ -111,6 +113,7 @@ impl SessionFormView {
                     render_ssh_network_fields(form, cx, p)
                 }
                 ConnectionChoice::Telnet => render_telnet_network_fields(form, cx, p),
+                ConnectionChoice::Ftp => render_ftp_network_fields(form, cx, p),
                 ConnectionChoice::Local | ConnectionChoice::Serial => div()
                     .p_3()
                     .rounded(p.radius.md)

@@ -7,8 +7,8 @@ use super::types::{
 use gpui_kit::Context;
 use std::path::PathBuf;
 use transom_core::{
-    AuthMethod, Connection, LocalConnection, OutboundProxy, ProxyAuth, ProxyJumpConfig,
-    SerialConnection, Session, SshConnection, StartupCommands, TelnetConnection, TerminalProfile,
+    AuthMethod, Connection, LocalConnection, OutboundProxy, ProxyAuth, ProxyJumpConfig, Session,
+    SshConnection, StartupCommands, TerminalProfile,
 };
 use zeroize::Zeroizing;
 
@@ -47,6 +47,10 @@ impl SessionForm {
                 None,
                 None,
             ),
+            ConnectionChoice::Ftp => {
+                let (connection, password) = self.build_ftp_connection(cx)?;
+                (connection, password, None)
+            }
         };
 
         let mut session = self
@@ -63,9 +67,10 @@ impl SessionForm {
         };
         // 出站代理对网络型连接有意义；串口与本地终端没有网络出口。
         session.proxy = match self.connection {
-            ConnectionChoice::Ssh | ConnectionChoice::Telnet | ConnectionChoice::Mosh => {
-                self.build_proxy(cx)?
-            }
+            ConnectionChoice::Ssh
+            | ConnectionChoice::Telnet
+            | ConnectionChoice::Mosh
+            | ConnectionChoice::Ftp => self.build_proxy(cx)?,
             ConnectionChoice::Serial | ConnectionChoice::Local => None,
         };
         session.icon = self.icon;
@@ -298,79 +303,6 @@ impl SessionForm {
             _ => None,
         };
         (auth, password, key_passphrase)
-    }
-
-    fn build_telnet_connection(
-        &self,
-        cx: &mut Context<impl Sized>,
-    ) -> Result<TelnetConnection, String> {
-        let host = self.host.read(cx).value().trim().to_string();
-        if host.is_empty() {
-            return Err(rust_i18n::t!("form.error_host").to_string());
-        }
-        let port: u16 = self
-            .port
-            .read(cx)
-            .value()
-            .trim()
-            .parse()
-            .map_err(|_| rust_i18n::t!("form.error_port").to_string())?;
-        if port == 0 {
-            return Err(rust_i18n::t!("form.error_port").to_string());
-        }
-        let mut options = self
-            .base
-            .as_ref()
-            .and_then(|session| match &session.connection {
-                Connection::Telnet(telnet) => Some(telnet.options.clone()),
-                _ => None,
-            })
-            .unwrap_or_default();
-        options.auto_reconnect = self.auto_reconnect;
-        if let Ok(timeout) = self.connect_timeout.read(cx).value().trim().parse::<u64>()
-            && (1..=120).contains(&timeout)
-        {
-            options.connect_timeout_secs = timeout;
-        }
-        if let Ok(keepalive) = self.keepalive.read(cx).value().trim().parse::<u64>()
-            && keepalive <= 3600
-        {
-            options.keepalive_secs = keepalive;
-        }
-        Ok(TelnetConnection {
-            host,
-            port,
-            encoding: self.telnet_encoding,
-            options,
-        })
-    }
-
-    fn build_serial_connection(
-        &self,
-        cx: &mut Context<impl Sized>,
-    ) -> Result<SerialConnection, String> {
-        let port = self.serial_port.read(cx).value().trim().to_string();
-        if port.is_empty() {
-            return Err(rust_i18n::t!("form.error_serial_port").to_string());
-        }
-        let baud_rate: u32 = self
-            .serial_baud
-            .read(cx)
-            .value()
-            .trim()
-            .parse()
-            .map_err(|_| rust_i18n::t!("form.error_serial_baud").to_string())?;
-        if baud_rate == 0 {
-            return Err(rust_i18n::t!("form.error_serial_baud").to_string());
-        }
-        Ok(SerialConnection {
-            port,
-            baud_rate,
-            data_bits: self.serial_data_bits,
-            parity: self.serial_parity,
-            stop_bits: self.serial_stop_bits,
-            flow_control: self.serial_flow_control,
-        })
     }
 
     /// 按认证方式读取内联口令/私钥口令。

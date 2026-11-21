@@ -23,6 +23,7 @@ pub(crate) fn display_compact(connection: &Connection) -> String {
         Connection::Ssh(ssh) => format!("{}@{}", ssh.username, ssh.host),
         Connection::Mosh(mosh) => format!("{}@{}", mosh.username, mosh.host),
         Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
+        Connection::Ftp(ftp) => format!("{}@{}", ftp.username, ftp.host),
         Connection::Local(local) => local.shell.clone().unwrap_or_else(|| "shell".to_string()),
         Connection::Serial(serial) => serial.port.clone(),
         _ => String::new(),
@@ -35,6 +36,15 @@ pub(crate) fn display_with_port(connection: &Connection) -> String {
         Connection::Ssh(ssh) => format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
         Connection::Mosh(mosh) => format!("mosh {}@{}:{}", mosh.username, mosh.host, mosh.ssh_port),
         Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
+        Connection::Ftp(ftp) => match ftp.security {
+            // FTPS 显式加密是运维关键信息，完整目标里必须带上前缀。
+            transom_core::FtpSecurity::ExplicitTls => {
+                format!("ftps {}@{}:{}", ftp.username, ftp.host, ftp.port)
+            }
+            transom_core::FtpSecurity::Plain => {
+                format!("{}@{}:{}", ftp.username, ftp.host, ftp.port)
+            }
+        },
         Connection::Local(local) => rust_i18n::t!(
             "connection.local_terminal",
             shell = local.shell.as_deref().unwrap_or("sh")
@@ -61,6 +71,7 @@ pub(crate) fn icon(connection: &Connection) -> AppIcon {
         Connection::Local(_) => AppIcon::Domain(DomainIcon::TERMINAL),
         Connection::Serial(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
         Connection::Telnet(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
+        Connection::Ftp(_) => AppIcon::Ui(UiIcon::FOLDER),
         Connection::Mosh(_) => AppIcon::Ui(UiIcon::RUN),
         Connection::ContainerEngine(_) => AppIcon::Domain(DomainIcon::CONTAINER),
         _ => AppIcon::Ui(UiIcon::WEB_SERVER),

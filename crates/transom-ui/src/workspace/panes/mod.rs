@@ -305,6 +305,15 @@ impl AppShell {
                 .unwrap_or_default();
             return crate::git::workspace::render_git_tab(workspace, badge, window, cx, p);
         }
+        // FTP 会话没有终端：面板挂载后它就是窗格正文（不走侧槽，
+        // 见 `plan_workspace_layout` 的侧槽抑制）；未挂载时回落状态页。
+        if let Some(view) = self.state.sftp_view(tab_id)
+            && self.state.workspace.tabs[index]
+                .session()
+                .is_some_and(|session| matches!(session.connection, Connection::Ftp(_)))
+        {
+            return view.into_any_element();
+        }
         if let Some(terminal) = self.state.workspace.tabs[index].terminal() {
             // 拖拽上传的进度浮层锚在这个容器右下角：它是"这个窗格的终端区"的
             // 最小外包块，绝对定位因此不受侧栏与面板列宽度变化的影响。

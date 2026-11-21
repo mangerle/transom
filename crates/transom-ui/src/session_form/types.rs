@@ -4,7 +4,7 @@ use gpui_kit::App;
 use gpui_kit::Entity;
 use gpui_kit::component::input::{InputState, TextareaState};
 use transom_core::{
-    AuthMethod, BlockViewOverride, Connection, ForwardRule, IdentityId, OutboundProxy,
+    AuthMethod, BlockViewOverride, Connection, ForwardRule, FtpSecurity, IdentityId, OutboundProxy,
     SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor, SerialStopBits, Session,
     SessionColor, SessionIcon, SessionId, TextEncoding,
 };
@@ -85,6 +85,7 @@ pub(crate) enum ConnectionChoice {
     Serial,
     Telnet,
     Mosh,
+    Ftp,
 }
 
 /// 会话表单里的出站代理档位。
@@ -146,6 +147,10 @@ pub(crate) struct SessionForm {
     pub serial_ports_error: Option<String>,
     /// Telnet 字符编码；远端为老设备或 BBS 时选择 GBK/Big5。
     pub telnet_encoding: TextEncoding,
+    /// FTP 传输安全档位：明文或显式 TLS（AUTH TLS）。
+    pub ftp_security: FtpSecurity,
+    /// FTP 数据连接被动模式；客户端侧网络环境默认开启。
+    pub ftp_passive: bool,
     pub startup_commands: Entity<TextareaState>,
     /// 本地终端工作目录
     pub local_working_dir: Entity<InputState>,
@@ -334,6 +339,8 @@ pub(crate) struct SessionFormSeed {
     pub serial_stop_bits: SerialStopBits,
     pub serial_flow_control: SerialFlowControl,
     pub telnet_encoding: TextEncoding,
+    pub ftp_security: FtpSecurity,
+    pub ftp_passive: bool,
     pub local_working_dir: String,
     pub local_shell: String,
     pub local_shell_args: String,

@@ -574,6 +574,21 @@ form:
   telnet_hint:
     en: Telnet has no built-in authentication; sign in inside the terminal. Choose GBK/Big5 when the remote side is a legacy device or a Chinese BBS.
     zh-CN: Telnet 无内建认证，登录在终端内交互完成；远端为老设备或中文 BBS 时请选择 GBK/Big5 编码。
+  ftp_security:
+    en: Transport security
+    zh-CN: 传输安全
+  ftp_hint:
+    en: FTP sessions have no terminal; the file browser opens in place after sign-in. FTPS upgrades to TLS via AUTH TLS before authentication. Passwords are stored in the system keychain only.
+    zh-CN: FTP 会话没有终端，登录成功后直接打开文件面板；FTPS 在认证前经 AUTH TLS 升级加密。密码只存系统钥匙串，不入会话文件。
+  ftp_passive:
+    en: Passive mode
+    zh-CN: 被动模式
+  ftp_passive_hint:
+    en: Passive mode lets the server pick data ports and works behind NAT/firewalls; disable it only when the server requires active mode.
+    zh-CN: 被动模式由服务端指定数据端口，对 NAT 与防火墙友好；仅服务端要求主动模式时关闭。
+  error_ftp_username:
+    en: FTP username is required (use "anonymous" for anonymous login)
+    zh-CN: FTP 用户名不能为空（匿名登录请填写 anonymous）
   serial_port:
     en: Serial device
     zh-CN: 串口设备
@@ -1043,6 +1058,12 @@ error:
   sftp_failed:
     en: SFTP error
     zh-CN: SFTP 错误
+  ftp_failed:
+    en: FTP error
+    zh-CN: FTP 错误
+  not_supported:
+    en: This operation is not supported over FTP
+    zh-CN: FTP 不支持该操作
   permission_denied:
     en: Permission denied by the remote host
     zh-CN: 远端拒绝授权
@@ -2146,6 +2167,66 @@ forward:
   confirm_start:
     en: Confirm & Start
     zh-CN: 确认并启动
+  edit:
+    en: Edit rule
+    zh-CN: 编辑规则
+  save_edit:
+    en: Save changes
+    zh-CN: 保存修改
+  stop_before_edit:
+    en: Stop the tunnel before editing this rule.
+    zh-CN: 请先停止隧道再编辑这条规则。
+  editing_cannot_start:
+    en: Save or cancel editing before starting.
+    zh-CN: 编辑中的规则先保存或取消，再启动。
+  error_port_taken:
+    en: Port is already used by rule "%{name}".
+    zh-CN: 该监听端口已被规则「%{name}」占用。
+  traffic:
+    en: "Traffic: %{traffic}"
+    zh-CN: "流量: %{traffic}"
+  connections:
+    en: "Connections: %{count}"
+    zh-CN: "连接数: %{count}"
+  test:
+    en: Test target connectivity
+    zh-CN: 测试目标连通性
+  test_ok:
+    en: Target reachable
+    zh-CN: 目标可达
+  copy_cli:
+    en: Copy equivalent ssh command
+    zh-CN: 复制等价 ssh 命令
+  cli_copied:
+    en: ssh command copied to clipboard
+    zh-CN: ssh 命令已复制到剪贴板
+  open_browser:
+    en: Open in browser
+    zh-CN: 在浏览器打开
+  browser_failed:
+    en: 'Failed to open browser: %{error}'
+    zh-CN: 打开浏览器失败：%{error}
+  preset_mysql:
+    en: MySQL
+    zh-CN: MySQL
+  preset_postgresql:
+    en: PostgreSQL
+    zh-CN: PostgreSQL
+  preset_redis:
+    en: Redis
+    zh-CN: Redis
+  preset_socks5:
+    en: SOCKS5 Proxy
+    zh-CN: SOCKS5 代理
+  kind_help_local:
+    en: 'Map a remote service port (for example a database bound to the server loopback) to this machine.'
+    zh-CN: 把远端服务端口（例如只监听在服务器回环上的数据库）映射到本机访问。
+  kind_help_remote:
+    en: Let the remote side open a port; anyone connecting to it reaches this machine.
+    zh-CN: 让远端开放一个端口，连接该端口即可访问本机侧的服务。
+  kind_help_dynamic:
+    en: 'Local SOCKS5 proxy: traffic decides its own target per connection.'
+    zh-CN: 本机 SOCKS5 代理：每个连接自行决定要访问的目标。
 known_hosts:
   title:
     en: Known Hosts
