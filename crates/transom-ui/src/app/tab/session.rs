@@ -42,6 +42,8 @@ pub(crate) struct SessionPaneState {
     pub(crate) sftp_view: Option<Entity<SftpPanelView>>,
     pub(crate) forwards_view: Option<Entity<crate::forward::ForwardView>>,
     pub(crate) forward_statuses: HashMap<ForwardId, ForwardStatus>,
+    /// 目标端口连通性探测结果（预本地化文案；`None` 表示成功），一次性展示。
+    pub(crate) forward_probe_results: HashMap<ForwardId, Option<String>>,
     pub(crate) system_stats: Option<SystemStats>,
     pub(crate) network_traffic: Option<NetworkTraffic>,
     pub(crate) _startup_task: Option<Task<()>>,

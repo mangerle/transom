@@ -9,7 +9,7 @@
 //! - ZmodemEvent: ZMODEM 传输协议事件
 
 use crate::error::AppError;
-use crate::ids::{ConnectionId, ContainerRequestId, SessionId, TabId, TransferId};
+use crate::ids::{ConnectionId, ContainerRequestId, ForwardId, SessionId, TabId, TransferId};
 use crate::model::container::{
     ComposeProject, ContainerDetails, ContainerEngineInfo, ContainerEngineProfile,
     ContainerFileEntry, ContainerFileSystemChange, ContainerImageDetails, ContainerImageSummary,
@@ -196,6 +196,13 @@ pub enum ForwardAppEvent {
         tab_id: TabId,
         connection_id: ConnectionId,
         status: ForwardStatus,
+    },
+    /// 目标端口连通性探测结果：一次性回报，界面显示在对应规则卡片下。
+    ForwardProbeResult {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        rule_id: ForwardId,
+        result: Result<(), AppError>,
     },
 }
 

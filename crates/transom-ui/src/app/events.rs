@@ -207,6 +207,29 @@ impl AppShell {
                     self.state.set_error(message);
                 }
             }
+            ForwardAppEvent::ForwardProbeResult {
+                tab_id,
+                connection_id,
+                rule_id,
+                result,
+            } => {
+                if let Some(tab) = self
+                    .state
+                    .workspace
+                    .tabs
+                    .iter_mut()
+                    .find(|tab| tab.id == tab_id && tab.connection_id() == Some(connection_id))
+                    && let Some(pane) = tab.session_pane_mut()
+                {
+                    // 结果预本地化后落卡片；成功与失败都是一次性展示，
+                    // 下次探测覆盖、删除规则时一并清理。
+                    let text = match &result {
+                        Ok(()) => None,
+                        Err(error) => Some(localized_error(error)),
+                    };
+                    pane.forward_probe_results.insert(rule_id, text);
+                }
+            }
         }
         cx.notify();
     }

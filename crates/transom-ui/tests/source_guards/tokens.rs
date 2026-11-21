@@ -207,7 +207,7 @@ fn selection_and_command_semantics_are_explicit() {
         .expect("读取 SSH 表单失败");
     assert!(auth.contains("ButtonGroup::new(\"auth-methods\")"));
     let forward =
-        std::fs::read_to_string(root.join("src/forward/view.rs")).expect("读取转发视图失败");
+        std::fs::read_to_string(root.join("src/forward/form.rs")).expect("读取转发表单失败");
     assert!(forward.contains("ButtonGroup::new(\"forward-kind\")"));
     let snippets =
         std::fs::read_to_string(root.join("src/snippets/card.rs")).expect("读取片段卡片失败");

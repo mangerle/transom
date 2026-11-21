@@ -1,6 +1,6 @@
 //! SOCKS5 动态转发：握手、CONNECT 与 UDP ASSOCIATE。
 
-use super::{ForwardTask, bind_listener, forward_error, serve_listener};
+use super::{ForwardTask, bind_listener, forward_error, relay_counted, serve_listener};
 use crate::client::SshRemote;
 use crate::timeout::SOCKS5_HANDSHAKE_TIMEOUT;
 use russh::Channel;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::watch;
-use transom_core::{AppError, BindAddress, ErrorCode};
+use transom_core::{AppError, BindAddress, ErrorCode, ErrorContext, ForwardMeter};
 
 /// SOCKS5 协商完成后的转发形态。
 enum Socks5Route {
@@ -26,19 +26,23 @@ enum Socks5Route {
 pub(super) async fn start_dynamic(
     remote: &SshRemote,
     bind: &BindAddress,
+    meter: ForwardMeter,
 ) -> Result<ForwardTask, AppError> {
     let listener = bind_listener(bind).await?;
     let bound_port = listener.local_addr().ok().map(|address| address.port());
     let (stop, stop_rx) = watch::channel(false);
     let remote = remote.clone();
 
+    let listener_meter = meter.clone();
     let join = tokio::spawn(serve_listener(
         listener,
         stop_rx,
+        meter.clone(),
         Arc::new(move |tcp| {
             let remote = remote.clone();
+            let meter = listener_meter.clone();
             Box::pin(async move {
-                if let Err(error) = run_socks5(remote, tcp).await {
+                if let Err(error) = run_socks5(remote, tcp, &meter).await {
                     log::debug!("SOCKS5 转发连接处理失败，原因: {error}");
                 }
             })
@@ -47,18 +51,20 @@ pub(super) async fn start_dynamic(
 
     Ok(ForwardTask {
         bound_port,
+        meter,
         stop,
         join: Some(join),
         remote_forward: None,
     })
 }
 
-/// 本地转发单条连接：建立远端通道后双向复制，任一方向结束即关闭两端。
+/// 本地转发单条连接：建立远端通道后按计量双向中继，任一方向结束即关闭两端。
 pub(super) async fn relay_local_connection(
     remote: SshRemote,
-    mut tcp: TcpStream,
+    tcp: TcpStream,
     host: String,
     port: u16,
+    meter: &ForwardMeter,
 ) {
     let channel = match remote.open_direct_tcpip(&host, port).await {
         Ok(channel) => channel,
@@ -67,12 +73,15 @@ pub(super) async fn relay_local_connection(
             return;
         }
     };
-    let mut stream = channel.into_stream();
-    let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+    relay_counted(tcp, channel.into_stream(), meter).await;
 }
 
 /// SOCKS5 入口：先限时完成协商，再进入不设总时限的数据中继。
-async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppError> {
+async fn run_socks5(
+    remote: SshRemote,
+    mut client: TcpStream,
+    meter: &ForwardMeter,
+) -> Result<(), AppError> {
     let route = tokio::time::timeout(
         SOCKS5_HANDSHAKE_TIMEOUT,
         socks5_negotiate(&remote, &mut client),
@@ -89,8 +98,7 @@ async fn run_socks5(remote: SshRemote, mut client: TcpStream) -> Result<(), AppE
     })??;
     match route {
         Socks5Route::Connect(channel) => {
-            let mut stream = channel.into_stream();
-            let _ = tokio::io::copy_bidirectional(&mut client, &mut stream).await;
+            relay_counted(client, channel.into_stream(), meter).await;
             Ok(())
         }
         Socks5Route::Udp { inbound, outbound } => {
@@ -165,7 +173,31 @@ async fn read_request_header(client: &mut TcpStream) -> Result<[u8; 4], AppError
     Ok(request)
 }
 
-/// CONNECT：解析目标地址、建立远端通道并回应成功。
+/// SOCKS5 应答状态码（RFC 1928 §6）。
+const SOCKS5_REPLY_GENERAL_FAILURE: u8 = 1;
+const SOCKS5_REPLY_NOT_ALLOWED: u8 = 2;
+const SOCKS5_REPLY_HOST_UNREACHABLE: u8 = 4;
+const SOCKS5_REPLY_CONNECTION_REFUSED: u8 = 5;
+
+/// 把通道拒绝原因翻译成 SOCKS5 应答状态码。
+///
+/// 设计原理（Why）：统一回 general failure 会让浏览器等 SOCKS 客户端把
+/// "目标拒绝连接"与"代理自身故障"混为一谈，前者应当立刻重试或提示，
+/// 后者应当停止——按远端拒绝原因细分回码，客户端才能做出正确反应。
+/// 映射按语义对齐：ConnectionFailed→refused、AdministrativelyProhibited
+/// →not allowed，其余一律 host unreachable。
+fn socks5_rejection_code(context: Option<&ErrorContext>) -> u8 {
+    match context {
+        Some(ErrorContext::ChannelRejected { reason }) => match reason.as_str() {
+            "ConnectFailed" => SOCKS5_REPLY_CONNECTION_REFUSED,
+            "AdministrativelyProhibited" => SOCKS5_REPLY_NOT_ALLOWED,
+            _ => SOCKS5_REPLY_HOST_UNREACHABLE,
+        },
+        _ => SOCKS5_REPLY_GENERAL_FAILURE,
+    }
+}
+
+/// CONNECT：解析目标地址、建立远端通道并回应成功；失败按拒绝原因回码。
 async fn connect_route(
     remote: &SshRemote,
     client: &mut TcpStream,
@@ -175,7 +207,8 @@ async fn connect_route(
     let channel = match remote.open_direct_tcpip(&host, port).await {
         Ok(channel) => channel,
         Err(error) => {
-            let _ = client.write_all(&[5, 1, 0, 1, 0, 0, 0, 0, 0, 0]).await;
+            let code = socks5_rejection_code(error.context());
+            let _ = client.write_all(&[5, code, 0, 1, 0, 0, 0, 0, 0, 0]).await;
             return Err(error);
         }
     };

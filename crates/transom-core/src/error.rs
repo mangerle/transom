@@ -139,6 +139,9 @@ pub enum ErrorContext {
         port: u16,
         timeout_ms: u64,
     },
+    /// SSH 转发通道被远端按原因拒绝（Debug 形式的 russh ChannelOpenFailure）。
+    /// 动态转发据此给 SOCKS5 客户端回细分状态码。
+    ChannelRejected { reason: String },
     /// Wake-on-LAN 发包失败。
     Wake { mac: String, reason: String },
 }

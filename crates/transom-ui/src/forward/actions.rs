@@ -1,12 +1,10 @@
 //! 端口转发规则管理与启停控制方法。
 
-use super::{
-    ForwardKindChoice, ForwardPanelState, PendingForwardConfirm, forward_bind_host,
-    is_public_bind_address,
-};
+use super::{ForwardKindChoice, ForwardPanelState, forward_bind_host, is_public_bind_address};
 use crate::app::{AppShell, AppState, TabStatus};
 use crate::keymap;
 use crate::palette::sftp_text_input;
+use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
 use transom_core::{
     AppError, Connection, ConnectionId, ErrorCode, ForwardCommand, ForwardId, ForwardRule,
@@ -47,6 +45,7 @@ impl AppState {
                     rule_id,
                     state,
                     error,
+                    meter: None,
                 },
             );
         }
@@ -74,6 +73,18 @@ fn on_forward_panel_event(
         }
         ForwardPanelEvent::DeleteRule { tab_id, rule_id } => {
             crate::forward::delete_forward_rule(app_state, *tab_id, *rule_id, cx);
+        }
+        ForwardPanelEvent::UpdateRule { tab_id, rule } => {
+            crate::forward::update_forward_rule(app_state, *tab_id, rule.clone(), cx);
+        }
+        ForwardPanelEvent::ProbeRule { tab_id, rule_id } => {
+            crate::forward::probe_forward_rule(app_state, *tab_id, *rule_id, cx);
+        }
+        ForwardPanelEvent::CopyCli { tab_id, rule_id } => {
+            crate::forward::copy_forward_cli(app_state, *tab_id, *rule_id, cx);
+        }
+        ForwardPanelEvent::OpenBrowser { tab_id, rule_id } => {
+            crate::forward::open_forward_browser(app_state, *tab_id, *rule_id, cx);
         }
         ForwardPanelEvent::ClosePanel => {
             app_state.workspace.close_forward_panel();
@@ -159,17 +170,45 @@ pub(crate) fn toggle_forward_panel(
     let view = cx.new(|_| {
         super::ForwardView::new(
             ForwardPanelState {
-                name_input: name,
-                bind_host_input: bind_host,
-                bind_port_input: bind_port,
-                target_host_input: target_host,
-                target_port_input: target_port,
+                name_input: name.clone(),
+                bind_host_input: bind_host.clone(),
+                bind_port_input: bind_port.clone(),
+                target_host_input: target_host.clone(),
+                target_port_input: target_port.clone(),
                 kind: ForwardKindChoice::Local,
                 error: None,
+                editing_id: None,
+                _subscriptions: Vec::new(),
             },
             tab_id,
         )
     });
+    // 回车提交：名称与两个端口输入框触发表单校验与落库。
+    let mut enter_subscriptions = Vec::new();
+    for input in [
+        ("forward-enter-name", name),
+        ("forward-enter-bind-port", bind_port),
+        ("forward-enter-target-port", target_port),
+    ] {
+        let (_id, input) = input;
+        enter_subscriptions.push(cx.subscribe_in(
+            &input,
+            window,
+            move |this, _, event: &InputEvent, _window, cx| {
+                if !matches!(event, InputEvent::PressEnter { .. }) {
+                    return;
+                }
+                if let Some(view) = this
+                    .state
+                    .workspace
+                    .tab(tab_id)
+                    .and_then(|tab| tab.forwards_view())
+                {
+                    view.update(cx, |panel, cx| panel.submit_pressed(cx));
+                }
+            },
+        ));
+    }
     let subscription = cx.subscribe(
         &view,
         |app_state, _view, event: &crate::forward::ForwardPanelEvent, cx| {
@@ -183,237 +222,11 @@ pub(crate) fn toggle_forward_panel(
         .forward
         .insert(tab_id, subscription);
     if let Some(pane) = app_state.workspace.tabs[index].session_pane_mut() {
+        view.update(cx, |panel, _| {
+            panel.state._subscriptions.extend(enter_subscriptions);
+        });
         pane.forwards_view = Some(view);
     }
-    cx.notify();
-}
-
-/// 面板校验通过后提交规则：落库、必要时要求公网确认，否则直接下发启动命令。
-pub(crate) fn submit_forward_rule(
-    app_state: &mut AppState,
-    tab_id: TabId,
-    rule: ForwardRule,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(tab) = app_state.workspace.tab(tab_id) else {
-        return;
-    };
-    let Some(connection_id) = tab.connection_id() else {
-        return;
-    };
-    let Some(session_id) = tab.session_id() else {
-        return;
-    };
-
-    if let Some(session) = app_state
-        .session
-        .catalog
-        .sessions
-        .iter_mut()
-        .find(|session| session.id == session_id)
-    {
-        session.forwards.push(rule.clone());
-    }
-    app_state.persist_catalog();
-
-    // 公网监听必须二次确认：不能因为点了一次「添加」就把端口开到公网。
-    if is_public_bind_address(forward_bind_host(&rule)) {
-        app_state.ui.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
-            tab_id,
-            connection_id,
-            rule,
-        });
-        cx.notify();
-        return;
-    }
-
-    app_state.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-    app_state.send_command(ForwardCommand::ForwardStart {
-        tab_id,
-        connection_id,
-        rule,
-    });
-    cx.notify();
-}
-
-pub(crate) fn start_forward_rule(
-    app_state: &mut AppState,
-    tab_id: TabId,
-    rule_id: ForwardId,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(tab) = app_state.workspace.tab(tab_id) else {
-        return;
-    };
-    let Some(connection_id) = tab.connection_id() else {
-        return;
-    };
-    let Some(session_id) = tab.session_id() else {
-        return;
-    };
-    let Some(rule) = app_state
-        .session
-        .catalog
-        .sessions
-        .iter()
-        .find(|session| session.id == session_id)
-        .and_then(|session| session.forwards.iter().find(|rule| rule.id == rule_id))
-        .cloned()
-    else {
-        return;
-    };
-
-    let bind_host = forward_bind_host(&rule);
-
-    if is_public_bind_address(bind_host) {
-        app_state.ui.modals.tools.confirm_forward_any = Some(PendingForwardConfirm {
-            tab_id,
-            connection_id,
-            rule,
-        });
-        cx.notify();
-        return;
-    }
-
-    if let Some(session) = app_state
-        .session
-        .catalog
-        .sessions
-        .iter_mut()
-        .find(|session| session.id == session_id)
-        && let Some(rule) = session.forwards.iter_mut().find(|rule| rule.id == rule_id)
-    {
-        rule.enabled = true;
-    }
-    app_state.persist_catalog();
-    app_state.set_forward_status(tab_id, rule_id, ForwardState::Starting, None);
-    app_state.send_command(ForwardCommand::ForwardStart {
-        tab_id,
-        connection_id,
-        rule,
-    });
-    cx.notify();
-}
-
-pub(crate) fn confirm_forward_start(app_state: &mut AppState, cx: &mut Context<AppShell>) {
-    let Some(pending) = app_state.ui.modals.tools.confirm_forward_any.take() else {
-        return;
-    };
-    let PendingForwardConfirm {
-        tab_id,
-        connection_id,
-        rule,
-    } = pending;
-    let session_id = app_state.workspace.tab(tab_id).and_then(|t| t.session_id());
-    if let Some(session_id) = session_id {
-        if let Some(session) = app_state
-            .session
-            .catalog
-            .sessions
-            .iter_mut()
-            .find(|s| s.id == session_id)
-            && let Some(r) = session.forwards.iter_mut().find(|r| r.id == rule.id)
-        {
-            r.enabled = true;
-        }
-        app_state.persist_catalog();
-    }
-    app_state.set_forward_status(tab_id, rule.id, ForwardState::Starting, None);
-    app_state.send_command(ForwardCommand::ForwardStart {
-        tab_id,
-        connection_id,
-        rule,
-    });
-    cx.notify();
-}
-
-pub(crate) fn cancel_forward_confirm(app_state: &mut AppState, cx: &mut Context<AppShell>) {
-    app_state.ui.modals.tools.confirm_forward_any = None;
-    cx.notify();
-}
-
-pub(crate) fn stop_forward_rule(
-    app_state: &mut AppState,
-    tab_id: TabId,
-    rule_id: ForwardId,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(tab) = app_state.workspace.tab(tab_id) else {
-        return;
-    };
-    let Some(connection_id) = tab.connection_id() else {
-        return;
-    };
-    let Some(session_id) = tab.session_id() else {
-        return;
-    };
-    if let Some(session) = app_state
-        .session
-        .catalog
-        .sessions
-        .iter_mut()
-        .find(|session| session.id == session_id)
-        && let Some(rule) = session.forwards.iter_mut().find(|rule| rule.id == rule_id)
-    {
-        rule.enabled = false;
-    }
-    app_state.persist_catalog();
-    app_state.set_forward_status(tab_id, rule_id, ForwardState::Stopped, None);
-    app_state.send_command(ForwardCommand::ForwardStop {
-        tab_id,
-        connection_id,
-        rule_id,
-    });
-    cx.notify();
-}
-
-pub(crate) fn delete_forward_rule(
-    app_state: &mut AppState,
-    tab_id: TabId,
-    rule_id: ForwardId,
-    cx: &mut Context<AppShell>,
-) {
-    let Some(tab) = app_state.workspace.tab(tab_id) else {
-        return;
-    };
-    let connection_id = tab.connection_id();
-    let Some(session_id) = tab.session_id() else {
-        return;
-    };
-    if let (Some(connection_id), Some(status)) = (
-        connection_id,
-        app_state
-            .workspace
-            .tab(tab_id)
-            .and_then(|tab| tab.session_pane())
-            .and_then(|pane| pane.forward_statuses.get(&rule_id)),
-    ) && matches!(
-        status.state,
-        ForwardState::Active { .. } | ForwardState::Starting
-    ) {
-        app_state.send_command(ForwardCommand::ForwardStop {
-            tab_id,
-            connection_id,
-            rule_id,
-        });
-    }
-    if let Some(pane) = app_state
-        .workspace
-        .tab_mut(tab_id)
-        .and_then(|tab| tab.session_pane_mut())
-    {
-        pane.forward_statuses.remove(&rule_id);
-    }
-    if let Some(session) = app_state
-        .session
-        .catalog
-        .sessions
-        .iter_mut()
-        .find(|session| session.id == session_id)
-    {
-        session.forwards.retain(|rule| rule.id != rule_id);
-    }
-    app_state.persist_catalog();
     cx.notify();
 }
 

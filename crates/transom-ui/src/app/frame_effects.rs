@@ -190,10 +190,16 @@ impl AppShell {
         else {
             return;
         };
-        let Some((session_id, statuses)) = self.state.workspace.tab(tab_id).and_then(|tab| {
-            let pane = tab.session_pane()?;
-            Some((tab.session_id()?, pane.forward_statuses.clone()))
-        }) else {
+        let Some((session_id, statuses, probe_results)) =
+            self.state.workspace.tab(tab_id).and_then(|tab| {
+                let pane = tab.session_pane()?;
+                Some((
+                    tab.session_id()?,
+                    pane.forward_statuses.clone(),
+                    pane.forward_probe_results.clone(),
+                ))
+            })
+        else {
             return;
         };
         // 先借用会话里的规则做比较：未变化时不必每帧克隆整份转发列表。
@@ -208,13 +214,15 @@ impl AppShell {
             .unwrap_or_default();
         let unchanged = {
             let current = view.read(cx);
-            current.rules() == rules && current.statuses() == &statuses
+            current.rules() == rules
+                && current.statuses() == &statuses
+                && current.probe_results() == &probe_results
         };
         if unchanged {
             return;
         }
         view.update(cx, |view, _| {
-            view.set_session_data(rules.to_vec(), statuses)
+            view.set_session_data(rules.to_vec(), statuses, probe_results)
         });
     }
 

@@ -6,6 +6,7 @@ use super::handler::{
 };
 use crate::auth::AuthPrompter;
 use crate::bridge::AsyncChannelStream;
+use crate::client::session::RemoteForwardTarget;
 use crate::error::NetError;
 use crate::traffic::CountingStream;
 use parking_lot::Mutex;
@@ -32,7 +33,7 @@ pub(crate) struct ChainParams<'a> {
     pub(crate) prompter: Arc<dyn AuthPrompter>,
     pub(crate) known_hosts: Arc<dyn KnownHostsStore>,
     /// 目标会话的远端转发登记表；与 `ClientHandler` 共享同一个 Arc。
-    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, RemoteForwardTarget>>>,
     /// 远端转发任务追踪器；在会话断开或取消转发时收割任务。
     pub(crate) forward_tasks: RemoteForwardTasks,
     /// 会话实际生效的出站代理；只作用于最外层物理连接。
@@ -48,7 +49,7 @@ pub(crate) struct HandshakeParams<'a> {
     pub(crate) prompter: Arc<dyn AuthPrompter>,
     pub(crate) known_hosts: Arc<dyn KnownHostsStore>,
     pub(crate) config: Arc<client::Config>,
-    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, RemoteForwardTarget>>>,
     pub(crate) forward_tasks: RemoteForwardTasks,
     pub(crate) allow_sha1_publickey_auth: bool,
 }

@@ -3,7 +3,7 @@
 mod auth;
 mod handler;
 mod jump;
-mod session;
+pub(crate) mod session;
 
 #[cfg(test)]
 mod tests;

@@ -1,14 +1,10 @@
 //! 端口转发面板与公网监听确认弹窗视图渲染。
 
-use super::ForwardKindChoice;
 use super::ForwardView;
-use crate::app::{AppShell, AppState};
-use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::{Palette, localized_error};
-use gpui_kit::base::{Selectable, h_flex, v_flex};
+use gpui_kit::base::{Disableable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_core::{ForwardKind, ForwardState};
 use transom_ui_icons::AppIcon;
@@ -102,7 +98,11 @@ impl ForwardView {
             .into_any_element()
     }
 
-    /// 单条转发规则行：状态、摘要、启停/编辑/删除与错误。
+    /// 单条转发规则卡片：头部（状态/启停/编辑/删除）、拓扑行、动作行与错误。
+    ///
+    /// 卡片化布局吸收自 winssh-pro 的转发对话框：三行结构在 360px 侧面板内
+    /// 竖排压缩。编辑中的卡片琥珀色描边对上"改的是哪条"；运行中禁编辑、
+    /// 编辑中禁启动，避免编辑态与运行态互相覆盖。
     fn render_forward_rule_row(
         &self,
         rule: &transom_core::ForwardRule,
@@ -119,62 +119,182 @@ impl ForwardView {
                 ForwardState::Active { .. } | ForwardState::Starting
             )
         });
+        let editing = self.editing_id() == Some(rule_id);
         let (status_text, status_color) = forward_rule_status(status.as_ref(), p);
         let summary = forward_rule_summary(rule);
+        let active_meter = status
+            .as_ref()
+            .filter(|status| matches!(status.state, ForwardState::Active { .. }))
+            .and_then(|status| status.meter.as_ref());
 
         let mut row = v_flex()
             .gap_1()
             .p_2()
             .rounded(p.radius.sm)
             .border_1()
-            .border_color(p.sidebar_border)
+            .border_color(if editing { p.warning } else { p.sidebar_border })
             .child(
                 h_flex()
                     .justify_between()
                     .items_center()
                     .child(div().text_sm().child(rule.name.clone()))
-                    .child(crate::widgets::status_badge(status_text, status_color, p)),
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(crate::widgets::status_badge(status_text, status_color, p))
+                            .child(
+                                Button::new(ElementId::Name(
+                                    format!("forward-edit-{rule_id}").into(),
+                                ))
+                                .ghost()
+                                .small()
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::EDIT)).small())
+                                .disabled(running || editing)
+                                .tooltip(if running {
+                                    rust_i18n::t!("forward.stop_before_edit").to_string()
+                                } else {
+                                    rust_i18n::t!("forward.edit").to_string()
+                                })
+                                .on_click(cx.listener({
+                                    let rule = rule.clone();
+                                    move |this, _, window, cx| {
+                                        this.begin_edit(&rule, window, cx);
+                                    }
+                                })),
+                            )
+                            .child(if running {
+                                Button::new(ElementId::Name(
+                                    format!("forward-stop-{rule_id}").into(),
+                                ))
+                                .small()
+                                .label(rust_i18n::t!("forward.stop").to_string())
+                                .on_click(cx.listener(
+                                    move |_this, _, _, cx| {
+                                        cx.emit(super::ForwardPanelEvent::StopRule {
+                                            tab_id,
+                                            rule_id,
+                                        });
+                                        cx.notify();
+                                    },
+                                ))
+                            } else {
+                                Button::new(ElementId::Name(
+                                    format!("forward-start-{rule_id}").into(),
+                                ))
+                                .small()
+                                .outline()
+                                .label(rust_i18n::t!("forward.start").to_string())
+                                .disabled(editing)
+                                .tooltip(rust_i18n::t!("forward.editing_cannot_start").to_string())
+                                .on_click(cx.listener(
+                                    move |_this, _, _, cx| {
+                                        cx.emit(super::ForwardPanelEvent::StartRule {
+                                            tab_id,
+                                            rule_id,
+                                        });
+                                        cx.notify();
+                                    },
+                                ))
+                            })
+                            .child(
+                                Button::new(ElementId::Name(
+                                    format!("forward-delete-{rule_id}").into(),
+                                ))
+                                .ghost()
+                                .small()
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
+                                .on_click(cx.listener(
+                                    move |_this, _, _, cx| {
+                                        cx.emit(super::ForwardPanelEvent::DeleteRule {
+                                            tab_id,
+                                            rule_id,
+                                        });
+                                        cx.notify();
+                                    },
+                                )),
+                            ),
+                    ),
             )
             .child(
                 div()
                     .text_xs()
                     .text_color(p.muted_foreground)
                     .child(summary),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .justify_end()
-                    .child(if running {
-                        Button::new(ElementId::Name(format!("forward-stop-{rule_id}").into()))
-                            .small()
-                            .label(rust_i18n::t!("forward.stop").to_string())
-                            .on_click(cx.listener(move |_this, _, _, cx| {
-                                cx.emit(super::ForwardPanelEvent::StopRule { tab_id, rule_id });
-                                cx.notify();
-                            }))
-                    } else {
-                        Button::new(ElementId::Name(format!("forward-start-{rule_id}").into()))
-                            .small()
-                            .outline()
-                            .label(rust_i18n::t!("forward.start").to_string())
-                            .on_click(cx.listener(move |_this, _, _, cx| {
-                                cx.emit(super::ForwardPanelEvent::StartRule { tab_id, rule_id });
-                                cx.notify();
-                            }))
-                    })
-                    .child(
-                        Button::new(ElementId::Name(format!("forward-delete-{rule_id}").into()))
-                            .ghost()
-                            .small()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
-                            .label(rust_i18n::t!("forward.delete").to_string())
-                            .on_click(cx.listener(move |_this, _, _, cx| {
-                                cx.emit(super::ForwardPanelEvent::DeleteRule { tab_id, rule_id });
-                                cx.notify();
-                            })),
-                    ),
             );
+        // 动作行：仅运行中有意义——流量/连接数实时读原子值，其余按类型提供。
+        if let (Some(meter), true) = (active_meter, running) {
+            let (bytes, connections) = meter.snapshot();
+            let mut actions = h_flex().gap_2().items_center().child(
+                div().text_xs().text_color(p.muted_foreground).child(
+                    rust_i18n::t!(
+                        "forward.traffic",
+                        traffic = transom_core::format_traffic(bytes)
+                    )
+                    .to_string(),
+                ),
+            );
+            if connections > 0 {
+                actions =
+                    actions.child(div().text_xs().text_color(p.muted_foreground).child(
+                        rust_i18n::t!("forward.connections", count = connections).to_string(),
+                    ));
+            }
+            actions = actions
+                .child(
+                    Button::new(ElementId::Name(format!("forward-probe-{rule_id}").into()))
+                        .ghost()
+                        .small()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FETCH)).small())
+                        .tooltip(rust_i18n::t!("forward.test").to_string())
+                        .on_click(cx.listener(move |_this, _, _, cx| {
+                            cx.emit(super::ForwardPanelEvent::ProbeRule { tab_id, rule_id });
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Button::new(ElementId::Name(format!("forward-cli-{rule_id}").into()))
+                        .ghost()
+                        .small()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::COPY)).small())
+                        .tooltip(rust_i18n::t!("forward.copy_cli").to_string())
+                        .on_click(cx.listener(move |_this, _, _, cx| {
+                            cx.emit(super::ForwardPanelEvent::CopyCli { tab_id, rule_id });
+                            cx.notify();
+                        })),
+                );
+            if rule.browser_url().is_some() {
+                actions = actions.child(
+                    Button::new(ElementId::Name(format!("forward-browser-{rule_id}").into()))
+                        .ghost()
+                        .small()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small())
+                        .tooltip(rust_i18n::t!("forward.open_browser").to_string())
+                        .on_click(cx.listener(move |_this, _, _, cx| {
+                            cx.emit(super::ForwardPanelEvent::OpenBrowser { tab_id, rule_id });
+                            cx.notify();
+                        })),
+                );
+            }
+            row = row.child(actions);
+        }
+        if let Some(probe) = self.probe_results().get(&rule_id) {
+            row = row.child(match probe {
+                Some(text) => div()
+                    .text_xs()
+                    .px_1()
+                    .rounded(p.radius.sm)
+                    .bg(p.danger.opacity(0.15))
+                    .text_color(p.danger)
+                    .child(text.clone()),
+                None => div()
+                    .text_xs()
+                    .px_1()
+                    .rounded(p.radius.sm)
+                    .bg(p.success.opacity(0.15))
+                    .text_color(p.success)
+                    .child(rust_i18n::t!("forward.test_ok").to_string()),
+            });
+        }
         if let Some(error) = status.and_then(|status| status.error) {
             row = row.child(
                 div()
@@ -185,168 +305,6 @@ impl ForwardView {
         }
         row.into_any_element()
     }
-
-    /// 转发类型三选一：本地/远程/动态。
-    fn render_kind_selector(&self, kind: ForwardKindChoice, cx: &mut Context<Self>) -> AnyElement {
-        ButtonGroup::new("forward-kind")
-            .small()
-            .child(
-                Button::new("forward-mode-local")
-                    .small()
-                    .label(rust_i18n::t!("forward.local").to_string())
-                    .selected(kind == ForwardKindChoice::Local),
-            )
-            .child(
-                Button::new("forward-mode-remote")
-                    .small()
-                    .label(rust_i18n::t!("forward.remote").to_string())
-                    .selected(kind == ForwardKindChoice::Remote),
-            )
-            .child(
-                Button::new("forward-mode-dynamic")
-                    .small()
-                    .label(rust_i18n::t!("forward.dynamic").to_string())
-                    .selected(kind == ForwardKindChoice::Dynamic),
-            )
-            .on_click(cx.listener(|this, clicks: &Vec<usize>, _, cx| {
-                let kind = match clicks.first() {
-                    Some(0) => Some(ForwardKindChoice::Local),
-                    Some(1) => Some(ForwardKindChoice::Remote),
-                    Some(2) => Some(ForwardKindChoice::Dynamic),
-                    _ => None,
-                };
-                if let Some(kind) = kind {
-                    this.state.kind = kind;
-                    cx.notify();
-                }
-            }))
-            .into_any_element()
-    }
-
-    /// 端口转发新增规则表单渲染。
-    fn render_forward_add_form(
-        &self,
-        tab_id: transom_core::TabId,
-        cx: &mut Context<Self>,
-        p: &Palette,
-    ) -> AnyElement {
-        let kind = self.state.kind;
-        let panel_error = self.state.error.clone();
-        let name_input = self.state.name_input.clone();
-        let bind_host_input = self.state.bind_host_input.clone();
-        let bind_port_input = self.state.bind_port_input.clone();
-        let target_host_input = self.state.target_host_input.clone();
-        let target_port_input = self.state.target_port_input.clone();
-
-        let kind_buttons = self.render_kind_selector(kind, cx);
-
-        let mut add_form = v_flex()
-            .p_2()
-            .gap_2()
-            .border_color(p.divider(p.sidebar_border))
-            .divider_edge(DividerEdge::Top, p.divider_width)
-            .child(kind_buttons)
-            .child(Input::new(&name_input).w_full())
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(div().flex_1().child(Input::new(&bind_host_input).w_full()))
-                    .child(
-                        div()
-                            .w(px(90.0))
-                            .child(Input::new(&bind_port_input).w_full()),
-                    ),
-            );
-        if kind != ForwardKindChoice::Dynamic {
-            add_form = add_form.child(
-                h_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&target_host_input).w_full()),
-                    )
-                    .child(
-                        div()
-                            .w(px(90.0))
-                            .child(Input::new(&target_port_input).w_full()),
-                    ),
-            );
-        }
-        add_form = add_form.child(
-            Button::new("forward-add")
-                .primary()
-                .small()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                .label(rust_i18n::t!("forward.add").to_string())
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    // 表单校验在实体里完成，通过后把规则交给外壳落库并发命令。
-                    if let Some(rule) = this.build_rule(cx) {
-                        cx.emit(super::ForwardPanelEvent::SubmitRule { tab_id, rule });
-                        cx.notify();
-                    }
-                })),
-        );
-        if let Some(error) = panel_error {
-            add_form = add_form.child(div().text_xs().text_color(p.danger).child(error));
-        }
-
-        add_form.into_any_element()
-    }
-}
-
-/// 端口转发冲突确认的弹窗体。
-///
-/// 取消与"确认启动"分别绑到 `cancel_forward_confirm` /
-/// `confirm_forward_start`，Esc 走前者：把拒绝回给等待中的转发请求。
-pub(crate) fn render_forward_confirm_body(
-    app_state: &AppState,
-    app: &Entity<AppShell>,
-    _cx: &App,
-    p: &Palette,
-) -> AnyElement {
-    let Some(pending) = app_state.ui.modals.tools.confirm_forward_any.as_ref() else {
-        return div().into_any_element();
-    };
-    let rule_name = pending.rule.name.clone();
-
-    let content = v_flex().gap_3().child(
-        div()
-            .text_xs()
-            .px_2()
-            .py_1()
-            .rounded(p.radius.sm)
-            .bg(p.muted)
-            .text_color(p.muted_foreground)
-            .child(format!("Rule: {rule_name}")),
-    );
-
-    let footer = h_flex()
-        .gap_2()
-        .child(crate::widgets::dialog_cancel_button(
-            "cancel-forward-confirm",
-            rust_i18n::t!("common.cancel").to_string(),
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                crate::forward::cancel_forward_confirm(&mut this.state, cx)
-            }),
-        ))
-        .child(crate::widgets::dialog_confirm_button(
-            "accept-forward-confirm",
-            rust_i18n::t!("forward.confirm_start").to_string(),
-            None,
-            crate::widgets::DialogConfirmKind::Danger,
-            crate::dialog_host::on_event(app, |this, _: &ClickEvent, _, cx| {
-                crate::forward::confirm_forward_start(&mut this.state, cx);
-            }),
-        ));
-
-    crate::widgets::dialog_body(
-        "forward-confirm-modal",
-        rust_i18n::t!("forward.confirm_any_title").to_string(),
-        Some(rust_i18n::t!("forward.confirm_any_hint").to_string()),
-        content,
-        Some(footer),
-    )
 }
 
 /// 转发状态文案与颜色；无状态视为已停止。

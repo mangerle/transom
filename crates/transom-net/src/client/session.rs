@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use transom_core::{AppError, ErrorCode, TerminalControl, TerminalIo, TrafficCounter};
+use transom_core::{
+    AppError, ErrorCode, ErrorContext, ForwardMeter, TerminalControl, TerminalIo, TrafficCounter,
+};
 
 /// 单次远端命令允许捕获的输出总量上限（stdout 与 stderr 合计）。
 pub(crate) const MAX_EXEC_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
@@ -31,10 +33,18 @@ pub struct CommandOutput {
     pub stderr: String,
 }
 
+/// 远端转发登记：按监听端口回连的本机目标与实时计量。
+#[derive(Clone)]
+pub(crate) struct RemoteForwardTarget {
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) meter: ForwardMeter,
+}
+
 #[derive(Clone)]
 pub struct SshRemote {
     pub(crate) inner: Arc<Handle<ClientHandler>>,
-    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, RemoteForwardTarget>>>,
     pub(crate) forward_tasks: RemoteForwardTasks,
     pub(crate) jump_handles: Vec<Arc<Handle<ClientHandler>>>,
 }
@@ -42,7 +52,7 @@ pub struct SshRemote {
 impl SshRemote {
     pub(crate) fn new(
         inner: Arc<Handle<ClientHandler>>,
-        remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+        remote_forwards: Arc<Mutex<HashMap<u16, RemoteForwardTarget>>>,
         forward_tasks: RemoteForwardTasks,
         jump_handles: Vec<Arc<Handle<ClientHandler>>>,
     ) -> Self {
@@ -85,14 +95,32 @@ impl SshRemote {
         host: &str,
         port: u16,
     ) -> Result<Channel<Msg>, AppError> {
-        with_timeout(
-            CHANNEL_OPEN_TIMEOUT,
-            ErrorCode::ForwardFailed,
-            "打开转发通道",
+        let future =
             self.inner
-                .channel_open_direct_tcpip(host.to_string(), port as u32, "127.0.0.1", 0),
-        )
-        .await
+                .channel_open_direct_tcpip(host.to_string(), port as u32, "127.0.0.1", 0);
+        match tokio::time::timeout(CHANNEL_OPEN_TIMEOUT, future).await {
+            Ok(Ok(channel)) => Ok(channel),
+            // 通道被远端按原因拒绝：拒绝码放进结构化现场，SOCKS5 动态转发
+            // 据此给客户端回细分状态码，其余调用方走统一错误文案。
+            Ok(Err(russh::Error::ChannelOpenFailure(reason))) => Err(AppError::with_context(
+                ErrorCode::ForwardFailed,
+                format!("远端拒绝打开转发通道，原因: {reason:?}"),
+                ErrorContext::ChannelRejected {
+                    reason: format!("{reason:?}"),
+                },
+            )),
+            Ok(Err(error)) => Err(AppError::with_detail(
+                ErrorCode::ForwardFailed,
+                format!("打开转发通道失败，原因: {error}"),
+            )),
+            Err(_) => Err(AppError::with_detail(
+                ErrorCode::Timeout,
+                format!(
+                    "打开转发通道超时，等待上限: {} 秒",
+                    CHANNEL_OPEN_TIMEOUT.as_secs()
+                ),
+            )),
+        }
     }
 
     pub(crate) async fn tcpip_forward(&self, host: &str, port: u16) -> Result<u32, AppError> {
@@ -117,10 +145,8 @@ impl SshRemote {
         .await
     }
 
-    pub(crate) fn register_remote_target(&self, port: u16, host: String, target_port: u16) {
-        self.remote_forwards
-            .lock()
-            .insert(port, (host, target_port));
+    pub(crate) fn register_remote_target(&self, port: u16, target: RemoteForwardTarget) {
+        self.remote_forwards.lock().insert(port, target);
     }
 
     pub(crate) fn unregister_remote_target(&self, port: u16) {

@@ -25,7 +25,7 @@ pub use client::{
     connect_ssh_remote,
 };
 pub use error::NetError;
-pub use forward::{ForwardTask, start_forward};
+pub use forward::{ForwardTask, start_forward, test_forward_target};
 pub use ftp::FtpClient;
 pub use host::{probe_ssh, probe_tcp, send_wake_on_lan};
 pub use keys::deploy_public_key;

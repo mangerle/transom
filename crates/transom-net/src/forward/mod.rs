@@ -11,19 +11,25 @@ mod socks5;
 use socks5::{relay_local_connection, start_dynamic};
 
 use crate::client::SshRemote;
+use crate::client::session::RemoteForwardTarget;
 use futures::future::BoxFuture;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 
 use tokio::sync::{Semaphore, watch};
 use tokio::task::{JoinHandle, JoinSet};
 use transom_core::{
-    AppError, BindAddress, ErrorCode, ForwardKind, ForwardRule, SocksAuth, TargetAddress,
+    AppError, BindAddress, ErrorCode, ForwardKind, ForwardMeter, ForwardRule, SocksAuth,
+    TargetAddress,
 };
 
 /// accept 失败后的退避窗口：EMFILE 等瞬时错误下避免 100% CPU 忙等。
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(500);
+
+/// 目标端口连通性探测的单次超时：与远端回连限时同一量级。
+const FORWARD_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// 单条本地/动态转发的最大并发连接数。
 ///
@@ -39,6 +45,8 @@ struct RemoteForwardInfo {
 
 pub struct ForwardTask {
     pub bound_port: Option<u16>,
+    /// 本条隧道的实时计量句柄；`ForwardStatus` 把它带给界面。
+    pub meter: ForwardMeter,
     stop: watch::Sender<bool>,
     join: Option<JoinHandle<()>>,
     remote_forward: Option<RemoteForwardInfo>,
@@ -77,8 +85,11 @@ pub async fn start_forward(
     remote: &SshRemote,
     rule: &ForwardRule,
 ) -> Result<ForwardTask, AppError> {
+    let meter = ForwardMeter::default();
     match &rule.kind {
-        ForwardKind::Local { bind, target } => start_local(remote, bind, target).await,
+        ForwardKind::Local { bind, target } => {
+            start_local(remote, bind, target, meter.clone()).await
+        }
         ForwardKind::Dynamic { bind, socks } => {
             if !matches!(socks.auth, SocksAuth::None) {
                 return Err(AppError::with_detail(
@@ -86,9 +97,11 @@ pub async fn start_forward(
                     "动态转发暂不支持 SOCKS 认证",
                 ));
             }
-            start_dynamic(remote, bind).await
+            start_dynamic(remote, bind, meter.clone()).await
         }
-        ForwardKind::Remote { bind, target } => start_remote(remote, bind, target).await,
+        ForwardKind::Remote { bind, target } => {
+            start_remote(remote, bind, target, meter.clone()).await
+        }
         _ => Err(AppError::with_detail(
             ErrorCode::ForwardFailed,
             "不支持的转发模式",
@@ -100,6 +113,7 @@ async fn start_local(
     remote: &SshRemote,
     bind: &BindAddress,
     target: &TargetAddress,
+    meter: ForwardMeter,
 ) -> Result<ForwardTask, AppError> {
     let listener = bind_listener(bind).await?;
     let bound_port = listener.local_addr().ok().map(|address| address.port());
@@ -107,21 +121,25 @@ async fn start_local(
     let remote = remote.clone();
     let target_host = target.host.clone();
     let target_port = target.port;
+    let listener_meter = meter.clone();
 
     let join = tokio::spawn(serve_listener(
         listener,
         stop_rx,
+        meter.clone(),
         Arc::new(move |tcp| {
             let remote = remote.clone();
             let host = target_host.clone();
+            let meter = listener_meter.clone();
             Box::pin(async move {
-                relay_local_connection(remote, tcp, host, target_port).await;
+                relay_local_connection(remote, tcp, host, target_port, &meter).await;
             })
         }),
     ));
 
     Ok(ForwardTask {
         bound_port,
+        meter,
         stop,
         join: Some(join),
         remote_forward: None,
@@ -132,9 +150,11 @@ async fn start_local(
 ///
 /// 没有这层收敛时，两个入口各自复制循环，且都没有并发上限与错误退避：
 /// 被本机或外部进程刷连接时会耗尽 FD，accept 失败后还会立即重试空转。
+/// 每条 accept 出的连接在此统一计量（连接数 +1）并设置 TCP_NODELAY。
 pub(super) async fn serve_listener(
     listener: TcpListener,
     mut stop_rx: watch::Receiver<bool>,
+    meter: ForwardMeter,
     handler: Arc<dyn Fn(TcpStream) -> BoxFuture<'static, ()> + Send + Sync>,
 ) {
     let mut connections = JoinSet::new();
@@ -158,6 +178,8 @@ pub(super) async fn serve_listener(
         };
         match accepted {
             Ok((tcp, _)) => {
+                meter.add_connection();
+                tcp.set_nodelay(true).ok();
                 let future = handler(tcp);
                 connections.spawn(async move {
                     let _permit = permit;
@@ -172,7 +194,7 @@ pub(super) async fn serve_listener(
         }
         while connections.try_join_next().is_some() {}
     }
-    // 停止转发必须同时断开在途连接：abort 取消 copy_bidirectional 后，
+    // 停止转发必须同时断开在途连接：abort 取消中继循环后，
     // 本地套接字与 SSH 通道随 future 一起释放，客户端立即看到连接关闭。
     abort_connections(&mut connections).await;
 }
@@ -181,14 +203,23 @@ async fn start_remote(
     remote: &SshRemote,
     bind: &BindAddress,
     target: &TargetAddress,
+    meter: ForwardMeter,
 ) -> Result<ForwardTask, AppError> {
     let actual_port = remote.tcpip_forward(&bind.host, bind.port).await?;
     let actual_port = actual_port.min(u16::MAX as u32) as u16;
-    remote.register_remote_target(actual_port, target.host.clone(), target.port);
+    remote.register_remote_target(
+        actual_port,
+        RemoteForwardTarget {
+            host: target.host.clone(),
+            port: target.port,
+            meter: meter.clone(),
+        },
+    );
     let (stop, _stop_rx) = watch::channel(false);
 
     Ok(ForwardTask {
         bound_port: Some(actual_port),
+        meter,
         stop,
         join: None,
         remote_forward: Some(RemoteForwardInfo {
@@ -207,6 +238,87 @@ pub(super) async fn bind_listener(bind: &BindAddress) -> Result<TcpListener, App
 
 pub(super) fn forward_error(error: std::io::Error) -> AppError {
     AppError::with_detail(ErrorCode::ForwardFailed, error.to_string())
+}
+
+/// 双向字节中继：两侧各自拷贝并计入 [`ForwardMeter`]。
+///
+/// 设计原理（Why）：
+/// - 实现初衷：`tokio::io::copy_bidirectional` 不提供中途计数，实时流量
+///   展示需要自记账；两侧各用 `tokio::io::copy`（其返回值即拷贝字节数），
+///   计数零额外拷贝开销。
+/// - EOF 传播语义：先结束的方向触发对端写半关闭（对端立刻看到 EOF 而不是
+///   等整条连接回收），随后等另一方向自然耗尽——半关闭期间回传数据仍在飞，
+///   不能提前丢弃。
+/// - 取消语义：外层任务被 abort 时 select 与两个 copy future 一起取消，
+///   套接字与 SSH 通道随任务释放，无需额外的子任务回收。
+///
+/// `down` 为本地→远端，`up` 为远端→本地；两侧字节统一累加进同一个计量器。
+pub(crate) async fn relay_counted<A, B>(a: A, b: B, meter: &ForwardMeter)
+where
+    A: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    B: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let (a_read, a_write) = tokio::io::split(a);
+    let (b_read, b_write) = tokio::io::split(b);
+    let (down, up) = tokio::join!(pump(a_read, b_write), pump(b_read, a_write));
+    meter.add_bytes(down.saturating_add(up));
+}
+
+/// 单方向拷贝：读完即对写端关闭，把 EOF 传播给对端。
+async fn pump<R, W>(reader: R, writer: W) -> u64
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    let mut reader = reader;
+    let mut writer = writer;
+    let count = tokio::io::copy(&mut reader, &mut writer).await;
+    let _ = writer.shutdown().await;
+    count.unwrap_or(0)
+}
+
+/// 探测转发目标端口的连通性：与建连无关的真实 TCP 拨号。
+///
+/// Local/Remote 有固定目标可测；Dynamic 的目标按每条连接给定，无法预探测，
+/// 按"不支持"拒绝。绑定地址为通配时与本机探测无碍（探测的是 target 而非
+/// bind）。结果供界面在规则卡片下一次性展示。
+///
+/// # Errors
+/// 目标不可达（含超时）返回 `ErrorCode::ForwardFailed`/`ErrorCode::Timeout`；
+/// Dynamic 类型返回 `ErrorCode::NotSupported`。
+pub async fn test_forward_target(rule: &ForwardRule) -> Result<(), AppError> {
+    let (host, port) = match &rule.kind {
+        ForwardKind::Local { target, .. } | ForwardKind::Remote { target, .. } => {
+            (target.host.as_str(), target.port)
+        }
+        _ => {
+            return Err(AppError::with_detail(
+                ErrorCode::NotSupported,
+                "动态转发的目标按每条连接决定，无法预探测连通性",
+            ));
+        }
+    };
+    if host.trim().is_empty() || port == 0 {
+        return Err(AppError::with_detail(
+            ErrorCode::ForwardFailed,
+            format!("转发目标地址无效，目标: {host}:{port}"),
+        ));
+    }
+    let connect = TcpStream::connect((host, port));
+    match tokio::time::timeout(FORWARD_PROBE_TIMEOUT, connect).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(error)) => Err(AppError::with_detail(
+            ErrorCode::ForwardFailed,
+            format!("连接目标失败，目标: {host}:{port}，原因: {error}"),
+        )),
+        Err(_) => Err(AppError::with_detail(
+            ErrorCode::Timeout,
+            format!(
+                "连接目标超时，目标: {host}:{port}，等待上限: {} 秒",
+                FORWARD_PROBE_TIMEOUT.as_secs()
+            ),
+        )),
+    }
 }
 
 /// 中止并等待全部在途连接退出。
@@ -239,6 +351,7 @@ mod tests {
         let join = tokio::spawn(serve_listener(
             listener,
             stop_rx,
+            ForwardMeter::default(),
             Arc::new(move |_tcp| {
                 let active = Arc::clone(&handler_active);
                 let peak = Arc::clone(&handler_peak);

@@ -215,6 +215,19 @@ async fn local_and_dynamic_forwarding_roundtrip() {
         .expect("local echo timed out")
         .unwrap();
     assert_eq!(&buffer, b"hello");
+    // 关闭本地连接让中继统计落地：EOF 传播后 pump 才把字节计入计量器。
+    drop(stream);
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let (bytes, connections) = local_task.meter.snapshot();
+            if bytes >= 10 && connections >= 1 {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("本地转发的流量计量应累计双向字节数");
     local_task.stop().await;
 
     let dynamic_rule = ForwardRule::new(

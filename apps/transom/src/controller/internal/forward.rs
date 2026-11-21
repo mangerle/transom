@@ -34,11 +34,13 @@ pub(super) async fn handle_forward_ready(
                 rule_id,
                 state: ForwardState::Stopped,
                 error: None,
+                meter: None,
             }
         }
         (false, Err(_)) => return,
         (true, Ok(task)) => {
             let bound_port = task.bound_port;
+            let meter = Some(task.meter.clone());
             if let Some(session) = state.sessions.get_mut(&tab_id) {
                 session.forwards.insert(rule_id, task);
             }
@@ -46,12 +48,14 @@ pub(super) async fn handle_forward_ready(
                 rule_id,
                 state: ForwardState::Active { bound_port },
                 error: None,
+                meter,
             }
         }
         (true, Err(error)) => ForwardStatus {
             rule_id,
             state: ForwardState::Failed,
             error: Some(error),
+            meter: None,
         },
     };
     let _ = ctx

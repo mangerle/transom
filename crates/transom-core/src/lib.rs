@@ -57,8 +57,9 @@ pub use model::container::{
 };
 pub use model::file_diff::{DEFAULT_CONTEXT_LINES, DiffHunk, FileDiff, MergeDirection};
 pub use model::forward::{
-    BindAddress, ForwardKind, ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions,
-    TargetAddress,
+    BindAddress, FORWARD_PRESETS, ForwardKind, ForwardMeter, ForwardPreset, ForwardPresetKind,
+    ForwardRule, ForwardState, ForwardStatus, SocksAuth, SocksOptions, TargetAddress,
+    format_traffic,
 };
 pub use model::git::*;
 pub use model::git::{GitPushOptions, PushTagsMode, ShelfEntry};

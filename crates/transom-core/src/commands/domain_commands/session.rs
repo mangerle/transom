@@ -61,6 +61,14 @@ pub enum ForwardCommand {
         connection_id: ConnectionId,
         rule_id: ForwardId,
     },
+    /// 探测转发规则的目标端口连通性：与建连无关的真实 TCP 拨号，
+    /// 结果经 `ForwardAppEvent::ForwardProbeResult` 回流。
+    ForwardProbe {
+        tab_id: TabId,
+        connection_id: ConnectionId,
+        rule_id: ForwardId,
+        rule: ForwardRule,
+    },
 }
 
 /// 主机监控与运维命令。

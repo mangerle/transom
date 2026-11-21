@@ -1,6 +1,7 @@
 //! russh 客户端回调事件处理器与底层传输抽象。
 
 use crate::auth::AuthPrompter;
+use crate::client::session::RemoteForwardTarget;
 use crate::error::NetError;
 use parking_lot::Mutex;
 use russh::Channel;
@@ -122,7 +123,7 @@ pub(crate) struct ClientHandler {
     pub(crate) host: String,
     pub(crate) port: u16,
     pub(crate) known_hosts: Arc<dyn KnownHostsStore>,
-    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, (String, u16)>>>,
+    pub(crate) remote_forwards: Arc<Mutex<HashMap<u16, RemoteForwardTarget>>>,
     /// 远端转发在途异步任务追踪器，消除脱缰孤儿任务。
     pub(crate) forward_tasks: RemoteForwardTasks,
     /// 远端转发通道准入：服务端开通道前先取许可，超限直接拒绝。
@@ -203,7 +204,7 @@ impl client::Handler for ClientHandler {
     ) -> Result<(), Self::Error> {
         let listen_port = connected_port as u16;
         let target = self.remote_forwards.lock().get(&listen_port).cloned();
-        let Some((host, port)) = target else {
+        let Some(RemoteForwardTarget { host, port, meter }) = target else {
             log::warn!("收到未登记端口的远端转发请求，已拒绝，远端端口: {listen_port}");
             reply
                 .reject(ChannelOpenFailure::AdministrativelyProhibited)
@@ -227,11 +228,14 @@ impl client::Handler for ClientHandler {
             // 转发不设限——长空闲本身就是隧道的正常形态。
             let connect = TcpStream::connect((host.as_str(), port));
             match tokio::time::timeout(FORWARD_CONNECT_TIMEOUT, connect).await {
-                Ok(Ok(mut tcp)) => {
+                Ok(Ok(tcp)) => {
                     log::debug!(
                         "远端转发通道已连接到本地目标，远端监听端口: {listen_port}，本地目标: {host}:{port}"
                     );
-                    let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+                    // 计入本条转发隧道的实时流量：双向字节与连接数随任务累计。
+                    tcp.set_nodelay(true).ok();
+                    meter.add_connection();
+                    crate::forward::relay_counted(tcp, stream, &meter).await;
                 }
                 Ok(Err(error)) => {
                     log::warn!(

@@ -6,7 +6,7 @@ use transom_core::{
     AppError, ConnectionId, ErrorCode, ForwardAppEvent, ForwardCommand, ForwardId, ForwardRule,
     ForwardState, ForwardStatus, TabId,
 };
-use transom_net::start_forward;
+use transom_net::{start_forward, test_forward_target};
 
 pub(super) async fn handle_forward_command(
     state: &mut ControllerState,
@@ -27,6 +27,14 @@ pub(super) async fn handle_forward_command(
             rule_id,
         } => {
             handle_forward_stop(state, ctx, tab_id, connection_id, rule_id).await;
+        }
+        ForwardCommand::ForwardProbe {
+            tab_id,
+            connection_id,
+            rule_id,
+            rule,
+        } => {
+            handle_forward_probe(state, ctx, tab_id, connection_id, rule_id, rule).await;
         }
     }
 }
@@ -54,6 +62,7 @@ async fn handle_forward_start(
                             ErrorCode::ForwardFailed,
                             "SSH connection is not ready",
                         )),
+                        meter: None,
                     },
                 }
                 .into(),
@@ -105,9 +114,40 @@ async fn handle_forward_stop(
                     rule_id,
                     state: ForwardState::Stopped,
                     error: None,
+                    meter: None,
                 },
             }
             .into(),
         )
         .await;
+}
+
+/// 目标端口连通性探测：与建连无关的真实 TCP 拨号，结果一次性回流。
+///
+/// 探测不需要 SSH 通道（目标就是本机可达性验证），但结果事件仍携带
+/// 标签与连接归属，界面据此把结果落到对应规则卡片下。
+async fn handle_forward_probe(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    tab_id: TabId,
+    connection_id: ConnectionId,
+    rule_id: ForwardId,
+    rule: ForwardRule,
+) {
+    let event_tx = ctx.event_tx.clone();
+    // 探测是短生命周期任务，纳入统一收尾集合；不等待完成，结果经事件回流。
+    state.cleanup_set.spawn(async move {
+        let result = test_forward_target(&rule).await;
+        let _ = event_tx
+            .send_async(
+                ForwardAppEvent::ForwardProbeResult {
+                    tab_id,
+                    connection_id,
+                    rule_id,
+                    result,
+                }
+                .into(),
+            )
+            .await;
+    });
 }
