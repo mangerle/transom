@@ -48,12 +48,14 @@ pub enum HostOutcome {
 impl HostAction {
     /// 从会话派生拨测动作；本地 Shell 与串口没有网络地址，返回 `None`。
     ///
-    /// SSH 派生为 [`ProbeKind::Ssh`]（校验服务端 Banner），Telnet 派生为
-    /// [`ProbeKind::Tcp`]（仅做三次握手）。
+    /// SSH 派生为 [`ProbeKind::Ssh`]（校验服务端 Banner），Telnet 与 FTP 派生为
+    /// [`ProbeKind::Tcp`]（仅做三次握手）：FTP 的握手成功不代表登录可用，
+    /// 协议级校验交给连接后的实际操作。
     pub fn probe_for(session: &Session) -> Option<Self> {
         let (host, port, kind) = match &session.connection {
             Connection::Ssh(ssh) => (ssh.host.clone(), ssh.port, ProbeKind::Ssh),
             Connection::Telnet(telnet) => (telnet.host.clone(), telnet.port, ProbeKind::Tcp),
+            Connection::Ftp(ftp) => (ftp.host.clone(), ftp.port, ProbeKind::Tcp),
             _ => return None,
         };
         if host.trim().is_empty() {

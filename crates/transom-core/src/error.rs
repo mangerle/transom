@@ -26,6 +26,17 @@ pub enum ErrorCode {
     ChannelFailed,
     /// SFTP 文件协议操作失败。
     SftpFailed,
+    /// FTP/FTPS 文件协议操作失败（登录成功后的控制或传输错误）。
+    ///
+    /// 与 [`Self::SftpFailed`] 分开成码：SFTP 走 SSH 通道，FTP 走独立控制连接，
+    /// 两者的排查路径（服务端日志、防火墙、被动端口范围）完全不同，混用会
+    /// 让用户按 SFTP 文档排查 FTP 故障。
+    FtpFailed,
+    /// 当前连接类型或后端不支持该操作（如 FTP 无软链接与远端归档能力）。
+    ///
+    /// 单独成码而不是复用 [`Self::Configuration`]：配置错误在派发前就能拒绝，
+    /// 而这里是连接已建立后按能力边界拒绝，用户提示应当指向"该协议做不到"。
+    NotSupported,
     /// 远端拒绝授权本次操作（`SSH_FX_PERMISSION_DENIED`）。
     ///
     /// 单独成码而不是混在 [`Self::SftpFailed`] 里靠文案判断：权限拒绝有一条独立的

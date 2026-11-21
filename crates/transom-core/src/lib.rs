@@ -74,10 +74,10 @@ pub use model::layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, Stat
 pub use model::mac::{MacAddress, MacParseError, normalize_mac};
 pub use model::serial::{SerialPortDescriptor, SerialPortProvider};
 pub use model::session::{
-    AuthMethod, BlockViewOverride, Connection, LocalConnection, MoshConnection, ProxyJumpConfig,
-    SerialConnection, SerialDataBits, SerialFlowControl, SerialParity, SerialStopBits, Session,
-    SessionOptions, SshConnection, SshHop, StartupCommands, TelnetConnection, TelnetOptions,
-    TextEncoding,
+    AuthMethod, BlockViewOverride, Connection, FtpConnection, FtpSecurity, LocalConnection,
+    MoshConnection, ProxyJumpConfig, SerialConnection, SerialDataBits, SerialFlowControl,
+    SerialParity, SerialStopBits, Session, SessionOptions, SshConnection, SshHop, StartupCommands,
+    TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use model::session_appearance::{SessionColor, SessionIcon};
 pub use model::settings::{

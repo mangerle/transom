@@ -72,6 +72,8 @@ pub enum Connection {
     Serial(SerialConnection),
     Telnet(TelnetConnection),
     Mosh(MoshConnection),
+    /// FTP/FTPS 文件传输会话：不产生终端，连接成功后直接打开文件面板。
+    Ftp(FtpConnection),
     /// 容器引擎管理工作区：打开的是三栏管理页，不建立终端连接。
     ContainerEngine(ContainerEngineProfile),
 }
@@ -269,6 +271,52 @@ impl Default for TelnetOptions {
             connect_timeout_secs: 15,
             keepalive_secs: 0,
             auto_reconnect: false,
+        }
+    }
+}
+
+/// FTP 会话的传输安全模式。
+///
+/// 只提供明文与显式 TLS（`AUTH TLS`）两档：显式 TLS 在标准 21 端口上协商升级，
+/// 是 FTPS 的事实主流部署形态；隐式 TLS（990 端口直连加密）属于历史遗留，
+/// 当前不表示，避免出现"连了但握手语义不明"的中间态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FtpSecurity {
+    #[default]
+    Plain,
+    /// 连接后先发 `AUTH TLS` 升级为加密通道，再进行认证。
+    ExplicitTls,
+}
+
+/// FTP 连接参数；密码不入模型，与 SSH 密码同机制存放在系统钥匙串。
+///
+/// 端口默认 21，被动模式默认开启（客户端侧网络环境多样，主动模式只在
+/// 服务端明确要求时手动切换）；全部字段可缺省，老会话文件按默认值降级。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FtpConnection {
+    pub host: String,
+    pub port: u16,
+    /// 登录用户名；匿名访问由用户显式填写 `anonymous`，不做隐式推断。
+    pub username: String,
+    #[serde(default)]
+    pub security: FtpSecurity,
+    #[serde(default = "default_ftp_passive")]
+    pub passive: bool,
+}
+
+fn default_ftp_passive() -> bool {
+    true
+}
+
+impl FtpConnection {
+    pub fn new(host: impl Into<String>, username: impl Into<String>) -> Self {
+        Self {
+            host: host.into(),
+            port: 21,
+            username: username.into(),
+            security: FtpSecurity::default(),
+            passive: default_ftp_passive(),
         }
     }
 }

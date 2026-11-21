@@ -242,3 +242,47 @@ fn missing_startup_field_defaults_to_empty() {
     let decoded: Session = serde_json::from_value(value).unwrap();
     assert!(decoded.startup.is_empty());
 }
+
+#[test]
+fn ftp_connection_round_trips_with_defaults() {
+    let session = Session::new(
+        "ftp-server",
+        Connection::Ftp(FtpConnection::new("files.example.com", "deploy")),
+    );
+    let json = serde_json::to_string(&session).unwrap();
+    let decoded: Session = serde_json::from_str(&json).unwrap();
+    let Connection::Ftp(ftp) = decoded.connection else {
+        panic!("应解析为 FTP 连接");
+    };
+    assert_eq!(ftp.host, "files.example.com");
+    assert_eq!(ftp.port, 21);
+    assert_eq!(ftp.username, "deploy");
+    assert_eq!(ftp.security, FtpSecurity::Plain);
+    assert!(ftp.passive, "被动模式必须是默认值");
+}
+
+/// security/passive 字段是可缺省的：老会话文件与手写配置缺字段时按默认降级。
+#[test]
+fn ftp_defaults_fill_missing_optional_fields() {
+    let value = serde_json::json!({
+        "kind": "ftp",
+        "host": "10.0.0.8",
+        "port": 2121,
+        "username": "anonymous"
+    });
+    let ftp: FtpConnection = serde_json::from_value(value).unwrap();
+    assert_eq!(ftp.host, "10.0.0.8");
+    assert_eq!(ftp.port, 2121);
+    assert_eq!(ftp.security, FtpSecurity::Plain);
+    assert!(ftp.passive);
+
+    let tls: FtpConnection = serde_json::from_value(serde_json::json!({
+        "kind": "ftp",
+        "host": "10.0.0.8",
+        "port": 21,
+        "username": "deploy",
+        "security": "explicit_tls"
+    }))
+    .unwrap();
+    assert_eq!(tls.security, FtpSecurity::ExplicitTls);
+}
