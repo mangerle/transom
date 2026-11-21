@@ -2,6 +2,7 @@
 
 mod backup_prompt;
 mod bootstrap;
+mod completion_source;
 mod container_requests;
 pub(crate) mod event_handlers;
 mod event_terminal_ready;
@@ -30,6 +31,7 @@ mod types;
 pub(crate) mod update;
 mod window_requests;
 
+pub(crate) use completion_source::CompletionSource;
 pub(crate) use modal_hub::{GitModals, ModalHub, ToolModalEntities};
 pub(crate) use persistence::Persistence;
 pub(crate) use runtime::spawn_blocking_local;

@@ -35,6 +35,8 @@ impl SettingsView {
                             let loaded = this.services.history_store.load();
                             *this.services.history.write() = loaded;
                         }
+                        // 补全候选与同一开关联动：关掉后终端浮层立即停止弹出。
+                        this.services.completion.apply_settings(app_settings(cx));
                         cx.notify();
                     }))
                     .into_any_element(),

@@ -7,7 +7,8 @@ use std::sync::atomic::AtomicBool;
 /// 构造期一次性准备的服务与设置快照。
 pub(super) struct BootstrapPrepared {
     pub(super) history: Arc<parking_lot::RwLock<Vec<String>>>,
-    pub(super) history_provider: transom_terminal::HistoryProvider,
+    pub(super) completion: Arc<CompletionSource>,
+    pub(super) completion_provider: transom_terminal::CompletionProvider,
     pub(super) shortcut_filter: Arc<parking_lot::RwLock<Vec<gpui_kit::KeybindingKeystroke>>>,
     pub(super) applied_shortcut_keys: Vec<(String, &'static str)>,
     pub(super) catalog: SessionCatalog,
@@ -81,7 +82,8 @@ pub(super) fn assemble_state(
             tasks: TaskHub::new(appearance_subscription, event_task),
             automation: super::super::state::AutomationState::default(),
             history: prepared.history,
-            history_provider: prepared.history_provider,
+            completion: prepared.completion,
+            completion_provider: prepared.completion_provider,
             persistence,
             restart_requested,
         },
@@ -196,15 +198,12 @@ pub(super) fn prepare_bootstrap(
         } else {
             Vec::new()
         }));
-    let history_provider: transom_terminal::HistoryProvider = {
-        let snapshot = Arc::clone(&history);
-        Arc::new(move |prefix: &str| {
-            transom_core::command_suggestions(
-                &snapshot.read(),
-                prefix,
-                transom_core::SUGGESTION_LIMIT,
-            )
-        })
+    // 补全候选来源：历史快照与设置页共用同一容器，片段与开关的初始值在这里灌入。
+    let completion = Arc::new(CompletionSource::new(Arc::clone(&history)));
+    completion.apply_settings(settings);
+    let completion_provider: transom_terminal::CompletionProvider = {
+        let source = Arc::clone(&completion);
+        Arc::new(move |token: &str, before: &str| source.complete(token, before))
     };
     let (catalog, catalog_error) = match services.session_store.load() {
         Ok(catalog) => (catalog, None),
@@ -228,7 +227,8 @@ pub(super) fn prepare_bootstrap(
     );
     BootstrapPrepared {
         history,
-        history_provider,
+        completion,
+        completion_provider,
         shortcut_filter,
         applied_shortcut_keys,
         catalog,

@@ -43,7 +43,7 @@ impl TerminalView {
             if self.write_input(&bytes) {
                 self.state.engine.lock().scroll_to_bottom();
                 self.input_line.clear();
-                self.clear_suggestions();
+                self.close_completions();
                 cx.notify();
             }
             return;
@@ -77,17 +77,46 @@ impl TerminalView {
             return;
         }
 
-        // Tab is consumed by the terminal context action to avoid focus traversal.
-        // 建议浮层打开时先用来补全：这是用户此刻最想要 Tab 干的事。
-        // 带修饰键的 Tab（Ctrl+Tab / Ctrl+Shift+Tab）必须继续走向编码器：
-        // 在 Kitty 协议下它们是与 Tab 完全不同的按键，吞掉就违背了协商语义。
-        if key == "tab"
-            && !modifiers.control
+        // 补全浮层打开时优先消费导航与采纳键：↑↓ 移动、Enter 采纳、Esc 收起。
+        // 其余按键原样继续，浮层随输入行刷新自动更新；带修饰键的组合不做浮层
+        // 语义，仍按原编码进终端（Ctrl-R 搜索、Shift-Enter 换行等不受影响）。
+        let plain = !modifiers.control
             && !modifiers.alt
             && !modifiers.platform
             && !modifiers.shift
-        {
-            self.accept_suggestion(cx);
+            && !modifiers.function;
+        if !self.completions.is_empty() && plain {
+            match key.as_str() {
+                "up" | "down" => {
+                    self.move_completion(key == "down", cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                "enter" => {
+                    self.accept_completion(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                "escape" => {
+                    self.close_completions();
+                    cx.stop_propagation();
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Tab is consumed by the terminal context action to avoid focus traversal.
+        // 建议浮层打开时先用来补全：这是用户此刻最想要 Tab 干的事；采纳成功必须
+        // 拦下 SendTab，否则补全完还会再发一个真 Tab 触发 shell 的路径补全。
+        // 浮层未开时直接放行，让 SendTab 动作按当前模式发送（避免与编码器重复）。
+        // 带修饰键的 Tab（Ctrl+Tab / Ctrl+Shift+Tab）必须继续走向编码器：
+        // 在 Kitty 协议下它们是与 Tab 完全不同的按键，吞掉就违背了协商语义。
+        if key == "tab" && plain {
+            if !self.completions.is_empty() {
+                self.accept_completion(cx);
+                cx.stop_propagation();
+            }
             return;
         }
 
@@ -135,7 +164,7 @@ impl TerminalView {
                 match key.as_str() {
                     "enter" => {
                         self.input_line.clear();
-                        self.clear_suggestions();
+                        self.close_completions();
                     }
                     "backspace" => {
                         self.input_line.pop();
@@ -143,7 +172,7 @@ impl TerminalView {
                     }
                     _ => {
                         self.input_line.clear();
-                        self.clear_suggestions();
+                        self.close_completions();
                     }
                 }
             }

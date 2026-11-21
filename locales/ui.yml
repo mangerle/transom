@@ -5491,6 +5491,19 @@ terminal:
     toggle_block_view:
       en: Toggle Block View / Classic Flow
       zh-CN: 切换语义块视图 / 经典连续流
+  completion:
+    badge_history:
+      en: History
+      zh-CN: 历史
+    badge_snippet:
+      en: Snippet
+      zh-CN: 片段
+    badge_option:
+      en: Option
+      zh-CN: 选项
+    badge_command:
+      en: Built-in
+      zh-CN: 内置
   block:
     banner:
       en: Collapsed %{rows} rows · %{status}%{duration}

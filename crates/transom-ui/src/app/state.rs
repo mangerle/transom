@@ -99,7 +99,9 @@ pub(crate) struct RuntimeState {
     pub(crate) tasks: TaskHub,
     pub(crate) automation: AutomationState,
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
-    pub(crate) history_provider: transom_terminal::HistoryProvider,
+    /// 补全候选来源：汇集历史与片段，缓存候选池；设置变更后需显式同步。
+    pub(crate) completion: Arc<super::CompletionSource>,
+    pub(crate) completion_provider: transom_terminal::CompletionProvider,
     pub(crate) persistence: Persistence,
     pub(crate) restart_requested: Arc<AtomicBool>,
 }

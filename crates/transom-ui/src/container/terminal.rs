@@ -108,8 +108,8 @@ pub(super) fn create_container_terminal(
             },
         )
     });
-    let provider = app_state.runtime.history_provider.clone();
-    terminal.update(cx, |view, _cx| view.attach_history(provider));
+    let provider = app_state.runtime.completion_provider.clone();
+    terminal.update(cx, |view, _cx| view.attach_completion(provider));
     let focus_handle = terminal.read(cx).focus_handle().clone();
     window.focus(&focus_handle, cx);
     let subscription = cx.subscribe_in(

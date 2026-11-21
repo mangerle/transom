@@ -29,7 +29,7 @@ mod view;
 mod view_ime;
 
 pub use engine::TerminalEngine;
-pub use event::{HistoryProvider, TerminalEvent, TerminalEventProxy};
+pub use event::{CompletionProvider, TerminalEvent, TerminalEventProxy};
 pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan};
 pub use input::{
     KeyEventKind, MouseButtonCode, encode_mouse, focus_bytes, keystroke_event_to_bytes,

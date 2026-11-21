@@ -57,7 +57,7 @@ impl Render for TerminalView {
             })
             .child(layer)
             .children(block_actions)
-            .children(self.render_suggestion_bar(cx))
+            .children(self.render_completion_popup(cx))
             .children(search_bar)
     }
 }

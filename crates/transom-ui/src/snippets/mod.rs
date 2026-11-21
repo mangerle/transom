@@ -196,6 +196,11 @@ pub(crate) fn save_snippet_form(app_state: &mut AppState, cx: &mut Context<AppSh
         cx.notify();
         return;
     }
+    // 片段镜像同步进补全候选来源：终端里敲命令时浮层立即反映新片段。
+    app_state
+        .runtime
+        .completion
+        .apply_settings(app_settings(cx));
     app_state.ui.modals.tools.snippet_panel.form = None;
     app_state.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
     cx.notify();
@@ -210,6 +215,11 @@ pub(super) fn delete_snippet(app_state: &mut AppState, id: SnippetId, cx: &mut C
         .retain(|item| item.id != id);
     if app_settings(cx).snippets.items.len() != before {
         app_state.persist_layout_settings(cx);
+        // 片段镜像同步进补全候选来源：被删的片段从终端浮层里立即消失。
+        app_state
+            .runtime
+            .completion
+            .apply_settings(app_settings(cx));
     }
 }
 

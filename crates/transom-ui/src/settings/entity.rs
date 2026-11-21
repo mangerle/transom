@@ -36,6 +36,8 @@ pub(crate) struct SettingsServices {
     pub(crate) history: Arc<parking_lot::RwLock<Vec<String>>>,
     /// 历史落盘存储：重新开启历史时从文件恢复。
     pub(crate) history_store: Arc<dyn transom_core::HistoryStore>,
+    /// 补全候选来源：历史开关变化后同步开关与片段镜像，终端浮层立即生效。
+    pub(crate) completion: Arc<crate::app::CompletionSource>,
     /// 启动时发现的本机 Shell 目录，供“默认本地 Shell”下拉与自定义路径判断使用。
     pub(crate) local_shells: Arc<Vec<ShellOption>>,
 }

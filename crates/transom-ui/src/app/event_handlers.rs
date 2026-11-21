@@ -330,7 +330,7 @@ impl AppShell {
                 },
             )
         });
-        let provider = self.state.runtime.history_provider.clone();
+        let provider = self.state.runtime.completion_provider.clone();
         let triggers = app_settings(cx).triggers.clone();
         let block_override = self
             .state
@@ -344,7 +344,7 @@ impl AppShell {
             });
         let block_view = app_settings(cx).block_view.resolved(block_override);
         terminal.update(cx, |view, cx| {
-            view.attach_history(provider);
+            view.attach_completion(provider);
             view.reload_triggers(&triggers);
             view.set_block_view(Some(block_view), cx);
         });

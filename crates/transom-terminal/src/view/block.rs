@@ -102,7 +102,7 @@ impl TerminalView {
         if self.write_input(&bytes) {
             self.state.engine.lock().scroll_to_bottom();
             self.input_line.clear();
-            self.clear_suggestions();
+            self.close_completions();
             cx.notify();
         }
     }

@@ -110,7 +110,10 @@ impl TerminalEngine {
     ///
     /// 折行的长命令按 `WRAPLINE` 标记继续拼接；宽字符的占位格跳过，
     /// 否则中文命令行会在每个汉字后多出一个空格。
-    fn grid_command_text(&self) -> Option<String> {
+    ///
+    /// 除命令采集外，补全浮层的采纳校验也用它核对网格内容：
+    /// 网格与本地按键跟踪一致（或只差回显尾部）时，替换词才是安全的。
+    pub(crate) fn grid_command_text(&self) -> Option<String> {
         let start = self.command_input_point?;
         let grid = self.term.grid();
         let cursor = grid.cursor.point;

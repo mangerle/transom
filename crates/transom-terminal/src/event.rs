@@ -1,12 +1,17 @@
 use crate::osc::ProgressState;
 use alacritty_terminal::event::{Event, EventListener};
 use flume::Sender;
+use transom_core::CompletionItem;
 
-/// 命令历史候选的查询回调：按输入前缀返回若干条历史命令。
+/// 终端输入补全的候选查询回调：按正在输入的词与其前文返回排好序的候选。
 ///
-/// 用回调而不是把存储塞进视图：终端 crate 不该知道历史存在哪个文件、留多少条，
-/// 那些都是应用侧的策略。回调在 UI 线程同步调用，实现方必须走内存快照。
-pub type HistoryProvider = std::sync::Arc<dyn Fn(&str) -> Vec<String> + Send + Sync>;
+/// 词位判定（命令位 / 参数位）、打分与合并都在 `transom-core` 的 completion
+/// 模块，应用侧只负责汇集候选来源（命令历史、用户片段）与缓存候选池。
+/// 用回调而不是把存储塞进视图：终端 crate 不该知道候选存在哪个文件、留多少条，
+/// 那些都是应用侧的策略。回调在 UI 线程同步调用，实现方必须走内存快照，
+/// 不得触碰磁盘或阻塞。
+pub type CompletionProvider =
+    std::sync::Arc<dyn Fn(&str, &str) -> Vec<CompletionItem> + Send + Sync>;
 
 /// Events surfaced to the application view.
 #[derive(Debug, Clone)]
@@ -39,7 +44,7 @@ pub enum TerminalEvent {
         exit_code: Option<i32>,
         duration_ms: u64,
     },
-    /// 采集到一条用户执行过的命令文本，供历史与建议使用。
+    /// 采集到一条用户执行过的命令文本，供命令历史与输入补全使用。
     ///
     /// 只在能确定命令内容时才发：shell 集成上报的参数或提示符到光标之间的网格
     /// 文本，二者都取不到就不发——猜出来的历史比没有历史更糟。

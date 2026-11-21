@@ -18,7 +18,7 @@ mod tests;
 mod types;
 
 use crate::engine::TerminalEngine;
-use crate::event::{HistoryProvider, TerminalEvent};
+use crate::event::{CompletionProvider, TerminalEvent};
 use crate::input::focus_bytes;
 use crate::osc::{CommandTracker, TitleGate};
 use crate::record::RecorderHandle;
@@ -38,8 +38,8 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use transom_core::{
-    BlockViewSettings, SessionCleanup, TerminalControlHandle, TerminalInteraction, TerminalIo,
-    TerminalProfile, TerminalSize,
+    BlockViewSettings, CompletionItem, SessionCleanup, TerminalControlHandle, TerminalInteraction,
+    TerminalIo, TerminalProfile, TerminalSize,
 };
 /// `CONTEXT` 对外以 `TERMINAL_CONTEXT` 暴露：应用侧的可改键表需要按同一上下文
 /// 注册终端专属动作，裸名 `CONTEXT` 在 crate 之外无法辨认它指的是哪个域。
@@ -101,13 +101,13 @@ pub struct TerminalView {
     /// 用户是否已亲自按键过。一旦按键，本轮不再注入：写进去的字节会拼到用户
     /// 半截的命令行上，把那条命令毁掉。状态机宁可不装也不毁命令。
     user_typed: bool,
-    /// 命令历史候选查询；未挂接时建议功能整体不生效。
-    pub(crate) history_provider: Option<HistoryProvider>,
-    /// 本地跟踪的当前输入行，只用于取建议前缀。
+    /// 补全候选查询；未挂接时补全功能整体不生效。
+    pub(crate) completion_provider: Option<CompletionProvider>,
+    /// 本地跟踪的当前输入行，只用于取补全的词与前文。
     pub(crate) input_line: String,
-    /// 当前候选列表与选中位置（Tab 逐个采纳，不抢上下键）。
-    pub(crate) suggestions: Vec<String>,
-    pub(crate) suggestion_index: usize,
+    /// 当前候选列表与选中位置（↑↓ 选择，Tab / Enter 采纳）。
+    pub(crate) completions: Vec<CompletionItem>,
+    pub(crate) completion_index: usize,
     /// 是否把查询词当正则表达式解析（与引擎里的快照同步）。
     pub(crate) search_regex_mode: bool,
     /// 检索输入框的事件订阅；随实体存活，收起搜索栏也不释放（下次复用同一输入框）。
@@ -268,10 +268,10 @@ impl TerminalView {
             copy_anchor: None,
             shell_integration,
             user_typed: false,
-            history_provider: None,
+            completion_provider: None,
             input_line: String::new(),
-            suggestions: Vec::new(),
-            suggestion_index: 0,
+            completions: Vec::new(),
+            completion_index: 0,
             search_open: false,
             search_input: None,
             search_regex_mode: false,

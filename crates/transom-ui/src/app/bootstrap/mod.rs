@@ -50,6 +50,7 @@ impl AppShell {
                     persistence: persistence.clone(),
                     history: prepared.history.clone(),
                     history_store: services.history.clone(),
+                    completion: prepared.completion.clone(),
                     local_shells: local_shells.clone(),
                 },
                 prepared.catalog.clone(),
