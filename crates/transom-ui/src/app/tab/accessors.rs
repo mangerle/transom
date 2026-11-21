@@ -1,6 +1,6 @@
 //! 标签类型的安全访问器。
 
-use super::{SessionPaneState, SessionTab, TabContent, WorkspaceTab};
+use super::{SessionPaneState, SessionTab, TabContent, TabProgress, WorkspaceTab};
 use crate::app::SessionMenuData;
 use gpui_kit::Entity;
 use transom_core::{Connection, ConnectionId, Session, SessionId};
@@ -55,6 +55,17 @@ impl WorkspaceTab {
     pub(crate) fn set_cwd(&mut self, cwd: Option<String>) {
         if let Some(session) = self.session_tab_mut() {
             session.cwd = cwd;
+        }
+    }
+
+    /// 返回当前任务进度快照；`None` 表示标签没有活动进度。
+    pub(crate) fn progress(&self) -> Option<TabProgress> {
+        self.session_tab().and_then(|session| session.progress)
+    }
+
+    pub(crate) fn set_progress(&mut self, progress: Option<TabProgress>) {
+        if let Some(session) = self.session_tab_mut() {
+            session.progress = progress;
         }
     }
 

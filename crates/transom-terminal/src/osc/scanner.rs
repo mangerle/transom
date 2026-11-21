@@ -1,6 +1,6 @@
 //! PTY 字节流旁路 OSC 增量扫描器。
 
-use super::types::{MAX_PAYLOAD_BYTES, OSC_INTRO, OscEvent};
+use super::types::{MAX_PAYLOAD_BYTES, OSC_INTRO, OscEvent, ProgressState};
 use crate::sequence_scanner::SequenceScanner;
 use crate::shell_integration::HANDSHAKE_TOKEN;
 use base64::Engine;
@@ -191,14 +191,19 @@ fn parse_clipboard(params: &str) -> Option<OscEvent> {
     Some(OscEvent::ClipboardStore { text })
 }
 
-/// OSC 9：iTerm2 约定的桌面通知 `9;<正文>`。
+/// OSC 9：iTerm2 约定的桌面通知 `9;<正文>`，以及 ConEmu 的进度子码 `9;4;...`。
 ///
-/// 该码被多个协议复用：`9;4;...` 是进度（ConEmu/Windows Terminal），
-/// `9;9;<path>` 是 ConEmu 的 cwd 上报。两者都不属于通知：进度暂未实现，
-/// cwd 由 OSC 7 统一承载，这里显式忽略，避免被当成正文弹出。
+/// 该码被多个协议复用：`9;4;<state>;<progress>` 是进度（ConEmu/Windows
+/// Terminal），`9;9;<path>` 是 ConEmu 的 cwd 上报。cwd 不属于通知，由 OSC 7
+/// 统一承载，这里显式忽略；进度解析为独立事件供标签栏展示。
 fn parse_osc9(params: &str) -> Option<OscEvent> {
-    if params.starts_with("4;") || params.starts_with("9;") {
+    if params.starts_with("9;") {
         return None;
+    }
+    // 进度子码必须带分号进入参数段：残缺的 `9;4` 不当作通知正文弹出。
+    if let Some(rest) = params.strip_prefix("4") {
+        let rest = rest.strip_prefix(';')?;
+        return parse_progress(rest);
     }
     if params.trim().is_empty() {
         return None;
@@ -207,6 +212,24 @@ fn parse_osc9(params: &str) -> Option<OscEvent> {
         title: String::new(),
         body: params.to_string(),
     })
+}
+
+/// 解析 OSC 9;4 进度载荷 `<state>;<progress>`。
+///
+/// 设计原理（Why）：state 与 progress 都来自远端不可信输出，越界取值宁可整条
+/// 丢弃也不截断猜测——进度展示是纯 UI 增强，丢一条序列不会有任何状态残留，
+/// 把越界值塞进标签却可能渲染出没有语义的百分比。
+///
+/// 代价与局限：规范要求双参数齐备（Windows Terminal 与 ConEmu 均如此），
+/// 缺进度参数的残缺序列会被丢弃，不做"按 0 处理"的宽容回退。
+fn parse_progress(rest: &str) -> Option<OscEvent> {
+    let (state_text, progress_text) = rest.split_once(';')?;
+    let state = ProgressState::from_subcode(state_text.parse::<u8>().ok()?)?;
+    let progress = progress_text.parse::<u8>().ok()?;
+    if progress > 100 {
+        return None;
+    }
+    Some(OscEvent::Progress { state, progress })
 }
 
 /// OSC 777：`notify;标题;正文` 或 `notify;title=..;body=..;icon=..`。

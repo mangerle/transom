@@ -1,4 +1,5 @@
 use super::*;
+use crate::osc::ProgressState;
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::SelectionType;
 use std::time::Duration;
@@ -163,6 +164,39 @@ fn kitty_image_is_stored_and_placed_at_cursor() {
     // 删除全部图像后放置必须消失。
     engine.process(b"\x1b_Ga=d,d=a;\x1b\\");
     assert!(engine.graphics_placements().is_empty());
+}
+
+/// OSC 9;4 进度事件进引擎事件队列且不污染网格：进度由视图转发展示，
+/// 不得影响块边界与屏幕内容。
+#[test]
+fn osc9_progress_reaches_event_queue_without_touching_grid() {
+    let (mut engine, _events) = engine(20, 4);
+    engine.process(b"\x1b]9;4;1;50\x1b\\");
+    assert!(
+        engine.osc_events.contains(&OscEvent::Progress {
+            state: ProgressState::Set,
+            progress: 50
+        }),
+        "进度事件应入队供视图转发"
+    );
+    // 进度序列必须原样透传给内核解析器（不消费输入），网格上只留下空行。
+    assert!(
+        engine
+            .term
+            .grid()
+            .display_iter()
+            .all(|cell| cell.c == ' ' || cell.c == '\0'),
+        "进度序列不应在网格上留下任何文本"
+    );
+    // 清除进度同样入队。
+    engine.process(b"\x1b]9;4;0;0\x1b\\");
+    assert!(
+        engine.osc_events.contains(&OscEvent::Progress {
+            state: ProgressState::Remove,
+            progress: 0
+        }),
+        "清除事件也应入队"
+    );
 }
 
 fn captured(engine: &TerminalEngine) -> Vec<String> {

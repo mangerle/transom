@@ -223,6 +223,9 @@ impl TerminalView {
                 OscEvent::Notify { title, body } => {
                     cx.emit(TerminalEvent::DesktopNotification { title, body });
                 }
+                OscEvent::Progress { state, progress } => {
+                    cx.emit(TerminalEvent::Progress { state, progress });
+                }
                 OscEvent::ClipboardStore { text } => {
                     self.on_remote_clipboard_store(&text, cx);
                 }

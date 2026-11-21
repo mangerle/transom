@@ -27,4 +27,4 @@ pub(crate) use group::{TabGroup, TabGroupOwner};
 pub(crate) use model::{SessionMenuData, TabCloseAction, TabContent, TabStatus, WorkspaceTab};
 pub(crate) use monitor::MonitorTab;
 pub(crate) use player::PlayerTab;
-pub(crate) use session::{SessionPaneState, SessionTab};
+pub(crate) use session::{SessionPaneState, SessionTab, TabProgress};

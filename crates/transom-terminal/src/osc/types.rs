@@ -11,6 +11,35 @@ pub(crate) const MAX_PAYLOAD_BYTES: usize = 128 * 1024;
 
 pub(crate) const OSC_INTRO: u8 = 0x5d;
 
+/// OSC 9;4 进度上报的状态子码（ConEmu/Windows Terminal 约定）。
+///
+/// 用枚举而非裸数字承载子码，让"清除/设置/出错/不定"四种语义在编译期互斥，
+/// 渲染层不会拿到没有约定的取值。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgressState {
+    /// 清除已发布的进度，标签回落到无进度状态。
+    Remove,
+    /// 设置确定进度，`progress` 取 0-100。
+    Set,
+    /// 任务出错终止；`progress` 保留出错时刻的值，仅用于标红展示。
+    Error,
+    /// 任务仍在进行但无法给出百分比。
+    Indeterminate,
+}
+
+impl ProgressState {
+    /// 解析子码数字；超出约定范围返回 `None`，调用方整条丢弃。
+    pub(crate) fn from_subcode(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::Remove),
+            1 => Some(Self::Set),
+            2 => Some(Self::Error),
+            3 => Some(Self::Indeterminate),
+            _ => None,
+        }
+    }
+}
+
 /// 一条 OSC 序列携带的、上层关心的语义。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OscEvent {
@@ -34,6 +63,11 @@ pub(crate) enum OscEvent {
     Cwd { path: String },
     /// 程序显式请求的桌面通知（OSC 777 / OSC 9）。
     Notify { title: String, body: String },
+    /// 程序通过 OSC 9;4 上报的任务进度（ConEmu/Windows Terminal 约定）。
+    ///
+    /// `progress` 仅在 [`ProgressState::Set`] 与 [`ProgressState::Error`] 下
+    /// 有语义（0-100），其余状态携带 0 占位；越界载荷在解析阶段整条丢弃。
+    Progress { state: ProgressState, progress: u8 },
     /// 远端程序请求写入本地剪贴板（OSC 52），已解码为文本。
     ///
     /// 是否真的写入由终端视图按会话授权决定，解析层只负责解出内容：读请求
@@ -211,6 +245,8 @@ impl CommandTracker {
                 })
             }
             OscEvent::Notify { .. } => None,
+            // 进度上报与命令边界无关：它由运行中的任务自行发布，只改标签展示。
+            OscEvent::Progress { .. } => None,
             // 剪贴板请求与命令耗时无关，也不构成边界。
             OscEvent::ClipboardStore { .. } => None,
             // 集成握手不参与"命令耗时/退出码"归并：它发生在任何命令边界之外。

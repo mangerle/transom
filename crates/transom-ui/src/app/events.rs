@@ -1,13 +1,13 @@
 //! 应用顶层事件分发与终端事件回调处理模块。
 
-use crate::app::{AppShell, TabStatus};
+use crate::app::{AppShell, TabProgress, TabStatus};
 use crate::palette::localized_error;
 use gpui_kit::*;
 use transom_core::{
     AppEvent, ForwardAppEvent, HostAppEvent, SftpAppEvent, SyncAppEvent, TabId, TerminalAppEvent,
     ZmodemAppEvent,
 };
-use transom_terminal::TerminalEvent;
+use transom_terminal::{ProgressState, TerminalEvent};
 
 impl AppShell {
     /// 应用顶层事件总线分发入口：按领域分发给对应的子系统处理器。
@@ -387,6 +387,21 @@ impl AppShell {
             }
             TerminalEvent::DesktopNotification { title, body } => {
                 crate::notify::on_desktop_notification(&mut self.state, title, body, cx);
+            }
+            TerminalEvent::Progress { state, progress } => {
+                // `Remove` 清空快照，其余状态保留值供标签渲染；Error 靠状态
+                // 标红，不需要额外的布尔标志位。
+                let snapshot = if matches!(state, ProgressState::Remove) {
+                    None
+                } else {
+                    Some(TabProgress {
+                        state: *state,
+                        progress: *progress,
+                    })
+                };
+                if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
+                    tab.set_progress(snapshot);
+                }
             }
             TerminalEvent::OpenCodeLocation { path, line, column } => {
                 crate::editor::open_terminal_code_location(

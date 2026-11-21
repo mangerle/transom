@@ -82,6 +82,8 @@ struct VerticalTabRowData {
     dot_color: gpui_kit::Hsla,
     icon: AppIcon,
     icon_color: gpui_kit::Hsla,
+    /// OSC 9;4 任务进度；与横向标签栏共用同一展示快照口径。
+    progress: Option<crate::app::tab::TabProgress>,
     tiled_badge: bool,
     this_set_id: Option<crate::tiling::TilingId>,
     can_tile: bool,
@@ -117,6 +119,7 @@ fn collect_row_data(
     let subtitle = presentation.subtitle.clone();
     let dot_color = presentation.status_color;
     let (icon, icon_color) = (presentation.icon, presentation.icon_color);
+    let progress = presentation.progress;
     let session_menu = presentation.session_menu.clone();
     let can_split = presentation.can_split;
     let tiled = app_state.tiling_of_group(group_id);
@@ -153,6 +156,7 @@ fn collect_row_data(
         dot_color,
         icon,
         icon_color,
+        progress,
         tiled_badge,
         this_set_id,
         can_tile,
@@ -222,12 +226,23 @@ fn tab_band_labels(data: &VerticalTabRowData, p: &Palette) -> Div {
         .flex_1()
         .min_w_0()
         .child(
-            div()
-                .text_sm()
-                .line_height(px(17.0))
-                .font_weight(FontWeight::MEDIUM)
-                .truncate()
-                .child(data.labeled.clone()),
+            // 标题占满剩余宽度，任务进度指示固定在其右侧，与横向标签栏一致。
+            h_flex()
+                .min_w_0()
+                .child(
+                    div()
+                        .text_sm()
+                        .line_height(px(17.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .truncate()
+                        .flex_1()
+                        .child(data.labeled.clone()),
+                )
+                .children(
+                    data.progress.map(|progress| {
+                        crate::workspace::render_tab_progress_indicator(progress, p)
+                    }),
+                ),
         )
         .child(
             div()

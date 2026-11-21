@@ -379,6 +379,10 @@ fn append_tab_entry_content(element: Stateful<Div>, model: &TabEntryModel<'_>) -
                 .truncate()
                 .child(model.labels.title.clone()),
         );
+    // OSC 9;4 任务进度放在标题与序号之间：属于临时状态，不应挤压标题本身。
+    if let Some(progress) = model.presentation.progress {
+        element = element.child(crate::workspace::render_tab_progress_indicator(progress, p));
+    }
     if model.display.serial > 0 {
         element = element.child(
             div()

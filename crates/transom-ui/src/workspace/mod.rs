@@ -16,6 +16,7 @@ mod vertical_tabs;
 pub use self::state::WorkspaceState;
 
 use crate::app::app_settings;
+use crate::app::tab::TabProgress;
 use crate::app::{AppShell, TabStatus};
 use crate::palette::{Palette, localized_error};
 use gpui_kit::base::{h_flex, v_flex};
@@ -23,6 +24,7 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use transom_core::{TabId, TabPosition};
+use transom_terminal::ProgressState;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -152,4 +154,55 @@ pub(crate) fn pane_status_indicator(status: &TabStatus, p: &Palette) -> (Hsla, A
         TabStatus::Connected => (p.success, AppIcon::Domain(DomainIcon::TERMINAL)),
         TabStatus::Failed(_) | TabStatus::Disconnected => (p.danger, AppIcon::Ui(UiIcon::ERROR)),
     }
+}
+
+/// OSC 9;4 任务进度的迷你展示：固定宽度进度条加百分比。
+///
+/// 横向标签栏与纵向标签面板共用同一渲染，保证两条栏的进度语义不漂移。
+/// 设计原理（Why）：任务进度是即时状态，快照来自 [`TabProgress`]（进度条
+/// 随标签快照每帧重建），不引入逐帧动画——不定态用静态占位宽度表达，
+/// 避免为低频事件维护常驻动画帧回调。
+///
+/// `Remove` 状态不会到达渲染层（事件处理已清空快照），到达时按无进度返回。
+pub(crate) fn render_tab_progress_indicator(progress: TabProgress, p: &Palette) -> AnyElement {
+    let (ratio, color, label) = match progress.state {
+        ProgressState::Remove => return div().into_any_element(),
+        ProgressState::Set => (
+            progress.progress as f32 / 100.0,
+            p.primary,
+            format!("{}%", progress.progress),
+        ),
+        ProgressState::Error => (
+            progress.progress as f32 / 100.0,
+            p.danger,
+            format!("{}%", progress.progress),
+        ),
+        // 不定态：进度未知，画约五分之二宽的占位条并用省略号示意。
+        ProgressState::Indeterminate => (0.4, p.muted_foreground, "…".to_string()),
+    };
+    h_flex()
+        .flex_none()
+        .items_center()
+        .gap_1()
+        .child(
+            div()
+                .w(px(24.0))
+                .h(px(3.0))
+                .rounded_full()
+                .bg(p.muted_foreground.opacity(0.25))
+                .overflow_hidden()
+                .child(div().w(relative(ratio)).h_full().rounded_full().bg(color)),
+        )
+        .child(
+            div()
+                .text_xs()
+                .flex_none()
+                .text_color(if progress.state == ProgressState::Error {
+                    p.danger
+                } else {
+                    p.muted_foreground
+                })
+                .child(label),
+        )
+        .into_any_element()
 }

@@ -7,7 +7,7 @@
 //! 代价与局限：Git 图标与强调色需要读取工作区实体，因此生成快照需要 `App`；
 //! 快照本身是拥有型数据，不能跨帧复用，但可在同一标签条目的多个子元素间共享。
 
-use super::{SessionMenuData, TabContent, TabStatus, WorkspaceTab};
+use super::{SessionMenuData, TabContent, TabProgress, TabStatus, WorkspaceTab};
 use crate::app::AppState;
 use crate::palette::Palette;
 use crate::session_appearance::{session_color, session_icon};
@@ -25,6 +25,8 @@ pub(crate) struct TabPresentation {
     pub(crate) icon_color: Hsla,
     pub(crate) status: TabStatus,
     pub(crate) status_color: Hsla,
+    /// OSC 9;4 上报的任务进度；横向与纵向标签栏按同一口径渲染。
+    pub(crate) progress: Option<TabProgress>,
     pub(crate) accent: Option<Hsla>,
     pub(crate) can_split: bool,
     pub(crate) closeable: bool,
@@ -53,6 +55,7 @@ impl WorkspaceTab {
             icon_color,
             status: self.status.clone(),
             status_color: tab_status_dot(self, palette),
+            progress: self.progress(),
             accent: tab_accent(state, self, cx),
             can_split: self.can_split(),
             closeable: true,

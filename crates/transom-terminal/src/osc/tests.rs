@@ -2,7 +2,8 @@
 
 use super::scanner::OscScanner;
 use super::types::{
-    CommandTracker, MAX_PAYLOAD_BYTES, OscEvent, TitleAction, TitleGate, TrackedCommand,
+    CommandTracker, MAX_PAYLOAD_BYTES, OscEvent, ProgressState, TitleAction, TitleGate,
+    TrackedCommand,
 };
 use std::time::{Duration, Instant};
 
@@ -151,10 +152,65 @@ fn parses_osc9_notifications_and_ignores_reserved_subcodes() {
         }]
     );
     // 9;4 是进度、9;9 是 ConEmu cwd：都不属于通知，不能弹窗。
-    assert_eq!(collect(&[b"\x1b]9;4;1;50\x07"]), vec![]);
+    assert_eq!(
+        collect(&[b"\x1b]9;4;1;50\x07"]),
+        vec![OscEvent::Progress {
+            state: ProgressState::Set,
+            progress: 50
+        }]
+    );
     assert_eq!(collect(&[b"\x1b]9;9;/home/user\x07"]), vec![]);
     assert_eq!(collect(&[b"\x1b]9;\x07"]), vec![]);
     assert_eq!(collect(&[b"\x1b]9;   \x07"]), vec![]);
+}
+
+#[test]
+fn parses_osc9_progress_subcodes() {
+    let event = |state, progress| vec![OscEvent::Progress { state, progress }];
+    assert_eq!(
+        collect(&[b"\x1b]9;4;0;0\x1b\\"]),
+        event(ProgressState::Remove, 0)
+    );
+    assert_eq!(
+        collect(&[b"\x1b]9;4;1;100\x07"]),
+        event(ProgressState::Set, 100)
+    );
+    assert_eq!(
+        collect(&[b"\x1b]9;4;2;75\x07"]),
+        event(ProgressState::Error, 75)
+    );
+    assert_eq!(
+        collect(&[b"\x1b]9;4;3;0\x07"]),
+        event(ProgressState::Indeterminate, 0)
+    );
+}
+
+#[test]
+fn rejects_malformed_osc9_progress() {
+    // 状态子码越界：宁可整条丢弃也不猜测语义。
+    assert_eq!(collect(&[b"\x1b]9;4;5;50\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;4;45;1\x07"]), vec![]);
+    // 进度超出 0-100 与非数字取值同样丢弃。
+    assert_eq!(collect(&[b"\x1b]9;4;1;200\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;4;1;abc\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;4;1;-5\x07"]), vec![]);
+    // 缺参数的残缺序列不当作通知正文。
+    assert_eq!(collect(&[b"\x1b]9;4;1\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;4\x07"]), vec![]);
+    assert_eq!(collect(&[b"\x1b]9;4;\x07"]), vec![]);
+}
+
+#[test]
+fn osc9_progress_survives_chunk_boundary() {
+    let whole = b"\x1b]9;4;1;50\x07";
+    let expected = vec![OscEvent::Progress {
+        state: ProgressState::Set,
+        progress: 50,
+    }];
+    for split in 1..whole.len() {
+        let events = collect(&[&whole[..split], &whole[split..]]);
+        assert_eq!(events, expected, "在 {split} 处切碎");
+    }
 }
 
 #[test]

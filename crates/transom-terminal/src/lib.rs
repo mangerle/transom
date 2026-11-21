@@ -35,6 +35,7 @@ pub use input::{
     KeyEventKind, MouseButtonCode, encode_mouse, focus_bytes, keystroke_event_to_bytes,
     keystroke_to_bytes, paste_bytes, tab_bytes,
 };
+pub use osc::ProgressState;
 pub use record::{
     CastEvent, CastEventType, CastHeader, RecorderHandle, ReplayInputStep, SessionRecorder,
     extract_replay_inputs, parse_cast_file,

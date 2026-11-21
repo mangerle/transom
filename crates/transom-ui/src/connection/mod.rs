@@ -203,6 +203,8 @@ fn reset_tab_connection(app_state: &mut AppState, tab_id: TabId, connection_id: 
         // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
         // 等新连接上的提示符钩子回报后再恢复 SFTP 跟随。
         tab.set_cwd(None);
+        // 旧连接的进度条属于已经结束的任务，不能带到新通道上继续显示。
+        tab.set_progress(None);
         if let Some(pane) = tab.session_pane_mut() {
             pane.sftp_view = None;
             pane.forward_statuses.clear();
@@ -347,9 +349,14 @@ pub(crate) fn record_recent_session(
 }
 
 /// 当前支持通过界面建立的连接类型；未知类型在派发前拒绝。
+///
+/// FTP 不产生终端，连接就绪后由 `FtpReady` 事件打开文件面板作为正文。
 fn connection_supported(session: &Session) -> bool {
     matches!(
         session.connection,
-        Connection::Ssh(_) | Connection::Local(_) | Connection::Serial(_) | Connection::Telnet(_)
+        Connection::Ssh(_)
+            | Connection::Local(_)
+            | Connection::Serial(_)
+            | Connection::Telnet(_)
     )
 }

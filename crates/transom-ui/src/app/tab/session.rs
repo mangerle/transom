@@ -7,7 +7,17 @@ use std::collections::HashMap;
 use transom_core::{
     ConnectionId, ForwardId, ForwardStatus, NetworkTraffic, Session, SessionId, SystemStats,
 };
-use transom_terminal::TerminalView;
+use transom_terminal::{ProgressState, TerminalView};
+
+/// OSC 9;4 上报的标签任务进度快照。
+///
+/// 只保留最近一次上报：进度展示是即时状态而非历史，`Remove` 事件直接把
+/// 整个字段清回 `None`，不保留残留条。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TabProgress {
+    pub(crate) state: ProgressState,
+    pub(crate) progress: u8,
+}
 
 /// 实时通信会话标签的全部专属状态。
 ///
@@ -19,6 +29,8 @@ pub(crate) struct SessionTab {
     pub(crate) connection_id: Option<ConnectionId>,
     /// 终端最近一次通过 OSC 7 上报的工作目录。
     pub(crate) cwd: Option<String>,
+    /// 终端最近一次通过 OSC 9;4 上报的任务进度；`None` 表示无活动进度。
+    pub(crate) progress: Option<TabProgress>,
     pub(crate) pane: SessionPaneState,
 }
 

@@ -83,6 +83,7 @@ impl AppShell {
             session: session.clone(),
             connection_id: None,
             cwd: None,
+            progress: None,
             pane: Default::default(),
         }));
         tab.set_connection_id(None);

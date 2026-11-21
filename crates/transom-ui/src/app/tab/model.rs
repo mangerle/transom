@@ -99,6 +99,7 @@ impl WorkspaceTab {
                 session,
                 connection_id: None,
                 cwd: None,
+                progress: None,
                 pane: SessionPaneState::default(),
             })),
         }

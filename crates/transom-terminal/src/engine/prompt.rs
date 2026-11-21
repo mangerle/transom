@@ -83,12 +83,13 @@ impl TerminalEngine {
                     );
                 }
             }
-            // 命令记录、cwd 上报、桌面通知、剪贴板请求与集成握手都不改变网格上的
-            // 块边界：握手只喂状态机，cwd 只改应用层目录状态，剪贴板请求由视图
-            // 层处理。
+            // 命令记录、cwd 上报、桌面通知、进度、剪贴板请求与集成握手都不改变
+            // 网格上的块边界：握手只喂状态机，cwd 只改应用层目录状态，进度与
+            // 剪贴板请求由视图层处理。
             OscEvent::CommandRecorded { .. }
             | OscEvent::Cwd { .. }
             | OscEvent::Notify { .. }
+            | OscEvent::Progress { .. }
             | OscEvent::ClipboardStore { .. }
             | OscEvent::ShellReport { .. }
             | OscEvent::IntegrationReady { .. } => {}

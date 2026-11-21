@@ -1,3 +1,4 @@
+use crate::osc::ProgressState;
 use alacritty_terminal::event::{Event, EventListener};
 use flume::Sender;
 
@@ -49,6 +50,15 @@ pub enum TerminalEvent {
     DesktopNotification {
         title: String,
         body: String,
+    },
+    /// 终端程序通过 OSC 9;4 上报的任务进度（ConEmu/Windows Terminal 约定）。
+    ///
+    /// 宿主据此更新标签上的进度展示：`Remove` 清除、`Error` 标红、
+    /// `Indeterminate` 显示不定态；事件本身低频（典型 100ms-1s 一条），
+    /// 宿主无需再做节流。
+    Progress {
+        state: ProgressState,
+        progress: u8,
     },
     /// The user asked for a context menu at a window-local position.
     ContextMenuRequested {
