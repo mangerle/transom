@@ -40,6 +40,9 @@ pub use model::catalog::{
     MergePreference, SessionCatalog, SessionFolder, SyncMergeReport, merge_catalogs,
 };
 pub use model::color::Rgb;
+pub use model::completion::{
+    CompletionItem, CompletionKind, CompletionPool, echo_lagging, last_token, merged_command,
+};
 pub use model::container::{
     ComposeAction, ComposeProject, ContainerBlockDeviceIo, ContainerBuildSpec, ContainerConnection,
     ContainerCreateSpec, ContainerDetails, ContainerEndpoint, ContainerEngineInfo,
