@@ -5,7 +5,7 @@
 
 mod context_menu;
 
-pub(super) use self::context_menu::build_remote_blank_context_menu;
+pub(super) use self::context_menu::{RemoteBlankContextMenuProps, build_remote_blank_context_menu};
 use self::context_menu::{RemoteContextMenuProps, build_remote_context_menu};
 use super::row_interaction::{SftpRowContext, SftpRowPath, SftpSide};
 use crate::palette::Palette;
@@ -211,6 +211,7 @@ impl SftpPanelView {
                                     app: app_cm.clone(),
                                     tab_id,
                                     target,
+                                    connection_id,
                                     entry_path: entry_path_cm.clone(),
                                     is_dir: entry_is_dir,
                                     is_parent_entry,

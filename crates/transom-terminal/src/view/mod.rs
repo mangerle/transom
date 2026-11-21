@@ -9,6 +9,8 @@ mod menu;
 mod paint;
 mod recording;
 mod render;
+mod shell_command;
+mod shell_directory;
 mod silent_echo;
 mod tasks;
 #[cfg(test)]
@@ -31,6 +33,7 @@ use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 pub(crate) use input::build_custom_keys;
+pub use shell_directory::TerminalDirectoryError;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;

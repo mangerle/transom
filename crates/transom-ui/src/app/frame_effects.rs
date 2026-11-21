@@ -235,6 +235,12 @@ impl AppShell {
             SftpPanelEvent::GrowPanelWidth(extra) => {
                 crate::sftp::grow_sftp_panel_width(&mut self.state, extra, window, cx);
             }
+            SftpPanelEvent::ChangeTerminalDirectory {
+                connection_id,
+                path,
+            } => {
+                self.change_terminal_directory(connection_id, path, window, cx);
+            }
             _ => {}
         }
     }

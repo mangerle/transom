@@ -6,13 +6,13 @@
 //! - 核心优势：集中管理本地文件操作契约（上传、新建、软链接、属性、删除等）。
 
 use crate::sftp::entity::SftpPanelView;
+use crate::sftp::{SftpPanelEvent, SftpTerminalDirectoryPath};
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::*;
-use std::path::PathBuf;
-use transom_core::TabId;
+use std::path::{Path, PathBuf};
+use transom_core::{ConnectionId, TabId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::CustomIcon;
-#[cfg(unix)]
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -20,8 +20,10 @@ use transom_ui_icons::UiIcon;
 pub(super) struct LocalContextMenuProps {
     pub(super) tab_id: TabId,
     pub(super) entry_path: PathBuf,
+    pub(super) is_dir: bool,
     pub(super) is_parent_entry: bool,
     pub(super) remote_available: bool,
+    pub(super) terminal_connection_id: Option<ConnectionId>,
 }
 
 /// 构建本地列表项右键菜单。
@@ -37,7 +39,9 @@ pub(super) fn build_local_context_menu(
         app: app_entity,
         tab_id: props.tab_id,
         entry_path: props.entry_path,
+        is_dir: props.is_dir,
         remote_available: props.remote_available,
+        terminal_connection_id: props.terminal_connection_id,
     };
     if props.is_parent_entry {
         return build_parent_entry_menu(menu, &ctx);
@@ -51,6 +55,7 @@ pub(super) fn build_local_context_menu(
         menu = append_upload_item(menu, &ctx);
     }
     menu = append_copy_path_item(menu, &ctx);
+    menu = append_terminal_directory_item(menu, &ctx);
     menu = append_symlink_item(menu, &ctx);
     menu = append_properties_item(menu, &ctx);
     #[cfg(unix)]
@@ -71,7 +76,9 @@ struct LocalMenuCtx {
     app: Entity<SftpPanelView>,
     tab_id: TabId,
     entry_path: PathBuf,
+    is_dir: bool,
     remote_available: bool,
+    terminal_connection_id: Option<ConnectionId>,
 }
 
 fn build_parent_entry_menu(menu: PopupMenu, ctx: &LocalMenuCtx) -> PopupMenu {
@@ -149,6 +156,37 @@ fn append_copy_path_item(menu: PopupMenu, ctx: &LocalMenuCtx) -> PopupMenu {
             });
         },
     ))
+}
+
+fn append_terminal_directory_item(menu: PopupMenu, ctx: &LocalMenuCtx) -> PopupMenu {
+    let Some(connection_id) = ctx.terminal_connection_id else {
+        return menu;
+    };
+    let Some(target) = terminal_target_path(&ctx.entry_path, ctx.is_dir) else {
+        return menu;
+    };
+    let app = ctx.app.clone();
+    menu.item(crate::widgets::menu_item(
+        rust_i18n::t!("sftp.menu.change_terminal_directory").to_string(),
+        AppIcon::Domain(DomainIcon::TERMINAL),
+        move |_, _, cx| {
+            app.update(cx, |_, cx| {
+                cx.emit(SftpPanelEvent::ChangeTerminalDirectory {
+                    connection_id,
+                    path: SftpTerminalDirectoryPath::Local(target.clone()),
+                });
+            });
+        },
+    ))
+}
+
+/// 目录项进入自身，文件项进入其父目录；根路径等无父项场景不提供入口。
+fn terminal_target_path(path: &Path, is_dir: bool) -> Option<PathBuf> {
+    if is_dir {
+        Some(path.to_path_buf())
+    } else {
+        path.parent().map(Path::to_path_buf)
+    }
 }
 
 fn append_symlink_item(menu: PopupMenu, ctx: &LocalMenuCtx) -> PopupMenu {
@@ -318,62 +356,100 @@ pub(super) fn build_local_blank_context_menu(
     menu: PopupMenu,
     app: Entity<SftpPanelView>,
     tab_id: TabId,
+    terminal_connection_id: Option<ConnectionId>,
+    current_path: PathBuf,
 ) -> PopupMenu {
-    menu.item(crate::widgets::menu_item(
-        rust_i18n::t!("sftp.menu.go_up").to_string(),
-        AppIcon::Ui(UiIcon::UP),
-        {
-            let app = app.clone();
-            move |_, window, cx| {
+    let terminal_app = app.clone();
+    let mut menu = menu
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.go_up").to_string(),
+            AppIcon::Ui(UiIcon::UP),
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.local_go_up(tab_id, window, cx);
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.refresh").to_string(),
+            AppIcon::Ui(UiIcon::REFRESH),
+            {
+                let app = app.clone();
+                move |_, _, cx| {
+                    app.update(cx, |this, cx| {
+                        this.local_refresh(cx);
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
+            AppIcon::Ui(UiIcon::NEW_FOLDER),
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.open_local_mkdir_modal(window, cx);
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.new_local_file").to_string(),
+            AppIcon::Ui(UiIcon::ADD_FILE),
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.open_local_new_file_modal(window, cx);
+                    });
+                }
+            },
+        ))
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.paste_here").to_string(),
+            AppIcon::Ui(UiIcon::PASTE),
+            move |_, _window, cx| {
                 app.update(cx, |this, cx| {
-                    this.local_go_up(tab_id, window, cx);
+                    this.paste_clipboard(cx);
                 });
-            }
-        },
-    ))
-    .item(crate::widgets::menu_item(
-        rust_i18n::t!("sftp.refresh").to_string(),
-        AppIcon::Ui(UiIcon::REFRESH),
-        {
-            let app = app.clone();
+            },
+        ));
+    if let Some(connection_id) = terminal_connection_id {
+        menu = menu.item(crate::widgets::menu_item(
+            rust_i18n::t!("sftp.menu.change_terminal_directory").to_string(),
+            AppIcon::Domain(DomainIcon::TERMINAL),
             move |_, _, cx| {
-                app.update(cx, |this, cx| {
-                    this.local_refresh(cx);
+                terminal_app.update(cx, |_, cx| {
+                    cx.emit(SftpPanelEvent::ChangeTerminalDirectory {
+                        connection_id,
+                        path: SftpTerminalDirectoryPath::Local(current_path.clone()),
+                    });
                 });
-            }
-        },
-    ))
-    .item(crate::widgets::menu_item(
-        rust_i18n::t!("sftp.menu.new_local_folder").to_string(),
-        AppIcon::Ui(UiIcon::NEW_FOLDER),
-        {
-            let app = app.clone();
-            move |_, window, cx| {
-                app.update(cx, |this, cx| {
-                    this.open_local_mkdir_modal(window, cx);
-                });
-            }
-        },
-    ))
-    .item(crate::widgets::menu_item(
-        rust_i18n::t!("sftp.menu.new_local_file").to_string(),
-        AppIcon::Ui(UiIcon::ADD_FILE),
-        {
-            let app = app.clone();
-            move |_, window, cx| {
-                app.update(cx, |this, cx| {
-                    this.open_local_new_file_modal(window, cx);
-                });
-            }
-        },
-    ))
-    .item(crate::widgets::menu_item(
-        rust_i18n::t!("sftp.menu.paste_here").to_string(),
-        AppIcon::Ui(UiIcon::PASTE),
-        move |_, _window, cx| {
-            app.update(cx, |this, cx| {
-                this.paste_clipboard(cx);
-            });
-        },
-    ))
+            },
+        ));
+    }
+    menu
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal_target_path;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn terminal_target_uses_directory_or_parent() {
+        assert_eq!(
+            terminal_target_path(Path::new("/tmp/dir"), true),
+            Some(PathBuf::from("/tmp/dir"))
+        );
+        assert_eq!(
+            terminal_target_path(Path::new("/tmp/dir/file.txt"), false),
+            Some(PathBuf::from("/tmp/dir"))
+        );
+        assert_eq!(terminal_target_path(Path::new("/"), false), None);
+    }
 }

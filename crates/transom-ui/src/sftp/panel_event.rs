@@ -9,6 +9,16 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use std::path::PathBuf;
 use transom_core::{ConnectionId, RemoteDeleteTarget, SftpCommand, TabId};
 
+/// SFTP 目录快捷动作的目标路径。
+///
+/// 本地路径保留 `PathBuf` 以支持平台原生路径；远端路径保持协议层给出的字符串，
+/// 两者都不在这里转换成展示文本，避免在菜单构建阶段丢失非 UTF-8 信息。
+#[derive(Clone, Debug)]
+pub(crate) enum SftpTerminalDirectoryPath {
+    Local(PathBuf),
+    Remote(String),
+}
+
 /// SFTP 面板向外壳发出的意图。
 #[derive(Clone)]
 pub(crate) enum SftpPanelEvent {
@@ -35,6 +45,11 @@ pub(crate) enum SftpPanelEvent {
     OpenInputModal(crate::sftp::SftpInputModalParams),
     /// 请求把面板加宽；需要窗口，由外壳在渲染期统一执行。
     GrowPanelWidth(f32),
+    /// 请求把指定已有终端切换到面板目录；不打开新会话。
+    ChangeTerminalDirectory {
+        connection_id: ConnectionId,
+        path: SftpTerminalDirectoryPath,
+    },
     /// 请求关闭指定窗格的面板；句柄由外壳回收。
     ClosePanel { tab_id: TabId },
     /// 请求打开本地对比面板；目标已由面板校验完成。

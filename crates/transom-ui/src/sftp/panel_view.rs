@@ -264,6 +264,9 @@ impl SftpPanelView {
                 local_selection: state.local.selection.clone(),
                 local_primary: state.local.selected.clone(),
                 diff_ready,
+                // 混合双栏的本地栏没有独立本地会话，终端入口只属于远端栏。
+                terminal_connection_id: None,
+                current_path: state.local.path.clone(),
             },
             p,
             cx,

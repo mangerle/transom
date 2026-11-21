@@ -35,6 +35,7 @@ impl TerminalView {
         // 截走）。记下它，Shell 集成便不再尝试注入：往半截命令行里写字节会直接
         // 毁掉用户正在敲的那条命令，宁可少一套语义块。
         self.user_typed = true;
+        self.state.engine.lock().note_prompt_input_edited();
 
         // 自定义映射优先于终端默认编码，也允许覆盖 Ctrl+Shift+C/V；
         // 应用级快捷键已在 key_filter 之前被保留，不会在这里被吃掉。
@@ -199,6 +200,7 @@ impl TerminalView {
     ) {
         // 与 on_key_down 同源：Tab 也是用户亲自敲进 Shell 的按键。
         self.user_typed = true;
+        self.state.engine.lock().note_prompt_input_edited();
         let mode = self.state.engine.lock().mode();
         if self.write_input(&tab_bytes(mode, false)) {
             self.state.engine.lock().scroll_to_bottom();
@@ -213,6 +215,7 @@ impl TerminalView {
         cx: &mut Context<Self>,
     ) {
         self.user_typed = true;
+        self.state.engine.lock().note_prompt_input_edited();
         let mode = self.state.engine.lock().mode();
         if self.write_input(&tab_bytes(mode, true)) {
             self.state.engine.lock().scroll_to_bottom();

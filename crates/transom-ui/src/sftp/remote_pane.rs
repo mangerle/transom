@@ -10,7 +10,9 @@
 //!   隐藏文件与过滤开关按列独立，互不影响。
 
 use super::SftpTransferRequest;
-use super::remote_content::{RemoteContentProps, build_remote_blank_context_menu};
+use super::remote_content::{
+    RemoteBlankContextMenuProps, RemoteContentProps, build_remote_blank_context_menu,
+};
 use super::side_remote::{SftpDragItem, SftpRemoteCopyParams};
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
@@ -331,6 +333,7 @@ impl SftpPanelView {
         let app_drop = cx.entity().clone();
         let app_upload_drop = cx.entity().clone();
         let app_blank_menu = cx.entity().clone();
+        let blank_current_path = target_dir.clone();
         let drop_bg = p.sidebar_accent.opacity(0.3);
         let drop_border = p.primary;
         v_flex()
@@ -376,9 +379,13 @@ impl SftpPanelView {
                     .context_menu(move |menu, _window, _cx| {
                         build_remote_blank_context_menu(
                             menu,
-                            app_blank_menu.clone(),
-                            tab_id,
-                            target,
+                            RemoteBlankContextMenuProps {
+                                app: app_blank_menu.clone(),
+                                tab_id,
+                                target,
+                                connection_id,
+                                current_path: blank_current_path.clone(),
+                            },
                         )
                     }),
             )

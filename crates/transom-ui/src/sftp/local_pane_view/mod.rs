@@ -27,8 +27,8 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::{VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::*;
-use transom_core::TabId;
 use transom_core::TransferDirection;
+use transom_core::{ConnectionId, TabId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::UiIcon;
 
@@ -50,6 +50,10 @@ pub(crate) struct SftpLocalPaneProps {
     pub(crate) local_primary: Option<std::path::PathBuf>,
     /// "与本地对比"入口是否可用：由调用方按实体状态提前算好。
     pub(crate) diff_ready: bool,
+    /// 仅本地单栏模式有值：右键动作据此定位已有本地终端。
+    pub(crate) terminal_connection_id: Option<ConnectionId>,
+    /// 空白区域快捷动作使用的当前本地目录快照。
+    pub(crate) current_path: std::path::PathBuf,
 }
 
 /// 本地内容渲染输入：条目、选中集与滚动句柄。
@@ -64,6 +68,16 @@ struct LocalContentInput {
     primary: Option<std::path::PathBuf>,
     scroll: VirtualListScrollHandle,
     remote_available: bool,
+    terminal_connection_id: Option<ConnectionId>,
+}
+
+/// 本地列表拖放区的渲染输入。
+struct LocalDropArea {
+    content: AnyElement,
+    scroll_handle: VirtualListScrollHandle,
+    tab_id: TabId,
+    terminal_connection_id: Option<ConnectionId>,
+    current_path: std::path::PathBuf,
 }
 
 impl SftpPanelView {
@@ -82,6 +96,7 @@ impl SftpPanelView {
             primary,
             scroll,
             remote_available,
+            terminal_connection_id,
         } = input;
         let local_selection = std::rc::Rc::new(selection);
         let local_primary = std::rc::Rc::new(primary);
@@ -147,8 +162,10 @@ impl SftpPanelView {
                                     LocalContextMenuProps {
                                         tab_id,
                                         entry_path: entry_path_cm.clone(),
+                                        is_dir,
                                         is_parent_entry,
                                         remote_available,
+                                        terminal_connection_id,
                                     },
                                 )
                             });
@@ -181,6 +198,8 @@ impl SftpPanelView {
         let local_selection = props.local_selection;
         let local_primary = props.local_primary;
         let diff_ready = props.diff_ready;
+        let terminal_connection_id = props.terminal_connection_id;
+        let current_path = props.current_path;
 
         let local_content = self.render_local_content(
             LocalContentInput {
@@ -191,6 +210,7 @@ impl SftpPanelView {
                 primary: local_primary,
                 scroll: local_scroll_handle.clone(),
                 remote_available,
+                terminal_connection_id,
             },
             p,
             cx,
@@ -213,8 +233,17 @@ impl SftpPanelView {
             cx,
         );
 
-        let drop_container =
-            self.render_local_drop_area(local_content, &local_scroll_handle, tab_id, p, cx);
+        let drop_container = self.render_local_drop_area(
+            LocalDropArea {
+                content: local_content,
+                scroll_handle: local_scroll_handle,
+                tab_id,
+                terminal_connection_id,
+                current_path,
+            },
+            p,
+            cx,
+        );
 
         v_flex()
             .size_full()
@@ -227,12 +256,17 @@ impl SftpPanelView {
     /// 本地列表拖放区：跨端下载拖入与目录级右键菜单。
     fn render_local_drop_area(
         &self,
-        local_content: AnyElement,
-        scroll_handle: &gpui_kit::component::VirtualListScrollHandle,
-        tab_id: transom_core::TabId,
+        area: LocalDropArea,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let LocalDropArea {
+            content,
+            scroll_handle,
+            tab_id,
+            terminal_connection_id,
+            current_path,
+        } = area;
         let menu_app = cx.entity().clone();
         let app_local_drop = cx.entity().clone();
         let app_blank_menu = menu_app.clone();
@@ -280,11 +314,17 @@ impl SftpPanelView {
                     }
                 });
             })
-            .child(local_content)
-            .vertical_scrollbar(scroll_handle)
+            .child(content)
+            .vertical_scrollbar(&scroll_handle)
             // 空白区右键给目录级动作：行元素上的菜单命中时优先并停止冒泡，不会互抢。
             .context_menu(move |menu, _window, _cx| {
-                build_local_blank_context_menu(menu, app_blank_menu.clone(), tab_id)
+                build_local_blank_context_menu(
+                    menu,
+                    app_blank_menu.clone(),
+                    tab_id,
+                    terminal_connection_id,
+                    current_path.clone(),
+                )
             });
         drop_container.into_any_element()
     }

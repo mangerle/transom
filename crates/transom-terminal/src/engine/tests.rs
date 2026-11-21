@@ -664,6 +664,33 @@ fn integration_gates_report_real_session_state() {
     assert!(!engine.output_idle(Instant::now(), Duration::from_secs(60 * 60)));
 }
 
+/// 目录快捷动作只在“已到提示符且输入行为空”时放行；用户编辑、命令执行和
+/// 不完整边界都必须保守回到不可写状态。
+#[test]
+fn prompt_input_state_rejects_unsafe_directory_writes() {
+    let (mut engine, _events) = engine(40, 3);
+    assert_eq!(engine.prompt_input_state(), PromptInputState::Unknown);
+
+    engine.process(b"\x1b]133;A\x1b\\$ ");
+    assert_eq!(engine.prompt_input_state(), PromptInputState::Empty);
+    engine.note_prompt_input_edited();
+    assert_eq!(engine.prompt_input_state(), PromptInputState::Edited);
+
+    engine.process(b"\x1b]133;C\x1b\\");
+    assert_eq!(engine.prompt_input_state(), PromptInputState::Running);
+    engine.mark_programmatic_command_submitted();
+    assert_eq!(engine.prompt_input_state(), PromptInputState::Running);
+
+    engine.process(b"\x1b]133;D;0\x1b\\");
+    assert_eq!(
+        engine.prompt_input_state(),
+        PromptInputState::Unknown,
+        "仅收到命令结束标记时不能假定新提示符已经落位"
+    );
+    engine.process(b"\x1b]133;A\x1b\\$ ");
+    assert_eq!(engine.prompt_input_state(), PromptInputState::Empty);
+}
+
 /// 集成握手回报不参与命令边界采集：它没有网格位置，混进去会造出假块。
 #[test]
 fn handshake_markers_do_not_create_blocks() {

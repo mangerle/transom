@@ -50,6 +50,7 @@ impl TerminalView {
         self.input_line = command;
         self.clear_suggestions();
         if !suffix.is_empty() {
+            self.state.engine.lock().note_prompt_input_edited();
             self.write_input(suffix.as_bytes());
             self.state.engine.lock().scroll_to_bottom();
         }

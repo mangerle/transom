@@ -21,6 +21,7 @@ pub(crate) use settings_global::{
 mod secret_prefill;
 mod session_duplicate;
 mod session_ops;
+mod sftp_terminal;
 mod state;
 pub(crate) mod tab;
 mod tab_coordination;

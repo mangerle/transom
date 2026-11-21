@@ -1806,6 +1806,9 @@ sftp:
     copy_abs_path:
       en: Copy Absolute Path
       zh-CN: 复制绝对路径
+    change_terminal_directory:
+      en: Jump Terminal to This Directory
+      zh-CN: 终端跳转此目录
     copy_entries:
       en: Copy Entries (Ctrl+C)
       zh-CN: 复制条目 (Ctrl+C)
@@ -1848,6 +1851,37 @@ sftp:
     remote_path_copied:
       en: 'Remote path copied: %{path}'
       zh-CN: '已复制远端路径: %{path}'
+  terminal_directory:
+    changed:
+      en: 'Changed directory in the matching terminal: %{path}'
+      zh-CN: '已在对应终端中进入目录: %{path}'
+    no_session:
+      en: No open terminal session matches this directory.
+      zh-CN: 未找到该目录对应的已打开终端会话
+    invalid_path:
+      en: This path cannot be safely passed to the terminal.
+      zh-CN: 该路径无法安全传给终端
+    exited:
+      en: The matching terminal session has ended.
+      zh-CN: 对应终端会话已结束
+    shell_unknown:
+      en: The terminal shell state cannot be verified; the directory was not changed.
+      zh-CN: 无法确认对应终端 Shell 状态，未切换目录
+    unsupported_shell:
+      en: This shell does not support a safe directory change.
+      zh-CN: 对应终端 Shell 不支持安全的目录切换
+    prompt_unknown:
+      en: The terminal has not reached a verified idle prompt; the directory was not changed.
+      zh-CN: 对应终端尚未确认处于空闲提示符，未切换目录
+    input_pending:
+      en: The terminal already contains unsubmitted input; the directory was not changed.
+      zh-CN: 对应终端已有未提交输入，未切换目录
+    running:
+      en: The terminal is running a command; the directory was not changed.
+      zh-CN: 对应终端正在执行命令，未切换目录
+    input_closed:
+      en: The terminal input channel is closed.
+      zh-CN: 对应终端输入通道已关闭
     entries_copied:
       en: 'Entry copied: %{path}'
       zh-CN: '已复制条目: %{path}'

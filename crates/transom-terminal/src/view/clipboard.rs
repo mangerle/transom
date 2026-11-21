@@ -120,6 +120,7 @@ impl TerminalView {
         let Some(item) = cx.read_from_clipboard() else {
             return false;
         };
+        self.state.engine.lock().note_prompt_input_edited();
         if clipboard_contains_image(&item) {
             let mode = self.state.engine.lock().mode();
             let Some(bytes) = image_paste_bytes(mode) else {

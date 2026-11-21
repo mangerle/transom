@@ -17,7 +17,7 @@ mod local_pane_view;
 mod modals;
 mod panel_event;
 
-pub(crate) use panel_event::SftpPanelEvent;
+pub(crate) use panel_event::{SftpPanelEvent, SftpTerminalDirectoryPath};
 mod filters;
 mod nav_actions;
 mod overlay;

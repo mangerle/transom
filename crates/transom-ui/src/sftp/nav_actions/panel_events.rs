@@ -101,7 +101,8 @@ pub(super) fn on_sftp_panel_event(
         }
         SftpPanelEvent::OpenEditor(_)
         | SftpPanelEvent::OpenInputModal(_)
-        | SftpPanelEvent::GrowPanelWidth(_) => {
+        | SftpPanelEvent::GrowPanelWidth(_)
+        | SftpPanelEvent::ChangeTerminalDirectory { .. } => {
             // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
             app_state.ui.window_requests.push_sftp(event.clone());
         }

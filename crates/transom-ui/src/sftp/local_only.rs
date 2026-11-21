@@ -225,6 +225,8 @@ impl SftpPanelView {
             local_selection: state.local.selection.clone(),
             local_primary: state.local.selected.clone(),
             diff_ready: false,
+            terminal_connection_id: state.main_connection,
+            current_path: state.local.path.clone(),
         }
     }
 }

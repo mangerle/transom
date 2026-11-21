@@ -62,6 +62,7 @@ impl EntityInputHandler for TerminalView {
         self.ime_marked_range = None;
         self.ime_text.clear();
         if !text.is_empty() {
+            self.state.engine.lock().note_prompt_input_edited();
             self.write_input(text.as_bytes());
             self.state.engine.lock().scroll_to_bottom();
             // 可打印输入（含 IME 上屏）累积进本地输入行，随后刷新历史建议。

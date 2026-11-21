@@ -6,7 +6,10 @@ use crate::renderer::DamageInfo;
 use crate::search::SearchState;
 
 mod blocks;
+mod prompt;
 mod selection;
+
+pub(crate) use prompt::PromptInputState;
 
 #[cfg(test)]
 mod tests;
@@ -15,7 +18,7 @@ mod tests;
 const MAX_PENDING_OSC_EVENTS: usize = 64;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point};
-use alacritty_terminal::term::cell::{Cell, Flags};
+use alacritty_terminal::term::cell::Cell;
 use alacritty_terminal::term::{Config, Osc52, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi::{
     CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle, Processor,
@@ -94,6 +97,8 @@ pub struct TerminalEngine {
     /// 之所以只记"变过"而不做行号平移：`Line` 是相对视口底部的编号，新行滚入时全部
     /// 命中行号同步 -1，而库外部拿不到绝对行数，平移无从校准（见 `search` 模块说明）。
     pub(crate) epoch: u64,
+    /// Shell 提示符与输入行状态；只由 OSC 133 边界和用户输入共同推进。
+    prompt_input_state: PromptInputState,
 }
 
 impl TerminalEngine {
@@ -150,6 +155,7 @@ impl TerminalEngine {
             last_write: None,
             shell_markers_seen: false,
             epoch: 0,
+            prompt_input_state: PromptInputState::Unknown,
         }
     }
 
@@ -264,127 +270,6 @@ impl TerminalEngine {
     /// 当前应绘制的图像放置列表；渲染器按行映射换算可见位置。
     pub(crate) fn graphics_placements(&self) -> Vec<GraphicsPlacement> {
         self.graphics.placements(self.term.grid().history_size())
-    }
-
-    /// 单条 OSC 133 标记：按当前位置更新命令块。
-    ///
-    /// 调用时内核已消费到该标记所在字节，网格光标即标记发生时的位置。
-    fn handle_marker(&mut self, event: &OscEvent) {
-        // 任何一条命令边界标记都证明远端已经在发 133，注入决策据此一次定死。
-        if matches!(
-            event,
-            OscEvent::PromptStart
-                | OscEvent::CommandStart
-                | OscEvent::PreExec { .. }
-                | OscEvent::CommandFinish { .. }
-        ) {
-            self.shell_markers_seen = true;
-        }
-        match event {
-            OscEvent::PromptStart => {
-                let line = self.cursor_absolute_line();
-                if !self.blocks_saturated {
-                    self.blocks.on_prompt(line);
-                }
-            }
-            OscEvent::CommandStart => {
-                self.command_input_point = Some(self.term.grid().cursor.point);
-                if !self.blocks_saturated {
-                    self.blocks.on_command_start(self.cursor_absolute_line());
-                }
-            }
-            OscEvent::PreExec { command } => {
-                let text = match command {
-                    Some(text) => text.trim().to_string(),
-                    None => self.grid_command_text().unwrap_or_default(),
-                };
-                self.record_command(&text);
-                if !self.blocks_saturated {
-                    self.blocks.on_preexec(self.cursor_absolute_line(), text);
-                }
-            }
-            OscEvent::CommandFinish {
-                exit_code,
-                duration_ms,
-            } => {
-                if !self.blocks_saturated {
-                    self.blocks.on_finish(
-                        *exit_code,
-                        *duration_ms,
-                        self.cursor_absolute_line(),
-                        false,
-                    );
-                }
-            }
-            // 命令记录、cwd 上报、桌面通知、剪贴板请求与集成握手都不改变网格上的
-            // 块边界：握手只喂状态机，cwd 只改应用层目录状态，剪贴板请求由视图
-            // 层处理。
-            OscEvent::CommandRecorded { .. }
-            | OscEvent::Cwd { .. }
-            | OscEvent::Notify { .. }
-            | OscEvent::ClipboardStore { .. }
-            | OscEvent::ShellReport { .. }
-            | OscEvent::IntegrationReady { .. } => {}
-        }
-    }
-
-    /// 记录一条可进入历史的命令；短行与刻意不留档的行跳过。
-    fn record_command(&mut self, text: &str) {
-        if text.chars().count() < 2 || text.starts_with(' ') {
-            return;
-        }
-        self.osc_events.push(OscEvent::CommandRecorded {
-            command: text.to_string(),
-        });
-    }
-
-    /// 从记录的输入起点读到当前光标，拼出用户敲下的那一行。
-    ///
-    /// 折行的长命令按 `WRAPLINE` 标记继续拼接；宽字符的占位格跳过，
-    /// 否则中文命令行会在每个汉字后多出一个空格。
-    fn grid_command_text(&self) -> Option<String> {
-        let start = self.command_input_point?;
-        let grid = self.term.grid();
-        let cursor = grid.cursor.point;
-        // 起点已不在当前可见窗口（发生过清屏或大幅滚动）时放弃，不猜。
-        if cursor.line < start.line {
-            return None;
-        }
-        let cols = self.size.cols as usize;
-        let mut text = String::new();
-        let mut line = start.line;
-        let mut column = start.column;
-        loop {
-            let last_column = if line == cursor.line {
-                cursor.column
-            } else {
-                Column(cols.saturating_sub(1))
-            };
-            while column <= last_column {
-                let cell = &grid[Point::new(line, column)];
-                if !cell
-                    .flags
-                    .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
-                    && cell.c != '\0'
-                {
-                    text.push(cell.c);
-                }
-                column = Column(column.0.saturating_add(1));
-            }
-            if line == cursor.line {
-                break;
-            }
-            // 只有上一行确实折到下一行才继续；否则说明换了行（例如已回车执行）。
-            let wrapped = grid[Point::new(line, Column(cols.saturating_sub(1)))]
-                .flags
-                .intersects(Flags::WRAPLINE);
-            if !wrapped {
-                break;
-            }
-            line += 1;
-            column = Column(0);
-        }
-        Some(text.trim_end().to_string())
     }
 
     fn cursor_absolute_line(&self) -> i64 {
