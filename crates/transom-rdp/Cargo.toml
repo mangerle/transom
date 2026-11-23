@@ -1,0 +1,54 @@
+[package]
+name = "transom-rdp"
+description = "RDP 远程桌面协议引擎：IronRDP 细粒度状态机驱动、Tile 增量瓦片渲染、硬件加速解码、本地音频直通与双向剪贴板"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+transom-core = { workspace = true }
+transom-platform = { workspace = true }
+
+# RDP 协议栈核心组件
+ironrdp-core = { workspace = true }
+ironrdp-pdu = { workspace = true }
+ironrdp-connector = { workspace = true }
+ironrdp-session = { workspace = true }
+ironrdp-input = { workspace = true }
+ironrdp-cliprdr = { workspace = true }
+ironrdp-graphics = { workspace = true }
+ironrdp-dvc = { workspace = true }
+ironrdp-svc = { workspace = true }
+ironrdp-displaycontrol = { workspace = true }
+ironrdp-egfx = { workspace = true }
+ironrdp-rdpsnd = { workspace = true }
+ironrdp-rdpsnd-native = { workspace = true }
+ironrdp-tokio = { workspace = true }
+ironrdp-tls = { workspace = true }
+ironrdp-bulk = { workspace = true }
+sspi = { workspace = true }
+
+# 声音输出与播放
+cpal = { workspace = true }
+
+# 渲染、像素与桌面集成
+image = { workspace = true }
+gpui-kit = { workspace = true }
+
+# 异步并发与基础工具
+tokio = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
+parking_lot = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

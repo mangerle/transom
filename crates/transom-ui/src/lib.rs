@@ -57,6 +57,7 @@ pub(crate) mod monitor;
 pub(crate) mod notify;
 pub(crate) mod performance;
 pub(crate) mod probe;
+pub(crate) mod rdp;
 pub(crate) mod record;
 pub(crate) mod session_appearance;
 pub(crate) mod session_form;

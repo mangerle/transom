@@ -1,7 +1,8 @@
 //! 工作区标签的公共类型与构造器。
 
 use super::{
-    ContainerTab, GitTab, MonitorTab, PlayerTab, SessionPaneState, SessionTab, TabGroupOwner,
+    ContainerTab, GitTab, MonitorTab, PlayerTab, RdpTab, SessionPaneState, SessionTab,
+    TabGroupOwner,
 };
 use transom_core::{AppError, Session, SessionId, TabId};
 
@@ -35,6 +36,7 @@ pub(crate) enum TabContent {
     Monitor(Box<MonitorTab>),
     Containers(Box<ContainerTab>),
     Git(GitTab),
+    Rdp(Box<RdpTab>),
 }
 
 /// 标签内容类型；只用于不持有实体即可验证的纯策略。
@@ -45,6 +47,7 @@ pub(crate) enum TabContentKind {
     Monitor,
     Container,
     Git,
+    Rdp,
 }
 
 impl TabContent {
@@ -56,6 +59,7 @@ impl TabContent {
             Self::Monitor(_) => TabContentKind::Monitor,
             Self::Containers(_) => TabContentKind::Container,
             Self::Git(_) => TabContentKind::Git,
+            Self::Rdp(_) => TabContentKind::Rdp,
         }
     }
 }
@@ -110,9 +114,10 @@ impl WorkspaceTab {
         match &self.content {
             TabContent::Session(session) => TabGroupOwner::Session(session.session_id),
             TabContent::Monitor(monitor) => TabGroupOwner::Session(monitor.target_session_id),
-            TabContent::Player(_) | TabContent::Containers(_) | TabContent::Git(_) => {
-                TabGroupOwner::Workspace(self.id)
-            }
+            TabContent::Player(_)
+            | TabContent::Containers(_)
+            | TabContent::Git(_)
+            | TabContent::Rdp(_) => TabGroupOwner::Workspace(self.id),
         }
     }
 
@@ -132,9 +137,10 @@ impl TabCloseAction {
         match kind {
             TabContentKind::Session => Self::CloseTerminal { tab_id },
             TabContentKind::Container => Self::DisconnectContainer { tab_id },
-            TabContentKind::Player | TabContentKind::Monitor | TabContentKind::Git => {
-                Self::DropOnly
-            }
+            TabContentKind::Player
+            | TabContentKind::Monitor
+            | TabContentKind::Git
+            | TabContentKind::Rdp => Self::DropOnly,
         }
     }
 }

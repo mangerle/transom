@@ -26,6 +26,7 @@ transom-terminal.workspace = true
 transom-updater.workspace = true
 transom-ui-icons.workspace = true
 transom-ui-kit.workspace = true
+transom-rdp.workspace = true
 gpui-kit.workspace = true
 # 标题栏性能 HUD 只采样当前进程的 CPU 与内存，复用工作区已锁定的 sysinfo。
 sysinfo.workspace = true

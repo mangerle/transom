@@ -24,6 +24,7 @@ pub(crate) fn display_compact(connection: &Connection) -> String {
         Connection::Mosh(mosh) => format!("{}@{}", mosh.username, mosh.host),
         Connection::Telnet(telnet) => format!("{}:{}", telnet.host, telnet.port),
         Connection::Ftp(ftp) => format!("{}@{}", ftp.username, ftp.host),
+        Connection::Rdp(rdp) => format!("rdp://{}@{}", rdp.username, rdp.host),
         Connection::Local(local) => local.shell.clone().unwrap_or_else(|| "shell".to_string()),
         Connection::Serial(serial) => serial.port.clone(),
         _ => String::new(),
@@ -45,6 +46,7 @@ pub(crate) fn display_with_port(connection: &Connection) -> String {
                 format!("{}@{}:{}", ftp.username, ftp.host, ftp.port)
             }
         },
+        Connection::Rdp(rdp) => format!("rdp://{}@{}:{}", rdp.username, rdp.host, rdp.port),
         Connection::Local(local) => rust_i18n::t!(
             "connection.local_terminal",
             shell = local.shell.as_deref().unwrap_or("sh")
@@ -73,6 +75,7 @@ pub(crate) fn icon(connection: &Connection) -> AppIcon {
         Connection::Telnet(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
         Connection::Ftp(_) => AppIcon::Ui(UiIcon::FOLDER),
         Connection::Mosh(_) => AppIcon::Ui(UiIcon::RUN),
+        Connection::Rdp(_) => AppIcon::Domain(DomainIcon::MONITOR),
         Connection::ContainerEngine(_) => AppIcon::Domain(DomainIcon::CONTAINER),
         _ => AppIcon::Ui(UiIcon::WEB_SERVER),
     }

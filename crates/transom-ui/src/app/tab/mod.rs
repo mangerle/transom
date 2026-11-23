@@ -17,6 +17,7 @@ mod model;
 mod monitor;
 mod player;
 pub(crate) mod presentation;
+mod rdp;
 mod session;
 #[cfg(test)]
 mod tests;
@@ -27,4 +28,5 @@ pub(crate) use group::{TabGroup, TabGroupOwner};
 pub(crate) use model::{SessionMenuData, TabCloseAction, TabContent, TabStatus, WorkspaceTab};
 pub(crate) use monitor::MonitorTab;
 pub(crate) use player::PlayerTab;
+pub(crate) use rdp::RdpTab;
 pub(crate) use session::{SessionPaneState, SessionTab, TabProgress};

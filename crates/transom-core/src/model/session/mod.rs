@@ -8,9 +8,9 @@ mod ssh;
 mod tests;
 
 pub use connection::{
-    Connection, FtpConnection, FtpSecurity, LocalConnection, MoshConnection, SerialConnection,
-    SerialDataBits, SerialFlowControl, SerialParity, SerialStopBits, TelnetConnection,
-    TelnetOptions, TextEncoding,
+    Connection, FtpConnection, FtpSecurity, LocalConnection, MoshConnection, RdpColorDepth,
+    RdpConnection, RdpDesktopSize, RdpPerformance, RdpSecurity, SerialConnection, SerialDataBits,
+    SerialFlowControl, SerialParity, SerialStopBits, TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use entity::{BlockViewOverride, Session, StartupCommands};
 pub use ssh::{AuthMethod, ProxyJumpConfig, SessionOptions, SshConnection, SshHop};

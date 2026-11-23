@@ -1,0 +1,31 @@
+//! RDP 远程桌面标签页。
+
+use super::{TabContent, WorkspaceTab};
+use crate::rdp::RdpView;
+use gpui_kit::Entity;
+use transom_core::TabId;
+
+/// RDP 远程桌面专属标签。
+pub(crate) struct RdpTab {
+    pub(crate) view: Entity<RdpView>,
+}
+
+impl WorkspaceTab {
+    /// 构造 RDP 桌面标签。
+    pub(crate) fn new_rdp(id: TabId, title: String, view: Entity<RdpView>) -> Self {
+        Self {
+            id,
+            title,
+            status: super::TabStatus::Connecting,
+            content: TabContent::Rdp(Box::new(RdpTab { view })),
+        }
+    }
+
+    /// 获取 RDP 视图实体句柄。
+    pub(crate) fn rdp_view(&self) -> Option<Entity<RdpView>> {
+        match &self.content {
+            TabContent::Rdp(rdp) => Some(rdp.view.clone()),
+            _ => None,
+        }
+    }
+}

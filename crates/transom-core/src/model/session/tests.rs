@@ -286,3 +286,26 @@ fn ftp_defaults_fill_missing_optional_fields() {
     .unwrap();
     assert_eq!(tls.security, FtpSecurity::ExplicitTls);
 }
+
+/// RDP 连接可正常序列化与反序列化，并保持默认特性开关开启。
+#[test]
+fn rdp_session_round_trip() {
+    let session = Session::new(
+        "win-desktop",
+        Connection::Rdp(RdpConnection::new("192.168.1.100", "Administrator")),
+    );
+    let json = serde_json::to_string(&session).unwrap();
+    let decoded: Session = serde_json::from_str(&json).unwrap();
+    let Connection::Rdp(rdp) = decoded.connection else {
+        panic!("应解析为 RDP 连接");
+    };
+    assert_eq!(rdp.host, "192.168.1.100");
+    assert_eq!(rdp.port, 3389);
+    assert_eq!(rdp.username, "Administrator");
+    assert_eq!(rdp.security, RdpSecurity::Negotiate);
+    assert_eq!(rdp.color_depth, RdpColorDepth::Depth32);
+    assert!(rdp.audio);
+    assert!(rdp.clipboard);
+    assert!(rdp.file_copy);
+    assert!(rdp.dynamic_resolution);
+}

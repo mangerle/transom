@@ -121,6 +121,7 @@ impl Session {
                 AuthMethod::PrivateKey { .. } => &[SecretKind::KeyPassphrase],
                 AuthMethod::Agent => &[],
             },
+            Connection::Rdp(_) => &[SecretKind::Password],
             _ => &[],
         }
     }

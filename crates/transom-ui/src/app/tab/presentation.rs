@@ -163,6 +163,7 @@ pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
         TabContent::Monitor(_) => rust_i18n::t!("tab_subtitle.monitor").to_string(),
         TabContent::Containers(_) => rust_i18n::t!("tab_subtitle.containers").to_string(),
         TabContent::Git(_) => rust_i18n::t!("tab_subtitle.git").to_string(),
+        TabContent::Rdp(_) => "RDP 远程桌面".to_string(),
     }
 }
 
@@ -173,7 +174,9 @@ pub(crate) fn compact_tab_icon(tab: &WorkspaceTab) -> AppIcon {
             .session()
             .map(|session| crate::connection::icon(&session.connection))
             .unwrap_or_else(|| AppIcon::Ui(UiIcon::ERROR)),
-        TabContent::Player(_) | TabContent::Monitor(_) => AppIcon::Domain(DomainIcon::MONITOR),
+        TabContent::Player(_) | TabContent::Monitor(_) | TabContent::Rdp(_) => {
+            AppIcon::Domain(DomainIcon::MONITOR)
+        }
         TabContent::Containers(container) => {
             if container.profile.engine.kind == ContainerEngineKind::Docker {
                 CustomIcon::DOCKER.into()

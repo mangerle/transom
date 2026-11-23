@@ -76,6 +76,8 @@ pub enum Connection {
     Ftp(FtpConnection),
     /// 容器引擎管理工作区：打开的是三栏管理页，不建立终端连接。
     ContainerEngine(ContainerEngineProfile),
+    /// RDP 远程桌面连接会话：打开远程图形桌面视图。
+    Rdp(RdpConnection),
 }
 
 /// Mosh（Mobile Shell）连接参数。
@@ -317,6 +319,120 @@ impl FtpConnection {
             username: username.into(),
             security: FtpSecurity::default(),
             passive: default_ftp_passive(),
+        }
+    }
+}
+
+/// RDP（远程桌面协议）安全层模式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RdpSecurity {
+    /// 自动协商（优先 NLA/CredSSP，协商失败时降级至 TLS 或标准 RDP）。
+    #[default]
+    Negotiate,
+    /// 强制网络级别身份验证（NLA / CredSSP）。
+    Nla,
+    /// 仅使用 TLS 加密传输。
+    Tls,
+    /// 传统 RDP 原生加密（无 TLS）。
+    Rdp,
+}
+
+/// RDP 桌面显示色深。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RdpColorDepth {
+    /// 32 位真彩色（支持 Alpha 与丰富平滑渐变）。
+    #[default]
+    Depth32,
+    /// 24 位真彩色。
+    Depth24,
+    /// 16 位高彩色（弱网优化档）。
+    Depth16,
+}
+
+/// RDP 体验与性能调优档位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RdpPerformance {
+    /// 局域网体验：开启字体平滑、桌面合成与视觉特效。
+    #[default]
+    Lan,
+    /// 宽带体验：开启字体平滑，禁用非必要桌面特效。
+    Broadband,
+    /// 广域网/弱网体验：禁用平滑、壁纸与动画，以低延迟优先。
+    Wan,
+}
+
+/// RDP 初始桌面分辨率（宽高像素）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RdpDesktopSize {
+    pub width: u16,
+    pub height: u16,
+}
+
+/// RDP 远程桌面连接参数。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RdpConnection {
+    /// 远端主机地址（域名或 IP）。
+    pub host: String,
+    /// RDP 服务端口，默认 3389。
+    #[serde(default = "default_rdp_port")]
+    pub port: u16,
+    /// 登录用户名。
+    pub username: String,
+    /// Windows 认证域名（可选）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
+    /// 安全协商模式。
+    #[serde(default)]
+    pub security: RdpSecurity,
+    /// 显示色深。
+    #[serde(default)]
+    pub color_depth: RdpColorDepth,
+    /// 性能与画质调优。
+    #[serde(default)]
+    pub performance: RdpPerformance,
+    /// 是否启用远端声音本地播放。
+    #[serde(default = "default_true")]
+    pub audio: bool,
+    /// 是否启用双向文本剪贴板同步。
+    #[serde(default = "default_true")]
+    pub clipboard: bool,
+    /// 是否启用双向剪贴板文件流复制。
+    #[serde(default = "default_true")]
+    pub file_copy: bool,
+    /// 动态分辨率调整（跟随视口窗格缩放自适应重设）。
+    #[serde(default = "default_true")]
+    pub dynamic_resolution: bool,
+    /// 自定义初始固定分辨率（`None` 表示跟随本地窗口大小）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desktop_size: Option<RdpDesktopSize>,
+}
+
+fn default_rdp_port() -> u16 {
+    3389
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl RdpConnection {
+    pub fn new(host: impl Into<String>, username: impl Into<String>) -> Self {
+        Self {
+            host: host.into(),
+            port: default_rdp_port(),
+            username: username.into(),
+            domain: None,
+            security: RdpSecurity::default(),
+            color_depth: RdpColorDepth::default(),
+            performance: RdpPerformance::default(),
+            audio: true,
+            clipboard: true,
+            file_copy: true,
+            dynamic_resolution: true,
+            desktop_size: None,
         }
     }
 }
