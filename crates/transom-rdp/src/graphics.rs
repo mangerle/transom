@@ -69,3 +69,36 @@ impl GraphicsPipeline {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_graphics_pipeline_lifecycle() {
+        let mut pipeline = GraphicsPipeline::new(1024, 768);
+        assert!(pipeline.commit_frame().is_none());
+
+        pipeline.record_damage(InclusiveRectangle {
+            left: 10,
+            top: 20,
+            right: 50,
+            bottom: 60,
+        });
+
+        let event = pipeline.commit_frame().expect("应产生提交帧");
+        assert_eq!(event.width, 1024);
+        assert_eq!(event.height, 768);
+        assert_eq!(event.dirty_rectangles.len(), 1);
+
+        assert!(pipeline.commit_frame().is_none());
+
+        pipeline.resize(1920, 1080);
+        let resize_event = pipeline.commit_frame().expect("resize 后应有全屏脏矩形");
+        assert_eq!(resize_event.width, 1920);
+        assert_eq!(resize_event.height, 1080);
+        assert_eq!(resize_event.dirty_rectangles.len(), 1);
+        assert_eq!(resize_event.dirty_rectangles[0].right, 1919);
+        assert_eq!(resize_event.dirty_rectangles[0].bottom, 1079);
+    }
+}

@@ -112,6 +112,30 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "m" => Scancode::from_u8(false, 0x32),
         "alt" | "option" => Scancode::from_u8(false, 0x38),
         "space" => Scancode::from_u8(false, 0x39),
+        "capslock" | "caps" => Scancode::from_u8(false, 0x3A),
+        // 功能键 F1 - F12
+        "f1" => Scancode::from_u8(false, 0x3B),
+        "f2" => Scancode::from_u8(false, 0x3C),
+        "f3" => Scancode::from_u8(false, 0x3D),
+        "f4" => Scancode::from_u8(false, 0x3E),
+        "f5" => Scancode::from_u8(false, 0x3F),
+        "f6" => Scancode::from_u8(false, 0x40),
+        "f7" => Scancode::from_u8(false, 0x41),
+        "f8" => Scancode::from_u8(false, 0x42),
+        "f9" => Scancode::from_u8(false, 0x43),
+        "f10" => Scancode::from_u8(false, 0x44),
+        "f11" => Scancode::from_u8(false, 0x57),
+        "f12" => Scancode::from_u8(false, 0x58),
+        // 常用标点符号
+        "[" | "bracketleft" => Scancode::from_u8(false, 0x1A),
+        "]" | "bracketright" => Scancode::from_u8(false, 0x1B),
+        ";" | "semicolon" => Scancode::from_u8(false, 0x27),
+        "'" | "quote" => Scancode::from_u8(false, 0x28),
+        "`" | "grave" => Scancode::from_u8(false, 0x29),
+        "\\" | "backslash" => Scancode::from_u8(false, 0x2B),
+        "," | "comma" => Scancode::from_u8(false, 0x33),
+        "." | "period" => Scancode::from_u8(false, 0x34),
+        "/" | "slash" => Scancode::from_u8(false, 0x35),
         // 导航与功能按键（多为扩展扫描码）
         "up" => Scancode::from_u8(true, 0x48),
         "down" => Scancode::from_u8(true, 0x50),
@@ -127,4 +151,30 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         _ => return None,
     };
     Some(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keyboard_translator_flow() {
+        let mut translator = KeyboardTranslator::default();
+        let ops = translator.handle_key_down("enter");
+        assert_eq!(ops.len(), 1);
+
+        let ops_up = translator.handle_key_up("enter");
+        assert_eq!(ops_up.len(), 1);
+
+        let released = translator.release_all();
+        assert_eq!(released.len(), 4);
+    }
+
+    #[test]
+    fn test_function_keys_and_symbols() {
+        assert!(key_name_to_scancode("f5").is_some());
+        assert!(key_name_to_scancode("f12").is_some());
+        assert!(key_name_to_scancode("backslash").is_some());
+        assert!(key_name_to_scancode("unknown_key_xyz").is_none());
+    }
 }

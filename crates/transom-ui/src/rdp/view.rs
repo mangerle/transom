@@ -1,14 +1,16 @@
 //! RDP 桌面视口核心组件与事件处理。
 //!
 //! 设计原理（Why）：作为 GPUI 自绘树中的一等公民视图，`RdpView` 将来自后台会话
-//! 线程的增量瓦片帧（`TiledDesktopFrame`）拼装呈现，并捕获键盘与鼠标操作直接
-//! 送回会话输入通道。
+//! 线程的增量瓦片帧（`TiledDesktopFrame`）拼装呈现，并捕获键盘、鼠标与滚轮操作
+//! 送回会话输入通道。针对高回报率鼠标提供坐标去重微节流，消除网络通道抖动。
 
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::SessionId;
-use transom_rdp::{RdpInput, RdpOutput, RdpSession, SessionConfig, TiledDesktopFrame};
+use transom_rdp::{
+    CursorUpdate, RdpInput, RdpOutput, RdpSession, SessionConfig, TiledDesktopFrame,
+};
 
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
 
@@ -32,6 +34,9 @@ pub struct RdpView {
     session: Option<RdpSession>,
     is_muted: bool,
     is_scaled: bool,
+    last_mouse_pos: Option<(u16, u16)>,
+    #[allow(dead_code)]
+    cursor: Option<CursorUpdate>,
     focus_handle: FocusHandle,
 }
 
@@ -56,6 +61,9 @@ impl RdpView {
                         RdpOutput::Frame(f) => {
                             view.frame = Some(f);
                         }
+                        RdpOutput::Cursor(c) => {
+                            view.cursor = Some(c);
+                        }
                         RdpOutput::Terminated(e) => {
                             view.state = RdpViewState::Failed(e.to_string());
                         }
@@ -78,6 +86,8 @@ impl RdpView {
             session: Some(session),
             is_muted: false,
             is_scaled: true,
+            last_mouse_pos: None,
+            cursor: None,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -97,16 +107,127 @@ impl RdpView {
         self.state = RdpViewState::Disconnected;
     }
 
-    /// 获取关联会话标识。
-    #[allow(dead_code)]
-    pub fn session_id(&self) -> SessionId {
-        self.session_id
+    /// 渲染状态提示视图（连接中、断开或失败）。
+    fn render_status_view(&self) -> AnyElement {
+        match &self.state {
+            RdpViewState::Connecting => v_flex()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .text_color(gpui_kit::rgb(0xaaaaaa))
+                .child(rust_i18n::t!("rdp.connecting").to_string())
+                .into_any_element(),
+            RdpViewState::Failed(msg) => v_flex()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .gap(px(8.0))
+                .text_color(gpui_kit::rgb(0xff5555))
+                .child(rust_i18n::t!("rdp.failed", msg = msg).to_string())
+                .into_any_element(),
+            RdpViewState::Disconnected => v_flex()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .text_color(gpui_kit::rgb(0x888888))
+                .child(rust_i18n::t!("rdp.disconnected").to_string())
+                .into_any_element(),
+            RdpViewState::Connected { .. } => div().into_any_element(),
+        }
     }
 
-    /// 获取显示标题。
-    #[allow(dead_code)]
-    pub fn title(&self) -> &str {
-        &self.title
+    /// 渲染桌面瓦片集合。
+    fn render_desktop_tiles(&self) -> AnyElement {
+        let Some(frame) = &self.frame else {
+            return div().into_any_element();
+        };
+
+        let mut grid = v_flex().flex_none();
+        let cols = frame.cols as usize;
+        let rows = frame.rows as usize;
+
+        for r in 0..rows {
+            let mut row = h_flex().flex_none();
+            for c in 0..cols {
+                let idx = r * cols + c;
+                if let Some(tile_img) = frame.tiles.get(idx) {
+                    row = row.child(img(ImageSource::Render(tile_img.clone())).flex_none());
+                }
+            }
+            grid = grid.child(row);
+        }
+        grid.into_any_element()
+    }
+
+    /// 渲染悬浮工具栏。
+    fn render_floating_toolbar(&self, cx: &Context<Self>) -> AnyElement {
+        let view_entity = cx.entity().clone();
+        let toolbar = render_rdp_toolbar(RdpToolbarParams {
+            is_muted: self.is_muted,
+            is_scaled: self.is_scaled,
+            on_send_cad: {
+                let view = view_entity.clone();
+                Box::new(move |_, _, cx| {
+                    view.update(cx, |this, _| {
+                        this.send_input(RdpInput::KeyDown {
+                            key: "ctrl".to_string(),
+                        });
+                        this.send_input(RdpInput::KeyDown {
+                            key: "alt".to_string(),
+                        });
+                        this.send_input(RdpInput::KeyDown {
+                            key: "delete".to_string(),
+                        });
+                        this.send_input(RdpInput::KeyUp {
+                            key: "delete".to_string(),
+                        });
+                        this.send_input(RdpInput::KeyUp {
+                            key: "alt".to_string(),
+                        });
+                        this.send_input(RdpInput::KeyUp {
+                            key: "ctrl".to_string(),
+                        });
+                    });
+                })
+            },
+            on_toggle_mute: {
+                let view = view_entity.clone();
+                Box::new(move |_, _, cx| {
+                    view.update(cx, |this, cx| {
+                        this.is_muted = !this.is_muted;
+                        cx.notify();
+                    });
+                })
+            },
+            on_toggle_scale: {
+                let view = view_entity.clone();
+                Box::new(move |_, _, cx| {
+                    view.update(cx, |this, cx| {
+                        this.is_scaled = !this.is_scaled;
+                        cx.notify();
+                    });
+                })
+            },
+            on_disconnect: {
+                let view = view_entity.clone();
+                Box::new(move |_, _, cx| {
+                    view.update(cx, |this, cx| {
+                        this.disconnect();
+                        cx.notify();
+                    });
+                })
+            },
+        });
+
+        div()
+            .absolute()
+            .top(px(8.0))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(toolbar)
+            .into_any_element()
     }
 }
 
@@ -118,8 +239,7 @@ impl Focusable for RdpView {
 
 impl Render for RdpView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let view_entity = cx.entity().clone();
-        let mut root = div()
+        let root = div()
             .track_focus(&self.focus_handle)
             .size_full()
             .relative()
@@ -140,7 +260,9 @@ impl Render for RdpView {
                         height,
                         this.is_scaled,
                     )
+                    && this.last_mouse_pos != Some((x, y))
                 {
+                    this.last_mouse_pos = Some((x, y));
                     this.send_input(RdpInput::MouseMove { x, y });
                 }
             }))
@@ -184,6 +306,48 @@ impl Render for RdpView {
                     }
                 }),
             )
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(move |this, _: &MouseDownEvent, _, _| {
+                    if let Some(input) =
+                        crate::rdp::input::map_mouse_button(MouseButton::Middle, true)
+                    {
+                        this.send_input(input);
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Middle,
+                cx.listener(move |this, _: &MouseUpEvent, _, _| {
+                    if let Some(input) =
+                        crate::rdp::input::map_mouse_button(MouseButton::Middle, false)
+                    {
+                        this.send_input(input);
+                    }
+                }),
+            )
+            .on_scroll(cx.listener(move |this, event: &ScrollEvent, _, _| {
+                let (delta_x, delta_y) = match event.delta {
+                    ScrollDelta::Lines(p) => ((p.x * 120.0) as i16, (p.y * 120.0) as i16),
+                    ScrollDelta::Pixels(p) => {
+                        let dy = (f32::from(p.y) / 10.0 * 120.0) as i16;
+                        let dx = (f32::from(p.x) / 10.0 * 120.0) as i16;
+                        (dx, dy)
+                    }
+                };
+                if delta_y != 0 {
+                    this.send_input(RdpInput::MouseWheel {
+                        vertical: true,
+                        delta: delta_y,
+                    });
+                }
+                if delta_x != 0 {
+                    this.send_input(RdpInput::MouseWheel {
+                        vertical: false,
+                        delta: delta_x,
+                    });
+                }
+            }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, _| {
                 this.send_input(RdpInput::KeyDown {
                     key: event.keystroke.key.clone(),
@@ -196,132 +360,10 @@ impl Render for RdpView {
             }));
 
         match &self.state {
-            RdpViewState::Connecting => {
-                root = root.child(
-                    v_flex()
-                        .size_full()
-                        .items_center()
-                        .justify_center()
-                        .text_color(gpui_kit::rgb(0xaaaaaa))
-                        .child(rust_i18n::t!("rdp.connecting").to_string()),
-                );
-            }
-            RdpViewState::Failed(msg) => {
-                root = root.child(
-                    v_flex()
-                        .size_full()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(8.0))
-                        .text_color(gpui_kit::rgb(0xff5555))
-                        .child(rust_i18n::t!("rdp.failed", msg = msg).to_string()),
-                );
-            }
-            RdpViewState::Disconnected => {
-                root = root.child(
-                    v_flex()
-                        .size_full()
-                        .items_center()
-                        .justify_center()
-                        .text_color(gpui_kit::rgb(0x888888))
-                        .child(rust_i18n::t!("rdp.disconnected").to_string()),
-                );
-            }
-            RdpViewState::Connected {
-                width: _,
-                height: _,
-            } => {
-                // 渲染桌面瓦片集合
-                if let Some(frame) = &self.frame {
-                    let mut grid = v_flex().flex_none();
-                    let cols = frame.cols as usize;
-                    let rows = frame.rows as usize;
-
-                    for r in 0..rows {
-                        let mut row = h_flex().flex_none();
-                        for c in 0..cols {
-                            let idx = r * cols + c;
-                            if let Some(tile_img) = frame.tiles.get(idx) {
-                                row = row
-                                    .child(img(ImageSource::Render(tile_img.clone())).flex_none());
-                            }
-                        }
-                        grid = grid.child(row);
-                    }
-                    root = root.child(grid);
-                }
-
-                // 悬浮工具条
-                let toolbar = render_rdp_toolbar(RdpToolbarParams {
-                    is_muted: self.is_muted,
-                    is_scaled: self.is_scaled,
-                    on_send_cad: {
-                        let view = view_entity.clone();
-                        Box::new(move |_, _, cx| {
-                            view.update(cx, |this, _| {
-                                this.send_input(RdpInput::KeyDown {
-                                    key: "ctrl".to_string(),
-                                });
-                                this.send_input(RdpInput::KeyDown {
-                                    key: "alt".to_string(),
-                                });
-                                this.send_input(RdpInput::KeyDown {
-                                    key: "delete".to_string(),
-                                });
-                                this.send_input(RdpInput::KeyUp {
-                                    key: "delete".to_string(),
-                                });
-                                this.send_input(RdpInput::KeyUp {
-                                    key: "alt".to_string(),
-                                });
-                                this.send_input(RdpInput::KeyUp {
-                                    key: "ctrl".to_string(),
-                                });
-                            });
-                        })
-                    },
-                    on_toggle_mute: {
-                        let view = view_entity.clone();
-                        Box::new(move |_, _, cx| {
-                            view.update(cx, |this, cx| {
-                                this.is_muted = !this.is_muted;
-                                cx.notify();
-                            });
-                        })
-                    },
-                    on_toggle_scale: {
-                        let view = view_entity.clone();
-                        Box::new(move |_, _, cx| {
-                            view.update(cx, |this, cx| {
-                                this.is_scaled = !this.is_scaled;
-                                cx.notify();
-                            });
-                        })
-                    },
-                    on_disconnect: {
-                        let view = view_entity.clone();
-                        Box::new(move |_, _, cx| {
-                            view.update(cx, |this, cx| {
-                                this.disconnect();
-                                cx.notify();
-                            });
-                        })
-                    },
-                });
-
-                root = root.child(
-                    div()
-                        .absolute()
-                        .top(px(8.0))
-                        .left_0()
-                        .right_0()
-                        .flex()
-                        .justify_center()
-                        .child(toolbar),
-                );
-            }
+            RdpViewState::Connected { .. } => root
+                .child(self.render_desktop_tiles())
+                .child(self.render_floating_toolbar(cx)),
+            _ => root.child(self.render_status_view()),
         }
-
-        root
     }
 }
