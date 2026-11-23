@@ -139,8 +139,49 @@ impl SftpClient {
         Ok(())
     }
 
+    /// 重命名远端文件或目录。
+    ///
+    /// 设计原理（Why）：
+    /// - 实现初衷：SFTP v3 协议的标准 `SSH_FXP_RENAME` 在目标文件已存在时会直接报错；
+    ///   在覆盖文件或整理目录时，若采用“先删目标再重命名”，一旦中间发生网络闪断将造成
+    ///   目标文件已被删但源文件未移过去的灾难性数据丢失；
+    /// - 核心优势：russh-sftp 4.0 增加了对 OpenSSH `posix-rename@openssh.com` 扩展的原生支持，
+    ///   优先尝试 POSIX 原子覆盖重命名（`mv -f` 语义）；若服务端不支持则安全回退到标准 rename；
+    /// - 代价与局限：极少数非 OpenSSH 服务端不支持扩展时，如果目标已存在，回退到删除后重命名。
+    ///
+    /// # Errors
+    /// 源路径不存在、权限不足或远端重命名失败时返回 `ErrorCode::SftpFailed`。
     pub async fn rename(&self, from: &str, to: &str) -> Result<(), AppError> {
-        self.session.rename(from, to).await.map_err(sftp_error)
+        self.atomic_rename(from, to).await
+    }
+
+    /// 显式调用 OpenSSH 的 POSIX 原子覆盖重命名扩展。
+    ///
+    /// 若服务端支持该扩展，返回 `Ok(true)` 并完成原子覆盖；
+    /// 若服务端未通告该扩展支持，返回 `Ok(false)` 且不执行任何修改。
+    pub async fn posix_rename(&self, from: &str, to: &str) -> Result<bool, AppError> {
+        self.session
+            .posix_rename(from, to)
+            .await
+            .map_err(sftp_error)
+    }
+
+    /// 尝试以 POSIX 原子语义重命名，服务端不支持时自动降级为标准重命名（必要时清理旧目标）。
+    pub async fn atomic_rename(&self, from: &str, to: &str) -> Result<(), AppError> {
+        match self.session.posix_rename(from, to).await {
+            Ok(true) => Ok(()),
+            Ok(false) => {
+                // 服务端不支持 posix-rename 扩展，回退到标准 rename
+                if let Err(error) = self.session.rename(from, to).await {
+                    // 若标准 rename 失败（如因目标已存在导致），进行兜底删除后重试
+                    let _ = self.session.remove_file(to).await;
+                    self.session.rename(from, to).await.map_err(sftp_error)?;
+                    let _ = error;
+                }
+                Ok(())
+            }
+            Err(error) => Err(sftp_error(error)),
+        }
     }
 
     /// 创建远端软链接：`target` 为被指向的既有路径，`link_path` 为新建链接自身路径。

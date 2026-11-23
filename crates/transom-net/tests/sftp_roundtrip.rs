@@ -715,3 +715,129 @@ fn modified_seconds(path: &std::path::Path) -> u64 {
         .expect("修改时间早于 Unix 纪元")
         .as_secs()
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn upload_interrupted_does_not_corrupt_existing_remote_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let remote_file = dir.path().join("critical_config.conf");
+    let original_content = b"ORIGINAL_VALID_PRODUCTION_CONFIG_DATA";
+    std::fs::write(&remote_file, original_content).unwrap();
+
+    let known_hosts =
+        Arc::new(JsonKnownHostsStore::new(dir.path().join("known_hosts_2.json")).unwrap());
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let mut server_config = server::Config {
+        inactivity_timeout: None,
+        ..Default::default()
+    };
+    server_config
+        .keys
+        .push(PrivateKey::random(&mut safe_rng(), Algorithm::Ed25519).unwrap());
+    let server_config = Arc::new(server_config);
+    let server_root = Arc::new(dir.path().to_path_buf());
+    let server_task = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        let handle = server::run_stream(
+            server_config,
+            socket,
+            TestServer::new(server_root).new_client(None),
+        )
+        .await
+        .unwrap();
+        let _ = handle.await;
+    });
+
+    let connection = SshConnection {
+        host: "127.0.0.1".into(),
+        port,
+        username: "tester".into(),
+        auth: AuthMethod::Password { save: false },
+        options: SessionOptions {
+            connect_timeout_secs: 5,
+            keepalive_secs: 0,
+            allow_keyboard_interactive: false,
+            auto_reconnect: false,
+            agent_forward: false,
+            wol_mac: None,
+        },
+        proxy_jump: None,
+    };
+
+    let session = tokio::time::timeout(
+        Duration::from_secs(8),
+        connect_ssh(transom_net::SshConnectParams {
+            connection: &connection,
+            jumps: &[],
+            size: TerminalSize::new(80, 24),
+            credentials: ConnectionSecrets {
+                password: Some(zeroize::Zeroizing::new("secret".to_string())),
+                key_passphrase: None,
+            },
+            prompter: Arc::new(PasswordPrompter::new("secret")),
+            known_hosts,
+            proxy: transom_core::OutboundProxy::default(),
+            allow_sha1_publickey_auth: true,
+        }),
+    )
+    .await
+    .expect("connect timed out")
+    .expect("connect failed");
+
+    let SshSession {
+        io, join, remote, ..
+    } = session;
+    let client = SftpClient::open(&remote).await.expect("open sftp");
+
+    // 准备一个较大的本地新文件用于覆盖上传
+    let local_file = dir.path().join("new_config.conf");
+    let new_content = vec![0x58u8; 512 * 1024]; // 512 KiB
+    std::fs::write(&local_file, &new_content).unwrap();
+
+    // 启动上传并在中途直接 abort 取消（模拟用户点击取消或 SftpCancel）
+    let upload_task = tokio::spawn({
+        let client = client.clone();
+        let local_file = local_file.clone();
+        async move {
+            client
+                .upload(&local_file, "/critical_config.conf", |transferred, _| {
+                    if transferred >= 32 * 1024 {
+                        // 传了一小部分
+                    }
+                })
+                .await
+        }
+    });
+
+    // 给予一定执行时间后强制 abort 取消
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    upload_task.abort();
+    let _ = upload_task.await;
+
+    // 核心断言：由于采用了临时文件暂存保护机制，远端既有的 critical_config.conf 绝对未被截断或损坏！
+    let remote_content_after_cancel =
+        std::fs::read(&remote_file).expect("读取被取消覆盖的远端文件");
+    assert_eq!(
+        remote_content_after_cancel, original_content,
+        "上传一半被取消后，远端原本的正常文件必须完好无损，绝对不允许被提前覆盖或截断"
+    );
+
+    // 紧接着再次发起完整的覆盖上传
+    let transferred = client
+        .upload(&local_file, "/critical_config.conf", |_, _| {})
+        .await
+        .expect("覆盖上传成功");
+    assert_eq!(transferred, 512 * 1024);
+
+    // 验证完成全量传输后，远端文件被原子替换为新内容
+    let final_content = std::fs::read(&remote_file).expect("读取覆盖后的远端文件");
+    assert_eq!(final_content, new_content, "最终内容必须正确替换");
+
+    client.close().await;
+    drop(client);
+    drop(io);
+    let _ = tokio::time::timeout(Duration::from_secs(3), join).await;
+    server_task.abort();
+}

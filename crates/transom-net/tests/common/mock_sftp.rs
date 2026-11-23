@@ -2,7 +2,7 @@ use md5::Md5;
 use russh::server::{self, Auth, Msg};
 use russh::{Channel, ChannelId};
 use russh_sftp::protocol::{
-    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode,
+    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, SftpHandle, Status, StatusCode,
 };
 use russh_sftp::server::Handler as SftpHandler;
 use sha2::{Digest, Sha256};
@@ -238,18 +238,19 @@ impl SftpHandler for FsSftp {
             .map_err(|_| StatusCode::Failure)?;
         Ok(Handle {
             id,
-            handle: filename,
+            handle: filename.into(),
         })
     }
 
     async fn read(
         &mut self,
         id: u32,
-        handle: String,
+        handle: SftpHandle,
         offset: u64,
         len: u32,
     ) -> Result<Data, Self::Error> {
-        let mut file = tokio::fs::File::open(self.local(&handle))
+        let path = String::from_utf8_lossy(handle.as_bytes()).to_string();
+        let mut file = tokio::fs::File::open(self.local(&path))
             .await
             .map_err(|_| StatusCode::Failure)?;
         file.seek(std::io::SeekFrom::Start(offset))
@@ -270,15 +271,16 @@ impl SftpHandler for FsSftp {
     async fn write(
         &mut self,
         id: u32,
-        handle: String,
+        handle: SftpHandle,
         offset: u64,
         data: Vec<u8>,
     ) -> Result<Status, Self::Error> {
+        let path = String::from_utf8_lossy(handle.as_bytes()).to_string();
         let mut file = tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(false)
-            .open(self.local(&handle))
+            .open(self.local(&path))
             .await
             .map_err(|_| StatusCode::Failure)?;
         file.seek(std::io::SeekFrom::Start(offset))
@@ -291,7 +293,7 @@ impl SftpHandler for FsSftp {
         Ok(ok(id))
     }
 
-    async fn close(&mut self, id: u32, _handle: String) -> Result<Status, Self::Error> {
+    async fn close(&mut self, id: u32, _handle: SftpHandle) -> Result<Status, Self::Error> {
         Ok(ok(id))
     }
 
@@ -300,19 +302,23 @@ impl SftpHandler for FsSftp {
             return Err(StatusCode::NoSuchFile);
         }
         self.readdir_done.remove(&path);
-        Ok(Handle { id, handle: path })
+        Ok(Handle {
+            id,
+            handle: path.into(),
+        })
     }
 
-    async fn readdir(&mut self, id: u32, handle: String) -> Result<Name, Self::Error> {
-        if !self.readdir_done.insert(handle.clone()) {
+    async fn readdir(&mut self, id: u32, handle: SftpHandle) -> Result<Name, Self::Error> {
+        let path = String::from_utf8_lossy(handle.as_bytes()).to_string();
+        if !self.readdir_done.insert(path.clone()) {
             return Err(StatusCode::Eof);
         }
         let mut files = Vec::new();
-        for entry in std::fs::read_dir(self.local(&handle)).map_err(|_| StatusCode::Failure)? {
+        for entry in std::fs::read_dir(self.local(&path)).map_err(|_| StatusCode::Failure)? {
             let entry = entry.map_err(|_| StatusCode::Failure)?;
             let name = entry.file_name().to_string_lossy().to_string();
-            let path = format!("{}/{}", handle.trim_end_matches('/'), name);
-            if let Ok(attrs) = self.lstat_attrs(&path) {
+            let entry_path = format!("{}/{}", path.trim_end_matches('/'), name);
+            if let Ok(attrs) = self.lstat_attrs(&entry_path) {
                 files.push(File::new(name, attrs));
             }
         }
@@ -347,8 +353,9 @@ impl SftpHandler for FsSftp {
         })
     }
 
-    async fn fstat(&mut self, id: u32, handle: String) -> Result<Attrs, Self::Error> {
-        self.stat(id, handle).await
+    async fn fstat(&mut self, id: u32, handle: SftpHandle) -> Result<Attrs, Self::Error> {
+        let path = String::from_utf8_lossy(handle.as_bytes()).to_string();
+        self.stat(id, path).await
     }
 
     async fn mkdir(

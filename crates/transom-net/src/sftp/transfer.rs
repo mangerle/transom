@@ -13,6 +13,7 @@ use russh_sftp::protocol::FileAttributes;
 use sha2::{Digest, Sha256};
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use transom_core::{AppError, ErrorCode, TransferStart};
@@ -180,6 +181,7 @@ impl SftpClient {
             file: mut remote_file,
             offset,
             existing_len,
+            staging_path,
         } = self
             .open_remote_upload_target(remote_path, start, source_len)
             .await?;
@@ -200,24 +202,44 @@ impl SftpClient {
         let mut transferred = offset;
         progress(transferred, total);
 
-        loop {
-            let count = local.read(&mut buffer).await.map_err(sftp_io_error)?;
-            if count == 0 {
-                break;
+        let write_result: Result<(), AppError> = async {
+            loop {
+                let count = local.read(&mut buffer).await.map_err(sftp_io_error)?;
+                if count == 0 {
+                    break;
+                }
+                if let Some(hasher) = local_hasher.as_mut() {
+                    hasher.update(&buffer[..count]);
+                }
+                remote_file
+                    .write_all(&buffer[..count])
+                    .await
+                    .map_err(sftp_io_error)?;
+                transferred = transferred.saturating_add(count as u64);
+                progress(transferred, total);
             }
-            if let Some(hasher) = local_hasher.as_mut() {
-                hasher.update(&buffer[..count]);
-            }
-            remote_file
-                .write_all(&buffer[..count])
-                .await
-                .map_err(sftp_io_error)?;
-            transferred = transferred.saturating_add(count as u64);
-            progress(transferred, total);
+            remote_file.shutdown().await.map_err(sftp_io_error)?;
+            let _ = remote_file.close().await;
+            Ok(())
         }
-        remote_file.shutdown().await.map_err(sftp_io_error)?;
-        self.finish_upload_target(remote_path, transferred, existing_len, local_mtime)
-            .await?;
+        .await;
+
+        if let Err(error) = write_result {
+            // 写入失败或中途取消：若存在暂存临时文件则尽力清理，原远端目标文件完好无损
+            if let Some(staging) = staging_path.as_deref() {
+                let _ = self.session.remove_file(staging).await;
+            }
+            return Err(error);
+        }
+
+        self.finish_upload_target(
+            remote_path,
+            staging_path.as_deref(),
+            transferred,
+            existing_len,
+            local_mtime,
+        )
+        .await?;
         let local_sha256 = local_hasher.map(|h| hex_encode(&h.finalize()));
         Ok(TransferProgressResult {
             transferred,
@@ -225,23 +247,33 @@ impl SftpClient {
         })
     }
 
-    /// 上传收尾：截断续传残留的旧尾部，并尽力保留源文件修改时间。
+    /// 上传收尾：将暂存文件原子替换到目标路径，截断续传残留的旧尾部，并尽力保留源文件修改时间。
     ///
-    /// 设计原理（Why）：续传只覆盖 `offset` 之后的内容，远端原有长度若超过
-    /// 本次写入长度，文件末尾会残留上一版数据；这种“尾巴”不会出现在字节流
-    /// 里，只能显式按实际写入长度截断，否则落盘结果比源文件更长。
+    /// 设计原理（Why）：
+    /// - 从头覆盖模式下写入的是同目录临时暂存文件（见 `make_staging_path`），收尾时
+    ///   通过 `atomic_rename`（优先依赖 russh-sftp 4.0 的 `posix_rename` 扩展）原子替换到
+    ///   目标路径；即使覆盖现有文件，也是由操作系统内核单步替换 inode，不仅杜绝了传输
+    ///   中断破坏已有文件的隐患，且在远端呈现零中间状态的原子语义；
+    /// - 续传模式直接在原文件续写，若远端原有长度超过本次写入长度，显式按实际长度截断旧尾部。
     ///
     /// # Errors
-    /// 远端截断失败时返回 `ErrorCode::SftpFailed`；修改时间失败只记日志，
+    /// 远端原子重命名或截断失败时返回 `ErrorCode::SftpFailed`；修改时间失败只记日志，
     /// 不影响传输结果的正确性。
     async fn finish_upload_target(
         &self,
         remote_path: &str,
+        staging_path: Option<&str>,
         transferred: u64,
         previous_len: u64,
         mtime: Option<u32>,
     ) -> Result<(), AppError> {
-        if previous_len > transferred {
+        if let Some(staging) = staging_path {
+            // 从头覆盖：使用原子重命名把暂存临时文件原子替换为最终目标文件
+            if let Err(error) = self.atomic_rename(staging, remote_path).await {
+                let _ = self.session.remove_file(staging).await;
+                return Err(error);
+            }
+        } else if previous_len > transferred {
             let mut attributes = FileAttributes::empty();
             attributes.size = Some(transferred);
             self.session
@@ -264,12 +296,12 @@ impl SftpClient {
 
     /// 按传输起点打开远端写入句柄。
     ///
-    /// 设计原理（Why）：续传的合法性只能由调用方给出的偏移与被覆盖文件的
-    /// 当前长度共同保证——远端若已被删除或截短到偏移以下，前缀不再完整，
-    /// 继续追加会写出错位内容，此时必须退回从头覆盖，而不是报错或照样追加。
-    ///
-    /// 返回句柄、起始偏移以及打开前的远端长度：后者用于在收尾时判断是否
-    /// 残留了旧尾部需要截断（覆盖模式恒为 0）。
+    /// 设计原理（Why）：
+    /// - 从头覆盖（`requested == 0`）：写入同目录下的 `.transom-upload-*.part` 临时文件，
+    ///   绝不直接在目标路径上 `create` 截断，彻底杜绝传输中途取消导致远端正常文件被毁的问题；
+    /// - 显式续传（`requested > 0`）：续传的合法性只能由调用方给出的偏移与被覆盖文件的
+    ///   当前长度共同保证——远端若已被删除或截短到偏移以下，前缀不再完整，继续追加会写出错位内容，
+    ///   此时必须退回从头覆盖（同样采用暂存路径保证安全），而不是报错或照样追加。
     async fn open_remote_upload_target(
         &self,
         remote_path: &str,
@@ -283,10 +315,13 @@ impl SftpClient {
             _ => 0,
         };
         if requested == 0 {
+            let staging = make_staging_path(remote_path);
+            let file = self.session.create(&staging).await.map_err(sftp_error)?;
             return Ok(UploadTarget {
-                file: self.session.create(remote_path).await.map_err(sftp_error)?,
+                file,
                 offset: 0,
                 existing_len: 0,
+                staging_path: Some(staging),
             });
         }
         let existing_len = self
@@ -297,10 +332,13 @@ impl SftpClient {
             .and_then(|metadata| metadata.size);
         let Some(existing_len) = existing_len.filter(|len| *len >= requested) else {
             log::debug!("远端文件不足以支撑续传偏移，退回从头覆盖，路径: {remote_path}");
+            let staging = make_staging_path(remote_path);
+            let file = self.session.create(&staging).await.map_err(sftp_error)?;
             return Ok(UploadTarget {
-                file: self.session.create(remote_path).await.map_err(sftp_error)?,
+                file,
                 offset: 0,
                 existing_len: 0,
+                staging_path: Some(staging),
             });
         };
         let mut file: RemoteFileHandle = self
@@ -318,7 +356,32 @@ impl SftpClient {
             file,
             offset: requested,
             existing_len,
+            staging_path: None,
         })
+    }
+}
+
+static UPLOAD_TOKEN_SEQ: AtomicU64 = AtomicU64::new(1);
+
+/// 为从头上传生成同目录下的暂存临时文件路径。
+///
+/// 格式为：`<parent>/.<filename>.transom-upload-<nanos>-<seq>.part`。
+fn make_staging_path(remote_path: &str) -> String {
+    let (parent, file_name) = match remote_path.rfind('/') {
+        Some(idx) => (&remote_path[..idx], &remote_path[idx + 1..]),
+        None => ("", remote_path),
+    };
+    let seq = UPLOAD_TOKEN_SEQ.fetch_add(1, Ordering::Relaxed);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let token = format!("{now:x}-{seq:x}");
+    if parent.is_empty() {
+        format!(".{file_name}.transom-upload-{token}.part")
+    } else if parent == "/" {
+        format!("/.{file_name}.transom-upload-{token}.part")
+    } else {
+        format!("{parent}/.{file_name}.transom-upload-{token}.part")
     }
 }
 
@@ -333,6 +396,8 @@ struct UploadTarget {
     offset: u64,
     /// 打开前的远端文件长度。
     existing_len: u64,
+    /// 从头覆盖时的临时暂存路径；续传模式直接写入目标因此为 None。
+    staging_path: Option<String>,
 }
 
 /// 下载收尾：按实际写入字节数截断本地残留尾部，并尽力保留远端修改时间。
