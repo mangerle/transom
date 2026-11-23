@@ -8873,7 +8873,7 @@ dependencies = [
 
 [[package]]
 name = "transom"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8903,7 +8903,7 @@ dependencies = [
 
 [[package]]
 name = "transom-container"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -8936,7 +8936,7 @@ dependencies = [
 
 [[package]]
 name = "transom-core"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "async-trait",
  "globset",
@@ -8956,7 +8956,7 @@ dependencies = [
 
 [[package]]
 name = "transom-crypto"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "argon2",
  "base64 0.23.1",
@@ -8975,7 +8975,7 @@ dependencies = [
 
 [[package]]
 name = "transom-desktop"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "log",
  "tempfile",
@@ -8986,7 +8986,7 @@ dependencies = [
 
 [[package]]
 name = "transom-git"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "log",
  "parking_lot 0.13.0",
@@ -8999,7 +8999,7 @@ dependencies = [
 
 [[package]]
 name = "transom-net"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -9030,7 +9030,7 @@ dependencies = [
 
 [[package]]
 name = "transom-platform"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "directories",
  "log",
@@ -9042,7 +9042,7 @@ dependencies = [
 
 [[package]]
 name = "transom-store"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "keyring",
  "log",
@@ -9059,7 +9059,7 @@ dependencies = [
 
 [[package]]
 name = "transom-sync"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -9085,7 +9085,7 @@ dependencies = [
 
 [[package]]
 name = "transom-terminal"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "alacritty_terminal",
  "base64 0.23.1",
@@ -9107,7 +9107,7 @@ dependencies = [
 
 [[package]]
 name = "transom-ui"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "chrono",
  "flume",
@@ -9145,7 +9145,7 @@ dependencies = [
 
 [[package]]
 name = "transom-ui-icons"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "gpui-kit",
  "log",
@@ -9155,7 +9155,7 @@ dependencies = [
 
 [[package]]
 name = "transom-ui-kit"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "gpui-kit",
  "transom-core",
@@ -9164,7 +9164,7 @@ dependencies = [
 
 [[package]]
 name = "transom-updater"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "log",
  "shipup",
@@ -9174,7 +9174,7 @@ dependencies = [
 
 [[package]]
 name = "transom-zmodem"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "flume",
  "log",

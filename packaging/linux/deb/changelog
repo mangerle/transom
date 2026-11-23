@@ -1,3 +1,13 @@
+transom (1.8.5) unstable; urgency=medium
+
+  * 升级 russh-sftp 至 4.0，支持 posix-rename 原子替换与上传暂存防损坏机制。
+  * 新增 FTP 与 FTPS 传输协议支持，补齐连接配置、客户端传输与文件面板交互。
+  * 端口转发面板交互增强，支持自适应排版、预设模板与实时流量计量。
+  * 终端输入补全升级为词位匹配候选浮层，并支持 OSC 9;4 任务进度标签栏展示。
+  * 标题栏新增性能 HUD 监控；适配 macOS 弹窗次提交快捷键与跨平台按键体验。
+
+ -- wangle <wangle@agree.com.cn>  Mon, 23 Nov 2026 20:38:00 +0800
+
 transom (1.8.4) unstable; urgency=medium
 
   * 升级 gpui-kit 至 0.10.0，并将主标签栏、Git 差异页签、通用表单、
