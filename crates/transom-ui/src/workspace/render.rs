@@ -330,9 +330,12 @@ impl AppShell {
                 panels_before_drawer += 1;
             }
             if show_forwards {
+                let forward_min_width = rem_px(size::FORWARD_PANEL_MIN_WIDTH, rem);
+                let forward_max_width = rem_px(size::FORWARD_PANEL_MAX_WIDTH, rem);
                 resizable_group = resizable_group.child(
                     resizable_panel()
                         .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
+                        .size_range(forward_min_width..forward_max_width)
                         .fixed()
                         .child(self.forward_view_element(cx)),
                 );
@@ -361,9 +364,12 @@ impl AppShell {
                 panels_before_drawer += 1;
             }
             if show_forwards {
+                let forward_min_width = rem_px(size::FORWARD_PANEL_MIN_WIDTH, rem);
+                let forward_max_width = rem_px(size::FORWARD_PANEL_MAX_WIDTH, rem);
                 resizable_group = resizable_group.child(
                     resizable_panel()
                         .size(rem_px(size::FORWARD_PANEL_WIDTH, rem))
+                        .size_range(forward_min_width..forward_max_width)
                         .fixed()
                         .child(self.forward_view_element(cx)),
                 );

@@ -43,8 +43,12 @@ pub mod size {
     pub const SIDEBAR_WIDTH: f32 = 16.875;
     /// 侧栏最大宽度（标准档 500px）。
     pub const SIDEBAR_MAX_WIDTH: f32 = 31.25;
-    /// 转发面板固定宽度（标准档 340px）。
-    pub const FORWARD_PANEL_WIDTH: f32 = 21.25;
+    /// 转发面板最小宽度（标准档 300px）。
+    pub const FORWARD_PANEL_MIN_WIDTH: f32 = 18.75;
+    /// 转发面板初始宽度（标准档 360px）。
+    pub const FORWARD_PANEL_WIDTH: f32 = 22.5;
+    /// 转发面板最大宽度（标准档 640px）。
+    pub const FORWARD_PANEL_MAX_WIDTH: f32 = 40.0;
     /// SFTP 面板初始宽度（标准档 760px，双栏模式）。
     pub const SFTP_PANEL_WIDTH: f32 = 47.5;
     /// SFTP 面板初始宽度（标准档 480px，仅本地模式）。

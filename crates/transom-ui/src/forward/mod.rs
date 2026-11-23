@@ -48,6 +48,7 @@ pub(crate) enum ForwardPanelEvent {
 }
 
 mod actions;
+mod confirm;
 mod entity;
 mod form;
 mod inspect;
@@ -55,8 +56,8 @@ mod lifecycle;
 mod view;
 
 pub(crate) use actions::{auto_start_forwards, on_toggle_forward, toggle_forward_panel};
+pub(crate) use confirm::render_forward_confirm_body;
 pub(crate) use entity::ForwardView;
-pub(crate) use form::render_forward_confirm_body;
 pub(crate) use inspect::{copy_forward_cli, open_forward_browser, probe_forward_rule};
 pub(crate) use lifecycle::{
     cancel_forward_confirm, confirm_forward_start, delete_forward_rule, start_forward_rule,

@@ -2219,14 +2219,74 @@ forward:
     en: SOCKS5 Proxy
     zh-CN: SOCKS5 代理
   kind_help_local:
-    en: 'Map a remote service port (for example a database bound to the server loopback) to this machine.'
-    zh-CN: 把远端服务端口（例如只监听在服务器回环上的数据库）映射到本机访问。
+    en: 'Forward a remote service port to local machine for access.'
+    zh-CN: 将远端服务端口（如服务器私有数据库）映射到本机访问。
   kind_help_remote:
     en: Let the remote side open a port; anyone connecting to it reaches this machine.
     zh-CN: 让远端开放一个端口，连接该端口即可访问本机侧的服务。
   kind_help_dynamic:
     en: 'Local SOCKS5 proxy: traffic decides its own target per connection.'
     zh-CN: 本机 SOCKS5 代理：每个连接自行决定要访问的目标。
+  empty_description:
+    en: Create a rule below or choose a preset to establish a tunnel.
+    zh-CN: 在下方表单配置并添加规则，或选择常用预设快速建立隧道。
+  flow_local:
+    en: "Local Client -> SSH Tunnel -> Remote Service"
+    zh-CN: "本机应用 ➔ SSH 隧道 ➔ 远端服务"
+  flow_remote:
+    en: "Remote Ingress -> SSH Tunnel -> Local Service"
+    zh-CN: "远端访问 ➔ SSH 隧道 ➔ 本机服务"
+  flow_dynamic:
+    en: "Local Client -> SOCKS5 -> Dynamic Gateway"
+    zh-CN: "本机客户端 ➔ SOCKS5 代理 ➔ 动态网关"
+  preset_header:
+    en: Presets
+    zh-CN: 常用预设
+  listen_endpoint:
+    en: Listen Endpoint
+    zh-CN: 监听端点
+  target_endpoint:
+    en: Target Endpoint
+    zh-CN: 目标端点
+  listen_local_title:
+    en: Local Listen
+    zh-CN: 本机监听
+  listen_remote_title:
+    en: Remote Listen
+    zh-CN: 远端监听
+  target_remote_title:
+    en: Remote Target
+    zh-CN: 远端目标
+  target_local_title:
+    en: Local Target
+    zh-CN: 本机目标
+  target_dynamic_title:
+    en: Dynamic Target
+    zh-CN: 目标端点（动态）
+  target_dynamic_hint:
+    en: Determined per connection
+    zh-CN: 由客户端请求动态指定
+  target_dynamic_port:
+    en: Dynamic
+    zh-CN: 动态
+  socks5_listen_title:
+    en: SOCKS5 Listen
+    zh-CN: 本机 SOCKS5 监听
+  rule_name_optional:
+    en: Rule Name (Optional)
+    zh-CN: 规则名称（选填）
+  editing_badge:
+    en: Editing Rule
+    zh-CN: 正在编辑规则
+  forward_to:
+    en: Forwards to
+    zh-CN: 转发至
+  host_placeholder:
+    en: Host / IP
+    zh-CN: 地址 / IP
+  port_placeholder:
+    en: Port
+    zh-CN: 端口
 known_hosts:
   title:
     en: Known Hosts

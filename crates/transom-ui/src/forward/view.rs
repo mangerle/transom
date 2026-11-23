@@ -9,6 +9,7 @@ use gpui_kit::*;
 use transom_core::{ForwardKind, ForwardState};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
+use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
 impl ForwardView {
@@ -28,8 +29,8 @@ impl ForwardView {
         let add_form = self.render_forward_add_form(tab_id, cx, p);
 
         v_flex()
-            .w(px(360.0))
-            .h_full()
+            .size_full()
+            .overflow_hidden()
             .bg(p.background)
             .text_color(p.foreground)
             .child(header)
@@ -77,10 +78,14 @@ impl ForwardView {
         if rules.is_empty() {
             rule_rows.push(
                 div()
-                    .p_3()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("forward.empty").to_string())
+                    .py_8()
+                    .px_3()
+                    .child(crate::widgets::empty_state(
+                        AppIcon::Domain(DomainIcon::FORWARD),
+                        rust_i18n::t!("forward.empty").to_string(),
+                        rust_i18n::t!("forward.empty_description").to_string(),
+                        p,
+                    ))
                     .into_any_element(),
             );
         }
@@ -90,6 +95,7 @@ impl ForwardView {
 
         v_flex()
             .id(ElementId::Name("forward-rules".into()))
+            .w_full()
             .flex_1()
             .overflow_y_scroll()
             .p_2()
@@ -121,23 +127,106 @@ impl ForwardView {
         });
         let editing = self.editing_id() == Some(rule_id);
         let (status_text, status_color) = forward_rule_status(status.as_ref(), p);
-        let summary = forward_rule_summary(rule);
+        let (kind_text, kind_color) = match &rule.kind {
+            ForwardKind::Local { .. } => (rust_i18n::t!("forward.local").to_string(), p.primary),
+            ForwardKind::Remote { .. } => (rust_i18n::t!("forward.remote").to_string(), p.warning),
+            ForwardKind::Dynamic { .. } => (rust_i18n::t!("forward.dynamic").to_string(), p.success),
+            _ => (String::new(), p.muted_foreground),
+        };
         let active_meter = status
             .as_ref()
             .filter(|status| matches!(status.state, ForwardState::Active { .. }))
             .and_then(|status| status.meter.as_ref());
 
+        let topology = match &rule.kind {
+            ForwardKind::Local { bind, target } | ForwardKind::Remote { bind, target } => {
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .text_xs()
+                    .child(
+                        div()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded(p.radius.sm)
+                            .bg(p.surface.ghost)
+                            .border_1()
+                            .border_color(p.stroke.faint)
+                            .text_color(p.foreground)
+                            .font_family(p.mono_font_family.clone())
+                            .child(format!("{}:{}", bind.host, bind.port)),
+                    )
+                    .child(
+                        AppIconElement::new(AppIcon::Ui(UiIcon::ARROW_RIGHT))
+                            .xsmall()
+                            .text_color(p.muted_foreground),
+                    )
+                    .child(
+                        div()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded(p.radius.sm)
+                            .bg(p.surface.ghost)
+                            .border_1()
+                            .border_color(p.stroke.faint)
+                            .text_color(p.foreground)
+                            .font_family(p.mono_font_family.clone())
+                            .child(format!("{}:{}", target.host, target.port)),
+                    )
+                    .into_any_element()
+            }
+            ForwardKind::Dynamic { bind, .. } => {
+                h_flex()
+                    .gap_1p5()
+                    .items_center()
+                    .text_xs()
+                    .child(
+                        div()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded(p.radius.sm)
+                            .bg(p.surface.ghost)
+                            .border_1()
+                            .border_color(p.stroke.faint)
+                            .text_color(p.foreground)
+                            .font_family(p.mono_font_family.clone())
+                            .child(format!("{}:{}", bind.host, bind.port)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_foreground)
+                            .child("SOCKS5"),
+                    )
+                    .into_any_element()
+            }
+            _ => div().into_any_element(),
+        };
+
         let mut row = v_flex()
-            .gap_1()
-            .p_2()
-            .rounded(p.radius.sm)
+            .w_full()
+            .gap_1p5()
+            .p_2p5()
+            .rounded(p.radius.md)
+            .bg(if editing { p.tone.warning_subtle } else { p.surface.faint })
             .border_1()
-            .border_color(if editing { p.warning } else { p.sidebar_border })
+            .border_color(if editing { p.warning } else { p.stroke.subtle })
             .child(
                 h_flex()
                     .justify_between()
                     .items_center()
-                    .child(div().text_sm().child(rule.name.clone()))
+                    .child(
+                        h_flex()
+                            .gap_1p5()
+                            .items_center()
+                            .child(crate::widgets::status_badge(kind_text, kind_color, p))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(rule.name.clone()),
+                            ),
+                    )
                     .child(
                         h_flex()
                             .gap_1()
@@ -171,8 +260,8 @@ impl ForwardView {
                                 .on_click(cx.listener(
                                     move |_this, _, _, cx| {
                                         cx.emit(super::ForwardPanelEvent::StopRule {
-                                            tab_id,
-                                            rule_id,
+                                             tab_id,
+                                             rule_id,
                                         });
                                         cx.notify();
                                     },
@@ -189,8 +278,8 @@ impl ForwardView {
                                 .on_click(cx.listener(
                                     move |_this, _, _, cx| {
                                         cx.emit(super::ForwardPanelEvent::StartRule {
-                                            tab_id,
-                                            rule_id,
+                                             tab_id,
+                                             rule_id,
                                         });
                                         cx.notify();
                                     },
@@ -206,8 +295,8 @@ impl ForwardView {
                                 .on_click(cx.listener(
                                     move |_this, _, _, cx| {
                                         cx.emit(super::ForwardPanelEvent::DeleteRule {
-                                            tab_id,
-                                            rule_id,
+                                             tab_id,
+                                             rule_id,
                                         });
                                         cx.notify();
                                     },
@@ -215,12 +304,7 @@ impl ForwardView {
                             ),
                     ),
             )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(summary),
-            );
+            .child(topology);
         // 动作行：仅运行中有意义——流量/连接数实时读原子值，其余按类型提供。
         if let (Some(meter), true) = (active_meter, running) {
             let (bytes, connections) = meter.snapshot();
@@ -345,18 +429,4 @@ fn forward_rule_status(
     }
 }
 
-/// 转发规则摘要：L/R/D 与绑定/目标地址。
-fn forward_rule_summary(rule: &transom_core::ForwardRule) -> String {
-    match &rule.kind {
-        ForwardKind::Local { bind, target } => format!(
-            "L {}:{} -> {}:{}",
-            bind.host, bind.port, target.host, target.port
-        ),
-        ForwardKind::Remote { bind, target } => format!(
-            "R {}:{} -> {}:{}",
-            bind.host, bind.port, target.host, target.port
-        ),
-        ForwardKind::Dynamic { bind, .. } => format!("D {}:{}", bind.host, bind.port),
-        _ => String::new(),
-    }
-}
+

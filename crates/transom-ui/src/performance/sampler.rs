@@ -277,8 +277,9 @@ fn private_memory_bytes() -> Option<u64> {
 mod tests {
     use super::{
         FrameSample, FrameSampler, ResourceHistory, ResourceSample, mean_frame_millis,
-        private_memory_bytes,
     };
+    #[cfg(target_os = "linux")]
+    use super::private_memory_bytes;
     use gpui_kit::WindowId;
     use std::collections::VecDeque;
     use std::time::{Duration, Instant};
