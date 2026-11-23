@@ -57,6 +57,14 @@ pub(super) fn assemble_state(
         local_shells,
     } = input;
     let git_registry = services.git_projects.load().unwrap_or_default();
+    let (api_registry, api_load_error) = match services.api_projects.load() {
+        Ok(registry) => (registry, None),
+        Err(error) => {
+            let message = error.detail.unwrap_or_else(|| format!("{:?}", error.code));
+            log::error!("加载 API 项目失败，已按空登记表启动: {message}");
+            (transom_api::ApiRegistry::default(), Some(message))
+        }
+    };
     let session_form = cx.new(|_| crate::session_form::SessionFormView::new());
     let known_hosts_view = cx.new(|_| {
         KnownHostsView::new(
@@ -141,6 +149,9 @@ pub(super) fn assemble_state(
                     git_registry.projects,
                     git_registry.folders,
                 ))
+            }),
+            api_sidebar: cx.new(|cx| {
+                crate::api_client::ApiSidebarView::new(api_registry, api_load_error, window, cx)
             }),
             editors,
             diff_viewer: None,

@@ -43,6 +43,11 @@ pub(crate) fn prune_tab_overlays(app_state: &mut AppState, cx: &mut Context<AppS
         .tasks
         .subscriptions
         .prune_git_workspaces(&alive);
+    app_state
+        .runtime
+        .tasks
+        .subscriptions
+        .prune_api_workspaces(&alive);
     prune_tab_diff_overlay(app_state, cx);
 }
 

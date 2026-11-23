@@ -2,6 +2,7 @@
 
 use super::model::TabContentKind;
 use super::{TabCloseAction, TabContent, TabGroupOwner, TabStatus, WorkspaceTab};
+use crate::api_client::ApiWorkspace;
 use crate::app::install_app_settings;
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
@@ -13,6 +14,7 @@ use gpui_kit::{
     Window, div, init, px,
 };
 use std::path::PathBuf;
+use transom_api::{ApiHttpService, ApiProject};
 use transom_core::{
     AppSettings, AuthMethod, Connection, ContainerEngineKind, ContainerEngineProfile,
     ContainerEngineRef, Session, SessionCatalog, SshConnection, TabId, TerminalProfile,
@@ -390,4 +392,31 @@ fn player_tab_open_and_close_are_typed() {
             let _ = view.render(window, cx);
         });
     });
+}
+
+#[test]
+fn api_client_tab_uses_typed_content_without_session_fields() {
+    let mut app = TestAppContext::single();
+    let cx = probe_window(&mut app);
+    let runtime = tokio::runtime::Runtime::new().expect("API 测试运行时应能创建");
+    let http = ApiHttpService::new(runtime.handle().clone()).expect("API HTTP 服务应能初始化");
+    let project = ApiProject::new("测试 API");
+    let tab = cx.update(|window, cx| {
+        let workspace = cx.new(|cx| ApiWorkspace::new(project.clone(), http, window, cx));
+        WorkspaceTab::new_api_client(
+            TabId::new(),
+            project.display_name().to_string(),
+            project.id,
+            workspace,
+        )
+    });
+
+    assert!(tab.session().is_none());
+    assert!(tab.connection_id().is_none());
+    assert!(tab.session_pane().is_none());
+    assert_eq!(tab.group_owner(), TabGroupOwner::Workspace(tab.id));
+    assert!(matches!(tab.close_action(), TabCloseAction::DropOnly));
+    assert!(tab.api_project_id().is_some());
+    assert!(tab.api_workspace().is_some());
+    assert_no_session_side_effects(&tab);
 }

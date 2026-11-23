@@ -346,6 +346,30 @@ fn container_workspace_is_owned_by_entity() {
     );
 }
 
+/// API 工作区必须由标签实体持有；侧栏只保留应用级项目快照。
+#[test]
+fn api_workspace_and_sidebar_are_entity_owned() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let model =
+        std::fs::read_to_string(root.join("src/app/tab/model.rs")).expect("读取标签模型失败");
+    let tab = std::fs::read_to_string(root.join("src/app/tab/api_client.rs"))
+        .expect("读取 API 标签类型失败");
+    assert!(
+        model.contains("ApiClient(Box<ApiClientTab>)")
+            && tab.contains("workspace: Entity<ApiWorkspace>"),
+        "TabContent::ApiClient 必须通过 ApiClientTab 持有 Entity<ApiWorkspace>"
+    );
+    let workspace = std::fs::read_to_string(root.join("src/api_client/workspace.rs"))
+        .expect("读取 API 工作区实体失败");
+    let sidebar = std::fs::read_to_string(root.join("src/api_client/sidebar.rs"))
+        .expect("读取 API 侧栏实体失败");
+    assert!(
+        workspace.contains("pub(crate) struct ApiWorkspace")
+            && sidebar.contains("pub(crate) struct ApiSidebarView"),
+        "API 工作区与侧栏必须保持独立实体"
+    );
+}
+
 /// 已知主机弹窗必须由实体持有，旧的 `AppState` 刷新入口不得复活。
 #[test]
 fn known_hosts_modal_is_owned_by_entity() {

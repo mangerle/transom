@@ -89,6 +89,9 @@ fn activity_item_selected(
         ActivityItemId::Git => {
             app_state.session.sidebar.visible() && section == SidebarSection::Git
         }
+        ActivityItemId::ApiClient => {
+            app_state.session.sidebar.visible() && section == SidebarSection::ApiClient
+        }
         ActivityItemId::CloudSync => {
             app_state.session.sidebar.visible() && section == SidebarSection::CloudSync
         }
@@ -311,6 +314,13 @@ fn activate_activity_item(
         ActivityItemId::Git => {
             crate::git::actions::GitActions::new(app_state).toggle_git_sidebar(cx)
         }
+        ActivityItemId::ApiClient => {
+            app_state
+                .session
+                .sidebar
+                .toggle_section(SidebarSection::ApiClient);
+            cx.notify();
+        }
         ActivityItemId::CloudSync => crate::cloud_sync::toggle_cloud_sync_sidebar(app_state, cx),
         ActivityItemId::Unknown => {}
     }
@@ -375,6 +385,7 @@ mod labels {
             ActivityItemId::Keys => UiIcon::KEY.into(),
             ActivityItemId::Settings => UiIcon::SETTINGS.into(),
             ActivityItemId::Git => UiIcon::VCS.into(),
+            ActivityItemId::ApiClient => UiIcon::WEB_SERVER.into(),
             ActivityItemId::CloudSync => CustomIcon::CLOUD.into(),
             ActivityItemId::Unknown => UiIcon::ERROR.into(),
         }
@@ -390,6 +401,7 @@ mod labels {
             ActivityItemId::Monitor => "monitor.title",
             ActivityItemId::Containers => "container.title",
             ActivityItemId::Git => "activity.git",
+            ActivityItemId::ApiClient => "activity.api_client",
             ActivityItemId::CloudSync => "activity.cloud_sync",
             ActivityItemId::Language => "activity.language",
             ActivityItemId::ImportSshConfig => "app.import_ssh_config",

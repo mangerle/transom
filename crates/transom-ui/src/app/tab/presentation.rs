@@ -104,6 +104,16 @@ pub(crate) fn tab_icon(
         });
         return (icon, color);
     }
+    if tab.api_project_id().is_some() {
+        return (
+            AppIcon::Custom(CustomIcon::NETWORK),
+            if active {
+                p.sidebar_accent_foreground
+            } else {
+                p.muted_foreground
+            },
+        );
+    }
     let appearance = state.session_appearance(tab);
     let Some(session) = tab.session() else {
         return (
@@ -164,6 +174,7 @@ pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
         TabContent::Containers(_) => rust_i18n::t!("tab_subtitle.containers").to_string(),
         TabContent::Git(_) => rust_i18n::t!("tab_subtitle.git").to_string(),
         TabContent::Rdp(_) => rust_i18n::t!("rdp.desktop").to_string(),
+        TabContent::ApiClient(_) => rust_i18n::t!("tab_subtitle.api").to_string(),
     }
 }
 
@@ -185,6 +196,7 @@ pub(crate) fn compact_tab_icon(tab: &WorkspaceTab) -> AppIcon {
             }
         }
         TabContent::Git(_) => AppIcon::Ui(UiIcon::VCS),
+        TabContent::ApiClient(_) => AppIcon::Custom(CustomIcon::NETWORK),
     }
 }
 

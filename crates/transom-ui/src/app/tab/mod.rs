@@ -10,6 +10,7 @@
 //! `tab.session` 字段；标签组也需要同时支持会话归属与单工作区归属。
 
 mod accessors;
+mod api_client;
 mod container;
 mod git;
 mod group;
@@ -22,6 +23,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use api_client::ApiClientTab;
 pub(crate) use container::ContainerTab;
 pub(crate) use git::GitTab;
 pub(crate) use group::{TabGroup, TabGroupOwner};

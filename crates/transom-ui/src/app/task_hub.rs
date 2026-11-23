@@ -27,6 +27,8 @@ pub(crate) struct BackgroundTasks {
     pub(crate) toast_tasks: VecDeque<(u64, Task<()>)>,
     /// 底栏一次性状态提示自动清空任务；新提示会替换旧任务从而取消旧定时。
     pub(crate) status_clear: Option<Task<()>>,
+    /// API 项目导入解析任务；只保留最近一次导入，重复导入会取消旧任务。
+    pub(crate) api_import: Option<Task<()>>,
 }
 
 impl BackgroundTasks {
@@ -39,6 +41,7 @@ impl BackgroundTasks {
             update_confirm: None,
             toast_tasks: VecDeque::with_capacity(32),
             status_clear: None,
+            api_import: None,
         }
     }
 }
@@ -53,10 +56,20 @@ pub(crate) struct PanelSubscriptions {
     pub(crate) container_workspaces: HashMap<TabId, Subscription>,
     /// Git 工作区发往外壳的意图事件：一个标签一份订阅，按标签回收。
     pub(crate) git_workspaces: HashMap<TabId, Subscription>,
+    /// API 工作区发往外壳的意图事件：一个标签一份订阅。
+    pub(crate) api_workspaces: HashMap<TabId, Subscription>,
+    /// API 工作区通知观察器：选择、方法或响应变化时触发整窗重绘。
+    pub(crate) api_workspace_observers: HashMap<TabId, Subscription>,
     /// 容器引擎侧栏发往外壳的意图事件：侧栏是单例实体。
     pub(crate) container_sidebar: Option<Subscription>,
     /// Git 侧栏发往外壳的意图事件：侧栏是单例实体。
     pub(crate) git_sidebar: Option<Subscription>,
+    /// API 项目侧栏发往外壳的意图事件：单例实体。
+    pub(crate) api_sidebar: Option<Subscription>,
+    /// API 项目搜索框变化：触发侧栏过滤结果重绘。
+    pub(crate) api_sidebar_search: Option<Subscription>,
+    /// API 侧栏内联编辑器与删除确认状态变化时触发整窗重绘。
+    pub(crate) api_sidebar_observer: Option<Subscription>,
     /// 会话侧栏发往外壳的意图事件：侧栏是单例实体。
     pub(crate) session_sidebar: Option<Subscription>,
     /// 云同步视图发往外壳的意图事件：单例实体。
@@ -105,8 +118,13 @@ impl PanelSubscriptions {
             forward: HashMap::new(),
             container_workspaces: HashMap::new(),
             git_workspaces: HashMap::new(),
+            api_workspaces: HashMap::new(),
+            api_workspace_observers: HashMap::new(),
             container_sidebar: None,
             git_sidebar: None,
+            api_sidebar: None,
+            api_sidebar_search: None,
+            api_sidebar_observer: None,
             session_sidebar: None,
             cloud_sync: None,
             update: None,
@@ -147,6 +165,14 @@ impl PanelSubscriptions {
     /// 丢弃已关闭标签的 Git 工作区事件订阅。
     pub(crate) fn prune_git_workspaces(&mut self, alive: &[TabId]) {
         self.git_workspaces
+            .retain(|tab_id, _| alive.contains(tab_id));
+    }
+
+    /// 丢弃已关闭 API 标签的事件订阅。
+    pub(crate) fn prune_api_workspaces(&mut self, alive: &[TabId]) {
+        self.api_workspaces
+            .retain(|tab_id, _| alive.contains(tab_id));
+        self.api_workspace_observers
             .retain(|tab_id, _| alive.contains(tab_id));
     }
 }

@@ -8,6 +8,7 @@
 //! 代价与局限：合并后按入队顺序执行，跨领域动作的先后由产生顺序决定；
 //! 需要严格先后的动作应在产生点排好，而不是依赖队列分组的固定次序。
 
+use crate::api_client::{ApiSidebarEvent, ApiWorkspaceEvent};
 use crate::container::ContainerWorkspaceEvent;
 use crate::editor::{EditorCloseRequest, EditorPanelEvent};
 use crate::git::GitWorkspaceEvent;
@@ -31,6 +32,13 @@ pub(crate) enum WindowRequest {
     ContainerSidebar(crate::container::ContainerSidebarEvent),
     /// Git 侧栏发往外壳的意图动作。
     GitSidebar(crate::git::GitSidebarEvent),
+    /// API 项目侧栏发往外壳的意图动作。
+    ApiSidebar(ApiSidebarEvent),
+    /// API 工作区发往外壳的窗口级动作。
+    ApiWorkspace {
+        tab_id: TabId,
+        event: ApiWorkspaceEvent,
+    },
     /// 会话侧栏发往外壳的意图动作。
     SessionSidebar(crate::sidebar::SessionSidebarEvent),
     /// Git 工作区窗口级动作。
@@ -97,6 +105,15 @@ impl WindowRequests {
 
     pub(crate) fn push_git_sidebar(&mut self, event: crate::git::GitSidebarEvent) {
         self.items.push(WindowRequest::GitSidebar(event));
+    }
+
+    pub(crate) fn push_api_sidebar(&mut self, event: ApiSidebarEvent) {
+        self.items.push(WindowRequest::ApiSidebar(event));
+    }
+
+    pub(crate) fn push_api_workspace(&mut self, tab_id: TabId, event: ApiWorkspaceEvent) {
+        self.items
+            .push(WindowRequest::ApiWorkspace { tab_id, event });
     }
 
     pub(crate) fn push_session_sidebar(&mut self, event: crate::sidebar::SessionSidebarEvent) {

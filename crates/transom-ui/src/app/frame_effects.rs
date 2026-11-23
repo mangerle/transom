@@ -281,6 +281,12 @@ impl AppShell {
                 WindowRequest::GitSidebar(event) => {
                     crate::git::actions::on_git_sidebar_event(&mut self.state, &event, window, cx);
                 }
+                WindowRequest::ApiSidebar(event) => {
+                    crate::api_client::on_sidebar_request(&mut self.state, event, window, cx);
+                }
+                WindowRequest::ApiWorkspace { tab_id, event } => {
+                    crate::api_client::on_workspace_request(&mut self.state, tab_id, event, cx);
+                }
                 WindowRequest::SessionSidebar(event) => {
                     crate::sidebar::on_session_sidebar_event(&mut self.state, &event, window, cx);
                 }

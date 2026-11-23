@@ -38,6 +38,7 @@ mod widgets;
 mod window_appearance;
 
 pub(crate) mod activity_bar;
+pub(crate) mod api_client;
 pub(crate) mod audit_viewer;
 pub(crate) mod batch;
 pub(crate) mod broadcast;
@@ -84,6 +85,7 @@ use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use transom_api::{ApiHttpService, ApiProjectStore};
 use transom_core::{
     AppCommand, AppEvent, AppSettings, BackupService, KnownHostsStore, LogLevel, SecretStore,
     SerialPortProvider, SessionStore, SettingsStore,
@@ -100,6 +102,10 @@ pub struct UiServices {
     /// 命令历史读写（独立于会话目录的一份本地文件）。
     pub history: Arc<dyn transom_core::HistoryStore>,
     pub git_projects: Arc<dyn transom_core::GitProjectStore>,
+    /// API 项目本地登记表；实现位于 `transom-store`。
+    pub api_projects: Arc<dyn ApiProjectStore>,
+    /// 全局 API HTTP 客户端；连接池随应用进程复用。
+    pub api_http: ApiHttpService,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
     /// 平台 URL 回调与深链任务共用的应用事件发送端。

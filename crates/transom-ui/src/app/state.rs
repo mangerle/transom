@@ -140,6 +140,8 @@ pub(crate) struct FeatureState {
     pub(crate) monitor: Entity<crate::monitor::MonitorView>,
     pub(crate) containers: crate::container::ContainerUiState,
     pub(crate) git_sidebar: Entity<crate::git::GitSidebarView>,
+    /// API 项目列表、搜索和侧栏内联编辑状态。
+    pub(crate) api_sidebar: Entity<crate::api_client::ApiSidebarView>,
     pub(crate) editors: Entity<EditorPanels>,
     pub(crate) diff_viewer: Option<Entity<crate::diff_viewer::DiffViewerView>>,
     pub(crate) broadcast: BroadcastBarState,

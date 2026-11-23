@@ -38,6 +38,7 @@ impl AppShell {
         let persistence = Persistence::new(
             services.session_store.clone(),
             services.settings_store.clone(),
+            services.api_projects.clone(),
         );
         let local_shells = Arc::new(transom_platform::shell::discover_shells());
         let settings_view = cx.new(|cx| {
@@ -200,6 +201,24 @@ impl AppShell {
                     .window_requests
                     .push_git_sidebar(event.clone());
                 cx.notify();
+            },
+        ));
+        self.state.runtime.tasks.subscriptions.api_sidebar = Some(cx.subscribe(
+            &self.state.features.api_sidebar,
+            |shell, _view, event: &crate::api_client::ApiSidebarEvent, cx| {
+                crate::api_client::on_sidebar_event(&mut shell.state, event, cx);
+            },
+        ));
+        self.state.runtime.tasks.subscriptions.api_sidebar_observer =
+            Some(cx.observe(&self.state.features.api_sidebar, |_, _, cx| cx.notify()));
+        let api_sidebar = self.state.features.api_sidebar.clone();
+        let api_sidebar_search = api_sidebar.read(cx).state.search.clone();
+        self.state.runtime.tasks.subscriptions.api_sidebar_search = Some(cx.subscribe(
+            &api_sidebar_search,
+            |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
             },
         ));
         self.state.runtime.tasks.subscriptions.session_sidebar = Some(cx.subscribe(

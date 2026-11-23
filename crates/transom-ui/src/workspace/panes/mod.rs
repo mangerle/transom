@@ -266,6 +266,30 @@ impl AppShell {
             }
             return self.render_container_tab(tab_id, window, cx, p);
         }
+        if let Some(workspace) = self.state.workspace.tabs[index].api_workspace() {
+            let state = workspace.read(cx);
+            return crate::api_client::render_api_workspace(
+                crate::api_client::ApiWorkspaceParams {
+                    view: &workspace,
+                    project: &state.project,
+                    selected_request: state.selected_request,
+                    method: state.method,
+                    response: state.response.as_ref(),
+                    sending: state.sending,
+                    error: state.error.as_deref(),
+                    request_name: &state.request_name,
+                    request_url: &state.request_url,
+                    request_headers: &state.request_headers,
+                    request_body: &state.request_body,
+                    response_headers: &state.response_headers,
+                    response_body: &state.response_body,
+                    tree_editor_split: &state.tree_editor_split,
+                    request_response_split: &state.request_response_split,
+                    rem: window.rem_size(),
+                },
+                p,
+            );
+        }
         if let Some(target_id) = self.state.workspace.tabs[index]
             .monitor()
             .map(|monitor| monitor.target_tab_id)

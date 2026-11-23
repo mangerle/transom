@@ -1,8 +1,8 @@
 //! 工作区标签的公共类型与构造器。
 
 use super::{
-    ContainerTab, GitTab, MonitorTab, PlayerTab, RdpTab, SessionPaneState, SessionTab,
-    TabGroupOwner,
+    ApiClientTab, ContainerTab, GitTab, MonitorTab, PlayerTab, RdpTab, SessionPaneState,
+    SessionTab, TabGroupOwner,
 };
 use transom_core::{AppError, Session, SessionId, TabId};
 
@@ -37,6 +37,7 @@ pub(crate) enum TabContent {
     Containers(Box<ContainerTab>),
     Git(GitTab),
     Rdp(Box<RdpTab>),
+    ApiClient(Box<ApiClientTab>),
 }
 
 /// 标签内容类型；只用于不持有实体即可验证的纯策略。
@@ -48,6 +49,7 @@ pub(crate) enum TabContentKind {
     Container,
     Git,
     Rdp,
+    ApiClient,
 }
 
 impl TabContent {
@@ -60,6 +62,7 @@ impl TabContent {
             Self::Containers(_) => TabContentKind::Container,
             Self::Git(_) => TabContentKind::Git,
             Self::Rdp(_) => TabContentKind::Rdp,
+            Self::ApiClient(_) => TabContentKind::ApiClient,
         }
     }
 }
@@ -117,7 +120,8 @@ impl WorkspaceTab {
             TabContent::Player(_)
             | TabContent::Containers(_)
             | TabContent::Git(_)
-            | TabContent::Rdp(_) => TabGroupOwner::Workspace(self.id),
+            | TabContent::Rdp(_)
+            | TabContent::ApiClient(_) => TabGroupOwner::Workspace(self.id),
         }
     }
 
@@ -140,7 +144,8 @@ impl TabCloseAction {
             TabContentKind::Player
             | TabContentKind::Monitor
             | TabContentKind::Git
-            | TabContentKind::Rdp => Self::DropOnly,
+            | TabContentKind::Rdp
+            | TabContentKind::ApiClient => Self::DropOnly,
         }
     }
 }

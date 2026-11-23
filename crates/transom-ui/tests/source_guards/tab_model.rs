@@ -131,3 +131,19 @@ fn tab_presentation_same_for_horizontal_and_vertical() {
         "横向标签与纵向标签必须共享 WorkspaceTab::presentation"
     );
 }
+
+#[test]
+fn api_client_tabs_use_typed_content() {
+    let model = read("src/app/tab/model.rs");
+    let tab = read("src/app/tab/api_client.rs");
+    assert!(
+        model.contains("ApiClient(Box<ApiClientTab>)"),
+        "API 工作区必须使用类型化 TabContent，不得伪造会话标签"
+    );
+    assert!(
+        tab.contains("fn new_api_client")
+            && tab.contains("ApiProjectId")
+            && tab.contains("Entity<ApiWorkspace>"),
+        "API 标签必须持有项目 id 与工作区实体"
+    );
+}

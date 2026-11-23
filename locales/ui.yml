@@ -163,6 +163,9 @@ activity:
   git:
     en: Git
     zh-CN: Git
+  api_client:
+    en: API Client
+    zh-CN: API 客户端
   cloud_sync:
     en: Cloud Sync
     zh-CN: 云同步
@@ -179,6 +182,140 @@ tab_subtitle:
   git:
     en: Git workspace
     zh-CN: Git 工作区
+  api:
+    en: API project
+    zh-CN: API 项目
+api:
+  sidebar:
+    search:
+      en: Search API projects
+      zh-CN: 搜索 API 项目
+    new_project:
+      en: New API project
+      zh-CN: 新建 API 项目
+    import_project:
+      en: Import API project
+      zh-CN: 导入 API 项目
+    empty_title:
+      en: No API projects yet
+      zh-CN: 还没有 API 项目
+    empty_hint:
+      en: Create a project or import a Transom API project file.
+      zh-CN: 新建项目，或导入 Transom API 项目文件。
+  project:
+    name_placeholder:
+      en: Project name
+      zh-CN: 项目名称
+    name_required:
+      en: Project name is required
+      zh-CN: 项目名称不能为空
+    request_count:
+      en: '%{count} requests'
+      zh-CN: '%{count} 个请求'
+    save:
+      en: Save
+      zh-CN: 保存
+    cancel:
+      en: Cancel
+      zh-CN: 取消
+    rename:
+      en: Rename
+      zh-CN: 重命名
+    delete:
+      en: Delete
+      zh-CN: 删除
+    delete_confirm:
+      en: Delete "%{name}"?
+      zh-CN: 删除“%{name}”？
+    created:
+      en: API project created
+      zh-CN: API 项目已创建
+    deleted:
+      en: API project deleted
+      zh-CN: API 项目已删除
+    imported:
+      en: Imported %{count} API projects
+      zh-CN: 已导入 %{count} 个 API 项目
+    saved:
+      en: API project saved
+      zh-CN: API 项目已保存
+    import_title:
+      en: Import API project
+      zh-CN: 导入 API 项目
+    import_thread_failed:
+      en: Could not start the API project import task
+      zh-CN: 启动 API 项目导入任务失败
+  request:
+    tree_title:
+      en: Requests
+      zh-CN: 请求
+    new:
+      en: New request
+      zh-CN: 新建请求
+    empty_title:
+      en: No requests yet
+      zh-CN: 还没有请求
+    empty_hint:
+      en: Add a request to start building the API.
+      zh-CN: 新建请求后即可开始编辑接口。
+    default_name:
+      en: New request
+      zh-CN: 新建请求
+    name:
+      en: Name
+      zh-CN: 名称
+    name_placeholder:
+      en: Request name
+      zh-CN: 请求名称
+    url_placeholder:
+      en: 'https://api.example.com/health'
+      zh-CN: 'https://api.example.com/health'
+    headers_placeholder:
+      en: 'One header per line, for example Content-Type: application/json'
+      zh-CN: '每行一个请求头，例如 Content-Type: application/json'
+    body_placeholder:
+      en: Request body
+      zh-CN: 请求体
+    headers:
+      en: Headers
+      zh-CN: 请求头
+    body:
+      en: Body
+      zh-CN: 请求体
+    save:
+      en: Save
+      zh-CN: 保存
+    send:
+      en: Send
+      zh-CN: 发送
+    delete:
+      en: Delete request
+      zh-CN: 删除请求
+    select_first:
+      en: Select or create a request first
+      zh-CN: 请先选择或新建请求
+    url_required:
+      en: Request URL is required
+      zh-CN: 请求地址不能为空
+  response:
+    title:
+      en: Response
+      zh-CN: 响应
+    metrics:
+      en: '%{elapsed} ms · %{size} bytes'
+      zh-CN: '%{elapsed} ms · %{size} 字节'
+    headers:
+      en: Response headers
+      zh-CN: 响应头
+    headers_placeholder:
+      en: No response headers
+      zh-CN: 暂无响应头
+    sending:
+      en: Sending request…
+      zh-CN: 正在发送请求…
+    empty:
+      en: Send a request to see the response.
+      zh-CN: 发送请求后在这里查看响应。
 common:
   close:
     en: Close

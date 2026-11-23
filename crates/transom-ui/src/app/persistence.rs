@@ -16,6 +16,7 @@
 use parking_lot::{Condvar, Mutex};
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use transom_api::{ApiProjectStore, ApiRegistry};
 use transom_core::{AppError, AppSettings, ErrorCode, SessionCatalog};
 
 /// 覆盖式快照写盘器。
@@ -135,11 +136,13 @@ pub(crate) struct Persistence {
 struct PersistenceInner {
     catalog: Option<SnapshotWriter<SessionCatalog>>,
     settings: Option<SnapshotWriter<AppSettings>>,
+    api_projects: Option<SnapshotWriter<ApiRegistry>>,
     /// 后台写盘失败的单槽通知：由渲染帧取走并转成应用内提示。
     error: Arc<Mutex<Option<AppError>>>,
     /// 后台线程不可用时的同步兜底存储。
     session_store: Arc<dyn transom_core::SessionStore>,
     settings_store: Arc<dyn transom_core::SettingsStore>,
+    api_project_store: Arc<dyn ApiProjectStore>,
 }
 
 impl Persistence {
@@ -148,6 +151,7 @@ impl Persistence {
     pub(crate) fn new(
         session_store: Arc<dyn transom_core::SessionStore>,
         settings_store: Arc<dyn transom_core::SettingsStore>,
+        api_project_store: Arc<dyn ApiProjectStore>,
     ) -> Self {
         let error = Arc::new(Mutex::new(None));
         let catalog_error = Arc::clone(&error);
@@ -166,13 +170,23 @@ impl Persistence {
                 *settings_error.lock() = Some(error);
             }
         });
+        let api_error = Arc::clone(&error);
+        let api_store_writer = Arc::clone(&api_project_store);
+        let api_projects = SnapshotWriter::spawn("api-projects", move |registry| {
+            if let Err(error) = api_store_writer.save(registry) {
+                log::error!("API 项目异步落盘失败，原因: {error}");
+                *api_error.lock() = Some(error);
+            }
+        });
         Self {
             inner: Arc::new(PersistenceInner {
                 catalog,
                 settings,
+                api_projects,
                 error,
                 session_store,
                 settings_store,
+                api_project_store,
             }),
         }
     }
@@ -193,6 +207,14 @@ impl Persistence {
             .is_some_and(|writer| writer.enqueue(settings).is_ok())
     }
 
+    /// 入队 API 项目登记表；通道不可用时返回 false，由调用方同步兜底。
+    pub(crate) fn enqueue_api_registry(&self, registry: ApiRegistry) -> bool {
+        self.inner
+            .api_projects
+            .as_ref()
+            .is_some_and(|writer| writer.enqueue(registry).is_ok())
+    }
+
     /// 保存设置：优先异步入队，写盘线程不可用时退回同步写。
     ///
     /// 返回 `Ok` 只表示“已进入内存与待写槽”；后台线程的写盘失败仍经
@@ -210,6 +232,14 @@ impl Persistence {
             return Ok(());
         }
         self.inner.session_store.save(catalog)
+    }
+
+    /// 保存 API 项目登记表：优先异步入队，写盘线程不可用时同步兜底。
+    pub(crate) fn save_api_registry(&self, registry: &ApiRegistry) -> Result<(), AppError> {
+        if self.enqueue_api_registry(registry.clone()) {
+            return Ok(());
+        }
+        self.inner.api_project_store.save(registry)
     }
 
     /// 取走最近一次后台写盘失败；渲染帧统一转成用户可见通知。

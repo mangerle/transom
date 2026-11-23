@@ -18,6 +18,7 @@ publish.workspace = true
 [dependencies]
 transom-platform.workspace = true
 transom-core.workspace = true
+transom-api.workspace = true
 transom-net.workspace = true
 transom-container.workspace = true
 transom-zmodem.workspace = true

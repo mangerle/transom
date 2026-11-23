@@ -76,8 +76,11 @@ fn main() -> anyhow::Result<()> {
     let git_projects: Arc<dyn transom_core::GitProjectStore> = Arc::new(
         transom_store::JsonGitProjectStore::new(paths::git_projects_path()),
     );
-
+    let api_projects: Arc<dyn transom_api::ApiProjectStore> = Arc::new(
+        transom_store::JsonApiProjectStore::new(paths::api_projects_path()),
+    );
     let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
+    let api_http = transom_api::ApiHttpService::new(controller.runtime().handle().clone())?;
 
     // 监听句柄保留在此直到进程结束：随控制器停机，不做脱缰派生。
     let _deep_link = primary.serve(controller.runtime(), controller.event_sender());
@@ -93,6 +96,8 @@ fn main() -> anyhow::Result<()> {
         backup,
         history,
         git_projects,
+        api_projects,
+        api_http,
         command_tx: controller.command_sender(),
         event_rx: controller.event_receiver(),
         event_tx: controller.event_sender(),

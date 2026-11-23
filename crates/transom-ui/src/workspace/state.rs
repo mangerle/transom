@@ -34,6 +34,17 @@ impl Default for WorkspaceState {
 }
 
 impl WorkspaceState {
+    /// 按项目 id 查找已打开的 API 工作区标签。
+    pub(crate) fn api_tab_for_project(
+        &self,
+        project_id: transom_api::ApiProjectId,
+    ) -> Option<TabId> {
+        self.tabs
+            .iter()
+            .find(|tab| tab.api_project_id() == Some(project_id))
+            .map(|tab| tab.id)
+    }
+
     /// 构造空的工作区状态容器。
     pub fn new() -> Self {
         Self {

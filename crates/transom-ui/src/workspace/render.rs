@@ -239,6 +239,20 @@ impl AppShell {
                         p,
                     )
                 }
+                SidebarSection::ApiClient => {
+                    let sidebar = self.state.features.api_sidebar.clone();
+                    let state = sidebar.read(cx);
+                    let query = state.query(cx);
+                    crate::api_client::render_api_sidebar(
+                        crate::api_client::ApiSidebarParams {
+                            view: &sidebar,
+                            state: &state.state,
+                            active_project: self.state.active_api_project_id(),
+                            query: &query,
+                        },
+                        p,
+                    )
+                }
                 SidebarSection::CloudSync => {
                     self.state.features.cloud_sync.clone().into_any_element()
                 }
