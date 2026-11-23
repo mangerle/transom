@@ -130,7 +130,9 @@ impl ForwardView {
         let (kind_text, kind_color) = match &rule.kind {
             ForwardKind::Local { .. } => (rust_i18n::t!("forward.local").to_string(), p.primary),
             ForwardKind::Remote { .. } => (rust_i18n::t!("forward.remote").to_string(), p.warning),
-            ForwardKind::Dynamic { .. } => (rust_i18n::t!("forward.dynamic").to_string(), p.success),
+            ForwardKind::Dynamic { .. } => {
+                (rust_i18n::t!("forward.dynamic").to_string(), p.success)
+            }
             _ => (String::new(), p.muted_foreground),
         };
         let active_meter = status
@@ -139,67 +141,63 @@ impl ForwardView {
             .and_then(|status| status.meter.as_ref());
 
         let topology = match &rule.kind {
-            ForwardKind::Local { bind, target } | ForwardKind::Remote { bind, target } => {
-                h_flex()
-                    .gap_1p5()
-                    .items_center()
-                    .text_xs()
-                    .child(
-                        div()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded(p.radius.sm)
-                            .bg(p.surface.ghost)
-                            .border_1()
-                            .border_color(p.stroke.faint)
-                            .text_color(p.foreground)
-                            .font_family(p.mono_font_family.clone())
-                            .child(format!("{}:{}", bind.host, bind.port)),
-                    )
-                    .child(
-                        AppIconElement::new(AppIcon::Ui(UiIcon::ARROW_RIGHT))
-                            .xsmall()
-                            .text_color(p.muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded(p.radius.sm)
-                            .bg(p.surface.ghost)
-                            .border_1()
-                            .border_color(p.stroke.faint)
-                            .text_color(p.foreground)
-                            .font_family(p.mono_font_family.clone())
-                            .child(format!("{}:{}", target.host, target.port)),
-                    )
-                    .into_any_element()
-            }
-            ForwardKind::Dynamic { bind, .. } => {
-                h_flex()
-                    .gap_1p5()
-                    .items_center()
-                    .text_xs()
-                    .child(
-                        div()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded(p.radius.sm)
-                            .bg(p.surface.ghost)
-                            .border_1()
-                            .border_color(p.stroke.faint)
-                            .text_color(p.foreground)
-                            .font_family(p.mono_font_family.clone())
-                            .child(format!("{}:{}", bind.host, bind.port)),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child("SOCKS5"),
-                    )
-                    .into_any_element()
-            }
+            ForwardKind::Local { bind, target } | ForwardKind::Remote { bind, target } => h_flex()
+                .gap_1p5()
+                .items_center()
+                .text_xs()
+                .child(
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.surface.ghost)
+                        .border_1()
+                        .border_color(p.stroke.faint)
+                        .text_color(p.foreground)
+                        .font_family(p.mono_font_family.clone())
+                        .child(format!("{}:{}", bind.host, bind.port)),
+                )
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::ARROW_RIGHT))
+                        .xsmall()
+                        .text_color(p.muted_foreground),
+                )
+                .child(
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.surface.ghost)
+                        .border_1()
+                        .border_color(p.stroke.faint)
+                        .text_color(p.foreground)
+                        .font_family(p.mono_font_family.clone())
+                        .child(format!("{}:{}", target.host, target.port)),
+                )
+                .into_any_element(),
+            ForwardKind::Dynamic { bind, .. } => h_flex()
+                .gap_1p5()
+                .items_center()
+                .text_xs()
+                .child(
+                    div()
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.surface.ghost)
+                        .border_1()
+                        .border_color(p.stroke.faint)
+                        .text_color(p.foreground)
+                        .font_family(p.mono_font_family.clone())
+                        .child(format!("{}:{}", bind.host, bind.port)),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .child("SOCKS5"),
+                )
+                .into_any_element(),
             _ => div().into_any_element(),
         };
 
@@ -208,7 +206,11 @@ impl ForwardView {
             .gap_1p5()
             .p_2p5()
             .rounded(p.radius.md)
-            .bg(if editing { p.tone.warning_subtle } else { p.surface.faint })
+            .bg(if editing {
+                p.tone.warning_subtle
+            } else {
+                p.surface.faint
+            })
             .border_1()
             .border_color(if editing { p.warning } else { p.stroke.subtle })
             .child(
@@ -260,8 +262,8 @@ impl ForwardView {
                                 .on_click(cx.listener(
                                     move |_this, _, _, cx| {
                                         cx.emit(super::ForwardPanelEvent::StopRule {
-                                             tab_id,
-                                             rule_id,
+                                            tab_id,
+                                            rule_id,
                                         });
                                         cx.notify();
                                     },
@@ -278,8 +280,8 @@ impl ForwardView {
                                 .on_click(cx.listener(
                                     move |_this, _, _, cx| {
                                         cx.emit(super::ForwardPanelEvent::StartRule {
-                                             tab_id,
-                                             rule_id,
+                                            tab_id,
+                                            rule_id,
                                         });
                                         cx.notify();
                                     },
@@ -295,8 +297,8 @@ impl ForwardView {
                                 .on_click(cx.listener(
                                     move |_this, _, _, cx| {
                                         cx.emit(super::ForwardPanelEvent::DeleteRule {
-                                             tab_id,
-                                             rule_id,
+                                            tab_id,
+                                            rule_id,
                                         });
                                         cx.notify();
                                     },
@@ -428,5 +430,3 @@ fn forward_rule_status(
         ),
     }
 }
-
-

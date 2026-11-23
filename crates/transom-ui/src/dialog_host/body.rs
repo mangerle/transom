@@ -137,16 +137,24 @@ where
 
 /// 多行输入框的次级提交键位绑定。
 ///
-/// gpui-kit 0.10 起，焦点在 `Textarea` 内时组件自身会把 Ctrl+Enter 作为
+/// gpui-kit 0.10 起，焦点在 `Textarea` 内时组件自身会把次级 Enter（macOS 为 Cmd+Enter，其他平台为 Ctrl+Enter）作为
 /// 次 Enter 上报为 `InputEnter`；这里保留容器 `Confirm` 路径，使焦点在弹窗
 /// 其他控件或外壳时仍有同一提交语义。绑定只在 `"Dialog"` 上下文生效，不会
 /// 抢走终端与编辑器面板的 Ctrl+字母控制码；与 `keymap::bindings()` 一起注册。
 pub(crate) const DIALOG_CONTEXT: &str = "Dialog";
 
 pub(crate) fn dialog_bindings() -> Vec<KeyBinding> {
-    vec![KeyBinding::new(
-        "ctrl-enter",
-        Confirm { secondary: true },
-        Some(DIALOG_CONTEXT),
-    )]
+    vec![
+        KeyBinding::new(
+            "ctrl-enter",
+            Confirm { secondary: true },
+            Some(DIALOG_CONTEXT),
+        ),
+        #[cfg(target_os = "macos")]
+        KeyBinding::new(
+            "cmd-enter",
+            Confirm { secondary: true },
+            Some(DIALOG_CONTEXT),
+        ),
+    ]
 }

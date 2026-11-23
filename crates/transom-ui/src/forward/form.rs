@@ -83,53 +83,48 @@ impl ForwardView {
                     .text_color(p.muted_foreground)
                     .child(rust_i18n::t!("forward.preset_header").to_string()),
             )
-            .child(
-                h_flex()
-                    .gap_1p5()
-                    .flex_wrap()
-                    .children(transom_core::FORWARD_PRESETS.iter().map(|preset| {
-                        let preset_label = rust_i18n::t!(preset.label_key).to_string();
-                        let label_for_click = preset_label.clone();
-                        div()
-                            .id(ElementId::Name(
-                                format!("forward-preset-{}", preset.listen_port).into(),
-                            ))
-                            .px_2()
-                            .py_0p5()
-                            .rounded(p.radius.sm)
-                            .bg(p.surface.ghost)
-                            .border_1()
-                            .border_color(p.stroke.subtle)
-                            .text_xs()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(p.surface.hover).border_color(p.primary))
-                            .child(preset_label)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.state.kind = match preset.kind {
-                                    transom_core::ForwardPresetKind::Local => {
-                                        ForwardKindChoice::Local
-                                    }
-                                    transom_core::ForwardPresetKind::Dynamic => {
-                                        ForwardKindChoice::Dynamic
-                                    }
-                                };
-                                if this.state.name_input.read(cx).value().trim().is_empty() {
-                                    this.state.name_input.update(cx, |input, cx| {
-                                        input.set_value(label_for_click.clone(), window, cx);
-                                    });
+            .child(h_flex().gap_1p5().flex_wrap().children(
+                transom_core::FORWARD_PRESETS.iter().map(|preset| {
+                    let preset_label = rust_i18n::t!(preset.label_key).to_string();
+                    let label_for_click = preset_label.clone();
+                    div()
+                        .id(ElementId::Name(
+                            format!("forward-preset-{}", preset.listen_port).into(),
+                        ))
+                        .px_2()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.surface.ghost)
+                        .border_1()
+                        .border_color(p.stroke.subtle)
+                        .text_xs()
+                        .cursor_pointer()
+                        .hover(|s| s.bg(p.surface.hover).border_color(p.primary))
+                        .child(preset_label)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.state.kind = match preset.kind {
+                                transom_core::ForwardPresetKind::Local => ForwardKindChoice::Local,
+                                transom_core::ForwardPresetKind::Dynamic => {
+                                    ForwardKindChoice::Dynamic
                                 }
-                                this.state.bind_port_input.update(cx, |input, cx| {
-                                    input.set_value(preset.listen_port.to_string(), window, cx)
+                            };
+                            if this.state.name_input.read(cx).value().trim().is_empty() {
+                                this.state.name_input.update(cx, |input, cx| {
+                                    input.set_value(label_for_click.clone(), window, cx);
                                 });
-                                if preset.needs_target() {
-                                    this.state.target_port_input.update(cx, |input, cx| {
-                                        input.set_value(preset.target_port.to_string(), window, cx)
-                                    });
-                                }
-                                cx.notify();
-                            }))
-                    })),
-            );
+                            }
+                            this.state.bind_port_input.update(cx, |input, cx| {
+                                input.set_value(preset.listen_port.to_string(), window, cx)
+                            });
+                            if preset.needs_target() {
+                                this.state.target_port_input.update(cx, |input, cx| {
+                                    input.set_value(preset.target_port.to_string(), window, cx)
+                                });
+                            }
+                            cx.notify();
+                        }))
+                }),
+            ));
 
         // 模式说明与流量走向
         let (kind_help_text, flow_text) = match kind {
@@ -267,37 +262,30 @@ impl ForwardView {
             )
             .child(div().flex_1().h(px(1.0)).bg(p.stroke.faint));
 
-        let (target_title_text, target_host_el, target_port_el) =
-            if kind == ForwardKindChoice::Dynamic {
-                (
-                    rust_i18n::t!("forward.target_dynamic_title").to_string(),
-                    render_disabled_field(
-                        rust_i18n::t!("forward.target_dynamic_hint").to_string(),
-                        p,
-                    ),
-                    render_disabled_field(
-                        rust_i18n::t!("forward.target_dynamic_port").to_string(),
-                        p,
-                    ),
-                )
-            } else {
-                (
-                    target_title,
-                    Input::new(&target_host_input).w_full().into_any_element(),
-                    Input::new(&target_port_input).w_full().into_any_element(),
-                )
-            };
+        let (target_title_text, target_host_el, target_port_el) = if kind
+            == ForwardKindChoice::Dynamic
+        {
+            (
+                rust_i18n::t!("forward.target_dynamic_title").to_string(),
+                render_disabled_field(rust_i18n::t!("forward.target_dynamic_hint").to_string(), p),
+                render_disabled_field(rust_i18n::t!("forward.target_dynamic_port").to_string(), p),
+            )
+        } else {
+            (
+                target_title,
+                Input::new(&target_host_input).w_full().into_any_element(),
+                Input::new(&target_port_input).w_full().into_any_element(),
+            )
+        };
 
-        add_form = add_form
-            .child(forward_divider)
-            .child(render_endpoint_group(
-                target_title_text,
-                rust_i18n::t!("forward.target_host").to_string(),
-                target_host_el,
-                rust_i18n::t!("forward.target_port").to_string(),
-                target_port_el,
-                p,
-            ));
+        add_form = add_form.child(forward_divider).child(render_endpoint_group(
+            target_title_text,
+            rust_i18n::t!("forward.target_host").to_string(),
+            target_host_el,
+            rust_i18n::t!("forward.target_port").to_string(),
+            target_port_el,
+            p,
+        ));
 
         // 编辑态：保存修改 + 取消；新增态：单一添加按钮。
         let actions = if editing {
@@ -321,15 +309,13 @@ impl ForwardView {
                             })),
                     ),
                 )
-                .child(
-                    div().flex_1().child(crate::widgets::dialog_cancel_button(
-                        "forward-cancel-edit",
-                        rust_i18n::t!("common.cancel").to_string(),
-                        cx.listener(move |this, _, window, cx| {
-                            this.cancel_edit(window, cx);
-                        }),
-                    )),
-                )
+                .child(div().flex_1().child(crate::widgets::dialog_cancel_button(
+                    "forward-cancel-edit",
+                    rust_i18n::t!("common.cancel").to_string(),
+                    cx.listener(move |this, _, window, cx| {
+                        this.cancel_edit(window, cx);
+                    }),
+                )))
         } else {
             h_flex().w_full().child(
                 Button::new("forward-add")

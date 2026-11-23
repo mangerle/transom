@@ -257,23 +257,28 @@ fn enter_在多行输入框内只换行不提交() {
 }
 
 #[test]
-fn ctrl_enter_在多行输入框内上报次提交动作而不落到容器_confirm() {
+fn 次级_enter_在多行输入框内上报次提交动作而不落到容器_confirm() {
     let mut app = TestAppContext::single();
     let cx = probe_window(&mut app);
     let log = new_log();
     open_textarea_dialog(cx, &log);
     log.borrow_mut().clear();
 
-    cx.simulate_keystrokes("ctrl-enter");
+    let stroke = if cfg!(target_os = "macos") {
+        "cmd-enter"
+    } else {
+        "ctrl-enter"
+    };
+    cx.simulate_keystrokes(stroke);
     cx.run_until_parked();
 
-    // 实测：gpui-kit 0.10 会把多行框的 Ctrl+Enter 作为次 Enter
-    // 上报为 InputEnter，且不插入换行。它不会落到容器的 Confirm；
+    // 实测：gpui-kit 0.10 会把多行框的次级 Enter（macOS 为 Cmd+Enter，其他平台为 Ctrl+Enter）
+    // 作为次 Enter 上报为 InputEnter，且不插入换行。它不会落到容器的 Confirm；
     // 是否提交由宿主接住 InputEnter 后决定。
     assert_eq!(
         hits(&log),
         vec!["input-enter".to_string()],
-        "Ctrl+Enter 应作为输入框次提交动作上报"
+        "次级 Enter 应作为输入框次提交动作上报"
     );
     assert!(dialog_open(cx), "未补绑时弹窗保持打开");
 }
