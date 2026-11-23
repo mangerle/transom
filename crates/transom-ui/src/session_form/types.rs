@@ -5,8 +5,8 @@ use gpui_kit::Entity;
 use gpui_kit::component::input::{InputState, TextareaState};
 use transom_core::{
     AuthMethod, BlockViewOverride, Connection, ForwardRule, FtpSecurity, IdentityId, OutboundProxy,
-    SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor, SerialStopBits, Session,
-    SessionColor, SessionIcon, SessionId, TextEncoding,
+    RdpColorDepth, SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor,
+    SerialStopBits, Session, SessionColor, SessionIcon, SessionId, TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -86,6 +86,7 @@ pub(crate) enum ConnectionChoice {
     Telnet,
     Mosh,
     Ftp,
+    Rdp,
 }
 
 /// 会话表单里的出站代理档位。
@@ -151,6 +152,16 @@ pub(crate) struct SessionForm {
     pub ftp_security: FtpSecurity,
     /// FTP 数据连接被动模式；客户端侧网络环境默认开启。
     pub ftp_passive: bool,
+    /// RDP 认证域名（可选，如 AD 域或工作组）。
+    pub rdp_domain: Entity<InputState>,
+    /// RDP 会话颜色深度。
+    pub rdp_color_depth: RdpColorDepth,
+    /// RDP 是否开启音频重定向。
+    pub rdp_audio: bool,
+    /// RDP 是否开启剪贴板双向同步。
+    pub rdp_clipboard: bool,
+    /// RDP 是否开启剪贴板文件流式复制。
+    pub rdp_file_copy: bool,
     pub startup_commands: Entity<TextareaState>,
     /// 本地终端工作目录
     pub local_working_dir: Entity<InputState>,
@@ -341,6 +352,11 @@ pub(crate) struct SessionFormSeed {
     pub telnet_encoding: TextEncoding,
     pub ftp_security: FtpSecurity,
     pub ftp_passive: bool,
+    pub rdp_domain: String,
+    pub rdp_color_depth: RdpColorDepth,
+    pub rdp_audio: bool,
+    pub rdp_clipboard: bool,
+    pub rdp_file_copy: bool,
     pub local_working_dir: String,
     pub local_shell: String,
     pub local_shell_args: String,

@@ -112,6 +112,11 @@ pub(crate) fn connect_session(
     crate::connection::record_recent_session(app_state, session_id, cx);
 
     let tab_id = TabId::new();
+    if let Connection::Rdp(rdp) = &session.connection {
+        open_rdp_session(app_state, tab_id, session.clone(), rdp.clone(), cx);
+        return;
+    }
+
     let tab = WorkspaceTab::new_session(tab_id, session.clone());
     app_state.workspace.create_group_for_tab(&tab);
     app_state.workspace.tabs.push(tab);
@@ -348,9 +353,42 @@ pub(crate) fn record_recent_session(
     }
 }
 
+/// 打开 RDP 远程桌面会话并将其作为独立图形标签挂入工作区。
+fn open_rdp_session(
+    app_state: &mut AppState,
+    tab_id: TabId,
+    session: Session,
+    rdp: transom_core::RdpConnection,
+    cx: &mut Context<AppShell>,
+) {
+    let secret_store = app_state.runtime.services.secret_store.clone();
+    let key =
+        transom_core::SecretKey::new(session.secret_owner(), transom_core::SecretKind::Password);
+    let password = secret_store
+        .get(&key)
+        .ok()
+        .flatten()
+        .map(|s| s.as_str().to_string())
+        .unwrap_or_default();
+
+    let initial_size = (1920, 1080);
+    let config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
+    let session_id = session.id;
+    let title = session.name.clone();
+    let view = cx.new(|cx| crate::rdp::RdpView::new(session_id, title, config, cx));
+
+    let tab = WorkspaceTab::new_rdp(tab_id, session.name.clone(), view);
+    app_state.workspace.create_group_for_tab(&tab);
+    app_state.workspace.tabs.push(tab);
+    app_state.workspace.active_tab = Some(tab_id);
+    app_state.present_active_group();
+    cx.notify();
+}
+
 /// 当前支持通过界面建立的连接类型；未知类型在派发前拒绝。
 ///
-/// FTP 不产生终端，连接就绪后由 `FtpReady` 事件打开文件面板作为正文。
+/// FTP 不产生终端，连接就绪后由 `FtpReady` 事件打开文件面板作为正文；
+/// RDP 走独立图形视口渲染管线，通过 `open_rdp_session` 创建原生图形视图。
 fn connection_supported(session: &Session) -> bool {
     matches!(
         session.connection,
@@ -359,5 +397,6 @@ fn connection_supported(session: &Session) -> bool {
             | Connection::Serial(_)
             | Connection::Telnet(_)
             | Connection::Ftp(_)
+            | Connection::Rdp(_)
     )
 }

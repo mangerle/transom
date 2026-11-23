@@ -163,7 +163,7 @@ pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
         TabContent::Monitor(_) => rust_i18n::t!("tab_subtitle.monitor").to_string(),
         TabContent::Containers(_) => rust_i18n::t!("tab_subtitle.containers").to_string(),
         TabContent::Git(_) => rust_i18n::t!("tab_subtitle.git").to_string(),
-        TabContent::Rdp(_) => "RDP 远程桌面".to_string(),
+        TabContent::Rdp(_) => rust_i18n::t!("rdp.desktop").to_string(),
     }
 }
 

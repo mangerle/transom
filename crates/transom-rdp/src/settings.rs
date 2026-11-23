@@ -176,10 +176,10 @@ fn parse_user_and_domain(
     raw_username: &str,
     explicit_domain: Option<&str>,
 ) -> (String, Option<String>) {
-    if let Some(domain) = explicit_domain {
-        if !domain.trim().is_empty() {
-            return (raw_username.to_string(), Some(domain.trim().to_string()));
-        }
+    if let Some(domain) = explicit_domain
+        && !domain.trim().is_empty()
+    {
+        return (raw_username.to_string(), Some(domain.trim().to_string()));
     }
 
     if let Some((domain, user)) = raw_username.split_once('\\') {

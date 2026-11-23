@@ -33,6 +33,7 @@ impl SessionFormView {
         let color = form.color;
         let display_icon = session_icon(icon).unwrap_or(match form.connection {
             ConnectionChoice::Local => AppIcon::Domain(DomainIcon::TERMINAL),
+            ConnectionChoice::Rdp => AppIcon::Domain(DomainIcon::MONITOR),
             _ => AppIcon::Ui(UiIcon::WEB_SERVER),
         });
         let icon_tint = session_color(color).unwrap_or(p.primary);

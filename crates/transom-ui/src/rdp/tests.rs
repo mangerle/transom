@@ -1,7 +1,7 @@
 //! RDP 界面组件单元测试。
 
 use super::input::{map_mouse_button, map_pointer_position};
-use gpui_kit::{Bounds, Pixels, Point, px, size};
+use gpui_kit::{Bounds, Point, px, size};
 use transom_rdp::MouseBtn;
 
 #[test]

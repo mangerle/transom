@@ -3,8 +3,8 @@ use super::types::{
     SessionTargetDefaults,
 };
 use transom_core::{
-    AuthMethod, Connection, FtpSecurity, OutboundProxy, SerialDataBits, SerialFlowControl,
-    SerialParity, SerialStopBits, TextEncoding,
+    AuthMethod, Connection, FtpSecurity, OutboundProxy, RdpColorDepth, SerialDataBits,
+    SerialFlowControl, SerialParity, SerialStopBits, TextEncoding,
 };
 
 /// 由认证方式推导表单默认值：选择、保存开关、私钥与证书路径。
@@ -67,6 +67,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         Some(Connection::Telnet(_)) => ConnectionChoice::Telnet,
         Some(Connection::Mosh(_)) => ConnectionChoice::Mosh,
         Some(Connection::Ftp(_)) => ConnectionChoice::Ftp,
+        Some(Connection::Rdp(_)) => ConnectionChoice::Rdp,
         _ => ConnectionChoice::Ssh,
     };
     let local = base.as_ref().and_then(|session| match &session.connection {
@@ -138,6 +139,19 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
             _ => None,
         })
         .unwrap_or((FtpSecurity::Plain, true));
+    let (rdp_domain, rdp_color_depth, rdp_audio, rdp_clipboard, rdp_file_copy) = base
+        .as_ref()
+        .and_then(|session| match &session.connection {
+            Connection::Rdp(rdp) => Some((
+                rdp.domain.clone().unwrap_or_default(),
+                rdp.color_depth,
+                rdp.audio,
+                rdp.clipboard,
+                rdp.file_copy,
+            )),
+            _ => None,
+        })
+        .unwrap_or((String::new(), RdpColorDepth::Depth32, true, true, true));
     let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
     let serial_baud = serial
         .map(|serial| serial.baud_rate)
@@ -178,6 +192,11 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         telnet_encoding,
         ftp_security,
         ftp_passive,
+        rdp_domain,
+        rdp_color_depth,
+        rdp_audio,
+        rdp_clipboard,
+        rdp_file_copy,
         local_working_dir,
         local_shell,
         local_shell_args,
@@ -215,6 +234,10 @@ fn target_defaults(
         Connection::Ftp(ftp) => Some(ftp),
         _ => None,
     });
+    let rdp = base.as_ref().and_then(|session| match &session.connection {
+        Connection::Rdp(rdp) => Some(rdp),
+        _ => None,
+    });
     let name = base
         .as_ref()
         .map(|session| session.name.clone())
@@ -224,15 +247,18 @@ fn target_defaults(
         .or_else(|| mosh.map(|mosh| mosh.host.clone()))
         .or_else(|| telnet.map(|telnet| telnet.host.clone()))
         .or_else(|| ftp.map(|ftp| ftp.host.clone()))
+        .or_else(|| rdp.map(|rdp| rdp.host.clone()))
         .unwrap_or_default();
     let port = ssh
         .map(|ssh| ssh.port)
         .or_else(|| mosh.map(|mosh| mosh.ssh_port))
         .or_else(|| telnet.map(|telnet| telnet.port))
         .or_else(|| ftp.map(|ftp| ftp.port))
+        .or_else(|| rdp.map(|rdp| rdp.port))
         .unwrap_or(match connection {
             ConnectionChoice::Telnet => 23,
             ConnectionChoice::Ftp => 21,
+            ConnectionChoice::Rdp => 3389,
             _ => 22,
         })
         .to_string();
@@ -240,6 +266,7 @@ fn target_defaults(
         .map(|ssh| ssh.username.clone())
         .or_else(|| mosh.map(|mosh| mosh.username.clone()))
         .or_else(|| ftp.map(|ftp| ftp.username.clone()))
+        .or_else(|| rdp.map(|rdp| rdp.username.clone()))
         .unwrap_or_default();
     // Self 字面量会移走 base，需要读的字段先取出来。
     let identity_choice = base.as_ref().and_then(|session| session.identity_id);

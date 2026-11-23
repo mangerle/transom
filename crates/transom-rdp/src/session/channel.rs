@@ -64,11 +64,14 @@ pub enum RdpOutput {
     Terminated(RdpError),
 }
 
+/// 输入通道发送/接收对。
+pub type InputChannelPair = (mpsc::Sender<RdpInput>, mpsc::Receiver<RdpInput>);
+
+/// 输出通道发送/接收对。
+pub type OutputChannelPair = (mpsc::Sender<RdpOutput>, mpsc::Receiver<RdpOutput>);
+
 /// 创建配对的有界通信通道。
-pub fn create_session_channels() -> (
-    (mpsc::Sender<RdpInput>, mpsc::Receiver<RdpInput>),
-    (mpsc::Sender<RdpOutput>, mpsc::Receiver<RdpOutput>),
-) {
+pub fn create_session_channels() -> (InputChannelPair, OutputChannelPair) {
     let input_ch = mpsc::channel(INPUT_CHANNEL_CAPACITY);
     let output_ch = mpsc::channel(OUTPUT_CHANNEL_CAPACITY);
     (input_ch, output_ch)

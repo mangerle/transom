@@ -11,6 +11,7 @@ mod ftp;
 mod init;
 mod local;
 mod proxy;
+mod rdp;
 mod serial;
 mod ssh;
 mod telnet;

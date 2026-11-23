@@ -30,6 +30,7 @@ impl SessionFormView {
             ),
             ("conn-mosh", ConnectionChoice::Mosh, "Mosh".to_string()),
             ("conn-ftp", ConnectionChoice::Ftp, "FTP".to_string()),
+            ("conn-rdp", ConnectionChoice::Rdp, "RDP".to_string()),
         ];
 
         h_flex()

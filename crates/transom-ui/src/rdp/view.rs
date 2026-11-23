@@ -8,7 +8,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::SessionId;
-use transom_rdp::{RdpOutput, RdpSession, SessionConfig, TiledDesktopFrame};
+use transom_rdp::{RdpInput, RdpOutput, RdpSession, SessionConfig, TiledDesktopFrame};
 
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
 
@@ -23,7 +23,9 @@ pub enum RdpViewState {
 
 /// RDP 远程桌面视口视图。
 pub struct RdpView {
+    #[allow(dead_code)]
     pub session_id: SessionId,
+    #[allow(dead_code)]
     pub title: String,
     state: RdpViewState,
     frame: Option<Arc<TiledDesktopFrame>>,
@@ -80,12 +82,31 @@ impl RdpView {
         }
     }
 
+    /// 发送输入指令到 RDP 会话循环。
+    pub fn send_input(&self, input: RdpInput) {
+        if let Some(session) = &self.session {
+            let _ = session.try_send_input(input);
+        }
+    }
+
     /// 发送断开请求。
     pub fn disconnect(&mut self) {
         if let Some(session) = &self.session {
             session.disconnect();
         }
         self.state = RdpViewState::Disconnected;
+    }
+
+    /// 获取关联会话标识。
+    #[allow(dead_code)]
+    pub fn session_id(&self) -> SessionId {
+        self.session_id
+    }
+
+    /// 获取显示标题。
+    #[allow(dead_code)]
+    pub fn title(&self) -> &str {
+        &self.title
     }
 }
 
@@ -96,13 +117,83 @@ impl Focusable for RdpView {
 }
 
 impl Render for RdpView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let view_entity = cx.entity().clone();
         let mut root = div()
             .track_focus(&self.focus_handle)
             .size_full()
             .relative()
             .bg(gpui_kit::rgb(0x101010))
-            .overflow_hidden();
+            .overflow_hidden()
+            .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, _| {
+                if let RdpViewState::Connected { width, height } = this.state
+                    && let Some((x, y)) = crate::rdp::input::map_pointer_position(
+                        event.position,
+                        Bounds {
+                            origin: Point::default(),
+                            size: Size {
+                                width: Pixels::from(width as f32),
+                                height: Pixels::from(height as f32),
+                            },
+                        },
+                        width,
+                        height,
+                        this.is_scaled,
+                    )
+                {
+                    this.send_input(RdpInput::MouseMove { x, y });
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _: &MouseDownEvent, _, _| {
+                    if let Some(input) =
+                        crate::rdp::input::map_mouse_button(MouseButton::Left, true)
+                    {
+                        this.send_input(input);
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(move |this, _: &MouseUpEvent, _, _| {
+                    if let Some(input) =
+                        crate::rdp::input::map_mouse_button(MouseButton::Left, false)
+                    {
+                        this.send_input(input);
+                    }
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _: &MouseDownEvent, _, _| {
+                    if let Some(input) =
+                        crate::rdp::input::map_mouse_button(MouseButton::Right, true)
+                    {
+                        this.send_input(input);
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Right,
+                cx.listener(move |this, _: &MouseUpEvent, _, _| {
+                    if let Some(input) =
+                        crate::rdp::input::map_mouse_button(MouseButton::Right, false)
+                    {
+                        this.send_input(input);
+                    }
+                }),
+            )
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, _| {
+                this.send_input(RdpInput::KeyDown {
+                    key: event.keystroke.key.clone(),
+                });
+            }))
+            .on_key_up(cx.listener(move |this, event: &KeyUpEvent, _, _| {
+                this.send_input(RdpInput::KeyUp {
+                    key: event.keystroke.key.clone(),
+                });
+            }));
 
         match &self.state {
             RdpViewState::Connecting => {
@@ -112,7 +203,7 @@ impl Render for RdpView {
                         .items_center()
                         .justify_center()
                         .text_color(gpui_kit::rgb(0xaaaaaa))
-                        .child("正在建立远程桌面连接..."),
+                        .child(rust_i18n::t!("rdp.connecting").to_string()),
                 );
             }
             RdpViewState::Failed(msg) => {
@@ -123,7 +214,7 @@ impl Render for RdpView {
                         .justify_center()
                         .gap(px(8.0))
                         .text_color(gpui_kit::rgb(0xff5555))
-                        .child(format!("远程桌面连接失败: {msg}")),
+                        .child(rust_i18n::t!("rdp.failed", msg = msg).to_string()),
                 );
             }
             RdpViewState::Disconnected => {
@@ -133,10 +224,13 @@ impl Render for RdpView {
                         .items_center()
                         .justify_center()
                         .text_color(gpui_kit::rgb(0x888888))
-                        .child("远程桌面会话已断开"),
+                        .child(rust_i18n::t!("rdp.disconnected").to_string()),
                 );
             }
-            RdpViewState::Connected { .. } => {
+            RdpViewState::Connected {
+                width: _,
+                height: _,
+            } => {
                 // 渲染桌面瓦片集合
                 if let Some(frame) = &self.frame {
                     let mut grid = v_flex().flex_none();
@@ -161,10 +255,58 @@ impl Render for RdpView {
                 let toolbar = render_rdp_toolbar(RdpToolbarParams {
                     is_muted: self.is_muted,
                     is_scaled: self.is_scaled,
-                    on_send_cad: Box::new(|_, _, _| {}),
-                    on_toggle_mute: Box::new(|_, _, _| {}),
-                    on_toggle_scale: Box::new(|_, _, _| {}),
-                    on_disconnect: Box::new(|_, _, _| {}),
+                    on_send_cad: {
+                        let view = view_entity.clone();
+                        Box::new(move |_, _, cx| {
+                            view.update(cx, |this, _| {
+                                this.send_input(RdpInput::KeyDown {
+                                    key: "ctrl".to_string(),
+                                });
+                                this.send_input(RdpInput::KeyDown {
+                                    key: "alt".to_string(),
+                                });
+                                this.send_input(RdpInput::KeyDown {
+                                    key: "delete".to_string(),
+                                });
+                                this.send_input(RdpInput::KeyUp {
+                                    key: "delete".to_string(),
+                                });
+                                this.send_input(RdpInput::KeyUp {
+                                    key: "alt".to_string(),
+                                });
+                                this.send_input(RdpInput::KeyUp {
+                                    key: "ctrl".to_string(),
+                                });
+                            });
+                        })
+                    },
+                    on_toggle_mute: {
+                        let view = view_entity.clone();
+                        Box::new(move |_, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.is_muted = !this.is_muted;
+                                cx.notify();
+                            });
+                        })
+                    },
+                    on_toggle_scale: {
+                        let view = view_entity.clone();
+                        Box::new(move |_, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.is_scaled = !this.is_scaled;
+                                cx.notify();
+                            });
+                        })
+                    },
+                    on_disconnect: {
+                        let view = view_entity.clone();
+                        Box::new(move |_, _, cx| {
+                            view.update(cx, |this, cx| {
+                                this.disconnect();
+                                cx.notify();
+                            });
+                        })
+                    },
                 });
 
                 root = root.child(

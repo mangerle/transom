@@ -37,6 +37,7 @@ pub(super) struct SessionFormInputs {
     proxy_port: Entity<InputState>,
     proxy_username: Entity<InputState>,
     proxy_password: Entity<InputState>,
+    rdp_domain: Entity<InputState>,
     forward_draft: SessionForwardDraft,
 }
 
@@ -175,6 +176,12 @@ impl SessionFormInputs {
                 &target.proxy_password,
                 &rust_i18n::t!("form.proxy_password_placeholder"),
             ),
+            rdp_domain: text_input(
+                window,
+                cx,
+                &seed.rdp_domain,
+                &rust_i18n::t!("form.rdp_domain_placeholder"),
+            ),
             forward_draft,
         }
     }
@@ -275,6 +282,11 @@ impl SessionForm {
             telnet_encoding,
             ftp_security,
             ftp_passive,
+            rdp_domain: _,
+            rdp_color_depth,
+            rdp_audio,
+            rdp_clipboard,
+            rdp_file_copy,
             local_working_dir: _,
             local_shell: _,
             local_shell_args: _,
@@ -326,6 +338,11 @@ impl SessionForm {
             telnet_encoding,
             ftp_security,
             ftp_passive,
+            rdp_domain: inputs.rdp_domain,
+            rdp_color_depth,
+            rdp_audio,
+            rdp_clipboard,
+            rdp_file_copy,
             startup_commands: inputs.startup_commands,
             local_working_dir: inputs.local_working_dir,
             local_shell: inputs.local_shell,

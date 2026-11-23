@@ -9,14 +9,17 @@ use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::*;
 
+/// 工具条按钮点击回调函数类型。
+pub type RdpToolbarCallback = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
 /// 悬浮工具条渲染参数。
 pub struct RdpToolbarParams {
     pub is_muted: bool,
     pub is_scaled: bool,
-    pub on_send_cad: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
-    pub on_toggle_mute: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
-    pub on_toggle_scale: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
-    pub on_disconnect: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
+    pub on_send_cad: RdpToolbarCallback,
+    pub on_toggle_mute: RdpToolbarCallback,
+    pub on_toggle_scale: RdpToolbarCallback,
+    pub on_disconnect: RdpToolbarCallback,
 }
 
 /// 渲染半透明悬浮快捷操作条。
@@ -38,9 +41,9 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams) -> AnyElement {
             Button::new(ElementId::Name("rdp-mute-btn".into()))
                 .small()
                 .label(if params.is_muted {
-                    "静音中"
+                    rust_i18n::t!("rdp.muted").to_string()
                 } else {
-                    "声音开启"
+                    rust_i18n::t!("rdp.sound_on").to_string()
                 })
                 .on_click(params.on_toggle_mute),
         )
@@ -48,16 +51,16 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams) -> AnyElement {
             Button::new(ElementId::Name("rdp-scale-btn".into()))
                 .small()
                 .label(if params.is_scaled {
-                    "自适应窗口"
+                    rust_i18n::t!("rdp.scale_to_fit").to_string()
                 } else {
-                    "原始比例"
+                    rust_i18n::t!("rdp.original_scale").to_string()
                 })
                 .on_click(params.on_toggle_scale),
         )
         .child(
             Button::new(ElementId::Name("rdp-disconnect-btn".into()))
                 .small()
-                .label("断开连接")
+                .label(rust_i18n::t!("rdp.disconnect").to_string())
                 .on_click(params.on_disconnect),
         )
         .into_any_element()

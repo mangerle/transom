@@ -233,6 +233,35 @@ dialog:
     en: There are unsaved changes. Use Save or Cancel inside the form first.
     zh-CN: 表单里有未提交的内容，请先在表单内保存或取消。
 
+rdp:
+  desktop:
+    en: RDP Remote Desktop
+    zh-CN: RDP 远程桌面
+  connecting:
+    en: Establishing remote desktop connection…
+    zh-CN: 正在建立远程桌面连接…
+  failed:
+    en: "Remote desktop connection failed: %{msg}"
+    zh-CN: "远程桌面连接失败: %{msg}"
+  disconnected:
+    en: Remote desktop session disconnected
+    zh-CN: 远程桌面会话已断开
+  muted:
+    en: Muted
+    zh-CN: 静音中
+  sound_on:
+    en: Sound on
+    zh-CN: 声音开启
+  scale_to_fit:
+    en: Scale to fit
+    zh-CN: 自适应窗口
+  original_scale:
+    en: Original scale
+    zh-CN: 原始比例
+  disconnect:
+    en: Disconnect
+    zh-CN: 断开连接
+
 tab:
   connecting:
     en: Connecting
@@ -589,6 +618,24 @@ form:
   error_ftp_username:
     en: FTP username is required (use "anonymous" for anonymous login)
     zh-CN: FTP 用户名不能为空（匿名登录请填写 anonymous）
+  rdp_domain:
+    en: Domain (optional)
+    zh-CN: 认证域（可选）
+  rdp_domain_placeholder:
+    en: WORKGROUP or ad.example.com
+    zh-CN: WORKGROUP 或 ad.example.com
+  rdp_color_depth:
+    en: Color depth
+    zh-CN: 颜色深度
+  rdp_audio:
+    en: Audio redirection
+    zh-CN: 音频重定向
+  rdp_clipboard:
+    en: Clipboard sync
+    zh-CN: 剪贴板双向同步
+  rdp_file_copy:
+    en: Clipboard file copy
+    zh-CN: 剪贴板文件流式复制
   serial_port:
     en: Serial device
     zh-CN: 串口设备

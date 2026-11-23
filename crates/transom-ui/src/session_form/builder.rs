@@ -51,6 +51,10 @@ impl SessionForm {
                 let (connection, password) = self.build_ftp_connection(cx)?;
                 (connection, password, None)
             }
+            ConnectionChoice::Rdp => {
+                let (connection, password) = self.build_rdp_connection(cx)?;
+                (connection, password, None)
+            }
         };
 
         let mut session = self
@@ -70,7 +74,8 @@ impl SessionForm {
             ConnectionChoice::Ssh
             | ConnectionChoice::Telnet
             | ConnectionChoice::Mosh
-            | ConnectionChoice::Ftp => self.build_proxy(cx)?,
+            | ConnectionChoice::Ftp
+            | ConnectionChoice::Rdp => self.build_proxy(cx)?,
             ConnectionChoice::Serial | ConnectionChoice::Local => None,
         };
         session.icon = self.icon;

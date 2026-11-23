@@ -7,7 +7,10 @@
 
 use super::types::SessionForm;
 use gpui_kit::Context;
-use transom_core::{Connection, FtpConnection, SerialConnection, TelnetConnection};
+use transom_core::{
+    Connection, FtpConnection, RdpConnection, RdpPerformance, RdpSecurity, SerialConnection,
+    TelnetConnection,
+};
 use zeroize::Zeroizing;
 
 impl SessionForm {
@@ -99,6 +102,52 @@ impl SessionForm {
                 username,
                 security: self.ftp_security,
                 passive: self.ftp_passive,
+            }),
+            password,
+        ))
+    }
+
+    /// 组装 RDP 连接参数：主机非空、端口合法，用户名与密码可选项。
+    ///
+    /// # Errors
+    /// 主机为空或端口非法/为零时返回本地化校验文案。
+    pub(super) fn build_rdp_connection(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<(Connection, Option<Zeroizing<String>>), String> {
+        let host = self.host.read(cx).value().trim().to_string();
+        if host.is_empty() {
+            return Err(rust_i18n::t!("form.error_host").to_string());
+        }
+        let port: u16 = self
+            .port
+            .read(cx)
+            .value()
+            .trim()
+            .parse()
+            .map_err(|_| rust_i18n::t!("form.error_port").to_string())?;
+        if port == 0 {
+            return Err(rust_i18n::t!("form.error_port").to_string());
+        }
+        let username = self.username.read(cx).value().trim().to_string();
+        let domain_str = self.rdp_domain.read(cx).value().trim().to_string();
+        let domain = (!domain_str.is_empty()).then_some(domain_str);
+        let password_value = self.password.read(cx).value().to_string();
+        let password = (!password_value.is_empty()).then(|| Zeroizing::new(password_value));
+        Ok((
+            Connection::Rdp(RdpConnection {
+                host,
+                port,
+                username,
+                domain,
+                security: RdpSecurity::Negotiate,
+                color_depth: self.rdp_color_depth,
+                performance: RdpPerformance::Lan,
+                audio: self.rdp_audio,
+                clipboard: self.rdp_clipboard,
+                file_copy: self.rdp_file_copy,
+                dynamic_resolution: true,
+                desktop_size: None,
             }),
             password,
         ))
