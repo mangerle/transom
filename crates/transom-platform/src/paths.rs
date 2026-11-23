@@ -40,6 +40,14 @@ pub fn git_projects_path() -> PathBuf {
     config_dir().join("git_projects.json")
 }
 
+/// 桌面端 API 客户端项目文件。
+///
+/// 与会话目录分开：API 项目由 Transom 自己维护，不参与 SSH 会话目录的备份与
+/// 三路合并，避免把本地接口定义错误地带到另一台机器。
+pub fn api_projects_path() -> PathBuf {
+    config_dir().join("api_projects.json")
+}
+
 /// 离线 Git 搁置集（Shelf）存放目录。
 pub fn shelf_dir() -> PathBuf {
     config_dir().join("shelf")

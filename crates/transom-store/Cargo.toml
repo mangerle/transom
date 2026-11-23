@@ -14,6 +14,7 @@ publish.workspace = true
 [dependencies]
 transom-platform.workspace = true
 transom-core.workspace = true
+transom-api.workspace = true
 transom-crypto.workspace = true
 serde.workspace = true
 serde_json.workspace = true

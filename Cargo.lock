@@ -9994,6 +9994,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "transom-api",
  "transom-container",
  "transom-core",
  "transom-git",
@@ -10007,6 +10008,20 @@ dependencies = [
  "uuid",
  "windows 0.62.2",
  "zeroize",
+]
+
+[[package]]
+name = "transom-api"
+version = "1.8.5"
+dependencies = [
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "transom-core",
+ "uuid",
 ]
 
 [[package]]
@@ -10190,6 +10205,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "tempfile",
+ "transom-api",
  "transom-core",
  "transom-crypto",
  "transom-platform",
@@ -10269,6 +10285,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "transom-api",
  "transom-core",
  "transom-crypto",
  "transom-desktop",

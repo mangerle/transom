@@ -2,6 +2,7 @@
 members = [
     "apps/transom",
     "crates/transom-core",
+    "crates/transom-api",
     "crates/transom-platform",
     "crates/transom-crypto",
     "crates/transom-store",
@@ -145,6 +146,7 @@ rustls = "0.23"
 rustls-platform-verifier = "0.7"
 
 transom-core = { path = "crates/transom-core" }
+transom-api = { path = "crates/transom-api" }
 transom-platform = { path = "crates/transom-platform" }
 transom-crypto = { path = "crates/transom-crypto" }
 transom-store = { path = "crates/transom-store" }

@@ -1,5 +1,6 @@
 //! Persistence for sessions, secrets, settings, and trusted host keys.
 
+mod api_projects;
 mod file_io;
 mod git_projects;
 mod history;
@@ -15,6 +16,7 @@ pub mod settings;
 
 // 备份/同步信封（BackupFormat、加解密入口）位于独立的 `transom_crypto` crate：
 // 存储层只暴露"文件"侧能力。调用方（sync、store）统一从 transom_crypto 引用。
+pub use api_projects::JsonApiProjectStore;
 pub use backup::{CatalogBackupService, read_backup, write_backup};
 pub use file_io::{LocalTextError, read_utf8_limited, write_atomic, write_utf8_checked_replace};
 pub use git_projects::JsonGitProjectStore;
