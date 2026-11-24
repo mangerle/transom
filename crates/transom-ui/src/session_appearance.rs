@@ -28,12 +28,16 @@ pub(crate) struct SessionAppearance {
 }
 
 /// 表单里可选的会话图标（不含"跟随连接类型"）。
-pub(crate) const SESSION_ICON_CHOICES: [SessionIcon; 10] = [
+pub(crate) const SESSION_ICON_CHOICES: [SessionIcon; 14] = [
     SessionIcon::Server,
+    SessionIcon::Ssh,
+    SessionIcon::Terminal,
+    SessionIcon::Desktop,
+    SessionIcon::Folder,
+    SessionIcon::Serial,
     SessionIcon::Database,
     SessionIcon::Container,
     SessionIcon::Cloud,
-    SessionIcon::Terminal,
     SessionIcon::Globe,
     SessionIcon::Shield,
     SessionIcon::Storage,
@@ -57,6 +61,10 @@ pub(crate) fn session_icon(icon: SessionIcon) -> Option<AppIcon> {
     match icon {
         SessionIcon::Auto => None,
         SessionIcon::Server => Some(UiIcon::WEB_SERVER.into()),
+        SessionIcon::Ssh => Some(DomainIcon::SSH.into()),
+        SessionIcon::Desktop => Some(DomainIcon::MONITOR.into()),
+        SessionIcon::Folder => Some(UiIcon::FOLDER.into()),
+        SessionIcon::Serial => Some(CustomIcon::PORT.into()),
         SessionIcon::Database => Some(CustomIcon::DATABASE.into()),
         SessionIcon::Container => Some(DomainIcon::CONTAINER.into()),
         SessionIcon::Cloud => Some(CustomIcon::CLOUD.into()),
@@ -66,6 +74,21 @@ pub(crate) fn session_icon(icon: SessionIcon) -> Option<AppIcon> {
         SessionIcon::Storage => Some(CustomIcon::DISK.into()),
         SessionIcon::Docker => Some(CustomIcon::DOCKER.into()),
         SessionIcon::Podman => Some(CustomIcon::PODMAN.into()),
+    }
+}
+
+/// 表单协议选项对应的默认图标（与 `connection::presentation::icon` 保持同一套映射）。
+pub(crate) fn default_icon_for_connection_choice(
+    choice: crate::session_form::ConnectionChoice,
+) -> AppIcon {
+    match choice {
+        crate::session_form::ConnectionChoice::Ssh => DomainIcon::SSH.into(),
+        crate::session_form::ConnectionChoice::Local => DomainIcon::TERMINAL.into(),
+        crate::session_form::ConnectionChoice::Telnet => UiIcon::WEB_SERVER.into(),
+        crate::session_form::ConnectionChoice::Serial => CustomIcon::PORT.into(),
+        crate::session_form::ConnectionChoice::Mosh => UiIcon::RUN.into(),
+        crate::session_form::ConnectionChoice::Ftp => UiIcon::FOLDER.into(),
+        crate::session_form::ConnectionChoice::Rdp => DomainIcon::MONITOR.into(),
     }
 }
 

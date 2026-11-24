@@ -3,10 +3,11 @@
 //! 单独成文件是因为这两行要维护两套交互：图标是一排图标按钮，颜色是一排色
 //! 块；混进主表单视图会让那个文件继续变大，两套控件的样式也各写各的。
 
-use super::types::{ConnectionChoice, SessionForm};
+use super::types::SessionForm;
 use crate::palette::Palette;
 use crate::session_appearance::{
-    SESSION_COLOR_CHOICES, SESSION_ICON_CHOICES, session_color, session_icon,
+    SESSION_COLOR_CHOICES, SESSION_ICON_CHOICES, default_icon_for_connection_choice, session_color,
+    session_icon,
 };
 use crate::session_form::SessionFormView;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
@@ -16,7 +17,7 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_core::{SessionColor, SessionIcon};
-use transom_ui_icons::{AppIcon, AppIconElement, DomainIcon, UiIcon};
+use transom_ui_icons::{AppIconElement, UiIcon};
 
 /// 色块直径：够点中，又不会让一排七个占满整行。
 const SWATCH_SIZE: f32 = 18.0;
@@ -31,11 +32,8 @@ impl SessionFormView {
     ) -> AnyElement {
         let icon = form.icon;
         let color = form.color;
-        let display_icon = session_icon(icon).unwrap_or(match form.connection {
-            ConnectionChoice::Local => AppIcon::Domain(DomainIcon::TERMINAL),
-            ConnectionChoice::Rdp => AppIcon::Domain(DomainIcon::MONITOR),
-            _ => AppIcon::Ui(UiIcon::WEB_SERVER),
-        });
+        let display_icon =
+            session_icon(icon).unwrap_or_else(|| default_icon_for_connection_choice(form.connection));
         let icon_tint = session_color(color).unwrap_or(p.primary);
         let content_entity = cx.entity();
         let content_palette = p.clone();

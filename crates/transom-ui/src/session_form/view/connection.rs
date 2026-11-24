@@ -81,19 +81,40 @@ impl SessionFormView {
             }))
             .into_any_element()
     }
+}
 
-    /// 左侧纵向配置分组导航栏（RDP 仅保留基本信息与网络与代理，过滤终端/转发/登录后命令）。
+/// 按连接协议真实能力返回左侧边栏应展示的配置分组列表。
+pub(in crate::session_form) fn sections_for_connection(
+    choice: ConnectionChoice,
+) -> &'static [SessionFormSection] {
+    match choice {
+        ConnectionChoice::Ssh => &SessionFormSection::ALL,
+        ConnectionChoice::Mosh | ConnectionChoice::Telnet => &[
+            SessionFormSection::Basic,
+            SessionFormSection::Network,
+            SessionFormSection::Terminal,
+            SessionFormSection::Startup,
+        ],
+        ConnectionChoice::Local | ConnectionChoice::Serial => &[
+            SessionFormSection::Basic,
+            SessionFormSection::Terminal,
+            SessionFormSection::Startup,
+        ],
+        ConnectionChoice::Ftp | ConnectionChoice::Rdp => {
+            &[SessionFormSection::Basic, SessionFormSection::Network]
+        }
+    }
+}
+
+impl SessionFormView {
+    /// 左侧纵向配置分组导航栏（按当前选中协议过滤不适用分组）。
     pub(super) fn render_session_sidebar(
         &self,
         form: &SessionForm,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let sections: &[SessionFormSection] = if form.connection == ConnectionChoice::Rdp {
-            &[SessionFormSection::Basic, SessionFormSection::Network]
-        } else {
-            &SessionFormSection::ALL
-        };
+        let sections = sections_for_connection(form.connection);
         v_flex()
             .w(rems(9.5))
             .flex_none()

@@ -26,7 +26,7 @@ use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 mod basic;
-mod connection;
+pub(super) mod connection;
 mod files;
 mod forward;
 mod terminal;
@@ -69,7 +69,7 @@ impl SessionFormView {
             .child(crate::widgets::dialog_confirm_button(
                 "save-session",
                 rust_i18n::t!("common.save").to_string(),
-                Some(AppIcon::Ui(UiIcon::CHECK)),
+                None,
                 crate::widgets::DialogConfirmKind::Primary,
                 cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx)),
             ));

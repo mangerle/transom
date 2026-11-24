@@ -67,11 +67,12 @@ pub(crate) fn describe_target(session: &Session) -> String {
     display_with_port(&session.connection)
 }
 
-/// 连接类型图标：全应用共用一套映射。
+/// 连接类型图标：全应用共用一套映射，每种协议独立区分。
 pub(crate) fn icon(connection: &Connection) -> AppIcon {
     match connection {
+        Connection::Ssh(_) => AppIcon::Domain(DomainIcon::SSH),
         Connection::Local(_) => AppIcon::Domain(DomainIcon::TERMINAL),
-        Connection::Serial(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
+        Connection::Serial(_) => AppIcon::Custom(transom_ui_icons::CustomIcon::PORT),
         Connection::Telnet(_) => AppIcon::Ui(UiIcon::WEB_SERVER),
         Connection::Ftp(_) => AppIcon::Ui(UiIcon::FOLDER),
         Connection::Mosh(_) => AppIcon::Ui(UiIcon::RUN),

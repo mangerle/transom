@@ -212,12 +212,7 @@ impl SessionFormView {
         let prev_default = default_port_for_choice(form.connection);
         let next_default = default_port_for_choice(choice);
         form.connection = choice;
-        if choice == ConnectionChoice::Rdp
-            && !matches!(
-                form.section,
-                SessionFormSection::Basic | SessionFormSection::Network
-            )
-        {
+        if !super::view::connection::sections_for_connection(choice).contains(&form.section) {
             form.section = SessionFormSection::Basic;
         }
 

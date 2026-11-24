@@ -15,6 +15,14 @@ pub enum SessionIcon {
     Auto,
     /// 服务器。
     Server,
+    /// SSH 主机。
+    Ssh,
+    /// 远程桌面（RDP）。
+    Desktop,
+    /// 文件传输（FTP / 目录）。
+    Folder,
+    /// 串口（硬件端口）。
+    Serial,
     /// 数据库。
     Database,
     /// 容器。
