@@ -29,6 +29,7 @@ use tokio::sync::{mpsc, watch};
 /// 停机信号而不阻塞等待网络回收。
 pub struct RdpSession {
     pub(crate) input_tx: mpsc::Sender<RdpInput>,
+    pub(crate) mouse_tx: watch::Sender<Option<(u16, u16)>>,
     pub(crate) shutdown_tx: watch::Sender<bool>,
     pub(crate) worker: Option<thread::JoinHandle<()>>,
 }
@@ -39,12 +40,14 @@ impl RdpSession {
         let channels = channel::create_session_channels();
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let events_tx_err = channels.senders.events.clone();
+        let input_rx = channels.input_rx;
+        let mouse_rx = channels.mouse_rx;
+        let senders = channels.senders;
 
         let worker = match thread::Builder::new()
             .name("transom-rdp-session".to_string())
-            .spawn(move || {
-                run_worker_thread(config, channels.input_rx, channels.senders, shutdown_rx)
-            }) {
+            .spawn(move || run_worker_thread(config, input_rx, mouse_rx, senders, shutdown_rx))
+        {
             Ok(handle) => Some(handle),
             Err(e) => {
                 log::error!("派生 RDP 独立会话线程失败: {e}");
@@ -58,11 +61,17 @@ impl RdpSession {
         (
             Self {
                 input_tx: channels.input_tx,
+                mouse_tx: channels.mouse_tx,
                 shutdown_tx,
                 worker,
             },
             channels.receivers,
         )
+    }
+
+    /// 投递最新鼠标坐标（覆盖式无阻塞槽位，绝不挤占按键与控制通道容量）。
+    pub fn send_mouse_move(&self, x: u16, y: u16) {
+        self.mouse_tx.send_replace(Some((x, y)));
     }
 
     /// 发送输入指令。若通道已满则等待；对端关闭时返回错误。
@@ -124,6 +133,7 @@ impl Drop for RdpSession {
 fn run_worker_thread(
     mut config: SessionConfig,
     input_rx: mpsc::Receiver<RdpInput>,
+    mouse_rx: watch::Receiver<Option<(u16, u16)>>,
     senders: channel::SessionSenders,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
@@ -154,6 +164,7 @@ fn run_worker_thread(
                     let runner = SessionLoopRunner::new(SessionLoopParams {
                         connection,
                         input_rx,
+                        mouse_rx,
                         senders,
                         shutdown_rx,
                     });

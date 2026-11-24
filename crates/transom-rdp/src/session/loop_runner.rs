@@ -42,6 +42,7 @@ const MAX_CONSECUTIVE_DECODE_ERRORS: u32 = 16;
 pub(crate) struct SessionLoopParams {
     pub(crate) connection: EstablishedConnection,
     pub(crate) input_rx: mpsc::Receiver<RdpInput>,
+    pub(crate) mouse_rx: watch::Receiver<Option<(u16, u16)>>,
     pub(crate) senders: SessionSenders,
     pub(crate) shutdown_rx: watch::Receiver<bool>,
 }
@@ -61,6 +62,7 @@ pub(crate) struct SessionLoopRunner {
     canvas: DecodedImage,
     tile_extractor: TileExtractor,
     input_rx: mpsc::Receiver<RdpInput>,
+    mouse_rx: watch::Receiver<Option<(u16, u16)>>,
     senders: SessionSenders,
     shutdown_rx: watch::Receiver<bool>,
     audio_muted: Arc<AtomicBool>,
@@ -105,6 +107,7 @@ impl SessionLoopRunner {
             canvas,
             tile_extractor: TileExtractor::default(),
             input_rx: params.input_rx,
+            mouse_rx: params.mouse_rx,
             senders: params.senders,
             shutdown_rx: params.shutdown_rx,
             audio_muted,
@@ -209,6 +212,15 @@ impl SessionLoopRunner {
                             return LoopAction::Stop;
                         }
                     }
+                    Ok(()) = self.mouse_rx.changed() => {
+                        let pos = *self.mouse_rx.borrow_and_update();
+                        if let Some((x, y)) = pos {
+                            self.input_batcher.prepare_mouse_move(x, y);
+                            if matches!(self.flush_fastpath_ops(writer).await, LoopAction::Stop) {
+                                return LoopAction::Stop;
+                            }
+                        }
+                    }
                     res = &mut read_fut => {
                         break res;
                     }
@@ -288,6 +300,11 @@ impl SessionLoopRunner {
         first: RdpInput,
         writer: &mut W,
     ) -> LoopAction {
+        let pending_mouse = if self.mouse_rx.has_changed().unwrap_or(false) {
+            *self.mouse_rx.borrow_and_update()
+        } else {
+            None
+        };
         let mut ctx = InputProcessContext {
             active_stage: &mut self.active_stage,
             writer,
@@ -297,7 +314,7 @@ impl SessionLoopRunner {
         };
         let outcome = self
             .input_batcher
-            .process_batch(first, &mut self.input_rx, &mut ctx)
+            .process_batch(pending_mouse, first, &mut self.input_rx, &mut ctx)
             .await;
 
         let action = self.flush_fastpath_ops(writer).await;

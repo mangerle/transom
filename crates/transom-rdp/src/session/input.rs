@@ -49,13 +49,18 @@ impl Default for InputBatcher {
 
 impl InputBatcher {
     /// 批量排空相邻 UI 输入指令，立即响应控制指令并将连续 FastPath 键鼠事件合并。
+    /// 若存在待同步的最新鼠标坐标，优先注入队列头部，保证点击事件前坐标严格对齐。
     pub(crate) async fn process_batch<W: FramedWrite>(
         &mut self,
+        pending_mouse: Option<(u16, u16)>,
         first: RdpInput,
         input_rx: &mut mpsc::Receiver<RdpInput>,
         ctx: &mut InputProcessContext<'_, W>,
     ) -> InputBatchOutcome {
         self.ops_buf.clear();
+        if let Some((x, y)) = pending_mouse {
+            self.ops_buf.push(Operation::MouseMove(MousePosition { x, y }));
+        }
         if matches!(
             self.enqueue_or_handle_control(first, ctx).await,
             InputBatchOutcome::Stop
@@ -78,6 +83,12 @@ impl InputBatcher {
         }
 
         InputBatchOutcome::Continue
+    }
+
+    /// 单独压入一次鼠标移动操作（用于鼠标覆盖槽位独立唤醒时）。
+    pub(crate) fn prepare_mouse_move(&mut self, x: u16, y: u16) {
+        self.ops_buf.clear();
+        self.ops_buf.push(Operation::MouseMove(MousePosition { x, y }));
     }
 
     /// 将当前累积的键鼠操作转换为 FastPath PDU 并交由状态机编码（零多余 `Vec` 克隆）。
@@ -145,7 +156,6 @@ fn append_fastpath_operations(
     out: &mut Vec<Operation>,
 ) {
     match input {
-        RdpInput::MouseMove { x, y } => out.push(Operation::MouseMove(MousePosition { x, y })),
         RdpInput::MouseButton { button, pressed } => {
             let btn = match button {
                 MouseBtn::Left => MouseButton::Left,

@@ -96,7 +96,7 @@ impl RdpView {
             && self.input.last_mouse_sent_at.elapsed() >= MOUSE_MOVE_THROTTLE_INTERVAL
         {
             self.input.last_mouse_sent_at = Instant::now();
-            self.send_input(RdpInput::MouseMove { x, y });
+            self.send_mouse_move(x, y);
         }
     }
 
@@ -116,7 +116,7 @@ impl RdpView {
     ) {
         self.focus(window, cx);
         if let Some((x, y)) = self.input.last_mouse_pos.get() {
-            self.send_input(RdpInput::MouseMove { x, y });
+            self.send_mouse_move(x, y);
         }
         if let Some(input) = map_mouse_button(btn, true) {
             self.send_input(input);

@@ -227,12 +227,19 @@ impl RdpView {
         matches!(self.cursor, RenderedCursor::Custom { .. })
     }
 
-    /// 发送输入指令到 RDP 会话循环；通道背压满时记录调试日志便于排查。
+    /// 投递最新鼠标坐标（覆盖式无阻塞槽位，绝不挤占按键通道）。
+    pub fn send_mouse_move(&self, x: u16, y: u16) {
+        if let Some(session) = &self.session {
+            session.send_mouse_move(x, y);
+        }
+    }
+
+    /// 发送输入指令到 RDP 会话循环；通道背压满时记录警告日志便于排查。
     pub fn send_input(&self, input: RdpInput) {
         if let Some(session) = &self.session
             && let Err(RdpError::ChannelFull { channel }) = session.try_send_input(input)
         {
-            log::debug!("RDP 输入通道已满（{channel}），本次输入已丢弃");
+            log::warn!("RDP 关键输入通道已满（{channel}），本次输入已丢弃");
         }
     }
 

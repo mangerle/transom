@@ -74,9 +74,11 @@ fn session_channel_backpressure_distinction() {
     assert_eq!(INPUT_CHANNEL_CAPACITY, 128);
 
     let (input_tx, _input_rx) = tokio::sync::mpsc::channel(1);
+    let (mouse_tx, _mouse_rx) = tokio::sync::watch::channel(None);
     let (shutdown_tx, _shutdown_rx) = tokio::sync::watch::channel(false);
     let session = crate::RdpSession {
         input_tx,
+        mouse_tx,
         shutdown_tx,
         worker: None,
     };

@@ -11,9 +11,9 @@ use crate::error::RdpError;
 use crate::keyboard::{KeyChord, ModifierState};
 use crate::pointer::CursorUpdate;
 use crate::tiles::FrameUpdate;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
-/// 输入事件通道容量上限（鼠标、按键与控制指令）。
+/// 输入事件通道容量上限（按键、鼠标按键与控制指令；高频鼠标移动走独立覆盖槽位）。
 pub const INPUT_CHANNEL_CAPACITY: usize = 128;
 
 /// 控制事件通道容量上限（连接状态、光标、剪贴板与终止通知）。
@@ -22,11 +22,9 @@ pub const OUTPUT_CHANNEL_CAPACITY: usize = 64;
 /// 桌面视频帧增量通道容量上限（保持极低延迟与极小内存驻留）。
 pub const FRAME_CHANNEL_CAPACITY: usize = 2;
 
-/// 从 UI 界面发送给 RDP 会话线程的输入指令。
+/// 从 UI 界面发送给 RDP 会话线程的输入指令（不含高频可覆盖的鼠标移动）。
 #[derive(Debug)]
 pub enum RdpInput {
-    /// 鼠标移动。
-    MouseMove { x: u16, y: u16 },
     /// 鼠标按键。
     MouseButton { button: MouseBtn, pressed: bool },
     /// 鼠标滚轮滚动（垂直/水平）。
@@ -103,6 +101,8 @@ pub(crate) struct SessionSenders {
 pub(crate) struct SessionChannels {
     pub(crate) input_tx: mpsc::Sender<RdpInput>,
     pub(crate) input_rx: mpsc::Receiver<RdpInput>,
+    pub(crate) mouse_tx: watch::Sender<Option<(u16, u16)>>,
+    pub(crate) mouse_rx: watch::Receiver<Option<(u16, u16)>>,
     pub(crate) senders: SessionSenders,
     pub(crate) receivers: RdpReceivers,
 }
@@ -110,12 +110,15 @@ pub(crate) struct SessionChannels {
 /// 创建配对的有界通信通道。
 pub(crate) fn create_session_channels() -> SessionChannels {
     let (input_tx, input_rx) = mpsc::channel(INPUT_CHANNEL_CAPACITY);
+    let (mouse_tx, mouse_rx) = watch::channel(None);
     let (events_tx, events_rx) = mpsc::channel(OUTPUT_CHANNEL_CAPACITY);
     let (frames_tx, frames_rx) = mpsc::channel(FRAME_CHANNEL_CAPACITY);
 
     SessionChannels {
         input_tx,
         input_rx,
+        mouse_tx,
+        mouse_rx,
         senders: SessionSenders {
             events: events_tx,
             frames: frames_tx,
