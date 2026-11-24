@@ -3,8 +3,8 @@ use super::types::{
     SessionTargetDefaults,
 };
 use transom_core::{
-    AuthMethod, Connection, FtpSecurity, OutboundProxy, RdpColorDepth, SerialDataBits,
-    SerialFlowControl, SerialParity, SerialStopBits, TextEncoding,
+    AuthMethod, Connection, FtpSecurity, OutboundProxy, RdpColorDepth, RdpPerformance, RdpSecurity,
+    SerialDataBits, SerialFlowControl, SerialParity, SerialStopBits, TextEncoding,
 };
 
 /// 由认证方式推导表单默认值：选择、保存开关、私钥与证书路径。
@@ -139,18 +139,49 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
             _ => None,
         })
         .unwrap_or((FtpSecurity::Plain, true));
-    let (rdp_domain, rdp_color_depth, rdp_audio, rdp_clipboard) = base
+    let (
+        rdp_domain,
+        rdp_security,
+        rdp_color_depth,
+        rdp_performance,
+        rdp_dynamic_resolution,
+        rdp_width,
+        rdp_height,
+        rdp_audio,
+        rdp_clipboard,
+    ) = base
         .as_ref()
         .and_then(|session| match &session.connection {
             Connection::Rdp(rdp) => Some((
                 rdp.domain.clone().unwrap_or_default(),
+                rdp.security,
                 rdp.color_depth,
+                rdp.performance,
+                rdp.dynamic_resolution,
+                rdp.desktop_size
+                    .map(|s| s.width)
+                    .unwrap_or(1920)
+                    .to_string(),
+                rdp.desktop_size
+                    .map(|s| s.height)
+                    .unwrap_or(1080)
+                    .to_string(),
                 rdp.audio,
                 rdp.clipboard,
             )),
             _ => None,
         })
-        .unwrap_or((String::new(), RdpColorDepth::Depth32, true, true));
+        .unwrap_or((
+            String::new(),
+            RdpSecurity::Negotiate,
+            RdpColorDepth::Depth32,
+            RdpPerformance::Lan,
+            true,
+            "1920".to_string(),
+            "1080".to_string(),
+            true,
+            true,
+        ));
     let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
     let serial_baud = serial
         .map(|serial| serial.baud_rate)
@@ -192,7 +223,12 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         ftp_security,
         ftp_passive,
         rdp_domain,
+        rdp_security,
         rdp_color_depth,
+        rdp_performance,
+        rdp_dynamic_resolution,
+        rdp_width,
+        rdp_height,
         rdp_audio,
         rdp_clipboard,
         local_working_dir,

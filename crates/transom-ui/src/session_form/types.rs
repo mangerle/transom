@@ -5,8 +5,9 @@ use gpui_kit::Entity;
 use gpui_kit::component::input::{InputState, TextareaState};
 use transom_core::{
     AuthMethod, BlockViewOverride, Connection, ForwardRule, FtpSecurity, IdentityId, OutboundProxy,
-    RdpColorDepth, SerialDataBits, SerialFlowControl, SerialParity, SerialPortDescriptor,
-    SerialStopBits, Session, SessionColor, SessionIcon, SessionId, TextEncoding,
+    RdpColorDepth, RdpPerformance, RdpSecurity, SerialDataBits, SerialFlowControl, SerialParity,
+    SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon, SessionId,
+    TextEncoding,
 };
 use zeroize::Zeroizing;
 
@@ -154,8 +155,18 @@ pub(crate) struct SessionForm {
     pub ftp_passive: bool,
     /// RDP 认证域名（可选，如 AD 域或工作组）。
     pub rdp_domain: Entity<InputState>,
-    /// RDP 会话颜色深度。
+    /// RDP 安全协议协商模式。
+    pub rdp_security: RdpSecurity,
+    /// RDP 颜色深度。
     pub rdp_color_depth: RdpColorDepth,
+    /// RDP 画质与体验档位。
+    pub rdp_performance: RdpPerformance,
+    /// RDP 是否启用视口自适应动态分辨率。
+    pub rdp_dynamic_resolution: bool,
+    /// RDP 固定分辨率宽度（仅非自适应模式生效）。
+    pub rdp_width: Entity<InputState>,
+    /// RDP 固定分辨率高度（仅非自适应模式生效）。
+    pub rdp_height: Entity<InputState>,
     /// RDP 是否开启音频重定向。
     pub rdp_audio: bool,
     /// RDP 是否开启剪贴板双向同步。
@@ -351,7 +362,12 @@ pub(crate) struct SessionFormSeed {
     pub ftp_security: FtpSecurity,
     pub ftp_passive: bool,
     pub rdp_domain: String,
+    pub rdp_security: RdpSecurity,
     pub rdp_color_depth: RdpColorDepth,
+    pub rdp_performance: RdpPerformance,
+    pub rdp_dynamic_resolution: bool,
+    pub rdp_width: String,
+    pub rdp_height: String,
     pub rdp_audio: bool,
     pub rdp_clipboard: bool,
     pub local_working_dir: String,

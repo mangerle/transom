@@ -13,7 +13,7 @@ use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
-use transom_core::RdpColorDepth;
+use transom_core::{RdpColorDepth, RdpPerformance, RdpSecurity};
 
 /// 无必填标记的常规文本输入字段。
 fn optional_form_field(label: String, input: Entity<InputState>, p: &Palette) -> AnyElement {
@@ -49,42 +49,77 @@ fn rdp_switch_row(
         .into_any_element()
 }
 
-/// 渲染色深选择按钮组。
-fn render_color_depth_picker(
-    selected: RdpColorDepth,
+/// 统一的分段选择按钮组渲染器，消除色深、画质、安全协议与分辨率模式的重复代码。
+fn render_segmented_picker<T: Copy + PartialEq + 'static>(
+    prefix: &'static str,
+    selected: T,
+    options: &[(T, &'static str)],
+    on_select: impl Fn(&mut SessionForm, T) + Copy + 'static,
     cx: &mut Context<SessionFormView>,
 ) -> AnyElement {
     h_flex()
         .gap_1()
-        .children(
-            [
-                (RdpColorDepth::Depth16, "16-bit"),
-                (RdpColorDepth::Depth24, "24-bit"),
-                (RdpColorDepth::Depth32, "32-bit"),
-            ]
-            .into_iter()
-            .map(|(depth, label)| {
-                Button::new(ElementId::Name(format!("rdp-depth-{label}").into()))
-                    .small()
-                    .label(label)
-                    .selected(selected == depth)
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.edit(cx, |form| form.rdp_color_depth = depth);
-                    }))
-            }),
-        )
+        .children(options.iter().copied().map(|(val, label)| {
+            Button::new(ElementId::Name(format!("{prefix}-{label}").into()))
+                .small()
+                .label(label)
+                .selected(selected == val)
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.edit(cx, |form| on_select(form, val));
+                }))
+        }))
         .into_any_element()
 }
 
-/// 渲染 RDP 的“基本信息”区（主机、端口、用户名、域、密码、色深与生效特性开关）。
+/// 渲染 RDP 的“基本信息”区（主机、端口、用户名、域、密码、分辨率、色深、画质、安全协议与外设开关）。
 pub(crate) fn render_rdp_basic_fields(
     form: &SessionForm,
     cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
-    let color_depth_buttons = render_color_depth_picker(form.rdp_color_depth, cx);
+    let resolution_picker = render_segmented_picker(
+        "rdp-res",
+        form.rdp_dynamic_resolution,
+        &[(true, "自适应窗口"), (false, "固定分辨率")],
+        |f, v| f.rdp_dynamic_resolution = v,
+        cx,
+    );
+    let color_depth_buttons = render_segmented_picker(
+        "rdp-depth",
+        form.rdp_color_depth,
+        &[
+            (RdpColorDepth::Depth16, "16-bit"),
+            (RdpColorDepth::Depth24, "24-bit"),
+            (RdpColorDepth::Depth32, "32-bit"),
+        ],
+        |f, v| f.rdp_color_depth = v,
+        cx,
+    );
+    let performance_buttons = render_segmented_picker(
+        "rdp-perf",
+        form.rdp_performance,
+        &[
+            (RdpPerformance::Lan, "极佳 (LAN)"),
+            (RdpPerformance::Broadband, "平衡 (宽带)"),
+            (RdpPerformance::Wan, "流畅 (WAN)"),
+        ],
+        |f, v| f.rdp_performance = v,
+        cx,
+    );
+    let security_buttons = render_segmented_picker(
+        "rdp-sec",
+        form.rdp_security,
+        &[
+            (RdpSecurity::Negotiate, "自动协商"),
+            (RdpSecurity::Nla, "NLA"),
+            (RdpSecurity::Tls, "TLS"),
+            (RdpSecurity::Rdp, "标准 RDP"),
+        ],
+        |f, v| f.rdp_security = v,
+        cx,
+    );
 
-    v_flex()
+    let mut fields = v_flex()
         .gap_3()
         .child(
             h_flex()
@@ -123,8 +158,45 @@ pub(crate) fn render_rdp_basic_fields(
             p,
         ))
         .child(serial_option_row(
+            "分辨率模式".to_string(),
+            resolution_picker,
+            p,
+        ));
+
+    if !form.rdp_dynamic_resolution {
+        fields = fields.child(
+            h_flex()
+                .gap_3()
+                .items_end()
+                .child(div().flex_1().child(number_form_field(
+                    "固定宽度 (px)".to_string(),
+                    true,
+                    form.rdp_width.clone(),
+                    p,
+                )))
+                .child(div().flex_1().child(number_form_field(
+                    "固定高度 (px)".to_string(),
+                    true,
+                    form.rdp_height.clone(),
+                    p,
+                ))),
+        );
+    }
+
+    fields
+        .child(serial_option_row(
             rust_i18n::t!("form.rdp_color_depth").to_string(),
             color_depth_buttons,
+            p,
+        ))
+        .child(serial_option_row(
+            "画质预设".to_string(),
+            performance_buttons,
+            p,
+        ))
+        .child(serial_option_row(
+            "安全协议".to_string(),
+            security_buttons,
             p,
         ))
         .child(rdp_switch_row(

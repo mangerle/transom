@@ -8,7 +8,7 @@
 use super::types::SessionForm;
 use gpui_kit::Context;
 use transom_core::{
-    Connection, FtpConnection, RdpConnection, RdpPerformance, RdpSecurity, SerialConnection,
+    Connection, FtpConnection, RdpConnection, SerialConnection,
     TelnetConnection,
 };
 use zeroize::Zeroizing;
@@ -135,7 +135,33 @@ impl SessionForm {
         let password_value = self.password.read(cx).value().to_string();
         let password = (!password_value.is_empty()).then(|| Zeroizing::new(password_value));
 
-        // 编辑已有 RDP 会话时保留表单未直接暴露的高级字段，防止保存时被默认值静默覆写
+        let desktop_size = if self.rdp_dynamic_resolution {
+            None
+        } else {
+            let width: u16 = self
+                .rdp_width
+                .read(cx)
+                .value()
+                .trim()
+                .parse()
+                .map_err(|_| "固定分辨率宽度必须为 640 ~ 4096 之间的整数".to_string())?;
+            let height: u16 = self
+                .rdp_height
+                .read(cx)
+                .value()
+                .trim()
+                .parse()
+                .map_err(|_| "固定分辨率高度必须为 480 ~ 2560 之间的整数".to_string())?;
+            if !(640..=4096).contains(&width) || !(480..=2560).contains(&height) {
+                return Err("固定分辨率须处于 640x480 ~ 4096x2560 范围内".to_string());
+            }
+            Some(transom_core::RdpDesktopSize {
+                width: width & !1,
+                height: height & !1,
+            })
+        };
+
+        // 编辑已有 RDP 会话时保留未在表单暴露的兼容字段
         let existing_rdp = self
             .base
             .as_ref()
@@ -149,18 +175,14 @@ impl SessionForm {
                 port,
                 username,
                 domain,
-                security: existing_rdp
-                    .map(|r| r.security)
-                    .unwrap_or(RdpSecurity::Negotiate),
+                security: self.rdp_security,
                 color_depth: self.rdp_color_depth,
-                performance: existing_rdp
-                    .map(|r| r.performance)
-                    .unwrap_or(RdpPerformance::Lan),
+                performance: self.rdp_performance,
                 audio: self.rdp_audio,
                 clipboard: self.rdp_clipboard,
                 file_copy: existing_rdp.map(|r| r.file_copy).unwrap_or(false),
-                dynamic_resolution: existing_rdp.map(|r| r.dynamic_resolution).unwrap_or(true),
-                desktop_size: existing_rdp.and_then(|r| r.desktop_size),
+                dynamic_resolution: self.rdp_dynamic_resolution,
+                desktop_size,
             }),
             password,
         ))
