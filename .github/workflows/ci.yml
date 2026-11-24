@@ -50,6 +50,7 @@ jobs:
             libxrandr-dev \
             libxinerama-dev \
             libgl1-mesa-dev \
+            libasound2-dev \
             pkg-config
 
       - name: 检查代码格式
