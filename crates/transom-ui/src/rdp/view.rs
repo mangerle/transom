@@ -52,7 +52,6 @@ pub(crate) struct RdpInputState {
     pub(crate) scroll_remainder_x: f32,
     pub(crate) scroll_remainder_y: f32,
     pub(crate) pan_offset: (f32, f32),
-    pub(crate) was_focused: bool,
 }
 
 impl Default for RdpInputState {
@@ -63,7 +62,6 @@ impl Default for RdpInputState {
             scroll_remainder_x: 0.0,
             scroll_remainder_y: 0.0,
             pan_offset: (0.0, 0.0),
-            was_focused: false,
         }
     }
 }
@@ -82,6 +80,7 @@ pub struct RdpView {
     pub(crate) last_sent_resize: Rc<Cell<Option<(u16, u16)>>>,
     last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
+    _focus_subscriptions: Vec<Subscription>,
     _consumer_tasks: Vec<Task<()>>,
 }
 
@@ -105,6 +104,7 @@ impl RdpView {
             last_sent_resize: Rc::new(Cell::new(None)),
             last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
+            _focus_subscriptions: Vec::new(),
             _consumer_tasks: Vec::new(),
         }
     }
@@ -369,6 +369,19 @@ impl RdpView {
             .child(toolbar)
             .into_any_element()
     }
+    /// 绑定一次性焦点/失焦事件订阅，避免在每帧 `render` 中轮询焦点边沿与发起网络同步。
+    fn ensure_focus_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self._focus_subscriptions.is_empty() {
+            return;
+        }
+        let on_focus = cx.on_focus(&self.focus_handle, window, |this, _, cx| {
+            this.sync_clipboard_to_remote(cx);
+        });
+        let on_blur = cx.on_blur(&self.focus_handle, window, |this, _, _| {
+            this.send_input(RdpInput::ReleaseAllKeys);
+        });
+        self._focus_subscriptions = vec![on_focus, on_blur];
+    }
 }
 
 impl Focusable for RdpView {
@@ -380,18 +393,12 @@ impl Focusable for RdpView {
 impl Render for RdpView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
+        self.ensure_focus_subscriptions(window, cx);
 
-        // 非连接状态（断开/失败/重激活期间）无 Canvas paint 阶段，仍需及时释放淘汰的 GPU 纹理
-        self.frame_cache.borrow_mut().drain_stale_images(window);
-
-        // 监测焦点边沿：失焦释放全部按下键位防粘滞；获焦预同步本地剪贴板消除首次 Ctrl+V 竞态
-        let is_focused = self.focus_handle.is_focused(window);
-        if self.input.was_focused && !is_focused {
-            self.send_input(RdpInput::ReleaseAllKeys);
-        } else if !self.input.was_focused && is_focused {
-            self.sync_clipboard_to_remote(cx);
+        // 非连接状态下无 Canvas paint 阶段，仅当确实存在待回收纹理时执行一次清理
+        if !matches!(self.state, RdpViewState::Connected { .. }) {
+            self.frame_cache.borrow_mut().drain_stale_images(window);
         }
-        self.input.was_focused = is_focused;
 
         let root = div()
             .track_focus(&self.focus_handle)
