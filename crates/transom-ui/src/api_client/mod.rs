@@ -8,6 +8,7 @@
 mod actions;
 mod assertion_editor;
 mod auth_editor;
+mod environment_editor;
 mod form_editor;
 mod form_editor_view;
 mod kv_editor;

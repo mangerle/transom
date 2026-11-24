@@ -66,7 +66,6 @@ impl ApiWorkspace {
             }
         };
         self.project.upsert_request(request);
-        self.capture_environment(cx);
         self.capture_cookies(cx);
         self.error = None;
         true

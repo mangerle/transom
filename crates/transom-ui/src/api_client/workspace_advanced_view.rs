@@ -92,7 +92,7 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
     let (title, body) = match section {
         ApiAuxiliarySection::Environment => (
             rust_i18n::t!("api.request.aux_environment").to_string(),
-            editor("api-env-editor", params.environment_editor),
+            params.environment_editor.clone().into_any_element(),
         ),
         ApiAuxiliarySection::Cookies => (
             rust_i18n::t!("api.request.aux_cookies").to_string(),

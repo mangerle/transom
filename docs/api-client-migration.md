@@ -139,7 +139,7 @@ API 项目标签
 - OAuth 2.0 支持 client credentials，从令牌端点获取 `access_token` 后设置 Bearer 头。
 - AWS SigV4 支持 canonical query、canonical headers、HMAC 派生密钥和会话令牌。
 - GraphQL 和 gRPC 的签名使用实际发送方法，不使用界面上残留的旧方法字段。
-- 环境变量采用 `NAME=value` 编辑格式，可在 URL、请求头、请求体、GraphQL 查询与变量中替换。
+- 环境变量使用名称、值、启用和密钥标记表格编辑，可在 URL、请求头、请求体、GraphQL 查询与变量中替换。
 - Cookie 编辑区使用 `name=value` 文本；响应 `Set-Cookie` 会自动更新项目 Cookie。
 - 发送时按域名、路径、Secure 和过期时间筛选 Cookie，再与手工 Cookie 合并。
 

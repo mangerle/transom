@@ -112,6 +112,15 @@ impl ApiWorkspace {
                     this.apply_assertions(assertions.clone(), cx);
                 },
             ),
+            cx.subscribe_in(
+                &workspace.editors.environment,
+                window,
+                |this, _, event, _, cx| {
+                    let super::environment_editor::EnvironmentEditorEvent::Changed(variables) =
+                        event;
+                    this.apply_environment_variables(variables.clone(), cx);
+                },
+            ),
         ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
@@ -335,7 +344,6 @@ impl ApiWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.capture_environment(cx);
         self.environment_id = Some(environment_id);
         self.project.active_environment_id = Some(environment_id);
         self.load_environment(window, cx);
@@ -379,8 +387,8 @@ impl ApiWorkspace {
     fn load_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let environment = self.project.active_environment();
         self.environment_id = self.project.active_environment_id.or(Some(environment.id));
-        self.editors.environment.update(cx, |state, cx| {
-            state.set_value(environment.variables_text(), window, cx)
+        self.editors.environment.update(cx, |editor, cx| {
+            editor.set_variables(&environment.variables, window, cx)
         });
     }
 

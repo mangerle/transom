@@ -5,6 +5,7 @@
 
 use super::assertion_editor::AssertionEditor;
 use super::auth_editor::AuthEditor;
+use super::environment_editor::EnvironmentEditor;
 use super::form_editor::FormEditor;
 use super::kv_editor::{KvEditor, KvEditorKind};
 use super::workspace::ApiWorkspace;
@@ -48,7 +49,7 @@ pub(super) fn new_editors(
                 .placeholder(rust_i18n::t!("api.request.timeout_hint").to_string())
         }),
         docs: placeholder(window, cx, "api.request.docs_placeholder"),
-        environment: placeholder(window, cx, "api.request.environment_placeholder"),
+        environment: cx.new(|cx| EnvironmentEditor::new(window, cx)),
         cookies: placeholder(window, cx, "api.request.cookies_placeholder"),
         form: cx.new(|cx| FormEditor::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),

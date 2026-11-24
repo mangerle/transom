@@ -600,6 +600,27 @@ api:
     assertions_placeholder:
       en: One assertion per line
       zh-CN: 每行一条断言
+    environment_name:
+      en: Name
+      zh-CN: 名称
+    environment_value:
+      en: Value
+      zh-CN: 值
+    environment_secret:
+      en: Secret
+      zh-CN: 密钥
+    environment_name_placeholder:
+      en: Variable name
+      zh-CN: 变量名称
+    environment_value_placeholder:
+      en: Variable value
+      zh-CN: 变量值
+    add_environment:
+      en: Add variable
+      zh-CN: 添加变量
+    remove_environment:
+      en: Remove variable
+      zh-CN: 删除变量
     environment_placeholder:
       en: One variable per line, NAME=value
       zh-CN: 每行一个环境变量，NAME=value
