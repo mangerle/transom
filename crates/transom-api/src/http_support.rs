@@ -31,9 +31,14 @@ pub(super) async fn read_response(
             )
         })
         .collect::<Vec<_>>();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     let body = read_limited_body(response, host).await?;
     let body_size = body.len();
-    let body = display_body(body, host)?;
+    let body = display_body(body, content_type.as_deref());
     Ok(ApiResponseSnapshot {
         status: status.as_u16(),
         status_text: status.canonical_reason().unwrap_or("").to_string(),
@@ -60,19 +65,40 @@ pub(super) fn parse_set_cookie(text: &str, response_host: Option<&str>) -> Optio
     };
     for part in parts {
         let part = part.trim();
-        if let Some(domain) = part.strip_prefix("Domain=") {
-            cookie.domain = Some(domain.to_string());
-        } else if let Some(path) = part.strip_prefix("Path=") {
-            cookie.path = path.to_string();
-        } else if part == "Secure" {
-            cookie.secure = true;
-        } else if part == "HttpOnly" {
-            cookie.http_only = true;
-        } else if let Some(max_age) = part.strip_prefix("Max-Age=") {
-            cookie.expires_at = max_age
-                .parse::<u64>()
-                .ok()
-                .map(|seconds| unix_now().saturating_add(seconds));
+        let (attribute, value) = part
+            .split_once('=')
+            .map_or((part, None), |(name, value)| (name, Some(value.trim())));
+        match attribute.trim().to_ascii_lowercase().as_str() {
+            "domain" => {
+                if let Some(domain) = value.filter(|value| !value.is_empty()) {
+                    cookie.domain = Some(domain.to_string());
+                }
+            }
+            "path" => {
+                if let Some(path) = value.filter(|value| !value.is_empty()) {
+                    cookie.path = path.to_string();
+                }
+            }
+            "secure" => cookie.secure = true,
+            "httponly" => cookie.http_only = true,
+            "max-age" => {
+                cookie.expires_at =
+                    value
+                        .and_then(|value| value.parse::<i64>().ok())
+                        .map(|seconds| {
+                            if seconds <= 0 {
+                                0
+                            } else {
+                                unix_now().saturating_add(seconds as u64)
+                            }
+                        });
+            }
+            "expires" => {
+                cookie.expires_at = value
+                    .and_then(|value| chrono::DateTime::parse_from_rfc2822(value).ok())
+                    .map(|time| time.timestamp().max(0) as u64);
+            }
+            _ => {}
         }
     }
     Some(cookie)
@@ -134,21 +160,43 @@ async fn read_limited_body(response: Response, host: &str) -> Result<Vec<u8>, Ap
     Ok(body)
 }
 
-fn display_body(body: Vec<u8>, host: &str) -> Result<String, ApiError> {
-    let text = String::from_utf8(body).map_err(|error| ApiError::ResponseText {
-        host: host.to_string(),
-        reason: error.to_string(),
-    })?;
+fn display_body(body: Vec<u8>, content_type: Option<&str>) -> String {
+    let body_size = body.len();
+    let text = match String::from_utf8(body) {
+        Ok(text) => text,
+        Err(error) if is_textual_content_type(content_type) => {
+            String::from_utf8_lossy(&error.into_bytes()).into_owned()
+        }
+        Err(_) => {
+            return format!(
+                "[二进制响应，{body_size} 字节，Content-Type: {}]",
+                content_type.unwrap_or("application/octet-stream")
+            );
+        }
+    };
     let trimmed = text.trim();
     if (trimmed.starts_with('{') && trimmed.ends_with('}'))
         || (trimmed.starts_with('[') && trimmed.ends_with(']'))
     {
         serde_json::from_str::<serde_json::Value>(trimmed)
             .map(|value| serde_json::to_string_pretty(&value).unwrap_or_else(|_| text.clone()))
-            .or(Ok(text))
+            .unwrap_or(text)
     } else {
-        Ok(text)
+        text
     }
+}
+
+fn is_textual_content_type(content_type: Option<&str>) -> bool {
+    let Some(content_type) = content_type else {
+        return false;
+    };
+    let content_type = content_type.to_ascii_lowercase();
+    content_type.starts_with("text/")
+        || content_type.contains("json")
+        || content_type.contains("xml")
+        || content_type.contains("javascript")
+        || content_type.contains("x-www-form-urlencoded")
+        || content_type.contains("graphql")
 }
 
 pub(super) fn grpc_payload(body: &[u8]) -> Option<&[u8]> {
@@ -156,7 +204,7 @@ pub(super) fn grpc_payload(body: &[u8]) -> Option<&[u8]> {
         return None;
     }
     let length = u32::from_be_bytes([body[1], body[2], body[3], body[4]]) as usize;
-    body.get(5..5 + length)
+    body.get(5..5usize.checked_add(length)?)
 }
 
 pub(super) fn request_host(url: &Url) -> String {
@@ -168,7 +216,6 @@ pub(super) fn request_host(url: &Url) -> String {
     if let Some(port) = url.port() {
         label.push_str(&format!(":{port}"));
     }
-    label.push_str(url.path());
     label
 }
 
@@ -182,4 +229,44 @@ pub(super) fn unix_now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_cookie_attributes_are_case_insensitive() {
+        let cookie = parse_set_cookie(
+            "sid=abc; domain=Example.COM; Path=/api; secure; httponly; Max-Age=0",
+            Some("example.com"),
+        )
+        .expect("Cookie 应可解析");
+        assert_eq!(cookie.domain.as_deref(), Some("Example.COM"));
+        assert_eq!(cookie.path, "/api");
+        assert!(cookie.secure);
+        assert!(cookie.http_only);
+        assert_eq!(cookie.expires_at, Some(0));
+    }
+
+    #[test]
+    fn binary_response_is_described_instead_of_becoming_an_error() {
+        let body = display_body(vec![0xff, 0x00, 0x01], Some("image/png"));
+        assert!(body.contains("二进制响应"));
+        assert!(body.contains("image/png"));
+    }
+
+    #[test]
+    fn grpc_payload_rejects_truncated_frames() {
+        let mut body = vec![0_u8; 5];
+        body[1..5].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert!(grpc_payload(&body).is_none());
+    }
+
+    #[test]
+    fn request_host_omits_path_and_query() {
+        let url =
+            reqwest::Url::parse("https://example.com/private/users?token=secret").expect("URL");
+        assert_eq!(request_host(&url), "https://example.com");
+    }
 }
