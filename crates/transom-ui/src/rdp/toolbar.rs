@@ -17,6 +17,7 @@ pub struct RdpToolbarParams {
     pub is_muted: bool,
     pub is_scaled: bool,
     pub on_send_cad: RdpToolbarCallback,
+    pub on_send_win: RdpToolbarCallback,
     pub on_toggle_mute: RdpToolbarCallback,
     pub on_toggle_scale: RdpToolbarCallback,
     pub on_disconnect: RdpToolbarCallback,
@@ -36,6 +37,12 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams) -> AnyElement {
                 .small()
                 .label("Ctrl+Alt+Del")
                 .on_click(params.on_send_cad),
+        )
+        .child(
+            Button::new(ElementId::Name("rdp-win-btn".into()))
+                .small()
+                .label("Win")
+                .on_click(params.on_send_win),
         )
         .child(
             Button::new(ElementId::Name("rdp-mute-btn".into()))

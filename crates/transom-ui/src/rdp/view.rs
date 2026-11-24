@@ -37,6 +37,9 @@ pub struct RdpView {
     is_muted: bool,
     pub(crate) is_scaled: bool,
     pub(crate) last_mouse_pos: Option<(u16, u16)>,
+    last_mouse_sent_at: std::time::Instant,
+    scroll_remainder_x: f32,
+    scroll_remainder_y: f32,
     pub(crate) cursor: Option<CursorUpdate>,
     pub(crate) viewport_bounds: Bounds<Pixels>,
     last_synced_clipboard: Option<String>,
@@ -94,6 +97,9 @@ impl RdpView {
             is_muted: false,
             is_scaled: true,
             last_mouse_pos: None,
+            last_mouse_sent_at: std::time::Instant::now(),
+            scroll_remainder_x: 0.0,
+            scroll_remainder_y: 0.0,
             cursor: None,
             viewport_bounds: Bounds::default(),
             last_synced_clipboard: None,
@@ -189,6 +195,19 @@ impl RdpView {
                     });
                 })
             },
+            on_send_win: {
+                let view = view_entity.clone();
+                Box::new(move |_, _, cx| {
+                    view.update(cx, |this, _| {
+                        this.send_input(RdpInput::KeyDown {
+                            key: "super".to_string(),
+                        });
+                        this.send_input(RdpInput::KeyUp {
+                            key: "super".to_string(),
+                        });
+                    });
+                })
+            },
             on_toggle_mute: {
                 let view = view_entity.clone();
                 Box::new(move |_, _, cx| {
@@ -274,10 +293,18 @@ impl Render for RdpView {
                         height,
                         this.is_scaled,
                     )
-                    && this.last_mouse_pos != Some((x, y))
                 {
-                    this.last_mouse_pos = Some((x, y));
-                    this.send_input(RdpInput::MouseMove { x, y });
+                    let is_pos_changed = this.last_mouse_pos != Some((x, y));
+                    // 流量整形节流：限制最大 125Hz 发送频率，彻底消灭通道打满造成的按键丢失
+                    let is_interval_passed = this.last_mouse_sent_at.elapsed()
+                        >= std::time::Duration::from_millis(8);
+                    if is_pos_changed && is_interval_passed {
+                        this.last_mouse_pos = Some((x, y));
+                        this.last_mouse_sent_at = std::time::Instant::now();
+                        this.send_input(RdpInput::MouseMove { x, y });
+                    } else if is_pos_changed {
+                        this.last_mouse_pos = Some((x, y));
+                    }
                 }
             }))
             .on_mouse_exit(cx.listener(move |this, _, _, _| {
@@ -289,6 +316,9 @@ impl Render for RdpView {
                 MouseButton::Left,
                 cx.listener(move |this, _: &MouseDownEvent, _, cx| {
                     this.sync_clipboard_to_remote(cx);
+                    if let Some((x, y)) = this.last_mouse_pos {
+                        this.send_input(RdpInput::MouseMove { x, y });
+                    }
                     if let Some(input) =
                         crate::rdp::input::map_mouse_button(MouseButton::Left, true)
                     {
@@ -310,6 +340,9 @@ impl Render for RdpView {
                 MouseButton::Right,
                 cx.listener(move |this, _: &MouseDownEvent, _, cx| {
                     this.sync_clipboard_to_remote(cx);
+                    if let Some((x, y)) = this.last_mouse_pos {
+                        this.send_input(RdpInput::MouseMove { x, y });
+                    }
                     if let Some(input) =
                         crate::rdp::input::map_mouse_button(MouseButton::Right, true)
                     {
@@ -331,6 +364,9 @@ impl Render for RdpView {
                 MouseButton::Middle,
                 cx.listener(move |this, _: &MouseDownEvent, _, cx| {
                     this.sync_clipboard_to_remote(cx);
+                    if let Some((x, y)) = this.last_mouse_pos {
+                        this.send_input(RdpInput::MouseMove { x, y });
+                    }
                     if let Some(input) =
                         crate::rdp::input::map_mouse_button(MouseButton::Middle, true)
                     {
@@ -349,25 +385,48 @@ impl Render for RdpView {
                 }),
             )
             .on_scroll(cx.listener(move |this, event: &ScrollEvent, _, _| {
-                let (delta_x, delta_y) = match event.delta {
-                    ScrollDelta::Lines(p) => ((p.x * 120.0) as i16, (p.y * 120.0) as i16),
-                    ScrollDelta::Pixels(p) => {
-                        let dy = (f32::from(p.y) / 10.0 * 120.0) as i16;
-                        let dx = (f32::from(p.x) / 10.0 * 120.0) as i16;
-                        (dx, dy)
+                match event.delta {
+                    ScrollDelta::Lines(p) => {
+                        let delta_y = (p.y * 120.0) as i16;
+                        let delta_x = (p.x * 120.0) as i16;
+                        if delta_y != 0 {
+                            this.send_input(RdpInput::MouseWheel {
+                                vertical: true,
+                                delta: delta_y,
+                            });
+                        }
+                        if delta_x != 0 {
+                            this.send_input(RdpInput::MouseWheel {
+                                vertical: false,
+                                delta: delta_x,
+                            });
+                        }
                     }
-                };
-                if delta_y != 0 {
-                    this.send_input(RdpInput::MouseWheel {
-                        vertical: true,
-                        delta: delta_y,
-                    });
-                }
-                if delta_x != 0 {
-                    this.send_input(RdpInput::MouseWheel {
-                        vertical: false,
-                        delta: delta_x,
-                    });
+                    ScrollDelta::Pixels(p) => {
+                        // 触摸板平滑微滚动手势累加，防止微小位移截断为零
+                        this.scroll_remainder_y += f32::from(p.y);
+                        this.scroll_remainder_x += f32::from(p.x);
+
+                        let steps_y = (this.scroll_remainder_y / 10.0).trunc();
+                        if steps_y != 0.0 {
+                            this.scroll_remainder_y -= steps_y * 10.0;
+                            let delta_y = (steps_y * 120.0) as i16;
+                            this.send_input(RdpInput::MouseWheel {
+                                vertical: true,
+                                delta: delta_y,
+                            });
+                        }
+
+                        let steps_x = (this.scroll_remainder_x / 10.0).trunc();
+                        if steps_x != 0.0 {
+                            this.scroll_remainder_x -= steps_x * 10.0;
+                            let delta_x = (steps_x * 120.0) as i16;
+                            this.send_input(RdpInput::MouseWheel {
+                                vertical: false,
+                                delta: delta_x,
+                            });
+                        }
+                    }
                 }
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {

@@ -127,23 +127,32 @@ impl TiledDesktopFrame {
         }
 
         let mut dirty_indices = Vec::new();
-        let mut new_tiles = Vec::with_capacity((cols * rows) as usize);
-        for r in 0..rows {
-            for c in 0..cols {
-                let index = (r * cols + c) as usize;
-                let is_dirty = dirty_mask.get(index).copied().unwrap_or(true);
 
-                if !is_dirty && index < self.tiles.len() {
-                    new_tiles.push(self.tiles[index].clone());
-                } else {
+        if is_dimension_changed || self.tiles.len() != (cols * rows) as usize {
+            // 分辨率改变或初次加载：全量初始化瓦片网格
+            let mut new_tiles = Vec::with_capacity((cols * rows) as usize);
+            for r in 0..rows {
+                for c in 0..cols {
+                    let index = (r * cols + c) as usize;
                     let tile_image = extract_tile_image(canvas, c, r);
                     new_tiles.push(Arc::new(tile_image));
                     dirty_indices.push(index);
                 }
             }
+            self.tiles = new_tiles;
+        } else {
+            // 原地增量更新：仅对受损瓦片进行重新采样覆写，干净瓦片零克隆零重配
+            for (index, &is_dirty) in dirty_mask.iter().enumerate() {
+                if is_dirty {
+                    let c = (index as u32) % cols;
+                    let r = (index as u32) / cols;
+                    let tile_image = extract_tile_image(canvas, c, r);
+                    self.tiles[index] = Arc::new(tile_image);
+                    dirty_indices.push(index);
+                }
+            }
         }
 
-        self.tiles = new_tiles;
         self.dirty_indices = dirty_indices;
         self.seq = self.seq.wrapping_add(1);
         true
