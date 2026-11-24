@@ -474,20 +474,40 @@ mod tests {
             right: 350,
             bottom: 350,
         };
-        extractor.mark_dirty(512, 512, &[rect_a]);
+        extractor.mark_dirty(512, 512, &[rect_a.clone()]);
         extractor.mark_dirty(512, 512, &[rect_b]);
         assert!(extractor.has_pending());
 
-        // 模拟发送失败（不调用 commit_flushed），下次提取仍应保留全部 2 个脏瓦片
+        // 模拟发送失败（不调用 commit_flushed），下次提取仍应保留全部 2 个脏瓦片且 seq 不跳号
         let first_try = extractor
             .extract_pending(&canvas)
             .expect("应产出 2 个脏瓦片");
         assert_eq!(first_try.patches.len(), 2);
+        assert_eq!(first_try.seq, 2);
         assert!(extractor.has_pending());
+
+        let second_try = extractor
+            .extract_pending(&canvas)
+            .expect("未 commit 前再次提取应保持同序号");
+        assert_eq!(second_try.seq, 2, "未 commit 前 seq 不应跳号");
 
         // 发送成功后提交，待发标记清空
         extractor.commit_flushed();
         assert!(!extractor.has_pending());
         assert!(extractor.extract_pending(&canvas).is_none());
+
+        // 验证缓冲池回收复用
+        let pool = extractor.buffer_pool();
+        extractor.recycle_frame(first_try);
+        extractor.recycle_frame(second_try);
+        let reused = pool.acquire(128 * 128 * 4);
+        assert!(reused.capacity() >= 128 * 128 * 4);
+        assert!(reused.is_empty());
+
+        extractor.mark_dirty(512, 512, &[rect_a]);
+        let next_frame = extractor
+            .extract_pending(&canvas)
+            .expect("提交后应递增为 seq=3");
+        assert_eq!(next_frame.seq, 3);
     }
 }

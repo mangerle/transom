@@ -83,3 +83,68 @@ pub(crate) async fn flush_network_responses<W: FramedWrite>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ironrdp_graphics::image_processing::PixelFormat;
+    use ironrdp_session::GracefulDisconnectReason;
+    use std::future::Future;
+    use std::pin::Pin;
+
+    struct DummyWriter;
+
+    impl FramedWrite for DummyWriter {
+        type WriteAllFut<'a>
+            = Pin<Box<dyn Future<Output = std::io::Result<()>> + 'a>>
+        where
+            Self: 'a;
+
+        fn write_all<'a>(&'a mut self, _buf: &'a [u8]) -> Self::WriteAllFut<'a> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn dispatch_recognizes_reactivate_and_terminate() {
+        let mut writer = DummyWriter;
+        let (events_tx, mut events_rx) = mpsc::channel(8);
+
+        let action =
+            dispatch_stage_outputs(&mut writer, &events_tx, &[ActiveStageOutput::DeactivateAll])
+                .await;
+        assert!(matches!(action, LoopAction::Reactivate));
+
+        let term_action = dispatch_stage_outputs(
+            &mut writer,
+            &events_tx,
+            &[ActiveStageOutput::Terminate(
+                GracefulDisconnectReason::UserInitiated,
+            )],
+        )
+        .await;
+        assert!(matches!(term_action, LoopAction::Stop));
+        assert!(matches!(
+            events_rx.try_recv(),
+            Ok(RdpOutput::Disconnected { .. })
+        ));
+    }
+
+    #[test]
+    fn flush_dirty_tiles_recycles_on_backpressure() {
+        let canvas = DecodedImage::new(PixelFormat::RgbA32, 256, 256);
+        let mut extractor = TileExtractor::default();
+        let (frames_tx, _frames_rx) = mpsc::channel(1);
+
+        // 首次发送成功占用唯一槽位
+        flush_dirty_tiles(&mut extractor, &canvas, &frames_tx);
+        assert!(!extractor.has_pending());
+
+        // 再次触发整帧重置（通道满），应保留脏状态且不递增 seq
+        extractor.reset();
+        flush_dirty_tiles(&mut extractor, &canvas, &frames_tx);
+        assert!(extractor.has_pending());
+        let retry = extractor.extract_pending(&canvas).expect("应可重试提取");
+        assert_eq!(retry.seq, 2);
+    }
+}

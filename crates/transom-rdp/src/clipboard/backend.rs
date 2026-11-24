@@ -147,3 +147,60 @@ impl CliprdrBackend for TransomCliprdrBackend {
         self.now_ms().saturating_sub(since)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::clipboard::text::{encode_ansi_payload, encode_text_payload};
+    use ironrdp_cliprdr::pdu::ClipboardFormatName;
+
+    #[test]
+    fn remote_copy_overwrites_pending_and_allows_repeat_same_text() {
+        let (tx, mut rx) = mpsc::channel(8);
+        let mut backend = TransomCliprdrBackend::new(tx);
+
+        // 连续两次远端复制，仅保留最新待拉取格式
+        backend.on_remote_copy(&[ClipboardFormat::new(ClipboardFormatId::CF_TEXT)]);
+        backend.on_remote_copy(&[ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)]);
+        assert_eq!(
+            backend.context.pending_paste_format,
+            Some(ClipboardFormatId::CF_UNICODETEXT)
+        );
+
+        // 模拟两次拉取相同文本 "hello"（期间本地可能已修改，远端二次复制必须正常下发）
+        let payload = encode_text_payload("hello");
+        for _ in 0..2 {
+            backend
+                .context
+                .inflight_paste_formats
+                .push_back(ClipboardFormatId::CF_UNICODETEXT);
+            let resp = FormatDataResponse::new_data(payload.as_slice());
+            backend.on_format_data_response(resp);
+            let event = rx.try_recv().expect("每次远端复制都应下发事件");
+            assert!(matches!(
+                event,
+                RdpOutput::Clipboard(ClipboardEvent::RemoteText(ref s)) if s == "hello"
+            ));
+        }
+
+        // ANSI 回退格式验证
+        let ansi = encode_ansi_payload("ansi-ok");
+        backend
+            .context
+            .inflight_paste_formats
+            .push_back(ClipboardFormatId::CF_TEXT);
+        backend.on_format_data_response(FormatDataResponse::new_data(ansi.as_slice()));
+        let event = rx.try_recv().expect("ANSI 格式应成功解码");
+        assert!(matches!(
+            event,
+            RdpOutput::Clipboard(ClipboardEvent::RemoteText(ref s)) if s == "ansi-ok"
+        ));
+
+        // 未知格式忽略，不产生事件
+        let unknown = ClipboardFormat::new(ClipboardFormatId(0x9999))
+            .with_name(ClipboardFormatName::new("Custom"));
+        backend.context.pending_paste_format = None;
+        backend.on_remote_copy(&[unknown]);
+        assert!(backend.context.pending_paste_format.is_none());
+    }
+}

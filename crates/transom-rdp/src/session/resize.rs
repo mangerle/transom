@@ -147,4 +147,24 @@ mod tests {
         ctrl.requeue_if_channel_not_ready(due, t0 + RESIZE_DEBOUNCE_INTERVAL);
         assert!(ctrl.next_deadline().is_some());
     }
+
+    #[test]
+    fn stops_requeue_after_max_retries_and_skips_matching_current() {
+        let mut t = Instant::now();
+        let mut ctrl = ResizeController::new((1920, 1080));
+        ctrl.schedule(1280, 720, t);
+
+        // 耗尽重试次数后应停止挂起
+        for _ in 0..=MAX_CHANNEL_WAIT_RETRIES {
+            t += RESIZE_DEBOUNCE_INTERVAL;
+            let due = ctrl.take_due(t).expect("应取出待发送目标");
+            ctrl.requeue_if_channel_not_ready(due, t);
+        }
+        assert!(ctrl.next_deadline().is_none());
+
+        // 若目标与当前生效分辨率相同则直接跳过
+        ctrl.set_current((1280, 720));
+        ctrl.schedule(1280, 720, t);
+        assert!(ctrl.next_deadline().is_none());
+    }
 }
