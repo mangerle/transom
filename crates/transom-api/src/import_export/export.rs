@@ -141,7 +141,7 @@ pub(super) fn export_openapi(project: &ApiProject) -> Result<String, String> {
                 method,
                 json!({
                     "summary": request.display_name(),
-                    "description": request.body,
+                    "description": request.description,
                     "responses": {"200": {"description": "实际响应"}}
                 }),
             );
