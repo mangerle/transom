@@ -38,6 +38,7 @@ pub(crate) struct ApiWorkspace {
     pub(crate) ws_event_task: Option<Task<()>>,
     pub(crate) ws_handle: Option<ApiWebSocketHandle>,
     editor_subscriptions: Vec<Subscription>,
+    binary_file_task: Option<Task<()>>,
 }
 
 impl EventEmitter<ApiWorkspaceEvent> for ApiWorkspace {}
@@ -80,6 +81,7 @@ impl ApiWorkspace {
             ws_event_task: None,
             ws_handle: None,
             editor_subscriptions: Vec::new(),
+            binary_file_task: None,
         };
         workspace.editor_subscriptions = vec![
             cx.subscribe_in(&workspace.editors.query, window, |this, _, event, _, cx| {
@@ -94,6 +96,10 @@ impl ApiWorkspace {
                     this.apply_header_entries(entries, cx);
                 },
             ),
+            cx.subscribe_in(&workspace.editors.form, window, |this, _, event, _, cx| {
+                let super::form_editor::FormEditorEvent::Changed(fields) = event;
+                this.apply_form_fields(fields, cx);
+            }),
         ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
@@ -144,6 +150,69 @@ impl ApiWorkspace {
         self.error = None;
         cx.notify();
         true
+    }
+
+    /// 切换 HTTP Body 类型，并同步表单编辑器的文件能力。
+    pub(crate) fn set_body_type(
+        &mut self,
+        body_type: transom_api::ApiBodyType,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.capture_editor(cx);
+        let Some(request_id) = self.selected_request else {
+            return;
+        };
+        if let Some(request) = self
+            .project
+            .requests
+            .iter_mut()
+            .find(|request| request.id == request_id)
+        {
+            request.body_type = body_type;
+            self.project.touch();
+        }
+        self.editors.form.update(cx, |editor, cx| {
+            editor.set_allow_files(body_type == transom_api::ApiBodyType::Multipart, window, cx);
+        });
+        cx.notify();
+    }
+
+    /// 选择 Binary 请求体文件，路径只在发送时读取。
+    pub(crate) fn pick_binary_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: None,
+        });
+        self.binary_file_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let _ = this.update_in(cx, |this, window, cx| {
+                let Some(request_id) = this.selected_request else {
+                    return;
+                };
+                if let Some(request) = this
+                    .project
+                    .requests
+                    .iter_mut()
+                    .find(|request| request.id == request_id)
+                {
+                    request.body_type = transom_api::ApiBodyType::Binary;
+                    request.body_file = format!("file://{}", path.display());
+                    this.project.touch();
+                    this.editors.form.update(cx, |editor, cx| {
+                        editor.set_allow_files(false, window, cx);
+                    });
+                    cx.notify();
+                }
+            });
+        }));
     }
 
     /// 当前选中请求的 clone；没有选中请求时返回 `None`。

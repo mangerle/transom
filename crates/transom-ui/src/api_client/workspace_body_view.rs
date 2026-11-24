@@ -4,22 +4,139 @@ use super::workspace_request_view::render_text_panel;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, space, typography};
-use crate::widgets::{IconButton, IconButtonSize, action_button};
+use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::*;
-use transom_api::ApiProtocol;
+use transom_api::{ApiBodyType, ApiProtocol};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(super) fn render_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     match params.protocol {
-        ApiProtocol::Http => render_text_panel("api-request-body", params.request_body.clone(), p),
+        ApiProtocol::Http => render_http_body(params, p),
         ApiProtocol::GraphQl => render_graphql_body(params, p),
         ApiProtocol::Grpc => render_grpc_body(params, p),
         ApiProtocol::WebSocket => render_websocket_body(params, p),
     }
+}
+
+fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
+    let body_type = params
+        .request
+        .map_or(ApiBodyType::Text, |request| request.body_type);
+    let view = params.view.clone();
+    let body_type_control = dropdown(
+        "api-request-body-type",
+        body_type,
+        ApiBodyType::ALL
+            .into_iter()
+            .map(|kind| (kind, body_type_label(kind)))
+            .collect(),
+        |this: &mut super::ApiWorkspace, kind, window, cx| {
+            this.set_body_type(kind, window, cx);
+        },
+        view,
+    );
+    let content = match body_type {
+        ApiBodyType::None => {
+            centered_body_message(rust_i18n::t!("api.request.no_body").to_string(), p)
+        }
+        ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
+            render_text_panel("api-request-body", params.request_body.clone(), p)
+        }
+        ApiBodyType::FormUrlEncoded | ApiBodyType::Multipart => {
+            params.form_editor.clone().into_any_element()
+        }
+        ApiBodyType::Binary => render_binary_body(params, p),
+    };
+    v_flex()
+        .size_full()
+        .min_h_0()
+        .child(
+            h_flex()
+                .h(rems(crate::theme::tokens::size::PANE_HEADER_HEIGHT))
+                .px(rems(space::SM))
+                .gap(rems(space::SM))
+                .items_center()
+                .child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("api.request.body_type").to_string()),
+                )
+                .child(body_type_control),
+        )
+        .child(content)
+        .into_any_element()
+}
+
+fn body_type_label(body_type: ApiBodyType) -> String {
+    match body_type {
+        ApiBodyType::None => rust_i18n::t!("api.request.body_none").to_string(),
+        ApiBodyType::Json => "JSON".to_string(),
+        ApiBodyType::Text => rust_i18n::t!("api.request.body_text").to_string(),
+        ApiBodyType::Xml => "XML".to_string(),
+        ApiBodyType::FormUrlEncoded => {
+            rust_i18n::t!("api.request.body_form_urlencoded").to_string()
+        }
+        ApiBodyType::Multipart => rust_i18n::t!("api.request.body_multipart").to_string(),
+        ApiBodyType::Binary => rust_i18n::t!("api.request.body_binary").to_string(),
+    }
+}
+
+fn render_binary_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
+    let view = params.view.clone();
+    let path = params
+        .request
+        .map(|request| request.body_file.as_str())
+        .unwrap_or_default();
+    let label = if path.is_empty() {
+        rust_i18n::t!("api.request.no_file_selected").to_string()
+    } else {
+        path.to_string()
+    };
+    v_flex()
+        .id("api-binary-body")
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .p(rems(space::SM))
+        .items_start()
+        .gap(rems(space::XS))
+        .child(
+            action_button(
+                "api-binary-file",
+                AppIcon::Ui(UiIcon::ADD_FILE),
+                rust_i18n::t!("api.request.choose_file").to_string(),
+            )
+            .on_click(move |_, window, cx| {
+                view.update(cx, |this, cx| this.pick_binary_file(window, cx));
+            }),
+        )
+        .child(
+            div()
+                .text_size(rems(typography::CAPTION))
+                .text_color(if path.is_empty() {
+                    p.muted_foreground
+                } else {
+                    p.foreground
+                })
+                .child(label),
+        )
+        .into_any_element()
+}
+
+fn centered_body_message(message: String, p: &Palette) -> AnyElement {
+    v_flex()
+        .flex_1()
+        .min_h_0()
+        .items_center()
+        .justify_center()
+        .text_color(p.muted_foreground)
+        .child(message)
+        .into_any_element()
 }
 
 fn render_graphql_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {

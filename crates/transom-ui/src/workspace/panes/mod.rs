@@ -291,6 +291,7 @@ impl AppShell {
                     query_editor: &state.editors.query,
                     header_editor: &state.editors.headers,
                     request_body: &state.editors.request_body,
+                    form_editor: &state.editors.form,
                     grpc_service: &state.editors.grpc_service,
                     grpc_method: &state.editors.grpc_method,
                     graphql_variables: &state.editors.graphql_variables,

@@ -347,6 +347,63 @@ api:
     query_value_placeholder:
       en: Value
       zh-CN: 值
+    body_type:
+      en: Body type
+      zh-CN: 请求体类型
+    no_body:
+      en: This request does not send a body.
+      zh-CN: 当前请求不发送请求体。
+    body_none:
+      en: No body
+      zh-CN: 无请求体
+    body_text:
+      en: Text
+      zh-CN: 文本
+    body_form_urlencoded:
+      en: x-www-form-urlencoded
+      zh-CN: x-www-form-urlencoded
+    body_multipart:
+      en: form-data
+      zh-CN: form-data
+    body_binary:
+      en: Binary
+      zh-CN: 二进制
+    form_name:
+      en: Name
+      zh-CN: 名称
+    form_type:
+      en: Type
+      zh-CN: 类型
+    form_value:
+      en: Value
+      zh-CN: 值
+    form_name_placeholder:
+      en: Field name
+      zh-CN: 字段名称
+    form_value_placeholder:
+      en: Field value
+      zh-CN: 字段值
+    value_text:
+      en: Text
+      zh-CN: 文本
+    value_file:
+      en: File
+      zh-CN: 文件
+    add_field:
+      en: Add field
+      zh-CN: 添加字段
+    remove_field:
+      en: Remove field
+      zh-CN: 删除字段
+    choose_file:
+      en: Choose file…
+      zh-CN: 选择文件…
+    binary_file:
+      en: Binary file
+      zh-CN: 二进制文件
+    no_file_selected:
+      en: No file selected
+      zh-CN: 未选择文件
     request_url_placeholder:
       en: Enter a URL or paste a cURL command
       zh-CN: 输入地址，或粘贴 cURL 命令

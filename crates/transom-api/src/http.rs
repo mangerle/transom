@@ -11,6 +11,7 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
+use super::http_body::{PreparedRequestParts, prepared_http_parts, send_form_http};
 use super::http_support::{
     ensure_header, grpc_payload, header_name, header_value, method_for, read_response,
     request_host, safe_url_label,
@@ -20,23 +21,17 @@ use super::http_support::{
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-const MAX_REQUEST_TIMEOUT_SECONDS: u64 = 600;
+pub(super) const MAX_REQUEST_TIMEOUT_SECONDS: u64 = 600;
 
 /// 认证阶段需要的完整请求上下文；集中传递避免参数列表继续膨胀。
-struct AuthRequest<'a> {
-    client: &'a Client,
-    request: &'a ApiRequest,
-    environment: &'a ApiEnvironment,
-    headers: &'a mut Vec<(String, String)>,
-    body: &'a [u8],
-    url: &'a Url,
-    method: &'a str,
-}
-
-/// HTTP 或 GraphQL 请求在应用认证与 Cookie 前的已编码部分。
-struct PreparedRequestParts {
-    headers: Vec<(String, String)>,
-    body: Vec<u8>,
+pub(super) struct AuthRequest<'a> {
+    pub(super) client: &'a Client,
+    pub(super) request: &'a ApiRequest,
+    pub(super) environment: &'a ApiEnvironment,
+    pub(super) headers: &'a mut Vec<(String, String)>,
+    pub(super) body: &'a [u8],
+    pub(super) url: &'a Url,
+    pub(super) method: &'a str,
 }
 
 /// 可直接展示的响应快照。
@@ -80,6 +75,12 @@ pub enum ApiError {
     ResponseTooLarge { host: String, limit: usize },
     #[error("解析响应文本失败，目标: {host}，原因: {reason}")]
     ResponseText { host: String, reason: String },
+    #[error("读取上传文件失败，路径: {path}，原因: {reason}")]
+    UploadFile { path: String, reason: String },
+    #[error("上传文件超过 {limit} 字节上限，路径: {path}")]
+    UploadFileTooLarge { path: String, limit: u64 },
+    #[error("构建 multipart 文件字段失败，字段: {field}，原因: {reason}")]
+    MultipartField { field: String, reason: String },
 }
 
 /// 一次在 Tokio 控制面执行的请求；接收端可在 GPUI 执行器上等待。
@@ -188,6 +189,9 @@ async fn send_http(
     cookies: &[ApiCookie],
     graphql: bool,
 ) -> Result<ApiResponseSnapshot, ApiError> {
+    if !graphql && request.body_type.is_form() {
+        return send_form_http(client, request, environment, cookies).await;
+    }
     let url = Url::parse(request.url.trim()).map_err(|error| ApiError::InvalidUrl {
         host: safe_url_label(request.url.trim()),
         reason: error.to_string(),
@@ -207,7 +211,7 @@ async fn send_http(
     let PreparedRequestParts {
         mut headers,
         mut body,
-    } = prepared_http_parts(request, environment, graphql)?;
+    } = prepared_http_parts(request, environment, graphql).await?;
     apply_cookies(&url, cookies, &mut headers);
     apply_auth(AuthRequest {
         client,
@@ -323,47 +327,7 @@ async fn send_grpc(
     Ok(snapshot)
 }
 
-fn prepared_http_parts(
-    request: &ApiRequest,
-    environment: &ApiEnvironment,
-    graphql: bool,
-) -> Result<PreparedRequestParts, ApiError> {
-    let mut headers = request
-        .headers
-        .iter()
-        .filter(|header| header.enabled)
-        .map(|header| {
-            (
-                environment.resolve(&header.name),
-                environment.resolve(&header.value),
-            )
-        })
-        .collect::<Vec<_>>();
-    if graphql {
-        ensure_header(&mut headers, "content-type", "application/json");
-        let variables: serde_json::Value =
-            serde_json::from_str(environment.resolve(&request.graphql_variables).as_str())
-                .map_err(|error| ApiError::InvalidGraphQlVariables {
-                    reason: error.to_string(),
-                })?;
-        let body = serde_json::json!({
-            "query": environment.resolve(&request.body),
-            "variables": variables
-        });
-        return Ok(PreparedRequestParts {
-            headers,
-            body: serde_json::to_vec(&body).map_err(|error| ApiError::InvalidGraphQlVariables {
-                reason: error.to_string(),
-            })?,
-        });
-    }
-    Ok(PreparedRequestParts {
-        headers,
-        body: request.body.as_bytes().to_vec(),
-    })
-}
-
-async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
+pub(super) async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
     let AuthRequest {
         client,
         request,
@@ -477,7 +441,7 @@ fn env_value(environment: &ApiEnvironment, name: &str) -> Result<String, ApiErro
         })
 }
 
-fn apply_cookies(url: &Url, cookies: &[ApiCookie], headers: &mut Vec<(String, String)>) {
+pub(super) fn apply_cookies(url: &Url, cookies: &[ApiCookie], headers: &mut Vec<(String, String)>) {
     let values = cookies
         .iter()
         .filter(|cookie| cookie.applies_to(url))
@@ -534,7 +498,10 @@ mod tests {
             timeout_seconds: 0,
             query: Vec::new(),
             headers: Vec::new(),
+            body_type: super::super::ApiBodyType::Text,
             body: String::new(),
+            form_fields: Vec::new(),
+            body_file: String::new(),
             graphql_variables: "{}".to_string(),
             grpc_service: String::new(),
             grpc_method: String::new(),
@@ -598,6 +565,94 @@ mod tests {
             .execute(&request, &environment, &[])
             .await
             .expect("GraphQL 请求成功");
+        server.await.expect("测试服务结束");
+        assert_eq!(response.status, 200);
+    }
+
+    #[tokio::test]
+    async fn sends_form_urlencoded_body() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定测试端口");
+        let address = listener.local_addr().expect("读取测试地址");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("接受连接");
+            let mut buffer = [0_u8; 2048];
+            let read = stream.read(&mut buffer).await.expect("读取请求");
+            let text = String::from_utf8_lossy(&buffer[..read]);
+            assert!(text.contains("name=Alice"));
+            assert!(text.contains("city=New+York"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK
+Content-Length: 2
+
+{}",
+                )
+                .await
+                .expect("写响应");
+        });
+        let service = ApiHttpService::new(tokio::runtime::Handle::current()).expect("构造服务");
+        let mut request = ApiRequest::new("表单", None);
+        request.method = super::super::ApiMethod::Post;
+        request.url = format!("http://{address}/form");
+        request.body_type = super::super::ApiBodyType::FormUrlEncoded;
+        request.form_fields = vec![
+            super::super::ApiFormField::new("name", "Alice"),
+            super::super::ApiFormField::new("city", "New York"),
+        ];
+        let response = service
+            .execute(&request, &ApiEnvironment::empty(), &[])
+            .await
+            .expect("表单请求成功");
+        server.await.expect("测试服务结束");
+        assert_eq!(response.status, 200);
+    }
+
+    #[tokio::test]
+    async fn sends_multipart_file_body() {
+        let directory = tempfile::tempdir().expect("临时目录");
+        let path = directory.path().join("hello.txt");
+        std::fs::write(&path, "hello upload").expect("写测试文件");
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定测试端口");
+        let address = listener.local_addr().expect("读取测试地址");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("接受连接");
+            let mut buffer = [0_u8; 8192];
+            let read = stream.read(&mut buffer).await.expect("读取请求");
+            let text = String::from_utf8_lossy(&buffer[..read]);
+            assert!(text.contains("multipart/form-data"));
+            assert!(text.contains("name=\"file\""));
+            assert!(text.contains("filename=\"hello.txt\""));
+            assert!(text.contains("hello upload"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK
+Content-Length: 2
+
+{}",
+                )
+                .await
+                .expect("写响应");
+        });
+        let service = ApiHttpService::new(tokio::runtime::Handle::current()).expect("构造服务");
+        let mut request = ApiRequest::new("文件", None);
+        request.method = super::super::ApiMethod::Post;
+        request.url = format!("http://{address}/upload");
+        request.body_type = super::super::ApiBodyType::Multipart;
+        request.form_fields = vec![super::super::ApiFormField {
+            name: "file".to_string(),
+            value: format!("file://{}", path.display()),
+            description: String::new(),
+            enabled: true,
+            kind: super::super::ApiFormFieldKind::File,
+        }];
+        let response = service
+            .execute(&request, &ApiEnvironment::empty(), &[])
+            .await
+            .expect("multipart 请求成功");
         server.await.expect("测试服务结束");
         assert_eq!(response.status, 200);
     }

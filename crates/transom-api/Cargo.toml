@@ -28,5 +28,10 @@ sha2.workspace = true
 hex.workspace = true
 chrono.workspace = true
 percent-encoding = "2"
+url.workspace = true
+mime_guess.workspace = true
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 
+
+[dev-dependencies]
+tempfile.workspace = true

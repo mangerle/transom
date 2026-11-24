@@ -3,7 +3,7 @@
 use super::workspace::ApiWorkspace;
 use super::workspace_kv::{header_entry, header_from_entry, query_entry, query_from_entry};
 use gpui_kit::*;
-use transom_api::{ApiMethod, ApiProtocol};
+use transom_api::{ApiBodyType, ApiMethod, ApiProtocol};
 
 impl ApiWorkspace {
     pub(super) fn capture_editor(&mut self, cx: &App) -> bool {
@@ -48,6 +48,7 @@ impl ApiWorkspace {
             .into_iter()
             .map(header_from_entry)
             .collect();
+        request.form_fields = self.editors.form.read(cx).fields(cx);
         request.graphql_variables = self.editors.graphql_variables.read(cx).value().to_string();
         let auth_text = self.editors.auth.read(cx).value().to_string();
         if let Err(error) = request.set_auth_text(&auth_text) {
@@ -89,6 +90,13 @@ impl ApiWorkspace {
             .as_ref()
             .map(|request| request.headers.iter().map(header_entry).collect::<Vec<_>>())
             .unwrap_or_default();
+        let form_fields = request
+            .as_ref()
+            .map(|request| request.form_fields.clone())
+            .unwrap_or_default();
+        let allow_files = request
+            .as_ref()
+            .is_some_and(|request| request.body_type == ApiBodyType::Multipart);
         let (
             name,
             url,
@@ -155,6 +163,9 @@ impl ApiWorkspace {
         });
         self.editors.headers.update(cx, |editor, cx| {
             editor.set_entries(&header_entries, window, cx);
+        });
+        self.editors.form.update(cx, |editor, cx| {
+            editor.set_fields(&form_fields, allow_files, window, cx);
         });
         self.editors
             .request_body

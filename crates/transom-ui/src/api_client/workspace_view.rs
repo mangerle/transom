@@ -37,6 +37,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) query_editor: &'a Entity<super::kv_editor::KvEditor>,
     pub(crate) header_editor: &'a Entity<super::kv_editor::KvEditor>,
     pub(crate) request_body: &'a Entity<TextareaState>,
+    pub(crate) form_editor: &'a Entity<super::form_editor::FormEditor>,
     pub(crate) grpc_service: &'a Entity<InputState>,
     pub(crate) grpc_method: &'a Entity<InputState>,
     pub(crate) graphql_variables: &'a Entity<TextareaState>,
