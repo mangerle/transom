@@ -8,21 +8,19 @@ use ironrdp_input::{Operation, Scancode};
 use std::collections::HashSet;
 
 /// 键盘状态跟踪器。
+///
+/// 维护当前处于按下状态的物理扫描码集合，在视图失焦或会话断开时精准释放，
+/// 避免修饰键或普通按键在远端桌面发生粘滞。
 #[derive(Default)]
 pub struct KeyboardTranslator {
-    ctrl_pressed: bool,
-    alt_pressed: bool,
-    shift_pressed: bool,
-    meta_pressed: bool,
     pressed_keys: HashSet<Scancode>,
 }
 
 impl KeyboardTranslator {
     /// 处理按键按下，返回一组需要送往 RDP 输入数据库的底层原子操作。
     pub fn handle_key_down(&mut self, key_name: &str) -> Vec<Operation> {
-        let mut ops = Vec::with_capacity(2);
+        let mut ops = Vec::with_capacity(1);
         if let Some(scancode) = key_name_to_scancode(key_name) {
-            self.track_modifiers(key_name, true);
             self.pressed_keys.insert(scancode);
             ops.push(Operation::KeyPressed(scancode));
         }
@@ -31,9 +29,8 @@ impl KeyboardTranslator {
 
     /// 处理按键抬起。
     pub fn handle_key_up(&mut self, key_name: &str) -> Vec<Operation> {
-        let mut ops = Vec::with_capacity(2);
+        let mut ops = Vec::with_capacity(1);
         if let Some(scancode) = key_name_to_scancode(key_name) {
-            self.track_modifiers(key_name, false);
             self.pressed_keys.remove(&scancode);
             ops.push(Operation::KeyReleased(scancode));
         }
@@ -42,11 +39,6 @@ impl KeyboardTranslator {
 
     /// 释放全部当前被按下的按键（防止切换标签或失焦时遗留按键按住状态）。
     pub fn release_all(&mut self) -> Vec<Operation> {
-        self.ctrl_pressed = false;
-        self.alt_pressed = false;
-        self.shift_pressed = false;
-        self.meta_pressed = false;
-
         if self.pressed_keys.is_empty() {
             // 兜底释放关键修饰键
             return vec![
@@ -62,22 +54,21 @@ impl KeyboardTranslator {
             .map(Operation::KeyReleased)
             .collect()
     }
-
-    fn track_modifiers(&mut self, key_name: &str, pressed: bool) {
-        match key_name {
-            "control" | "ctrl" => self.ctrl_pressed = pressed,
-            "alt" | "option" => self.alt_pressed = pressed,
-            "shift" => self.shift_pressed = pressed,
-            "super" | "command" | "win" => self.meta_pressed = pressed,
-            _ => {}
-        }
-    }
 }
 
 /// 常用键名到 XT 扫描码（及扩展标志）映射。
+///
+/// 使用栈上小缓冲完成 ASCII 小写归一化，避免每次键盘事件触发堆分配。
 fn key_name_to_scancode(name: &str) -> Option<Scancode> {
-    let lower = name.to_ascii_lowercase();
-    let code = match lower.as_str() {
+    if name.len() > 24 {
+        return None;
+    }
+    let mut buf = [0u8; 24];
+    for (dst, &src) in buf.iter_mut().zip(name.as_bytes()) {
+        *dst = src.to_ascii_lowercase();
+    }
+    let lower = std::str::from_utf8(&buf[..name.len()]).ok()?;
+    let code = match lower {
         "escape" | "esc" => Scancode::from_u8(false, 0x01),
         "1" => Scancode::from_u8(false, 0x02),
         "2" => Scancode::from_u8(false, 0x03),

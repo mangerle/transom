@@ -364,18 +364,17 @@ fn open_rdp_session(
     let secret_store = app_state.runtime.services.secret_store.clone();
     let key =
         transom_core::SecretKey::new(session.secret_owner(), transom_core::SecretKind::Password);
-    let password = secret_store
-        .get(&key)
-        .ok()
-        .flatten()
-        .map(|s| s.as_str().to_string())
-        .unwrap_or_default();
+    let password = match secret_store.get(&key) {
+        Ok(secret) => secret.map(|s| s.as_str().to_string()).unwrap_or_default(),
+        Err(err) => {
+            log::warn!("读取 RDP 会话密码失败，将以空口令继续尝试: {err}");
+            String::new()
+        }
+    };
 
     let initial_size = (1920, 1080);
     let config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
-    let session_id = session.id;
-    let title = session.name.clone();
-    let view = cx.new(|cx| crate::rdp::RdpView::new(session_id, title, config, cx));
+    let view = cx.new(|cx| crate::rdp::RdpView::new(config, cx));
 
     let tab = WorkspaceTab::new_rdp(tab_id, session.name.clone(), view);
     app_state.workspace.create_group_for_tab(&tab);

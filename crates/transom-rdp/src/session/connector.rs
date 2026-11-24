@@ -1,9 +1,9 @@
-//! RDP 连接序列驱动：拨号、TLS 升级与 NLA / CredSSP 认证。
+//! RDP 连接序列驱动：拨号、安全层升级与 NLA / CredSSP 认证。
 //!
 //! 设计原理（Why）：将握手连接序列与主数据传输循环严格解耦。连接阶段各步骤
-//! （X.224、MCS、CredSSP、Capabilities Exchange）依次流转。对每个网络与握手
-//! 步骤施加显式超时保护，防止远端黑洞导致协程永久泄漏；按需挂载 RDPSND 等静态通道；
-//! 若任意步骤失败，立即将底层错误转换为具体的 `RdpError`。
+//! （X.224、MCS、TLS/CredSSP、Capabilities Exchange）依次流转，并统一施加
+//! 超时保护与取消停机监听，防止远端黑洞导致协程泄漏或关闭标签时无法及时退出；
+//! 按需挂载 RDPSND、CLIPRDR 与 DisplayControl 通道。
 
 use crate::audio::TransomAudioBackend;
 use crate::clipboard::{CliprdrSyncContext, TransomCliprdrBackend};
@@ -11,16 +11,17 @@ use crate::error::RdpError;
 use crate::session::channel::RdpOutput;
 use crate::settings::SessionConfig;
 use crate::transport::connect_stream;
-use ironrdp_connector::{ClientConnector, ConnectionResult, ServerName};
+use ironrdp_connector::{ClientConnector, ClientConnectorState, ConnectionResult, ServerName};
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{TokioFramed, connect_begin, connect_finalize, mark_as_upgraded};
 use parking_lot::Mutex;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 /// 单步握手与安全协商超时限制（秒）。
 const DEFAULT_HANDSHAKE_TIMEOUT_SECS: u64 = 15;
@@ -41,12 +42,16 @@ pub struct EstablishedConnection {
 }
 
 /// 执行完整的 RDP 连接与认证序列。
+///
+/// # Errors
+/// 拨号失败、握手超时、TLS 升级异常、NLA 认证失败或收到取消停机信号时返回对应 [`RdpError`]。
 pub async fn establish_connection(
     config: &SessionConfig,
-    output_tx: &mpsc::Sender<RdpOutput>,
+    events_tx: &mpsc::Sender<RdpOutput>,
+    shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<EstablishedConnection, RdpError> {
     // 1. 建立基础 TCP 传输流
-    let stream = connect_stream(&config.host, config.port).await?;
+    let stream = connect_stream(&config.host, config.port, shutdown_rx).await?;
     let local_addr = stream.local_addr().map_err(|e| RdpError::Network {
         address: config.host.clone(),
         source: e,
@@ -61,36 +66,44 @@ pub async fn establish_connection(
         local_addr,
         audio_muted.clone(),
         cliprdr_context.clone(),
-        output_tx.clone(),
+        events_tx.clone(),
     );
 
     // 2. 执行 connect_begin 握手
-    let should_upgrade = tokio::time::timeout(
-        Duration::from_secs(DEFAULT_HANDSHAKE_TIMEOUT_SECS),
+    let should_upgrade = run_stage(
+        "connect_begin 握手初始化",
+        shutdown_rx,
         connect_begin(&mut framed, &mut connector),
     )
-    .await
-    .map_err(|_| RdpError::Timeout {
-        stage: "connect_begin 握手初始化",
-        timeout_secs: DEFAULT_HANDSHAKE_TIMEOUT_SECS,
-    })?
+    .await?
     .map_err(|e| RdpError::Protocol {
         stage: "connect_begin 握手初始化",
         detail: e.to_string(),
     })?;
 
-    // 3. 执行 TLS 安全升级与公钥提取
-    let (initial_stream, leftover) = framed.into_inner();
-    let (tls_stream, server_public_key) = perform_tls_upgrade(initial_stream, &config.host).await?;
+    // 3. 按协商结果决定是否执行 TLS 升级（标准 RDP 安全模式跳过 TLS）
+    let needs_tls = matches!(
+        connector.state,
+        ClientConnectorState::EnhancedSecurityUpgrade { selected_protocol }
+            if !selected_protocol.is_empty()
+    );
+    let (mut framed, server_public_key) = if needs_tls {
+        let (initial_stream, leftover) = framed.into_inner();
+        let (tls_stream, public_key) =
+            perform_tls_upgrade(initial_stream, &config.host, shutdown_rx).await?;
+        let erased: ErasedStream = Box::new(tls_stream);
+        (TokioFramed::new_with_leftover(erased, leftover), public_key)
+    } else {
+        (framed, Vec::new())
+    };
 
-    // 4. 执行 connect_finalize 驱动 CredSSP / NLA 认证
+    // 4. 执行 connect_finalize 驱动 CredSSP / NLA 认证与通道确认
     let upgraded = mark_as_upgraded(should_upgrade, &mut connector);
-    let erased: ErasedStream = Box::new(tls_stream);
-    let mut framed = TokioFramed::new_with_leftover(erased, leftover);
     let mut network_client = ReqwestNetworkClient::new();
 
-    let outcome = tokio::time::timeout(
-        Duration::from_secs(DEFAULT_HANDSHAKE_TIMEOUT_SECS),
+    let outcome = run_stage(
+        "connect_finalize 身份认证与通道确认",
+        shutdown_rx,
         connect_finalize(
             upgraded,
             connector,
@@ -101,11 +114,7 @@ pub async fn establish_connection(
             None,
         ),
     )
-    .await
-    .map_err(|_| RdpError::Timeout {
-        stage: "connect_finalize 身份认证与通道确认",
-        timeout_secs: DEFAULT_HANDSHAKE_TIMEOUT_SECS,
-    })?
+    .await?
     .map_err(|e| RdpError::Authentication {
         username: config.username.clone(),
         message: e.to_string(),
@@ -124,35 +133,61 @@ pub async fn establish_connection(
     })
 }
 
-/// 构建包含能力标志与静态通道的客户端连接器。
+/// 为异步握手步骤统一施加超时限制与取消信号监听。
+async fn run_stage<T, F>(
+    stage: &'static str,
+    shutdown_rx: &mut watch::Receiver<bool>,
+    fut: F,
+) -> Result<T, RdpError>
+where
+    F: Future<Output = T>,
+{
+    if *shutdown_rx.borrow() {
+        return Err(RdpError::ChannelClosed {
+            channel: "RDP 会话停机信号",
+        });
+    }
+
+    let timed = tokio::time::timeout(Duration::from_secs(DEFAULT_HANDSHAKE_TIMEOUT_SECS), fut);
+    tokio::select! {
+        _ = shutdown_rx.changed() => Err(RdpError::ChannelClosed {
+            channel: "RDP 会话停机信号",
+        }),
+        res = timed => res.map_err(|_| RdpError::Timeout {
+            stage,
+            timeout_secs: DEFAULT_HANDSHAKE_TIMEOUT_SECS,
+        }),
+    }
+}
+
+/// 构建包含能力标志与按需挂载通道的客户端连接器。
 fn build_client_connector(
     config: &SessionConfig,
     local_addr: SocketAddr,
     audio_muted: Arc<AtomicBool>,
     cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
-    output_tx: mpsc::Sender<RdpOutput>,
+    events_tx: mpsc::Sender<RdpOutput>,
 ) -> ClientConnector {
     let rdp_config = config.to_ironrdp_config();
     let mut connector = ClientConnector::new(rdp_config, local_addr);
 
-    // 若启用了音频重定向，挂载 RDPSND 静态通道
     if config.audio {
         let backend = TransomAudioBackend::new(audio_muted);
         connector =
             connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(Box::new(backend)));
     }
 
-    // 若启用了剪贴板重定向，挂载 CLIPRDR 静态通道
     if config.clipboard {
-        let backend = TransomCliprdrBackend::new(cliprdr_context, output_tx);
+        let backend = TransomCliprdrBackend::new(cliprdr_context, events_tx);
         connector = connector.with_static_channel(ironrdp_cliprdr::Cliprdr::new(Box::new(backend)));
     }
 
-    // 挂载 DRDYNVC 动态虚拟通道，并注册 Display Control 动态通道（打通远端动态重设分辨率协议闭环）
-    let drdynvc = ironrdp_dvc::DrdynvcClient::new().with_dynamic_channel(
-        ironrdp_displaycontrol::client::DisplayControlClient::new(|_| Ok(Vec::new())),
-    );
-    connector = connector.with_static_channel(drdynvc);
+    if config.dynamic_resolution {
+        let drdynvc = ironrdp_dvc::DrdynvcClient::new().with_dynamic_channel(
+            ironrdp_displaycontrol::client::DisplayControlClient::new(|_| Ok(Vec::new())),
+        );
+        connector = connector.with_static_channel(drdynvc);
+    }
 
     connector
 }
@@ -161,19 +196,17 @@ fn build_client_connector(
 async fn perform_tls_upgrade<S>(
     stream: S,
     host: &str,
+    shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<(ironrdp_tls::TlsStream<S>, Vec<u8>), RdpError>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
 {
-    let (tls_stream, certificate) = tokio::time::timeout(
-        Duration::from_secs(DEFAULT_HANDSHAKE_TIMEOUT_SECS),
+    let (tls_stream, certificate) = run_stage(
+        "TLS 安全握手升级",
+        shutdown_rx,
         ironrdp_tls::upgrade(stream, host),
     )
-    .await
-    .map_err(|_| RdpError::Timeout {
-        stage: "TLS 安全握手升级",
-        timeout_secs: DEFAULT_HANDSHAKE_TIMEOUT_SECS,
-    })?
+    .await?
     .map_err(|e| RdpError::Tls {
         host: host.to_string(),
         message: e.to_string(),

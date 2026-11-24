@@ -1,46 +1,51 @@
-//! 剪贴板文件流式传输与沙箱路径防穿越保护。
+//! 剪贴板文件流沙箱路径防穿越保护。
 //!
-//! 设计原理（Why）：RDP 剪贴板文件复制（MS-RDPECLIP）通过文件流分块读取与写入。
-//! 严禁未经校验直接按对端下发的文件名写入本地文件系统；必须通过 Canonical Path
-//! 校验确保目标路径严格位于受控的本地下载目录沙箱之内，杜绝 `../` 越权逃逸。
+//! 设计原理（Why）：RDP 剪贴板文件复制（MS-RDPECLIP）接收来自远端的文件路径。
+//! 严禁在校验通过前对任意拼接路径执行文件系统写操作（例如提前 `create_dir_all`），
+//! 必须先在纯路径层面逐段过滤非法组件（`..`、根目录、驱动器盘符），再结合基准目录的
+//! `canonicalize` 校验，确保目标路径严格落于受控沙箱目录之内，彻底杜绝目录穿越与越权建目录。
 
 use crate::error::RdpError;
-use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
-
-/// 文件流分块大小（默认 512KB）。
-pub const FILE_CHUNK_SIZE: usize = 512 * 1024;
-
-/// 文件传输阶段状态事件。
-#[derive(Debug, Clone)]
-pub enum FileTransferEvent {
-    /// 开始传输指定文件。
-    Started { name: String, total_bytes: u64 },
-    /// 文件传输进度更新。
-    Progress {
-        name: String,
-        transferred: u64,
-        total: u64,
-    },
-    /// 文件传输顺利完成。
-    Completed { name: String },
-    /// 传输失败。
-    Failed { name: String, error: String },
-}
+use std::fs;
+use std::path::{Component, Path, PathBuf};
 
 /// 安全地规范化并校验目标落盘路径，确保不会逃逸出指定的受控沙箱目录。
+///
+/// # Errors
+/// - 当 `file_name` 包含 `..`、盘符前缀、空路径或无法解析出有效相对路径时，返回 [`RdpError::PathTraversal`]；
+/// - 当无法创建或规范化受控基准目录时，返回 [`RdpError::SandboxIo`]。
 pub fn sanitize_destination_path(base_dir: &Path, file_name: &str) -> Result<PathBuf, RdpError> {
-    // 过滤掉任何可能携带的绝对路径前缀或 Windows 驱动器盘符（如 `C:\`）
-    let clean_name = file_name
-        .trim_start_matches('/')
-        .trim_start_matches('\\')
-        .replace('\\', "/");
+    // 统一将 Windows 反斜杠转为正斜杠，再逐个校验路径组件
+    let normalized = file_name.replace('\\', "/");
+    let mut safe_relative = PathBuf::new();
 
-    let relative_path = Path::new(&clean_name);
-    let target = base_dir.join(relative_path);
+    for component in Path::new(&normalized).components() {
+        match component {
+            Component::Normal(part) => {
+                // 拦截类似 "C:" 这类在 POSIX 上被视为 Normal 的 Windows 盘符片段
+                let part_str = part.to_string_lossy();
+                if part_str.contains(':') {
+                    return Err(RdpError::PathTraversal {
+                        path: PathBuf::from(file_name),
+                    });
+                }
+                safe_relative.push(part);
+            }
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(RdpError::PathTraversal {
+                    path: PathBuf::from(file_name),
+                });
+            }
+        }
+    }
 
-    // 若父目录存在则先规范化基准目录；不存在时创建
+    if safe_relative.as_os_str().is_empty() {
+        return Err(RdpError::PathTraversal {
+            path: PathBuf::from(file_name),
+        });
+    }
+
     if !base_dir.exists() {
         fs::create_dir_all(base_dir).map_err(|e| RdpError::SandboxIo {
             path: base_dir.to_path_buf(),
@@ -53,44 +58,10 @@ pub fn sanitize_destination_path(base_dir: &Path, file_name: &str) -> Result<Pat
         source: e,
     })?;
 
-    // 如果目标文件尚不存在，校验其父目录归属
-    let target_parent = target.parent().unwrap_or(base_dir);
-    if !target_parent.exists() {
-        fs::create_dir_all(target_parent).map_err(|e| RdpError::SandboxIo {
-            path: target_parent.to_path_buf(),
-            source: e,
-        })?;
+    let final_path = canonical_base.join(&safe_relative);
+    if !final_path.starts_with(&canonical_base) {
+        return Err(RdpError::PathTraversal { path: final_path });
     }
 
-    let canonical_parent = target_parent
-        .canonicalize()
-        .map_err(|e| RdpError::SandboxIo {
-            path: target_parent.to_path_buf(),
-            source: e,
-        })?;
-
-    if !canonical_parent.starts_with(&canonical_base) {
-        return Err(RdpError::PathTraversal {
-            path: target.to_path_buf(),
-        });
-    }
-
-    Ok(canonical_parent.join(target.file_name().unwrap_or_default()))
-}
-
-/// 读取本地文件指定偏移量的分块数据。
-pub fn read_file_chunk(
-    path: &Path,
-    offset: u64,
-    buffer: &mut [u8],
-) -> Result<usize, std::io::Error> {
-    let mut file = File::open(path)?;
-    file.seek(SeekFrom::Start(offset))?;
-    file.read(buffer)
-}
-
-/// 写入分块数据到目标文件。
-pub fn write_file_chunk(file: &mut File, offset: u64, data: &[u8]) -> Result<(), std::io::Error> {
-    file.seek(SeekFrom::Start(offset))?;
-    file.write_all(data)
+    Ok(final_path)
 }

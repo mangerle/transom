@@ -1,9 +1,10 @@
 //! RDP 桌面视口悬浮快捷操作条。
 //!
 //! 设计原理（Why）：远程桌面全屏或大窗格操作时，宿主系统的常规快捷键（如 Ctrl+Alt+Del、
-//! Win 键）常被本地系统拦截无法直接传给远端；通过在桌面视口顶部提供紧凑的半透明
-//! 悬浮工具条，为用户提供一键发送系统组合键、声音静音、缩放模式切换与会话断开。
+//! Win 键）常被本地系统拦截无法直接传给远端；通过在桌面视口顶部提供紧凑的悬浮工具条，
+//! 并使用统一主题调色板 [`Palette`] 与设计令牌，确保亮色/暗色主题下视觉层级一致。
 
+use crate::palette::Palette;
 use gpui_kit::base::h_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
@@ -13,7 +14,8 @@ use gpui_kit::*;
 pub type RdpToolbarCallback = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
 /// 悬浮工具条渲染参数。
-pub struct RdpToolbarParams {
+pub struct RdpToolbarParams<'a> {
+    pub palette: &'a Palette,
     pub is_muted: bool,
     pub is_scaled: bool,
     pub on_send_cad: RdpToolbarCallback,
@@ -23,15 +25,16 @@ pub struct RdpToolbarParams {
     pub on_disconnect: RdpToolbarCallback,
 }
 
-/// 渲染半透明悬浮快捷操作条。
-pub fn render_rdp_toolbar(params: RdpToolbarParams) -> AnyElement {
+/// 渲染悬浮快捷操作条。
+pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
+    let p = params.palette;
     h_flex()
-        .gap(px(6.0))
-        .p(px(4.0))
-        .rounded(px(6.0))
-        .bg(gpui_kit::rgba(0x1e1e1ecc))
+        .gap_1p5()
+        .p_1()
+        .rounded_md()
+        .bg(p.surface.floating)
         .border_1()
-        .border_color(gpui_kit::rgba(0xffffff22))
+        .border_color(p.border)
         .child(
             Button::new(ElementId::Name("rdp-cad-btn".into()))
                 .small()

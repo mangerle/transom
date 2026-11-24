@@ -10,11 +10,15 @@ use ironrdp_pdu::rdp::capability_sets::{
     MajorPlatformType, RailSupportLevel, client_codecs_capabilities,
 };
 use ironrdp_pdu::rdp::client_info::{CompressionType, PerformanceFlags, TimezoneInfo};
+use std::fmt;
 use transom_core::{RdpColorDepth, RdpConnection, RdpPerformance, RdpSecurity};
 use zeroize::Zeroize;
 
 /// RDP 客户端会话启动运行期配置。
-#[derive(Debug, Clone)]
+///
+/// 设计原理（Why）：手动实现脱敏 `Debug` 并在 `Drop` 时自动擦除内存中的密码，
+/// 即使发生提前返回或 panic 也能确保明文凭据不会泄漏到日志或残留在堆内存中。
+#[derive(Clone)]
 pub struct SessionConfig {
     /// 目标主机地址（IP 或域名）。
     pub host: String,
@@ -164,6 +168,32 @@ impl SessionConfig {
                     | PerformanceFlags::DISABLE_CURSORSETTINGS
             }
         }
+    }
+}
+
+impl fmt::Debug for SessionConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SessionConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .field("domain", &self.domain)
+            .field("security", &self.security)
+            .field("color_depth", &self.color_depth)
+            .field("performance", &self.performance)
+            .field("audio", &self.audio)
+            .field("clipboard", &self.clipboard)
+            .field("file_copy", &self.file_copy)
+            .field("dynamic_resolution", &self.dynamic_resolution)
+            .field("initial_size", &self.initial_size)
+            .finish()
+    }
+}
+
+impl Drop for SessionConfig {
+    fn drop(&mut self) {
+        self.password.zeroize();
     }
 }
 

@@ -1,11 +1,9 @@
-//! 远端光标位图解码与 GPUI 系统光标适配。
+//! 远端光标位图数据结构与校验。
 //!
-//! 设计原理（Why）：RDP 协议通过单独的 Pointer PDU 发送光标形状与热点信息，
-//! 不应把光标强行画进桌面位图画布；由客户端将远端光标位图解码为平台原生的
-//! 系统光标，能够确保本地鼠标移动完全跟手、零网络延迟，并正确呈现反色与形状。
+//! 设计原理（Why）：RDP 协议通过独立的 Pointer PDU 下发光标形状与热点坐标。
+//! 协议层只产出与 GUI 框架无关的纯 RGBA8 像素数据（[`CursorUpdate`]），
+//! 由上层 UI 视图自行转换为 GPU 纹理并在客户端零延迟合成绘制，保持协议层纯净。
 
-use gpui_kit::RenderImage;
-use image::{Frame, RgbaImage};
 use std::sync::Arc;
 
 /// 远端光标形状更新事件。
@@ -15,7 +13,7 @@ pub enum CursorUpdate {
     Hidden,
     /// 恢复默认箭头光标。
     Default,
-    /// 远端下发的新位图光标。
+    /// 远端下发的新位图光标（32 位 RGBA8 像素）。
     Custom {
         /// 光标像素宽度。
         width: u16,
@@ -25,12 +23,12 @@ pub enum CursorUpdate {
         hot_x: u16,
         /// 光标热点垂直偏移（像素）。
         hot_y: u16,
-        /// 光标位图图像。
-        image: Arc<RenderImage>,
+        /// 紧凑排布的 RGBA8 像素数据（长度严格等于 `width * height * 4`）。
+        rgba: Arc<[u8]>,
     },
 }
 
-/// 将 32 位 RGBA 光标像素缓冲封装为 GPUI `RenderImage`。
+/// 校验并封装 32 位 RGBA8 光标像素载荷。
 pub fn create_custom_cursor(
     width: u16,
     height: u16,
@@ -38,71 +36,46 @@ pub fn create_custom_cursor(
     hot_y: u16,
     rgba_data: &[u8],
 ) -> Option<CursorUpdate> {
-    if width == 0 || height == 0 || rgba_data.len() != usize::from(width) * usize::from(height) * 4
-    {
+    let expected_len = usize::from(width)
+        .checked_mul(usize::from(height))?
+        .checked_mul(4)?;
+    if width == 0 || height == 0 || rgba_data.len() != expected_len {
         return None;
     }
-
-    let rgba_image = RgbaImage::from_raw(u32::from(width), u32::from(height), rgba_data.to_vec())?;
-    let render_image = RenderImage::new(vec![Frame::new(rgba_image)]);
 
     Some(CursorUpdate::Custom {
         width,
         height,
-        hot_x,
-        hot_y,
-        image: Arc::new(render_image),
+        hot_x: hot_x.min(width.saturating_sub(1)),
+        hot_y: hot_y.min(height.saturating_sub(1)),
+        rgba: Arc::from(rgba_data),
     })
 }
 
-/// 解析单色 1bpp 掩码光标（XOR / AND 掩码）。
-pub fn decode_monochrome_cursor(
-    width: u16,
-    height: u16,
-    hot_x: u16,
-    hot_y: u16,
-    and_mask: &[u8],
-    xor_mask: &[u8],
-) -> Option<CursorUpdate> {
-    let width_u32 = u32::from(width);
-    let height_u32 = u32::from(height);
-    let stride = (width_u32.div_ceil(8)) as usize;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    if and_mask.len() < stride * height as usize || xor_mask.len() < stride * height as usize {
-        return None;
-    }
-
-    let mut rgba_image = RgbaImage::new(width_u32, height_u32);
-
-    for y in 0..height_u32 {
-        let row_offset = y as usize * stride;
-        for x in 0..width_u32 {
-            let byte_idx = row_offset + (x as usize / 8);
-            let bit_mask = 0x80 >> (x % 8);
-
-            let and_bit = (and_mask[byte_idx] & bit_mask) != 0;
-            let xor_bit = (xor_mask[byte_idx] & bit_mask) != 0;
-
-            let pixel = match (and_bit, xor_bit) {
-                // AND=0, XOR=0: 黑色不透明
-                (false, false) => image::Rgba([0, 0, 0, 255]),
-                // AND=0, XOR=1: 白色不透明
-                (false, true) => image::Rgba([255, 255, 255, 255]),
-                // AND=1, XOR=0: 完全透明
-                (true, false) => image::Rgba([0, 0, 0, 0]),
-                // AND=1, XOR=1: 反色（在 RGBA 中以半透明高亮表示）
-                (true, true) => image::Rgba([128, 128, 128, 180]),
-            };
-            rgba_image.put_pixel(x, y, pixel);
+    #[test]
+    fn custom_cursor_validates_dimensions_and_clamps_hotspot() {
+        let data = vec![255u8; 4 * 4 * 4];
+        let cursor = create_custom_cursor(4, 4, 10, 10, &data).expect("合法光标应构造成功");
+        match cursor {
+            CursorUpdate::Custom {
+                width,
+                height,
+                hot_x,
+                hot_y,
+                rgba,
+            } => {
+                assert_eq!((width, height), (4, 4));
+                assert_eq!((hot_x, hot_y), (3, 3));
+                assert_eq!(rgba.len(), 64);
+            }
+            _ => panic!("预期为 Custom 变体"),
         }
-    }
 
-    let render_image = RenderImage::new(vec![Frame::new(rgba_image)]);
-    Some(CursorUpdate::Custom {
-        width,
-        height,
-        hot_x,
-        hot_y,
-        image: Arc::new(render_image),
-    })
+        assert!(create_custom_cursor(0, 4, 0, 0, &[]).is_none());
+        assert!(create_custom_cursor(4, 4, 0, 0, &[0; 12]).is_none());
+    }
 }

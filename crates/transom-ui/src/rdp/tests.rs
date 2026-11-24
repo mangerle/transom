@@ -1,8 +1,9 @@
 //! RDP 界面组件单元测试。
 
+use super::frame_cache::{TiledFrameCache, ViewportTransform};
 use super::input::{map_mouse_button, map_pointer_position};
 use gpui_kit::{Bounds, Point, px, size};
-use transom_rdp::MouseBtn;
+use transom_rdp::{FrameUpdate, MouseBtn, TilePatch};
 
 #[test]
 fn pointer_position_mapping_scale_and_fit() {
@@ -11,17 +12,82 @@ fn pointer_position_mapping_scale_and_fit() {
         size: size(px(800.0), px(600.0)),
     };
 
-    // 视口内的点
-    let pt = Point::new(px(500.0), px(350.0));
-    let mapped = map_pointer_position(pt, bounds, 1920, 1080, true);
-    assert!(mapped.is_some());
-    let (x, y) = mapped.unwrap();
-    assert!(x < 1920);
-    assert!(y < 1080);
+    // 视口中心点应映射到远端桌面中心（1920x1080 居中在 800x600 内）
+    let center = Point::new(px(500.0), px(350.0));
+    let mapped = map_pointer_position(center, bounds, 1920, 1080, true).expect("中心点应命中");
+    assert!((i32::from(mapped.0) - 960).abs() <= 1);
+    assert!((i32::from(mapped.1) - 540).abs() <= 1);
+
+    // 落在上下黑边（Letterbox）内的点应返回 None
+    let letterbox_top = Point::new(px(500.0), px(60.0));
+    assert!(map_pointer_position(letterbox_top, bounds, 1920, 1080, true).is_none());
 
     // 视口外的点应被安全丢弃
     let out_pt = Point::new(px(50.0), px(30.0));
     assert!(map_pointer_position(out_pt, bounds, 1920, 1080, true).is_none());
+}
+
+#[test]
+fn viewport_transform_roundtrip_consistency() {
+    let bounds = Bounds {
+        origin: Point::new(px(20.0), px(40.0)),
+        size: size(px(1000.0), px(500.0)),
+    };
+    let transform = ViewportTransform::compute(bounds, 2000, 1000, true).expect("应算出有效变换");
+    assert!((transform.scale - 0.5).abs() < 1e-5);
+
+    let rect = transform.map_desktop_rect(bounds.origin, 200.0, 100.0, 100.0, 50.0);
+    let back = transform
+        .unmap_point(bounds, rect.origin, 2000, 1000)
+        .expect("正向映射点反算必须命中");
+    assert_eq!(back, (200, 100));
+}
+
+#[test]
+fn frame_cache_applies_incremental_patches_in_place() {
+    let mut cache = TiledFrameCache::default();
+    let patch_a = TilePatch {
+        col: 0,
+        row: 0,
+        width: 4,
+        height: 4,
+        rgba: vec![255; 4 * 4 * 4],
+    };
+    cache.apply_update(FrameUpdate {
+        width: 512,
+        height: 256,
+        cols: 2,
+        rows: 1,
+        seq: 1,
+        full_reset: true,
+        patches: vec![patch_a],
+    });
+    assert_eq!(cache.tiles.len(), 2);
+    assert!(cache.tiles[0].is_some());
+    assert!(cache.tiles[1].is_none());
+
+    let first_ptr = std::sync::Arc::as_ptr(cache.tiles[0].as_ref().expect("首瓦片应存在"));
+
+    // 仅更新第 2 个瓦片，第 1 个瓦片指针保持不变（零重配）
+    let patch_b = TilePatch {
+        col: 1,
+        row: 0,
+        width: 4,
+        height: 4,
+        rgba: vec![128; 4 * 4 * 4],
+    };
+    cache.apply_update(FrameUpdate {
+        width: 512,
+        height: 256,
+        cols: 2,
+        rows: 1,
+        seq: 2,
+        full_reset: false,
+        patches: vec![patch_b],
+    });
+    let after_ptr = std::sync::Arc::as_ptr(cache.tiles[0].as_ref().expect("首瓦片应存在"));
+    assert_eq!(first_ptr, after_ptr);
+    assert!(cache.tiles[1].is_some());
 }
 
 #[test]

@@ -1,16 +1,27 @@
-//! RDP 界面交互输入事件转换。
+//! RDP 界面交互输入事件转换与流量整形。
 //!
-//! 设计原理（Why）：GPUI 界面层传递的坐标是带有窗格偏移、外边距与可能的
-//! 缩放（FitWindow）的浮点逻辑像素；需要基于当前视口包围盒进行归一化并
-//! 映射到远端桌面的实际物理像素坐标系，同时过滤掉视口外的越界坐标。
+//! 设计原理（Why）：
+//! 1. 复用 [`ViewportTransform`] 唯一真源完成鼠标坐标反算，保证渲染与点击像素零偏差；
+//! 2. 鼠标移出视口仅清理本地悬停状态（不再误释放正在输入的键盘按键），键盘全释放由
+//!    视图失焦钩子统一保障；
+//! 3. 鼠标移动采用 125Hz（8ms）流量整形，点击前补发最新坐标，防止高频鼠标事件灌满通道。
 
+use super::frame_cache::ViewportTransform;
+use super::view::{RdpView, RdpViewState};
 use gpui_kit::{Bounds, Pixels, Point};
+use std::time::{Duration, Instant};
 use transom_rdp::{MouseBtn, RdpInput};
 
+/// 鼠标移动流量整形间隔（125Hz）。
+const MOUSE_MOVE_THROTTLE_INTERVAL: Duration = Duration::from_millis(8);
+
+/// 触控板微像素滚动累加步长（像素）。
+const SCROLL_PIXEL_STEP: f32 = 10.0;
+
+/// RDP 滚轮标准单位增量（对应 Windows WHEEL_DELTA）。
+const RDP_WHEEL_DELTA: f32 = 120.0;
+
 /// 计算鼠标在远端桌面上的物理像素坐标。
-///
-/// 优化说明：自适应缩放模式下采用严格保持宽高比的等比缩放，
-/// 并按黑边居中偏移（Letterbox / Pillarbox）计算物理像素，杜绝视口拉伸形变与鼠标热点偏移。
 pub fn map_pointer_position(
     cursor_pos: Point<Pixels>,
     viewport_bounds: Bounds<Pixels>,
@@ -18,43 +29,9 @@ pub fn map_pointer_position(
     desktop_height: u16,
     scale_to_fit: bool,
 ) -> Option<(u16, u16)> {
-    if !viewport_bounds.contains(&cursor_pos) || desktop_width == 0 || desktop_height == 0 {
-        return None;
-    }
-
-    let rel_x = f32::from(cursor_pos.x - viewport_bounds.origin.x);
-    let rel_y = f32::from(cursor_pos.y - viewport_bounds.origin.y);
-
-    let (scale, offset_x, offset_y) = if scale_to_fit {
-        let view_w = f32::from(viewport_bounds.size.width);
-        let view_h = f32::from(viewport_bounds.size.height);
-        let s = (view_w / f32::from(desktop_width))
-            .min(view_h / f32::from(desktop_height));
-        let ox = (view_w - f32::from(desktop_width) * s) / 2.0;
-        let oy = (view_h - f32::from(desktop_height) * s) / 2.0;
-        (s, ox, oy)
-    } else {
-        (1.0, 0.0, 0.0)
-    };
-
-    if scale <= 0.0 {
-        return None;
-    }
-
-    let desk_x = (rel_x - offset_x) / scale;
-    let desk_y = (rel_y - offset_y) / scale;
-
-    if desk_x < 0.0
-        || desk_y < 0.0
-        || desk_x >= f32::from(desktop_width)
-        || desk_y >= f32::from(desktop_height)
-    {
-        return None;
-    }
-
-    let px = (desk_x.round() as u16).min(desktop_width - 1);
-    let py = (desk_y.round() as u16).min(desktop_height - 1);
-    Some((px, py))
+    let transform =
+        ViewportTransform::compute(viewport_bounds, desktop_width, desktop_height, scale_to_fit)?;
+    transform.unmap_point(viewport_bounds, cursor_pos, desktop_width, desktop_height)
 }
 
 /// 将 GPUI 鼠标按键转换为 RDP 输入指令。
@@ -71,37 +48,40 @@ pub fn map_mouse_button(button: gpui_kit::MouseButton, pressed: bool) -> Option<
     })
 }
 
-use super::view::{RdpView, RdpViewState};
-
 impl RdpView {
-    /// 处理鼠标指针在视口内的移动事件（集成 125Hz 流量整形）。
-    pub(crate) fn handle_mouse_move(&mut self, event: &gpui_kit::MouseMoveEvent) {
-        if let RdpViewState::Connected { width, height } = self.state
-            && let Some((x, y)) = map_pointer_position(
-                event.position,
-                self.viewport_bounds,
-                width,
-                height,
-                self.is_scaled,
-            )
-        {
-            let is_pos_changed = self.last_mouse_pos != Some((x, y));
-            let is_interval_passed =
-                self.last_mouse_sent_at.elapsed() >= std::time::Duration::from_millis(8);
-            if is_pos_changed && is_interval_passed {
-                self.last_mouse_pos = Some((x, y));
-                self.last_mouse_sent_at = std::time::Instant::now();
-                self.send_input(RdpInput::MouseMove { x, y });
-            } else if is_pos_changed {
-                self.last_mouse_pos = Some((x, y));
+    /// 处理鼠标指针在视口内的移动事件（集成 125Hz 流量整形与自定义光标跟手重绘）。
+    pub(crate) fn handle_mouse_move(
+        &mut self,
+        event: &gpui_kit::MouseMoveEvent,
+        cx: &mut gpui_kit::Context<Self>,
+    ) {
+        let RdpViewState::Connected { width, height } = self.state else {
+            return;
+        };
+        let bounds = self.viewport_bounds.get();
+        let mapped = map_pointer_position(event.position, bounds, width, height, self.is_scaled);
+
+        if mapped != self.last_mouse_pos {
+            self.last_mouse_pos = mapped;
+            // 若当前使用客户端自绘自定义光标，触发局部重绘保持光标跟手
+            if self.is_custom_cursor_active() {
+                cx.notify();
             }
+        }
+
+        if let Some((x, y)) = mapped
+            && self.last_mouse_sent_at.elapsed() >= MOUSE_MOVE_THROTTLE_INTERVAL
+        {
+            self.last_mouse_sent_at = Instant::now();
+            self.send_input(RdpInput::MouseMove { x, y });
         }
     }
 
-    /// 鼠标移出视口：清理状态并释放可能按住的修饰键。
-    pub(crate) fn handle_mouse_exit(&mut self) {
-        self.last_mouse_pos = None;
-        self.send_input(RdpInput::ReleaseAllKeys);
+    /// 鼠标移出视口：仅清理悬停坐标状态，不干扰仍在焦点的键盘输入。
+    pub(crate) fn handle_mouse_exit(&mut self, cx: &mut gpui_kit::Context<Self>) {
+        if self.last_mouse_pos.take().is_some() && self.is_custom_cursor_active() {
+            cx.notify();
+        }
     }
 
     /// 处理鼠标按下：同步系统剪贴板、原子补齐最新坐标并派发点击。
@@ -130,45 +110,32 @@ impl RdpView {
     pub(crate) fn handle_scroll(&mut self, event: &gpui_kit::ScrollEvent) {
         match event.delta {
             gpui_kit::ScrollDelta::Lines(p) => {
-                let delta_y = (p.y * 120.0) as i16;
-                let delta_x = (p.x * 120.0) as i16;
-                if delta_y != 0 {
-                    self.send_input(RdpInput::MouseWheel {
-                        vertical: true,
-                        delta: delta_y,
-                    });
-                }
-                if delta_x != 0 {
-                    self.send_input(RdpInput::MouseWheel {
-                        vertical: false,
-                        delta: delta_x,
-                    });
-                }
+                self.dispatch_wheel_delta(true, (p.y * RDP_WHEEL_DELTA) as i16);
+                self.dispatch_wheel_delta(false, (p.x * RDP_WHEEL_DELTA) as i16);
             }
             gpui_kit::ScrollDelta::Pixels(p) => {
                 self.scroll_remainder_y += f32::from(p.y);
                 self.scroll_remainder_x += f32::from(p.x);
 
-                let steps_y = (self.scroll_remainder_y / 10.0).trunc();
+                let steps_y = (self.scroll_remainder_y / SCROLL_PIXEL_STEP).trunc();
                 if steps_y != 0.0 {
-                    self.scroll_remainder_y -= steps_y * 10.0;
-                    let delta_y = (steps_y * 120.0) as i16;
-                    self.send_input(RdpInput::MouseWheel {
-                        vertical: true,
-                        delta: delta_y,
-                    });
+                    self.scroll_remainder_y -= steps_y * SCROLL_PIXEL_STEP;
+                    self.dispatch_wheel_delta(true, (steps_y * RDP_WHEEL_DELTA) as i16);
                 }
 
-                let steps_x = (self.scroll_remainder_x / 10.0).trunc();
+                let steps_x = (self.scroll_remainder_x / SCROLL_PIXEL_STEP).trunc();
                 if steps_x != 0.0 {
-                    self.scroll_remainder_x -= steps_x * 10.0;
-                    let delta_x = (steps_x * 120.0) as i16;
-                    self.send_input(RdpInput::MouseWheel {
-                        vertical: false,
-                        delta: delta_x,
-                    });
+                    self.scroll_remainder_x -= steps_x * SCROLL_PIXEL_STEP;
+                    self.dispatch_wheel_delta(false, (steps_x * RDP_WHEEL_DELTA) as i16);
                 }
             }
+        }
+    }
+
+    /// 派发非零滚轮增量指令。
+    fn dispatch_wheel_delta(&self, vertical: bool, delta: i16) {
+        if delta != 0 {
+            self.send_input(RdpInput::MouseWheel { vertical, delta });
         }
     }
 
@@ -184,9 +151,7 @@ impl RdpView {
         if is_paste {
             self.sync_clipboard_to_remote(cx);
         }
-        self.send_input(RdpInput::KeyDown {
-            key: key.clone(),
-        });
+        self.send_input(RdpInput::KeyDown { key: key.clone() });
     }
 
     /// 处理键盘按键抬起。

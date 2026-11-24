@@ -25,10 +25,6 @@ pub enum RdpError {
         timeout_secs: u64,
     },
 
-    /// 代理通道握手失败。
-    #[error("经过代理连接 RDP 服务器失败，代理地址: {proxy}，原因: {message}")]
-    Proxy { proxy: String, message: String },
-
     /// TLS 加密通道升级或证书校验失败。
     #[error("TLS 安全握手失败，主机: {host}，原因: {message}")]
     Tls { host: String, message: String },

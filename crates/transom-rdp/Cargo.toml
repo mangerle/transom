@@ -13,7 +13,6 @@ publish.workspace = true
 
 [dependencies]
 transom-core = { workspace = true }
-transom-platform = { workspace = true }
 
 # RDP 协议栈核心组件
 ironrdp-core = { workspace = true }
@@ -26,27 +25,15 @@ ironrdp-graphics = { workspace = true }
 ironrdp-dvc = { workspace = true }
 ironrdp-svc = { workspace = true }
 ironrdp-displaycontrol = { workspace = true }
-ironrdp-egfx = { workspace = true }
 ironrdp-rdpsnd = { workspace = true }
 ironrdp-rdpsnd-native = { workspace = true }
 ironrdp-tokio = { workspace = true }
 ironrdp-tls = { workspace = true }
-ironrdp-bulk = { workspace = true }
-sspi = { workspace = true }
-
-# 声音输出与播放
-cpal = { workspace = true }
-
-# 渲染、像素与桌面集成
-image = { workspace = true }
-gpui-kit = { workspace = true }
 
 # 异步并发与基础工具
 tokio = { workspace = true }
-futures = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
-anyhow = { workspace = true }
 parking_lot = { workspace = true }
 zeroize = { workspace = true }
 
