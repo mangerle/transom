@@ -1,10 +1,9 @@
-//! API 响应 Headers、Cookies、Assertions 与 History 表格。
+//! API 响应 Headers、Cookies 与 Assertions 表格。
 
-use super::workspace_response_view::{centered_message, response_color};
+use super::workspace_response_view::centered_message;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::StyledExt;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -221,172 +220,7 @@ pub(super) fn render_assertions(results: &[ApiAssertionResult], p: &Palette) -> 
         .into_any_element()
 }
 
-pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    if params.project.history.is_empty() {
-        return centered_message(rust_i18n::t!("api.response.no_history").to_string(), p);
-    }
-    let border = p.divider(p.border);
-    let header = h_flex()
-        .h(rems(size::LARGE_HEADER_HEIGHT))
-        .bg(p.list_head)
-        .text_size(rems(typography::CAPTION))
-        .text_color(p.muted_foreground)
-        .border_color(border)
-        .border_b_1()
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_time").to_string(),
-            rems(5.5),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_status").to_string(),
-            rems(4.0),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_method").to_string(),
-            rems(5.0),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_url").to_string(),
-            rems(0.0),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_elapsed").to_string(),
-            rems(5.0),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_assertions").to_string(),
-            rems(5.5),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_action").to_string(),
-            rems(4.5),
-            border,
-        ));
-    let rows = params
-        .project
-        .history
-        .iter()
-        .rev()
-        .enumerate()
-        .map(|(index, entry)| {
-            let view = params.view.clone();
-            let replay_view = params.view.clone();
-            let request_id = entry.request_id;
-            let status_color = response_color(entry.status, p);
-            h_flex()
-                .id(("api-history-row", index))
-                .h(rems(size::LARGE_HEADER_HEIGHT))
-                .items_center()
-                .border_color(border)
-                .border_b_1()
-                .hover(|row| row.bg(p.list_hover))
-                .on_click(move |_, window, cx| {
-                    view.update(cx, |this, cx| this.select_request(request_id, window, cx));
-                })
-                .child(table_cell(
-                    history_time(entry.at),
-                    rems(5.5),
-                    p.muted_foreground,
-                    border,
-                    false,
-                ))
-                .child(table_cell(
-                    entry.status.to_string(),
-                    rems(4.0),
-                    status_color,
-                    border,
-                    false,
-                ))
-                .child(table_cell(
-                    entry.method.clone(),
-                    rems(5.0),
-                    p.foreground,
-                    border,
-                    false,
-                ))
-                .child(table_cell(
-                    entry.url.clone(),
-                    rems(0.0),
-                    p.muted_foreground,
-                    border,
-                    true,
-                ))
-                .child(table_cell(
-                    format!("{} ms", entry.elapsed_millis),
-                    rems(5.0),
-                    p.muted_foreground,
-                    border,
-                    false,
-                ))
-                .child(table_cell(
-                    format!("{}/{}", entry.assertions_passed, entry.assertions_total),
-                    rems(5.5),
-                    if entry.assertions_passed == entry.assertions_total {
-                        p.success
-                    } else {
-                        p.warning
-                    },
-                    border,
-                    false,
-                ))
-                .child(
-                    div()
-                        .w(rems(4.5))
-                        .flex_none()
-                        .h_full()
-                        .px(rems(space::XS))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .border_l_1()
-                        .border_color(border)
-                        .child(
-                            IconButton::new(
-                                ("api-history-replay", index),
-                                AppIcon::Ui(UiIcon::FETCH),
-                                rust_i18n::t!("api.response.history_replay").to_string(),
-                            )
-                            .size(IconButtonSize::RowAction)
-                            .render()
-                            .on_click(move |_, window, cx| {
-                                cx.stop_propagation();
-                                replay_view.update(cx, |this, cx| {
-                                    this.replay_history(request_id, window, cx)
-                                });
-                            }),
-                        ),
-                )
-                .into_any_element()
-        });
-    v_flex()
-        .id("api-response-history")
-        .flex_1()
-        .min_h_0()
-        .w_full()
-        .p(rems(space::SM))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .w_full()
-                .overflow_y_scrollbar()
-                .rounded(p.radius.md)
-                .border_1()
-                .border_color(border)
-                .overflow_hidden()
-                .child(header)
-                .children(rows),
-        )
-        .into_any_element()
-}
-
-fn table_header_cell(label: String, width: Rems, border: Hsla) -> AnyElement {
+pub(super) fn table_header_cell(label: String, width: Rems, border: Hsla) -> AnyElement {
     div()
         .w(width)
         .flex_none()
@@ -401,7 +235,13 @@ fn table_header_cell(label: String, width: Rems, border: Hsla) -> AnyElement {
         .into_any_element()
 }
 
-fn table_cell(text: String, width: Rems, color: Hsla, border: Hsla, flexible: bool) -> AnyElement {
+pub(super) fn table_cell(
+    text: String,
+    width: Rems,
+    color: Hsla,
+    border: Hsla,
+    flexible: bool,
+) -> AnyElement {
     div()
         .when(flexible, |cell| cell.flex_1().min_w_0())
         .when(!flexible, |cell| cell.w(width).flex_none())
@@ -415,14 +255,4 @@ fn table_cell(text: String, width: Rems, color: Hsla, border: Hsla, flexible: bo
         .truncate()
         .child(text)
         .into_any_element()
-}
-
-fn history_time(at: u64) -> String {
-    chrono::DateTime::from_timestamp(at as i64, 0)
-        .map(|time| {
-            time.with_timezone(&chrono::Local)
-                .format("%m-%d %H:%M:%S")
-                .to_string()
-        })
-        .unwrap_or_else(|| "--".to_string())
 }

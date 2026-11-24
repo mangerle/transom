@@ -838,6 +838,12 @@ api:
     history_request_missing:
       en: The request for this history entry has been deleted.
       zh-CN: 该历史记录对应的请求已被删除。
+    no_response_excerpt:
+      en: This history entry has no response excerpt.
+      zh-CN: 该历史记录没有响应摘要。
+    close_history_detail:
+      en: Close history details
+      zh-CN: 关闭历史详情
     copy_body:
       en: Copy response body
       zh-CN: 复制响应正文

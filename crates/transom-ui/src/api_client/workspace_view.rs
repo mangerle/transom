@@ -27,6 +27,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) request_tab: ApiRequestTab,
     pub(crate) editor_ratio: f32,
     pub(crate) response_tab: ApiResponseTab,
+    pub(crate) selected_history: Option<usize>,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
     pub(crate) folder_editor: Option<&'a super::workspace_folder::FolderEditor>,
     pub(crate) pending_folder_delete: Option<ApiFolderId>,

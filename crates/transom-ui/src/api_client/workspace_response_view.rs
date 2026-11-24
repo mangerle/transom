@@ -99,7 +99,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
         ApiResponseTab::Assertions => {
             super::workspace_response_tables::render_assertions(params.assertion_results, p)
         }
-        ApiResponseTab::History => super::workspace_response_tables::render_history(params, p),
+        ApiResponseTab::History => super::workspace_history_view::render_history(params, p),
     });
     body.into_any_element()
 }

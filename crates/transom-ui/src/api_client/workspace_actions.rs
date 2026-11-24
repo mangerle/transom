@@ -66,6 +66,7 @@ impl ApiWorkspace {
     /// 重放历史记录对应的当前请求；请求已被删除时给出明确错误。
     pub(crate) fn replay_history(
         &mut self,
+        history_index: usize,
         request_id: transom_api::ApiRequestId,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -77,8 +78,37 @@ impl ApiWorkspace {
             );
             return;
         }
+        if history_index < self.project.history.len() {
+            self.selected_history = Some(history_index);
+        }
         self.select_request(request_id, window, cx);
         self.send_request(window, cx);
+    }
+
+    /// 选中历史记录并恢复对应请求；再次点击同一记录会收起详情。
+    pub(crate) fn select_history(
+        &mut self,
+        history_index: usize,
+        request_id: transom_api::ApiRequestId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if history_index >= self.project.history.len() {
+            return;
+        }
+        if self.selected_history == Some(history_index) {
+            self.selected_history = None;
+            cx.notify();
+            return;
+        }
+        self.selected_history = Some(history_index);
+        self.select_request(request_id, window, cx);
+        cx.notify();
+    }
+
+    pub(crate) fn clear_history_selection(&mut self, cx: &mut Context<Self>) {
+        self.selected_history = None;
+        cx.notify();
     }
 
     /// 复制当前响应正文；WebSocket 请求复制消息日志。
@@ -246,6 +276,7 @@ impl ApiWorkspace {
             assertions_total: total,
             response_excerpt: response_excerpt(&response, 500),
         });
+        self.selected_history = Some(self.project.history.len().saturating_sub(1));
         self.editors.response_body.update(cx, |state, cx| {
             state.set_value(response.body.clone(), window, cx)
         });
