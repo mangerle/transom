@@ -351,14 +351,19 @@ impl AppShell {
 
         let mut secret_writes = Vec::new();
         if built.session.identity_id.is_none() {
+            let preserve_existing_password =
+                editing && !matches!(built.session.connection, Connection::Ssh(_));
             if save_password {
                 match &built.password {
                     Some(password) => {
                         secret_writes.push(SecretWrite::Set(password_key, password.clone()))
                     }
-                    None => secret_writes.push(SecretWrite::Delete(password_key)),
+                    None if !preserve_existing_password => {
+                        secret_writes.push(SecretWrite::Delete(password_key))
+                    }
+                    None => {}
                 }
-            } else {
+            } else if !preserve_existing_password {
                 secret_writes.push(SecretWrite::Delete(password_key));
             }
             if save_passphrase {

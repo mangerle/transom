@@ -153,7 +153,11 @@ pub(crate) fn render_rdp_basic_fields(
                 ))),
         )
         .child(optional_form_field(
-            rust_i18n::t!("form.password").to_string(),
+            if form.base.is_some() {
+                "密码（留空则保留已保存密码）".to_string()
+            } else {
+                rust_i18n::t!("form.password").to_string()
+            },
             form.password.clone(),
             p,
         ))
