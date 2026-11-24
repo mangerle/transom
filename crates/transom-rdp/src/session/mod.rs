@@ -47,12 +47,13 @@ impl RdpSession {
                 };
 
                 runtime.block_on(async move {
-                    match connector::establish_connection(&config).await {
+                    match connector::establish_connection(&config, &output_tx).await {
                         Ok(conn) => {
                             let runner = loop_runner::SessionLoopRunner::new(
                                 conn.framed,
                                 conn.result,
-                                &config,
+                                conn.audio_muted,
+                                conn.cliprdr_context,
                                 input_rx,
                                 output_tx,
                             );

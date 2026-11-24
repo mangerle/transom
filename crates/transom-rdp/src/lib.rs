@@ -23,7 +23,7 @@ pub mod settings;
 pub mod tiles;
 pub mod transport;
 
-pub use audio::AudioPlayer;
+pub use audio::TransomAudioBackend;
 pub use clipboard::{ClipboardEvent, FileTransferEvent};
 pub use error::RdpError;
 pub use pointer::CursorUpdate;

@@ -4,9 +4,11 @@
 //! 必须遵循局部容错原则：剪贴板格式协商失败或对端格式不规范，一律只记日志
 //! 并局部降级，绝对严禁向外抛出致命错误导致主桌面会话中断。
 
+pub mod backend;
 pub mod file_stream;
 pub mod text;
 
+pub use backend::{CliprdrSyncContext, TransomCliprdrBackend};
 pub use file_stream::FileTransferEvent;
 
 /// 剪贴板事件流转定义。

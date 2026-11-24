@@ -3,26 +3,40 @@
 //! 设计原理（Why）：会话循环运行在独立的异步任务中，驱动 IronRDP 的 ActiveStage
 //! 协议状态机。通过 `tokio::select!` 多路复用同时监听网络入站 PDU 与 UI 端入站操作，
 //! 实现双向零等待高吞吐响应，并控制单个循环轮次的时延。所有响应帧实时写回网络，
-//! 损伤矩形实时提取并更新瓦片帧，远端光标动态转换为系统光标。
+//! 损伤矩形实时提取并更新瓦片帧，双向剪贴板（CLIPRDR）协议实时交互，动态调整分辨率防抖保护。
 
-use crate::audio::AudioPlayer;
-use crate::clipboard::ClipboardManager;
+use crate::clipboard::CliprdrSyncContext;
+use crate::clipboard::text::encode_text_payload;
 use crate::error::RdpError;
 use crate::keyboard::KeyboardTranslator;
 use crate::pointer::{CursorUpdate, create_custom_cursor};
 use crate::session::channel::{MouseBtn, RdpInput, RdpOutput};
 use crate::session::connector::ErasedStream;
-use crate::settings::SessionConfig;
 use crate::tiles::TiledDesktopFrame;
+use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, FormatDataResponse};
+use ironrdp_cliprdr::{Client, Cliprdr};
 use ironrdp_connector::ConnectionResult;
+use ironrdp_core::IntoOwned;
 use ironrdp_input::{
     Database as InputDatabase, MouseButton, MousePosition, Operation, WheelRotations,
 };
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
 use ironrdp_tokio::{FramedWrite, TokioFramed, split_tokio_framed};
+use parking_lot::Mutex;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+
+/// 动态调整分辨率最小防抖冷却间隔（毫秒）。
+const RESIZE_DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
+
+/// 动态分辨率安全限制范围。
+const MIN_DESKTOP_WIDTH: u16 = 640;
+const MAX_DESKTOP_WIDTH: u16 = 4096;
+const MIN_DESKTOP_HEIGHT: u16 = 480;
+const MAX_DESKTOP_HEIGHT: u16 = 2560;
 
 /// 会话循环主运行器。
 pub struct SessionLoopRunner {
@@ -32,8 +46,8 @@ pub struct SessionLoopRunner {
     tiled_frame: TiledDesktopFrame,
     input_rx: mpsc::Receiver<RdpInput>,
     output_tx: mpsc::Sender<RdpOutput>,
-    _audio_player: AudioPlayer,
-    clipboard: ClipboardManager,
+    audio_muted: Arc<AtomicBool>,
+    cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
     keyboard: KeyboardTranslator,
     input_db: InputDatabase,
 }
@@ -43,7 +57,8 @@ impl SessionLoopRunner {
     pub fn new(
         framed: TokioFramed<ErasedStream>,
         conn_result: ConnectionResult,
-        config: &SessionConfig,
+        audio_muted: Arc<AtomicBool>,
+        cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
         input_rx: mpsc::Receiver<RdpInput>,
         output_tx: mpsc::Sender<RdpOutput>,
     ) -> Self {
@@ -68,11 +83,6 @@ impl SessionLoopRunner {
         }
         .build();
 
-        let audio_player = AudioPlayer::new();
-        if !config.audio {
-            audio_player.set_muted(true);
-        }
-
         Self {
             framed,
             active_stage,
@@ -80,8 +90,8 @@ impl SessionLoopRunner {
             tiled_frame: TiledDesktopFrame::default(),
             input_rx,
             output_tx,
-            _audio_player: audio_player,
-            clipboard: ClipboardManager::new(),
+            audio_muted,
+            cliprdr_context,
             keyboard: KeyboardTranslator::default(),
             input_db: InputDatabase::new(),
         }
@@ -100,13 +110,20 @@ impl SessionLoopRunner {
         let mut input_rx = self.input_rx;
         let output_tx = self.output_tx;
         let mut keyboard = self.keyboard;
-        let mut clipboard = self.clipboard;
         let mut input_db = self.input_db;
         let mut tiled_frame = self.tiled_frame;
         let mut active_stage = self.active_stage;
         let mut canvas = self.canvas;
+        let audio_muted = self.audio_muted;
+        let cliprdr_context = self.cliprdr_context;
+
+        let mut last_resize_at = Instant::now() - RESIZE_DEBOUNCE_INTERVAL;
+        let mut current_resolution = (width, height);
 
         loop {
+            // 同步检查并驱动 CLIPRDR 剪贴板事件
+            Self::drive_cliprdr_events(&mut active_stage, &mut writer, &cliprdr_context).await;
+
             tokio::select! {
                 // 1. 处理来自界面的用户输入指令
                 maybe_input = input_rx.recv() => {
@@ -114,57 +131,57 @@ impl SessionLoopRunner {
                         break;
                     };
 
-                    if matches!(input, RdpInput::Disconnect) {
-                        if let Ok(outputs) = active_stage.graceful_shutdown() {
-                            let _ = Self::flush_network_responses(&mut writer, &outputs).await;
+                    match input {
+                        RdpInput::Disconnect => {
+                            if let Ok(outputs) = active_stage.graceful_shutdown() {
+                                let _ = Self::flush_network_responses(&mut writer, &outputs).await;
+                            }
+                            break;
                         }
-                        break;
-                    }
-
-                    if let RdpInput::ClipboardText(text) = input {
-                        let _ = clipboard.update_local_text(text);
-                        continue;
-                    }
-
-                    if let RdpInput::Resize { width, height } = input {
-                        if let Some(res) = active_stage.encode_resize(
-                            u32::from(width),
-                            u32::from(height),
-                            None,
-                            None,
-                        ) {
-                            match res {
-                                Ok(response_frame) => {
-                                    if let Err(e) = writer.write_all(&response_frame).await {
-                                        log::warn!("写入动态重设分辨率响应帧失败: {e}");
+                        RdpInput::MuteAudio(muted) => {
+                            audio_muted.store(muted, Ordering::Relaxed);
+                            continue;
+                        }
+                        RdpInput::ClipboardText(text) => {
+                            Self::handle_local_clipboard_copy(
+                                &mut active_stage,
+                                &mut writer,
+                                &cliprdr_context,
+                                text,
+                            ).await;
+                            continue;
+                        }
+                        RdpInput::Resize { width, height } => {
+                            let clamped_w = width.clamp(MIN_DESKTOP_WIDTH, MAX_DESKTOP_WIDTH);
+                            let clamped_h = height.clamp(MIN_DESKTOP_HEIGHT, MAX_DESKTOP_HEIGHT);
+                            if (clamped_w, clamped_h) != current_resolution
+                                && last_resize_at.elapsed() >= RESIZE_DEBOUNCE_INTERVAL
+                            {
+                                last_resize_at = Instant::now();
+                                current_resolution = (clamped_w, clamped_h);
+                                Self::handle_resize(&mut active_stage, &mut writer, clamped_w, clamped_h).await;
+                            }
+                            continue;
+                        }
+                        other => {
+                            let ops = Self::convert_input_to_operations(other, &mut keyboard);
+                            if ops.is_empty() {
+                                continue;
+                            }
+                            let fastpath_events = input_db.apply(ops);
+                            if !fastpath_events.is_empty() {
+                                match active_stage.process_fastpath_input(&mut canvas, &fastpath_events) {
+                                    Ok(outputs) => {
+                                        if Self::flush_network_responses(&mut writer, &outputs).await.is_err()
+                                            || Self::notify_ui_outputs(&outputs, &output_tx).await
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!("处理 FastPath 输入异常: {e}");
                                     }
                                 }
-                                Err(e) => {
-                                    log::warn!("编码动态重设分辨率失败: {e}");
-                                }
-                            }
-                        }
-                        continue;
-                    }
-
-                    let ops = Self::convert_input_to_operations(input, &mut keyboard);
-                    if ops.is_empty() {
-                        continue;
-                    }
-
-                    let fastpath_events = input_db.apply(ops);
-                    if !fastpath_events.is_empty() {
-                        match active_stage.process_fastpath_input(&mut canvas, &fastpath_events) {
-                            Ok(outputs) => {
-                                if Self::flush_network_responses(&mut writer, &outputs).await.is_err() {
-                                    break;
-                                }
-                                if Self::notify_ui_outputs(&outputs, &output_tx).await {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                log::warn!("处理 FastPath 输入异常: {e}");
                             }
                         }
                     }
@@ -176,17 +193,15 @@ impl SessionLoopRunner {
                         Ok((action, payload)) => {
                             match active_stage.process(&mut canvas, action, &payload, None) {
                                 Ok(outputs) => {
-                                    if Self::flush_network_responses(&mut writer, &outputs).await.is_err() {
-                                        break;
-                                    }
-                                    if Self::notify_ui_outputs(&outputs, &output_tx).await {
+                                    if Self::flush_network_responses(&mut writer, &outputs).await.is_err()
+                                        || Self::notify_ui_outputs(&outputs, &output_tx).await
+                                    {
                                         break;
                                     }
 
-                                    // 提取最新损伤矩形并提交瓦片更新
+                                    // 提取最新损伤矩形并提交增量瓦片更新
                                     let damages = active_stage.take_damage_regions();
-                                    if !damages.is_empty() {
-                                        tiled_frame.update(&canvas, &damages);
+                                    if !damages.is_empty() && tiled_frame.update(&canvas, &damages) {
                                         let frame_arc = Arc::new(tiled_frame.clone());
                                         let _ = output_tx.send(RdpOutput::Frame(frame_arc)).await;
                                     }
@@ -205,6 +220,88 @@ impl SessionLoopRunner {
                             break;
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// 驱动 CLIPRDR 剪贴板事件流转（拉取远端数据或应答远端数据请求）。
+    async fn drive_cliprdr_events<W: FramedWrite>(
+        active_stage: &mut ActiveStage,
+        writer: &mut W,
+        context: &Arc<Mutex<CliprdrSyncContext>>,
+    ) {
+        let (need_paste, pending_format) = {
+            let mut ctx = context.lock();
+            let paste = ctx.pending_paste_text;
+            ctx.pending_paste_text = false;
+            let format = ctx.pending_data_request.take();
+            (paste, format)
+        };
+
+        if need_paste
+            && let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
+            && let Ok(messages) = cliprdr.initiate_paste(ClipboardFormatId::CF_UNICODETEXT)
+            && let Ok(bytes) =
+                active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
+        {
+            let _ = writer.write_all(&bytes).await;
+        }
+
+        if let Some(_format) = pending_format {
+            let local_text = context.lock().local_text.clone();
+            let response = if let Some(text) = local_text {
+                FormatDataResponse::new_data(encode_text_payload(&text)).into_owned()
+            } else {
+                FormatDataResponse::new_error().into_owned()
+            };
+
+            if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
+                && let Ok(messages) = cliprdr.submit_format_data(response)
+                && let Ok(bytes) =
+                    active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
+            {
+                let _ = writer.write_all(&bytes).await;
+            }
+        }
+    }
+
+    /// 处理本地剪贴板更新并向远端通告。
+    async fn handle_local_clipboard_copy<W: FramedWrite>(
+        active_stage: &mut ActiveStage,
+        writer: &mut W,
+        context: &Arc<Mutex<CliprdrSyncContext>>,
+        text: String,
+    ) {
+        context.lock().local_text = Some(text);
+        let formats = [ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)];
+        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
+            && let Ok(messages) = cliprdr.initiate_copy(&formats)
+            && let Ok(bytes) =
+                active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
+        {
+            let _ = writer.write_all(&bytes).await;
+        }
+    }
+
+    /// 执行动态重设分辨率。
+    async fn handle_resize<W: FramedWrite>(
+        active_stage: &mut ActiveStage,
+        writer: &mut W,
+        width: u16,
+        height: u16,
+    ) {
+        if let Some(res) =
+            active_stage.encode_resize(u32::from(width), u32::from(height), None, None)
+        {
+            match res {
+                Ok(response_frame) => {
+                    if let Err(e) = writer.write_all(&response_frame).await {
+                        log::warn!("写入动态重设分辨率响应帧失败: {e}");
+                    }
+                }
+                Err(e) => {
+                    log::warn!("编码动态重设分辨率失败: {e}");
                 }
             }
         }

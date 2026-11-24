@@ -34,6 +34,8 @@ pub enum RdpInput {
     ReleaseAllKeys,
     /// 请求动态重设桌面分辨率。
     Resize { width: u16, height: u16 },
+    /// 设置音频静音状态。
+    MuteAudio(bool),
     /// 本地剪贴板文本更新。
     ClipboardText(String),
     /// 请求断开会话并退出。

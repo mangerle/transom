@@ -88,6 +88,10 @@ pub struct TiledDesktopFrame {
     pub rows: u32,
     /// 瓦片渲染图像句柄列表（按行优先排序）。
     pub tiles: Vec<Arc<RenderImage>>,
+    /// 帧单调递增序列号。
+    pub seq: u64,
+    /// 本次更新受到影响的瓦片网格索引列表。
+    pub dirty_indices: Vec<usize>,
 }
 
 impl TiledDesktopFrame {
@@ -95,7 +99,8 @@ impl TiledDesktopFrame {
     ///
     /// 优化核心：若分辨率未发生变化，仅重新采样并生成标记为脏的瓦片，
     /// 干净瓦片直接继承已有 `Arc<RenderImage>` 引用，避免昂贵的 GPU 纹理再分配。
-    pub fn update(&mut self, canvas: &DecodedImage, dirty_rects: &[InclusiveRectangle]) {
+    /// 若计算后无任何实际受影响瓦片，返回 false 并跳过后续开销。
+    pub fn update(&mut self, canvas: &DecodedImage, dirty_rects: &[InclusiveRectangle]) -> bool {
         let width = canvas.width();
         let height = canvas.height();
         let (cols, rows) = compute_grid_dimensions(width, height);
@@ -115,6 +120,12 @@ impl TiledDesktopFrame {
             compute_dirty_mask(width, height, dirty_rects)
         };
 
+        let has_any_dirty = dirty_mask.iter().any(|&d| d);
+        if !has_any_dirty && !is_dimension_changed {
+            return false;
+        }
+
+        let mut dirty_indices = Vec::new();
         let mut new_tiles = Vec::with_capacity((cols * rows) as usize);
         for r in 0..rows {
             for c in 0..cols {
@@ -126,11 +137,15 @@ impl TiledDesktopFrame {
                 } else {
                     let tile_image = extract_tile_image(canvas, c, r);
                     new_tiles.push(Arc::new(tile_image));
+                    dirty_indices.push(index);
                 }
             }
         }
 
         self.tiles = new_tiles;
+        self.dirty_indices = dirty_indices;
+        self.seq = self.seq.wrapping_add(1);
+        true
     }
 }
 

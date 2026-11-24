@@ -5,15 +5,22 @@
 //! 步骤施加显式超时保护，防止远端黑洞导致协程永久泄漏；按需挂载 RDPSND 等静态通道；
 //! 若任意步骤失败，立即将底层错误转换为具体的 `RdpError`。
 
+use crate::audio::TransomAudioBackend;
+use crate::clipboard::{CliprdrSyncContext, TransomCliprdrBackend};
 use crate::error::RdpError;
+use crate::session::channel::RdpOutput;
 use crate::settings::SessionConfig;
 use crate::transport::connect_stream;
 use ironrdp_connector::{ClientConnector, ConnectionResult, ServerName};
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{TokioFramed, connect_begin, connect_finalize, mark_as_upgraded};
+use parking_lot::Mutex;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::mpsc;
 
 /// 单步握手与安全协商超时限制（秒）。
 const DEFAULT_HANDSHAKE_TIMEOUT_SECS: u64 = 15;
@@ -29,11 +36,14 @@ impl<T: AsyncRead + AsyncWrite> AsyncReadWrite for T {}
 pub struct EstablishedConnection {
     pub framed: TokioFramed<ErasedStream>,
     pub result: ConnectionResult,
+    pub audio_muted: Arc<AtomicBool>,
+    pub cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
 }
 
 /// 执行完整的 RDP 连接与认证序列。
 pub async fn establish_connection(
     config: &SessionConfig,
+    output_tx: &mpsc::Sender<RdpOutput>,
 ) -> Result<EstablishedConnection, RdpError> {
     // 1. 建立基础 TCP 传输流
     let stream = connect_stream(&config.host, config.port).await?;
@@ -42,8 +52,17 @@ pub async fn establish_connection(
         source: e,
     })?;
 
+    let audio_muted = Arc::new(AtomicBool::new(!config.audio));
+    let cliprdr_context = Arc::new(Mutex::new(CliprdrSyncContext::default()));
+
     let mut framed: TokioFramed<ErasedStream> = TokioFramed::new(Box::new(stream));
-    let mut connector = build_client_connector(config, local_addr);
+    let mut connector = build_client_connector(
+        config,
+        local_addr,
+        audio_muted.clone(),
+        cliprdr_context.clone(),
+        output_tx.clone(),
+    );
 
     // 2. 执行 connect_begin 握手
     let should_upgrade = tokio::time::timeout(
@@ -97,19 +116,36 @@ pub async fn establish_connection(
         detail: e.to_string(),
     })?;
 
-    Ok(EstablishedConnection { framed, result })
+    Ok(EstablishedConnection {
+        framed,
+        result,
+        audio_muted,
+        cliprdr_context,
+    })
 }
 
 /// 构建包含能力标志与静态通道的客户端连接器。
-fn build_client_connector(config: &SessionConfig, local_addr: SocketAddr) -> ClientConnector {
+fn build_client_connector(
+    config: &SessionConfig,
+    local_addr: SocketAddr,
+    audio_muted: Arc<AtomicBool>,
+    cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
+    output_tx: mpsc::Sender<RdpOutput>,
+) -> ClientConnector {
     let rdp_config = config.to_ironrdp_config();
     let mut connector = ClientConnector::new(rdp_config, local_addr);
 
     // 若启用了音频重定向，挂载 RDPSND 静态通道
     if config.audio {
-        let backend = ironrdp_rdpsnd_native::cpal::RdpsndBackend::new();
+        let backend = TransomAudioBackend::new(audio_muted);
         connector =
             connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(Box::new(backend)));
+    }
+
+    // 若启用了剪贴板重定向，挂载 CLIPRDR 静态通道
+    if config.clipboard {
+        let backend = TransomCliprdrBackend::new(cliprdr_context, output_tx);
+        connector = connector.with_static_channel(ironrdp_cliprdr::Cliprdr::new(Box::new(backend)));
     }
 
     connector

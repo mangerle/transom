@@ -256,6 +256,7 @@ impl RdpView {
                 Box::new(move |_, _, cx| {
                     view.update(cx, |this, cx| {
                         this.is_muted = !this.is_muted;
+                        this.send_input(RdpInput::MuteAudio(this.is_muted));
                         cx.notify();
                     });
                 })

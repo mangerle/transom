@@ -11,6 +11,7 @@ use ironrdp_pdu::rdp::capability_sets::{
 };
 use ironrdp_pdu::rdp::client_info::{CompressionType, PerformanceFlags, TimezoneInfo};
 use transom_core::{RdpColorDepth, RdpConnection, RdpPerformance, RdpSecurity};
+use zeroize::Zeroize;
 
 /// RDP 客户端会话启动运行期配置。
 #[derive(Debug, Clone)]
@@ -67,6 +68,11 @@ impl SessionConfig {
                 .map(|size| (size.width, size.height))
                 .unwrap_or(initial_size),
         }
+    }
+
+    /// 安全擦除内存中的密码字符串。
+    pub fn clear_password(&mut self) {
+        self.password.zeroize();
     }
 
     /// 构造 IronRDP 连接器配置。
