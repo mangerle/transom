@@ -20,6 +20,7 @@ use super::http_support::{
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_REQUEST_TIMEOUT_SECONDS: u64 = 600;
 
 /// 认证阶段需要的完整请求上下文；集中传递避免参数列表继续膨胀。
 struct AuthRequest<'a> {
@@ -221,6 +222,11 @@ async fn send_http(
     let mut builder = client
         .request(method, url.clone())
         .body(std::mem::take(&mut body));
+    if request.timeout_seconds > 0 {
+        builder = builder.timeout(Duration::from_secs(
+            request.timeout_seconds.min(MAX_REQUEST_TIMEOUT_SECONDS),
+        ));
+    }
     for header in &headers {
         builder = builder.header(header_name(header)?, header_value(header)?);
     }
@@ -295,6 +301,11 @@ async fn send_grpc(
         .post(endpoint.clone())
         .version(Version::HTTP_2)
         .body(framed);
+    if request.timeout_seconds > 0 {
+        builder = builder.timeout(Duration::from_secs(
+            request.timeout_seconds.min(MAX_REQUEST_TIMEOUT_SECONDS),
+        ));
+    }
     for header in &headers {
         builder = builder.header(header_name(header)?, header_value(header)?);
     }
@@ -519,6 +530,9 @@ mod tests {
             protocol: ApiProtocol::Http,
             method: super::super::ApiMethod::Get,
             url: format!("http://{address}/health"),
+            description: String::new(),
+            timeout_seconds: 0,
+            query: Vec::new(),
             headers: Vec::new(),
             body: String::new(),
             graphql_variables: "{}".to_string(),

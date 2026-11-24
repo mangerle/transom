@@ -6,16 +6,21 @@
 //! 并排与关闭模型，不引入第二个主界面状态源。
 
 mod actions;
+mod kv_editor;
 mod sidebar;
 mod sidebar_view;
 mod workspace;
 mod workspace_actions;
 mod workspace_advanced_view;
+mod workspace_body_view;
 mod workspace_config;
+mod workspace_editor_state;
 mod workspace_editors;
+mod workspace_kv;
 mod workspace_request_view;
 mod workspace_response_view;
 mod workspace_tree_view;
+mod workspace_types;
 mod workspace_view;
 
 pub(crate) use actions::{

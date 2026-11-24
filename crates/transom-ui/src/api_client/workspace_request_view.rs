@@ -1,10 +1,10 @@
-//! API 请求编辑器：请求工具条、协议输入和请求级页签。
+//! API 请求编辑器：方法与环境地址栏、请求页签和协议主体。
 
-use super::workspace_advanced_view::{render_auxiliary_panel, render_workspace_toolbar};
+use super::workspace_body_view::render_body;
 use super::workspace_view::ApiWorkspaceParams;
 use super::{ApiRequestTab, ApiWorkspace};
 use crate::palette::Palette;
-use crate::theme::tokens::{rem_px, size, space, typography};
+use crate::theme::tokens::{size, space};
 use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
@@ -13,68 +13,114 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::*;
-use transom_api::{ApiAuth, ApiMethod, ApiProtocol};
-use transom_ui_icons::{AppIcon, AppIconElement, FileTypeIcon, UiIcon};
+use transom_api::{ApiAuth, ApiEnvironmentId, ApiMethod, ApiProtocol};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-const REQUEST_TABS: [ApiRequestTab; 4] = [
-    ApiRequestTab::Body,
-    ApiRequestTab::Headers,
-    ApiRequestTab::Auth,
-    ApiRequestTab::Assertions,
-];
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RequestMode {
+    Http(ApiMethod),
+    GraphQl,
+    Grpc,
+    WebSocket,
+}
+
+impl RequestMode {
+    fn current(protocol: ApiProtocol, method: ApiMethod) -> Self {
+        match protocol {
+            ApiProtocol::Http => Self::Http(method),
+            ApiProtocol::GraphQl => Self::GraphQl,
+            ApiProtocol::Grpc => Self::Grpc,
+            ApiProtocol::WebSocket => Self::WebSocket,
+        }
+    }
+
+    fn pair(&self) -> (ApiProtocol, ApiMethod) {
+        match self {
+            Self::Http(method) => (ApiProtocol::Http, *method),
+            Self::GraphQl => (ApiProtocol::GraphQl, ApiMethod::Post),
+            Self::Grpc => (ApiProtocol::Grpc, ApiMethod::Post),
+            Self::WebSocket => (ApiProtocol::WebSocket, ApiMethod::Get),
+        }
+    }
+}
 
 pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view;
-    let method_options = ApiMethod::ALL
+    let current_mode = RequestMode::current(params.protocol, params.method);
+    let mut mode_options = ApiMethod::ALL
         .into_iter()
-        .map(|method| (method, method.as_str().to_string()))
-        .collect();
-    let method = dropdown(
-        "api-request-method",
-        params.method,
-        method_options,
-        |this: &mut ApiWorkspace, method, _, cx| this.set_method(method, cx),
+        .map(|method| (RequestMode::Http(method), method.as_str().to_string()))
+        .collect::<Vec<_>>();
+    mode_options.extend([
+        (RequestMode::GraphQl, "GraphQL".to_string()),
+        (
+            RequestMode::Grpc,
+            rust_i18n::t!("api.protocol.grpc_raw").to_string(),
+        ),
+        (RequestMode::WebSocket, "WebSocket".to_string()),
+    ]);
+    let mode = dropdown(
+        "api-request-mode",
+        current_mode,
+        mode_options,
+        |this: &mut ApiWorkspace, mode, _, cx| {
+            let (protocol, method) = mode.pair();
+            this.set_request_mode(protocol, method, cx);
+        },
         view.clone(),
     );
-    let view_for_save = view.clone();
-    let view_for_send = view.clone();
-    let view_for_delete = view.clone();
-    let send_icon = if params.protocol == ApiProtocol::WebSocket {
-        AppIcon::Ui(UiIcon::FETCH)
-    } else {
-        AppIcon::Ui(UiIcon::RUN)
-    };
+    let environment_options = params
+        .project
+        .environments
+        .iter()
+        .map(|environment| (Some(environment.id), environment.name.clone()))
+        .collect::<Vec<_>>();
+    let environment = dropdown(
+        "api-request-environment",
+        params.environment_id,
+        environment_options,
+        |this: &mut ApiWorkspace, environment_id: Option<ApiEnvironmentId>, window, cx| {
+            if let Some(environment_id) = environment_id {
+                this.set_environment(environment_id, window, cx);
+            }
+        },
+        view.clone(),
+    );
+    let send_view = view.clone();
+    let paste_view = view.clone();
 
     let mut content = v_flex()
         .size_full()
         .min_h_0()
         .overflow_hidden()
         .bg(p.background)
-        .child(render_workspace_toolbar(params, p))
+        .px(rems(space::SM))
+        .pt(rems(space::SM))
         .child(
             h_flex()
                 .h(rems(size::LARGE_HEADER_HEIGHT))
-                .px(rems(space::SM))
+                .w_full()
+                .px(rems(space::XS))
                 .gap(rems(space::XS))
                 .items_center()
+                .rounded(p.radius.lg)
+                .border_1()
                 .border_color(p.divider(p.border))
-                .border_b_1()
-                .child(method)
-                .child(Input::new(params.request_url).flex_1().min_w_0())
-                .child(
-                    action_button(
-                        "api-request-save",
-                        AppIcon::Ui(UiIcon::SAVE),
-                        rust_i18n::t!("api.request.save").to_string(),
-                    )
-                    .on_click(move |_, _, cx| {
-                        view_for_save.update(cx, |this, cx| this.save_project(cx));
-                    }),
-                )
+                .child(mode)
+                .child(divider(p))
+                .child(environment)
+                .child(Input::new(params.request_url).flex_1().min_w_0().on_paste(
+                    move |clipboard, window, cx| {
+                        let Some(text) = clipboard.text() else {
+                            return false;
+                        };
+                        paste_view.update(cx, |this, cx| this.import_curl(&text, window, cx))
+                    },
+                ))
                 .child(
                     action_button(
                         "api-request-send",
-                        send_icon,
+                        AppIcon::Ui(UiIcon::FETCH),
                         if params.protocol == ApiProtocol::WebSocket {
                             rust_i18n::t!("api.request.websocket_connect").to_string()
                         } else {
@@ -84,66 +130,20 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                     .primary()
                     .disabled(params.selected_request.is_none() || params.sending)
                     .on_click(move |_, window, cx| {
-                        view_for_send.update(cx, |this, cx| this.send_request(window, cx));
-                    }),
-                )
-                .child(
-                    IconButton::new(
-                        "api-request-delete",
-                        AppIcon::Ui(UiIcon::DELETE),
-                        rust_i18n::t!("api.request.delete").to_string(),
-                    )
-                    .size(IconButtonSize::Compact)
-                    .render()
-                    .disabled(params.selected_request.is_none())
-                    .on_click(move |_, window, cx| {
-                        view_for_delete.update(cx, |this, cx| this.delete_selected(window, cx));
+                        send_view.update(cx, |this, cx| this.send_request(window, cx));
                     }),
                 ),
-        )
-        .child(
-            h_flex()
-                .px(rems(space::SM))
-                .py(rems(space::XS))
-                .gap(rems(space::SM))
-                .items_center()
-                .child(
-                    div()
-                        .w(rems(7.0))
-                        .text_color(p.muted_foreground)
-                        .text_size(rems(typography::CAPTION))
-                        .child(rust_i18n::t!("api.request.name").to_string()),
-                )
-                .child(Input::new(params.request_name).flex_1().min_w_0()),
         );
 
     if let Some(error) = params.error {
-        content = content.child(
-            div()
-                .mx(rems(space::SM))
-                .mt(rems(space::SM))
-                .p(rems(space::SM))
-                .rounded(p.radius.md)
-                .bg(p.surface.control_selected)
-                .text_color(p.danger)
-                .child(error.to_string()),
-        );
+        content = content.child(message_bar(error.to_string(), p.danger, p));
     }
     if let Some(notice) = params.notice {
-        content = content.child(
-            div()
-                .mx(rems(space::SM))
-                .mt(rems(space::SM))
-                .p(rems(space::SM))
-                .rounded(p.radius.md)
-                .bg(p.surface.control_selected)
-                .text_color(p.success)
-                .child(notice.to_string()),
-        );
+        content = content.child(message_bar(notice.to_string(), p.success, p));
     }
 
     let editor = if params.auxiliary_section.is_some() {
-        render_auxiliary_panel(params, p)
+        super::workspace_advanced_view::render_auxiliary_panel(params, p)
     } else if params.selected_request.is_some() {
         render_tabbed_request(params, p)
     } else {
@@ -154,31 +154,73 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
 
 fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view.clone();
-    let selected = REQUEST_TABS
+    let ratio_view = params.view.clone();
+    let save_view = params.view.clone();
+    let tabs = visible_tabs(params);
+    let selected = tabs
         .iter()
         .position(|tab| *tab == params.request_tab)
         .unwrap_or(0);
-    let tabs = REQUEST_TABS.into_iter().map(|tab| request_tab(tab, params));
+    let labels = tabs
+        .iter()
+        .copied()
+        .map(|tab| request_tab(tab, params))
+        .collect::<Vec<_>>();
+    let click_tabs = tabs.clone();
     let bar = TabBar::new("api-request-tabs")
         .underline()
         .small()
         .w_full()
         .selected_index(selected)
-        .children(tabs)
+        .children(labels)
+        .suffix(
+            h_flex()
+                .gap(rems(space::XXS))
+                .items_center()
+                .child(dropdown(
+                    "api-request-ratio",
+                    params.editor_ratio,
+                    vec![
+                        (0.3, "30%".to_string()),
+                        (0.5, "50%".to_string()),
+                        (0.7, "70%".to_string()),
+                    ],
+                    |this: &mut ApiWorkspace, ratio, window, cx| {
+                        this.set_editor_ratio(ratio, window, cx);
+                    },
+                    ratio_view,
+                ))
+                .child(
+                    IconButton::new(
+                        "api-request-save",
+                        AppIcon::Ui(UiIcon::SAVE),
+                        rust_i18n::t!("api.request.save").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        save_view.update(cx, |this, cx| this.save_project(cx));
+                    }),
+                )
+                .child(super::workspace_advanced_view::render_project_actions_menu(
+                    params,
+                )),
+        )
         .on_click(move |index, _, cx| {
-            if let Some(tab) = REQUEST_TABS.get(*index).copied() {
+            if let Some(tab) = click_tabs.get(*index).copied() {
                 view.update(cx, |this, cx| this.set_request_tab(tab, cx));
             }
         });
-    let content = match params.request_tab {
+    let content = match tabs.get(selected).copied().unwrap_or(ApiRequestTab::Query) {
+        ApiRequestTab::Query => params.query_editor.clone().into_any_element(),
         ApiRequestTab::Body => render_body(params, p),
-        ApiRequestTab::Headers => {
-            render_text_panel("api-request-headers", params.request_headers.clone(), p)
-        }
+        ApiRequestTab::Headers => params.header_editor.clone().into_any_element(),
         ApiRequestTab::Auth => render_text_panel("api-request-auth", params.auth.clone(), p),
         ApiRequestTab::Assertions => {
             render_text_panel("api-request-assertions", params.assertions.clone(), p)
         }
+        ApiRequestTab::Settings => render_settings(params, p),
+        ApiRequestTab::Docs => render_text_panel("api-request-docs", params.docs.clone(), p),
     };
     v_flex()
         .flex_1()
@@ -195,103 +237,78 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         .into_any_element()
 }
 
+fn visible_tabs(params: &ApiWorkspaceParams<'_>) -> Vec<ApiRequestTab> {
+    let mut tabs = Vec::with_capacity(5);
+    if params.protocol == ApiProtocol::Http || params.protocol == ApiProtocol::GraphQl {
+        tabs.push(ApiRequestTab::Query);
+    }
+    if params.protocol != ApiProtocol::Http || params.method.has_body() {
+        tabs.push(ApiRequestTab::Body);
+    }
+    tabs.push(ApiRequestTab::Headers);
+    tabs.push(ApiRequestTab::Auth);
+    tabs.push(ApiRequestTab::Assertions);
+    tabs.push(ApiRequestTab::Settings);
+    tabs.push(ApiRequestTab::Docs);
+    tabs
+}
+
 fn request_tab(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> Tab {
     let request = params.request;
-    let (label, icon) = match tab {
-        ApiRequestTab::Body => (
-            match params.protocol {
-                ApiProtocol::Http => rust_i18n::t!("api.request.body").to_string(),
-                ApiProtocol::GraphQl => rust_i18n::t!("api.request.graphql_query").to_string(),
-                ApiProtocol::Grpc => rust_i18n::t!("api.request.grpc_message").to_string(),
-                ApiProtocol::WebSocket => {
-                    rust_i18n::t!("api.request.websocket_messages").to_string()
-                }
-            },
-            match params.protocol {
-                ApiProtocol::Http => AppIcon::Ui(UiIcon::EDIT),
-                ApiProtocol::GraphQl => AppIcon::FileType(FileTypeIcon::GRAPHQL),
-                ApiProtocol::Grpc => AppIcon::Ui(UiIcon::DEPENDENCIES),
-                ApiProtocol::WebSocket => AppIcon::Ui(UiIcon::LIGHTNING),
-            },
-        ),
+    let label = match tab {
+        ApiRequestTab::Query => {
+            let count = request.map_or(0, |request| {
+                request
+                    .query
+                    .iter()
+                    .filter(|param| param.enabled && !param.name.trim().is_empty())
+                    .count()
+            });
+            labeled(rust_i18n::t!("api.request.query").to_string(), count)
+        }
+        ApiRequestTab::Body => match params.protocol {
+            ApiProtocol::Http => rust_i18n::t!("api.request.body").to_string(),
+            ApiProtocol::GraphQl => rust_i18n::t!("api.request.graphql_query").to_string(),
+            ApiProtocol::Grpc => rust_i18n::t!("api.request.grpc_message").to_string(),
+            ApiProtocol::WebSocket => rust_i18n::t!("api.request.websocket_messages").to_string(),
+        },
         ApiRequestTab::Headers => {
             let count = request.map_or(0, |request| {
                 request
                     .headers
                     .iter()
-                    .filter(|header| header.enabled)
+                    .filter(|header| header.enabled && !header.name.trim().is_empty())
                     .count()
             });
-            (
-                format!("{} ({count})", rust_i18n::t!("api.request.headers"),),
-                AppIcon::Ui(UiIcon::LIST_FILES),
-            )
+            labeled(rust_i18n::t!("api.request.headers").to_string(), count)
         }
         ApiRequestTab::Auth => {
             let count = request.map_or(0, |request| {
                 usize::from(!matches!(request.auth, ApiAuth::None))
             });
-            (
-                format!("{} ({count})", rust_i18n::t!("api.request.auth")),
-                AppIcon::Ui(UiIcon::KEY),
-            )
+            labeled(rust_i18n::t!("api.request.auth").to_string(), count)
         }
         ApiRequestTab::Assertions => {
             let count = request.map_or(0, |request| request.assertions.len());
-            (
-                format!("{} ({count})", rust_i18n::t!("api.request.assertions")),
-                AppIcon::Ui(UiIcon::CHECK),
-            )
+            labeled(rust_i18n::t!("api.request.assertions").to_string(), count)
         }
+        ApiRequestTab::Settings => rust_i18n::t!("api.request.settings").to_string(),
+        ApiRequestTab::Docs => rust_i18n::t!("api.request.docs").to_string(),
     };
-    Tab::new()
-        .label(label)
-        .prefix(AppIconElement::new(icon).xsmall())
+    Tab::new().label(label)
 }
 
-fn render_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    match params.protocol {
-        ApiProtocol::Http => render_text_panel("api-request-body", params.request_body.clone(), p),
-        ApiProtocol::GraphQl => render_graphql_body(params, p),
-        ApiProtocol::Grpc => render_grpc_body(params, p),
-        ApiProtocol::WebSocket => render_websocket_body(params, p),
+fn labeled(name: String, count: usize) -> String {
+    if count == 0 {
+        name
+    } else {
+        format!("{name} ({count})")
     }
 }
 
-fn render_graphql_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
+fn render_settings(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     v_flex()
-        .id("api-graphql-body")
-        .flex_1()
-        .min_h_0()
-        .w_full()
-        .p(rems(space::SM))
-        .gap(rems(space::XS))
-        .child(field_label(
-            rust_i18n::t!("api.request.graphql_query").to_string(),
-            p,
-        ))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(Textarea::new(params.request_body).size_full()),
-        )
-        .child(field_label(
-            rust_i18n::t!("api.request.graphql_variables").to_string(),
-            p,
-        ))
-        .child(
-            div()
-                .h(rem_px(8.0, params.rem))
-                .min_h_0()
-                .child(Textarea::new(params.graphql_variables).size_full()),
-        )
-        .into_any_element()
-}
-
-fn render_grpc_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    v_flex()
-        .id("api-grpc-body")
+        .id("api-request-settings")
         .flex_1()
         .min_h_0()
         .w_full()
@@ -303,114 +320,23 @@ fn render_grpc_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
                 .items_center()
                 .child(
                     div()
-                        .w(rems(7.0))
+                        .w(rems(9.0))
                         .text_color(p.muted_foreground)
-                        .text_size(rems(typography::CAPTION))
-                        .child(rust_i18n::t!("api.request.grpc_service").to_string()),
+                        .child(rust_i18n::t!("api.request.timeout").to_string()),
                 )
-                .child(Input::new(params.grpc_service).flex_1().min_w_0())
-                .child(Input::new(params.grpc_method).w(rems(12.0))),
-        )
-        .child(field_label(
-            rust_i18n::t!("api.request.grpc_message").to_string(),
-            p,
-        ))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(Textarea::new(params.request_body).size_full()),
-        )
-        .into_any_element()
-}
-
-fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let connect_view = params.view.clone();
-    let send_view = params.view.clone();
-    let close_view = params.view.clone();
-    v_flex()
-        .id("api-websocket-body")
-        .flex_1()
-        .min_h_0()
-        .w_full()
-        .p(rems(space::SM))
-        .gap(rems(space::XS))
-        .child(
-            h_flex()
-                .gap(rems(space::XS))
-                .items_center()
-                .child(
-                    AppIconElement::new(AppIcon::Ui(if params.ws_connected {
-                        UiIcon::CHECK
-                    } else {
-                        UiIcon::WARNING
-                    }))
-                    .xsmall(),
-                )
+                .child(Input::new(params.timeout).w(rems(10.0)))
                 .child(
                     div()
-                        .text_color(if params.ws_connected {
-                            p.success
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(if params.ws_connected {
-                            rust_i18n::t!("api.websocket.connected").to_string()
-                        } else {
-                            rust_i18n::t!("api.websocket.not_connected").to_string()
-                        }),
-                )
-                .child(div().flex_1())
-                .child(
-                    action_button(
-                        "api-ws-connect",
-                        AppIcon::Ui(UiIcon::FETCH),
-                        rust_i18n::t!("api.request.websocket_connect").to_string(),
-                    )
-                    .on_click(move |_, window, cx| {
-                        connect_view.update(cx, |this, cx| this.connect_websocket(window, cx));
-                    }),
-                )
-                .child(
-                    action_button(
-                        "api-ws-send",
-                        AppIcon::Ui(UiIcon::RUN),
-                        rust_i18n::t!("api.request.websocket_send").to_string(),
-                    )
-                    .primary()
-                    .disabled(!params.ws_connected)
-                    .on_click(move |_, window, cx| {
-                        send_view.update(cx, |this, cx| this.send_websocket_text(window, cx));
-                    }),
-                )
-                .child(
-                    IconButton::new(
-                        "api-ws-close",
-                        AppIcon::Ui(UiIcon::CLOSE),
-                        rust_i18n::t!("api.request.websocket_close").to_string(),
-                    )
-                    .size(IconButtonSize::Compact)
-                    .render()
-                    .disabled(!params.ws_connected)
-                    .on_click(move |_, _, cx| {
-                        close_view.update(cx, |this, cx| this.close_websocket(cx));
-                    }),
+                        .flex_1()
+                        .text_color(p.muted_foreground)
+                        .text_size(rems(crate::theme::tokens::typography::CAPTION))
+                        .child(rust_i18n::t!("api.request.timeout_hint").to_string()),
                 ),
-        )
-        .child(field_label(
-            rust_i18n::t!("api.request.websocket_input").to_string(),
-            p,
-        ))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(Textarea::new(params.websocket_input).size_full()),
         )
         .into_any_element()
 }
 
-fn render_text_panel(
+pub(super) fn render_text_panel(
     id: &'static str,
     state: Entity<gpui_kit::component::input::TextareaState>,
     p: &Palette,
@@ -440,11 +366,22 @@ fn render_empty_request(p: &Palette) -> AnyElement {
         .into_any_element()
 }
 
-fn field_label(label: String, p: &Palette) -> AnyElement {
+fn message_bar(message: String, color: Hsla, p: &Palette) -> AnyElement {
     div()
-        .pb(rems(space::XXS))
-        .text_color(p.muted_foreground)
-        .text_size(rems(typography::CAPTION))
-        .child(label)
+        .mx(rems(space::SM))
+        .mt(rems(space::SM))
+        .p(rems(space::SM))
+        .rounded(p.radius.md)
+        .bg(p.surface.control_selected)
+        .text_color(color)
+        .child(message)
+        .into_any_element()
+}
+
+fn divider(p: &Palette) -> AnyElement {
+    div()
+        .w(px(1.0))
+        .h(rems(1.5))
+        .bg(p.divider(p.border))
         .into_any_element()
 }

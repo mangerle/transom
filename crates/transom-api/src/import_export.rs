@@ -107,6 +107,7 @@ fn push_curl_header(request: &mut ApiRequest, text: &str) -> Result<(), AppError
     request.headers.push(ApiHeader {
         name: name.to_string(),
         value: value.trim().to_string(),
+        description: String::new(),
         enabled: true,
     });
     Ok(())
@@ -185,6 +186,7 @@ fn parse_postman_request(
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .to_string(),
+                description: String::new(),
                 enabled: !header
                     .get("disabled")
                     .and_then(Value::as_bool)

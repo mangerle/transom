@@ -329,15 +329,45 @@ api:
     url_placeholder:
       en: 'https://api.example.com/health'
       zh-CN: 'https://api.example.com/health'
+    parameter_name:
+      en: Name
+      zh-CN: 名称
+    parameter_value:
+      en: Value
+      zh-CN: 值
+    parameter_description:
+      en: Description
+      zh-CN: 说明
+    query_name_placeholder:
+      en: Add name…
+      zh-CN: 添加名称…
+    header_name_placeholder:
+      en: Header name
+      zh-CN: Header 名称
+    query_value_placeholder:
+      en: Value
+      zh-CN: 值
+    request_url_placeholder:
+      en: Enter a URL or paste a cURL command
+      zh-CN: 输入地址，或粘贴 cURL 命令
+    add_parameter:
+      en: Add parameter
+      zh-CN: 添加参数
+    remove_parameter:
+      en: Remove parameter
+      zh-CN: 删除参数
     headers_placeholder:
       en: 'One header per line, for example Content-Type: application/json'
       zh-CN: '每行一个请求头，例如 Content-Type: application/json'
     body_placeholder:
       en: Request body
       zh-CN: 请求体
+    query:
+      en: Query
+      zh-CN: Query
     headers:
-      en: Headers
-      zh-CN: 请求头
+      en: Header
+      zh-CN: Header
     body:
       en: Body
       zh-CN: 请求体
@@ -386,6 +416,24 @@ api:
     assertions:
       en: Assertions
       zh-CN: 断言
+    settings:
+      en: Settings
+      zh-CN: 设置
+    docs:
+      en: Docs
+      zh-CN: 说明
+    timeout:
+      en: Timeout
+      zh-CN: 请求超时
+    timeout_hint:
+      en: Seconds; empty uses the default 60 seconds
+      zh-CN: 秒，留空使用默认 60 秒
+    timeout_invalid:
+      en: Request timeout must be a whole number of seconds
+      zh-CN: 请求超时必须是整数秒
+    docs_placeholder:
+      en: Request documentation
+      zh-CN: 请求说明
     auth_placeholder:
       en: Authentication JSON, secrets use environment variable names
       zh-CN: 认证 JSON，密钥使用环境变量名

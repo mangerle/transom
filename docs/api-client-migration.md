@@ -45,19 +45,22 @@ API 项目标签
   │    ├─ Cookie 管理
   │    └─ 代码生成
   ├─ 请求编辑区
-  │    ├─ 请求行：方法、URL、保存、发送、删除
-  │    └─ 请求页签：Body、Headers、Auth、Assertions
+  │    ├─ 请求行：方法/协议、环境、URL、粘贴 cURL、发送
+  │    └─ 请求页签：Query、Body、Header、Auth、Assertions、Settings、Docs
   └─ 响应面板
        ├─ 状态、耗时、大小和断言摘要
        └─ 响应页签：Body、Headers、Cookies、Assertions、History
 ```
 
-请求页签按协议改变主体含义：
+请求页签按方法和协议动态出现：
 
-- HTTP：请求体。
-- GraphQL：Query 与 Variables。
-- gRPC：服务名、方法名与消息。
-- WebSocket：连接状态、消息输入与连接动作。
+- Query：名称、值、说明三列表格，启用项合并到发送 URL。
+- Body：HTTP 请求体、GraphQL Query/Variables、gRPC 服务/方法/消息、WebSocket 消息。
+- Header：名称、值、说明三列表格。
+- Auth、Assertions：当前请求的认证与断言。
+- Settings：请求级超时，0 或留空使用默认值。
+- Docs：请求说明文档。
+- 地址框粘贴完整 cURL 命令时，自动填充方法、URL、Query、Header 和 Body。
 
 项目级动作与请求级页签分离，避免把环境或 Cookie 当作当前请求字段。不同功能使用不同语义图标，禁止所有工具复用同一个齿轮图标。
 

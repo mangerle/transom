@@ -42,6 +42,11 @@ impl ApiMethod {
         Self::Head,
         Self::Options,
     ];
+
+    /// 该方法是否通常携带请求体，用于决定是否显示 Body 页签。
+    pub const fn has_body(self) -> bool {
+        matches!(self, Self::Post | Self::Put | Self::Patch | Self::Delete)
+    }
 }
 
 impl fmt::Display for ApiMethod {
@@ -79,8 +84,46 @@ impl ApiProtocol {
 pub struct ApiHeader {
     pub name: String,
     pub value: String,
+    #[serde(default)]
+    pub description: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+}
+
+impl ApiHeader {
+    /// 用名称、值与启用状态创建请求头，说明留空。
+    pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            value: value.into(),
+            description: String::new(),
+            enabled: true,
+        }
+    }
+}
+
+/// 一条 URL 查询参数；与请求头共享四列表格结构。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ApiQueryParam {
+    pub name: String,
+    pub value: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl ApiQueryParam {
+    /// 用名称、值与启用状态创建查询参数，说明留空。
+    pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            value: value.into(),
+            description: String::new(),
+            enabled: true,
+        }
+    }
 }
 
 fn default_true() -> bool {
@@ -154,6 +197,12 @@ pub struct ApiRequest {
     #[serde(default)]
     pub url: String,
     #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub timeout_seconds: u64,
+    #[serde(default)]
+    pub query: Vec<ApiQueryParam>,
+    #[serde(default)]
     pub headers: Vec<ApiHeader>,
     #[serde(default)]
     pub body: String,
@@ -179,6 +228,9 @@ impl ApiRequest {
             protocol: ApiProtocol::Http,
             method: ApiMethod::Get,
             url: String::new(),
+            description: String::new(),
+            timeout_seconds: 0,
+            query: Vec::new(),
             headers: Vec::new(),
             body: String::new(),
             graphql_variables: "{}".to_string(),
@@ -199,18 +251,38 @@ impl ApiRequest {
         }
     }
 
-    /// 发送时将 `/` 开头的相对地址接到项目基础地址后；绝对 URL 原样返回。
+    /// 发送时将相对地址接到项目基础地址后，并合并启用中的查询参数。
     pub fn resolved_url(&self, base_url: &str, environment: &ApiEnvironment) -> String {
         let url = environment.resolve(self.url.trim());
         let base = environment
             .resolve(base_url.trim())
             .trim_end_matches('/')
             .to_string();
-        if url.starts_with('/') && !base.is_empty() {
+        let url = if url.starts_with('/') && !base.is_empty() {
             format!("{base}{url}")
         } else {
             url
+        };
+        let enabled = self
+            .query
+            .iter()
+            .filter(|param| param.enabled && !param.name.trim().is_empty());
+        if enabled.clone().next().is_none() {
+            return url;
         }
+        let Ok(mut parsed) = reqwest::Url::parse(&url) else {
+            return url;
+        };
+        {
+            let mut pairs = parsed.query_pairs_mut();
+            for param in enabled {
+                pairs.append_pair(
+                    environment.resolve(param.name.trim()).as_str(),
+                    environment.resolve(param.value.trim()).as_str(),
+                );
+            }
+        }
+        parsed.to_string()
     }
 
     /// 将启用的请求头渲染为一行一个 `名称: 值` 文本。
@@ -290,9 +362,15 @@ impl ApiRequest {
     pub fn resolved(&self, base_url: &str, environment: &ApiEnvironment) -> Self {
         let mut resolved = self.clone();
         resolved.url = self.resolved_url(base_url, environment);
+        for query in &mut resolved.query {
+            query.name = environment.resolve(&query.name);
+            query.value = environment.resolve(&query.value);
+            query.description = environment.resolve(&query.description);
+        }
         for header in &mut resolved.headers {
             header.name = environment.resolve(&header.name);
             header.value = environment.resolve(&header.value);
+            header.description = environment.resolve(&header.description);
         }
         resolved.body = environment.resolve(&self.body);
         resolved.graphql_variables = environment.resolve(&self.graphql_variables);
@@ -342,6 +420,7 @@ fn parse_headers(text: &str) -> Result<Vec<ApiHeader>, ApiError> {
         headers.push(ApiHeader {
             name: name.to_string(),
             value: value.trim().to_string(),
+            description: String::new(),
             enabled: true,
         });
     }
@@ -379,16 +458,23 @@ mod tests {
         request
             .set_header_text("Authorization: Bearer {{TOKEN}}\nX-Host: {{HOST}}")
             .expect("请求头应合法");
+        request.query.push(ApiQueryParam::new("q", "{{TOKEN}}"));
         let mut environment = ApiEnvironment::new("测试");
         environment
             .set_variables_text("TOKEN=abc\nHOST=example.com")
             .expect("环境变量应合法");
         let resolved = request.resolved("https://{{HOST}}", &environment);
-        assert_eq!(resolved.url, "https://example.com");
+        assert_eq!(resolved.url, "https://example.com/?q=abc");
         assert_eq!(
             resolved.header_text(),
             "Authorization: Bearer abc\nX-Host: example.com"
         );
+        let query = reqwest::Url::parse(&resolved.url)
+            .expect("解析后的地址应可再次解析")
+            .query_pairs()
+            .map(|(name, value)| (name.into_owned(), value.into_owned()))
+            .collect::<Vec<_>>();
+        assert_eq!(query, vec![("q".to_string(), "abc".to_string())]);
     }
 
     #[test]

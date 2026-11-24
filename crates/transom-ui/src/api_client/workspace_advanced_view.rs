@@ -1,145 +1,85 @@
 //! API 工作区的项目级工具栏与环境、Cookie 配置面板。
 
+use super::ApiAuxiliarySection;
 use super::workspace_view::ApiWorkspaceParams;
-use super::{ApiAuxiliarySection, ApiWorkspace};
 use crate::palette::Palette;
 use crate::theme::tokens::space;
-use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown, menu_item};
+use crate::widgets::{IconButton, IconButtonSize, action_button, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::*;
-use transom_api::{ApiEnvironmentId, ApiProtocol, CodeTarget};
+use transom_api::CodeTarget;
 use transom_ui_icons::{AppIcon, CustomIcon, FileTypeIcon, UiIcon};
 
-/// 协议、环境、项目工具与代码生成工具条。
-pub(crate) fn render_workspace_toolbar(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let view = params.view.clone();
-    let protocol_options = [
-        (ApiProtocol::Http, "HTTP".to_string()),
-        (ApiProtocol::GraphQl, "GraphQL".to_string()),
-        (
-            ApiProtocol::Grpc,
-            rust_i18n::t!("api.protocol.grpc_raw").to_string(),
-        ),
-        (ApiProtocol::WebSocket, "WebSocket".to_string()),
-    ];
-    let protocol = dropdown(
-        "api-request-protocol",
-        params.protocol,
-        protocol_options.to_vec(),
-        |this: &mut ApiWorkspace, protocol, _, cx| this.set_protocol(protocol, cx),
-        view.clone(),
-    );
-    let environment_options = params
-        .project
-        .environments
-        .iter()
-        .map(|environment| (Some(environment.id), environment.name.clone()))
-        .collect::<Vec<_>>();
-    let environment = dropdown(
-        "api-request-environment",
-        params.environment_id,
-        environment_options,
-        |this: &mut ApiWorkspace, environment_id: Option<ApiEnvironmentId>, window, cx| {
-            if let Some(environment_id) = environment_id {
-                this.set_environment(environment_id, window, cx);
-            }
-        },
-        view.clone(),
-    );
-
-    let tools = h_flex()
-        .gap(rems(space::XXS))
-        .items_center()
-        .child(project_tool_button(
-            "api-project-environment",
-            AppIcon::Ui(UiIcon::DEPENDENCIES),
-            rust_i18n::t!("api.project.environment").to_string(),
-            ApiAuxiliarySection::Environment,
-            params.auxiliary_section,
-            view.clone(),
-        ))
-        .child(project_tool_button(
-            "api-project-cookies",
-            AppIcon::Custom(CustomIcon::COOKIE),
-            rust_i18n::t!("api.project.cookies").to_string(),
-            ApiAuxiliarySection::Cookies,
-            params.auxiliary_section,
-            view.clone(),
-        ))
-        .child(render_codegen_menu(params));
-
-    h_flex()
-        .flex_wrap()
-        .gap(rems(space::XS))
-        .items_center()
-        .px(rems(space::SM))
-        .py(rems(space::XS))
-        .border_color(p.divider(p.border))
-        .border_b_1()
-        .child(protocol)
-        .child(environment)
-        .child(div().flex_1().min_w_0())
-        .child(tools)
-        .into_any_element()
-}
-
-fn project_tool_button(
-    id: &'static str,
-    icon: AppIcon,
-    label: String,
-    section: ApiAuxiliarySection,
-    current: Option<ApiAuxiliarySection>,
-    view: Entity<ApiWorkspace>,
-) -> AnyElement {
-    IconButton::new(id, icon, label)
-        .size(IconButtonSize::Compact)
-        .selected(current == Some(section))
-        .render()
-        .on_click(move |_, _, cx| {
-            view.update(cx, |this, cx| this.toggle_auxiliary(section, cx));
-        })
-        .into_any_element()
-}
-
-fn render_codegen_menu(params: &ApiWorkspaceParams<'_>) -> AnyElement {
+/// 页签栏右侧的项目动作菜单。
+pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> AnyElement {
     let view = params.view.clone();
     action_button(
-        "api-codegen",
-        AppIcon::Ui(UiIcon::LANGUAGE),
-        rust_i18n::t!("api.request.codegen").to_string(),
+        "api-project-actions",
+        AppIcon::Ui(UiIcon::MORE_HORIZONTAL),
+        rust_i18n::t!("common.more").to_string(),
     )
     .small()
     .dropdown_caret(true)
     .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-        let targets = [
-            (CodeTarget::Curl, "cURL", FileTypeIcon::SHELL),
-            (
-                CodeTarget::JavaScriptFetch,
-                "JavaScript fetch",
-                FileTypeIcon::JAVASCRIPT,
-            ),
-            (
-                CodeTarget::PythonRequests,
-                "Python requests",
-                FileTypeIcon::PYTHON,
-            ),
-            (CodeTarget::RustReqwest, "Rust reqwest", FileTypeIcon::RUST),
-        ];
-        targets
-            .into_iter()
-            .fold(menu, |menu, (target, label, icon)| {
-                let view = view.clone();
-                menu.item(menu_item(
-                    label,
-                    AppIcon::FileType(icon),
-                    move |_, _, cx| {
-                        view.update(cx, |this, cx| this.copy_code(target, cx));
-                    },
-                ))
-            })
+        let environment = view.clone();
+        let cookies = view.clone();
+        let code_cur = view.clone();
+        let code_js = view.clone();
+        let code_py = view.clone();
+        let code_rs = view.clone();
+        menu.item(menu_item(
+            rust_i18n::t!("api.project.environment").to_string(),
+            AppIcon::Ui(UiIcon::DEPENDENCIES),
+            move |_, _, cx| {
+                environment.update(cx, |this, cx| {
+                    this.toggle_auxiliary(ApiAuxiliarySection::Environment, cx)
+                });
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("api.project.cookies").to_string(),
+            AppIcon::Custom(CustomIcon::COOKIE),
+            move |_, _, cx| {
+                cookies.update(cx, |this, cx| {
+                    this.toggle_auxiliary(ApiAuxiliarySection::Cookies, cx)
+                });
+            },
+        ))
+        .item(menu_item(
+            "cURL",
+            AppIcon::FileType(FileTypeIcon::SHELL),
+            move |_, _, cx| {
+                code_cur.update(cx, |this, cx| this.copy_code(CodeTarget::Curl, cx));
+            },
+        ))
+        .item(menu_item(
+            "JavaScript fetch",
+            AppIcon::FileType(FileTypeIcon::JAVASCRIPT),
+            move |_, _, cx| {
+                code_js.update(cx, |this, cx| {
+                    this.copy_code(CodeTarget::JavaScriptFetch, cx)
+                });
+            },
+        ))
+        .item(menu_item(
+            "Python requests",
+            AppIcon::FileType(FileTypeIcon::PYTHON),
+            move |_, _, cx| {
+                code_py.update(cx, |this, cx| {
+                    this.copy_code(CodeTarget::PythonRequests, cx)
+                });
+            },
+        ))
+        .item(menu_item(
+            "Rust reqwest",
+            AppIcon::FileType(FileTypeIcon::RUST),
+            move |_, _, cx| {
+                code_rs.update(cx, |this, cx| this.copy_code(CodeTarget::RustReqwest, cx));
+            },
+        ))
     })
     .into_any_element()
 }

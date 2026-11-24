@@ -1,75 +1,16 @@
 //! API 项目工作区实体：请求、环境、认证、断言和协议运行状态。
 
-use gpui_kit::component::input::{InputState, TextareaState};
+use super::kv_editor::KvEditorEvent;
+pub(crate) use super::workspace_types::{
+    ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent,
+    ApiWorkspaceServices,
+};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use transom_api::{
-    ApiAssertionResult, ApiEnvironmentId, ApiHttpService, ApiMethod, ApiProject, ApiProtocol,
-    ApiRequest, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService,
+    ApiAssertionResult, ApiEnvironmentId, ApiImportFormat, ApiMethod, ApiProject, ApiProtocol,
+    ApiRequest, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, import_projects,
 };
-
-/// API 工作区需要的外壳服务集合。
-#[derive(Clone)]
-pub(crate) struct ApiWorkspaceServices {
-    pub(crate) http: ApiHttpService,
-    pub(crate) websocket: ApiWebSocketService,
-}
-
-/// 项目级配置面板；只承载不随单个请求切换的配置。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ApiAuxiliarySection {
-    Environment,
-    Cookies,
-}
-
-/// 请求编辑器的信息架构页签。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ApiRequestTab {
-    Body,
-    Headers,
-    Auth,
-    Assertions,
-}
-
-/// 响应面板的信息架构页签。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ApiResponseTab {
-    Body,
-    Headers,
-    Cookies,
-    Assertions,
-    History,
-}
-
-/// API 工作区需要外壳处理的窗口级意图。
-#[derive(Clone)]
-pub(crate) enum ApiWorkspaceEvent {
-    /// 项目快照已变化，请求由外壳更新登记表并异步落盘。
-    PersistProject {
-        project: ApiProject,
-        notice: Option<String>,
-    },
-}
-
-/// 所有可编辑文本实体集中在一个参数对象中，避免渲染函数反查工作区实体。
-pub(crate) struct ApiWorkspaceEditors {
-    pub(crate) request_name: Entity<InputState>,
-    pub(crate) request_url: Entity<InputState>,
-    pub(crate) request_headers: Entity<TextareaState>,
-    pub(crate) request_body: Entity<TextareaState>,
-    pub(crate) grpc_service: Entity<InputState>,
-    pub(crate) grpc_method: Entity<InputState>,
-    pub(crate) graphql_variables: Entity<TextareaState>,
-    pub(crate) auth: Entity<TextareaState>,
-    pub(crate) assertions: Entity<TextareaState>,
-    pub(crate) environment: Entity<TextareaState>,
-    pub(crate) cookies: Entity<TextareaState>,
-    pub(crate) history: Entity<TextareaState>,
-    pub(crate) websocket_input: Entity<TextareaState>,
-    pub(crate) websocket_log: Entity<TextareaState>,
-    pub(crate) response_headers: Entity<TextareaState>,
-    pub(crate) response_body: Entity<TextareaState>,
-}
 
 /// 单个 API 项目标签的工作区实体。
 pub(crate) struct ApiWorkspace {
@@ -79,6 +20,7 @@ pub(crate) struct ApiWorkspace {
     pub(crate) protocol: ApiProtocol,
     pub(crate) environment_id: Option<ApiEnvironmentId>,
     pub(crate) request_tab: ApiRequestTab,
+    pub(crate) editor_ratio: f32,
     pub(crate) response_tab: ApiResponseTab,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
     pub(crate) editors: ApiWorkspaceEditors,
@@ -95,6 +37,7 @@ pub(crate) struct ApiWorkspace {
     pub(crate) ws_task: Option<Task<()>>,
     pub(crate) ws_event_task: Option<Task<()>>,
     pub(crate) ws_handle: Option<ApiWebSocketHandle>,
+    editor_subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<ApiWorkspaceEvent> for ApiWorkspace {}
@@ -118,7 +61,8 @@ impl ApiWorkspace {
             environment_id: active_environment_id,
             project,
             method: ApiMethod::Get,
-            request_tab: ApiRequestTab::Body,
+            request_tab: ApiRequestTab::Query,
+            editor_ratio: 0.5,
             response_tab: ApiResponseTab::Body,
             auxiliary_section: None,
             editors,
@@ -135,12 +79,71 @@ impl ApiWorkspace {
             ws_task: None,
             ws_event_task: None,
             ws_handle: None,
+            editor_subscriptions: Vec::new(),
         };
+        workspace.editor_subscriptions = vec![
+            cx.subscribe_in(&workspace.editors.query, window, |this, _, event, _, cx| {
+                let KvEditorEvent::Changed(entries) = event;
+                this.apply_query_entries(entries, cx);
+            }),
+            cx.subscribe_in(
+                &workspace.editors.headers,
+                window,
+                |this, _, event, _, cx| {
+                    let KvEditorEvent::Changed(entries) = event;
+                    this.apply_header_entries(entries, cx);
+                },
+            ),
+        ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
         workspace.load_cookies(window, cx);
         workspace.refresh_history(window, cx);
         workspace
+    }
+
+    /// 将粘贴的 cURL 命令填充到当前请求；不是 cURL 时返回 false 交给输入框。
+    pub(crate) fn import_curl(
+        &mut self,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let text = text.trim();
+        if !text.starts_with("curl ") {
+            return false;
+        }
+        if self.selected_request.is_none() {
+            return true;
+        }
+        let imported = match import_projects(text, ApiImportFormat::Curl) {
+            Ok(mut projects) => projects
+                .pop()
+                .and_then(|mut project| project.requests.pop()),
+            Err(error) => {
+                self.error = error.detail;
+                cx.notify();
+                return true;
+            }
+        };
+        let Some(imported) = imported else {
+            return true;
+        };
+        let Some(existing_id) = self.selected_request else {
+            return true;
+        };
+        let Some(existing) = self.project.request(existing_id).cloned() else {
+            return true;
+        };
+        let mut request = imported;
+        request.id = existing.id;
+        request.folder_id = existing.folder_id;
+        request.name = existing.name;
+        self.project.upsert_request(request);
+        self.load_selected(window, cx);
+        self.error = None;
+        cx.notify();
+        true
     }
 
     /// 当前选中请求的 clone；没有选中请求时返回 `None`。
@@ -198,16 +201,15 @@ impl ApiWorkspace {
         cx.notify();
     }
 
-    /// 更新当前请求方法和协议。
-    pub(crate) fn set_method(&mut self, method: ApiMethod, cx: &mut Context<Self>) {
-        self.method = method;
-        self.capture_editor(cx);
-        cx.notify();
-    }
-
-    /// 设置协议并同步请求草稿。
-    pub(crate) fn set_protocol(&mut self, protocol: ApiProtocol, cx: &mut Context<Self>) {
+    /// 同时切换协议和方法，避免一次选择触发两次草稿回写。
+    pub(crate) fn set_request_mode(
+        &mut self,
+        protocol: ApiProtocol,
+        method: ApiMethod,
+        cx: &mut Context<Self>,
+    ) {
         self.protocol = protocol;
+        self.method = method;
         self.capture_editor(cx);
         cx.notify();
     }
@@ -221,6 +223,28 @@ impl ApiWorkspace {
     /// 切换响应面板页签；只改变当前工作区的视图状态。
     pub(crate) fn set_response_tab(&mut self, tab: ApiResponseTab, cx: &mut Context<Self>) {
         self.response_tab = tab;
+        cx.notify();
+    }
+
+    /// 按预设比例调整请求区与响应区高度。
+    pub(crate) fn set_editor_ratio(
+        &mut self,
+        ratio: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let sizes = self.request_response_split.read(cx).sizes().clone();
+        if sizes.len() < 2 {
+            self.editor_ratio = ratio;
+            cx.notify();
+            return;
+        }
+        let total = sizes.iter().copied().sum::<Pixels>();
+        let target = total * ratio;
+        self.request_response_split.update(cx, |state, cx| {
+            state.resize_panel(0, target, window, cx);
+        });
+        self.editor_ratio = ratio;
         cx.notify();
     }
 
@@ -270,135 +294,6 @@ impl ApiWorkspace {
     ) {
         self.auxiliary_section = (self.auxiliary_section != Some(section)).then_some(section);
         cx.notify();
-    }
-
-    pub(super) fn capture_editor(&mut self, cx: &App) -> bool {
-        let Some(request_id) = self.selected_request else {
-            return true;
-        };
-        let Some(mut request) = self.project.request(request_id).cloned() else {
-            return false;
-        };
-        request.name = self
-            .editors
-            .request_name
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        request.url = self.editors.request_url.read(cx).value().trim().to_string();
-        request.body = self.editors.request_body.read(cx).value().to_string();
-        request.grpc_service = self
-            .editors
-            .grpc_service
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        request.grpc_method = self.editors.grpc_method.read(cx).value().trim().to_string();
-        request.protocol = self.protocol;
-        request.method = self.method;
-        let header_text = self.editors.request_headers.read(cx).value().to_string();
-        if let Err(error) = request.set_header_text(&header_text) {
-            self.error = Some(error.to_string());
-            return false;
-        }
-        request.graphql_variables = self.editors.graphql_variables.read(cx).value().to_string();
-        let auth_text = self.editors.auth.read(cx).value().to_string();
-        if let Err(error) = request.set_auth_text(&auth_text) {
-            self.error = Some(error.to_string());
-            return false;
-        }
-        let assertions_text = self.editors.assertions.read(cx).value().to_string();
-        if let Err(error) = request.set_assertions_text(&assertions_text) {
-            self.error = Some(error.to_string());
-            return false;
-        }
-        self.project.upsert_request(request);
-        self.capture_environment(cx);
-        self.capture_cookies(cx);
-        self.error = None;
-        true
-    }
-
-    fn load_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let request = self.selected_request().cloned();
-        let (
-            name,
-            url,
-            headers,
-            body,
-            method,
-            protocol,
-            graphql,
-            auth,
-            assertions,
-            grpc_service,
-            grpc_method,
-        ) = request.map_or_else(
-            || {
-                (
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                    ApiMethod::Get,
-                    ApiProtocol::Http,
-                    "{}".to_string(),
-                    "{\"kind\":\"none\"}".to_string(),
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                )
-            },
-            |request| {
-                let headers = request.header_text();
-                let auth = request.auth_text();
-                let assertions = request.assertions_text();
-                (
-                    request.display_name().to_string(),
-                    request.url,
-                    headers,
-                    request.body,
-                    request.method,
-                    request.protocol,
-                    request.graphql_variables,
-                    auth,
-                    assertions,
-                    request.grpc_service,
-                    request.grpc_method,
-                )
-            },
-        );
-        self.method = method;
-        self.protocol = protocol;
-        self.editors
-            .request_name
-            .update(cx, |state, cx| state.set_value(name, window, cx));
-        self.editors
-            .request_url
-            .update(cx, |state, cx| state.set_value(url, window, cx));
-        self.editors
-            .request_headers
-            .update(cx, |state, cx| state.set_value(headers, window, cx));
-        self.editors
-            .request_body
-            .update(cx, |state, cx| state.set_value(body, window, cx));
-        self.editors
-            .grpc_service
-            .update(cx, |state, cx| state.set_value(grpc_service, window, cx));
-        self.editors
-            .grpc_method
-            .update(cx, |state, cx| state.set_value(grpc_method, window, cx));
-        self.editors
-            .graphql_variables
-            .update(cx, |state, cx| state.set_value(graphql, window, cx));
-        self.editors
-            .auth
-            .update(cx, |state, cx| state.set_value(auth, window, cx));
-        self.editors
-            .assertions
-            .update(cx, |state, cx| state.set_value(assertions, window, cx));
     }
 
     fn load_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {

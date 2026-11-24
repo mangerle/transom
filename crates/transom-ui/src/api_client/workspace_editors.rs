@@ -3,6 +3,7 @@
 //! 将实体创建从工作区状态文件中分离，保证状态流转与编辑器初始化各自内聚，
 //! 同时避免单个文件随高级配置项增长突破 500 行上限。
 
+use super::kv_editor::{KvEditor, KvEditorKind};
 use super::workspace::ApiWorkspace;
 use super::workspace::ApiWorkspaceEditors;
 use gpui_kit::component::input::{InputState, TextareaState};
@@ -25,7 +26,8 @@ pub(super) fn new_editors(
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.url_placeholder").to_string())
         }),
-        request_headers: placeholder(window, cx, "api.request.headers_placeholder"),
+        query: cx.new(|cx| KvEditor::new(KvEditorKind::Query, window, cx)),
+        headers: cx.new(|cx| KvEditor::new(KvEditorKind::Header, window, cx)),
         request_body: placeholder(window, cx, "api.request.body_placeholder"),
         grpc_service: cx.new(|cx| {
             InputState::new(window, cx)
@@ -38,6 +40,11 @@ pub(super) fn new_editors(
         graphql_variables: placeholder(window, cx, "api.request.graphql_variables_placeholder"),
         auth: placeholder(window, cx, "api.request.auth_placeholder"),
         assertions: placeholder(window, cx, "api.request.assertions_placeholder"),
+        timeout: cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("api.request.timeout_hint").to_string())
+        }),
+        docs: placeholder(window, cx, "api.request.docs_placeholder"),
         environment: placeholder(window, cx, "api.request.environment_placeholder"),
         cookies: placeholder(window, cx, "api.request.cookies_placeholder"),
         history: cx.new(|cx| TextareaState::new(window, cx)),

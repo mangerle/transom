@@ -30,8 +30,8 @@ pub use model::{
     ApiRegistry, ApiVariable, MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,
 };
 pub use request::{
-    ApiAssertion, ApiAssertionResult, ApiAuth, ApiHeader, ApiMethod, ApiProtocol, ApiRequest,
-    method_for_request,
+    ApiAssertion, ApiAssertionResult, ApiAuth, ApiHeader, ApiMethod, ApiProtocol, ApiQueryParam,
+    ApiRequest, method_for_request,
 };
 pub use store::{ApiProjectStore, parse_project_import};
 pub use websocket::{
