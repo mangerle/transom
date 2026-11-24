@@ -32,17 +32,17 @@ impl RdpView {
         let last_sent_resize = Rc::clone(&self.last_sent_resize);
 
         canvas(
-            move |bounds, _window, _cx| {
+            move |bounds, window, _cx| {
                 let old_size = viewport_bounds_cell.get().size;
                 viewport_bounds_cell.set(bounds);
 
-                if dynamic_resolution && old_size != bounds.size {
-                    let target_w = f32::from(bounds.size.width).round() as u16;
-                    let target_h = f32::from(bounds.size.height).round() as u16;
+                if dynamic_resolution && f32::from(old_size.width) > 0.0 && f32::from(old_size.height) > 0.0
+                {
+                    let scale = window.scale_factor().max(1.0);
+                    let target_w = (f32::from(bounds.size.width) * scale).round() as u16;
+                    let target_h = (f32::from(bounds.size.height) * scale).round() as u16;
                     // 跳过首次从 0x0 布局初始化的抖动，且通道满时不覆写已发送尺寸以便下次重试
-                    if f32::from(old_size.width) > 0.0
-                        && f32::from(old_size.height) > 0.0
-                        && target_w >= MIN_DYNAMIC_WIDTH
+                    if target_w >= MIN_DYNAMIC_WIDTH
                         && target_h >= MIN_DYNAMIC_HEIGHT
                         && last_sent_resize.get() != Some((target_w, target_h))
                         && let Some(ref sender) = resize_sender

@@ -19,8 +19,8 @@ const MAX_DESKTOP_WIDTH: u16 = 4096;
 const MIN_DESKTOP_HEIGHT: u16 = 480;
 const MAX_DESKTOP_HEIGHT: u16 = 2560;
 
-/// 通道未就绪时的最大退避重试次数。
-const MAX_CHANNEL_WAIT_RETRIES: u8 = 4;
+/// 通道未就绪时的最大退避重试次数（20 * 250ms = 5 秒，覆盖慢速 WAN DVC 握手）。
+const MAX_CHANNEL_WAIT_RETRIES: u8 = 20;
 
 /// 规范化目标分辨率：钳制到合法范围并执行 MS-RDPEDISP 偶数对齐。
 pub(crate) fn normalize_resolution(width: u16, height: u16) -> (u16, u16) {
@@ -93,6 +93,12 @@ impl ResizeController {
             self.retries_left -= 1;
             self.pending = Some(target);
             self.deadline = Some(now + RESIZE_DEBOUNCE_INTERVAL);
+        } else if target != self.current {
+            log::debug!(
+                "DisplayControl 动态分辨率通道等待超时，放弃本次请求: {}x{}",
+                target.0,
+                target.1
+            );
         }
     }
 }
