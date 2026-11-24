@@ -20,10 +20,10 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
     writer: &mut W,
     context: &Arc<Mutex<CliprdrSyncContext>>,
 ) {
-    let (paste_formats, pending_requests, local_text) = {
+    let (paste_format, pending_requests, local_text) = {
         let mut ctx = context.lock();
-        let pastes: Vec<ClipboardFormatId> = ctx.pending_paste_formats.drain(..).collect();
-        for &fmt in &pastes {
+        let paste = ctx.pending_paste_format.take();
+        if let Some(fmt) = paste {
             if ctx.inflight_paste_formats.len() >= 16 {
                 ctx.inflight_paste_formats.pop_front();
             }
@@ -35,18 +35,16 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
         } else {
             ctx.local_text.clone()
         };
-        (pastes, requests, text)
+        (paste, requests, text)
     };
 
-    for format_id in paste_formats {
-        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
-            && let Ok(messages) = cliprdr.initiate_paste(format_id)
-            && let Ok(bytes) =
-                active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
-            && let Err(e) = writer.write_all(&bytes).await
-        {
-            log::debug!("写入 CLIPRDR 粘贴请求失败: {e}");
-        }
+    if let Some(format_id) = paste_format
+        && let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
+        && let Ok(messages) = cliprdr.initiate_paste(format_id)
+        && let Ok(bytes) = active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
+        && let Err(e) = writer.write_all(&bytes).await
+    {
+        log::debug!("写入 CLIPRDR 粘贴请求失败: {e}");
     }
 
     for requested_format in pending_requests {

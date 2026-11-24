@@ -26,16 +26,14 @@ const MAX_CLIPRDR_QUEUE: usize = 16;
 /// 剪贴板跨线程同步状态上下文。
 #[derive(Debug, Default)]
 pub struct CliprdrSyncContext {
-    /// 远端宣告可用且待拉取的具体文本格式队列（优先 `CF_UNICODETEXT`，回退 `CF_TEXT`）。
-    pub pending_paste_formats: VecDeque<ClipboardFormatId>,
+    /// 远端最新宣告可用且待拉取的文本格式（仅保留最新一次 `on_remote_copy` 结果，避免积压过时请求）。
+    pub pending_paste_format: Option<ClipboardFormatId>,
     /// 已发出拉取请求、等待数据响应的格式队列（用于准确选择 UTF-16LE 或 ANSI 解码器）。
     pub inflight_paste_formats: VecDeque<ClipboardFormatId>,
     /// 远端正在请求本地提供的剪贴板格式队列。
     pub pending_data_requests: VecDeque<ClipboardFormatId>,
     /// 本地最新待共享给远端的纯文本数据。
     pub local_text: Option<String>,
-    /// 最近一次同步自远端的文本（用于防回环震荡）。
-    pub last_remote_text: Option<String>,
 }
 
 fn push_bounded(queue: &mut VecDeque<ClipboardFormatId>, format: ClipboardFormatId) {
@@ -103,7 +101,8 @@ impl CliprdrBackend for TransomCliprdrBackend {
             None
         };
         if let Some(format) = preferred {
-            push_bounded(&mut self.context.lock().pending_paste_formats, format);
+            // 新一次远端复制会覆盖先前的格式清单，仅保留最新待拉取格式
+            self.context.lock().pending_paste_format = Some(format);
         }
     }
 
@@ -127,13 +126,10 @@ impl CliprdrBackend for TransomCliprdrBackend {
         };
 
         if let Some(text) = decoded {
-            let mut ctx = self.context.lock();
-            if ctx.last_remote_text.as_deref() != Some(&text) {
-                ctx.last_remote_text = Some(text.clone());
-                let _ = self
-                    .output_tx
-                    .try_send(RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)));
-            }
+            // 不在后端按历史文本去重：若用户期间修改了本地剪贴板，远端再次复制相同文本也应正常覆盖本地
+            let _ = self
+                .output_tx
+                .try_send(RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)));
         }
     }
 
