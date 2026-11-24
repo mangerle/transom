@@ -385,7 +385,6 @@ fn render_project_row(
     let title = project.display_name().to_string();
     let subtitle =
         rust_i18n::t!("api.project.request_count", count = project.request_count()).to_string();
-    let owned_project = project.clone();
     let view_for_click = view.clone();
     let view_for_menu = view.clone();
     sidebar_row_band(
@@ -403,7 +402,6 @@ fn render_project_row(
         let postman_view = view_for_menu.clone();
         let openapi_view = view_for_menu.clone();
         let transom_view = view_for_menu.clone();
-        let project_for_menu = owned_project.clone();
         menu.item(menu_item(
             rust_i18n::t!("api.project.rename").to_string(),
             AppIcon::Ui(UiIcon::EDIT),
@@ -421,58 +419,29 @@ fn render_project_row(
         .item(menu_item(
             rust_i18n::t!("api.project.export_curl").to_string(),
             AppIcon::Ui(UiIcon::DOWNLOAD),
-            {
-                let project = project_for_menu.clone();
-                move |_, _, cx| {
-                    curl_view.update(cx, |_, cx| {
-                        cx.emit(super::ApiSidebarEvent::ExportProject {
-                            project: project.clone(),
-                            format: ApiExportFormat::Curl,
-                        });
-                    });
-                }
+            move |_, _, cx| {
+                emit_project_export(&curl_view, project_id, ApiExportFormat::Curl, cx);
             },
         ))
         .item(menu_item(
             rust_i18n::t!("api.project.export_postman").to_string(),
             AppIcon::Ui(UiIcon::DOWNLOAD),
-            {
-                let project = project_for_menu.clone();
-                move |_, _, cx| {
-                    postman_view.update(cx, |_, cx| {
-                        cx.emit(super::ApiSidebarEvent::ExportProject {
-                            project: project.clone(),
-                            format: ApiExportFormat::Postman,
-                        });
-                    });
-                }
+            move |_, _, cx| {
+                emit_project_export(&postman_view, project_id, ApiExportFormat::Postman, cx);
             },
         ))
         .item(menu_item(
             rust_i18n::t!("api.project.export_openapi").to_string(),
             AppIcon::Ui(UiIcon::DOWNLOAD),
-            {
-                let project = project_for_menu.clone();
-                move |_, _, cx| {
-                    openapi_view.update(cx, |_, cx| {
-                        cx.emit(super::ApiSidebarEvent::ExportProject {
-                            project: project.clone(),
-                            format: ApiExportFormat::OpenApi,
-                        });
-                    });
-                }
+            move |_, _, cx| {
+                emit_project_export(&openapi_view, project_id, ApiExportFormat::OpenApi, cx);
             },
         ))
         .item(menu_item(
             rust_i18n::t!("api.project.export_transom").to_string(),
             AppIcon::Ui(UiIcon::DOWNLOAD),
             move |_, _, cx| {
-                transom_view.update(cx, |_, cx| {
-                    cx.emit(super::ApiSidebarEvent::ExportProject {
-                        project: project_for_menu.clone(),
-                        format: ApiExportFormat::Transom,
-                    });
-                });
+                emit_project_export(&transom_view, project_id, ApiExportFormat::Transom, cx);
             },
         ))
     })
@@ -480,4 +449,18 @@ fn render_project_row(
     .child(div().flex_1().min_w_0().truncate().child(title))
     .child(div().text_color(p.muted_foreground).child(subtitle))
     .into_any_element()
+}
+
+fn emit_project_export(
+    view: &Entity<ApiSidebarView>,
+    project_id: ApiProjectId,
+    format: ApiExportFormat,
+    cx: &mut App,
+) {
+    view.update(cx, |view, cx| {
+        let Some(project) = view.state.registry.project(project_id).cloned() else {
+            return;
+        };
+        cx.emit(super::ApiSidebarEvent::ExportProject { project, format });
+    });
 }

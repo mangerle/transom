@@ -51,7 +51,6 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
             request_rows = request_rows.child(render_request_row(
                 view,
                 request,
-                &params.project.folders,
                 params.selected_request,
                 p,
                 true,
@@ -67,7 +66,6 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
         request_rows = request_rows.child(render_request_row(
             view,
             request,
-            &params.project.folders,
             params.selected_request,
             p,
             false,
@@ -147,7 +145,6 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
 fn render_request_row(
     view: &Entity<ApiWorkspace>,
     request: &ApiRequest,
-    folders: &[ApiFolder],
     selected_request: Option<ApiRequestId>,
     p: &Palette,
     nested: bool,
@@ -156,7 +153,6 @@ fn render_request_row(
     let view_for_menu = view.clone();
     let request_id = request.id;
     let current_folder = request.folder_id;
-    let menu_folders = folders.to_vec();
     let selected = selected_request == Some(request_id);
     list_row(
         ElementId::Name(format!("api-request-{request_id}").into()),
@@ -167,7 +163,8 @@ fn render_request_row(
     .on_click(move |_, window, cx| {
         view_for_click.update(cx, |this, cx| this.select_request(request_id, window, cx));
     })
-    .context_menu(move |menu, _window, _cx| {
+    .context_menu(move |menu, _window, cx| {
+        let menu_folders = view_for_menu.read(cx).project.folders.clone();
         let duplicate_view = view_for_menu.clone();
         let delete_view = view_for_menu.clone();
         let mut menu = menu.item(menu_item(
