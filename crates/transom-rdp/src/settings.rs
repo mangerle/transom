@@ -10,6 +10,9 @@ use ironrdp_pdu::rdp::capability_sets::{
     MajorPlatformType, RailSupportLevel, client_codecs_capabilities,
 };
 use ironrdp_pdu::rdp::client_info::{CompressionType, PerformanceFlags, TimezoneInfo};
+
+/// RDP 客户端与会话运行时统一使用的协议压缩算法。
+pub(crate) const DEFAULT_COMPRESSION_TYPE: CompressionType = CompressionType::K64;
 use std::fmt;
 use std::sync::Arc;
 use transom_core::{RdpColorDepth, RdpConnection, RdpPerformance, RdpSecurity};
@@ -151,7 +154,7 @@ impl SessionConfig {
             performance_flags: self.performance_flags(),
             license_cache: None,
             timezone_info: TimezoneInfo::default(),
-            compression_type: Some(CompressionType::K64),
+            compression_type: Some(DEFAULT_COMPRESSION_TYPE),
             // GPUI 当前未提供隐藏宿主原生光标（CursorStyle::None）或注册自定义位图光标的能力；
             // 若开启服务端指针位图，客户端自绘光标会与系统箭头光标双重叠加。此处关闭服务端指针，
             // 统一使用零延迟本地原生光标；待未来 GUI 框架支持隐藏原生光标后可重新开启。

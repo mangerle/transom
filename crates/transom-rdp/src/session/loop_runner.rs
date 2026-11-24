@@ -19,6 +19,7 @@ use crate::session::connector::{ErasedStream, EstablishedConnection};
 use crate::session::input::{InputBatchOutcome, InputBatcher, InputProcessContext};
 use crate::session::reactivate::execute_reactivation;
 use crate::session::resize::ResizeController;
+use crate::settings::DEFAULT_COMPRESSION_TYPE;
 use crate::tiles::TileExtractor;
 use ironrdp_connector::connection_activation::ConnectionActivationFactory;
 use ironrdp_graphics::image_processing::PixelFormat;
@@ -93,7 +94,7 @@ impl SessionLoopRunner {
             io_channel_id: result.io_channel_id,
             message_channel_id: result.message_channel_id,
             share_id: result.share_id,
-            compression_type: None,
+            compression_type: Some(DEFAULT_COMPRESSION_TYPE),
             enable_server_pointer: result.enable_server_pointer,
             pointer_software_rendering: result.pointer_software_rendering,
         }
