@@ -42,30 +42,30 @@ pub fn sanitize_destination_path(base_dir: &Path, file_name: &str) -> Result<Pat
 
     // 若父目录存在则先规范化基准目录；不存在时创建
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir).map_err(|e| RdpError::Network {
-            address: base_dir.display().to_string(),
+        fs::create_dir_all(base_dir).map_err(|e| RdpError::SandboxIo {
+            path: base_dir.to_path_buf(),
             source: e,
         })?;
     }
 
-    let canonical_base = base_dir.canonicalize().map_err(|e| RdpError::Network {
-        address: base_dir.display().to_string(),
+    let canonical_base = base_dir.canonicalize().map_err(|e| RdpError::SandboxIo {
+        path: base_dir.to_path_buf(),
         source: e,
     })?;
 
     // 如果目标文件尚不存在，校验其父目录归属
     let target_parent = target.parent().unwrap_or(base_dir);
     if !target_parent.exists() {
-        fs::create_dir_all(target_parent).map_err(|e| RdpError::Network {
-            address: target_parent.display().to_string(),
+        fs::create_dir_all(target_parent).map_err(|e| RdpError::SandboxIo {
+            path: target_parent.to_path_buf(),
             source: e,
         })?;
     }
 
     let canonical_parent = target_parent
         .canonicalize()
-        .map_err(|e| RdpError::Network {
-            address: target_parent.display().to_string(),
+        .map_err(|e| RdpError::SandboxIo {
+            path: target_parent.to_path_buf(),
             source: e,
         })?;
 

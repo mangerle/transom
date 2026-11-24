@@ -45,6 +45,14 @@ pub enum RdpError {
     #[error("检测到非法的跨目录文件路径，目标: {path}，拒绝传输")]
     PathTraversal { path: PathBuf },
 
+    /// 访问或创建本地剪贴板沙箱目录失败。
+    #[error("访问或创建本地剪贴板沙箱目录失败，路径: {path}，原因: {source}")]
+    SandboxIo {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     /// 本地音频输出设备初始化失败。
     #[error("初始化本地音频播放设备失败，原因: {message}")]
     AudioOutput { message: String },

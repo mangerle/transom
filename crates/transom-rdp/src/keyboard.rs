@@ -148,6 +148,32 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "pageup" => Scancode::from_u8(true, 0x49),
         "pagedown" => Scancode::from_u8(true, 0x51),
         "super" | "command" | "win" => Scancode::from_u8(true, 0x5B),
+        // 打印屏幕、滚动锁定与数字锁定
+        "printscreen" | "prtscn" => Scancode::from_u8(true, 0x37),
+        "scrolllock" => Scancode::from_u8(false, 0x46),
+        "numlock" => Scancode::from_u8(false, 0x45),
+        // 小键盘（Numpad）按键
+        "numpad0" => Scancode::from_u8(false, 0x52),
+        "numpad1" => Scancode::from_u8(false, 0x4F),
+        "numpad2" => Scancode::from_u8(false, 0x50),
+        "numpad3" => Scancode::from_u8(false, 0x51),
+        "numpad4" => Scancode::from_u8(false, 0x4B),
+        "numpad5" => Scancode::from_u8(false, 0x4C),
+        "numpad6" => Scancode::from_u8(false, 0x4D),
+        "numpad7" => Scancode::from_u8(false, 0x47),
+        "numpad8" => Scancode::from_u8(false, 0x48),
+        "numpad9" => Scancode::from_u8(false, 0x49),
+        "numpadadd" => Scancode::from_u8(false, 0x4E),
+        "numpadsubtract" => Scancode::from_u8(false, 0x4A),
+        "numpadmultiply" => Scancode::from_u8(false, 0x37),
+        "numpaddivide" => Scancode::from_u8(true, 0x35),
+        "numpadenter" => Scancode::from_u8(true, 0x1C),
+        "numpaddecimal" => Scancode::from_u8(false, 0x53),
+        // 区分右侧功能与修饰键
+        "rightctrl" | "rctrl" => Scancode::from_u8(true, 0x1D),
+        "rightalt" | "ralt" => Scancode::from_u8(true, 0x38),
+        "rightshift" | "rshift" => Scancode::from_u8(false, 0x36),
+        "contextmenu" | "menu" | "app" => Scancode::from_u8(true, 0x5D),
         _ => return None,
     };
     Some(code)
@@ -175,6 +201,9 @@ mod tests {
         assert!(key_name_to_scancode("f5").is_some());
         assert!(key_name_to_scancode("f12").is_some());
         assert!(key_name_to_scancode("backslash").is_some());
+        assert!(key_name_to_scancode("numpad0").is_some());
+        assert!(key_name_to_scancode("prtscn").is_some());
+        assert!(key_name_to_scancode("rctrl").is_some());
         assert!(key_name_to_scancode("unknown_key_xyz").is_none());
     }
 }

@@ -151,8 +151,8 @@ impl TiledDesktopFrame {
 
 /// 从已解码的位图画布中提取单个瓦片的像素并转换为 RGBA 格式。
 ///
-/// 优化说明：使用按行切片与直接内存写入替代逐像素 `put_pixel`，
-/// 消除每帧数万次函数边界检查，便于编译器实现自动向量化。
+/// 优化说明：使用成行对齐切片与 `chunks_exact(4)` 替代逐像素点坐标计算与越界检测，
+/// 循环体完全消除 bounds check，便于 LLVM 编译器进行循环展开与 SIMD 自动向量化。
 fn extract_tile_image(canvas: &DecodedImage, col: u32, row: u32) -> RenderImage {
     let (left, top, tile_w, tile_h) =
         compute_tile_bounds(canvas.width(), canvas.height(), col, row);
@@ -161,28 +161,30 @@ fn extract_tile_image(canvas: &DecodedImage, col: u32, row: u32) -> RenderImage 
     let canvas_stride = usize::from(canvas.width()) * 4;
     let raw_pixels = canvas.data();
     let target_raw: &mut [u8] = &mut rgba_buffer;
-    let tile_w_usize = tile_w as usize;
-    let target_stride = tile_w_usize * 4;
+    let tile_w_bytes = (tile_w as usize) * 4;
 
     for y in 0..tile_h as usize {
         let canvas_y = top as usize + y;
-        let row_offset = canvas_y * canvas_stride;
-        let target_row_offset = y * target_stride;
+        let src_start = canvas_y * canvas_stride + (left as usize) * 4;
+        let src_end = src_start + tile_w_bytes;
+        let dst_start = y * tile_w_bytes;
+        let dst_end = dst_start + tile_w_bytes;
 
-        for x in 0..tile_w_usize {
-            let canvas_x = left as usize + x;
-            let pixel_offset = row_offset + canvas_x * 4;
-            let target_offset = target_row_offset + x * 4;
+        if src_end <= raw_pixels.len() && dst_end <= target_raw.len() {
+            let src_slice = &raw_pixels[src_start..src_end];
+            let dst_slice = &mut target_raw[dst_start..dst_end];
 
-            if pixel_offset + 3 < raw_pixels.len() && target_offset + 3 < target_raw.len() {
+            for (src, dst) in src_slice
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(dst_slice.as_chunks_mut::<4>().0.iter_mut())
+            {
                 // BgrX32 转换为 RGBA8：原 BGR 重新排布为 RGB，并填充不透明 Alpha
-                let b = raw_pixels[pixel_offset];
-                let g = raw_pixels[pixel_offset + 1];
-                let r = raw_pixels[pixel_offset + 2];
-                target_raw[target_offset] = r;
-                target_raw[target_offset + 1] = g;
-                target_raw[target_offset + 2] = b;
-                target_raw[target_offset + 3] = 255;
+                dst[0] = src[2];
+                dst[1] = src[1];
+                dst[2] = src[0];
+                dst[3] = 255;
             }
         }
     }

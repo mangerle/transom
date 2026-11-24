@@ -3,7 +3,8 @@
 //! 设计原理（Why）：作为 GPUI 自绘树中的一等公民视图，`RdpView` 采用原生 GPU
 //! `canvas` 管道对后台会话线程交付的增量瓦片帧（`TiledDesktopFrame`）进行直接渲染，
 //! 消除数百个 DOM 节点开销；在 prepaint 阶段捕获精确物理视口矩形，实现鼠标坐标
-//! 的无偏差绝对反算与动态缩放映射；打通系统剪贴板（GPUI Clipboard）双向流转。
+//! 的无偏差绝对反算与动态缩放映射；引入视口 AABB 裁剪（Frustum Culling）减少 GPU 绘制开销；
+//! 客户端自绘远端光标位图消除光标延迟；失焦自动释放按键彻底根除修饰键粘滞；打通双向剪贴板即时同步。
 
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
@@ -31,14 +32,14 @@ pub struct RdpView {
     #[allow(dead_code)]
     pub title: String,
     state: RdpViewState,
-    frame: Option<Arc<TiledDesktopFrame>>,
+    pub(crate) frame: Option<Arc<TiledDesktopFrame>>,
     session: Option<RdpSession>,
     is_muted: bool,
-    is_scaled: bool,
-    last_mouse_pos: Option<(u16, u16)>,
-    #[allow(dead_code)]
-    cursor: Option<CursorUpdate>,
-    viewport_bounds: Bounds<Pixels>,
+    pub(crate) is_scaled: bool,
+    pub(crate) last_mouse_pos: Option<(u16, u16)>,
+    pub(crate) cursor: Option<CursorUpdate>,
+    pub(crate) viewport_bounds: Bounds<Pixels>,
+    last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
 }
 
@@ -67,6 +68,7 @@ impl RdpView {
                             view.cursor = Some(c);
                         }
                         RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)) => {
+                            view.last_synced_clipboard = Some(text.clone());
                             cx.write_to_clipboard(ClipboardItem::new_string(text));
                         }
                         RdpOutput::Terminated(e) => {
@@ -94,6 +96,7 @@ impl RdpView {
             last_mouse_pos: None,
             cursor: None,
             viewport_bounds: Bounds::default(),
+            last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
         }
     }
@@ -102,6 +105,17 @@ impl RdpView {
     pub fn send_input(&self, input: RdpInput) {
         if let Some(session) = &self.session {
             let _ = session.try_send_input(input);
+        }
+    }
+
+    /// 检查并同步本地剪贴板新内容到远端桌面。
+    pub fn sync_clipboard_to_remote(&mut self, cx: &mut Context<Self>) {
+        if let Some(item) = cx.read_from_clipboard()
+            && let Some(text) = item.text()
+            && self.last_synced_clipboard.as_deref() != Some(&text)
+        {
+            self.last_synced_clipboard = Some(text.clone());
+            self.send_input(RdpInput::ClipboardText(text));
         }
     }
 
@@ -141,83 +155,6 @@ impl RdpView {
                 .into_any_element(),
             RdpViewState::Connected { .. } => div().into_any_element(),
         }
-    }
-
-    /// 渲染桌面瓦片集合的高性能 GPU 自绘画布。
-    fn render_desktop_canvas(&self, cx: &Context<Self>) -> impl IntoElement {
-        let view_entity = cx.entity().clone();
-        let frame = self.frame.clone();
-        let is_scaled = self.is_scaled;
-
-        canvas(
-            move |bounds, _window, cx| {
-                view_entity.update(cx, |this, _| {
-                    this.viewport_bounds = bounds;
-                });
-            },
-            move |bounds, _, window, _cx| {
-                let Some(frame) = &frame else {
-                    return;
-                };
-
-                let cols = frame.cols as usize;
-                let rows = frame.rows as usize;
-                let desktop_width = frame.width;
-                let desktop_height = frame.height;
-
-                if desktop_width == 0 || desktop_height == 0 {
-                    return;
-                }
-
-                let (scale_x, scale_y) = if is_scaled {
-                    (
-                        f32::from(bounds.size.width) / f32::from(desktop_width),
-                        f32::from(bounds.size.height) / f32::from(desktop_height),
-                    )
-                } else {
-                    (1.0, 1.0)
-                };
-
-                for r in 0..rows {
-                    for c in 0..cols {
-                        let idx = r * cols + c;
-                        if let Some(tile_img) = frame.tiles.get(idx) {
-                            let (tile_x, tile_y, tile_w, tile_h) =
-                                transom_rdp::tiles::compute_tile_bounds(
-                                    desktop_width,
-                                    desktop_height,
-                                    c as u32,
-                                    r as u32,
-                                );
-
-                            let dst_origin = bounds.origin
-                                + Point::new(
-                                    px(tile_x as f32 * scale_x),
-                                    px(tile_y as f32 * scale_y),
-                                );
-                            let dst_size = Size {
-                                width: px(tile_w as f32 * scale_x),
-                                height: px(tile_h as f32 * scale_y),
-                            };
-                            let tile_bounds = Bounds {
-                                origin: dst_origin,
-                                size: dst_size,
-                            };
-
-                            let _ = window.paint_image(
-                                bounds,
-                                tile_bounds,
-                                Corners::default(),
-                                tile_img.clone(),
-                                0,
-                                false,
-                            );
-                        }
-                    }
-                }
-            },
-        )
-        .size_full()
     }
 
     /// 渲染悬浮工具栏。
@@ -306,6 +243,7 @@ impl Render for RdpView {
             .size_full()
             .relative()
             .bg(gpui_kit::rgb(0x101010))
+            .cursor(CursorStyle::Arrow)
             .overflow_hidden()
             .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, _| {
                 if let RdpViewState::Connected { width, height } = this.state
@@ -322,9 +260,15 @@ impl Render for RdpView {
                     this.send_input(RdpInput::MouseMove { x, y });
                 }
             }))
+            .on_mouse_exit(cx.listener(move |this, _, _, _| {
+                // 鼠标移出远程桌面视口时自动释放修饰键，防止切换时按键卡死
+                this.last_mouse_pos = None;
+                this.send_input(RdpInput::ReleaseAllKeys);
+            }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, _: &MouseDownEvent, _, _| {
+                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
+                    this.sync_clipboard_to_remote(cx);
                     if let Some(input) =
                         crate::rdp::input::map_mouse_button(MouseButton::Left, true)
                     {
@@ -344,7 +288,8 @@ impl Render for RdpView {
             )
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, _: &MouseDownEvent, _, _| {
+                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
+                    this.sync_clipboard_to_remote(cx);
                     if let Some(input) =
                         crate::rdp::input::map_mouse_button(MouseButton::Right, true)
                     {
@@ -364,7 +309,8 @@ impl Render for RdpView {
             )
             .on_mouse_down(
                 MouseButton::Middle,
-                cx.listener(move |this, _: &MouseDownEvent, _, _| {
+                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
+                    this.sync_clipboard_to_remote(cx);
                     if let Some(input) =
                         crate::rdp::input::map_mouse_button(MouseButton::Middle, true)
                     {
@@ -404,7 +350,8 @@ impl Render for RdpView {
                     });
                 }
             }))
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, _| {
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                this.sync_clipboard_to_remote(cx);
                 this.send_input(RdpInput::KeyDown {
                     key: event.keystroke.key.clone(),
                 });

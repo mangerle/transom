@@ -17,6 +17,10 @@ pub enum CursorUpdate {
     Default,
     /// 远端下发的新位图光标。
     Custom {
+        /// 光标像素宽度。
+        width: u16,
+        /// 光标像素高度。
+        height: u16,
         /// 光标热点水平偏移（像素）。
         hot_x: u16,
         /// 光标热点垂直偏移（像素）。
@@ -43,6 +47,8 @@ pub fn create_custom_cursor(
     let render_image = RenderImage::new(vec![Frame::new(rgba_image)]);
 
     Some(CursorUpdate::Custom {
+        width,
+        height,
         hot_x,
         hot_y,
         image: Arc::new(render_image),
@@ -93,6 +99,8 @@ pub fn decode_monochrome_cursor(
 
     let render_image = RenderImage::new(vec![Frame::new(rgba_image)]);
     Some(CursorUpdate::Custom {
+        width,
+        height,
         hot_x,
         hot_y,
         image: Arc::new(render_image),
