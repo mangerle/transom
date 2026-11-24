@@ -438,29 +438,24 @@ impl RdpView {
             .on_mouse_move(cx.listener(|this, e, _, cx| this.handle_mouse_move(e, cx)))
             .on_mouse_exit(cx.listener(|this, _, _, cx| this.handle_mouse_exit(cx)))
             .on_scroll(cx.listener(|this, e, _, cx| this.handle_scroll(e, cx)))
+            .on_any_mouse_down(cx.listener(|this, e: &MouseDownEvent, window, cx| {
+                this.handle_mouse_down(e.button, window, cx);
+            }))
             .child(self.render_desktop_canvas());
 
-        let buttons = [
+        for btn in [
             MouseButton::Left,
             MouseButton::Right,
             MouseButton::Middle,
             MouseButton::Navigate(NavigationDirection::Back),
             MouseButton::Navigate(NavigationDirection::Forward),
-        ];
-        for btn in buttons {
-            container = container
-                .on_mouse_down(
-                    btn,
-                    cx.listener(move |this, _, window, cx| {
-                        this.handle_mouse_down(btn, window, cx);
-                    }),
-                )
-                .on_mouse_up(
-                    btn,
-                    cx.listener(move |this, _, _, _| {
-                        this.handle_mouse_up(btn);
-                    }),
-                );
+        ] {
+            container = container.on_mouse_up(
+                btn,
+                cx.listener(move |this, _, _, _| {
+                    this.handle_mouse_up(btn);
+                }),
+            );
         }
 
         container

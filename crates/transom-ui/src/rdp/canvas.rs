@@ -12,7 +12,7 @@ use gpui_kit::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use transom_rdp::RdpInput;
-use transom_rdp::tiles::compute_tile_bounds;
+use transom_rdp::tiles::{TILE_SIZE, compute_tile_bounds};
 
 /// 动态分辨率请求的最小合法尺寸阈值。
 const MIN_DYNAMIC_WIDTH: u16 = 640;
@@ -99,26 +99,50 @@ fn paint_desktop_frame(
     paint_custom_cursor(window, bounds, cursor, last_mouse_pos, &transform);
 }
 
-/// 批量绘制落入视口 AABB 范围内的增量瓦片。
+/// 批量绘制落入视口可见区间内的增量瓦片（直接反算行列范围，避免全网格遍历）。
 fn paint_visible_tiles(
     window: &mut Window,
     bounds: Bounds<Pixels>,
     cache: &TiledFrameCache,
     transform: &ViewportTransform,
 ) {
-    let cols = cache.cols as usize;
-    let rows = cache.rows as usize;
-    let view_r = bounds.origin.x + bounds.size.width;
-    let view_b = bounds.origin.y + bounds.size.height;
+    if cache.cols == 0 || cache.rows == 0 || transform.scale <= 0.0 {
+        return;
+    }
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let idx = r * cols + c;
+    let view_w = f32::from(bounds.size.width);
+    let view_h = f32::from(bounds.size.height);
+    let vis_left = ((0.0 - transform.offset_x) / transform.scale)
+        .max(0.0)
+        .floor() as u32;
+    let vis_top = ((0.0 - transform.offset_y) / transform.scale)
+        .max(0.0)
+        .floor() as u32;
+    let vis_right = ((view_w - transform.offset_x) / transform.scale)
+        .min(f32::from(cache.width))
+        .ceil() as u32;
+    let vis_bottom = ((view_h - transform.offset_y) / transform.scale)
+        .min(f32::from(cache.height))
+        .ceil() as u32;
+
+    if vis_left >= vis_right || vis_top >= vis_bottom {
+        return;
+    }
+
+    let col_start = (vis_left / TILE_SIZE).min(cache.cols - 1);
+    let col_end = ((vis_right - 1) / TILE_SIZE).min(cache.cols - 1);
+    let row_start = (vis_top / TILE_SIZE).min(cache.rows - 1);
+    let row_end = ((vis_bottom - 1) / TILE_SIZE).min(cache.rows - 1);
+    let cols = cache.cols as usize;
+
+    for r in row_start..=row_end {
+        for c in col_start..=col_end {
+            let idx = (r as usize) * cols + (c as usize);
             let Some(Some(tile_img)) = cache.tiles.get(idx) else {
                 continue;
             };
             let (tile_x, tile_y, tile_w, tile_h) =
-                compute_tile_bounds(cache.width, cache.height, c as u32, r as u32);
+                compute_tile_bounds(cache.width, cache.height, c, r);
             let tile_bounds = transform.map_desktop_rect(
                 bounds.origin,
                 tile_x as f32,
@@ -126,14 +150,6 @@ fn paint_visible_tiles(
                 tile_w as f32,
                 tile_h as f32,
             );
-
-            if tile_bounds.origin.x + tile_bounds.size.width <= bounds.origin.x
-                || tile_bounds.origin.x >= view_r
-                || tile_bounds.origin.y + tile_bounds.size.height <= bounds.origin.y
-                || tile_bounds.origin.y >= view_b
-            {
-                continue;
-            }
 
             let _ = window.paint_image(
                 bounds,
