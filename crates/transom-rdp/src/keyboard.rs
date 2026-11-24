@@ -51,7 +51,8 @@ pub enum KeyChord {
 #[derive(Default)]
 pub struct KeyboardTranslator {
     pressed_keys: HashSet<Scancode>,
-    pressed_unicode: HashSet<char>,
+    /// 记录通过 Unicode 回退按下的 `(归一化键名, 字符)`，确保 `KeyUp` 缺少 `key_char` 时仍能精确释放。
+    pressed_unicode: Vec<(String, char)>,
     modifiers: ModifierState,
 }
 
@@ -75,7 +76,7 @@ impl KeyboardTranslator {
     ) {
         self.sync_modifiers(modifiers, out);
 
-        if let Some(scancode) = key_name_to_scancode(key_name) {
+        if let Some(scancode) = resolve_scancode_for_down(key_name, modifiers.shift) {
             // 核心左修饰键已由 `sync_modifiers` 差分同步，避免按下修饰键自身时重复入队
             if is_synced_modifier(scancode) {
                 return;
@@ -85,26 +86,49 @@ impl KeyboardTranslator {
             return;
         }
 
-        // 未命中物理扫描码且无控制修饰键时，回退为 FastPath Unicode 字符事件（支持中文/IME）
+        // 未命中物理扫描码且无控制修饰键时，回退为 FastPath Unicode 字符事件（支持中文/IME/非美式符号）
         if !modifiers.has_command_modifier()
             && let Some(text) = key_char
         {
+            let normalized = key_name.to_ascii_lowercase();
             for ch in text.chars() {
                 if !ch.is_control() {
-                    self.pressed_unicode.insert(ch);
+                    if !self
+                        .pressed_unicode
+                        .iter()
+                        .any(|(k, c)| *k == normalized && *c == ch)
+                    {
+                        self.pressed_unicode.push((normalized.clone(), ch));
+                    }
                     out.push(Operation::UnicodeKeyPressed(ch));
                 }
             }
         }
     }
 
-    /// 处理按键抬起：按扫描码或 Unicode 字符精准释放。
+    /// 处理按键抬起：优先匹配已按下的 Unicode 键记录，再按扫描码或 `key_char` 释放。
     pub fn handle_key_up(
         &mut self,
         key_name: &str,
         key_char: Option<&str>,
         out: &mut Vec<Operation>,
     ) {
+        let normalized = key_name.to_ascii_lowercase();
+        let mut released_unicode = false;
+        let mut i = 0;
+        while i < self.pressed_unicode.len() {
+            if self.pressed_unicode[i].0 == normalized {
+                let (_, ch) = self.pressed_unicode.swap_remove(i);
+                out.push(Operation::UnicodeKeyReleased(ch));
+                released_unicode = true;
+            } else {
+                i += 1;
+            }
+        }
+        if released_unicode {
+            return;
+        }
+
         if let Some(scancode) = key_name_to_scancode(key_name) {
             self.pressed_keys.remove(&scancode);
             out.push(Operation::KeyReleased(scancode));
@@ -113,7 +137,8 @@ impl KeyboardTranslator {
 
         if let Some(text) = key_char {
             for ch in text.chars() {
-                if self.pressed_unicode.remove(&ch) {
+                if let Some(pos) = self.pressed_unicode.iter().position(|(_, c)| *c == ch) {
+                    self.pressed_unicode.swap_remove(pos);
                     out.push(Operation::UnicodeKeyReleased(ch));
                 }
             }
@@ -138,7 +163,7 @@ impl KeyboardTranslator {
     pub fn release_all(&mut self, out: &mut Vec<Operation>) {
         self.modifiers = ModifierState::default();
 
-        for ch in self.pressed_unicode.drain() {
+        for (_, ch) in self.pressed_unicode.drain(..) {
             out.push(Operation::UnicodeKeyReleased(ch));
         }
 
@@ -195,6 +220,63 @@ fn is_synced_modifier(code: Scancode) -> bool {
         || code == SCANCODE_LALT
         || code == SCANCODE_LSHIFT
         || code == SCANCODE_LWIN
+}
+
+/// 根据 `Shift` 状态决定按下事件是否映射为美式物理扫描码；
+/// 对无 `Shift` 状态下出现的 Shift 派生符号（如非美式键盘直接打出的 `!`/`@`/`_`），
+/// 返回 `None` 以便回退到 Unicode 输入，避免误发未 Shift 的数字/标点键。
+fn resolve_scancode_for_down(name: &str, shift_held: bool) -> Option<Scancode> {
+    if !shift_held && is_shifted_symbol_name(name) {
+        return None;
+    }
+    key_name_to_scancode(name)
+}
+
+fn is_shifted_symbol_name(name: &str) -> bool {
+    matches!(
+        name,
+        "!" | "exclam"
+            | "@"
+            | "at"
+            | "#"
+            | "numbersign"
+            | "$"
+            | "dollar"
+            | "%"
+            | "percent"
+            | "^"
+            | "asciicircum"
+            | "&"
+            | "ampersand"
+            | "*"
+            | "asterisk"
+            | "("
+            | "parenleft"
+            | ")"
+            | "parenright"
+            | "_"
+            | "underscore"
+            | "+"
+            | "plus"
+            | "{"
+            | "braceleft"
+            | "}"
+            | "braceright"
+            | ":"
+            | "colon"
+            | "\""
+            | "quotedbl"
+            | "~"
+            | "asciitilde"
+            | "|"
+            | "bar"
+            | "<"
+            | "less"
+            | ">"
+            | "greater"
+            | "?"
+            | "question"
+    )
 }
 
 /// 常用键名到 XT 扫描码（及扩展标志）映射。
@@ -415,5 +497,27 @@ mod tests {
         assert!(key_name_to_scancode("@").is_some());
         assert!(key_name_to_scancode("?").is_some());
         assert!(key_name_to_scancode("unknown_key_xyz").is_none());
+    }
+
+    #[test]
+    fn test_unicode_release_without_key_char_and_unshifted_symbol_fallback() {
+        let mut translator = KeyboardTranslator::default();
+        let mut ops = Vec::new();
+
+        // 按下中文字符但抬起时宿主系统未附带 key_char，仍应根据键名准确释放
+        translator.handle_key_down("ime_zhong", Some("中"), ModifierState::default(), &mut ops);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::UnicodeKeyPressed('中')));
+
+        ops.clear();
+        translator.handle_key_up("ime_zhong", None, &mut ops);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::UnicodeKeyReleased('中')));
+
+        // 非美式键盘未按 Shift 直接输入 '!'，应走 Unicode 而非数字键 1 的扫描码
+        ops.clear();
+        translator.handle_key_down("!", Some("!"), ModifierState::default(), &mut ops);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::UnicodeKeyPressed('!')));
     }
 }
