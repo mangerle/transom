@@ -4,6 +4,7 @@ use super::workspace_response_view::{centered_message, response_color};
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::StyledExt;
 use gpui_kit::component::scroll::ScrollableElement;
@@ -261,6 +262,11 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
             rust_i18n::t!("api.response.history_assertions").to_string(),
             rems(5.5),
             border,
+        ))
+        .child(table_header_cell(
+            rust_i18n::t!("api.response.history_action").to_string(),
+            rems(4.5),
+            border,
         ));
     let rows = params
         .project
@@ -270,6 +276,7 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
         .enumerate()
         .map(|(index, entry)| {
             let view = params.view.clone();
+            let replay_view = params.view.clone();
             let request_id = entry.request_id;
             let status_color = response_color(entry.status, p);
             h_flex()
@@ -328,6 +335,33 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
                     border,
                     false,
                 ))
+                .child(
+                    div()
+                        .w(rems(4.5))
+                        .flex_none()
+                        .h_full()
+                        .px(rems(space::XS))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .border_l_1()
+                        .border_color(border)
+                        .child(
+                            IconButton::new(
+                                ("api-history-replay", index),
+                                AppIcon::Ui(UiIcon::FETCH),
+                                rust_i18n::t!("api.response.history_replay").to_string(),
+                            )
+                            .size(IconButtonSize::RowAction)
+                            .render()
+                            .on_click(move |_, window, cx| {
+                                cx.stop_propagation();
+                                replay_view.update(cx, |this, cx| {
+                                    this.replay_history(request_id, window, cx)
+                                });
+                            }),
+                        ),
+                )
                 .into_any_element()
         });
     v_flex()

@@ -799,6 +799,21 @@ api:
     history_assertions:
       en: Assertions
       zh-CN: 断言
+    history_action:
+      en: Action
+      zh-CN: 操作
+    history_replay:
+      en: Replay request
+      zh-CN: 重放请求
+    history_request_missing:
+      en: The request for this history entry has been deleted.
+      zh-CN: 该历史记录对应的请求已被删除。
+    copy_body:
+      en: Copy response body
+      zh-CN: 复制响应正文
+    body_copied:
+      en: Response body copied
+      zh-CN: 响应正文已复制
     no_cookies:
       en: This response has no cookies.
       zh-CN: 本次响应没有 Cookie。

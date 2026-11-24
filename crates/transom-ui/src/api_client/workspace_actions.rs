@@ -63,6 +63,38 @@ impl ApiWorkspace {
         self.send_task = Some(task);
     }
 
+    /// 重放历史记录对应的当前请求；请求已被删除时给出明确错误。
+    pub(crate) fn replay_history(
+        &mut self,
+        request_id: transom_api::ApiRequestId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.project.request(request_id).is_none() {
+            self.set_error(
+                rust_i18n::t!("api.response.history_request_missing").to_string(),
+                cx,
+            );
+            return;
+        }
+        self.select_request(request_id, window, cx);
+        self.send_request(window, cx);
+    }
+
+    /// 复制当前响应正文；WebSocket 请求复制消息日志。
+    pub(crate) fn copy_response_body(&mut self, cx: &mut Context<Self>) {
+        let text = if self.protocol == ApiProtocol::WebSocket {
+            self.editors.websocket_log.read(cx).value().to_string()
+        } else {
+            self.editors.response_body.read(cx).value().to_string()
+        };
+        if text.is_empty() {
+            return;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        self.set_notice(rust_i18n::t!("api.response.body_copied").to_string(), cx);
+    }
+
     /// 连接 WebSocket，并把收到的消息持续写入日志。
     pub(crate) fn connect_websocket(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.capture_request(cx) {

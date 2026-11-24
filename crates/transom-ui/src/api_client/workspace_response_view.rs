@@ -4,10 +4,12 @@ use super::ApiResponseTab;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
+use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{ApiProtocol, ApiResponseSnapshot};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
@@ -22,6 +24,7 @@ const RESPONSE_TABS: [ApiResponseTab; 5] = [
 
 pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view.clone();
+    let copy_view = params.view.clone();
     let selected = RESPONSE_TABS
         .iter()
         .position(|tab| *tab == params.response_tab)
@@ -60,7 +63,24 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
                         .flex_1()
                         .child(rust_i18n::t!("api.response.title").to_string()),
                 )
-                .children(render_summary(params, p)),
+                .children(render_summary(params, p))
+                .when(
+                    params.response.is_some() || params.protocol == ApiProtocol::WebSocket,
+                    |row| {
+                        row.child(
+                            IconButton::new(
+                                "api-response-copy-body",
+                                AppIcon::Ui(UiIcon::COPY),
+                                rust_i18n::t!("api.response.copy_body").to_string(),
+                            )
+                            .size(IconButtonSize::Compact)
+                            .render()
+                            .on_click(move |_, _, cx| {
+                                copy_view.update(cx, |this, cx| this.copy_response_body(cx));
+                            }),
+                        )
+                    },
+                ),
         )
         .child(
             div()
