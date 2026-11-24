@@ -281,6 +281,8 @@ impl AppShell {
                     editor_ratio: state.editor_ratio,
                     response_tab: state.response_tab,
                     auxiliary_section: state.auxiliary_section,
+                    folder_editor: state.folder_editor.as_ref(),
+                    pending_folder_delete: state.pending_folder_delete,
                     codegen_target: state.codegen_target,
                     ws_connected: state.ws_connected,
                     notice: state.notice.as_deref(),

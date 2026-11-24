@@ -4,30 +4,44 @@ use super::ApiWorkspace;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use crate::widgets::{IconButton, IconButtonSize, list_row, menu_item};
+use crate::widgets::{IconButton, IconButtonSize, action_button, list_row, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_api::{ApiRequest, ApiRequestId, method_for_request};
+use transom_api::{ApiFolder, ApiRequest, ApiRequestId, method_for_request};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view;
     let mut request_rows = v_flex().w_full().gap(rems(space::XXS));
+    if let Some(editor) = params.folder_editor {
+        request_rows = request_rows.child(render_folder_editor(view, editor, p));
+    }
+    if let Some(folder_id) = params.pending_folder_delete
+        && let Some(folder) = params
+            .project
+            .folders
+            .iter()
+            .find(|folder| folder.id == folder_id)
+    {
+        request_rows = request_rows.child(render_folder_delete_confirm(
+            view,
+            folder,
+            params
+                .project
+                .requests
+                .iter()
+                .filter(|request| request.folder_id == Some(folder_id))
+                .count(),
+            p,
+        ));
+    }
     for folder in &params.project.folders {
-        request_rows = request_rows.child(
-            h_flex()
-                .h(rems(size::TREE_BAND_HEIGHT))
-                .px(rems(space::SM))
-                .items_center()
-                .gap(rems(space::XS))
-                .bg(p.list_head)
-                .text_color(p.muted_foreground)
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).xsmall())
-                .child(div().truncate().child(folder.name.clone())),
-        );
+        request_rows = request_rows.child(render_folder_row(view, folder, p));
         for request in params
             .project
             .requests
@@ -58,7 +72,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
         ));
     }
 
-    let body = if params.project.requests.is_empty() {
+    let body = if params.project.requests.is_empty() && params.project.folders.is_empty() {
         v_flex()
             .p(rems(space::MD))
             .gap(rems(space::SM))
@@ -76,6 +90,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
     };
 
     let view_for_new = view.clone();
+    let view_for_new_folder = view.clone();
     v_flex()
         .size_full()
         .min_w_0()
@@ -96,6 +111,19 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
                         .flex_1()
                         .text_color(p.foreground)
                         .child(rust_i18n::t!("api.request.tree_title").to_string()),
+                )
+                .child(
+                    IconButton::new(
+                        "api-folder-new",
+                        AppIcon::Ui(UiIcon::NEW_FOLDER),
+                        rust_i18n::t!("api.request.new_folder").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, window, cx| {
+                        view_for_new_folder
+                            .update(cx, |this, cx| this.start_create_folder(window, cx));
+                    }),
                 )
                 .child(
                     IconButton::new(
@@ -172,4 +200,154 @@ fn render_request_row(
             .child(method_for_request(request)),
     )
     .into_any_element()
+}
+
+fn render_folder_row(view: &Entity<ApiWorkspace>, folder: &ApiFolder, p: &Palette) -> AnyElement {
+    let rename_view = view.clone();
+    let delete_view = view.clone();
+    let folder_id = folder.id;
+    h_flex()
+        .id(ElementId::Name(format!("api-folder-{folder_id}").into()))
+        .h(rems(size::TREE_BAND_HEIGHT))
+        .px(rems(space::SM))
+        .items_center()
+        .gap(rems(space::XS))
+        .bg(p.list_head)
+        .text_color(p.muted_foreground)
+        .context_menu(move |menu, _, _| {
+            let rename_view = rename_view.clone();
+            let delete_view = delete_view.clone();
+            menu.item(menu_item(
+                rust_i18n::t!("api.request.rename_folder").to_string(),
+                AppIcon::Ui(UiIcon::EDIT),
+                move |_, window, cx| {
+                    rename_view.update(cx, |this, cx| {
+                        this.start_rename_folder(folder_id, window, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                rust_i18n::t!("api.request.delete_folder").to_string(),
+                AppIcon::Ui(UiIcon::DELETE),
+                move |_, _, cx| {
+                    delete_view.update(cx, |this, cx| this.request_delete_folder(folder_id, cx));
+                },
+            ))
+        })
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::FOLDER)).xsmall())
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(folder.name.clone()),
+        )
+        .into_any_element()
+}
+
+fn render_folder_editor(
+    view: &Entity<ApiWorkspace>,
+    editor: &super::workspace_folder::FolderEditor,
+    p: &Palette,
+) -> AnyElement {
+    let submit_view = view.clone();
+    let cancel_view = view.clone();
+    let row = h_flex()
+        .mx(rems(space::XS))
+        .my(rems(space::XXS))
+        .gap(rems(space::XS))
+        .items_center()
+        .child(Input::new(&editor.input).flex_1().min_w_0())
+        .child(
+            IconButton::new(
+                "api-folder-editor-submit",
+                AppIcon::Ui(UiIcon::CHECK),
+                rust_i18n::t!("api.request.save_folder").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(move |_, _, cx| {
+                submit_view.update(cx, |this, cx| this.submit_folder_editor(cx));
+            }),
+        )
+        .child(
+            IconButton::new(
+                "api-folder-editor-cancel",
+                AppIcon::Ui(UiIcon::CLOSE),
+                rust_i18n::t!("api.project.cancel").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(move |_, _, cx| {
+                cancel_view.update(cx, |this, cx| this.cancel_folder_editor(cx));
+            }),
+        );
+    let mut content = v_flex().child(row);
+    if let Some(error) = &editor.error {
+        content = content.child(
+            div()
+                .px(rems(space::SM))
+                .text_color(p.danger)
+                .child(error.clone()),
+        );
+    }
+    content.into_any_element()
+}
+
+fn render_folder_delete_confirm(
+    view: &Entity<ApiWorkspace>,
+    folder: &ApiFolder,
+    request_count: usize,
+    p: &Palette,
+) -> AnyElement {
+    let confirm_view = view.clone();
+    let cancel_view = view.clone();
+    v_flex()
+        .mx(rems(space::XS))
+        .my(rems(space::XXS))
+        .p(rems(space::SM))
+        .gap(rems(space::XS))
+        .rounded(p.radius.md)
+        .border_1()
+        .border_color(p.danger)
+        .child(
+            div().text_color(p.foreground).child(
+                rust_i18n::t!(
+                    "api.request.delete_folder_confirm",
+                    name = folder.name.as_str()
+                )
+                .to_string(),
+            ),
+        )
+        .child(div().text_color(p.muted_foreground).child(
+            rust_i18n::t!("api.request.delete_folder_hint", count = request_count).to_string(),
+        ))
+        .child(
+            h_flex()
+                .gap(rems(space::XS))
+                .child(
+                    action_button(
+                        "api-folder-delete-confirm",
+                        AppIcon::Ui(UiIcon::DELETE),
+                        rust_i18n::t!("api.project.delete").to_string(),
+                    )
+                    .danger()
+                    .on_click(move |_, _, cx| {
+                        confirm_view.update(cx, |this, cx| this.confirm_delete_folder(cx));
+                    }),
+                )
+                .child(
+                    IconButton::new(
+                        "api-folder-delete-cancel",
+                        AppIcon::Ui(UiIcon::CLOSE),
+                        rust_i18n::t!("api.project.cancel").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        cancel_view.update(cx, |this, cx| this.cancel_delete_folder(cx));
+                    }),
+                ),
+        )
+        .into_any_element()
 }

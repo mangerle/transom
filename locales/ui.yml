@@ -347,6 +347,30 @@ api:
     duplicate:
       en: Duplicate request
       zh-CN: 复制请求
+    new_folder:
+      en: New folder
+      zh-CN: 新建目录
+    folder_name_placeholder:
+      en: Folder name
+      zh-CN: 目录名称
+    folder_name_required:
+      en: Folder name is required
+      zh-CN: 目录名称不能为空
+    rename_folder:
+      en: Rename folder
+      zh-CN: 重命名目录
+    delete_folder:
+      en: Delete folder
+      zh-CN: 删除目录
+    save_folder:
+      en: Save folder
+      zh-CN: 保存目录
+    delete_folder_confirm:
+      en: 'Delete folder "%{name}"?'
+      zh-CN: 删除目录“%{name}”？
+    delete_folder_hint:
+      en: '%{count} requests will be moved to the project root.'
+      zh-CN: '%{count} 个请求将移回项目根层。'
     empty_title:
       en: No requests yet
       zh-CN: 还没有请求

@@ -22,6 +22,7 @@ mod workspace_advanced_view;
 mod workspace_body_view;
 mod workspace_editor_state;
 mod workspace_editors;
+mod workspace_folder;
 mod workspace_kv;
 mod workspace_request_view;
 mod workspace_response_tables;

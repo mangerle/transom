@@ -11,8 +11,8 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::*;
 use transom_api::{
-    ApiAssertionResult, ApiEnvironmentId, ApiMethod, ApiProject, ApiProtocol, ApiRequest,
-    ApiRequestId, ApiResponseSnapshot,
+    ApiAssertionResult, ApiEnvironmentId, ApiFolderId, ApiMethod, ApiProject, ApiProtocol,
+    ApiRequest, ApiRequestId, ApiResponseSnapshot,
 };
 
 /// API 工作区渲染参数；所有跨实体数据由外壳在本帧读取后传入。
@@ -28,6 +28,8 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) editor_ratio: f32,
     pub(crate) response_tab: ApiResponseTab,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(crate) folder_editor: Option<&'a super::workspace_folder::FolderEditor>,
+    pub(crate) pending_folder_delete: Option<ApiFolderId>,
     pub(crate) codegen_target: transom_api::CodeTarget,
     pub(crate) ws_connected: bool,
     pub(crate) notice: Option<&'a str>,

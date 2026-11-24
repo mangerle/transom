@@ -1,6 +1,7 @@
 //! API 项目工作区实体：请求、环境、认证、断言和协议运行状态。
 
 use super::kv_editor::KvEditorEvent;
+use super::workspace_folder::FolderEditor;
 pub(crate) use super::workspace_types::{
     ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent,
     ApiWorkspaceServices,
@@ -9,8 +10,9 @@ use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use transom_api::{
-    ApiAssertionResult, ApiEnvironmentId, ApiImportFormat, ApiMethod, ApiProject, ApiProtocol,
-    ApiRequest, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, import_projects,
+    ApiAssertionResult, ApiEnvironmentId, ApiFolderId, ApiImportFormat, ApiMethod, ApiProject,
+    ApiProtocol, ApiRequest, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle,
+    import_projects,
 };
 
 /// 单个 API 项目标签的工作区实体。
@@ -39,6 +41,8 @@ pub(crate) struct ApiWorkspace {
     pub(crate) ws_task: Option<Task<()>>,
     pub(crate) ws_event_task: Option<Task<()>>,
     pub(crate) ws_handle: Option<ApiWebSocketHandle>,
+    pub(crate) folder_editor: Option<FolderEditor>,
+    pub(crate) pending_folder_delete: Option<ApiFolderId>,
     editor_subscriptions: Vec<Subscription>,
     binary_file_task: Option<Task<()>>,
 }
@@ -83,6 +87,8 @@ impl ApiWorkspace {
             ws_task: None,
             ws_event_task: None,
             ws_handle: None,
+            folder_editor: None,
+            pending_folder_delete: None,
             editor_subscriptions: Vec::new(),
             binary_file_task: None,
         };

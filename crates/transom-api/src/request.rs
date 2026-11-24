@@ -640,4 +640,21 @@ mod tests {
         assert_eq!(duplicate.url, request.url);
         assert_eq!(duplicate.headers, request.headers);
     }
+
+    #[test]
+    fn removing_folder_moves_requests_to_project_root() {
+        let mut project = super::super::ApiProject::new("目录测试");
+        let folder = project.add_folder("用户");
+        let request = ApiRequest::new("列表", Some(folder.id));
+        let request_id = request.id;
+        project.upsert_request(request);
+
+        assert!(project.remove_folder(folder.id));
+        assert_eq!(
+            project
+                .request(request_id)
+                .and_then(|request| request.folder_id),
+            None
+        );
+    }
 }

@@ -39,6 +39,8 @@ UI 采用“Transom 视觉语言 + CyberAPI 信息架构”的原则，不复制
 ```text
 API 项目标签
   ├─ 左侧接口树
+  │    ├─ 新建、重命名和删除目录
+  │    └─ 新建、重命名和复制请求
   ├─ 项目工具条
   │    ├─ HTTP / GraphQL / gRPC / WebSocket 协议
   │    ├─ 环境选择与环境变量
@@ -55,6 +57,7 @@ API 项目标签
 请求页签按方法和协议动态出现：
 
 - Query：名称、值、说明三列表格，启用项合并到发送 URL。
+- 接口树支持单层目录管理；删除目录时，目录内请求会移回项目根层，不会连带删除。
 - Body：HTTP 请求体、GraphQL Query/Variables、gRPC 服务/方法/消息、WebSocket 消息。
 - Header：名称、值、说明三列表格。
 - Auth、Assertions：当前请求的认证与断言。

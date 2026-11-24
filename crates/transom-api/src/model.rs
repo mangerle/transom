@@ -177,6 +177,22 @@ impl ApiProject {
         folder
     }
 
+    /// 删除目录并把其中的请求移回项目根层，避免删除目录时连带丢失请求。
+    pub fn remove_folder(&mut self, id: ApiFolderId) -> bool {
+        let before = self.folders.len();
+        self.folders.retain(|folder| folder.id != id);
+        if before == self.folders.len() {
+            return false;
+        }
+        for request in &mut self.requests {
+            if request.folder_id == Some(id) {
+                request.folder_id = None;
+            }
+        }
+        self.touch();
+        true
+    }
+
     /// 追加一条请求历史，超过上限时保留最近记录。
     pub fn push_history(&mut self, entry: ApiHistoryEntry) {
         self.history.push(entry);
