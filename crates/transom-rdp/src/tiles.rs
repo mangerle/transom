@@ -152,43 +152,40 @@ impl TiledDesktopFrame {
 
 /// 从已解码的位图画布中提取单个瓦片的像素并转换为 RGBA 格式。
 ///
-/// 优化说明：使用成行对齐切片与 `chunks_exact(4)` 替代逐像素点坐标计算与越界检测，
-/// 循环体完全消除 bounds check，便于 LLVM 编译器进行循环展开与 SIMD 自动向量化。
+/// 优化核心：
+/// 1. 彻底消灭 `RgbaImage::new` 强制触发的 256KB 零初始化 memset 开销，
+///    改用预分配容量 `Vec::with_capacity` 配合零拷贝 `from_raw` 包装；
+/// 2. 使用成行对齐切片与 `as_chunks::<4>()`，便于 LLVM 编译器进行循环展开与 SIMD 自动向量化。
 fn extract_tile_image(canvas: &DecodedImage, col: u32, row: u32) -> RenderImage {
     let (left, top, tile_w, tile_h) =
         compute_tile_bounds(canvas.width(), canvas.height(), col, row);
 
-    let mut rgba_buffer = RgbaImage::new(tile_w, tile_h);
+    let tile_w_bytes = (tile_w as usize) * 4;
+    let total_bytes = tile_w_bytes * (tile_h as usize);
+    let mut raw_vec = Vec::with_capacity(total_bytes);
+
     let canvas_stride = usize::from(canvas.width()) * 4;
     let raw_pixels = canvas.data();
-    let target_raw: &mut [u8] = &mut rgba_buffer;
-    let tile_w_bytes = (tile_w as usize) * 4;
 
     for y in 0..tile_h as usize {
         let canvas_y = top as usize + y;
         let src_start = canvas_y * canvas_stride + (left as usize) * 4;
         let src_end = src_start + tile_w_bytes;
-        let dst_start = y * tile_w_bytes;
-        let dst_end = dst_start + tile_w_bytes;
 
-        if src_end <= raw_pixels.len() && dst_end <= target_raw.len() {
+        if src_end <= raw_pixels.len() {
             let src_slice = &raw_pixels[src_start..src_end];
-            let dst_slice = &mut target_raw[dst_start..dst_end];
-
-            for (src, dst) in src_slice
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .zip(dst_slice.as_chunks_mut::<4>().0.iter_mut())
-            {
-                // BgrX32 转换为 RGBA8：原 BGR 重新排布为 RGB，并填充不透明 Alpha
-                dst[0] = src[2];
-                dst[1] = src[1];
-                dst[2] = src[0];
-                dst[3] = 255;
+            for src in src_slice.as_chunks::<4>().0 {
+                // BgrX32 转换为 RGBA8：原 BGR 重新排布为 RGB，并填充不透明 Alpha (255)
+                raw_vec.extend_from_slice(&[src[2], src[1], src[0], 255]);
             }
+        } else {
+            // 越界安全防护（兜底填充黑底）
+            raw_vec.resize(raw_vec.len() + tile_w_bytes, 0);
         }
     }
+
+    let rgba_buffer = RgbaImage::from_raw(tile_w, tile_h, raw_vec)
+        .unwrap_or_else(|| RgbaImage::new(tile_w, tile_h));
 
     RenderImage::new(vec![Frame::new(rgba_buffer)])
 }

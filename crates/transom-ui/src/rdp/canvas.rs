@@ -5,18 +5,16 @@
 //! 远端自定义光标的无延迟客户端硬件合成绘制。
 
 use gpui_kit::*;
-use transom_rdp::{CursorUpdate, RdpInput};
+use transom_rdp::RdpInput;
 
 use super::view::RdpView;
 
 impl RdpView {
-    /// 渲染桌面瓦片集合的高性能 GPU 自绘画布（含视口 AABB 裁剪与客户端光标渲染）。
+    /// 渲染桌面瓦片集合的高性能 GPU 自绘画布（含视口 AABB 裁剪与等比居中）。
     pub(crate) fn render_desktop_canvas(&self, cx: &Context<Self>) -> impl IntoElement {
         let view_entity = cx.entity().clone();
         let frame = self.frame.clone();
         let is_scaled = self.is_scaled;
-        let cursor = self.cursor.clone();
-        let last_mouse_pos = self.last_mouse_pos;
 
         canvas(
             move |bounds, _window, cx| {
@@ -50,19 +48,22 @@ impl RdpView {
                     return;
                 }
 
-                let (scale_x, scale_y) = if is_scaled {
-                    (
-                        f32::from(bounds.size.width) / f32::from(desktop_width),
-                        f32::from(bounds.size.height) / f32::from(desktop_height),
-                    )
+                let (scale, offset_x, offset_y) = if is_scaled {
+                    let view_w = f32::from(bounds.size.width);
+                    let view_h = f32::from(bounds.size.height);
+                    let s = (view_w / f32::from(desktop_width))
+                        .min(view_h / f32::from(desktop_height));
+                    let ox = (view_w - f32::from(desktop_width) * s) / 2.0;
+                    let oy = (view_h - f32::from(desktop_height) * s) / 2.0;
+                    (s, ox, oy)
                 } else {
-                    (1.0, 1.0)
+                    (1.0, 0.0, 0.0)
                 };
 
                 let view_r = bounds.origin.x + bounds.size.width;
                 let view_b = bounds.origin.y + bounds.size.height;
 
-                // 1. 批量绘制增量可见瓦片（执行 AABB 视口相交裁剪）
+                // 1. 批量绘制增量可见瓦片（执行 AABB 视口相交裁剪与居中等比映射）
                 for r in 0..rows {
                     for c in 0..cols {
                         let idx = r * cols + c;
@@ -77,12 +78,12 @@ impl RdpView {
 
                             let dst_origin = bounds.origin
                                 + Point::new(
-                                    px(tile_x as f32 * scale_x),
-                                    px(tile_y as f32 * scale_y),
+                                    px(offset_x + tile_x as f32 * scale),
+                                    px(offset_y + tile_y as f32 * scale),
                                 );
                             let dst_size = Size {
-                                width: px(tile_w as f32 * scale_x),
-                                height: px(tile_h as f32 * scale_y),
+                                width: px(tile_w as f32 * scale),
+                                height: px(tile_h as f32 * scale),
                             };
 
                             // AABB 视口相交判定：若瓦片完全落在视口外部则剔除
@@ -109,35 +110,6 @@ impl RdpView {
                             );
                         }
                     }
-                }
-
-                // 2. 客户端自绘远端光标位图（零延迟且支持动态形状）
-                if let Some(CursorUpdate::Custom {
-                    width,
-                    height,
-                    hot_x,
-                    hot_y,
-                    image,
-                }) = &cursor
-                    && let Some((mx, my)) = last_mouse_pos
-                {
-                    let cur_x = bounds.origin.x + px(mx as f32 * scale_x - *hot_x as f32);
-                    let cur_y = bounds.origin.y + px(my as f32 * scale_y - *hot_y as f32);
-                    let cur_bounds = Bounds {
-                        origin: Point::new(cur_x, cur_y),
-                        size: Size {
-                            width: px(*width as f32),
-                            height: px(*height as f32),
-                        },
-                    };
-                    let _ = window.paint_image(
-                        bounds,
-                        cur_bounds,
-                        Corners::default(),
-                        image.clone(),
-                        0,
-                        false,
-                    );
                 }
             },
         )

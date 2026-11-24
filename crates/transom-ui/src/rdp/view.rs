@@ -239,12 +239,31 @@ impl Focusable for RdpView {
 
 impl Render for RdpView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let cursor_style = match &self.cursor {
+            Some(CursorUpdate::Custom {
+                hot_x,
+                hot_y,
+                width,
+                height,
+                ..
+            }) => {
+                if *width > 0 && *height > 0 && *hot_x == *width / 2 && *hot_y == *height / 2 {
+                    CursorStyle::Crosshair
+                } else if *hot_x > 0 && *hot_x < 8 && *height > 10 {
+                    CursorStyle::IBeam
+                } else {
+                    CursorStyle::Arrow
+                }
+            }
+            _ => CursorStyle::Arrow,
+        };
+
         let root = div()
             .track_focus(&self.focus_handle)
             .size_full()
             .relative()
             .bg(gpui_kit::rgb(0x101010))
-            .cursor(CursorStyle::Arrow)
+            .cursor(cursor_style)
             .overflow_hidden()
             .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, _| {
                 if let RdpViewState::Connected { width, height } = this.state
@@ -352,9 +371,15 @@ impl Render for RdpView {
                 }
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                this.sync_clipboard_to_remote(cx);
+                let key = &event.keystroke.key;
+                let is_paste = key.eq_ignore_ascii_case("v")
+                    && (event.keystroke.modifiers.control
+                        || event.keystroke.modifiers.platform);
+                if is_paste {
+                    this.sync_clipboard_to_remote(cx);
+                }
                 this.send_input(RdpInput::KeyDown {
-                    key: event.keystroke.key.clone(),
+                    key: key.clone(),
                 });
             }))
             .on_key_up(cx.listener(move |this, event: &KeyUpEvent, _, _| {

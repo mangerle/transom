@@ -8,6 +8,9 @@ use gpui_kit::{Bounds, Pixels, Point};
 use transom_rdp::{MouseBtn, RdpInput};
 
 /// 计算鼠标在远端桌面上的物理像素坐标。
+///
+/// 优化说明：自适应缩放模式下采用严格保持宽高比的等比缩放，
+/// 并按黑边居中偏移（Letterbox / Pillarbox）计算物理像素，杜绝视口拉伸形变与鼠标热点偏移。
 pub fn map_pointer_position(
     cursor_pos: Point<Pixels>,
     viewport_bounds: Bounds<Pixels>,
@@ -22,26 +25,35 @@ pub fn map_pointer_position(
     let rel_x = f32::from(cursor_pos.x - viewport_bounds.origin.x);
     let rel_y = f32::from(cursor_pos.y - viewport_bounds.origin.y);
 
-    let (x, y) = if scale_to_fit {
+    let (scale, offset_x, offset_y) = if scale_to_fit {
         let view_w = f32::from(viewport_bounds.size.width);
         let view_h = f32::from(viewport_bounds.size.height);
-        let scale_x = f32::from(desktop_width) / view_w;
-        let scale_y = f32::from(desktop_height) / view_h;
-        (rel_x * scale_x, rel_y * scale_y)
+        let s = (view_w / f32::from(desktop_width))
+            .min(view_h / f32::from(desktop_height));
+        let ox = (view_w - f32::from(desktop_width) * s) / 2.0;
+        let oy = (view_h - f32::from(desktop_height) * s) / 2.0;
+        (s, ox, oy)
     } else {
-        // 非等比缩放模式下，若鼠标落在超出桌面尺寸的黑边空白区域，直接忽略
-        if rel_x >= f32::from(desktop_width) || rel_y >= f32::from(desktop_height) {
-            return None;
-        }
-        (rel_x, rel_y)
+        (1.0, 0.0, 0.0)
     };
 
-    if x < 0.0 || y < 0.0 {
+    if scale <= 0.0 {
         return None;
     }
 
-    let px = (x.round() as u16).min(desktop_width - 1);
-    let py = (y.round() as u16).min(desktop_height - 1);
+    let desk_x = (rel_x - offset_x) / scale;
+    let desk_y = (rel_y - offset_y) / scale;
+
+    if desk_x < 0.0
+        || desk_y < 0.0
+        || desk_x >= f32::from(desktop_width)
+        || desk_y >= f32::from(desktop_height)
+    {
+        return None;
+    }
+
+    let px = (desk_x.round() as u16).min(desktop_width - 1);
+    let py = (desk_y.round() as u16).min(desktop_height - 1);
     Some((px, py))
 }
 

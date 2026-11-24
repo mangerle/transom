@@ -23,10 +23,13 @@ pub struct RdpSession {
 
 impl RdpSession {
     /// 异步拨号并启动独立的会话工作线程。
-    pub fn connect(config: SessionConfig) -> (Self, mpsc::Receiver<RdpOutput>) {
+    pub fn connect(mut config: SessionConfig) -> (Self, mpsc::Receiver<RdpOutput>) {
         let (input_ch, output_ch) = channel::create_session_channels();
         let (input_tx, input_rx) = input_ch;
         let (output_tx, output_rx) = output_ch;
+
+        let output_tx_err = output_tx.clone();
+        let host_for_err = config.host.clone();
 
         let spawn_result = thread::Builder::new()
             .name("transom-rdp-session".to_string())
@@ -49,6 +52,8 @@ impl RdpSession {
                 runtime.block_on(async move {
                     match connector::establish_connection(&config, &output_tx).await {
                         Ok(conn) => {
+                            // 握手连接建立成功后，即刻清空擦除内存中的密码字符串
+                            config.clear_password();
                             let runner = loop_runner::SessionLoopRunner::new(
                                 conn.framed,
                                 conn.result,
@@ -60,6 +65,7 @@ impl RdpSession {
                             runner.run().await;
                         }
                         Err(e) => {
+                            config.clear_password();
                             log::warn!("RDP 连接建立失败: {e}");
                             let _ = output_tx.send(RdpOutput::Terminated(e)).await;
                         }
@@ -69,8 +75,10 @@ impl RdpSession {
 
         if let Err(e) = spawn_result {
             log::error!("派生 RDP 独立会话线程失败: {e}");
-            // 线程创建失败，向输出通道推入终止通知
-            let _ = input_tx.try_send(RdpInput::Disconnect);
+            let _ = output_tx_err.try_send(RdpOutput::Terminated(RdpError::Network {
+                address: host_for_err,
+                source: std::io::Error::other(e.to_string()),
+            }));
         }
 
         (Self { input_tx }, output_rx)

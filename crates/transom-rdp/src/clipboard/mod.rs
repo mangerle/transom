@@ -21,35 +21,3 @@ pub enum ClipboardEvent {
     /// 本地向远端发送文本剪贴板更新。
     LocalTextUpdate(String),
 }
-
-/// 剪贴板通道管理状态。
-#[derive(Default)]
-pub struct ClipboardManager {
-    /// 最近一次同步的文本指纹/内容，避免双向回环风暴。
-    last_synced_text: Option<String>,
-}
-
-impl ClipboardManager {
-    /// 构造新的剪贴板通道管理器。
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// 检查是否为重复文本，若有新内容则更新内部记录。
-    pub fn should_sync_remote_text(&mut self, text: &str) -> bool {
-        if self.last_synced_text.as_deref() == Some(text) {
-            return false;
-        }
-        self.last_synced_text = Some(text.to_string());
-        true
-    }
-
-    /// 记录本地更新并准备发往对端。
-    pub fn update_local_text(&mut self, text: String) -> Option<Vec<u8>> {
-        if self.last_synced_text.as_ref() == Some(&text) {
-            return None;
-        }
-        self.last_synced_text = Some(text.clone());
-        Some(text::encode_text_payload(&text))
-    }
-}

@@ -138,16 +138,28 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "f10" => Scancode::from_u8(false, 0x44),
         "f11" => Scancode::from_u8(false, 0x57),
         "f12" => Scancode::from_u8(false, 0x58),
-        // 常用标点符号
-        "[" | "bracketleft" => Scancode::from_u8(false, 0x1A),
-        "]" | "bracketright" => Scancode::from_u8(false, 0x1B),
-        ";" | "semicolon" => Scancode::from_u8(false, 0x27),
-        "'" | "quote" => Scancode::from_u8(false, 0x28),
-        "`" | "grave" => Scancode::from_u8(false, 0x29),
-        "\\" | "backslash" => Scancode::from_u8(false, 0x2B),
-        "," | "comma" => Scancode::from_u8(false, 0x33),
-        "." | "period" => Scancode::from_u8(false, 0x34),
-        "/" | "slash" => Scancode::from_u8(false, 0x35),
+        // 常用标点符号与 Shift 组合符号（PC XT 物理键位映射）
+        "[" | "bracketleft" | "{" | "braceleft" => Scancode::from_u8(false, 0x1A),
+        "]" | "bracketright" | "}" | "braceright" => Scancode::from_u8(false, 0x1B),
+        ";" | "semicolon" | ":" | "colon" => Scancode::from_u8(false, 0x27),
+        "'" | "quote" | "\"" | "quotedbl" => Scancode::from_u8(false, 0x28),
+        "`" | "grave" | "~" | "asciitilde" => Scancode::from_u8(false, 0x29),
+        "\\" | "backslash" | "|" | "bar" => Scancode::from_u8(false, 0x2B),
+        "," | "comma" | "<" | "less" => Scancode::from_u8(false, 0x33),
+        "." | "period" | ">" | "greater" => Scancode::from_u8(false, 0x34),
+        "/" | "slash" | "?" | "question" => Scancode::from_u8(false, 0x35),
+        "!" | "exclam" => Scancode::from_u8(false, 0x02),
+        "@" | "at" => Scancode::from_u8(false, 0x03),
+        "#" | "numbersign" => Scancode::from_u8(false, 0x04),
+        "$" | "dollar" => Scancode::from_u8(false, 0x05),
+        "%" | "percent" => Scancode::from_u8(false, 0x06),
+        "^" | "asciicircum" => Scancode::from_u8(false, 0x07),
+        "&" | "ampersand" => Scancode::from_u8(false, 0x08),
+        "*" | "asterisk" => Scancode::from_u8(false, 0x09),
+        "(" | "parenleft" => Scancode::from_u8(false, 0x0A),
+        ")" | "parenright" => Scancode::from_u8(false, 0x0B),
+        "_" | "underscore" => Scancode::from_u8(false, 0x0C),
+        "+" | "plus" => Scancode::from_u8(false, 0x0D),
         // 导航与功能按键（多为扩展扫描码）
         "up" => Scancode::from_u8(true, 0x48),
         "down" => Scancode::from_u8(true, 0x50),
@@ -218,6 +230,13 @@ mod tests {
         assert!(key_name_to_scancode("numpad0").is_some());
         assert!(key_name_to_scancode("prtscn").is_some());
         assert!(key_name_to_scancode("rctrl").is_some());
+        assert!(key_name_to_scancode("!").is_some());
+        assert!(key_name_to_scancode("@").is_some());
+        assert!(key_name_to_scancode("#").is_some());
+        assert!(key_name_to_scancode("$").is_some());
+        assert!(key_name_to_scancode(":").is_some());
+        assert!(key_name_to_scancode("\"").is_some());
+        assert!(key_name_to_scancode("?").is_some());
         assert!(key_name_to_scancode("unknown_key_xyz").is_none());
     }
 }

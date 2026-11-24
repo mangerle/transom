@@ -32,6 +32,9 @@ use tokio::sync::mpsc;
 /// 动态调整分辨率最小防抖冷却间隔（毫秒）。
 const RESIZE_DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
+/// 桌面图像增量帧最小聚合节流间隔（约 60 FPS，防止每秒海量微帧轰炸与协议反压阻塞）。
+const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
 /// 动态分辨率安全限制范围。
 const MIN_DESKTOP_WIDTH: u16 = 640;
 const MAX_DESKTOP_WIDTH: u16 = 4096;
@@ -119,10 +122,24 @@ impl SessionLoopRunner {
 
         let mut last_resize_at = Instant::now() - RESIZE_DEBOUNCE_INTERVAL;
         let mut current_resolution = (width, height);
+        let mut pending_damages = Vec::new();
+        let mut last_frame_flushed = Instant::now();
 
         loop {
+            let wait_time = MIN_FRAME_INTERVAL.saturating_sub(last_frame_flushed.elapsed());
+
             tokio::select! {
-                // 1. 处理来自界面的用户输入指令
+                // 1. 增量损伤帧聚合定时刷新分支（在 16ms 窗口内合并高频 PDU 碎片化刷新）
+                _ = tokio::time::sleep(wait_time), if !pending_damages.is_empty() => {
+                    if tiled_frame.update(&canvas, &pending_damages) {
+                        let frame_arc = Arc::new(tiled_frame.clone());
+                        let _ = output_tx.send(RdpOutput::Frame(frame_arc)).await;
+                    }
+                    pending_damages.clear();
+                    last_frame_flushed = Instant::now();
+                }
+
+                // 2. 处理来自界面的用户输入指令
                 maybe_input = input_rx.recv() => {
                     let Some(input) = maybe_input else {
                         break;
@@ -184,7 +201,7 @@ impl SessionLoopRunner {
                     }
                 }
 
-                // 2. 处理来自网络链路的 RDP PDU 报文
+                // 3. 处理来自网络链路的 RDP PDU 报文
                 pdu_result = reader.read_pdu() => {
                     match pdu_result {
                         Ok((action, payload)) => {
@@ -196,11 +213,22 @@ impl SessionLoopRunner {
                                         break;
                                     }
 
-                                    // 提取最新损伤矩形并提交增量瓦片更新
+                                    // 提取最新损伤矩形并累积至帧合并批处理队列
                                     let damages = active_stage.take_damage_regions();
-                                    if !damages.is_empty() && tiled_frame.update(&canvas, &damages) {
-                                        let frame_arc = Arc::new(tiled_frame.clone());
-                                        let _ = output_tx.send(RdpOutput::Frame(frame_arc)).await;
+                                    if !damages.is_empty() {
+                                        pending_damages.extend(damages);
+                                    }
+
+                                    // 若已达到单帧节流间隔（>=16ms），立即刷新并派发桌面瓦片更新
+                                    if !pending_damages.is_empty()
+                                        && last_frame_flushed.elapsed() >= MIN_FRAME_INTERVAL
+                                    {
+                                        if tiled_frame.update(&canvas, &pending_damages) {
+                                            let frame_arc = Arc::new(tiled_frame.clone());
+                                            let _ = output_tx.send(RdpOutput::Frame(frame_arc)).await;
+                                        }
+                                        pending_damages.clear();
+                                        last_frame_flushed = Instant::now();
                                     }
 
                                     // 处理网络报文后精准驱动 CLIPRDR 剪贴板事件流转
