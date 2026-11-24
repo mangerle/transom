@@ -122,6 +122,7 @@ impl TiledDesktopFrame {
 
         let has_any_dirty = dirty_mask.iter().any(|&d| d);
         if !has_any_dirty && !is_dimension_changed {
+            self.dirty_indices.clear();
             return false;
         }
 
@@ -190,4 +191,31 @@ fn extract_tile_image(canvas: &DecodedImage, col: u32, row: u32) -> RenderImage 
     }
 
     RenderImage::new(vec![Frame::new(rgba_buffer)])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ironrdp_graphics::image_processing::PixelFormat;
+
+    #[test]
+    fn test_extract_tile_image_and_update() {
+        let canvas = DecodedImage::new(PixelFormat::BgrX32, 512, 512);
+
+        let _tile = extract_tile_image(&canvas, 0, 0);
+
+        let mut desktop_frame = TiledDesktopFrame::default();
+        let changed = desktop_frame.update(&canvas, &[]);
+        assert!(changed);
+        assert_eq!(desktop_frame.cols, 2);
+        assert_eq!(desktop_frame.rows, 2);
+        assert_eq!(desktop_frame.seq, 1);
+        assert_eq!(desktop_frame.dirty_indices.len(), 4);
+
+        // 无损伤时再次更新，应返回 false 且序列号不增加
+        let changed_again = desktop_frame.update(&canvas, &[]);
+        assert!(!changed_again);
+        assert_eq!(desktop_frame.seq, 1);
+        assert!(desktop_frame.dirty_indices.is_empty());
+    }
 }

@@ -29,6 +29,10 @@ pub fn map_pointer_position(
         let scale_y = f32::from(desktop_height) / view_h;
         (rel_x * scale_x, rel_y * scale_y)
     } else {
+        // 非等比缩放模式下，若鼠标落在超出桌面尺寸的黑边空白区域，直接忽略
+        if rel_x >= f32::from(desktop_width) || rel_y >= f32::from(desktop_height) {
+            return None;
+        }
         (rel_x, rel_y)
     };
 

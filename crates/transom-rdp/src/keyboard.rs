@@ -5,6 +5,7 @@
 //! 本模块建立标准扫描码转换表，并维护修饰键状态，避免远端按键卡死或错乱。
 
 use ironrdp_input::{Operation, Scancode};
+use std::collections::HashSet;
 
 /// 键盘状态跟踪器。
 #[derive(Default)]
@@ -13,6 +14,7 @@ pub struct KeyboardTranslator {
     alt_pressed: bool,
     shift_pressed: bool,
     meta_pressed: bool,
+    pressed_keys: HashSet<Scancode>,
 }
 
 impl KeyboardTranslator {
@@ -21,6 +23,7 @@ impl KeyboardTranslator {
         let mut ops = Vec::with_capacity(2);
         if let Some(scancode) = key_name_to_scancode(key_name) {
             self.track_modifiers(key_name, true);
+            self.pressed_keys.insert(scancode);
             ops.push(Operation::KeyPressed(scancode));
         }
         ops
@@ -31,24 +34,33 @@ impl KeyboardTranslator {
         let mut ops = Vec::with_capacity(2);
         if let Some(scancode) = key_name_to_scancode(key_name) {
             self.track_modifiers(key_name, false);
+            self.pressed_keys.remove(&scancode);
             ops.push(Operation::KeyReleased(scancode));
         }
         ops
     }
 
-    /// 释放全部按键（防止切换标签或失焦时遗留按键按住状态）。
+    /// 释放全部当前被按下的按键（防止切换标签或失焦时遗留按键按住状态）。
     pub fn release_all(&mut self) -> Vec<Operation> {
         self.ctrl_pressed = false;
         self.alt_pressed = false;
         self.shift_pressed = false;
         self.meta_pressed = false;
-        // 逐一释放关键修饰键
-        vec![
-            Operation::KeyReleased(Scancode::from_u8(false, 0x1D)), // Left Ctrl
-            Operation::KeyReleased(Scancode::from_u8(false, 0x38)), // Left Alt
-            Operation::KeyReleased(Scancode::from_u8(false, 0x2A)), // Left Shift
-            Operation::KeyReleased(Scancode::from_u8(true, 0x5B)),  // Left Win
-        ]
+
+        if self.pressed_keys.is_empty() {
+            // 兜底释放关键修饰键
+            return vec![
+                Operation::KeyReleased(Scancode::from_u8(false, 0x1D)), // Left Ctrl
+                Operation::KeyReleased(Scancode::from_u8(false, 0x38)), // Left Alt
+                Operation::KeyReleased(Scancode::from_u8(false, 0x2A)), // Left Shift
+                Operation::KeyReleased(Scancode::from_u8(true, 0x5B)),  // Left Win
+            ];
+        }
+
+        self.pressed_keys
+            .drain()
+            .map(Operation::KeyReleased)
+            .collect()
     }
 
     fn track_modifiers(&mut self, key_name: &str, pressed: bool) {
@@ -189,11 +201,13 @@ mod tests {
         let ops = translator.handle_key_down("enter");
         assert_eq!(ops.len(), 1);
 
-        let ops_up = translator.handle_key_up("enter");
-        assert_eq!(ops_up.len(), 1);
-
+        // 按住状态下执行 release_all，应精准释放该按键
         let released = translator.release_all();
-        assert_eq!(released.len(), 4);
+        assert_eq!(released.len(), 1);
+
+        // 集合已清空，兜底释放 4 个常见修饰键
+        let empty_released = translator.release_all();
+        assert_eq!(empty_released.len(), 4);
     }
 
     #[test]

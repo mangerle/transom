@@ -119,11 +119,12 @@ impl RdpView {
         }
     }
 
-    /// 发送断开请求并释放按键。
+    /// 发送断开请求并释放按键与会话句柄。
     pub fn disconnect(&mut self) {
         self.send_input(RdpInput::ReleaseAllKeys);
-        if let Some(session) = &self.session {
+        if let Some(session) = self.session.take() {
             session.disconnect();
+            drop(session);
         }
         self.state = RdpViewState::Disconnected;
     }

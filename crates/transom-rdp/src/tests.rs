@@ -51,7 +51,11 @@ fn keyboard_scancode_translation() {
     let ops = translator.handle_key_down("enter");
     assert_eq!(ops.len(), 1);
     let release_ops = translator.release_all();
-    assert_eq!(release_ops.len(), 4);
+    assert_eq!(release_ops.len(), 1);
+
+    // 未按下任何键时，调用 release_all 释放 4 个修饰键以兜底
+    let fallback_ops = translator.release_all();
+    assert_eq!(fallback_ops.len(), 4);
 }
 
 #[test]

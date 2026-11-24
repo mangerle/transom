@@ -121,9 +121,6 @@ impl SessionLoopRunner {
         let mut current_resolution = (width, height);
 
         loop {
-            // 同步检查并驱动 CLIPRDR 剪贴板事件
-            Self::drive_cliprdr_events(&mut active_stage, &mut writer, &cliprdr_context).await;
-
             tokio::select! {
                 // 1. 处理来自界面的用户输入指令
                 maybe_input = input_rx.recv() => {
@@ -205,6 +202,9 @@ impl SessionLoopRunner {
                                         let frame_arc = Arc::new(tiled_frame.clone());
                                         let _ = output_tx.send(RdpOutput::Frame(frame_arc)).await;
                                     }
+
+                                    // 处理网络报文后精准驱动 CLIPRDR 剪贴板事件流转
+                                    Self::drive_cliprdr_events(&mut active_stage, &mut writer, &cliprdr_context).await;
                                 }
                                 Err(e) => {
                                     log::error!("解码处理 RDP 报文失败: {e}");
