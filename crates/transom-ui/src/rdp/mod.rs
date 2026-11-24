@@ -4,6 +4,7 @@ pub mod canvas;
 mod frame_cache;
 pub mod input;
 pub mod toolbar;
+pub(crate) mod tunnel;
 pub mod view;
 
 pub use view::{RdpView, RdpViewEvent};

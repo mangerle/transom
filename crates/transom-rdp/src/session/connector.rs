@@ -50,7 +50,13 @@ pub async fn establish_connection(
     events_tx: &mpsc::Sender<RdpOutput>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<EstablishedConnection, RdpError> {
-    let stream = connect_stream(&config.host, config.port, shutdown_rx).await?;
+    let (dial_host, dial_port) = config
+        .connect_endpoint
+        .as_ref()
+        .map_or((config.host.as_str(), config.port), |(h, p)| {
+            (h.as_str(), *p)
+        });
+    let stream = connect_stream(dial_host, dial_port, shutdown_rx).await?;
     let local_addr = stream.local_addr().map_err(|e| RdpError::Network {
         address: config.host.clone(),
         source: e,

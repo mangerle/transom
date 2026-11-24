@@ -3,6 +3,7 @@
 //! 设计原理（Why）：仅展示已真正接入协议栈并生效的配置项（主机、端口、用户名、域、
 //! 密码、色深、音频重定向与双向剪贴板），彻底杜绝未生效的假开关或填后丢弃的空壳表单。
 
+use super::proxy::render_proxy_section;
 use super::serial::serial_option_row;
 use super::ssh::{number_form_field, required_form_field};
 use crate::palette::Palette;
@@ -217,5 +218,17 @@ pub(crate) fn render_rdp_basic_fields(
             |form, v| form.rdp_clipboard = v,
             cx,
         ))
+        .into_any_element()
+}
+
+/// 渲染 RDP 的“网络与代理”区（支持经由 SSH 跳板机隧道转发 3389）。
+pub(crate) fn render_rdp_network_fields(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_3()
+        .child(render_proxy_section(form, cx, p))
         .into_any_element()
 }

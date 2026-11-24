@@ -10240,6 +10240,7 @@ dependencies = [
  "transom-crypto",
  "transom-desktop",
  "transom-git",
+ "transom-net",
  "transom-platform",
  "transom-rdp",
  "transom-store",

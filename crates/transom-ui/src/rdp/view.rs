@@ -7,6 +7,7 @@
 use super::canvas::ViewportSyncHandle;
 use super::frame_cache::TiledFrameCache;
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
+use super::tunnel::RdpTunnelGuard;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
@@ -86,6 +87,7 @@ pub struct RdpView {
     pub(crate) frame_cache: Rc<RefCell<TiledFrameCache>>,
     pub(crate) input: RdpInputState,
     session: Option<RdpSession>,
+    tunnel_guard: Option<RdpTunnelGuard>,
     is_muted: bool,
     pub(crate) is_scaled: bool,
     pub(crate) dynamic_resolution: bool,
@@ -111,6 +113,7 @@ impl RdpView {
             frame_cache: Rc::new(RefCell::new(TiledFrameCache::default())),
             input: RdpInputState::default(),
             session: None,
+            tunnel_guard: None,
             is_muted: initial_muted,
             is_scaled: true,
             dynamic_resolution,
@@ -129,15 +132,21 @@ impl RdpView {
     #[allow(dead_code)]
     pub fn new(config: SessionConfig, cx: &mut Context<Self>) -> Self {
         let mut view = Self::new_pending(!config.audio, config.dynamic_resolution, cx);
-        view.start_session(config, cx);
+        view.start_session(config, None, cx);
         view
     }
 
     /// 使用就绪的会话配置启动或重新启动后台 RDP 连接（原地复用标签页）。
-    pub fn start_session(&mut self, config: SessionConfig, cx: &mut Context<Self>) {
+    pub fn start_session(
+        &mut self,
+        config: SessionConfig,
+        tunnel_guard: Option<RdpTunnelGuard>,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(old_session) = self.session.take() {
             old_session.disconnect();
         }
+        self.tunnel_guard = tunnel_guard;
         self._consumer_tasks.clear();
         self.retire_rendered_resources();
         self.input.pan_offset = (0.0, 0.0);
@@ -220,6 +229,7 @@ impl RdpView {
             RdpOutput::Disconnected { reason } => {
                 log::info!("RDP 会话已断开: {reason}");
                 self.session = None;
+                self.tunnel_guard = None;
                 self.retire_rendered_resources();
                 self.state = RdpViewState::Disconnected;
                 if self.is_fullscreen {
@@ -235,6 +245,7 @@ impl RdpView {
                 current_fingerprint,
             }) => {
                 self.session = None;
+                self.tunnel_guard = None;
                 self.retire_rendered_resources();
                 self.state = RdpViewState::HostKeyMismatch {
                     host,
@@ -251,6 +262,7 @@ impl RdpView {
             RdpOutput::Terminated(err) => {
                 let detail = err.to_string();
                 self.session = None;
+                self.tunnel_guard = None;
                 self.retire_rendered_resources();
                 self.state = RdpViewState::Failed(detail.clone());
                 if self.is_fullscreen {
@@ -334,6 +346,7 @@ impl RdpView {
         if let Some(session) = self.session.take() {
             session.disconnect();
         }
+        self.tunnel_guard = None;
         self.retire_rendered_resources();
         self.state = RdpViewState::Disconnected;
     }

@@ -73,6 +73,9 @@ pub struct SessionConfig {
     pub initial_size: (u16, u16),
     /// 客户端 DPI 缩放百分比（100..=500，例如 200 表示 2x HiDPI）。
     pub scale_factor_percent: u32,
+    /// 可选的底层 TCP 实际拨号端点（用于通过 SSH 隧道转发至本地 `127.0.0.1:port` 时，
+    /// 保持 `host`/`port` 为真实目标主机以进行 TLS SNI、CredSSP 与 known_hosts 校验）。
+    pub connect_endpoint: Option<(String, u16)>,
     /// 可选的 TLS 证书校验回调（用于 TOFU 或指纹钉扎）。
     pub cert_verifier: Option<TlsCertVerifier>,
 }
@@ -100,6 +103,7 @@ impl SessionConfig {
                 .map(|size| (size.width, size.height))
                 .unwrap_or(initial_size),
             scale_factor_percent: 100,
+            connect_endpoint: None,
             cert_verifier: None,
         }
     }

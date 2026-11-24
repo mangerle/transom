@@ -370,6 +370,21 @@ fn open_rdp_session(
     let secret_store = app_state.runtime.services.secret_store.clone();
     let known_hosts = app_state.runtime.services.known_hosts.clone();
     let secret_owner = session.secret_owner();
+    let jump_chain = match app_state.session.catalog.proxy_jump_chain(&session) {
+        Ok(chain) => chain,
+        Err(err) => {
+            log::warn!("解析 RDP SSH 隧道跳板机链失败: {err}");
+            Vec::new()
+        }
+    };
+    let outbound_proxy = session.effective_proxy(&app_settings(cx).proxy);
+    let allow_sha1 = app_settings(cx).allow_sha1_publickey_auth;
+
+    let tunnel_params = RdpTunnelLaunchParams {
+        jump_chain,
+        outbound_proxy,
+        allow_sha1,
+    };
 
     launch_rdp_session_async(
         view.clone(),
@@ -377,6 +392,7 @@ fn open_rdp_session(
         known_hosts.clone(),
         secret_owner.clone(),
         rdp.clone(),
+        tunnel_params.clone(),
         cx,
     );
 
@@ -391,6 +407,7 @@ fn open_rdp_session(
                         known_hosts.clone(),
                         secret_owner.clone(),
                         rdp.clone(),
+                        tunnel_params.clone(),
                         cx,
                     );
                 }
@@ -413,6 +430,7 @@ fn open_rdp_session(
                         known_hosts.clone(),
                         secret_owner.clone(),
                         rdp.clone(),
+                        tunnel_params.clone(),
                         cx,
                     );
                 }
@@ -458,45 +476,87 @@ fn open_rdp_session(
     cx.notify();
 }
 
-/// 在专用阻塞线程池读取钥匙串凭据，完成后回到 UI 线程启动 RDP 会话。
+#[derive(Clone)]
+struct RdpTunnelLaunchParams {
+    jump_chain: Vec<Session>,
+    outbound_proxy: transom_core::OutboundProxy,
+    allow_sha1: bool,
+}
+
+/// 在专用阻塞线程池读取钥匙串凭据，按需建立 SSH 转发隧道后回到 UI 线程启动 RDP 会话。
 fn launch_rdp_session_async(
     view: Entity<crate::rdp::RdpView>,
     secret_store: std::sync::Arc<dyn transom_core::SecretStore>,
     known_hosts: std::sync::Arc<dyn transom_core::KnownHostsStore>,
     secret_owner: transom_core::SecretOwner,
     rdp: transom_core::RdpConnection,
+    tunnel_params: RdpTunnelLaunchParams,
     cx: &mut Context<AppShell>,
 ) {
     cx.spawn(async move |_, cx| {
-        let password_result = crate::app::spawn_blocking_local(move || {
+        let jump_chain = tunnel_params.jump_chain;
+        let prep_result = crate::app::spawn_blocking_local(move || {
             let key =
                 transom_core::SecretKey::new(secret_owner, transom_core::SecretKind::Password);
-            secret_store
+            let password = secret_store
                 .get(&key)
                 .map(|secret| secret.map(|s| s.as_str().to_string()).unwrap_or_default())
-                .map_err(|err| format!("读取 RDP 会话密码失败，已中止连接以防触发账户锁定: {err}"))
+                .map_err(|err| format!("读取 RDP 会话密码失败，已中止连接以防触发账户锁定: {err}"))?;
+            let (hops, hop_err) = collect_jump_hops(secret_store.as_ref(), &jump_chain);
+            if let Some(err) = hop_err {
+                return Err(format!("读取 SSH 隧道跳板机凭据失败: {err}"));
+            }
+            Ok((password, hops))
         })
         .await
         .unwrap_or_else(|| Err("读取 RDP 会话密码任务被取消或异常中断".to_string()));
 
-        match password_result {
-            Ok(password) => {
-                let port = rdp.port;
-                view.update(cx, |rdp_view, cx| {
-                    let initial_size = rdp_view.current_viewport_size().unwrap_or((1280, 800));
-                    let mut config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
-                    config.scale_factor_percent = rdp_view.current_scale_factor_percent();
-                    config.cert_verifier = Some(build_rdp_cert_verifier(known_hosts, port));
-                    rdp_view.start_session(config, cx);
-                });
-            }
+        let (password, hops) = match prep_result {
+            Ok(v) => v,
             Err(detail) => {
                 log::error!("{detail}");
                 view.update(cx, |rdp_view, cx| {
                     rdp_view.fail_with_error(detail, cx);
                 });
+                return;
             }
-        }
+        };
+
+        let (connect_endpoint, tunnel_guard) = if !hops.is_empty() {
+            match crate::rdp::tunnel::open_ssh_tunnel_for_rdp(
+                hops,
+                tunnel_params.outbound_proxy,
+                known_hosts.clone(),
+                tunnel_params.allow_sha1,
+                rdp.host.clone(),
+                rdp.port,
+            )
+            .await
+            {
+                Ok((local_port, guard)) => {
+                    (Some(("127.0.0.1".to_string(), local_port)), Some(guard))
+                }
+                Err(detail) => {
+                    log::error!("{detail}");
+                    view.update(cx, |rdp_view, cx| {
+                        rdp_view.fail_with_error(detail, cx);
+                    });
+                    return;
+                }
+            }
+        } else {
+            (None, None)
+        };
+
+        let port = rdp.port;
+        view.update(cx, |rdp_view, cx| {
+            let initial_size = rdp_view.current_viewport_size().unwrap_or((1280, 800));
+            let mut config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
+            config.scale_factor_percent = rdp_view.current_scale_factor_percent();
+            config.connect_endpoint = connect_endpoint;
+            config.cert_verifier = Some(build_rdp_cert_verifier(known_hosts, port));
+            rdp_view.start_session(config, tunnel_guard, cx);
+        });
     })
     .detach();
 }
