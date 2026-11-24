@@ -19,10 +19,14 @@ pub struct RdpToolbarParams<'a> {
     pub palette: &'a Palette,
     pub is_muted: bool,
     pub is_scaled: bool,
+    pub is_fullscreen: bool,
+    pub is_pinned: bool,
     pub on_send_cad: RdpToolbarCallback,
     pub on_send_win: RdpToolbarCallback,
     pub on_toggle_mute: RdpToolbarCallback,
     pub on_toggle_scale: RdpToolbarCallback,
+    pub on_toggle_fullscreen: RdpToolbarCallback,
+    pub on_toggle_pin: RdpToolbarCallback,
     pub on_disconnect: RdpToolbarCallback,
 }
 
@@ -36,6 +40,7 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
         .bg(p.surface.floating)
         .border_1()
         .border_color(p.border)
+        .shadow_md()
         .child(
             Button::new(ElementId::Name("rdp-cad-btn".into()))
                 .small()
@@ -67,13 +72,42 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
             Button::new(ElementId::Name("rdp-scale-btn".into()))
                 .small()
                 .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::MAXIMIZE)).small())
                 .label(if params.is_scaled {
                     rust_i18n::t!("rdp.scale_to_fit").to_string()
                 } else {
                     rust_i18n::t!("rdp.original_scale").to_string()
                 })
                 .on_click(params.on_toggle_scale),
+        )
+        .child(
+            Button::new(ElementId::Name("rdp-fullscreen-btn".into()))
+                .small()
+                .ghost()
+                .child(
+                    AppIconElement::new(AppIcon::Ui(if params.is_fullscreen {
+                        UiIcon::MINIMIZE
+                    } else {
+                        UiIcon::MAXIMIZE
+                    }))
+                    .small(),
+                )
+                .label(if params.is_fullscreen {
+                    "退出全屏"
+                } else {
+                    "全屏"
+                })
+                .on_click(params.on_toggle_fullscreen),
+        )
+        .child(
+            Button::new(ElementId::Name("rdp-pin-btn".into()))
+                .small()
+                .ghost()
+                .label(if params.is_pinned {
+                    "取消固定"
+                } else {
+                    "固定"
+                })
+                .on_click(params.on_toggle_pin),
         )
         .child(
             Button::new(ElementId::Name("rdp-disconnect-btn".into()))

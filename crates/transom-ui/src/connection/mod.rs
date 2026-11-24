@@ -393,6 +393,14 @@ fn open_rdp_session(
                     cx,
                 );
             }
+            if let crate::rdp::RdpViewEvent::FullscreenChanged(active) = event {
+                shell.state.ui.immersive = *active;
+                if *active {
+                    shell.state.ui.modals.close_transient();
+                }
+                cx.notify();
+                return;
+            }
 
             let Some(tab) = shell
                 .state
@@ -410,6 +418,7 @@ fn open_rdp_session(
                 crate::rdp::RdpViewEvent::Failed(detail) => TabStatus::Failed(
                     AppError::with_detail(ErrorCode::ConnectionFailed, detail.clone()),
                 ),
+                crate::rdp::RdpViewEvent::FullscreenChanged(_) => return,
             };
             cx.notify();
         },

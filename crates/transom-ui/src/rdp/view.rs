@@ -41,6 +41,8 @@ pub enum RdpViewEvent {
     Failed(String),
     /// 用户点击重连按钮，请求工作区外壳异步重新拉取凭据并重启会话。
     Reconnect,
+    /// 全屏沉浸状态变更，请求工作区外壳同步隐藏/恢复侧边栏与标签栏。
+    FullscreenChanged(bool),
 }
 
 impl EventEmitter<RdpViewEvent> for RdpView {}
@@ -75,6 +77,9 @@ pub struct RdpView {
     is_muted: bool,
     pub(crate) is_scaled: bool,
     pub(crate) dynamic_resolution: bool,
+    is_fullscreen: bool,
+    toolbar_expanded: bool,
+    toolbar_pinned: bool,
     pub(crate) viewport_sync: ViewportSyncHandle,
     last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
@@ -97,6 +102,9 @@ impl RdpView {
             is_muted: initial_muted,
             is_scaled: true,
             dynamic_resolution,
+            is_fullscreen: false,
+            toolbar_expanded: false,
+            toolbar_pinned: false,
             viewport_sync: ViewportSyncHandle::default(),
             last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
@@ -202,6 +210,10 @@ impl RdpView {
                 self.session = None;
                 self.retire_rendered_resources();
                 self.state = RdpViewState::Disconnected;
+                if self.is_fullscreen {
+                    self.is_fullscreen = false;
+                    cx.emit(RdpViewEvent::FullscreenChanged(false));
+                }
                 cx.emit(RdpViewEvent::Disconnected);
             }
             RdpOutput::Terminated(err) => {
@@ -209,6 +221,10 @@ impl RdpView {
                 self.session = None;
                 self.retire_rendered_resources();
                 self.state = RdpViewState::Failed(detail.clone());
+                if self.is_fullscreen {
+                    self.is_fullscreen = false;
+                    cx.emit(RdpViewEvent::FullscreenChanged(false));
+                }
                 cx.emit(RdpViewEvent::Failed(detail));
             }
         }
@@ -334,49 +350,90 @@ impl RdpView {
         }
     }
 
-    /// 渲染悬浮工具栏。
+    /// 渲染悬浮工具栏（默认收起为顶部窄条，鼠标移入自动展开、移出自动收起，支持全屏与图钉固定）。
     fn render_floating_toolbar(&self, p: &Palette, cx: &Context<Self>) -> AnyElement {
         let view = cx.entity().clone();
-        let make_action = |f: fn(&mut RdpView, &mut Context<RdpView>)| {
+        let make_action = |f: fn(&mut RdpView, &mut Window, &mut Context<RdpView>)| {
             let entity = view.clone();
-            Box::new(move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
-                entity.update(cx, f);
+            Box::new(move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                entity.update(cx, |this, cx| f(this, window, cx));
             }) as super::toolbar::RdpToolbarCallback
         };
 
-        let toolbar = render_rdp_toolbar(RdpToolbarParams {
-            palette: p,
-            is_muted: self.is_muted,
-            is_scaled: self.is_scaled,
-            on_send_cad: make_action(|this, _| this.send_key_chord(KeyChord::CtrlAltDelete)),
-            on_send_win: make_action(|this, _| this.send_key_chord(KeyChord::Win)),
-            on_toggle_mute: make_action(|this, cx| {
-                this.is_muted = !this.is_muted;
-                this.send_input(RdpInput::MuteAudio(this.is_muted));
-                cx.notify();
-            }),
-            on_toggle_scale: make_action(|this, cx| {
-                this.is_scaled = !this.is_scaled;
-                if this.is_scaled {
-                    this.input.pan_offset = (0.0, 0.0);
-                }
-                cx.notify();
-            }),
-            on_disconnect: make_action(|this, cx| {
-                this.disconnect();
-                cx.emit(RdpViewEvent::Disconnected);
-                cx.notify();
-            }),
-        });
+        let show_full = self.toolbar_expanded || self.toolbar_pinned;
+        let content = if show_full {
+            render_rdp_toolbar(RdpToolbarParams {
+                palette: p,
+                is_muted: self.is_muted,
+                is_scaled: self.is_scaled,
+                is_fullscreen: self.is_fullscreen,
+                is_pinned: self.toolbar_pinned,
+                on_send_cad: make_action(|this, _, _| this.send_key_chord(KeyChord::CtrlAltDelete)),
+                on_send_win: make_action(|this, _, _| this.send_key_chord(KeyChord::Win)),
+                on_toggle_mute: make_action(|this, _, cx| {
+                    this.is_muted = !this.is_muted;
+                    this.send_input(RdpInput::MuteAudio(this.is_muted));
+                    cx.notify();
+                }),
+                on_toggle_scale: make_action(|this, _, cx| {
+                    this.is_scaled = !this.is_scaled;
+                    if this.is_scaled {
+                        this.input.pan_offset = (0.0, 0.0);
+                    }
+                    cx.notify();
+                }),
+                on_toggle_fullscreen: make_action(|this, window, cx| {
+                    window.toggle_fullscreen();
+                    this.is_fullscreen = !this.is_fullscreen;
+                    this.toolbar_expanded = false;
+                    cx.emit(RdpViewEvent::FullscreenChanged(this.is_fullscreen));
+                    cx.notify();
+                }),
+                on_toggle_pin: make_action(|this, _, cx| {
+                    this.toolbar_pinned = !this.toolbar_pinned;
+                    cx.notify();
+                }),
+                on_disconnect: make_action(|this, window, cx| {
+                    if this.is_fullscreen && window.is_fullscreen() {
+                        window.toggle_fullscreen();
+                    }
+                    this.is_fullscreen = false;
+                    this.disconnect();
+                    cx.emit(RdpViewEvent::FullscreenChanged(false));
+                    cx.emit(RdpViewEvent::Disconnected);
+                    cx.notify();
+                }),
+            })
+        } else {
+            // 收起态：顶部正中极窄半透明抓手，不遮挡远端标题栏或浏览器标签栏
+            div()
+                .w(px(88.0))
+                .h(px(6.0))
+                .rounded_full()
+                .bg(p.surface.floating)
+                .border_1()
+                .border_color(p.border)
+                .opacity(0.75)
+                .into_any_element()
+        };
 
         div()
+            .id("rdp-floating-toolbar-zone")
             .absolute()
-            .top_2()
+            .top_0()
             .left_0()
             .right_0()
             .flex()
             .justify_center()
-            .child(toolbar)
+            .pt(if show_full { px(8.0) } else { px(2.0) })
+            .pb(px(6.0))
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                if this.toolbar_expanded != *hovered {
+                    this.toolbar_expanded = *hovered;
+                    cx.notify();
+                }
+            }))
+            .child(content)
             .into_any_element()
     }
     /// 绑定一次性焦点/失焦事件订阅，避免在每帧 `render` 中轮询焦点边沿与发起网络同步。
@@ -404,6 +461,7 @@ impl Render for RdpView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
         self.viewport_sync.set_scale_factor(window.scale_factor());
+        self.is_fullscreen = window.is_fullscreen();
         self.ensure_focus_subscriptions(window, cx);
 
         // 非连接状态下无 Canvas paint 阶段，仅当确实存在待回收纹理时执行一次清理
