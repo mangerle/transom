@@ -41,6 +41,7 @@ impl CustomIcon {
     pub const PORT: Self = Self("port");
     pub const PROCESS: Self = Self("process");
     pub const IMAGE: Self = Self("image");
+    pub const COOKIE: Self = Self("cookie");
     pub const SNIPPET: Self = Self("snippet");
     pub const BROADCAST: Self = Self("broadcast");
     pub const RECORDING: Self = Self("recording");
@@ -112,6 +113,7 @@ mod tests {
             CustomIcon::PORT,
             CustomIcon::PROCESS,
             CustomIcon::IMAGE,
+            CustomIcon::COOKIE,
             CustomIcon::SNIPPET,
             CustomIcon::BROADCAST,
             CustomIcon::RECORDING,

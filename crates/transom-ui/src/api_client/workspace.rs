@@ -17,14 +17,30 @@ pub(crate) struct ApiWorkspaceServices {
     pub(crate) mock: ApiMockService,
 }
 
-/// 左侧树/右侧编辑区共享的高级面板页签。
+/// 项目级配置面板；只承载不随单个请求切换的配置。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApiAuxiliarySection {
     Environment,
     Cookies,
+    Mock,
+}
+
+/// 请求编辑器的信息架构页签。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ApiRequestTab {
+    Body,
+    Headers,
     Auth,
     Assertions,
-    Mock,
+}
+
+/// 响应面板的信息架构页签。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ApiResponseTab {
+    Body,
+    Headers,
+    Cookies,
+    Assertions,
     History,
 }
 
@@ -66,6 +82,8 @@ pub(crate) struct ApiWorkspace {
     pub(crate) method: ApiMethod,
     pub(crate) protocol: ApiProtocol,
     pub(crate) environment_id: Option<ApiEnvironmentId>,
+    pub(crate) request_tab: ApiRequestTab,
+    pub(crate) response_tab: ApiResponseTab,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
     pub(crate) editors: ApiWorkspaceEditors,
     pub(crate) response: Option<ApiResponseSnapshot>,
@@ -107,6 +125,8 @@ impl ApiWorkspace {
             environment_id: active_environment_id,
             project,
             method: ApiMethod::Get,
+            request_tab: ApiRequestTab::Body,
+            response_tab: ApiResponseTab::Body,
             auxiliary_section: None,
             editors,
             response: None,
@@ -200,6 +220,18 @@ impl ApiWorkspace {
     pub(crate) fn set_protocol(&mut self, protocol: ApiProtocol, cx: &mut Context<Self>) {
         self.protocol = protocol;
         self.capture_editor(cx);
+        cx.notify();
+    }
+
+    /// 切换请求编辑页签；只改变当前工作区的视图状态。
+    pub(crate) fn set_request_tab(&mut self, tab: ApiRequestTab, cx: &mut Context<Self>) {
+        self.request_tab = tab;
+        cx.notify();
+    }
+
+    /// 切换响应面板页签；只改变当前工作区的视图状态。
+    pub(crate) fn set_response_tab(&mut self, tab: ApiResponseTab, cx: &mut Context<Self>) {
+        self.response_tab = tab;
         cx.notify();
     }
 

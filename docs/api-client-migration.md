@@ -33,6 +33,38 @@ API 客户端沿用 Git、容器和会话目录的导航模型：
 
 终端、Git、容器和 API 标签可以同时存在。API 项目不会切换整个主界面，也不会伪造终端会话或占用 `TerminalTab` 的会话字段。
 
+## UI 信息架构
+
+UI 采用“Transom 视觉语言 + CyberAPI 信息架构”的原则，不复制 CyberAPI 的 Web 页面外观，但保留其对象层级和操作路径。
+
+```text
+API 项目标签
+  ├─ 左侧接口树
+  ├─ 项目工具条
+  │    ├─ HTTP / GraphQL / gRPC / WebSocket 协议
+  │    ├─ 环境选择与环境变量
+  │    ├─ Cookie 管理
+  │    ├─ Mock 服务
+  │    └─ 代码生成
+  ├─ 请求编辑区
+  │    ├─ 请求行：方法、URL、保存、发送、删除
+  │    └─ 请求页签：Body、Headers、Auth、Assertions
+  └─ 响应面板
+       ├─ 状态、耗时、大小和断言摘要
+       └─ 响应页签：Body、Headers、Cookies、Assertions、History
+```
+
+请求页签按协议改变主体含义：
+
+- HTTP：请求体。
+- GraphQL：Query 与 Variables。
+- gRPC：服务名、方法名与消息。
+- WebSocket：连接状态、消息输入与连接动作。
+
+项目级动作与请求级页签分离，避免把环境、Cookie 或 Mock 当作当前请求字段。不同功能使用不同语义图标，禁止所有工具复用同一个齿轮图标。
+
+当前已完成信息架构骨架；结构化键值编辑器、表单化认证、独立环境/Cookie/Mock 弹窗、导入预览与历史详情仍按后续阶段替换现有简化控件。
+
 ## 类型与状态边界
 
 - `ApiSidebarView`：窗口单例实体，保存项目登记表、搜索词、内联编辑器和删除确认。

@@ -239,6 +239,15 @@ api:
       en: Create a project or import a Transom API project file.
       zh-CN: 新建项目，或导入 Transom API 项目文件。
   project:
+    environment:
+      en: Environment variables
+      zh-CN: 环境变量
+    cookies:
+      en: Cookies
+      zh-CN: Cookie
+    mock:
+      en: Mock service
+      zh-CN: Mock 服务
     name_placeholder:
       en: Project name
       zh-CN: 项目名称
@@ -354,12 +363,18 @@ api:
     url_required:
       en: Request URL is required
       zh-CN: 请求地址不能为空
+    graphql_query:
+      en: GraphQL query
+      zh-CN: GraphQL 查询
     graphql_variables:
       en: GraphQL variables
       zh-CN: GraphQL 变量
     graphql_variables_placeholder:
       en: '{"id": 1}'
       zh-CN: '{"id": 1}'
+    grpc_message:
+      en: gRPC message
+      zh-CN: gRPC 消息
     grpc_service:
       en: Service
       zh-CN: 服务
@@ -372,6 +387,12 @@ api:
     grpc_method_placeholder:
       en: MethodName
       zh-CN: MethodName
+    auth:
+      en: Auth
+      zh-CN: 认证
+    assertions:
+      en: Assertions
+      zh-CN: 断言
     auth_placeholder:
       en: Authentication JSON, secrets use environment variable names
       zh-CN: 认证 JSON，密钥使用环境变量名
@@ -387,6 +408,12 @@ api:
     mock_placeholder:
       en: Mock route JSON
       zh-CN: Mock 路由 JSON
+    websocket_input:
+      en: Message
+      zh-CN: 消息
+    websocket_messages:
+      en: Messages
+      zh-CN: 消息
     websocket_input_placeholder:
       en: WebSocket message
       zh-CN: WebSocket 消息
@@ -426,7 +453,28 @@ api:
     mock_stop:
       en: Stop Mock
       zh-CN: 停止 Mock
+    codegen:
+      en: Code
+      zh-CN: 代码
   response:
+    body:
+      en: Body
+      zh-CN: 响应体
+    cookies:
+      en: Cookies
+      zh-CN: Cookie
+    assertions_label:
+      en: Assertions
+      zh-CN: 断言
+    history:
+      en: History
+      zh-CN: 历史
+    no_cookies:
+      en: This response has no cookies.
+      zh-CN: 本次响应没有 Cookie。
+    no_assertions:
+      en: This request has no assertion results.
+      zh-CN: 当前请求没有断言结果。
     title:
       en: Response
       zh-CN: 响应
@@ -436,6 +484,9 @@ api:
     headers:
       en: Response headers
       zh-CN: 响应头
+    no_headers:
+      en: This response has no headers.
+      zh-CN: 本次响应没有响应头。
     headers_placeholder:
       en: No response headers
       zh-CN: 暂无响应头

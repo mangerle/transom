@@ -13,6 +13,8 @@ mod workspace_actions;
 mod workspace_advanced_view;
 mod workspace_config;
 mod workspace_editors;
+mod workspace_request_view;
+mod workspace_response_view;
 mod workspace_tree_view;
 mod workspace_view;
 
@@ -23,6 +25,7 @@ pub(crate) use actions::{
 pub(crate) use sidebar::{ApiSidebarEvent, ApiSidebarState, ApiSidebarView};
 pub(crate) use sidebar_view::{ApiSidebarParams, render_api_sidebar};
 pub(crate) use workspace::{
-    ApiAuxiliarySection, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceServices,
+    ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspace, ApiWorkspaceEvent,
+    ApiWorkspaceServices,
 };
 pub(crate) use workspace_view::{ApiWorkspaceParams, render_api_workspace};
