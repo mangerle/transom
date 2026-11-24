@@ -198,12 +198,30 @@ impl SessionFormView {
         }
     }
 
-    /// 切换连接类型；切到串口且尚无设备清单时请求外壳重新枚举。
-    pub(crate) fn set_connection(&mut self, choice: ConnectionChoice, cx: &mut Context<Self>) {
+    /// 切换连接类型；若端口仍为原协议默认值（或空）则自动切换为目标协议默认端口；
+    /// 切到串口且尚无设备清单时请求外壳重新枚举。
+    pub(crate) fn set_connection(
+        &mut self,
+        choice: ConnectionChoice,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(form) = self.state.as_mut() else {
             return;
         };
+        let prev_default = default_port_for_choice(form.connection);
+        let next_default = default_port_for_choice(choice);
         form.connection = choice;
+
+        if prev_default != next_default {
+            let current_port = form.port.read(cx).value().trim().to_string();
+            if current_port.is_empty() || current_port == prev_default.to_string() {
+                form.port.update(cx, |input, cx| {
+                    input.set_value(next_default.to_string(), window, cx);
+                });
+            }
+        }
+
         let needs_ports = choice == ConnectionChoice::Serial && form.serial_ports.is_empty();
         cx.notify();
         if needs_ports {
@@ -409,5 +427,14 @@ fn new_identity_edit_state(
         save_password,
         save_passphrase,
         error: None,
+    }
+}
+
+fn default_port_for_choice(choice: ConnectionChoice) -> u16 {
+    match choice {
+        ConnectionChoice::Telnet => 23,
+        ConnectionChoice::Ftp => 21,
+        ConnectionChoice::Rdp => 3389,
+        _ => 22,
     }
 }

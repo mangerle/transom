@@ -290,7 +290,7 @@ impl RdpView {
             Button::new(ElementId::Name("rdp-reconnect-btn".into()))
                 .small()
                 .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                .label(rust_i18n::t!("tab.reconnect").to_string())
+                .label(rust_i18n::t!("common.reconnect").to_string())
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.state = RdpViewState::Connecting;
                     cx.emit(RdpViewEvent::Reconnect);

@@ -75,8 +75,8 @@ impl SessionFormView {
                         }
                     })
                     .child(label)
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.set_connection(choice, cx);
+                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                        this.set_connection(choice, window, cx);
                     }))
             }))
             .into_any_element()
