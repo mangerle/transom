@@ -65,7 +65,7 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) timeout: Entity<InputState>,
     pub(crate) docs: Entity<TextareaState>,
     pub(crate) environment: Entity<super::environment_editor::EnvironmentEditor>,
-    pub(crate) cookies: Entity<TextareaState>,
+    pub(crate) cookies: Entity<super::cookie_editor::CookieEditor>,
     pub(crate) form: Entity<super::form_editor::FormEditor>,
     pub(crate) websocket_input: Entity<TextareaState>,
     pub(crate) websocket_log: Entity<TextareaState>,

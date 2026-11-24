@@ -7,7 +7,6 @@ use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize, action_button, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
-use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::*;
 use transom_api::CodeTarget;
@@ -96,7 +95,7 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
         ),
         ApiAuxiliarySection::Cookies => (
             rust_i18n::t!("api.request.aux_cookies").to_string(),
-            editor("api-cookie-editor", params.cookies_editor),
+            params.cookies_editor.clone().into_any_element(),
         ),
     };
     let view = params.view.clone();
@@ -137,14 +136,5 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
                 .border_color(p.divider(p.border))
                 .child(body),
         )
-        .into_any_element()
-}
-
-fn editor(id: &'static str, state: &Entity<TextareaState>) -> AnyElement {
-    v_flex()
-        .id(id)
-        .size_full()
-        .min_h_0()
-        .child(Textarea::new(state).size_full())
         .into_any_element()
 }

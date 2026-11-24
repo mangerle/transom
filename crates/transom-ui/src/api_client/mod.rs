@@ -8,6 +8,7 @@
 mod actions;
 mod assertion_editor;
 mod auth_editor;
+mod cookie_editor;
 mod environment_editor;
 mod form_editor;
 mod form_editor_view;
@@ -18,7 +19,6 @@ mod workspace;
 mod workspace_actions;
 mod workspace_advanced_view;
 mod workspace_body_view;
-mod workspace_config;
 mod workspace_editor_state;
 mod workspace_editors;
 mod workspace_kv;

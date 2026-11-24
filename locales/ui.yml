@@ -624,6 +624,42 @@ api:
     environment_placeholder:
       en: One variable per line, NAME=value
       zh-CN: 每行一个环境变量，NAME=value
+    cookie_name:
+      en: Name
+      zh-CN: 名称
+    cookie_value:
+      en: Value
+      zh-CN: 值
+    cookie_domain:
+      en: Domain
+      zh-CN: 域
+    cookie_path:
+      en: Path
+      zh-CN: 路径
+    cookie_secure:
+      en: Secure
+      zh-CN: Secure
+    cookie_http_only:
+      en: HttpOnly
+      zh-CN: HttpOnly
+    cookie_name_placeholder:
+      en: Cookie name
+      zh-CN: Cookie 名称
+    cookie_value_placeholder:
+      en: Cookie value
+      zh-CN: Cookie 值
+    cookie_domain_placeholder:
+      en: example.com
+      zh-CN: example.com
+    cookie_path_placeholder:
+      en: /
+      zh-CN: /
+    add_cookie:
+      en: Add cookie
+      zh-CN: 添加 Cookie
+    remove_cookie:
+      en: Remove cookie
+      zh-CN: 删除 Cookie
     cookies_placeholder:
       en: One cookie per line, name=value
       zh-CN: 每行一个 Cookie，name=value

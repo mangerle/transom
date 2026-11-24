@@ -5,6 +5,7 @@
 
 use super::assertion_editor::AssertionEditor;
 use super::auth_editor::AuthEditor;
+use super::cookie_editor::CookieEditor;
 use super::environment_editor::EnvironmentEditor;
 use super::form_editor::FormEditor;
 use super::kv_editor::{KvEditor, KvEditorKind};
@@ -50,7 +51,7 @@ pub(super) fn new_editors(
         }),
         docs: placeholder(window, cx, "api.request.docs_placeholder"),
         environment: cx.new(|cx| EnvironmentEditor::new(window, cx)),
-        cookies: placeholder(window, cx, "api.request.cookies_placeholder"),
+        cookies: cx.new(|cx| CookieEditor::new(window, cx)),
         form: cx.new(|cx| FormEditor::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),
         websocket_log: cx.new(|cx| TextareaState::new(window, cx)),

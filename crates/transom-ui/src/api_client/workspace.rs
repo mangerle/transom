@@ -121,6 +121,14 @@ impl ApiWorkspace {
                     this.apply_environment_variables(variables.clone(), cx);
                 },
             ),
+            cx.subscribe_in(
+                &workspace.editors.cookies,
+                window,
+                |this, _, event, _, cx| {
+                    let super::cookie_editor::CookieEditorEvent::Changed(cookies) = event;
+                    this.apply_cookies(cookies.clone(), cx);
+                },
+            ),
         ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
@@ -392,11 +400,10 @@ impl ApiWorkspace {
         });
     }
 
-    fn load_cookies(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = transom_api::cookies_text(&self.project.cookies);
-        self.editors
-            .cookies
-            .update(cx, |state, cx| state.set_value(text, window, cx));
+    pub(super) fn load_cookies(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.editors.cookies.update(cx, |editor, cx| {
+            editor.set_cookies(&self.project.cookies, window, cx)
+        });
     }
 
     pub(crate) fn environment(&self) -> transom_api::ApiEnvironment {

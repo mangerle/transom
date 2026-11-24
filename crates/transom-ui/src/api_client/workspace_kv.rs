@@ -3,7 +3,9 @@
 use super::kv_editor::KvEntry;
 use super::workspace::ApiWorkspace;
 use gpui_kit::*;
-use transom_api::{ApiAssertion, ApiAuth, ApiFormField, ApiHeader, ApiQueryParam, ApiVariable};
+use transom_api::{
+    ApiAssertion, ApiAuth, ApiCookie, ApiFormField, ApiHeader, ApiQueryParam, ApiVariable,
+};
 
 impl ApiWorkspace {
     pub(super) fn apply_query_entries(&mut self, entries: &[KvEntry], cx: &mut Context<Self>) {
@@ -19,6 +21,12 @@ impl ApiWorkspace {
             return;
         };
         request.query = entries.iter().cloned().map(query_from_entry).collect();
+        self.project.touch();
+        cx.notify();
+    }
+
+    pub(super) fn apply_cookies(&mut self, cookies: Vec<ApiCookie>, cx: &mut Context<Self>) {
+        self.project.cookies = cookies;
         self.project.touch();
         cx.notify();
     }

@@ -165,6 +165,7 @@ impl ApiWorkspace {
         for cookie in response.set_cookies.drain(..) {
             self.project.upsert_cookie(cookie);
         }
+        self.load_cookies(window, cx);
         let (passed, total) = transom_api::assertion_summary(&self.assertion_results);
         self.project.push_history(ApiHistoryEntry {
             request_id: request.id,
