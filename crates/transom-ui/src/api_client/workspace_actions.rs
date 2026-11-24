@@ -192,11 +192,13 @@ impl ApiWorkspace {
 
     /// 关闭 WebSocket。
     pub(crate) fn close_websocket(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = self.ws_handle.take() {
-            handle.close();
+        if let Some(handle) = &self.ws_handle
+            && let Err(error) = handle.close()
+        {
+            self.set_error(error, cx);
+            return;
         }
         self.ws_connected = false;
-        self.ws_event_task = None;
         self.set_notice(rust_i18n::t!("api.websocket.closed").to_string(), cx);
     }
 
@@ -319,10 +321,12 @@ impl ApiWorkspace {
                         ApiWebSocketEvent::Message(text) => this.append_ws_log(text, window, cx),
                         ApiWebSocketEvent::Closed(reason) => {
                             this.ws_connected = false;
+                            this.ws_handle = None;
                             this.append_ws_log(reason, window, cx);
                         }
                         ApiWebSocketEvent::Error(error) => {
                             this.ws_connected = false;
+                            this.ws_handle = None;
                             this.append_ws_log(error, window, cx);
                         }
                     }

@@ -128,8 +128,10 @@ impl ApiWebSocketHandle {
     }
 
     /// 请求关闭连接。
-    pub fn close(&self) {
-        let _ = self.command_tx.try_send(WsCommand::Close);
+    pub fn close(&self) -> Result<(), String> {
+        self.command_tx
+            .try_send(WsCommand::Close)
+            .map_err(|error| format!("WebSocket 关闭命令未能提交: {error}"))
     }
 
     /// 取走事件接收端，交给 GPUI 异步任务逐条消费。
