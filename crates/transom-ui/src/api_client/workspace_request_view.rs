@@ -216,9 +216,7 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         ApiRequestTab::Body => render_body(params, p),
         ApiRequestTab::Headers => params.header_editor.clone().into_any_element(),
         ApiRequestTab::Auth => params.auth.clone().into_any_element(),
-        ApiRequestTab::Assertions => {
-            render_text_panel("api-request-assertions", params.assertions.clone(), p)
-        }
+        ApiRequestTab::Assertions => params.assertions.clone().into_any_element(),
         ApiRequestTab::Settings => render_settings(params, p),
         ApiRequestTab::Docs => render_text_panel("api-request-docs", params.docs.clone(), p),
     };
@@ -289,7 +287,13 @@ fn request_tab(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> Tab {
             labeled(rust_i18n::t!("api.request.auth").to_string(), count)
         }
         ApiRequestTab::Assertions => {
-            let count = request.map_or(0, |request| request.assertions.len());
+            let count = request.map_or(0, |request| {
+                request
+                    .assertions
+                    .iter()
+                    .filter(|assertion| assertion.enabled)
+                    .count()
+            });
             labeled(rust_i18n::t!("api.request.assertions").to_string(), count)
         }
         ApiRequestTab::Settings => rust_i18n::t!("api.request.settings").to_string(),

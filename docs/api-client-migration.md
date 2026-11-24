@@ -134,6 +134,7 @@ API 项目标签
 
 ## 认证、环境与 Cookie
 
+- Auth 页签使用结构化表单选择 None、Bearer、Basic、OAuth 2.0 或 AWS SigV4。
 - Bearer 与 Basic 从环境变量读取凭据。
 - OAuth 2.0 支持 client credentials，从令牌端点获取 `access_token` 后设置 Bearer 头。
 - AWS SigV4 支持 canonical query、canonical headers、HMAC 派生密钥和会话令牌。
@@ -183,7 +184,7 @@ json data.id == 123
 json data.token exists
 ```
 
-结果是逐条通过或不匹配明细；JSON 解析失败、路径不存在或语法不支持时会返回明确失败原因，不中断响应展示。
+断言在请求页以逐行表格编辑，支持启用、禁用、添加和删除；执行时只计算启用中的断言。结果是逐条通过或不匹配明细；JSON 解析失败、路径不存在或语法不支持时会返回明确失败原因，不中断响应展示。
 
 ### 代码生成
 

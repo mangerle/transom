@@ -42,7 +42,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) grpc_method: &'a Entity<InputState>,
     pub(crate) graphql_variables: &'a Entity<TextareaState>,
     pub(crate) auth: &'a Entity<super::auth_editor::AuthEditor>,
-    pub(crate) assertions: &'a Entity<TextareaState>,
+    pub(crate) assertions: &'a Entity<super::assertion_editor::AssertionEditor>,
     pub(crate) timeout: &'a Entity<InputState>,
     pub(crate) docs: &'a Entity<TextareaState>,
     pub(crate) environment_editor: &'a Entity<TextareaState>,

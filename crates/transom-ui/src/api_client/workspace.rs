@@ -104,6 +104,14 @@ impl ApiWorkspace {
                 let super::auth_editor::AuthEditorEvent::Changed(auth) = event;
                 this.apply_auth(auth.clone(), cx);
             }),
+            cx.subscribe_in(
+                &workspace.editors.assertions,
+                window,
+                |this, _, event, _, cx| {
+                    let super::assertion_editor::AssertionEditorEvent::Changed(assertions) = event;
+                    this.apply_assertions(assertions.clone(), cx);
+                },
+            ),
         ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);

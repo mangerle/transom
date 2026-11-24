@@ -3,7 +3,7 @@
 use super::workspace::ApiWorkspace;
 use super::workspace_kv::{header_entry, header_from_entry, query_entry, query_from_entry};
 use gpui_kit::*;
-use transom_api::{ApiAuth, ApiBodyType, ApiMethod, ApiProtocol};
+use transom_api::{ApiAssertion, ApiAuth, ApiBodyType, ApiMethod, ApiProtocol};
 
 impl ApiWorkspace {
     pub(super) fn capture_editor(&mut self, cx: &App) -> bool {
@@ -51,11 +51,7 @@ impl ApiWorkspace {
         request.form_fields = self.editors.form.read(cx).fields(cx);
         request.graphql_variables = self.editors.graphql_variables.read(cx).value().to_string();
         request.auth = self.editors.auth.read(cx).auth(cx);
-        let assertions_text = self.editors.assertions.read(cx).value().to_string();
-        if let Err(error) = request.set_assertions_text(&assertions_text) {
-            self.error = Some(error.to_string());
-            return false;
-        }
+        request.assertions = self.editors.assertions.read(cx).assertions(cx);
         request.description = self.editors.docs.read(cx).value().to_string();
         let timeout = self.editors.timeout.read(cx).value().trim().to_string();
         request.timeout_seconds = if timeout.is_empty() {
@@ -116,7 +112,7 @@ impl ApiWorkspace {
                     ApiProtocol::Http,
                     "{}".to_string(),
                     ApiAuth::None,
-                    String::new(),
+                    Vec::<ApiAssertion>::new(),
                     String::new(),
                     String::new(),
                     String::new(),
@@ -125,7 +121,7 @@ impl ApiWorkspace {
             },
             |request| {
                 let auth = request.auth.clone();
-                let assertions = request.assertions_text();
+                let assertions = request.assertions.clone();
                 (
                     request.display_name().to_string(),
                     request.url,
@@ -178,9 +174,9 @@ impl ApiWorkspace {
         self.editors
             .auth
             .update(cx, |editor, cx| editor.set_auth(&auth, window, cx));
-        self.editors
-            .assertions
-            .update(cx, |state, cx| state.set_value(assertions, window, cx));
+        self.editors.assertions.update(cx, |editor, cx| {
+            editor.set_assertions(&assertions, window, cx)
+        });
         self.editors
             .docs
             .update(cx, |state, cx| state.set_value(docs, window, cx));

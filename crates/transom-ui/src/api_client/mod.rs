@@ -6,6 +6,7 @@
 //! 并排与关闭模型，不引入第二个主界面状态源。
 
 mod actions;
+mod assertion_editor;
 mod auth_editor;
 mod form_editor;
 mod form_editor_view;

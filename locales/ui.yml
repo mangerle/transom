@@ -585,6 +585,18 @@ api:
     auth_placeholder:
       en: Authentication JSON, secrets use environment variable names
       zh-CN: 认证 JSON，密钥使用环境变量名
+    assertion_expression:
+      en: Expression
+      zh-CN: 断言表达式
+    assertion_placeholder:
+      en: 'status == 200'
+      zh-CN: 'status == 200'
+    add_assertion:
+      en: Add assertion
+      zh-CN: 添加断言
+    remove_assertion:
+      en: Remove assertion
+      zh-CN: 删除断言
     assertions_placeholder:
       en: One assertion per line
       zh-CN: 每行一条断言

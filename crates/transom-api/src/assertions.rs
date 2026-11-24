@@ -13,8 +13,13 @@ pub fn evaluate_assertions(
     request: &ApiRequest,
     response: &ApiResponseSnapshot,
 ) -> Vec<ApiAssertionResult> {
-    let mut results = Vec::with_capacity(request.assertions.len());
-    for assertion in &request.assertions {
+    let enabled = request
+        .assertions
+        .iter()
+        .filter(|assertion| assertion.enabled)
+        .collect::<Vec<_>>();
+    let mut results = Vec::with_capacity(enabled.len());
+    for assertion in enabled {
         let expression = assertion.expression.trim();
         let result = match evaluate_one(expression, response) {
             Ok(passed) => ApiAssertionResult {

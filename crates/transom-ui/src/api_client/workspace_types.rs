@@ -61,7 +61,7 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) grpc_method: Entity<InputState>,
     pub(crate) graphql_variables: Entity<TextareaState>,
     pub(crate) auth: Entity<super::auth_editor::AuthEditor>,
-    pub(crate) assertions: Entity<TextareaState>,
+    pub(crate) assertions: Entity<super::assertion_editor::AssertionEditor>,
     pub(crate) timeout: Entity<InputState>,
     pub(crate) docs: Entity<TextareaState>,
     pub(crate) environment: Entity<TextareaState>,

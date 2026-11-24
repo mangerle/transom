@@ -258,6 +258,8 @@ pub enum ApiAuth {
 #[serde(rename_all = "snake_case")]
 pub struct ApiAssertion {
     pub expression: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
 
 /// 断言执行结果。
@@ -449,6 +451,7 @@ impl ApiRequest {
             })?;
             assertions.push(ApiAssertion {
                 expression: trimmed.to_string(),
+                enabled: true,
             });
         }
         self.assertions = assertions;
@@ -586,6 +589,10 @@ mod tests {
         request
             .set_assertions_text("status == 200\njson ok == true\nbody contains ok")
             .expect("断言应合法");
+        request.assertions.push(ApiAssertion {
+            expression: "status != 500".to_string(),
+            enabled: false,
+        });
         let response = ApiResponseSnapshot {
             status: 200,
             status_text: "OK".to_string(),

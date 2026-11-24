@@ -3,6 +3,7 @@
 //! 将实体创建从工作区状态文件中分离，保证状态流转与编辑器初始化各自内聚，
 //! 同时避免单个文件随高级配置项增长突破 500 行上限。
 
+use super::assertion_editor::AssertionEditor;
 use super::auth_editor::AuthEditor;
 use super::form_editor::FormEditor;
 use super::kv_editor::{KvEditor, KvEditorKind};
@@ -41,7 +42,7 @@ pub(super) fn new_editors(
         }),
         graphql_variables: placeholder(window, cx, "api.request.graphql_variables_placeholder"),
         auth: cx.new(|cx| AuthEditor::new(window, cx)),
-        assertions: placeholder(window, cx, "api.request.assertions_placeholder"),
+        assertions: cx.new(|cx| AssertionEditor::new(window, cx)),
         timeout: cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.timeout_hint").to_string())
