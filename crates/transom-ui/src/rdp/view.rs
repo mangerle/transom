@@ -4,7 +4,7 @@
 //! （低频控制事件 + 高频增量瓦片帧）、常驻纹理缓存 [`TiledFrameCache`] 与焦点失焦
 //! 按键清理；渲染层统一使用 [`Palette`] 主题语义色与设计令牌，彻底消除硬编码颜色。
 
-use super::canvas::new_viewport_bounds_cell;
+use super::canvas::ViewportSyncHandle;
 use super::frame_cache::{RenderedCursor, TiledFrameCache};
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
 use crate::palette::Palette;
@@ -76,8 +76,7 @@ pub struct RdpView {
     pub(crate) is_scaled: bool,
     pub(crate) dynamic_resolution: bool,
     pub(crate) cursor: RenderedCursor,
-    pub(crate) viewport_bounds: Rc<Cell<Bounds<Pixels>>>,
-    pub(crate) last_sent_resize: Rc<Cell<Option<(u16, u16)>>>,
+    pub(crate) viewport_sync: ViewportSyncHandle,
     last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
     _focus_subscriptions: Vec<Subscription>,
@@ -100,8 +99,7 @@ impl RdpView {
             is_scaled: true,
             dynamic_resolution,
             cursor: RenderedCursor::Default,
-            viewport_bounds: new_viewport_bounds_cell(),
-            last_sent_resize: Rc::new(Cell::new(None)),
+            viewport_sync: ViewportSyncHandle::default(),
             last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
             _focus_subscriptions: Vec::new(),
@@ -125,7 +123,7 @@ impl RdpView {
         self._consumer_tasks.clear();
         self.retire_rendered_resources();
         self.input.pan_offset = (0.0, 0.0);
-        self.last_sent_resize.set(None);
+        self.viewport_sync.set_last_sent_resize(None);
         self.is_muted = !config.audio;
         self.dynamic_resolution = config.dynamic_resolution;
         self.state = RdpViewState::Connecting;
@@ -191,7 +189,7 @@ impl RdpView {
                 cx.emit(RdpViewEvent::Connected);
             }
             RdpOutput::Resized { width, height } => {
-                self.last_sent_resize.set(Some((width, height)));
+                self.viewport_sync.set_last_sent_resize(Some((width, height)));
                 self.state = RdpViewState::Connected { width, height };
             }
             RdpOutput::Cursor(cursor) => {

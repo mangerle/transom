@@ -18,10 +18,69 @@ use transom_rdp::tiles::{TILE_SIZE, compute_tile_bounds};
 const MIN_DYNAMIC_WIDTH: u16 = 640;
 const MIN_DYNAMIC_HEIGHT: u16 = 480;
 
+/// 视口矩形与动态分辨率请求协同状态（收敛 `prepaint` 阶段所需的无重入共享状态）。
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ViewportSyncState {
+    bounds: Bounds<Pixels>,
+    last_sent_resize: Option<(u16, u16)>,
+}
+
+/// 无重入视口状态句柄。
+#[derive(Clone, Default)]
+pub(crate) struct ViewportSyncHandle(Rc<Cell<ViewportSyncState>>);
+
+impl ViewportSyncHandle {
+    pub(crate) fn bounds(&self) -> Bounds<Pixels> {
+        self.0.get().bounds
+    }
+
+    pub(crate) fn set_last_sent_resize(&self, size: Option<(u16, u16)>) {
+        let mut state = self.0.get();
+        state.last_sent_resize = size;
+        self.0.set(state);
+    }
+
+    fn handle_prepaint(
+        &self,
+        bounds: Bounds<Pixels>,
+        scale_factor: f32,
+        dynamic_resolution: bool,
+        resize_sender: Option<&tokio::sync::mpsc::Sender<RdpInput>>,
+    ) {
+        let mut state = self.0.get();
+        let old_size = state.bounds.size;
+        state.bounds = bounds;
+
+        if dynamic_resolution
+            && f32::from(old_size.width) > 0.0
+            && f32::from(old_size.height) > 0.0
+        {
+            let scale = scale_factor.max(1.0);
+            let target_w = (f32::from(bounds.size.width) * scale).round() as u16;
+            let target_h = (f32::from(bounds.size.height) * scale).round() as u16;
+            // 跳过首次从 0x0 布局初始化的抖动，且通道满时不覆写已发送尺寸以便下次重试
+            if target_w >= MIN_DYNAMIC_WIDTH
+                && target_h >= MIN_DYNAMIC_HEIGHT
+                && state.last_sent_resize != Some((target_w, target_h))
+                && let Some(sender) = resize_sender
+                && sender
+                    .try_send(RdpInput::Resize {
+                        width: target_w,
+                        height: target_h,
+                    })
+                    .is_ok()
+            {
+                state.last_sent_resize = Some((target_w, target_h));
+            }
+        }
+        self.0.set(state);
+    }
+}
+
 impl RdpView {
     /// 渲染桌面瓦片集合与自定义光标的高性能 GPU 自绘画布。
     pub(crate) fn render_desktop_canvas(&self) -> impl IntoElement {
-        let viewport_bounds_cell = Rc::clone(&self.viewport_bounds);
+        let viewport_sync = self.viewport_sync.clone();
         let frame_cache = Rc::clone(&self.frame_cache);
         let cursor = self.cursor.clone();
         let last_mouse_pos = Rc::clone(&self.input.last_mouse_pos);
@@ -29,33 +88,15 @@ impl RdpView {
         let pan_offset = self.input.pan_offset;
         let dynamic_resolution = self.dynamic_resolution;
         let resize_sender = self.session_sender();
-        let last_sent_resize = Rc::clone(&self.last_sent_resize);
 
         canvas(
             move |bounds, window, _cx| {
-                let old_size = viewport_bounds_cell.get().size;
-                viewport_bounds_cell.set(bounds);
-
-                if dynamic_resolution && f32::from(old_size.width) > 0.0 && f32::from(old_size.height) > 0.0
-                {
-                    let scale = window.scale_factor().max(1.0);
-                    let target_w = (f32::from(bounds.size.width) * scale).round() as u16;
-                    let target_h = (f32::from(bounds.size.height) * scale).round() as u16;
-                    // 跳过首次从 0x0 布局初始化的抖动，且通道满时不覆写已发送尺寸以便下次重试
-                    if target_w >= MIN_DYNAMIC_WIDTH
-                        && target_h >= MIN_DYNAMIC_HEIGHT
-                        && last_sent_resize.get() != Some((target_w, target_h))
-                        && let Some(ref sender) = resize_sender
-                        && sender
-                            .try_send(RdpInput::Resize {
-                                width: target_w,
-                                height: target_h,
-                            })
-                            .is_ok()
-                    {
-                        last_sent_resize.set(Some((target_w, target_h)));
-                    }
-                }
+                viewport_sync.handle_prepaint(
+                    bounds,
+                    window.scale_factor(),
+                    dynamic_resolution,
+                    resize_sender.as_ref(),
+                );
             },
             move |bounds, _, window, _cx| {
                 paint_desktop_frame(
@@ -202,7 +243,4 @@ fn paint_custom_cursor(
     );
 }
 
-/// 便捷构造用于 prepaint 的无重入视口包围盒容器。
-pub(crate) fn new_viewport_bounds_cell() -> Rc<Cell<Bounds<Pixels>>> {
-    Rc::new(Cell::new(Bounds::default()))
-}
+

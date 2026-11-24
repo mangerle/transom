@@ -75,7 +75,7 @@ impl RdpView {
         let RdpViewState::Connected { width, height } = self.state else {
             return;
         };
-        let bounds = self.viewport_bounds.get();
+        let bounds = self.viewport_sync.bounds();
         let mapped = map_pointer_position(
             event.position,
             bounds,
@@ -173,7 +173,7 @@ impl RdpView {
             gpui_kit::ScrollDelta::Lines(p) => (p.x * 48.0, p.y * 48.0),
             gpui_kit::ScrollDelta::Pixels(p) => (f32::from(p.x), f32::from(p.y)),
         };
-        let bounds = self.viewport_bounds.get();
+        let bounds = self.viewport_sync.bounds();
         let min_x = (f32::from(bounds.size.width) - f32::from(width)).min(0.0);
         let min_y = (f32::from(bounds.size.height) - f32::from(height)).min(0.0);
         let next = (
