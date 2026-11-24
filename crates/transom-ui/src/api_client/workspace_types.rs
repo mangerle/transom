@@ -67,7 +67,6 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) environment: Entity<TextareaState>,
     pub(crate) cookies: Entity<TextareaState>,
     pub(crate) form: Entity<super::form_editor::FormEditor>,
-    pub(crate) history: Entity<TextareaState>,
     pub(crate) websocket_input: Entity<TextareaState>,
     pub(crate) websocket_log: Entity<TextareaState>,
     pub(crate) response_body: Entity<TextareaState>,

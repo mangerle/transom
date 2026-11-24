@@ -116,7 +116,6 @@ impl ApiWorkspace {
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
         workspace.load_cookies(window, cx);
-        workspace.refresh_history(window, cx);
         workspace
     }
 
@@ -389,31 +388,6 @@ impl ApiWorkspace {
         let text = transom_api::cookies_text(&self.project.cookies);
         self.editors
             .cookies
-            .update(cx, |state, cx| state.set_value(text, window, cx));
-    }
-
-    pub(crate) fn refresh_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self
-            .project
-            .history
-            .iter()
-            .rev()
-            .map(|entry| {
-                rust_i18n::t!(
-                    "api.history.line",
-                    method = entry.method,
-                    url = entry.url,
-                    status = entry.status,
-                    elapsed = entry.elapsed_millis,
-                    passed = entry.assertions_passed,
-                    total = entry.assertions_total
-                )
-                .to_string()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        self.editors
-            .history
             .update(cx, |state, cx| state.set_value(text, window, cx));
     }
 

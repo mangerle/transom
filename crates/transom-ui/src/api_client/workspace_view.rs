@@ -47,7 +47,6 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) docs: &'a Entity<TextareaState>,
     pub(crate) environment_editor: &'a Entity<TextareaState>,
     pub(crate) cookies_editor: &'a Entity<TextareaState>,
-    pub(crate) history_editor: &'a Entity<TextareaState>,
     pub(crate) websocket_input: &'a Entity<TextareaState>,
     pub(crate) websocket_log: &'a Entity<TextareaState>,
     pub(crate) assertion_results: &'a [ApiAssertionResult],

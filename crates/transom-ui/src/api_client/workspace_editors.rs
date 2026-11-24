@@ -51,7 +51,6 @@ pub(super) fn new_editors(
         environment: placeholder(window, cx, "api.request.environment_placeholder"),
         cookies: placeholder(window, cx, "api.request.cookies_placeholder"),
         form: cx.new(|cx| FormEditor::new(window, cx)),
-        history: cx.new(|cx| TextareaState::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),
         websocket_log: cx.new(|cx| TextareaState::new(window, cx)),
         response_body: cx.new(|cx| TextareaState::new(window, cx)),

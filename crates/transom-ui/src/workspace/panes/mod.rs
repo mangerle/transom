@@ -301,7 +301,6 @@ impl AppShell {
                     docs: &state.editors.docs,
                     environment_editor: &state.editors.environment,
                     cookies_editor: &state.editors.cookies,
-                    history_editor: &state.editors.history,
                     websocket_input: &state.editors.websocket_input,
                     websocket_log: &state.editors.websocket_log,
                     response_body: &state.editors.response_body,

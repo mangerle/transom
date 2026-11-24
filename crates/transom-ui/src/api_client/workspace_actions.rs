@@ -178,7 +178,6 @@ impl ApiWorkspace {
             assertions_total: total,
             response_excerpt: response_excerpt(&response, 500),
         });
-        self.refresh_history(window, cx);
         self.editors.response_body.update(cx, |state, cx| {
             state.set_value(response.body.clone(), window, cx)
         });

@@ -658,6 +658,27 @@ api:
     history:
       en: History
       zh-CN: 历史
+    no_history:
+      en: No request history yet.
+      zh-CN: 暂无请求历史。
+    history_time:
+      en: Time
+      zh-CN: 时间
+    history_status:
+      en: Status
+      zh-CN: 状态
+    history_method:
+      en: Method
+      zh-CN: 方法
+    history_url:
+      en: URL
+      zh-CN: 地址
+    history_elapsed:
+      en: Elapsed
+      zh-CN: 耗时
+    history_assertions:
+      en: Assertions
+      zh-CN: 断言
     no_cookies:
       en: This response has no cookies.
       zh-CN: 本次响应没有 Cookie。
