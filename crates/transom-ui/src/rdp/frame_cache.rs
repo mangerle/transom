@@ -107,18 +107,22 @@ impl TiledFrameCache {
         }
 
         for slot in &mut self.pending_patches {
-            let Some(patch) = slot.take() else {
+            let Some(mut patch) = slot.take() else {
                 continue;
             };
             let idx = (patch.row as usize)
                 .saturating_mul(self.cols as usize)
                 .saturating_add(patch.col as usize);
-            if idx < self.tiles.len()
-                && let Some(rgba) = RgbaImage::from_raw(patch.width, patch.height, patch.rgba)
-            {
-                let img = Arc::new(RenderImage::new(vec![Frame::new(rgba)]));
-                if let Some(old) = self.tiles[idx].replace(img) {
-                    self.stale_images.push(old);
+            if idx < self.tiles.len() {
+                // GPUI RenderImage 内部固定按 BGRA8 采样，上传前原地交换 R/B 通道
+                for px in patch.rgba.as_chunks_mut::<4>().0 {
+                    px.swap(0, 2);
+                }
+                if let Some(rgba) = RgbaImage::from_raw(patch.width, patch.height, patch.rgba) {
+                    let img = Arc::new(RenderImage::new(vec![Frame::new(rgba)]));
+                    if let Some(old) = self.tiles[idx].replace(img) {
+                        self.stale_images.push(old);
+                    }
                 }
             }
         }
