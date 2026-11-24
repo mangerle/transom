@@ -8,13 +8,34 @@
 //! 代价与局限：当前版本提供桌面端本地项目、HTTP 请求和响应查看的最小闭环；
 //! Postman、OpenAPI、cURL 等复杂导入器以及 GraphQL、gRPC、WebSocket 不在本阶段。
 
+mod assertions;
+mod codegen;
 mod http;
+mod http_support;
 mod id;
+mod import_export;
+mod mock;
 mod model;
+mod request;
+mod signing;
+mod store;
+mod websocket;
 
+pub use assertions::{assertion_summary, evaluate_assertions};
+pub use codegen::{CodeTarget, generate_code, response_excerpt};
 pub use http::{ApiError, ApiExchange, ApiHttpService, ApiResponseSnapshot, MAX_RESPONSE_BYTES};
-pub use id::{ApiFolderId, ApiProjectId, ApiRequestId};
+pub use id::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
+pub use import_export::{ApiExportFormat, ApiImportFormat, export_project, import_projects};
+pub use mock::{ApiMockHandle, ApiMockRoute, ApiMockService, ApiMockStart};
 pub use model::{
-    API_SCHEMA_VERSION, ApiFolder, ApiHeader, ApiMethod, ApiProject, ApiProjectStore, ApiRegistry,
-    ApiRequest, MAX_IMPORT_BYTES, parse_project_import,
+    API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiFolder, ApiHistoryEntry, ApiProject,
+    ApiRegistry, ApiVariable, MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,
+};
+pub use request::{
+    ApiAssertion, ApiAssertionResult, ApiAuth, ApiHeader, ApiMethod, ApiProtocol, ApiRequest,
+    method_for_request,
+};
+pub use store::{ApiProjectStore, parse_project_import};
+pub use websocket::{
+    ApiWebSocketEvent, ApiWebSocketHandle, ApiWebSocketService, ApiWebSocketStart,
 };

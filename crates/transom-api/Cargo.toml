@@ -20,4 +20,13 @@ reqwest.workspace = true
 futures.workspace = true
 uuid.workspace = true
 tokio.workspace = true
+log.workspace = true
+base64.workspace = true
+serde_yaml_ng.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
+chrono.workspace = true
+percent-encoding = "2"
+tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 

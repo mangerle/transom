@@ -1,15 +1,17 @@
-//! API 项目、接口目录、请求和本地存储契约。
+//! API 项目、目录、环境、Cookie、历史和 Mock 配置。
 
-use super::{ApiFolderId, ApiProjectId, ApiRequestId};
+use super::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
+use super::{ApiMockRoute, ApiRequest};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use transom_core::AppError;
 
 /// 当前项目文件结构版本；版本高于程序支持值时拒绝加载，避免静默丢失新字段。
-pub const API_SCHEMA_VERSION: u32 = 1;
+pub const API_SCHEMA_VERSION: u32 = 2;
 /// 单次项目导入文件上限，防止误选超大文件后在 UI 线程前产生无界内存增长。
 pub const MAX_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_NAME_CHARS: usize = 120;
+const MAX_HISTORY_ENTRIES: usize = 100;
 
 /// API 项目登记表；一个文件保存全部本地项目。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,21 +77,38 @@ pub struct ApiProject {
     #[serde(default)]
     pub requests: Vec<ApiRequest>,
     #[serde(default)]
+    pub environments: Vec<ApiEnvironment>,
+    #[serde(default)]
+    pub active_environment_id: Option<ApiEnvironmentId>,
+    #[serde(default)]
+    pub cookies: Vec<ApiCookie>,
+    #[serde(default)]
+    pub history: Vec<ApiHistoryEntry>,
+    #[serde(default)]
+    pub mock_routes: Vec<ApiMockRoute>,
+    #[serde(default)]
     pub created_at: u64,
     #[serde(default)]
     pub updated_at: u64,
 }
 
 impl ApiProject {
-    /// 创建空项目；首次请求由工作区内的“新建请求”动作生成。
+    /// 创建空项目，并预置一个本地环境便于立即使用 `{{变量}}`。
     pub fn new(name: impl Into<String>) -> Self {
         let now = unix_now();
+        let environment = ApiEnvironment::new("本地");
+        let active_environment_id = Some(environment.id);
         Self {
             id: ApiProjectId::new(),
             name: normalize_name(name.into(), "未命名项目"),
             base_url: String::new(),
             folders: Vec::new(),
             requests: Vec::new(),
+            environments: vec![environment],
+            active_environment_id,
+            cookies: Vec::new(),
+            history: Vec::new(),
+            mock_routes: Vec::new(),
             created_at: now,
             updated_at: now,
         }
@@ -113,6 +132,18 @@ impl ApiProject {
     /// 查找请求。
     pub fn request(&self, id: ApiRequestId) -> Option<&ApiRequest> {
         self.requests.iter().find(|request| request.id == id)
+    }
+
+    /// 当前活动环境；没有配置时返回内置空环境。
+    pub fn active_environment(&self) -> ApiEnvironment {
+        self.active_environment_id
+            .and_then(|id| {
+                self.environments
+                    .iter()
+                    .find(|environment| environment.id == id)
+            })
+            .cloned()
+            .unwrap_or_else(ApiEnvironment::empty)
     }
 
     /// 插入或替换请求，并刷新项目更新时间。
@@ -149,6 +180,30 @@ impl ApiProject {
         folder
     }
 
+    /// 追加一条请求历史，超过上限时保留最近记录。
+    pub fn push_history(&mut self, entry: ApiHistoryEntry) {
+        self.history.push(entry);
+        if self.history.len() > MAX_HISTORY_ENTRIES {
+            let excess = self.history.len() - MAX_HISTORY_ENTRIES;
+            self.history.drain(0..excess);
+        }
+        self.touch();
+    }
+
+    /// 用同名 Cookie 覆盖旧值；域名按小写比较。
+    pub fn upsert_cookie(&mut self, cookie: ApiCookie) {
+        if let Some(existing) = self.cookies.iter_mut().find(|existing| {
+            existing.name.eq_ignore_ascii_case(&cookie.name)
+                && existing.domain == cookie.domain
+                && existing.path == cookie.path
+        }) {
+            *existing = cookie;
+        } else {
+            self.cookies.push(cookie);
+        }
+        self.touch();
+    }
+
     /// 更新项目元数据并刷新更新时间。
     pub fn touch(&mut self) {
         self.updated_at = unix_now();
@@ -174,212 +229,207 @@ impl ApiFolder {
     }
 }
 
-/// HTTP 方法；与 CyberAPI 保持相同的常用集合，但独立定义，避免跨项目类型耦合。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum ApiMethod {
-    #[default]
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
-    Head,
-    Options,
+/// 命名环境；变量值可以在请求、请求头和请求体中使用 `{{name}}` 引用。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ApiEnvironment {
+    #[serde(default)]
+    pub id: ApiEnvironmentId,
+    pub name: String,
+    #[serde(default)]
+    pub variables: Vec<ApiVariable>,
 }
 
-impl ApiMethod {
-    /// 方法展示文本。
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Get => "GET",
-            Self::Post => "POST",
-            Self::Put => "PUT",
-            Self::Patch => "PATCH",
-            Self::Delete => "DELETE",
-            Self::Head => "HEAD",
-            Self::Options => "OPTIONS",
+impl ApiEnvironment {
+    /// 新建环境。
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            id: ApiEnvironmentId::new(),
+            name: normalize_name(name.into(), "未命名环境"),
+            variables: Vec::new(),
         }
     }
 
-    /// 下拉菜单使用的稳定顺序。
-    pub const ALL: [Self; 7] = [
-        Self::Get,
-        Self::Post,
-        Self::Put,
-        Self::Patch,
-        Self::Delete,
-        Self::Head,
-        Self::Options,
-    ];
+    /// 创建没有变量的匿名环境。
+    pub fn empty() -> Self {
+        Self {
+            id: ApiEnvironmentId::new(),
+            name: "本地".to_string(),
+            variables: Vec::new(),
+        }
+    }
+
+    /// 解析变量模板；未知变量保留原样，便于用户看到缺失配置。
+    pub fn resolve(&self, text: &str) -> String {
+        let mut resolved = text.to_string();
+        for variable in self.variables.iter().filter(|variable| variable.enabled) {
+            let needle = format!("{{{{{}}}}}", variable.name);
+            resolved = resolved.replace(&needle, &variable.value);
+        }
+        resolved
+    }
+
+    /// 将环境变量渲染为 `NAME=value` 文本。
+    pub fn variables_text(&self) -> String {
+        self.variables
+            .iter()
+            .map(|variable| format!("{}={}", variable.name, variable.value))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// 从 `NAME=value` 文本替换变量；缺少等号时返回带行号的错误。
+    ///
+    /// # Errors
+    /// 非空行没有 `=` 或变量名为空时返回 `AppError`。
+    pub fn set_variables_text(&mut self, text: &str) -> Result<(), AppError> {
+        let mut variables = Vec::with_capacity(text.lines().count());
+        for (index, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            let Some((name, value)) = trimmed.split_once('=') else {
+                return Err(AppError::with_detail(
+                    transom_core::ErrorCode::Configuration,
+                    format!("环境变量第 {} 行缺少等号: {}", index + 1, trimmed),
+                ));
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(AppError::with_detail(
+                    transom_core::ErrorCode::Configuration,
+                    format!("环境变量第 {} 行名称为空", index + 1),
+                ));
+            }
+            variables.push(ApiVariable {
+                name: name.to_string(),
+                value: value.trim().to_string(),
+                enabled: true,
+                secret: false,
+            });
+        }
+        self.variables = variables;
+        Ok(())
+    }
 }
 
-/// 一条请求头；`enabled` 保留编辑器的启用/禁用能力。
+/// 单个环境变量；`secret` 仅用于界面遮罩，不改变模板替换行为。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct ApiHeader {
+pub struct ApiVariable {
     pub name: String,
     pub value: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default)]
+    pub secret: bool,
 }
 
 fn default_true() -> bool {
     true
 }
 
-/// 一条可保存、可发送的 HTTP 请求。
+/// 本地 Cookie；请求发送时按域名、过期时间和 Secure 规则筛选。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct ApiRequest {
-    #[serde(default)]
-    pub id: ApiRequestId,
-    #[serde(default)]
-    pub folder_id: Option<ApiFolderId>,
+pub struct ApiCookie {
     pub name: String,
+    pub value: String,
     #[serde(default)]
-    pub method: ApiMethod,
+    pub domain: Option<String>,
+    #[serde(default = "default_cookie_path")]
+    pub path: String,
     #[serde(default)]
-    pub url: String,
+    pub secure: bool,
     #[serde(default)]
-    pub headers: Vec<ApiHeader>,
+    pub http_only: bool,
     #[serde(default)]
-    pub body: String,
+    pub expires_at: Option<u64>,
 }
 
-impl ApiRequest {
-    /// 新建请求；URL 留空，由编辑器填写。
-    pub fn new(name: impl Into<String>, folder_id: Option<ApiFolderId>) -> Self {
-        Self {
-            id: ApiRequestId::new(),
-            folder_id,
-            name: normalize_name(name.into(), "未命名请求"),
-            method: ApiMethod::Get,
-            url: String::new(),
-            headers: Vec::new(),
-            body: String::new(),
-        }
-    }
+fn default_cookie_path() -> String {
+    "/".to_string()
+}
 
-    /// 请求展示名。
-    pub fn display_name(&self) -> &str {
-        let name = self.name.trim();
-        if name.is_empty() {
-            "未命名请求"
+impl ApiCookie {
+    /// 是否适用于当前请求地址。
+    pub fn applies_to(&self, url: &reqwest::Url) -> bool {
+        let host = url.host_str().unwrap_or_default();
+        let domain = self.domain.as_deref().unwrap_or(host);
+        let domain_matches = if domain.starts_with('.') {
+            host.ends_with(domain)
         } else {
-            name
-        }
-    }
-
-    /// 发送时将 `/` 开头的相对地址接到项目基础地址后；绝对 URL 原样返回。
-    pub fn resolved_url(&self, base_url: &str) -> String {
-        let url = self.url.trim();
-        let base = base_url.trim().trim_end_matches('/');
-        if url.starts_with('/') && !base.is_empty() {
-            format!("{base}{url}")
-        } else {
-            url.to_string()
-        }
-    }
-
-    /// 将启用的请求头渲染为一行一个 `名称: 值` 文本。
-    pub fn header_text(&self) -> String {
-        self.headers
-            .iter()
-            .filter(|header| header.enabled)
-            .map(|header| format!("{}: {}", header.name, header.value))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// 从文本解析请求头；空行忽略，格式错误带行号返回。
-    ///
-    /// # Errors
-    /// 任意非空行缺少冒号或名称为空时返回带中文上下文的 `ApiError`。
-    pub fn set_header_text(&mut self, text: &str) -> Result<(), super::ApiError> {
-        self.headers = parse_headers(text)?;
-        Ok(())
+            host.eq_ignore_ascii_case(domain)
+        };
+        domain_matches
+            && url.path().starts_with(&self.path)
+            && (!self.secure || url.scheme() == "https")
+            && self.expires_at.is_none_or(|expires| expires > unix_now())
     }
 }
 
-/// 本地项目存储契约；UI 只依赖契约，JSON 实现位于 `transom-store`。
-pub trait ApiProjectStore: Send + Sync {
-    /// 加载全部项目；文件不存在时返回空登记表。
-    ///
-    /// # Errors
-    /// 文件损坏、版本过高或 I/O 失败时返回 `AppError`。
-    fn load(&self) -> Result<ApiRegistry, AppError>;
-
-    /// 原子保存全部项目。
-    ///
-    /// # Errors
-    /// 序列化、创建目录或原子替换失败时返回 `AppError`。
-    fn save(&self, registry: &ApiRegistry) -> Result<(), AppError>;
+/// 将项目 Cookie 渲染为 `name=value` 文本；域名和属性由响应自动维护。
+pub fn cookies_text(cookies: &[ApiCookie]) -> String {
+    cookies
+        .iter()
+        .map(|cookie| format!("{}={}", cookie.name, cookie.value))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-/// 导入文件解析结果：兼容单个项目与应用自己的项目登记表。
-pub fn parse_project_import(input: &str) -> Result<Vec<ApiProject>, AppError> {
-    let value: serde_json::Value = serde_json::from_str(input).map_err(|error| {
-        AppError::with_detail(
-            transom_core::ErrorCode::Configuration,
-            format!("解析 API 项目导入文件失败，原因: {error}"),
-        )
-    })?;
-    if value.get("projects").is_some() {
-        let registry: ApiRegistry = serde_json::from_value(value).map_err(|error| {
-            AppError::with_detail(
-                transom_core::ErrorCode::Configuration,
-                format!("解析 API 项目登记表失败，原因: {error}"),
-            )
-        })?;
-        if registry.version > API_SCHEMA_VERSION {
-            return Err(AppError::with_detail(
-                transom_core::ErrorCode::Configuration,
-                format!(
-                    "API 项目文件版本 {} 高于当前支持版本 {}，请升级 Transom",
-                    registry.version, API_SCHEMA_VERSION
-                ),
-            ));
-        }
-        Ok(registry.projects)
-    } else {
-        let project: ApiProject = serde_json::from_value(value).map_err(|error| {
-            AppError::with_detail(
-                transom_core::ErrorCode::Configuration,
-                format!("解析单个 API 项目失败，原因: {error}"),
-            )
-        })?;
-        Ok(vec![project])
-    }
-}
-
-fn parse_headers(text: &str) -> Result<Vec<ApiHeader>, super::ApiError> {
-    let mut headers = Vec::new();
+/// 从 `name=value` 文本替换 Cookie；域名缺省时按发送目标主机生效。
+///
+/// # Errors
+/// 非空行没有等号或 Cookie 名称为空时返回中文错误。
+pub fn parse_cookies_text(text: &str) -> Result<Vec<ApiCookie>, AppError> {
+    let mut cookies = Vec::with_capacity(text.lines().count());
     for (index, line) in text.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        let Some((name, value)) = trimmed.split_once(':') else {
-            return Err(super::ApiError::InvalidHeader {
-                line: index.saturating_add(1),
-                reason: "缺少冒号分隔符".to_string(),
-            });
+        let Some((name, value)) = trimmed.split_once('=') else {
+            return Err(AppError::with_detail(
+                transom_core::ErrorCode::Configuration,
+                format!("Cookie 第 {} 行缺少等号: {}", index + 1, trimmed),
+            ));
         };
         let name = name.trim();
         if name.is_empty() {
-            return Err(super::ApiError::InvalidHeader {
-                line: index.saturating_add(1),
-                reason: "请求头名称为空".to_string(),
-            });
+            return Err(AppError::with_detail(
+                transom_core::ErrorCode::Configuration,
+                format!("Cookie 第 {} 行名称为空", index + 1),
+            ));
         }
-        headers.push(ApiHeader {
+        cookies.push(ApiCookie {
             name: name.to_string(),
             value: value.trim().to_string(),
-            enabled: true,
+            domain: None,
+            path: "/".to_string(),
+            secure: false,
+            http_only: false,
+            expires_at: None,
         });
     }
-    Ok(headers)
+    Ok(cookies)
+}
+
+/// 一次请求在项目历史中的摘要；不保存完整响应体，避免项目文件无限膨胀。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ApiHistoryEntry {
+    pub request_id: ApiRequestId,
+    pub request_name: String,
+    pub method: String,
+    pub url: String,
+    pub status: u16,
+    pub elapsed_millis: u128,
+    pub at: u64,
+    pub assertions_passed: usize,
+    pub assertions_total: usize,
+    #[serde(default)]
+    pub response_excerpt: String,
 }
 
 fn normalize_name(name: String, fallback: &str) -> String {
@@ -406,50 +456,33 @@ mod tests {
         assert_eq!(project.name, "Demo API");
         assert_eq!(project.display_name(), "Demo API");
         assert_eq!(project.request_count(), 0);
+        assert!(project.active_environment_id.is_some());
         assert!(!project.id.to_string().is_empty());
     }
 
     #[test]
-    fn header_text_round_trips_and_reports_bad_lines() {
-        let mut request = ApiRequest::new("创建用户", None);
-        request
-            .set_header_text("Content-Type: application/json\nX-Trace: demo")
-            .expect("合法请求头");
-        assert_eq!(request.headers.len(), 2);
+    fn environment_variables_round_trip_and_resolve() {
+        let mut environment = ApiEnvironment::new("测试");
+        environment
+            .set_variables_text("HOST=example.com\nTOKEN=secret")
+            .expect("合法环境变量");
+        assert_eq!(environment.variables.len(), 2);
         assert_eq!(
-            request.header_text(),
-            "Content-Type: application/json\nX-Trace: demo"
+            environment.resolve("https://{{HOST}}/api"),
+            "https://example.com/api"
         );
-        assert!(request.set_header_text("broken header").is_err());
-    }
-
-    #[test]
-    fn relative_url_uses_project_base_url() {
-        let mut request = ApiRequest::new("健康检查", None);
-        request.url = "/health".to_string();
         assert_eq!(
-            request.resolved_url("https://api.example.com/"),
-            "https://api.example.com/health"
-        );
-        request.url = "https://other.example.com/ping".to_string();
-        assert_eq!(
-            request.resolved_url("https://api.example.com"),
-            "https://other.example.com/ping"
+            environment.variables_text(),
+            "HOST=example.com\nTOKEN=secret"
         );
     }
 
     #[test]
-    fn import_accepts_single_project_and_registry() {
-        let project = ApiProject::new("导入项目");
-        let registry = ApiRegistry {
-            version: API_SCHEMA_VERSION,
-            projects: vec![project.clone()],
-        };
-        let single = parse_project_import(&serde_json::to_string(&project).expect("序列化"))
-            .expect("单个项目");
-        let many = parse_project_import(&serde_json::to_string(&registry).expect("序列化"))
-            .expect("登记表");
-        assert_eq!(single, vec![project]);
-        assert_eq!(many.len(), 1);
+    fn broken_environment_variable_reports_line() {
+        let mut environment = ApiEnvironment::new("测试");
+        let error = environment
+            .set_variables_text("HOST=example.com\nBROKEN")
+            .expect_err("缺少等号");
+        assert!(error.detail.expect("错误详情").contains("第 2 行"));
     }
 }
