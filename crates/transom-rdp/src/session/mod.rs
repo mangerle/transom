@@ -102,3 +102,10 @@ impl RdpSession {
         let _ = self.try_send_input(RdpInput::Disconnect);
     }
 }
+
+impl Drop for RdpSession {
+    fn drop(&mut self) {
+        // 会话句柄销毁时自动尝试派发断开指令，实现确定性 RAII 资源回收与平滑停机
+        let _ = self.input_tx.try_send(RdpInput::Disconnect);
+    }
+}

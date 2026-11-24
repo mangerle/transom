@@ -1,15 +1,16 @@
 //! RDP 桌面视口核心组件与事件处理。
 //!
-//! 设计原理（Why）：作为 GPUI 自绘树中的一等公民视图，`RdpView` 将来自后台会话
-//! 线程的增量瓦片帧（`TiledDesktopFrame`）拼装呈现，并捕获键盘、鼠标与滚轮操作
-//! 送回会话输入通道。针对高回报率鼠标提供坐标去重微节流，消除网络通道抖动。
+//! 设计原理（Why）：作为 GPUI 自绘树中的一等公民视图，`RdpView` 采用原生 GPU
+//! `canvas` 管道对后台会话线程交付的增量瓦片帧（`TiledDesktopFrame`）进行直接渲染，
+//! 消除数百个 DOM 节点开销；在 prepaint 阶段捕获精确物理视口矩形，实现鼠标坐标
+//! 的无偏差绝对反算与动态缩放映射；打通系统剪贴板（GPUI Clipboard）双向流转。
 
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::*;
 use std::sync::Arc;
 use transom_core::SessionId;
 use transom_rdp::{
-    CursorUpdate, RdpInput, RdpOutput, RdpSession, SessionConfig, TiledDesktopFrame,
+    ClipboardEvent, CursorUpdate, RdpInput, RdpOutput, RdpSession, SessionConfig, TiledDesktopFrame,
 };
 
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
@@ -37,6 +38,7 @@ pub struct RdpView {
     last_mouse_pos: Option<(u16, u16)>,
     #[allow(dead_code)]
     cursor: Option<CursorUpdate>,
+    viewport_bounds: Bounds<Pixels>,
     focus_handle: FocusHandle,
 }
 
@@ -64,6 +66,9 @@ impl RdpView {
                         RdpOutput::Cursor(c) => {
                             view.cursor = Some(c);
                         }
+                        RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)) => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(text));
+                        }
                         RdpOutput::Terminated(e) => {
                             view.state = RdpViewState::Failed(e.to_string());
                         }
@@ -88,6 +93,7 @@ impl RdpView {
             is_scaled: true,
             last_mouse_pos: None,
             cursor: None,
+            viewport_bounds: Bounds::default(),
             focus_handle: cx.focus_handle(),
         }
     }
@@ -99,7 +105,7 @@ impl RdpView {
         }
     }
 
-    /// 发送断开请求。
+    /// 发送断开请求并释放按键。
     pub fn disconnect(&mut self) {
         self.send_input(RdpInput::ReleaseAllKeys);
         if let Some(session) = &self.session {
@@ -137,27 +143,81 @@ impl RdpView {
         }
     }
 
-    /// 渲染桌面瓦片集合。
-    fn render_desktop_tiles(&self) -> AnyElement {
-        let Some(frame) = &self.frame else {
-            return div().into_any_element();
-        };
+    /// 渲染桌面瓦片集合的高性能 GPU 自绘画布。
+    fn render_desktop_canvas(&self, cx: &Context<Self>) -> impl IntoElement {
+        let view_entity = cx.entity().clone();
+        let frame = self.frame.clone();
+        let is_scaled = self.is_scaled;
 
-        let mut grid = v_flex().flex_none();
-        let cols = frame.cols as usize;
-        let rows = frame.rows as usize;
+        canvas(
+            move |bounds, _window, cx| {
+                view_entity.update(cx, |this, _| {
+                    this.viewport_bounds = bounds;
+                });
+            },
+            move |bounds, _, window, _cx| {
+                let Some(frame) = &frame else {
+                    return;
+                };
 
-        for r in 0..rows {
-            let mut row = h_flex().flex_none();
-            for c in 0..cols {
-                let idx = r * cols + c;
-                if let Some(tile_img) = frame.tiles.get(idx) {
-                    row = row.child(img(ImageSource::Render(tile_img.clone())).flex_none());
+                let cols = frame.cols as usize;
+                let rows = frame.rows as usize;
+                let desktop_width = frame.width;
+                let desktop_height = frame.height;
+
+                if desktop_width == 0 || desktop_height == 0 {
+                    return;
                 }
-            }
-            grid = grid.child(row);
-        }
-        grid.into_any_element()
+
+                let (scale_x, scale_y) = if is_scaled {
+                    (
+                        f32::from(bounds.size.width) / f32::from(desktop_width),
+                        f32::from(bounds.size.height) / f32::from(desktop_height),
+                    )
+                } else {
+                    (1.0, 1.0)
+                };
+
+                for r in 0..rows {
+                    for c in 0..cols {
+                        let idx = r * cols + c;
+                        if let Some(tile_img) = frame.tiles.get(idx) {
+                            let (tile_x, tile_y, tile_w, tile_h) =
+                                transom_rdp::tiles::compute_tile_bounds(
+                                    desktop_width,
+                                    desktop_height,
+                                    c as u32,
+                                    r as u32,
+                                );
+
+                            let dst_origin = bounds.origin
+                                + Point::new(
+                                    px(tile_x as f32 * scale_x),
+                                    px(tile_y as f32 * scale_y),
+                                );
+                            let dst_size = Size {
+                                width: px(tile_w as f32 * scale_x),
+                                height: px(tile_h as f32 * scale_y),
+                            };
+                            let tile_bounds = Bounds {
+                                origin: dst_origin,
+                                size: dst_size,
+                            };
+
+                            let _ = window.paint_image(
+                                bounds,
+                                tile_bounds,
+                                Corners::default(),
+                                tile_img.clone(),
+                                0,
+                                false,
+                            );
+                        }
+                    }
+                }
+            },
+        )
+        .size_full()
     }
 
     /// 渲染悬浮工具栏。
@@ -250,13 +310,7 @@ impl Render for RdpView {
                 if let RdpViewState::Connected { width, height } = this.state
                     && let Some((x, y)) = crate::rdp::input::map_pointer_position(
                         event.position,
-                        Bounds {
-                            origin: Point::default(),
-                            size: Size {
-                                width: Pixels::from(width as f32),
-                                height: Pixels::from(height as f32),
-                            },
-                        },
+                        this.viewport_bounds,
                         width,
                         height,
                         this.is_scaled,
@@ -362,7 +416,7 @@ impl Render for RdpView {
 
         match &self.state {
             RdpViewState::Connected { .. } => root
-                .child(self.render_desktop_tiles())
+                .child(self.render_desktop_canvas(cx))
                 .child(self.render_floating_toolbar(cx)),
             _ => root.child(self.render_status_view()),
         }
