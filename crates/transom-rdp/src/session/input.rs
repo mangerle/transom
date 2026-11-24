@@ -116,7 +116,10 @@ impl InputBatcher {
                 InputBatchOutcome::Continue
             }
             RdpInput::ClipboardText(text) => {
-                handle_local_clipboard_copy(ctx.active_stage, ctx.writer, text).await;
+                if let Err(e) = handle_local_clipboard_copy(ctx.active_stage, ctx.writer, text).await {
+                    log::info!("写入 CLIPRDR 本地复制通告时连接中断: {e}");
+                    return InputBatchOutcome::Stop;
+                }
                 InputBatchOutcome::Continue
             }
             RdpInput::Resize { width, height } => {

@@ -345,7 +345,18 @@ impl SessionLoopRunner {
                     );
                 }
 
-                drive_cliprdr_events(&mut self.active_stage, writer).await;
+                if let Err(e) = drive_cliprdr_events(&mut self.active_stage, writer).await {
+                    log::info!("写入 CLIPRDR 响应时连接中断: {e}");
+                    let _ = self
+                        .senders
+                        .events
+                        .send(RdpOutput::Terminated(RdpError::Network {
+                            address: "远端连接".to_string(),
+                            source: e,
+                        }))
+                        .await;
+                    return LoopAction::Stop;
+                }
             }
             Err(e) => {
                 self.consecutive_decode_errors = self.consecutive_decode_errors.saturating_add(1);

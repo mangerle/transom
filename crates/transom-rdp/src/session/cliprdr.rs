@@ -4,6 +4,7 @@
 //! 本地复制通告）从主事件循环 `loop_runner` 中剥离，并严格按照对端协商/请求的格式 ID
 //! （`CF_UNICODETEXT` / `CF_TEXT`）编解码，杜绝格式错配导致的粘贴乱码。
 
+use crate::clipboard::backend::MAX_CLIPRDR_QUEUE;
 use crate::clipboard::TransomCliprdrBackend;
 use crate::clipboard::text::{encode_ansi_payload, encode_text_payload};
 use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, FormatDataResponse};
@@ -13,21 +14,24 @@ use ironrdp_session::ActiveStage;
 use ironrdp_tokio::FramedWrite;
 
 /// 驱动 CLIPRDR 剪贴板事件流转（拉取远端数据或应答远端数据请求）。
+///
+/// # Errors
+/// 写入底层网络流失败时返回 `std::io::Error`，以便主循环感知连接断开并立即退出。
 pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
     active_stage: &mut ActiveStage,
     writer: &mut W,
-) {
+) -> Result<(), std::io::Error> {
     let (paste_format, pending_requests, local_text) = {
         let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>() else {
-            return;
+            return Ok(());
         };
         let Some(backend) = cliprdr.downcast_backend_mut::<TransomCliprdrBackend>() else {
-            return;
+            return Ok(());
         };
         let ctx = &mut backend.context;
         let paste = ctx.pending_paste_format.take();
         if let Some(fmt) = paste {
-            if ctx.inflight_paste_formats.len() >= 16 {
+            if ctx.inflight_paste_formats.len() >= MAX_CLIPRDR_QUEUE {
                 ctx.inflight_paste_formats.pop_front();
             }
             ctx.inflight_paste_formats.push_back(fmt);
@@ -45,9 +49,8 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
         && let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
         && let Ok(messages) = cliprdr.initiate_paste(format_id)
         && let Ok(bytes) = active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
-        && let Err(e) = writer.write_all(&bytes).await
     {
-        log::debug!("写入 CLIPRDR 粘贴请求失败: {e}");
+        writer.write_all(&bytes).await?;
     }
 
     for requested_format in pending_requests {
@@ -57,19 +60,23 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
             && let Ok(messages) = cliprdr.submit_format_data(response)
             && let Ok(bytes) =
                 active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
-            && let Err(e) = writer.write_all(&bytes).await
         {
-            log::debug!("写入 CLIPRDR 格式数据响应失败: {e}");
+            writer.write_all(&bytes).await?;
         }
     }
+
+    Ok(())
 }
 
 /// 处理本地剪贴板更新并向远端通告（同时声明 Unicode 与 ANSI 文本格式以兼容各类远端应用）。
+///
+/// # Errors
+/// 写入底层网络流失败时返回 `std::io::Error`。
 pub(crate) async fn handle_local_clipboard_copy<W: FramedWrite>(
     active_stage: &mut ActiveStage,
     writer: &mut W,
     text: String,
-) {
+) -> Result<(), std::io::Error> {
     let formats = [
         ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT),
         ClipboardFormat::new(ClipboardFormatId::CF_TEXT),
@@ -81,11 +88,11 @@ pub(crate) async fn handle_local_clipboard_copy<W: FramedWrite>(
         if let Ok(messages) = cliprdr.initiate_copy(&formats)
             && let Ok(bytes) =
                 active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
-            && let Err(e) = writer.write_all(&bytes).await
         {
-            log::debug!("写入 CLIPRDR 本地复制通告失败: {e}");
+            writer.write_all(&bytes).await?;
         }
     }
+    Ok(())
 }
 
 fn build_format_data_response(

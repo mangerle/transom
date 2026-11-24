@@ -11,12 +11,8 @@ use super::view::RdpView;
 use gpui_kit::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use transom_rdp::RdpInput;
 use transom_rdp::tiles::{TILE_SIZE, compute_tile_bounds};
-
-/// 动态分辨率请求的最小合法尺寸阈值。
-const MIN_DYNAMIC_WIDTH: u16 = 640;
-const MIN_DYNAMIC_HEIGHT: u16 = 480;
+use transom_rdp::{MIN_DESKTOP_HEIGHT, MIN_DESKTOP_WIDTH, RdpInput};
 
 /// 视口矩形与动态分辨率请求协同状态（收敛 `prepaint` 阶段所需的无重入共享状态）。
 #[derive(Clone, Copy, Default)]
@@ -59,8 +55,8 @@ impl ViewportSyncHandle {
             let target_w = (f32::from(bounds.size.width) * scale).round() as u16;
             let target_h = (f32::from(bounds.size.height) * scale).round() as u16;
             // 跳过首次从 0x0 布局初始化的抖动，且通道满时不覆写已发送尺寸以便下次重试
-            if target_w >= MIN_DYNAMIC_WIDTH
-                && target_h >= MIN_DYNAMIC_HEIGHT
+            if target_w >= MIN_DESKTOP_WIDTH
+                && target_h >= MIN_DESKTOP_HEIGHT
                 && state.last_sent_resize != Some((target_w, target_h))
                 && let Some(sender) = resize_sender
                 && sender

@@ -13,7 +13,7 @@ mod input;
 pub mod loop_runner;
 mod output;
 mod reactivate;
-mod resize;
+pub mod resize;
 
 use crate::error::RdpError;
 use crate::settings::SessionConfig;

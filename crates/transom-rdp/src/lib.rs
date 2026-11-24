@@ -24,6 +24,7 @@ pub use audio::TransomAudioBackend;
 pub use clipboard::ClipboardEvent;
 pub use error::RdpError;
 pub use keyboard::{KeyChord, ModifierState};
+pub use session::resize::{MIN_DESKTOP_HEIGHT, MIN_DESKTOP_WIDTH};
 pub use session::{MouseBtn, RdpInput, RdpOutput, RdpReceivers, RdpSession};
 pub use settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo};
 pub use tiles::{FrameUpdate, TILE_SIZE, TilePatch};

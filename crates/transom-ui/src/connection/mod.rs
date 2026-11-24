@@ -442,8 +442,9 @@ fn launch_rdp_session_async(
 
         match password_result {
             Ok(password) => {
-                let config = transom_rdp::SessionConfig::new(&rdp, password, (1920, 1080));
                 view.update(cx, |rdp_view, cx| {
+                    let initial_size = rdp_view.current_viewport_size().unwrap_or((1280, 800));
+                    let config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
                     rdp_view.start_session(config, cx);
                 });
             }

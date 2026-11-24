@@ -19,7 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
 /// 剪贴板内部有界待处理队列上限，防止异常高频请求导致内存积压。
-const MAX_CLIPRDR_QUEUE: usize = 16;
+pub(crate) const MAX_CLIPRDR_QUEUE: usize = 16;
 
 /// 剪贴板跨线程同步状态上下文。
 #[derive(Debug, Default)]

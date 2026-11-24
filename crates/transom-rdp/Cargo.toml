@@ -1,6 +1,6 @@
 [package]
 name = "transom-rdp"
-description = "RDP 远程桌面协议引擎：IronRDP 细粒度状态机驱动、Tile 增量瓦片渲染、硬件加速解码、本地音频直通与双向剪贴板"
+description = "RDP 远程桌面协议引擎：IronRDP 细粒度状态机驱动、128x128 增量瓦片提取、本地音频直通与双向剪贴板"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -217,6 +217,18 @@ impl RdpView {
         self.session.as_ref().map(RdpSession::input_sender)
     }
 
+    /// 获取当前视口布局尺寸（未布局完成时返回 `None`），供连接初始化时选择匹配的默认分辨率。
+    pub(crate) fn current_viewport_size(&self) -> Option<(u16, u16)> {
+        let size = self.viewport_sync.bounds().size;
+        let w = f32::from(size.width).round() as u16;
+        let h = f32::from(size.height).round() as u16;
+        if w >= transom_rdp::MIN_DESKTOP_WIDTH && h >= transom_rdp::MIN_DESKTOP_HEIGHT {
+            Some((w, h))
+        } else {
+            None
+        }
+    }
+
     /// 聚焦当前 RDP 桌面视图以接收后续键盘输入。
     pub(crate) fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus_handle, cx);

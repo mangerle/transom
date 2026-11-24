@@ -14,10 +14,10 @@ use std::time::{Duration, Instant};
 pub(crate) const RESIZE_DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
 
 /// 动态分辨率安全范围限制。
-const MIN_DESKTOP_WIDTH: u16 = 640;
-const MAX_DESKTOP_WIDTH: u16 = 4096;
-const MIN_DESKTOP_HEIGHT: u16 = 480;
-const MAX_DESKTOP_HEIGHT: u16 = 2560;
+pub const MIN_DESKTOP_WIDTH: u16 = 640;
+pub const MAX_DESKTOP_WIDTH: u16 = 4096;
+pub const MIN_DESKTOP_HEIGHT: u16 = 480;
+pub const MAX_DESKTOP_HEIGHT: u16 = 2560;
 
 /// 通道未就绪时的最大退避重试次数（20 * 250ms = 5 秒，覆盖慢速 WAN DVC 握手）。
 const MAX_CHANNEL_WAIT_RETRIES: u8 = 20;
