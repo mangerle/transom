@@ -76,6 +76,11 @@ pub enum RdpOutput {
     Connected { width: u16, height: u16 },
     /// 远端桌面分辨率已通过重激活序列完成变更。
     Resized { width: u16, height: u16 },
+    /// 实时网络质量遥测（每秒下行吞吐量与 TCP 往返延时）。
+    NetworkStats {
+        rx_bytes_per_sec: u64,
+        rtt_ms: Option<u32>,
+    },
     /// 剪贴板事件。
     Clipboard(ClipboardEvent),
     /// 远端或本地正常断开会话。

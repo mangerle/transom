@@ -71,13 +71,27 @@ pub fn map_modifiers(modifiers: gpui_kit::Modifiers) -> ModifierState {
 }
 
 impl RdpView {
+    /// 获取当前画布实际渲染的桌面物理像素尺寸（优先使用与画面同源的 `frame_cache` 尺寸）。
+    fn current_desktop_size(&self) -> Option<(u16, u16)> {
+        let cache = self.frame_cache.borrow();
+        if cache.width > 0 && cache.height > 0 {
+            return Some((cache.width, cache.height));
+        }
+        match self.state {
+            RdpViewState::Connected { width, height } if width > 0 && height > 0 => {
+                Some((width, height))
+            }
+            _ => None,
+        }
+    }
+
     /// 处理鼠标指针在视口内的移动事件（集成 125Hz 流量整形与坐标缓存）。
     pub(crate) fn handle_mouse_move(
         &mut self,
         event: &gpui_kit::MouseMoveEvent,
         _cx: &mut gpui_kit::Context<Self>,
     ) {
-        let RdpViewState::Connected { width, height } = self.state else {
+        let Some((width, height)) = self.current_desktop_size() else {
             return;
         };
         let bounds = self.viewport_sync.bounds();
@@ -106,18 +120,32 @@ impl RdpView {
         self.input.last_mouse_pos = None;
     }
 
-    /// 处理鼠标按下：夺回键盘焦点、原子补齐最新坐标并派发点击。
+    /// 处理鼠标按下：夺回键盘焦点、按按下位置实时反算并同步坐标后派发点击。
     pub(crate) fn handle_mouse_down(
         &mut self,
-        btn: gpui_kit::MouseButton,
+        event: &gpui_kit::MouseDownEvent,
         window: &mut Window,
         cx: &mut gpui_kit::Context<Self>,
     ) {
         self.focus(window, cx);
-        if let Some((x, y)) = self.input.last_mouse_pos {
-            self.send_mouse_move(x, y);
+        if let Some((width, height)) = self.current_desktop_size() {
+            let mapped = map_pointer_position(
+                event.position,
+                self.viewport_sync.bounds(),
+                width,
+                height,
+                self.is_scaled,
+                self.input.pan_offset,
+                self.viewport_sync.scale_factor(),
+            );
+            if let Some((x, y)) = mapped {
+                self.input.last_mouse_pos = Some((x, y));
+                self.send_mouse_move(x, y);
+            } else if let Some((x, y)) = self.input.last_mouse_pos {
+                self.send_mouse_move(x, y);
+            }
         }
-        if let Some(input) = map_mouse_button(btn, true) {
+        if let Some(input) = map_mouse_button(event.button, true) {
             self.send_input(input);
         }
     }
@@ -175,7 +203,7 @@ impl RdpView {
 
     /// 在 1:1 原始比例模式下平移本地视口偏移，便于查看超出窗格范围的远端区域。
     fn pan_viewport(&mut self, delta: gpui_kit::ScrollDelta, cx: &mut gpui_kit::Context<Self>) {
-        let RdpViewState::Connected { width, height } = self.state else {
+        let Some((width, height)) = self.current_desktop_size() else {
             return;
         };
         let (dx, dy) = match delta {

@@ -52,6 +52,10 @@ impl CustomIcon {
     pub const EYE_OFF: Self = Self("eye_off");
     pub const PANEL_WIDEN: Self = Self("panel_widen");
     pub const PANEL_NARROW: Self = Self("panel_narrow");
+    pub const VOLUME_ON: Self = Self("volume_on");
+    pub const VOLUME_OFF: Self = Self("volume_off");
+    pub const FULLSCREEN: Self = Self("fullscreen");
+    pub const FULLSCREEN_EXIT: Self = Self("fullscreen_exit");
 
     /// 当前图标的浅色资产路径。
     pub fn light_path(self) -> SharedString {

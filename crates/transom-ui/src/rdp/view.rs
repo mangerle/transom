@@ -94,6 +94,8 @@ pub struct RdpView {
     is_fullscreen: bool,
     toolbar_expanded: bool,
     toolbar_pinned: bool,
+    rx_bytes_per_sec: u64,
+    rtt_ms: Option<u32>,
     pub(crate) viewport_sync: ViewportSyncHandle,
     last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
@@ -120,6 +122,8 @@ impl RdpView {
             is_fullscreen: false,
             toolbar_expanded: false,
             toolbar_pinned: false,
+            rx_bytes_per_sec: 0,
+            rtt_ms: None,
             viewport_sync: ViewportSyncHandle::default(),
             last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
@@ -225,6 +229,16 @@ impl RdpView {
             RdpOutput::Resized { width, height } => {
                 self.viewport_sync.set_last_sent_resize(Some((width, height)));
                 self.state = RdpViewState::Connected { width, height };
+            }
+            RdpOutput::NetworkStats {
+                rx_bytes_per_sec,
+                rtt_ms,
+            } => {
+                self.rx_bytes_per_sec = rx_bytes_per_sec;
+                self.rtt_ms = rtt_ms;
+                if self.toolbar_expanded || self.toolbar_pinned {
+                    cx.notify();
+                }
             }
             RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)) => {
                 self.last_synced_clipboard = Some(text.clone());
@@ -501,6 +515,8 @@ impl RdpView {
                 is_scaled: self.is_scaled,
                 is_fullscreen: self.is_fullscreen,
                 is_pinned: self.toolbar_pinned,
+                rx_bytes_per_sec: self.rx_bytes_per_sec,
+                rtt_ms: self.rtt_ms,
                 on_send_cad: make_action(|this, _, _| this.send_key_chord(KeyChord::CtrlAltDelete)),
                 on_send_win: make_action(|this, _, _| this.send_key_chord(KeyChord::Win)),
                 on_toggle_mute: make_action(|this, _, cx| {
@@ -632,7 +648,7 @@ impl RdpView {
             .on_mouse_exit(cx.listener(|this, _, _, cx| this.handle_mouse_exit(cx)))
             .on_scroll(cx.listener(|this, e, _, cx| this.handle_scroll(e, cx)))
             .on_any_mouse_down(cx.listener(|this, e: &MouseDownEvent, window, cx| {
-                this.handle_mouse_down(e.button, window, cx);
+                this.handle_mouse_down(e, window, cx);
             }))
             .child(self.render_desktop_canvas());
 

@@ -43,6 +43,8 @@ pub struct EstablishedConnection {
     pub result: ConnectionResult,
     pub audio_muted: Arc<AtomicBool>,
     pub scale_factor_percent: u32,
+    pub peer_addr: Option<SocketAddr>,
+    pub initial_rtt_ms: Option<u32>,
 }
 
 /// 执行完整的 RDP 连接与认证序列。
@@ -60,7 +62,10 @@ pub async fn establish_connection(
         .map_or((config.host.as_str(), config.port), |(h, p)| {
             (h.as_str(), *p)
         });
+    let dial_started = std::time::Instant::now();
     let stream = connect_stream(dial_host, dial_port, shutdown_rx).await?;
+    let initial_rtt_ms = u32::try_from(dial_started.elapsed().as_millis()).ok();
+    let peer_addr = stream.peer_addr().ok();
     let local_addr = stream.local_addr().map_err(|e| RdpError::Network {
         address: config.host.clone(),
         source: e,
@@ -79,7 +84,7 @@ pub async fn establish_connection(
     .await?
     .map_err(|e| RdpError::Protocol {
         stage: "connect_begin 握手初始化",
-        detail: e.to_string(),
+        detail: format!("{e} ({e:?})"),
     })?;
 
     let (mut framed, server_public_key) = upgrade_transport_if_needed(
@@ -106,6 +111,8 @@ pub async fn establish_connection(
         result,
         audio_muted,
         scale_factor_percent: config.scale_factor_percent,
+        peer_addr,
+        initial_rtt_ms,
     })
 }
 
