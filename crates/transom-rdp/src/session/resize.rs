@@ -29,19 +29,26 @@ pub(crate) fn normalize_resolution(width: u16, height: u16) -> (u16, u16) {
     (w.max(MIN_DESKTOP_WIDTH), h.max(MIN_DESKTOP_HEIGHT))
 }
 
+/// 规范化 DPI 缩放百分比（限定在 MS-RDPEDISP 合法范围 100..=500）。
+pub(crate) fn normalize_scale_percent(scale_percent: u32) -> u32 {
+    scale_percent.clamp(100, 500)
+}
+
 /// 动态分辨率请求尾沿防抖控制器。
 pub(crate) struct ResizeController {
     current: (u16, u16),
-    pending: Option<(u16, u16)>,
+    current_scale: u32,
+    pending: Option<(u16, u16, u32)>,
     deadline: Option<Instant>,
     retries_left: u8,
 }
 
 impl ResizeController {
-    /// 以初始协商分辨率构造控制器。
-    pub(crate) fn new(initial: (u16, u16)) -> Self {
+    /// 以初始协商分辨率与缩放比例构造控制器。
+    pub(crate) fn new(initial: (u16, u16), initial_scale: u32) -> Self {
         Self {
             current: initial,
+            current_scale: normalize_scale_percent(initial_scale),
             pending: None,
             deadline: None,
             retries_left: 0,
@@ -51,23 +58,27 @@ impl ResizeController {
     /// 远端完成重激活后更新当前生效分辨率。
     pub(crate) fn set_current(&mut self, resolution: (u16, u16)) {
         self.current = resolution;
-        if self.pending == Some(resolution) {
+        if let Some((pw, ph, ps)) = self.pending
+            && (pw, ph) == resolution
+        {
+            self.current_scale = ps;
             self.pending = None;
             self.deadline = None;
             self.retries_left = 0;
         }
     }
 
-    /// 记录新的目标尺寸并顺延尾沿防抖截止时间。
-    pub(crate) fn schedule(&mut self, width: u16, height: u16, now: Instant) {
-        let target = normalize_resolution(width, height);
-        if target == self.current {
+    /// 记录新的目标尺寸与 DPI 缩放比例并顺延尾沿防抖截止时间。
+    pub(crate) fn schedule(&mut self, width: u16, height: u16, scale_percent: u32, now: Instant) {
+        let (w, h) = normalize_resolution(width, height);
+        let scale = normalize_scale_percent(scale_percent);
+        if (w, h) == self.current && scale == self.current_scale {
             self.pending = None;
             self.deadline = None;
             self.retries_left = 0;
             return;
         }
-        self.pending = Some(target);
+        self.pending = Some((w, h, scale));
         self.deadline = Some(now + RESIZE_DEBOUNCE_INTERVAL);
         self.retries_left = MAX_CHANNEL_WAIT_RETRIES;
     }
@@ -77,8 +88,8 @@ impl ResizeController {
         self.deadline
     }
 
-    /// 若已到达截止时间，取出待发送的目标分辨率。
-    pub(crate) fn take_due(&mut self, now: Instant) -> Option<(u16, u16)> {
+    /// 若已到达截止时间，取出待发送的目标分辨率与 DPI 缩放百分比。
+    pub(crate) fn take_due(&mut self, now: Instant) -> Option<(u16, u16, u32)> {
         let deadline = self.deadline?;
         if now < deadline {
             return None;
@@ -88,16 +99,21 @@ impl ResizeController {
     }
 
     /// 当 DisplayControl 通道尚未就绪时，按剩余次数顺延重试，避免静默丢失。
-    pub(crate) fn requeue_if_channel_not_ready(&mut self, target: (u16, u16), now: Instant) {
-        if self.retries_left > 0 && target != self.current {
+    pub(crate) fn requeue_if_channel_not_ready(
+        &mut self,
+        target: (u16, u16, u32),
+        now: Instant,
+    ) {
+        if self.retries_left > 0 && ((target.0, target.1) != self.current || target.2 != self.current_scale) {
             self.retries_left -= 1;
             self.pending = Some(target);
             self.deadline = Some(now + RESIZE_DEBOUNCE_INTERVAL);
-        } else if target != self.current {
+        } else if (target.0, target.1) != self.current || target.2 != self.current_scale {
             log::debug!(
-                "DisplayControl 动态分辨率通道等待超时，放弃本次请求: {}x{}",
+                "DisplayControl 动态分辨率通道等待超时，放弃本次请求: {}x{} @ {}%",
                 target.0,
-                target.1
+                target.1,
+                target.2
             );
         }
     }
@@ -117,29 +133,29 @@ mod tests {
     #[test]
     fn trailing_edge_debounce_delivers_final_size() {
         let t0 = Instant::now();
-        let mut ctrl = ResizeController::new((1920, 1080));
+        let mut ctrl = ResizeController::new((1920, 1080), 100);
 
         // 连续拖动窗口，中间尺寸被覆盖，截止时间顺延
-        ctrl.schedule(1400, 900, t0);
+        ctrl.schedule(1400, 900, 150, t0);
         assert!(ctrl.take_due(t0 + Duration::from_millis(100)).is_none());
 
         let t1 = t0 + Duration::from_millis(150);
-        ctrl.schedule(1601, 901, t1);
+        ctrl.schedule(1601, 901, 200, t1);
         assert!(ctrl.take_due(t1 + Duration::from_millis(200)).is_none());
 
-        // 稳定满 250ms 后交付最终偶数对齐尺寸
+        // 稳定满 250ms 后交付最终偶数对齐尺寸与 DPI 缩放
         let due = ctrl
             .take_due(t1 + RESIZE_DEBOUNCE_INTERVAL)
             .expect("到期后应交付最终尺寸");
-        assert_eq!(due, (1600, 900));
+        assert_eq!(due, (1600, 900, 200));
         assert!(ctrl.next_deadline().is_none());
     }
 
     #[test]
     fn requeues_when_channel_not_ready() {
         let t0 = Instant::now();
-        let mut ctrl = ResizeController::new((1920, 1080));
-        ctrl.schedule(1280, 720, t0);
+        let mut ctrl = ResizeController::new((1920, 1080), 100);
+        ctrl.schedule(1280, 720, 100, t0);
 
         let due = ctrl
             .take_due(t0 + RESIZE_DEBOUNCE_INTERVAL)
@@ -151,8 +167,8 @@ mod tests {
     #[test]
     fn stops_requeue_after_max_retries_and_skips_matching_current() {
         let mut t = Instant::now();
-        let mut ctrl = ResizeController::new((1920, 1080));
-        ctrl.schedule(1280, 720, t);
+        let mut ctrl = ResizeController::new((1920, 1080), 100);
+        ctrl.schedule(1280, 720, 100, t);
 
         // 耗尽重试次数后应停止挂起
         for _ in 0..=MAX_CHANNEL_WAIT_RETRIES {
@@ -164,7 +180,7 @@ mod tests {
 
         // 若目标与当前生效分辨率相同则直接跳过
         ctrl.set_current((1280, 720));
-        ctrl.schedule(1280, 720, t);
+        ctrl.schedule(1280, 720, 100, t);
         assert!(ctrl.next_deadline().is_none());
     }
 }

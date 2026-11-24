@@ -74,6 +74,7 @@ impl SessionLoopRunner {
             framed,
             result,
             audio_muted,
+            scale_factor_percent,
         } = params.connection;
 
         let width = result.desktop_size.width;
@@ -104,7 +105,7 @@ impl SessionLoopRunner {
             shutdown_rx: params.shutdown_rx,
             audio_muted,
             input_batcher: InputBatcher::default(),
-            resize_controller: ResizeController::new((width, height)),
+            resize_controller: ResizeController::new((width, height), scale_factor_percent),
             current_resolution: (width, height),
             consecutive_decode_errors: 0,
         }
@@ -242,14 +243,16 @@ impl SessionLoopRunner {
     /// 触发已到期的动态分辨率请求（若通道尚未就绪则有限次数重试）。
     async fn flush_due_resize<W: FramedWrite>(&mut self, writer: &mut W) {
         let now = Instant::now();
-        let Some((width, height)) = self.resize_controller.take_due(now) else {
+        let Some((width, height, scale_percent)) = self.resize_controller.take_due(now) else {
             return;
         };
 
-        match self
-            .active_stage
-            .encode_resize(u32::from(width), u32::from(height), None, None)
-        {
+        match self.active_stage.encode_resize(
+            u32::from(width),
+            u32::from(height),
+            Some(scale_percent),
+            None,
+        ) {
             Some(Ok(response_frame)) => {
                 if let Err(e) = writer.write_all(&response_frame).await {
                     log::warn!("写入动态重设分辨率帧失败: {e}");
@@ -260,7 +263,7 @@ impl SessionLoopRunner {
             }
             None => {
                 self.resize_controller
-                    .requeue_if_channel_not_ready((width, height), now);
+                    .requeue_if_channel_not_ready((width, height, scale_percent), now);
             }
         }
     }

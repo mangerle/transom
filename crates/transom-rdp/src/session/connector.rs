@@ -38,6 +38,7 @@ pub struct EstablishedConnection {
     pub framed: TokioFramed<ErasedStream>,
     pub result: ConnectionResult,
     pub audio_muted: Arc<AtomicBool>,
+    pub scale_factor_percent: u32,
 }
 
 /// 执行完整的 RDP 连接与认证序列。
@@ -93,6 +94,7 @@ pub async fn establish_connection(
         framed,
         result,
         audio_muted,
+        scale_factor_percent: config.scale_factor_percent,
     })
 }
 

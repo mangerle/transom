@@ -122,8 +122,13 @@ impl InputBatcher {
                 }
                 InputBatchOutcome::Continue
             }
-            RdpInput::Resize { width, height } => {
-                ctx.resize_controller.schedule(width, height, Instant::now());
+            RdpInput::Resize {
+                width,
+                height,
+                scale_factor_percent,
+            } => {
+                ctx.resize_controller
+                    .schedule(width, height, scale_factor_percent, Instant::now());
                 InputBatchOutcome::Continue
             }
             fastpath => {
@@ -208,7 +213,7 @@ mod tests {
     async fn batcher_orders_pending_mouse_before_click_and_handles_controls() {
         let mut writer = DummyWriter;
         let audio_muted = AtomicBool::new(false);
-        let mut resize_controller = ResizeController::new((1920, 1080));
+        let mut resize_controller = ResizeController::new((1920, 1080), 100);
         let mut active_stage = ironrdp_session::ActiveStageBuilder {
             static_channels: ironrdp_svc::StaticChannelSet::new(),
             user_channel_id: 1001,
@@ -230,6 +235,7 @@ mod tests {
             .send(RdpInput::Resize {
                 width: 1281,
                 height: 721,
+                scale_factor_percent: 200,
             })
             .await
             .expect("发送分辨率指令");

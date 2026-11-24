@@ -60,6 +60,8 @@ pub struct SessionConfig {
     pub dynamic_resolution: bool,
     /// 初始视口尺寸（宽、高）。
     pub initial_size: (u16, u16),
+    /// 客户端 DPI 缩放百分比（100..=500，例如 200 表示 2x HiDPI）。
+    pub scale_factor_percent: u32,
     /// 可选的 TLS 证书校验回调（用于 TOFU 或指纹钉扎）。
     pub cert_verifier: Option<TlsCertVerifier>,
 }
@@ -86,6 +88,7 @@ impl SessionConfig {
                 .desktop_size
                 .map(|size| (size.width, size.height))
                 .unwrap_or(initial_size),
+            scale_factor_percent: 100,
             cert_verifier: None,
         }
     }
@@ -133,7 +136,7 @@ impl SessionConfig {
                 width: self.initial_size.0,
                 height: self.initial_size.1,
             },
-            desktop_scale_factor: 0,
+            desktop_scale_factor: self.scale_factor_percent.clamp(100, 500),
             monitor_layout: None,
             desktop_physical_size: None,
             desktop_orientation: None,

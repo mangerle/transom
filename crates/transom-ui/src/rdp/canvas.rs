@@ -18,7 +18,8 @@ use transom_rdp::{MIN_DESKTOP_HEIGHT, MIN_DESKTOP_WIDTH, RdpInput};
 #[derive(Clone, Copy, Default)]
 pub(crate) struct ViewportSyncState {
     bounds: Bounds<Pixels>,
-    last_sent_resize: Option<(u16, u16)>,
+    scale_factor: f32,
+    last_sent_resize: Option<(u16, u16, u32)>,
 }
 
 /// 无重入视口状态句柄。
@@ -30,9 +31,21 @@ impl ViewportSyncHandle {
         self.0.get().bounds
     }
 
+    pub(crate) fn scale_factor_percent(&self) -> u32 {
+        let scale = self.0.get().scale_factor.max(1.0);
+        ((scale * 100.0).round() as u32).clamp(100, 500)
+    }
+
+    pub(crate) fn set_scale_factor(&self, scale_factor: f32) {
+        let mut state = self.0.get();
+        state.scale_factor = scale_factor.max(1.0);
+        self.0.set(state);
+    }
+
     pub(crate) fn set_last_sent_resize(&self, size: Option<(u16, u16)>) {
         let mut state = self.0.get();
-        state.last_sent_resize = size;
+        let scale = ((state.scale_factor.max(1.0) * 100.0).round() as u32).clamp(100, 500);
+        state.last_sent_resize = size.map(|(w, h)| (w, h, scale));
         self.0.set(state);
     }
 
@@ -46,27 +59,30 @@ impl ViewportSyncHandle {
         let mut state = self.0.get();
         let old_size = state.bounds.size;
         state.bounds = bounds;
+        let scale = scale_factor.max(1.0);
+        state.scale_factor = scale;
 
         if dynamic_resolution
             && f32::from(old_size.width) > 0.0
             && f32::from(old_size.height) > 0.0
         {
-            let scale = scale_factor.max(1.0);
             let target_w = (f32::from(bounds.size.width) * scale).round() as u16;
             let target_h = (f32::from(bounds.size.height) * scale).round() as u16;
+            let scale_percent = ((scale * 100.0).round() as u32).clamp(100, 500);
             // 跳过首次从 0x0 布局初始化的抖动，且通道满时不覆写已发送尺寸以便下次重试
             if target_w >= MIN_DESKTOP_WIDTH
                 && target_h >= MIN_DESKTOP_HEIGHT
-                && state.last_sent_resize != Some((target_w, target_h))
+                && state.last_sent_resize != Some((target_w, target_h, scale_percent))
                 && let Some(sender) = resize_sender
                 && sender
                     .try_send(RdpInput::Resize {
                         width: target_w,
                         height: target_h,
+                        scale_factor_percent: scale_percent,
                     })
                     .is_ok()
             {
-                state.last_sent_resize = Some((target_w, target_h));
+                state.last_sent_resize = Some((target_w, target_h, scale_percent));
             }
         }
         self.0.set(state);

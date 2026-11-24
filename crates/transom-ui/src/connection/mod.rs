@@ -450,6 +450,7 @@ fn launch_rdp_session_async(
                 view.update(cx, |rdp_view, cx| {
                     let initial_size = rdp_view.current_viewport_size().unwrap_or((1280, 800));
                     let mut config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
+                    config.scale_factor_percent = rdp_view.current_scale_factor_percent();
                     config.cert_verifier = Some(build_rdp_cert_verifier(known_hosts, port));
                     rdp_view.start_session(config, cx);
                 });

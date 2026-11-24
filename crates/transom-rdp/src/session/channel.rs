@@ -45,8 +45,12 @@ pub enum RdpInput {
     SendKeyChord(KeyChord),
     /// 释放全部按键。
     ReleaseAllKeys,
-    /// 请求动态重设桌面分辨率。
-    Resize { width: u16, height: u16 },
+    /// 请求动态重设桌面分辨率（含客户端 DPI 缩放百分比 100..=500）。
+    Resize {
+        width: u16,
+        height: u16,
+        scale_factor_percent: u32,
+    },
     /// 设置音频静音状态。
     MuteAudio(bool),
     /// 本地剪贴板文本更新。

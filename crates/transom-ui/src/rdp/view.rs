@@ -220,16 +220,22 @@ impl RdpView {
         self.session.as_ref().map(RdpSession::input_sender)
     }
 
-    /// 获取当前视口布局尺寸（未布局完成时返回 `None`），供连接初始化时选择匹配的默认分辨率。
+    /// 获取当前视口物理布局尺寸（未布局完成时返回 `None`），供连接初始化时选择匹配的默认分辨率。
     pub(crate) fn current_viewport_size(&self) -> Option<(u16, u16)> {
         let size = self.viewport_sync.bounds().size;
-        let w = f32::from(size.width).round() as u16;
-        let h = f32::from(size.height).round() as u16;
+        let scale = f32::from(self.viewport_sync.scale_factor_percent() as u16) / 100.0;
+        let w = (f32::from(size.width) * scale).round() as u16;
+        let h = (f32::from(size.height) * scale).round() as u16;
         if w >= transom_rdp::MIN_DESKTOP_WIDTH && h >= transom_rdp::MIN_DESKTOP_HEIGHT {
             Some((w, h))
         } else {
             None
         }
+    }
+
+    /// 获取当前视口 DPI 缩放百分比（100..=500）。
+    pub(crate) fn current_scale_factor_percent(&self) -> u32 {
+        self.viewport_sync.scale_factor_percent()
     }
 
     /// 聚焦当前 RDP 桌面视图以接收后续键盘输入。
@@ -397,6 +403,7 @@ impl Focusable for RdpView {
 impl Render for RdpView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
+        self.viewport_sync.set_scale_factor(window.scale_factor());
         self.ensure_focus_subscriptions(window, cx);
 
         // 非连接状态下无 Canvas paint 阶段，仅当确实存在待回收纹理时执行一次清理
