@@ -215,7 +215,7 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         ApiRequestTab::Query => params.query_editor.clone().into_any_element(),
         ApiRequestTab::Body => render_body(params, p),
         ApiRequestTab::Headers => params.header_editor.clone().into_any_element(),
-        ApiRequestTab::Auth => render_text_panel("api-request-auth", params.auth.clone(), p),
+        ApiRequestTab::Auth => params.auth.clone().into_any_element(),
         ApiRequestTab::Assertions => {
             render_text_panel("api-request-assertions", params.assertions.clone(), p)
         }

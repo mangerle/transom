@@ -491,6 +491,97 @@ api:
     docs_placeholder:
       en: Request documentation
       zh-CN: 请求说明
+    auth_method:
+      none:
+        en: No authentication
+        zh-CN: 无认证
+      bearer:
+        en: Bearer token
+        zh-CN: Bearer Token
+      basic:
+        en: Basic auth
+        zh-CN: Basic Auth
+      oauth2:
+        en: OAuth 2.0 client credentials
+        zh-CN: OAuth 2.0 客户端凭据
+      aws_sigv4:
+        en: AWS SigV4
+        zh-CN: AWS SigV4
+      none_hint:
+        en: This request does not use authentication.
+        zh-CN: 当前请求不使用认证。
+      token_env:
+        en: Token environment variable
+        zh-CN: Token 环境变量
+      token_env_placeholder:
+        en: TOKEN
+        zh-CN: TOKEN
+      username_env:
+        en: Username environment variable
+        zh-CN: 用户名环境变量
+      username_env_placeholder:
+        en: USERNAME
+        zh-CN: USERNAME
+      password_env:
+        en: Password environment variable
+        zh-CN: 密码环境变量
+      password_env_placeholder:
+        en: PASSWORD
+        zh-CN: PASSWORD
+      token_url:
+        en: Token URL
+        zh-CN: Token 地址
+      token_url_placeholder:
+        en: https://auth.example.com/token
+        zh-CN: https://auth.example.com/token
+      client_id:
+        en: Client ID
+        zh-CN: 客户端 ID
+      client_id_placeholder:
+        en: client-id
+        zh-CN: client-id
+      client_secret_env:
+        en: Client secret environment variable
+        zh-CN: 客户端密钥环境变量
+      client_secret_env_placeholder:
+        en: CLIENT_SECRET
+        zh-CN: CLIENT_SECRET
+      scope:
+        en: Scope
+        zh-CN: 作用域
+      scope_placeholder:
+        en: read write
+        zh-CN: read write
+      access_key_env:
+        en: Access key environment variable
+        zh-CN: Access Key 环境变量
+      access_key_env_placeholder:
+        en: AWS_ACCESS_KEY_ID
+        zh-CN: AWS_ACCESS_KEY_ID
+      secret_key_env:
+        en: Secret key environment variable
+        zh-CN: Secret Key 环境变量
+      secret_key_env_placeholder:
+        en: AWS_SECRET_ACCESS_KEY
+        zh-CN: AWS_SECRET_ACCESS_KEY
+      session_token_env:
+        en: Session token environment variable
+        zh-CN: Session Token 环境变量
+      session_token_env_placeholder:
+        en: AWS_SESSION_TOKEN
+        zh-CN: AWS_SESSION_TOKEN
+      region:
+        en: Region
+        zh-CN: 区域
+      region_placeholder:
+        en: us-east-1
+        zh-CN: us-east-1
+      service:
+        en: Service
+        zh-CN: 服务
+      service_placeholder:
+        en: execute-api
+        zh-CN: execute-api
     auth_placeholder:
       en: Authentication JSON, secrets use environment variable names
       zh-CN: 认证 JSON，密钥使用环境变量名

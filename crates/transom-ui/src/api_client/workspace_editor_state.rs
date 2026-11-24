@@ -3,7 +3,7 @@
 use super::workspace::ApiWorkspace;
 use super::workspace_kv::{header_entry, header_from_entry, query_entry, query_from_entry};
 use gpui_kit::*;
-use transom_api::{ApiBodyType, ApiMethod, ApiProtocol};
+use transom_api::{ApiAuth, ApiBodyType, ApiMethod, ApiProtocol};
 
 impl ApiWorkspace {
     pub(super) fn capture_editor(&mut self, cx: &App) -> bool {
@@ -50,11 +50,7 @@ impl ApiWorkspace {
             .collect();
         request.form_fields = self.editors.form.read(cx).fields(cx);
         request.graphql_variables = self.editors.graphql_variables.read(cx).value().to_string();
-        let auth_text = self.editors.auth.read(cx).value().to_string();
-        if let Err(error) = request.set_auth_text(&auth_text) {
-            self.error = Some(error.to_string());
-            return false;
-        }
+        request.auth = self.editors.auth.read(cx).auth(cx);
         let assertions_text = self.editors.assertions.read(cx).value().to_string();
         if let Err(error) = request.set_assertions_text(&assertions_text) {
             self.error = Some(error.to_string());
@@ -119,7 +115,7 @@ impl ApiWorkspace {
                     ApiMethod::Get,
                     ApiProtocol::Http,
                     "{}".to_string(),
-                    "{\"kind\":\"none\"}".to_string(),
+                    ApiAuth::None,
                     String::new(),
                     String::new(),
                     String::new(),
@@ -128,7 +124,7 @@ impl ApiWorkspace {
                 )
             },
             |request| {
-                let auth = request.auth_text();
+                let auth = request.auth.clone();
                 let assertions = request.assertions_text();
                 (
                     request.display_name().to_string(),
@@ -181,7 +177,7 @@ impl ApiWorkspace {
             .update(cx, |state, cx| state.set_value(graphql, window, cx));
         self.editors
             .auth
-            .update(cx, |state, cx| state.set_value(auth, window, cx));
+            .update(cx, |editor, cx| editor.set_auth(&auth, window, cx));
         self.editors
             .assertions
             .update(cx, |state, cx| state.set_value(assertions, window, cx));

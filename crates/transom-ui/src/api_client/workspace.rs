@@ -100,6 +100,10 @@ impl ApiWorkspace {
                 let super::form_editor::FormEditorEvent::Changed(fields) = event;
                 this.apply_form_fields(fields, cx);
             }),
+            cx.subscribe_in(&workspace.editors.auth, window, |this, _, event, _, cx| {
+                let super::auth_editor::AuthEditorEvent::Changed(auth) = event;
+                this.apply_auth(auth.clone(), cx);
+            }),
         ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);

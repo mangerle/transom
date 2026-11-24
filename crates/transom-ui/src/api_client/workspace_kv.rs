@@ -3,7 +3,7 @@
 use super::kv_editor::KvEntry;
 use super::workspace::ApiWorkspace;
 use gpui_kit::*;
-use transom_api::{ApiFormField, ApiHeader, ApiQueryParam};
+use transom_api::{ApiAuth, ApiFormField, ApiHeader, ApiQueryParam};
 
 impl ApiWorkspace {
     pub(super) fn apply_query_entries(&mut self, entries: &[KvEntry], cx: &mut Context<Self>) {
@@ -19,6 +19,23 @@ impl ApiWorkspace {
             return;
         };
         request.query = entries.iter().cloned().map(query_from_entry).collect();
+        self.project.touch();
+        cx.notify();
+    }
+
+    pub(super) fn apply_auth(&mut self, auth: ApiAuth, cx: &mut Context<Self>) {
+        let Some(request_id) = self.selected_request else {
+            return;
+        };
+        let Some(request) = self
+            .project
+            .requests
+            .iter_mut()
+            .find(|request| request.id == request_id)
+        else {
+            return;
+        };
+        request.auth = auth;
         self.project.touch();
         cx.notify();
     }
