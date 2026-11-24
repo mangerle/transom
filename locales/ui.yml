@@ -214,10 +214,6 @@ api:
     closed:
       en: WebSocket closed
       zh-CN: WebSocket 已关闭
-  mock:
-    invalid_json:
-      en: 'Mock route JSON is invalid: %{error}'
-      zh-CN: 'Mock 路由 JSON 无效: %{error}'
   code:
     copied:
       en: Code copied to clipboard
@@ -245,9 +241,6 @@ api:
     cookies:
       en: Cookies
       zh-CN: Cookie
-    mock:
-      en: Mock service
-      zh-CN: Mock 服务
     name_placeholder:
       en: Project name
       zh-CN: 项目名称
@@ -405,9 +398,6 @@ api:
     cookies_placeholder:
       en: One cookie per line, name=value
       zh-CN: 每行一个 Cookie，name=value
-    mock_placeholder:
-      en: Mock route JSON
-      zh-CN: Mock 路由 JSON
     websocket_input:
       en: Message
       zh-CN: 消息
@@ -441,18 +431,9 @@ api:
     aux_assertions:
       en: Assertions
       zh-CN: 断言
-    aux_mock:
-      en: Mock
-      zh-CN: Mock
     aux_history:
       en: History
       zh-CN: 历史
-    mock_start:
-      en: Start Mock
-      zh-CN: 启动 Mock
-    mock_stop:
-      en: Stop Mock
-      zh-CN: 停止 Mock
     codegen:
       en: Code
       zh-CN: 代码

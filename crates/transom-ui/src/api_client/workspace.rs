@@ -4,9 +4,8 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use transom_api::{
-    ApiAssertionResult, ApiEnvironmentId, ApiHttpService, ApiMethod, ApiMockHandle, ApiMockService,
-    ApiProject, ApiProtocol, ApiRequest, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle,
-    ApiWebSocketService,
+    ApiAssertionResult, ApiEnvironmentId, ApiHttpService, ApiMethod, ApiProject, ApiProtocol,
+    ApiRequest, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService,
 };
 
 /// API 工作区需要的外壳服务集合。
@@ -14,7 +13,6 @@ use transom_api::{
 pub(crate) struct ApiWorkspaceServices {
     pub(crate) http: ApiHttpService,
     pub(crate) websocket: ApiWebSocketService,
-    pub(crate) mock: ApiMockService,
 }
 
 /// 项目级配置面板；只承载不随单个请求切换的配置。
@@ -22,7 +20,6 @@ pub(crate) struct ApiWorkspaceServices {
 pub(crate) enum ApiAuxiliarySection {
     Environment,
     Cookies,
-    Mock,
 }
 
 /// 请求编辑器的信息架构页签。
@@ -67,7 +64,6 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) assertions: Entity<TextareaState>,
     pub(crate) environment: Entity<TextareaState>,
     pub(crate) cookies: Entity<TextareaState>,
-    pub(crate) mock: Entity<TextareaState>,
     pub(crate) history: Entity<TextareaState>,
     pub(crate) websocket_input: Entity<TextareaState>,
     pub(crate) websocket_log: Entity<TextareaState>,
@@ -90,7 +86,6 @@ pub(crate) struct ApiWorkspace {
     pub(crate) assertion_results: Vec<ApiAssertionResult>,
     pub(crate) sending: bool,
     pub(crate) ws_connected: bool,
-    pub(crate) mock_port: Option<u16>,
     pub(crate) notice: Option<String>,
     pub(crate) error: Option<String>,
     pub(crate) tree_editor_split: Entity<ResizableState>,
@@ -100,8 +95,6 @@ pub(crate) struct ApiWorkspace {
     pub(crate) ws_task: Option<Task<()>>,
     pub(crate) ws_event_task: Option<Task<()>>,
     pub(crate) ws_handle: Option<ApiWebSocketHandle>,
-    pub(crate) mock_task: Option<Task<()>>,
-    pub(crate) mock_handle: Option<ApiMockHandle>,
 }
 
 impl EventEmitter<ApiWorkspaceEvent> for ApiWorkspace {}
@@ -133,7 +126,6 @@ impl ApiWorkspace {
             assertion_results: Vec::new(),
             sending: false,
             ws_connected: false,
-            mock_port: None,
             notice: None,
             error: None,
             tree_editor_split: cx.new(|_| ResizableState::default()),
@@ -143,13 +135,10 @@ impl ApiWorkspace {
             ws_task: None,
             ws_event_task: None,
             ws_handle: None,
-            mock_task: None,
-            mock_handle: None,
         };
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
         workspace.load_cookies(window, cx);
-        workspace.load_mock(window, cx);
         workspace.refresh_history(window, cx);
         workspace
     }
@@ -424,14 +413,6 @@ impl ApiWorkspace {
         let text = transom_api::cookies_text(&self.project.cookies);
         self.editors
             .cookies
-            .update(cx, |state, cx| state.set_value(text, window, cx));
-    }
-
-    fn load_mock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = serde_json::to_string_pretty(&self.project.mock_routes)
-            .unwrap_or_else(|_| "[]".to_string());
-        self.editors
-            .mock
             .update(cx, |state, cx| state.set_value(text, window, cx));
     }
 

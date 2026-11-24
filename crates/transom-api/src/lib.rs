@@ -14,7 +14,6 @@ mod http;
 mod http_support;
 mod id;
 mod import_export;
-mod mock;
 mod model;
 mod request;
 mod signing;
@@ -26,7 +25,6 @@ pub use codegen::{CodeTarget, generate_code, response_excerpt};
 pub use http::{ApiError, ApiExchange, ApiHttpService, ApiResponseSnapshot, MAX_RESPONSE_BYTES};
 pub use id::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
 pub use import_export::{ApiExportFormat, ApiImportFormat, export_project, import_projects};
-pub use mock::{ApiMockHandle, ApiMockRoute, ApiMockService, ApiMockStart};
 pub use model::{
     API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiFolder, ApiHistoryEntry, ApiProject,
     ApiRegistry, ApiVariable, MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,

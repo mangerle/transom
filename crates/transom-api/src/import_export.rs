@@ -313,7 +313,7 @@ fn export_openapi(project: &ApiProject) -> Result<String, String> {
                 json!({
                     "summary": request.display_name(),
                     "description": request.body,
-                    "responses": {"200": {"description": "Mock 或实际响应"}}
+                    "responses": {"200": {"description": "实际响应"}}
                 }),
             );
         }

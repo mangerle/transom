@@ -1,7 +1,7 @@
-//! API 项目、目录、环境、Cookie、历史和 Mock 配置。
+//! API 项目、目录、环境、Cookie、历史和请求数据。
 
+use super::ApiRequest;
 use super::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
-use super::{ApiMockRoute, ApiRequest};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use transom_core::AppError;
@@ -85,8 +85,6 @@ pub struct ApiProject {
     #[serde(default)]
     pub history: Vec<ApiHistoryEntry>,
     #[serde(default)]
-    pub mock_routes: Vec<ApiMockRoute>,
-    #[serde(default)]
     pub created_at: u64,
     #[serde(default)]
     pub updated_at: u64,
@@ -108,7 +106,6 @@ impl ApiProject {
             active_environment_id,
             cookies: Vec::new(),
             history: Vec::new(),
-            mock_routes: Vec::new(),
             created_at: now,
             updated_at: now,
         }

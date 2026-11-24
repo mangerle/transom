@@ -1,4 +1,4 @@
-//! API 工作区的项目级工具栏与环境、Cookie、Mock 配置面板。
+//! API 工作区的项目级工具栏与环境、Cookie 配置面板。
 
 use super::workspace_view::ApiWorkspaceParams;
 use super::{ApiAuxiliarySection, ApiWorkspace};
@@ -6,11 +6,9 @@ use crate::palette::Palette;
 use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{ApiEnvironmentId, ApiProtocol, CodeTarget};
 use transom_ui_icons::{AppIcon, CustomIcon, FileTypeIcon, UiIcon};
@@ -68,14 +66,6 @@ pub(crate) fn render_workspace_toolbar(params: &ApiWorkspaceParams<'_>, p: &Pale
             AppIcon::Custom(CustomIcon::COOKIE),
             rust_i18n::t!("api.project.cookies").to_string(),
             ApiAuxiliarySection::Cookies,
-            params.auxiliary_section,
-            view.clone(),
-        ))
-        .child(project_tool_button(
-            "api-project-mock",
-            AppIcon::Ui(UiIcon::WEB_SERVER),
-            rust_i18n::t!("api.project.mock").to_string(),
-            ApiAuxiliarySection::Mock,
             params.auxiliary_section,
             view.clone(),
         ))
@@ -154,7 +144,7 @@ fn render_codegen_menu(params: &ApiWorkspaceParams<'_>) -> AnyElement {
     .into_any_element()
 }
 
-/// 项目级配置面板；只渲染环境、Cookie 或 Mock 中当前选中的一项。
+/// 项目级配置面板；只渲染环境或 Cookie 中当前选中的一项。
 pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let Some(section) = params.auxiliary_section else {
         return div().into_any_element();
@@ -168,50 +158,6 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
             rust_i18n::t!("api.request.aux_cookies").to_string(),
             editor("api-cookie-editor", params.cookies_editor),
         ),
-        ApiAuxiliarySection::Mock => {
-            let view = params.view.clone();
-            let title = rust_i18n::t!("api.request.aux_mock").to_string();
-            let body = v_flex()
-                .gap(rems(space::XS))
-                .child(editor("api-mock-editor", params.mock_editor))
-                .child(
-                    h_flex()
-                        .gap(rems(space::XS))
-                        .child(
-                            action_button(
-                                "api-mock-start",
-                                AppIcon::Ui(UiIcon::RUN),
-                                rust_i18n::t!("api.request.mock_start").to_string(),
-                            )
-                            .on_click({
-                                let view = view.clone();
-                                move |_, window, cx| {
-                                    view.update(cx, |this, cx| this.start_mock(window, cx));
-                                }
-                            }),
-                        )
-                        .child(
-                            action_button(
-                                "api-mock-stop",
-                                AppIcon::Ui(UiIcon::STOP),
-                                rust_i18n::t!("api.request.mock_stop").to_string(),
-                            )
-                            .disabled(params.mock_port.is_none())
-                            .on_click(move |_, _, cx| {
-                                view.update(cx, |this, cx| this.stop_mock(cx));
-                            }),
-                        )
-                        .when_some(params.mock_port, |row, port| {
-                            row.child(
-                                div()
-                                    .text_color(p.muted_foreground)
-                                    .child(format!("http://127.0.0.1:{port}")),
-                            )
-                        }),
-                )
-                .into_any_element();
-            (title, body)
-        }
     };
     let view = params.view.clone();
     v_flex()

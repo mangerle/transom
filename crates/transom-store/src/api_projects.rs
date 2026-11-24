@@ -79,6 +79,37 @@ mod tests {
     }
 
     #[test]
+    fn legacy_mock_routes_are_ignored_and_removed_on_save() {
+        let dir = tempdir().expect("临时目录");
+        let path = dir.path().join("api_projects.json");
+        let mut project =
+            serde_json::to_value(transom_api::ApiProject::new("旧项目")).expect("项目应可序列化");
+        project.as_object_mut().expect("项目应为 JSON 对象").insert(
+            "mock_routes".to_string(),
+            serde_json::json!([{"method": "GET", "path": "/ping"}]),
+        );
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({
+                "version": API_SCHEMA_VERSION,
+                "projects": [project],
+            }))
+            .expect("登记表应可序列化"),
+        )
+        .expect("写旧项目文件");
+
+        let store = JsonApiProjectStore::new(&path);
+        let loaded = store.load().expect("旧项目应可读取");
+        assert_eq!(loaded.projects[0].name, "旧项目");
+        store.save(&loaded).expect("重新保存成功");
+        let saved = std::fs::read_to_string(&path).expect("读取新项目文件");
+        assert!(
+            !saved.contains("mock_routes"),
+            "新文件不应继续保存 Mock 路由"
+        );
+    }
+
+    #[test]
     fn round_trips_projects_and_requests() {
         let dir = tempdir().expect("临时目录");
         let store = JsonApiProjectStore::new(dir.path().join("api_projects.json"));

@@ -60,7 +60,6 @@ pub(crate) fn open_api_project(
     let services = ApiWorkspaceServices {
         http: state.runtime.services.api_http.clone(),
         websocket: state.runtime.services.api_ws.clone(),
-        mock: state.runtime.services.api_mock.clone(),
     };
     let workspace = cx.new(|cx| ApiWorkspace::new(project.clone(), services, window, cx));
     let subscription = cx.subscribe(

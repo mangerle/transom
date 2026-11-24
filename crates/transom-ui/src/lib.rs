@@ -85,7 +85,7 @@ use gpui_kit::component as gpui_component;
 use gpui_kit::*;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use transom_api::{ApiHttpService, ApiMockService, ApiProjectStore, ApiWebSocketService};
+use transom_api::{ApiHttpService, ApiProjectStore, ApiWebSocketService};
 use transom_core::{
     AppCommand, AppEvent, AppSettings, BackupService, KnownHostsStore, LogLevel, SecretStore,
     SerialPortProvider, SessionStore, SettingsStore,
@@ -108,8 +108,6 @@ pub struct UiServices {
     pub api_http: ApiHttpService,
     /// 全局 API WebSocket 连接服务。
     pub api_ws: ApiWebSocketService,
-    /// 全局 API Mock 服务。
-    pub api_mock: ApiMockService,
     pub command_tx: flume::Sender<AppCommand>,
     pub event_rx: flume::Receiver<AppEvent>,
     /// 平台 URL 回调与深链任务共用的应用事件发送端。

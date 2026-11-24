@@ -1,10 +1,10 @@
-//! API 工作区的发送、WebSocket、Mock 与代码生成动作。
+//! API 工作区的发送、WebSocket 与代码生成动作。
 
 use super::ApiWorkspace;
 use gpui_kit::*;
 use transom_api::{
-    ApiEnvironment, ApiHistoryEntry, ApiMockRoute, ApiProtocol, ApiRequest, ApiWebSocketEvent,
-    CodeTarget, evaluate_assertions, generate_code, method_for_request, response_excerpt,
+    ApiEnvironment, ApiHistoryEntry, ApiProtocol, ApiRequest, ApiWebSocketEvent, CodeTarget,
+    evaluate_assertions, generate_code, method_for_request, response_excerpt,
 };
 
 impl ApiWorkspace {
@@ -132,50 +132,6 @@ impl ApiWorkspace {
         self.ws_connected = false;
         self.ws_event_task = None;
         self.set_notice(rust_i18n::t!("api.websocket.closed").to_string(), cx);
-    }
-
-    /// 启动当前项目 Mock 服务。
-    pub(crate) fn start_mock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(handle) = self.mock_handle.take() {
-            drop(handle);
-        }
-        let routes =
-            match serde_json::from_str::<Vec<ApiMockRoute>>(&self.editors.mock.read(cx).value()) {
-                Ok(routes) => routes,
-                Err(error) => {
-                    self.set_error(
-                        rust_i18n::t!("api.mock.invalid_json", error = error).to_string(),
-                        cx,
-                    );
-                    return;
-                }
-            };
-        self.project.mock_routes.clone_from(&routes);
-        cx.emit(super::ApiWorkspaceEvent::PersistProject {
-            project: self.project.clone(),
-            notice: None,
-        });
-        let service = self.services.mock.clone();
-        let task = cx.spawn_in(window, async move |this, cx| {
-            let result = service.start(routes).await;
-            let _ = this.update_in(cx, |this, _window, cx| match result {
-                Ok(handle) => {
-                    this.mock_port = Some(handle.port);
-                    this.mock_handle = Some(handle);
-                    cx.notify();
-                }
-                Err(error) => this.set_error(error, cx),
-            });
-        });
-        self.mock_task = Some(task);
-    }
-
-    /// 停止 Mock 服务。
-    pub(crate) fn stop_mock(&mut self, cx: &mut Context<Self>) {
-        self.mock_handle = None;
-        self.mock_task = None;
-        self.mock_port = None;
-        cx.notify();
     }
 
     /// 生成代码并复制到剪贴板。

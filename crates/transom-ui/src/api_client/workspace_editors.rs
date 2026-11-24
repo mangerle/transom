@@ -40,7 +40,6 @@ pub(super) fn new_editors(
         assertions: placeholder(window, cx, "api.request.assertions_placeholder"),
         environment: placeholder(window, cx, "api.request.environment_placeholder"),
         cookies: placeholder(window, cx, "api.request.cookies_placeholder"),
-        mock: placeholder(window, cx, "api.request.mock_placeholder"),
         history: cx.new(|cx| TextareaState::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),
         websocket_log: cx.new(|cx| TextareaState::new(window, cx)),

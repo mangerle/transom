@@ -82,7 +82,6 @@ fn main() -> anyhow::Result<()> {
     let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
     let api_http = transom_api::ApiHttpService::new(controller.runtime().handle().clone())?;
     let api_ws = transom_api::ApiWebSocketService::new(controller.runtime().handle().clone());
-    let api_mock = transom_api::ApiMockService::new(controller.runtime().handle().clone());
 
     // 监听句柄保留在此直到进程结束：随控制器停机，不做脱缰派生。
     let _deep_link = primary.serve(controller.runtime(), controller.event_sender());
@@ -101,7 +100,6 @@ fn main() -> anyhow::Result<()> {
         api_projects,
         api_http,
         api_ws,
-        api_mock,
         command_tx: controller.command_sender(),
         event_rx: controller.event_receiver(),
         event_tx: controller.event_sender(),

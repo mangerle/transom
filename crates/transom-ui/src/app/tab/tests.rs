@@ -14,7 +14,7 @@ use gpui_kit::{
     Window, div, init, px,
 };
 use std::path::PathBuf;
-use transom_api::{ApiHttpService, ApiMockService, ApiProject, ApiWebSocketService};
+use transom_api::{ApiHttpService, ApiProject, ApiWebSocketService};
 use transom_core::{
     AppSettings, AuthMethod, Connection, ContainerEngineKind, ContainerEngineProfile,
     ContainerEngineRef, Session, SessionCatalog, SshConnection, TabId, TerminalProfile,
@@ -402,7 +402,6 @@ fn api_client_tab_uses_typed_content_without_session_fields() {
     let services = ApiWorkspaceServices {
         http: ApiHttpService::new(runtime.handle().clone()).expect("API HTTP 服务应能初始化"),
         websocket: ApiWebSocketService::new(runtime.handle().clone()),
-        mock: ApiMockService::new(runtime.handle().clone()),
     };
     let project = ApiProject::new("测试 API");
     let tab = cx.update(|window, cx| {
