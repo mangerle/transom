@@ -333,6 +333,35 @@ impl ApiWorkspace {
         cx.notify();
     }
 
+    /// 把当前请求移动到指定目录，传 `None` 表示移回项目根层。
+    pub(crate) fn move_selected_to_folder(
+        &mut self,
+        folder_id: Option<ApiFolderId>,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.capture_editor(cx) {
+            cx.notify();
+            return;
+        }
+        let Some(request_id) = self.selected_request else {
+            return;
+        };
+        if folder_id.is_some_and(|id| !self.project.folders.iter().any(|folder| folder.id == id)) {
+            return;
+        }
+        let Some(request) = self
+            .project
+            .requests
+            .iter_mut()
+            .find(|request| request.id == request_id)
+        else {
+            return;
+        };
+        request.folder_id = folder_id;
+        self.project.touch();
+        cx.notify();
+    }
+
     /// 同时切换协议和方法，避免一次选择触发两次草稿回写。
     pub(crate) fn set_request_mode(
         &mut self,

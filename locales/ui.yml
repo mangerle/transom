@@ -347,6 +347,12 @@ api:
     duplicate:
       en: Duplicate request
       zh-CN: 复制请求
+    move_to_folder:
+      en: 'Move to "%{name}"'
+      zh-CN: 移动到“%{name}”
+    move_to_root:
+      en: Move to project root
+      zh-CN: 移回项目根层
     new_folder:
       en: New folder
       zh-CN: 新建目录

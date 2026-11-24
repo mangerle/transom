@@ -4,7 +4,7 @@ use super::ApiWorkspace;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use crate::widgets::{IconButton, IconButtonSize, action_button, list_row, menu_item};
+use crate::widgets::{IconButton, IconButtonSize, MenuItem, action_button, list_row, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Input;
@@ -51,6 +51,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
             request_rows = request_rows.child(render_request_row(
                 view,
                 request,
+                &params.project.folders,
                 params.selected_request,
                 p,
                 true,
@@ -66,6 +67,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
         request_rows = request_rows.child(render_request_row(
             view,
             request,
+            &params.project.folders,
             params.selected_request,
             p,
             false,
@@ -145,6 +147,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
 fn render_request_row(
     view: &Entity<ApiWorkspace>,
     request: &ApiRequest,
+    folders: &[ApiFolder],
     selected_request: Option<ApiRequestId>,
     p: &Palette,
     nested: bool,
@@ -152,6 +155,8 @@ fn render_request_row(
     let view_for_click = view.clone();
     let view_for_menu = view.clone();
     let request_id = request.id;
+    let current_folder = request.folder_id;
+    let menu_folders = folders.to_vec();
     let selected = selected_request == Some(request_id);
     list_row(
         ElementId::Name(format!("api-request-{request_id}").into()),
@@ -165,7 +170,7 @@ fn render_request_row(
     .context_menu(move |menu, _window, _cx| {
         let duplicate_view = view_for_menu.clone();
         let delete_view = view_for_menu.clone();
-        menu.item(menu_item(
+        let mut menu = menu.item(menu_item(
             rust_i18n::t!("api.request.duplicate").to_string(),
             AppIcon::Ui(UiIcon::COPY),
             move |_, window, cx| {
@@ -174,8 +179,38 @@ fn render_request_row(
                     this.duplicate_selected(window, cx);
                 });
             },
-        ))
-        .item(menu_item(
+        ));
+        for folder in &menu_folders {
+            let move_view = view_for_menu.clone();
+            let folder_id = folder.id;
+            let label = rust_i18n::t!("api.request.move_to_folder", name = folder.name.as_str())
+                .to_string();
+            menu = menu.item(
+                MenuItem::new(label, AppIcon::Ui(UiIcon::FOLDER))
+                    .disabled(current_folder == Some(folder_id))
+                    .render(move |_, window, cx| {
+                        move_view.update(cx, |this, cx| {
+                            this.select_request(request_id, window, cx);
+                            this.move_selected_to_folder(Some(folder_id), cx);
+                        });
+                    }),
+            );
+        }
+        let move_root_view = view_for_menu.clone();
+        menu = menu.item(
+            MenuItem::new(
+                rust_i18n::t!("api.request.move_to_root").to_string(),
+                AppIcon::Ui(UiIcon::HOME_FOLDER),
+            )
+            .disabled(current_folder.is_none())
+            .render(move |_, window, cx| {
+                move_root_view.update(cx, |this, cx| {
+                    this.select_request(request_id, window, cx);
+                    this.move_selected_to_folder(None, cx);
+                });
+            }),
+        );
+        menu.item(menu_item(
             rust_i18n::t!("api.request.delete").to_string(),
             AppIcon::Ui(UiIcon::DELETE),
             move |_, window, cx| {
