@@ -274,7 +274,7 @@ impl TileExtractor {
         self.needs_full_reset || self.dirty_count > 0
     }
 
-    /// 按当前累积的脏位图提取待发送帧；不会提前清空脏位图，须在发送成功后调用 [`commit_flushed`]。
+    /// 按当前累积的脏位图提取待发送帧；不会提前清空脏位图，须在发送成功后调用 [`Self::commit_flushed`]。
     pub fn extract_pending(&mut self, canvas: &DecodedImage) -> Option<FrameUpdate> {
         let width = canvas.width();
         let height = canvas.height();

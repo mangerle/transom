@@ -6,7 +6,7 @@
 //!   远端主机的摩擦成本，系统需要原生兼容 Docker Context，自动感知已有的上下文配置并支持切换。
 //! - **核心优势**：采用“CLI 命令优先 + 磁盘配置回退”的双通道发现机制。一方面通过 `docker context ls --format '{{json .}}'`
 //!   获取最准确的动态运行状态；另一方面在无 Docker CLI 或受限容器沙箱内，直接扫描 `~/.docker/contexts/meta/`
-//!   与 `~/.docker/config.json` 获取静态元数据，并可将其无损转换为内部的 [`EngineCandidate`]。
+//!   与 `~/.docker/config.json` 获取静态元数据，并可将其无损转换为内部的 `EngineCandidate`。
 //! - **代价与局限**：纯磁盘回退模式依赖 Docker 官方的上下文文件存储目录规范，若用户使用了定制的
 //!   上下文凭证存储后端，静态回退可能缺失部分动态参数；因此本模块严格保证 CLI 优先。
 

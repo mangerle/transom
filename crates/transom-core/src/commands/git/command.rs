@@ -331,8 +331,8 @@ pub enum GitCommand {
     ///
     /// 设计原理（Why）：克隆不属于任何「已登记项目」——仓库还不存在，所以这条命令
     /// 不带 `project`，只带请求号、地址与目标目录；进度由
-    /// [`GitAppEvent::CloneProgress`] 多次回报，结束由
-    /// [`GitAppEvent::CloneDone`] 收口，界面按请求号落到对应的克隆标签页。
+    /// `GitAppEvent::CloneProgress` 多次回报，结束由
+    /// `GitAppEvent::CloneDone` 收口，界面按请求号落到对应的克隆标签页。
     Clone {
         request_id: GitRequestId,
         url: String,

@@ -155,7 +155,7 @@ pub struct WindowSettings {
 /// "恢复出三个标签后再叠一个本地终端"这种没人想要的组合；三档互斥后每个取值
 /// 都是一句能说清的话，也不存在优先级要解释。
 ///
-/// 反序列化沿用 [`LogLevel`] 的口径：设置文件属外部输入，认不出的值退回默认档，
+/// 反序列化沿用 `LogLevel` 的口径：设置文件属外部输入，认不出的值退回默认档，
 /// 而不是让整个 `settings.json` 加载失败、把所有设置一起丢掉。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -28,8 +28,6 @@ ironrdp-displaycontrol = { workspace = true }
 ironrdp-egfx = { workspace = true }
 ironrdp-rdpsnd = { workspace = true }
 ironrdp-rdpsnd-native = { workspace = true }
-ironrdp-rdpdr = { workspace = true }
-ironrdp-rdpdr-native = { workspace = true }
 ironrdp-tokio = { workspace = true }
 ironrdp-tls = { workspace = true }
 rustls = { workspace = true }
@@ -41,3 +39,7 @@ log = { workspace = true }
 parking_lot = { workspace = true }
 zeroize = { workspace = true }
 sha2 = { workspace = true }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+ironrdp-rdpdr = { workspace = true }
+ironrdp-rdpdr-native = { workspace = true }

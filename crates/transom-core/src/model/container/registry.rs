@@ -19,7 +19,7 @@ pub struct ContainerRegistry {
     pub id: String,
     /// 仓库展示名称（如 "Docker Hub (官方)", "公司内部 Harbor"）。
     pub name: String,
-    /// 仓库服务地址（如 "https://registry-1.docker.io", "https://harbor.internal.com"）。
+    /// 仓库服务地址（如 `"https://registry-1.docker.io"`, `"https://harbor.internal.com"`）。
     pub url: String,
     /// 可选认证用户名。
     #[serde(default)]
@@ -62,7 +62,7 @@ impl ContainerRegistry {
         }
     }
 
-    /// 提取用于镜像 Tag 前缀的域名/主机名（例如从 "https://harbor.example.com" 提取 "harbor.example.com"）。
+    /// 提取用于镜像 Tag 前缀的域名/主机名（例如从 `"https://harbor.example.com"` 提取 `"harbor.example.com"`）。
     pub fn domain(&self) -> &str {
         let trimmed = self
             .url

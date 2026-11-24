@@ -90,7 +90,7 @@ impl Repo {
     /// 把仓库相对路径解析为宿主机绝对路径，并拒绝越出仓库根的输入。
     ///
     /// # Errors
-    /// 见 [`resolve_in`]。
+    /// 见 `resolve_in`。
     pub fn resolve_path(&self, relative: &str) -> Result<PathBuf, GitError> {
         resolve_in(&self.root, relative)
     }

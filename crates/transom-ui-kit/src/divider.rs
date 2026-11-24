@@ -44,7 +44,7 @@ struct DividerStyle(DividerSettings);
 
 impl Global for DividerStyle {}
 
-/// 写入分割线外观；由 [`crate::theme::apply_appearance`] 在每次外观变化时调用。
+/// 写入分割线外观；由 `theme::apply_appearance` 在每次外观变化时调用。
 pub fn apply(cx: &mut App, settings: DividerSettings) {
     cx.set_global(DividerStyle(settings));
 }
