@@ -1,3 +1,13 @@
+transom (1.9.0) unstable; urgency=medium
+
+  * 新增原生 RDP 远程桌面支持，接入 IronRDP 状态机、EGFX 通道与增量瓦片 GPU 渲染。
+  * 支持 RDP 动态分辨率适配、HiDPI 缩放、画质预设、音频重定向、双向剪贴板同步与本地共享目录映射。
+  * 支持 RDP 经由 SSH 跳板机隧道转发连接，并接入 TLS 公钥指纹 TOFU 校验与变更确认重连流程。
+  * 新增 RDP 悬浮工具栏、全屏沉浸模式、RTT 与实时下行速率遥测，支持会话侧栏按协议过滤分组。
+  * 修复终端跳转当前目录无反应及编辑会话留空密码时的凭据保留问题。
+
+ -- wangle <wangle@agree.com.cn>  Tue, 24 Nov 2026 20:23:00 +0800
+
 transom (1.8.5) unstable; urgency=medium
 
   * 升级 russh-sftp 至 4.0，支持 posix-rename 原子替换与上传暂存防损坏机制。
