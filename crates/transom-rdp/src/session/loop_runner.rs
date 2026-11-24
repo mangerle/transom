@@ -21,7 +21,7 @@ use crate::session::output::{
 use crate::session::reactivate::execute_reactivation;
 use crate::session::resize::ResizeController;
 use crate::settings::DEFAULT_COMPRESSION_TYPE;
-use crate::tiles::TileExtractor;
+use crate::tiles::{TileBufferPool, TileExtractor};
 use ironrdp_connector::connection_activation::ConnectionActivationFactory;
 use ironrdp_graphics::image_processing::PixelFormat;
 use ironrdp_session::image::DecodedImage;
@@ -44,6 +44,7 @@ pub(crate) struct SessionLoopParams {
     pub(crate) connection: EstablishedConnection,
     pub(crate) input_rx: mpsc::Receiver<RdpInput>,
     pub(crate) mouse_rx: watch::Receiver<Option<(u16, u16)>>,
+    pub(crate) buffer_pool: TileBufferPool,
     pub(crate) senders: SessionSenders,
     pub(crate) shutdown_rx: watch::Receiver<bool>,
 }
@@ -96,7 +97,7 @@ impl SessionLoopRunner {
             active_stage,
             activation_factory: result.activation_factory,
             canvas,
-            tile_extractor: TileExtractor::default(),
+            tile_extractor: TileExtractor::with_pool(params.buffer_pool),
             input_rx: params.input_rx,
             mouse_rx: params.mouse_rx,
             senders: params.senders,

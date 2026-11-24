@@ -17,6 +17,7 @@ pub mod resize;
 
 use crate::error::RdpError;
 use crate::settings::SessionConfig;
+use crate::tiles::TileBufferPool;
 pub use channel::{MouseBtn, RdpInput, RdpOutput, RdpReceivers};
 use loop_runner::{SessionLoopParams, SessionLoopRunner};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -44,11 +45,20 @@ impl RdpSession {
         let input_rx = channels.input_rx;
         let mouse_rx = channels.mouse_rx;
         let senders = channels.senders;
+        let buffer_pool = channels.receivers.buffer_pool.clone();
 
         let worker = match thread::Builder::new()
             .name("transom-rdp-session".to_string())
-            .spawn(move || run_worker_thread(config, input_rx, mouse_rx, senders, shutdown_rx))
-        {
+            .spawn(move || {
+                run_worker_thread(
+                    config,
+                    input_rx,
+                    mouse_rx,
+                    buffer_pool,
+                    senders,
+                    shutdown_rx,
+                )
+            }) {
             Ok(handle) => Some(handle),
             Err(e) => {
                 log::error!("派生 RDP 独立会话线程失败: {e}");
@@ -135,6 +145,7 @@ fn run_worker_thread(
     mut config: SessionConfig,
     input_rx: mpsc::Receiver<RdpInput>,
     mouse_rx: watch::Receiver<Option<(u16, u16)>>,
+    buffer_pool: TileBufferPool,
     senders: channel::SessionSenders,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
@@ -166,6 +177,7 @@ fn run_worker_thread(
                         connection,
                         input_rx,
                         mouse_rx,
+                        buffer_pool,
                         senders,
                         shutdown_rx,
                     });

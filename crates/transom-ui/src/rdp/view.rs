@@ -127,6 +127,9 @@ impl RdpView {
         self.state = RdpViewState::Connecting;
 
         let (session, receivers) = RdpSession::connect(config);
+        self.frame_cache
+            .borrow_mut()
+            .set_buffer_pool(receivers.buffer_pool);
         let event_task = Self::spawn_event_consumer(receivers.events, cx);
         let frame_task = Self::spawn_frame_consumer(receivers.frames, cx);
         self.session = Some(session);

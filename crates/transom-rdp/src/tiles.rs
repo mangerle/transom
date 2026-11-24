@@ -15,11 +15,11 @@ use ironrdp_session::image::DecodedImage;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-/// 瓦片网格标准尺寸（128x128 像素，兼顾小区域增量刷新放大效应与 GPU 绘制调用次数）。
-pub const TILE_SIZE: u32 = 128;
+/// 瓦片网格标准尺寸（256x256 像素，兼顾 GPUI Atlas 纹理数量上限与局部增量粒度）。
+pub const TILE_SIZE: u32 = 256;
 
 /// 像素缓冲池最大缓存块数，防止分辨率骤变或异常积压导致内存滞留。
-const MAX_BUFFER_POOL_SIZE: usize = 256;
+const MAX_BUFFER_POOL_SIZE: usize = 128;
 
 /// 跨线程复用的瓦片像素缓冲池。
 ///
@@ -202,6 +202,14 @@ pub struct TileExtractor {
 }
 
 impl TileExtractor {
+    /// 使用外部共享像素缓冲池构造提取器（用于与 UI 层形成回收闭环）。
+    pub fn with_pool(pool: TileBufferPool) -> Self {
+        Self {
+            pool,
+            ..Self::default()
+        }
+    }
+
     /// 获取共享像素缓冲池句柄（供 UI 侧归还被覆盖未上传的瓦片缓冲）。
     pub fn buffer_pool(&self) -> TileBufferPool {
         self.pool.clone()
@@ -422,16 +430,16 @@ mod tests {
         let canvas = DecodedImage::new(PixelFormat::BgrX32, 512, 512);
         let mut extractor = TileExtractor::default();
 
-        // 首次提取触发全量重置（16 个 128x128 瓦片）
+        // 首次提取触发全量重置（4 个 256x256 瓦片）
         let first = extractor
             .extract(&canvas, &[])
             .expect("首次提取应产出全量帧");
         assert!(first.full_reset);
-        assert_eq!(first.cols, 4);
-        assert_eq!(first.rows, 4);
+        assert_eq!(first.cols, 2);
+        assert_eq!(first.rows, 2);
         assert_eq!(first.seq, 1);
-        assert_eq!(first.patches.len(), 16);
-        assert_eq!(first.patches[0].rgba.len(), 128 * 128 * 4);
+        assert_eq!(first.patches.len(), 4);
+        assert_eq!(first.patches[0].rgba.len(), 256 * 256 * 4);
 
         // 无损伤时跳过更新
         assert!(extractor.extract(&canvas, &[]).is_none());
@@ -500,8 +508,8 @@ mod tests {
         let pool = extractor.buffer_pool();
         extractor.recycle_frame(first_try);
         extractor.recycle_frame(second_try);
-        let reused = pool.acquire(128 * 128 * 4);
-        assert!(reused.capacity() >= 128 * 128 * 4);
+        let reused = pool.acquire(256 * 256 * 4);
+        assert!(reused.capacity() >= 256 * 256 * 4);
         assert!(reused.is_empty());
 
         extractor.mark_dirty(512, 512, &[rect_a]);

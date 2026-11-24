@@ -12,7 +12,7 @@
 use gpui_kit::{Bounds, Pixels, Point, RenderImage, Size, Window, px};
 use image::{Frame, RgbaImage};
 use std::sync::Arc;
-use transom_rdp::{FrameUpdate, TilePatch};
+use transom_rdp::{FrameUpdate, TileBufferPool, TilePatch};
 
 /// UI 侧常驻的桌面瓦片 GPU 纹理缓存。
 #[derive(Default)]
@@ -26,9 +26,33 @@ pub(crate) struct TiledFrameCache {
     pending_size: Option<(u16, u16, u32, u32)>,
     pending_patches: Vec<Option<TilePatch>>,
     stale_images: Vec<Arc<RenderImage>>,
+    buffer_pool: Option<TileBufferPool>,
 }
 
 impl TiledFrameCache {
+    /// 绑定与后端共享的像素缓冲池，使被覆盖/清理的未上传补丁能归还复用。
+    pub(crate) fn set_buffer_pool(&mut self, pool: TileBufferPool) {
+        self.buffer_pool = Some(pool);
+    }
+
+    fn recycle_patch(&self, patch: TilePatch) {
+        if let Some(pool) = &self.buffer_pool {
+            pool.release(patch.rgba);
+        }
+    }
+
+    fn recycle_all_pending(&mut self) {
+        if let Some(pool) = &self.buffer_pool {
+            for slot in &mut self.pending_patches {
+                if let Some(old) = slot.take() {
+                    pool.release(old.rgba);
+                }
+            }
+        } else {
+            self.pending_patches.clear();
+        }
+    }
+
     /// 接收后台会话的增量瓦片补丁，在纯 CPU 待上传缓冲中按瓦片槽位就地合并。
     pub(crate) fn apply_update(&mut self, update: FrameUpdate) {
         let total = (update.cols as usize).saturating_mul(update.rows as usize);
@@ -44,11 +68,12 @@ impl TiledFrameCache {
         );
 
         if update.full_reset || size_changed {
+            self.recycle_all_pending();
             self.pending_reset = true;
             self.pending_size = Some((update.width, update.height, update.cols, update.rows));
-            self.pending_patches = vec![None; total];
+            self.pending_patches.resize_with(total, || None);
         } else if self.pending_patches.len() != total {
-            self.pending_patches.resize(total, None);
+            self.pending_patches.resize_with(total, || None);
         }
 
         let cols = self.pending_size.map_or(self.cols, |(_, _, c, _)| c) as usize;
@@ -57,7 +82,11 @@ impl TiledFrameCache {
                 .saturating_mul(cols)
                 .saturating_add(patch.col as usize);
             if let Some(slot) = self.pending_patches.get_mut(idx) {
-                *slot = Some(patch);
+                if let Some(replaced) = slot.replace(patch) {
+                    self.recycle_patch(replaced);
+                }
+            } else {
+                self.recycle_patch(patch);
             }
         }
     }
@@ -114,6 +143,7 @@ impl TiledFrameCache {
         self.tiles.clear();
         self.pending_reset = false;
         self.pending_size = None;
+        self.recycle_all_pending();
         self.pending_patches.clear();
     }
 

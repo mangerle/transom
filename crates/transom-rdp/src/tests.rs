@@ -10,15 +10,15 @@ use transom_core::RdpConnection;
 #[test]
 fn tile_grid_dimensions_and_bounds() {
     let (cols, rows) = compute_grid_dimensions(1920, 1080);
-    assert_eq!(cols, 15);
-    assert_eq!(rows, 9);
+    assert_eq!(cols, 8);
+    assert_eq!(rows, 5);
 
     let (left, top, w, h) = compute_tile_bounds(1920, 1080, 0, 0);
-    assert_eq!((left, top, w, h), (0, 0, 128, 128));
+    assert_eq!((left, top, w, h), (0, 0, 256, 256));
 
     // 边缘瓦片应正确裁剪
-    let (left, top, w, h) = compute_tile_bounds(1920, 1080, 14, 8);
-    assert_eq!((left, top, w, h), (14 * 128, 8 * 128, 128, 56));
+    let (left, top, w, h) = compute_tile_bounds(1920, 1080, 7, 4);
+    assert_eq!((left, top, w, h), (7 * 256, 4 * 256, 128, 56));
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn dirty_mask_calculation() {
         bottom: 100,
     }];
     let mask = compute_dirty_mask(1920, 1080, &dirty);
-    assert_eq!(mask.len(), 135);
+    assert_eq!(mask.len(), 40);
     assert!(mask[0], "左上角第一个瓦片必须被标记为脏");
     assert!(!mask[1], "第二个未被覆盖的瓦片必须是干净的");
 }

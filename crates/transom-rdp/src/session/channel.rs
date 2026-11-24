@@ -9,7 +9,7 @@
 use crate::clipboard::ClipboardEvent;
 use crate::error::RdpError;
 use crate::keyboard::{KeyChord, ModifierState};
-use crate::tiles::FrameUpdate;
+use crate::tiles::{FrameUpdate, TileBufferPool};
 use tokio::sync::{mpsc, watch};
 
 /// 输入事件通道容量上限（按键、鼠标按键与控制指令；高频鼠标移动走独立覆盖槽位）。
@@ -86,6 +86,8 @@ pub struct RdpReceivers {
     pub events: mpsc::Receiver<RdpOutput>,
     /// 高频增量瓦片帧接收端。
     pub frames: mpsc::Receiver<FrameUpdate>,
+    /// 跨线程共享的像素缓冲池（用于 UI 侧覆盖未上传补丁时归还 `Vec<u8>`）。
+    pub buffer_pool: TileBufferPool,
 }
 
 /// 内部会话通道发送端集合。
@@ -123,6 +125,7 @@ pub(crate) fn create_session_channels() -> SessionChannels {
         receivers: RdpReceivers {
             events: events_rx,
             frames: frames_rx,
+            buffer_pool: TileBufferPool::default(),
         },
     }
 }
