@@ -52,7 +52,6 @@ pub(super) fn new_editors(
         history: cx.new(|cx| TextareaState::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),
         websocket_log: cx.new(|cx| TextareaState::new(window, cx)),
-        response_headers: placeholder(window, cx, "api.response.headers_placeholder"),
         response_body: cx.new(|cx| TextareaState::new(window, cx)),
     }
 }

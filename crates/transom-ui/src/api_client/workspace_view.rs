@@ -51,7 +51,6 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) websocket_input: &'a Entity<TextareaState>,
     pub(crate) websocket_log: &'a Entity<TextareaState>,
     pub(crate) assertion_results: &'a [ApiAssertionResult],
-    pub(crate) response_headers: &'a Entity<TextareaState>,
     pub(crate) response_body: &'a Entity<TextareaState>,
     pub(crate) tree_editor_split: &'a Entity<ResizableState>,
     pub(crate) request_response_split: &'a Entity<ResizableState>,

@@ -179,15 +179,6 @@ impl ApiWorkspace {
             response_excerpt: response_excerpt(&response, 500),
         });
         self.refresh_history(window, cx);
-        let header_text = response
-            .headers
-            .iter()
-            .map(|(name, value)| format!("{name}: {value}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        self.editors
-            .response_headers
-            .update(cx, |state, cx| state.set_value(header_text, window, cx));
         self.editors.response_body.update(cx, |state, cx| {
             state.set_value(response.body.clone(), window, cx)
         });
@@ -200,9 +191,6 @@ impl ApiWorkspace {
     }
 
     fn clear_response_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.editors
-            .response_headers
-            .update(cx, |state, cx| state.set_value(String::new(), window, cx));
         self.editors
             .response_body
             .update(cx, |state, cx| state.set_value(String::new(), window, cx));

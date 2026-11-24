@@ -191,11 +191,101 @@ fn render_body(
 }
 
 fn render_headers(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    if params.response.is_some() {
-        text_content("api-response-headers", params.response_headers.clone(), p)
-    } else {
-        centered_message(rust_i18n::t!("api.response.no_headers").to_string(), p)
+    let Some(response) = params.response else {
+        return centered_message(rust_i18n::t!("api.response.no_headers").to_string(), p);
+    };
+    if response.headers.is_empty() {
+        return centered_message(rust_i18n::t!("api.response.no_headers").to_string(), p);
     }
+    let border = p.divider(p.border);
+    let header = h_flex()
+        .h(rems(size::LARGE_HEADER_HEIGHT))
+        .bg(p.list_head)
+        .text_size(rems(typography::CAPTION))
+        .text_color(p.muted_foreground)
+        .border_color(border)
+        .border_b_1()
+        .child(
+            div()
+                .w(relative(0.28))
+                .flex_none()
+                .min_w_0()
+                .h_full()
+                .px(rems(space::SM))
+                .flex()
+                .items_center()
+                .child(rust_i18n::t!("api.request.parameter_name").to_string()),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .px(rems(space::SM))
+                .flex()
+                .items_center()
+                .border_l_1()
+                .border_color(border)
+                .child(rust_i18n::t!("api.request.parameter_value").to_string()),
+        );
+    let rows = response
+        .headers
+        .iter()
+        .enumerate()
+        .map(|(index, (name, value))| {
+            h_flex()
+                .id(("api-response-header", index))
+                .h(rems(size::LARGE_HEADER_HEIGHT))
+                .items_center()
+                .border_color(border)
+                .border_b_1()
+                .child(
+                    div()
+                        .w(relative(0.28))
+                        .flex_none()
+                        .min_w_0()
+                        .h_full()
+                        .px(rems(space::SM))
+                        .flex()
+                        .items_center()
+                        .truncate()
+                        .child(name.clone()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .px(rems(space::SM))
+                        .flex()
+                        .items_center()
+                        .border_l_1()
+                        .border_color(border)
+                        .truncate()
+                        .child(value.clone()),
+                )
+                .into_any_element()
+        });
+    v_flex()
+        .id("api-response-headers")
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .p(rems(space::SM))
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .overflow_y_scrollbar()
+                .rounded(p.radius.md)
+                .border_1()
+                .border_color(border)
+                .overflow_hidden()
+                .child(header)
+                .children(rows),
+        )
+        .into_any_element()
 }
 
 fn render_cookies(response: Option<&ApiResponseSnapshot>, p: &Palette) -> AnyElement {

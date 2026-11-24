@@ -70,6 +70,5 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) history: Entity<TextareaState>,
     pub(crate) websocket_input: Entity<TextareaState>,
     pub(crate) websocket_log: Entity<TextareaState>,
-    pub(crate) response_headers: Entity<TextareaState>,
     pub(crate) response_body: Entity<TextareaState>,
 }

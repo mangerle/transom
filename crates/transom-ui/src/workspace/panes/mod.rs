@@ -304,7 +304,6 @@ impl AppShell {
                     history_editor: &state.editors.history,
                     websocket_input: &state.editors.websocket_input,
                     websocket_log: &state.editors.websocket_log,
-                    response_headers: &state.editors.response_headers,
                     response_body: &state.editors.response_body,
                     tree_editor_split: &state.tree_editor_split,
                     request_response_split: &state.request_response_split,
