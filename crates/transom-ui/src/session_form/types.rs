@@ -167,6 +167,8 @@ pub(crate) struct SessionForm {
     pub rdp_width: Entity<InputState>,
     /// RDP 固定分辨率高度（仅非自适应模式生效）。
     pub rdp_height: Entity<InputState>,
+    /// RDP 本地共享目录路径（留空不共享）。
+    pub rdp_shared_dir: Entity<InputState>,
     /// RDP 是否开启音频重定向。
     pub rdp_audio: bool,
     /// RDP 是否开启剪贴板双向同步。
@@ -368,6 +370,7 @@ pub(crate) struct SessionFormSeed {
     pub rdp_dynamic_resolution: bool,
     pub rdp_width: String,
     pub rdp_height: String,
+    pub rdp_shared_dir: String,
     pub rdp_audio: bool,
     pub rdp_clipboard: bool,
     pub local_working_dir: String,

@@ -204,6 +204,11 @@ pub(crate) fn render_rdp_basic_fields(
             security_buttons,
             p,
         ))
+        .child(optional_form_field(
+            "共享本地目录（可选）".to_string(),
+            form.rdp_shared_dir.clone(),
+            p,
+        ))
         .child(rdp_switch_row(
             "toggle-rdp-audio",
             rust_i18n::t!("form.rdp_audio").to_string(),

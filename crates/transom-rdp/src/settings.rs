@@ -76,6 +76,8 @@ pub struct SessionConfig {
     /// 可选的底层 TCP 实际拨号端点（用于通过 SSH 隧道转发至本地 `127.0.0.1:port` 时，
     /// 保持 `host`/`port` 为真实目标主机以进行 TLS SNI、CredSSP 与 known_hosts 校验）。
     pub connect_endpoint: Option<(String, u16)>,
+    /// 可选的本地共享目录路径（启用 RDPDR 磁盘重定向）。
+    pub shared_dir: Option<String>,
     /// 可选的 TLS 证书校验回调（用于 TOFU 或指纹钉扎）。
     pub cert_verifier: Option<TlsCertVerifier>,
 }
@@ -104,6 +106,7 @@ impl SessionConfig {
                 .unwrap_or(initial_size),
             scale_factor_percent: 100,
             connect_endpoint: None,
+            shared_dir: connection.shared_dir.clone(),
             cert_verifier: None,
         }
     }

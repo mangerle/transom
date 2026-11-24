@@ -408,6 +408,9 @@ pub struct RdpConnection {
     /// 自定义初始固定分辨率（`None` 表示跟随本地窗口大小）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desktop_size: Option<RdpDesktopSize>,
+    /// 本地共享目录路径（启用 `rdpdr` 通道将该目录映射为远端网络驱动器）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_dir: Option<String>,
 }
 
 fn default_rdp_port() -> u16 {
@@ -433,6 +436,7 @@ impl RdpConnection {
             file_copy: true,
             dynamic_resolution: true,
             desktop_size: None,
+            shared_dir: None,
         }
     }
 }

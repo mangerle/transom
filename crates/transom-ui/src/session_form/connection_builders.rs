@@ -161,6 +161,17 @@ impl SessionForm {
             })
         };
 
+        let shared_dir_str = self.rdp_shared_dir.read(cx).value().trim().to_string();
+        let shared_dir = if shared_dir_str.is_empty() {
+            None
+        } else {
+            let expanded = transom_platform::paths::expand_home(&shared_dir_str);
+            if !expanded.is_dir() {
+                return Err(format!("指定的共享目录不存在: {}", expanded.display()));
+            }
+            Some(expanded.to_string_lossy().into_owned())
+        };
+
         // 编辑已有 RDP 会话时保留未在表单暴露的兼容字段
         let existing_rdp = self
             .base
@@ -183,6 +194,7 @@ impl SessionForm {
                 file_copy: existing_rdp.map(|r| r.file_copy).unwrap_or(false),
                 dynamic_resolution: self.rdp_dynamic_resolution,
                 desktop_size,
+                shared_dir,
             }),
             password,
         ))

@@ -40,6 +40,7 @@ pub(super) struct SessionFormInputs {
     rdp_domain: Entity<InputState>,
     rdp_width: Entity<InputState>,
     rdp_height: Entity<InputState>,
+    rdp_shared_dir: Entity<InputState>,
     forward_draft: SessionForwardDraft,
 }
 
@@ -186,6 +187,12 @@ impl SessionFormInputs {
             ),
             rdp_width: number_input(window, cx, &seed.rdp_width, "1920", (640.0, 4096.0, 2.0)),
             rdp_height: number_input(window, cx, &seed.rdp_height, "1080", (480.0, 2560.0, 2.0)),
+            rdp_shared_dir: text_input(
+                window,
+                cx,
+                &seed.rdp_shared_dir,
+                "例如 /home/user/share（留空不共享）",
+            ),
             forward_draft,
         }
     }
@@ -293,6 +300,7 @@ impl SessionForm {
             rdp_dynamic_resolution,
             rdp_width: _,
             rdp_height: _,
+            rdp_shared_dir: _,
             rdp_audio,
             rdp_clipboard,
             local_working_dir: _,
@@ -353,6 +361,7 @@ impl SessionForm {
             rdp_dynamic_resolution,
             rdp_width: inputs.rdp_width,
             rdp_height: inputs.rdp_height,
+            rdp_shared_dir: inputs.rdp_shared_dir,
             rdp_audio,
             rdp_clipboard,
             startup_commands: inputs.startup_commands,

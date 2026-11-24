@@ -147,6 +147,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         rdp_dynamic_resolution,
         rdp_width,
         rdp_height,
+        rdp_shared_dir,
         rdp_audio,
         rdp_clipboard,
     ) = base
@@ -166,6 +167,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
                     .map(|s| s.height)
                     .unwrap_or(1080)
                     .to_string(),
+                rdp.shared_dir.clone().unwrap_or_default(),
                 rdp.audio,
                 rdp.clipboard,
             )),
@@ -179,6 +181,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
             true,
             "1920".to_string(),
             "1080".to_string(),
+            String::new(),
             true,
             true,
         ));
@@ -229,6 +232,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         rdp_dynamic_resolution,
         rdp_width,
         rdp_height,
+        rdp_shared_dir,
         rdp_audio,
         rdp_clipboard,
         local_working_dir,

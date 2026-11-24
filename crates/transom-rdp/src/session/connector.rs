@@ -204,10 +204,41 @@ fn build_client_connector(
     let rdp_config = config.to_ironrdp_config();
     let mut connector = ClientConnector::new(rdp_config, local_addr);
 
+    let mut has_rdpsnd = false;
     if config.audio {
         let backend = TransomAudioBackend::new(audio_muted);
         connector =
             connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(Box::new(backend)));
+        has_rdpsnd = true;
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if let Some(ref shared_dir) = config.shared_dir {
+        let dir_trimmed = shared_dir.trim();
+        if !dir_trimmed.is_empty() && std::path::Path::new(dir_trimmed).is_dir() {
+            // [MS-RDPEFS] 要求服务端下发 RDPDR 包前客户端必须同时通告 rdpsnd 通道
+            if !has_rdpsnd {
+                let silent_audio = TransomAudioBackend::new(Arc::new(AtomicBool::new(true)));
+                connector = connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(
+                    Box::new(silent_audio),
+                ));
+            }
+            let rdpdr_backend = ironrdp_rdpdr_native::backend::NixRdpdrBackend::new(
+                dir_trimmed.to_string(),
+            );
+            let drive_name = std::path::Path::new(dir_trimmed)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("TransomShare")
+                .to_string();
+            let rdpdr = ironrdp_rdpdr::Rdpdr::new(Box::new(rdpdr_backend), "Transom".to_string())
+                .with_drives(Some(vec![(1, drive_name)]));
+            connector = connector.with_static_channel(rdpdr);
+            log::info!("已挂载 RDPDR 本地共享目录通道: {dir_trimmed}");
+        } else if !dir_trimmed.is_empty() {
+            log::warn!("配置的 RDP 共享目录不存在或不可访问，已跳过挂载: {dir_trimmed}");
+        }
     }
 
     if config.clipboard {
