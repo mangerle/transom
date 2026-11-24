@@ -15,23 +15,34 @@ use ironrdp_cliprdr::pdu::{
 };
 use ironrdp_core::impl_as_any;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
+/// 剪贴板内部有界待处理队列上限，防止异常高频请求导致内存积压。
+const MAX_CLIPRDR_QUEUE: usize = 16;
+
 /// 剪贴板跨线程同步状态上下文。
 #[derive(Debug, Default)]
 pub struct CliprdrSyncContext {
-    /// 远端宣告可用且待拉取的具体文本格式（优先 `CF_UNICODETEXT`，回退 `CF_TEXT`）。
-    pub pending_paste_format: Option<ClipboardFormatId>,
-    /// 最近一次发起拉取时请求的格式（用于准确选择 UTF-16LE 或 ANSI 解码器）。
-    pub inflight_paste_format: Option<ClipboardFormatId>,
-    /// 远端是否正在请求本地提供指定格式的剪贴板数据。
-    pub pending_data_request: Option<ClipboardFormatId>,
+    /// 远端宣告可用且待拉取的具体文本格式队列（优先 `CF_UNICODETEXT`，回退 `CF_TEXT`）。
+    pub pending_paste_formats: VecDeque<ClipboardFormatId>,
+    /// 已发出拉取请求、等待数据响应的格式队列（用于准确选择 UTF-16LE 或 ANSI 解码器）。
+    pub inflight_paste_formats: VecDeque<ClipboardFormatId>,
+    /// 远端正在请求本地提供的剪贴板格式队列。
+    pub pending_data_requests: VecDeque<ClipboardFormatId>,
     /// 本地最新待共享给远端的纯文本数据。
     pub local_text: Option<String>,
     /// 最近一次同步自远端的文本（用于防回环震荡）。
     pub last_remote_text: Option<String>,
+}
+
+fn push_bounded(queue: &mut VecDeque<ClipboardFormatId>, format: ClipboardFormatId) {
+    if queue.len() >= MAX_CLIPRDR_QUEUE {
+        queue.pop_front();
+    }
+    queue.push_back(format);
 }
 
 /// Transom 原生剪贴板通道后端。
@@ -92,16 +103,19 @@ impl CliprdrBackend for TransomCliprdrBackend {
             None
         };
         if let Some(format) = preferred {
-            self.context.lock().pending_paste_format = Some(format);
+            push_bounded(&mut self.context.lock().pending_paste_formats, format);
         }
     }
 
     fn on_format_data_request(&mut self, request: FormatDataRequest) {
-        self.context.lock().pending_data_request = Some(request.format);
+        push_bounded(
+            &mut self.context.lock().pending_data_requests,
+            request.format,
+        );
     }
 
     fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
-        let requested_format = self.context.lock().inflight_paste_format.take();
+        let requested_format = self.context.lock().inflight_paste_formats.pop_front();
         if response.is_error() {
             log::debug!("远端返回剪贴板数据提取失败响应");
             return;

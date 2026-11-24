@@ -29,6 +29,7 @@ impl RdpView {
         let pan_offset = self.input.pan_offset;
         let dynamic_resolution = self.dynamic_resolution;
         let resize_sender = self.session_sender();
+        let last_sent_resize = Rc::clone(&self.last_sent_resize);
 
         canvas(
             move |bounds, _window, _cx| {
@@ -38,14 +39,21 @@ impl RdpView {
                 if dynamic_resolution && old_size != bounds.size {
                     let target_w = f32::from(bounds.size.width).round() as u16;
                     let target_h = f32::from(bounds.size.height).round() as u16;
-                    if target_w >= MIN_DYNAMIC_WIDTH
+                    // 跳过首次从 0x0 布局初始化的抖动，且通道满时不覆写已发送尺寸以便下次重试
+                    if f32::from(old_size.width) > 0.0
+                        && f32::from(old_size.height) > 0.0
+                        && target_w >= MIN_DYNAMIC_WIDTH
                         && target_h >= MIN_DYNAMIC_HEIGHT
+                        && last_sent_resize.get() != Some((target_w, target_h))
                         && let Some(ref sender) = resize_sender
+                        && sender
+                            .try_send(RdpInput::Resize {
+                                width: target_w,
+                                height: target_h,
+                            })
+                            .is_ok()
                     {
-                        let _ = sender.try_send(RdpInput::Resize {
-                            width: target_w,
-                            height: target_h,
-                        });
+                        last_sent_resize.set(Some((target_w, target_h)));
                     }
                 }
             },
@@ -75,7 +83,11 @@ fn paint_desktop_frame(
     is_scaled: bool,
     pan_offset: (f32, f32),
 ) {
-    frame_cache.borrow_mut().drain_stale_images(window);
+    {
+        let mut cache = frame_cache.borrow_mut();
+        cache.commit_pending();
+        cache.drain_stale_images(window);
+    }
     let cache = frame_cache.borrow();
     let Some(transform) =
         ViewportTransform::compute(bounds, cache.width, cache.height, is_scaled, pan_offset)

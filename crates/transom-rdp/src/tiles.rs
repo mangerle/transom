@@ -75,6 +75,39 @@ pub fn compute_tile_bounds(width: u16, height: u16, col: u32, row: u32) -> (u32,
     )
 }
 
+/// 遍历损伤矩形集合覆盖到的所有瓦片线性索引（自动钳制边界并跳过非法矩形）。
+fn for_each_covered_tile(
+    width: u16,
+    height: u16,
+    cols: u32,
+    dirty_rects: &[InclusiveRectangle],
+    mut visit: impl FnMut(usize),
+) {
+    if width == 0 || height == 0 || cols == 0 || dirty_rects.is_empty() {
+        return;
+    }
+
+    let max_valid_x = u32::from(width) - 1;
+    let max_valid_y = u32::from(height) - 1;
+
+    for rect in dirty_rects {
+        if rect.left > rect.right || rect.top > rect.bottom {
+            continue;
+        }
+        let col_start = u32::from(rect.left).min(max_valid_x) / TILE_SIZE;
+        let col_end = u32::from(rect.right).min(max_valid_x) / TILE_SIZE;
+        let row_start = u32::from(rect.top).min(max_valid_y) / TILE_SIZE;
+        let row_end = u32::from(rect.bottom).min(max_valid_y) / TILE_SIZE;
+
+        for r in row_start..=row_end {
+            let row_base = (r * cols) as usize;
+            for c in col_start..=col_end {
+                visit(row_base + c as usize);
+            }
+        }
+    }
+}
+
 /// 标记脏瓦片掩码矩阵（按行优先存储的布尔切片），复用调用方提供的缓冲避免重复分配。
 pub fn fill_dirty_mask(
     width: u16,
@@ -90,33 +123,11 @@ pub fn fill_dirty_mask(
         return;
     }
 
-    let max_valid_x = u32::from(width) - 1;
-    let max_valid_y = u32::from(height) - 1;
-
-    for rect in dirty_rects {
-        if rect.left > rect.right || rect.top > rect.bottom {
-            continue;
+    for_each_covered_tile(width, height, cols, dirty_rects, |index| {
+        if let Some(slot) = mask.get_mut(index) {
+            *slot = true;
         }
-        let min_x = u32::from(rect.left).min(max_valid_x);
-        let min_y = u32::from(rect.top).min(max_valid_y);
-        let max_x = u32::from(rect.right).min(max_valid_x);
-        let max_y = u32::from(rect.bottom).min(max_valid_y);
-
-        let col_start = min_x / TILE_SIZE;
-        let col_end = max_x / TILE_SIZE;
-        let row_start = min_y / TILE_SIZE;
-        let row_end = max_y / TILE_SIZE;
-
-        for r in row_start..=row_end {
-            let row_base = (r * cols) as usize;
-            for c in col_start..=col_end {
-                let index = row_base + c as usize;
-                if let Some(slot) = mask.get_mut(index) {
-                    *slot = true;
-                }
-            }
-        }
-    }
+    });
 }
 
 /// 便捷纯函数：计算并返回新的脏瓦片掩码矩阵。
@@ -183,31 +194,16 @@ impl TileExtractor {
             return;
         }
 
-        let max_valid_x = u32::from(width) - 1;
-        let max_valid_y = u32::from(height) - 1;
-
-        for rect in dirty_rects {
-            if rect.left > rect.right || rect.top > rect.bottom {
-                continue;
+        let mask = &mut self.dirty_mask;
+        let dirty_count = &mut self.dirty_count;
+        for_each_covered_tile(width, height, self.cols, dirty_rects, |index| {
+            if let Some(slot) = mask.get_mut(index)
+                && !*slot
+            {
+                *slot = true;
+                *dirty_count += 1;
             }
-            let col_start = u32::from(rect.left).min(max_valid_x) / TILE_SIZE;
-            let col_end = u32::from(rect.right).min(max_valid_x) / TILE_SIZE;
-            let row_start = u32::from(rect.top).min(max_valid_y) / TILE_SIZE;
-            let row_end = u32::from(rect.bottom).min(max_valid_y) / TILE_SIZE;
-
-            for r in row_start..=row_end {
-                let row_base = (r * self.cols) as usize;
-                for c in col_start..=col_end {
-                    let index = row_base + c as usize;
-                    if let Some(slot) = self.dirty_mask.get_mut(index)
-                        && !*slot
-                    {
-                        *slot = true;
-                        self.dirty_count += 1;
-                    }
-                }
-            }
-        }
+        });
     }
 
     /// 是否存在尚未提交给 UI 的脏瓦片或全量重置请求。

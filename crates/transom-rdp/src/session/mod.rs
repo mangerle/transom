@@ -9,6 +9,7 @@
 pub mod channel;
 pub mod cliprdr;
 pub mod connector;
+mod input;
 pub mod loop_runner;
 mod reactivate;
 mod resize;

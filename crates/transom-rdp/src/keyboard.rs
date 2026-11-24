@@ -76,6 +76,10 @@ impl KeyboardTranslator {
         self.sync_modifiers(modifiers, out);
 
         if let Some(scancode) = key_name_to_scancode(key_name) {
+            // 核心左修饰键已由 `sync_modifiers` 差分同步，避免按下修饰键自身时重复入队
+            if is_synced_modifier(scancode) {
+                return;
+            }
             self.pressed_keys.insert(scancode);
             out.push(Operation::KeyPressed(scancode));
             return;
@@ -138,19 +142,31 @@ impl KeyboardTranslator {
             out.push(Operation::UnicodeKeyReleased(ch));
         }
 
-        if self.pressed_keys.is_empty() {
-            // 兜底释放关键修饰键，防止宿主系统吞掉抬起事件
-            out.extend_from_slice(&[
-                Operation::KeyReleased(SCANCODE_LCTRL),
-                Operation::KeyReleased(SCANCODE_LALT),
-                Operation::KeyReleased(SCANCODE_LSHIFT),
-                Operation::KeyReleased(SCANCODE_LWIN),
-            ]);
-            return;
+        let mut released_modifiers = [false; 4];
+        for code in self.pressed_keys.drain() {
+            if code == SCANCODE_LCTRL {
+                released_modifiers[0] = true;
+            } else if code == SCANCODE_LALT {
+                released_modifiers[1] = true;
+            } else if code == SCANCODE_LSHIFT {
+                released_modifiers[2] = true;
+            } else if code == SCANCODE_LWIN {
+                released_modifiers[3] = true;
+            }
+            out.push(Operation::KeyReleased(code));
         }
 
-        for code in self.pressed_keys.drain() {
-            out.push(Operation::KeyReleased(code));
+        // 兜底释放未在 `pressed_keys` 中的核心修饰键，防止宿主系统吞掉抬起事件导致卡键
+        let core_modifiers = [
+            SCANCODE_LCTRL,
+            SCANCODE_LALT,
+            SCANCODE_LSHIFT,
+            SCANCODE_LWIN,
+        ];
+        for (released, code) in released_modifiers.into_iter().zip(core_modifiers) {
+            if !released {
+                out.push(Operation::KeyReleased(code));
+            }
         }
     }
 
@@ -172,6 +188,13 @@ impl KeyboardTranslator {
             out.push(Operation::KeyReleased(code));
         }
     }
+}
+
+fn is_synced_modifier(code: Scancode) -> bool {
+    code == SCANCODE_LCTRL
+        || code == SCANCODE_LALT
+        || code == SCANCODE_LSHIFT
+        || code == SCANCODE_LWIN
 }
 
 /// 常用键名到 XT 扫描码（及扩展标志）映射。
@@ -323,10 +346,10 @@ mod tests {
         translator.handle_key_down("enter", None, ModifierState::default(), &mut ops);
         assert_eq!(ops.len(), 1);
 
-        // 按住状态下执行 release_all，应精准释放该按键
+        // 按住状态下执行 release_all，应释放该按键并兜底释放核心修饰键
         ops.clear();
         translator.release_all(&mut ops);
-        assert_eq!(ops.len(), 1);
+        assert_eq!(ops.len(), 5);
 
         // 集合已清空，兜底释放 4 个常见修饰键
         ops.clear();

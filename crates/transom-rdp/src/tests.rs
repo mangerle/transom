@@ -52,7 +52,7 @@ fn keyboard_scancode_translation() {
 
     ops.clear();
     translator.release_all(&mut ops);
-    assert_eq!(ops.len(), 1);
+    assert_eq!(ops.len(), 5);
 
     ops.clear();
     translator.release_all(&mut ops);

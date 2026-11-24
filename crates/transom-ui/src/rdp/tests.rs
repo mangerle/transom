@@ -74,6 +74,7 @@ fn frame_cache_applies_incremental_patches_in_place() {
         full_reset: true,
         patches: vec![patch_a],
     });
+    cache.commit_pending();
     assert_eq!(cache.tiles.len(), 2);
     assert!(cache.tiles[0].is_some());
     assert!(cache.tiles[1].is_none());
@@ -97,6 +98,7 @@ fn frame_cache_applies_incremental_patches_in_place() {
         full_reset: false,
         patches: vec![patch_b],
     });
+    cache.commit_pending();
     let after_ptr = std::sync::Arc::as_ptr(cache.tiles[0].as_ref().expect("首瓦片应存在"));
     assert_eq!(first_ptr, after_ptr);
     assert!(cache.tiles[1].is_some());
@@ -119,11 +121,59 @@ fn frame_cache_applies_incremental_patches_in_place() {
         full_reset: false,
         patches: vec![patch_a2],
     });
+    cache.commit_pending();
     assert_eq!(cache.stale_count(), 1, "覆盖已有瓦片应登记 1 张待回收纹理");
 
     // clear 应将剩余 2 张现役瓦片一并登记回收
     cache.clear();
     assert_eq!(cache.stale_count(), 3);
+}
+
+#[test]
+fn frame_cache_coalesces_background_updates_before_commit() {
+    let mut cache = TiledFrameCache::default();
+    let patch_1 = TilePatch {
+        col: 0,
+        row: 0,
+        width: 4,
+        height: 4,
+        rgba: vec![10; 4 * 4 * 4],
+    };
+    let patch_2 = TilePatch {
+        col: 0,
+        row: 0,
+        width: 4,
+        height: 4,
+        rgba: vec![20; 4 * 4 * 4],
+    };
+
+    cache.apply_update(FrameUpdate {
+        width: 256,
+        height: 256,
+        cols: 1,
+        rows: 1,
+        seq: 1,
+        full_reset: true,
+        patches: vec![patch_1],
+    });
+    cache.apply_update(FrameUpdate {
+        width: 256,
+        height: 256,
+        cols: 1,
+        rows: 1,
+        seq: 2,
+        full_reset: false,
+        patches: vec![patch_2],
+    });
+
+    // 未执行绘制提交前，不产生任何 GPU 纹理与淘汰队列积压
+    assert!(cache.tiles.is_empty());
+    assert_eq!(cache.stale_count(), 0);
+
+    cache.commit_pending();
+    assert_eq!(cache.tiles.len(), 1);
+    assert!(cache.tiles[0].is_some());
+    assert_eq!(cache.stale_count(), 0);
 }
 
 #[test]

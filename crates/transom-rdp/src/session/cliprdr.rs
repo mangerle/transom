@@ -20,27 +20,36 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
     writer: &mut W,
     context: &Arc<Mutex<CliprdrSyncContext>>,
 ) {
-    let (paste_format, pending_format) = {
+    let (paste_formats, pending_requests, local_text) = {
         let mut ctx = context.lock();
-        let paste = ctx.pending_paste_format.take();
-        if paste.is_some() {
-            ctx.inflight_paste_format = paste;
+        let pastes: Vec<ClipboardFormatId> = ctx.pending_paste_formats.drain(..).collect();
+        for &fmt in &pastes {
+            if ctx.inflight_paste_formats.len() >= 16 {
+                ctx.inflight_paste_formats.pop_front();
+            }
+            ctx.inflight_paste_formats.push_back(fmt);
         }
-        let format = ctx.pending_data_request.take();
-        (paste, format)
+        let requests: Vec<ClipboardFormatId> = ctx.pending_data_requests.drain(..).collect();
+        let text = if requests.is_empty() {
+            None
+        } else {
+            ctx.local_text.clone()
+        };
+        (pastes, requests, text)
     };
 
-    if let Some(format_id) = paste_format
-        && let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
-        && let Ok(messages) = cliprdr.initiate_paste(format_id)
-        && let Ok(bytes) = active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
-        && let Err(e) = writer.write_all(&bytes).await
-    {
-        log::debug!("写入 CLIPRDR 粘贴请求失败: {e}");
+    for format_id in paste_formats {
+        if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
+            && let Ok(messages) = cliprdr.initiate_paste(format_id)
+            && let Ok(bytes) =
+                active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
+            && let Err(e) = writer.write_all(&bytes).await
+        {
+            log::debug!("写入 CLIPRDR 粘贴请求失败: {e}");
+        }
     }
 
-    if let Some(requested_format) = pending_format {
-        let local_text = context.lock().local_text.clone();
+    for requested_format in pending_requests {
         let response = build_format_data_response(requested_format, local_text.as_deref());
 
         if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()

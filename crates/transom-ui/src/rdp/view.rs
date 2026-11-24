@@ -79,6 +79,7 @@ pub struct RdpView {
     pub(crate) dynamic_resolution: bool,
     pub(crate) cursor: RenderedCursor,
     pub(crate) viewport_bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub(crate) last_sent_resize: Rc<Cell<Option<(u16, u16)>>>,
     last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
     _consumer_tasks: Vec<Task<()>>,
@@ -101,6 +102,7 @@ impl RdpView {
             dynamic_resolution,
             cursor: RenderedCursor::Default,
             viewport_bounds: new_viewport_bounds_cell(),
+            last_sent_resize: Rc::new(Cell::new(None)),
             last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
             _consumer_tasks: Vec::new(),
@@ -123,6 +125,7 @@ impl RdpView {
         self._consumer_tasks.clear();
         self.retire_rendered_resources();
         self.input.pan_offset = (0.0, 0.0);
+        self.last_sent_resize.set(None);
         self.is_muted = !config.audio;
         self.dynamic_resolution = config.dynamic_resolution;
         self.state = RdpViewState::Connecting;
@@ -178,7 +181,7 @@ impl RdpView {
                 cx.emit(RdpViewEvent::Connected);
             }
             RdpOutput::Resized { width, height } => {
-                self.frame_cache.borrow_mut().clear();
+                self.last_sent_resize.set(Some((width, height)));
                 self.state = RdpViewState::Connected { width, height };
             }
             RdpOutput::Cursor(cursor) => {
@@ -388,50 +391,54 @@ impl Render for RdpView {
             .size_full()
             .relative()
             .bg(p.background)
-            .cursor(CursorStyle::Arrow)
             .overflow_hidden()
-            .on_mouse_move(cx.listener(|this, e, _, cx| this.handle_mouse_move(e, cx)))
-            .on_mouse_exit(cx.listener(|this, _, _, cx| this.handle_mouse_exit(cx)))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| {
-                    this.handle_mouse_down(MouseButton::Left, window, cx)
-                }),
-            )
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Left)),
-            )
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|this, _, window, cx| {
-                    this.handle_mouse_down(MouseButton::Right, window, cx)
-                }),
-            )
-            .on_mouse_up(
-                MouseButton::Right,
-                cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Right)),
-            )
-            .on_mouse_down(
-                MouseButton::Middle,
-                cx.listener(|this, _, window, cx| {
-                    this.handle_mouse_down(MouseButton::Middle, window, cx)
-                }),
-            )
-            .on_mouse_up(
-                MouseButton::Middle,
-                cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Middle)),
-            )
-            .on_scroll(cx.listener(|this, e, _, cx| this.handle_scroll(e, cx)))
             .on_modifiers_changed(cx.listener(|this, e, _, _| this.handle_modifiers_changed(e)))
             .on_key_down(cx.listener(|this, e, _, cx| this.handle_key_down(e, cx)))
             .on_key_up(cx.listener(|this, e, _, _| this.handle_key_up(e)));
 
         match &self.state {
             RdpViewState::Connected { .. } => root
-                .child(self.render_desktop_canvas())
+                .child(self.render_interactive_canvas(cx))
                 .child(self.render_floating_toolbar(&p, cx)),
             _ => root.child(self.render_status_view(&p, cx)),
         }
+    }
+}
+
+impl RdpView {
+    /// 渲染绑定鼠标与滚轮事件的桌面画布容器，与悬浮工具栏物理隔离，防止工具栏点击穿透到远端。
+    fn render_interactive_canvas(&self, cx: &mut Context<Self>) -> Div {
+        let mut container = div()
+            .size_full()
+            .cursor(CursorStyle::Arrow)
+            .on_mouse_move(cx.listener(|this, e, _, cx| this.handle_mouse_move(e, cx)))
+            .on_mouse_exit(cx.listener(|this, _, _, cx| this.handle_mouse_exit(cx)))
+            .on_scroll(cx.listener(|this, e, _, cx| this.handle_scroll(e, cx)))
+            .child(self.render_desktop_canvas());
+
+        let buttons = [
+            MouseButton::Left,
+            MouseButton::Right,
+            MouseButton::Middle,
+            MouseButton::Navigate(NavigationDirection::Back),
+            MouseButton::Navigate(NavigationDirection::Forward),
+        ];
+        for btn in buttons {
+            container = container
+                .on_mouse_down(
+                    btn,
+                    cx.listener(move |this, _, window, cx| {
+                        this.handle_mouse_down(btn, window, cx);
+                    }),
+                )
+                .on_mouse_up(
+                    btn,
+                    cx.listener(move |this, _, _, _| {
+                        this.handle_mouse_up(btn);
+                    }),
+                );
+        }
+
+        container
     }
 }

@@ -3,25 +3,18 @@
 //! 设计原理（Why）：
 //! 1. 将 GPU 纹理管理（`Arc<RenderImage>`）收敛在 UI 层，使底层协议库 `transom-rdp`
 //!    与 GUI 框架彻底解耦；
-//! 2. [`TiledFrameCache`] 仅按增量补丁 [`FrameUpdate`] 原地替换受损瓦片槽位，干净瓦片
-//!    复用已有 `Arc<RenderImage>`，彻底消除每帧克隆整张瓦片表的开销；
+//! 2. **延迟纹理上传（Deferred Texture Upload）**：后台推送的 [`FrameUpdate`] 先在纯 CPU
+//!    待上传槽位中按 `(col, row)` 覆盖合并，仅在窗口实际执行绘制（`paint`）时才构造
+//!    `RenderImage` 并立即 `window.drop_image` 释放被淘汰的旧纹理，彻底消除后台标签页
+//!    不可见时的 GPU 纹理创建开销与显存泄漏；
 //! 3. [`ViewportTransform`] 作为渲染与鼠标坐标反算的唯一真源，杜绝两处缩放公式漂移。
 
 use gpui_kit::{Bounds, Pixels, Point, RenderImage, Size, Window, px};
 use image::{Frame, RgbaImage};
 use std::sync::Arc;
-use transom_rdp::{CursorUpdate, FrameUpdate};
-
-/// 待回收 GPU 纹理队列上限（防异常状态下内存无界积压）。
-const MAX_STALE_IMAGES: usize = 512;
+use transom_rdp::{CursorUpdate, FrameUpdate, TilePatch};
 
 /// UI 侧常驻的桌面瓦片 GPU 纹理缓存。
-///
-/// 设计原理（Why）：GPUI 的 `window.paint_image` 会以 `ImageId` 将 `RenderImage`
-/// 驻留在窗口级 GPU Sprite Atlas 中；仅覆盖并 `Drop` Rust 侧的 `Arc<RenderImage>`
-/// 不会自动从图集卸载显存。因此每次替换或清空瓦片时，必须将淘汰的纹理句柄收集到
-/// `stale_images`，在持有 `&mut Window` 的渲染/绘制周期中显式调用 `window.drop_image`
-/// 确定性释放显存。
 #[derive(Default)]
 pub(crate) struct TiledFrameCache {
     pub(crate) width: u16,
@@ -29,38 +22,74 @@ pub(crate) struct TiledFrameCache {
     pub(crate) cols: u32,
     pub(crate) rows: u32,
     pub(crate) tiles: Vec<Option<Arc<RenderImage>>>,
+    pending_reset: bool,
+    pending_size: Option<(u16, u16, u32, u32)>,
+    pending_patches: Vec<Option<TilePatch>>,
     stale_images: Vec<Arc<RenderImage>>,
 }
 
 impl TiledFrameCache {
-    /// 应用来自后台会话的增量瓦片补丁，仅对变更瓦片构造新纹理并原地覆写，
-    /// 同时将淘汰的旧纹理移入待回收队列。
+    /// 接收后台会话的增量瓦片补丁，在纯 CPU 待上传缓冲中按瓦片槽位就地合并。
     pub(crate) fn apply_update(&mut self, update: FrameUpdate) {
         let total = (update.cols as usize).saturating_mul(update.rows as usize);
-        if update.full_reset
-            || self.width != update.width
-            || self.height != update.height
-            || self.tiles.len() != total
-        {
-            self.retire_all_tiles();
-            self.width = update.width;
-            self.height = update.height;
-            self.cols = update.cols;
-            self.rows = update.rows;
-            self.tiles = vec![None; total];
+        let size_changed = self.pending_size.map_or_else(
+            || {
+                self.width != update.width
+                    || self.height != update.height
+                    || self.tiles.len() != total
+            },
+            |(pw, ph, pc, pr)| {
+                pw != update.width || ph != update.height || pc != update.cols || pr != update.rows
+            },
+        );
+
+        if update.full_reset || size_changed {
+            self.pending_reset = true;
+            self.pending_size = Some((update.width, update.height, update.cols, update.rows));
+            self.pending_patches = vec![None; total];
+        } else if self.pending_patches.len() != total {
+            self.pending_patches.resize(total, None);
         }
 
-        let cols = self.cols as usize;
+        let cols = self.pending_size.map_or(self.cols, |(_, _, c, _)| c) as usize;
         for patch in update.patches {
             let idx = (patch.row as usize)
                 .saturating_mul(cols)
+                .saturating_add(patch.col as usize);
+            if let Some(slot) = self.pending_patches.get_mut(idx) {
+                *slot = Some(patch);
+            }
+        }
+    }
+
+    /// 将待上传的纯像素补丁提交为 GPU 纹理，并把被替换的旧纹理登记到回收队列。
+    pub(crate) fn commit_pending(&mut self) {
+        if self.pending_reset {
+            self.retire_all_tiles();
+            if let Some((w, h, cols, rows)) = self.pending_size.take() {
+                self.width = w;
+                self.height = h;
+                self.cols = cols;
+                self.rows = rows;
+                let total = (cols as usize).saturating_mul(rows as usize);
+                self.tiles = vec![None; total];
+            }
+            self.pending_reset = false;
+        }
+
+        for slot in &mut self.pending_patches {
+            let Some(patch) = slot.take() else {
+                continue;
+            };
+            let idx = (patch.row as usize)
+                .saturating_mul(self.cols as usize)
                 .saturating_add(patch.col as usize);
             if idx < self.tiles.len()
                 && let Some(rgba) = RgbaImage::from_raw(patch.width, patch.height, patch.rgba)
             {
                 let img = Arc::new(RenderImage::new(vec![Frame::new(rgba)]));
                 if let Some(old) = self.tiles[idx].replace(img) {
-                    self.retire_image(old);
+                    self.stale_images.push(old);
                 }
             }
         }
@@ -68,9 +97,7 @@ impl TiledFrameCache {
 
     /// 将一张已淘汰的 GPU 纹理（瓦片或自定义光标）登记到待回收队列。
     pub(crate) fn retire_image(&mut self, img: Arc<RenderImage>) {
-        if self.stale_images.len() < MAX_STALE_IMAGES {
-            self.stale_images.push(img);
-        }
+        self.stale_images.push(img);
     }
 
     /// 在持有窗口上下文时，确定性释放全部已淘汰的 GPU Sprite Atlas 纹理。
@@ -82,7 +109,7 @@ impl TiledFrameCache {
         }
     }
 
-    /// 清空已缓存瓦片并将旧纹理移入待回收队列（如分辨率变更重激活或断开期间）。
+    /// 清空已缓存瓦片与待上传补丁，并将现役纹理移入待回收队列。
     pub(crate) fn clear(&mut self) {
         self.retire_all_tiles();
         self.width = 0;
@@ -90,6 +117,9 @@ impl TiledFrameCache {
         self.cols = 0;
         self.rows = 0;
         self.tiles.clear();
+        self.pending_reset = false;
+        self.pending_size = None;
+        self.pending_patches.clear();
     }
 
     /// 返回当前待回收纹理数量（主要用于单元测试断言）。
@@ -100,9 +130,7 @@ impl TiledFrameCache {
 
     fn retire_all_tiles(&mut self) {
         for slot in &mut self.tiles {
-            if let Some(old) = slot.take()
-                && self.stale_images.len() < MAX_STALE_IMAGES
-            {
+            if let Some(old) = slot.take() {
                 self.stale_images.push(old);
             }
         }

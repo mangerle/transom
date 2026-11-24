@@ -1,0 +1,182 @@
+//! RDP 会话输入批处理与 FastPath 转换器。
+//!
+//! 设计原理（Why）：将高频输入批处理、`InputDatabase` 状态维护与控制指令分流
+//! 从 `loop_runner` 主事件循环中剥离，保持主循环简洁聚焦于网络与定时器调度；
+//! 同时复用 `ops_buf` 避免每次键鼠事件产生堆分配。
+
+use crate::clipboard::CliprdrSyncContext;
+use crate::keyboard::KeyboardTranslator;
+use crate::session::channel::{MouseBtn, RdpInput};
+use crate::session::cliprdr::handle_local_clipboard_copy;
+use crate::session::resize::ResizeController;
+use ironrdp_input::{
+    Database as InputDatabase, MouseButton, MousePosition, Operation, WheelRotations,
+};
+use ironrdp_session::image::DecodedImage;
+use ironrdp_session::{ActiveStage, ActiveStageOutput, SessionResult};
+use ironrdp_tokio::FramedWrite;
+use parking_lot::Mutex;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
+use tokio::sync::mpsc;
+
+/// 单次批处理从输入通道排空的最大事件数。
+const MAX_INPUT_BATCH_SIZE: usize = 32;
+
+/// 输入处理后的会话控制指令。
+pub(crate) enum InputBatchOutcome {
+    Continue,
+    Stop,
+}
+
+/// 键盘、鼠标与控制输入批处理器。
+pub(crate) struct InputBatcher {
+    keyboard: KeyboardTranslator,
+    input_db: InputDatabase,
+    ops_buf: Vec<Operation>,
+}
+
+impl Default for InputBatcher {
+    fn default() -> Self {
+        Self {
+            keyboard: KeyboardTranslator::default(),
+            input_db: InputDatabase::new(),
+            ops_buf: Vec::with_capacity(MAX_INPUT_BATCH_SIZE),
+        }
+    }
+}
+
+impl InputBatcher {
+    /// 批量排空相邻 UI 输入指令，立即响应控制指令并将连续 FastPath 键鼠事件合并。
+    pub(crate) async fn process_batch<W: FramedWrite>(
+        &mut self,
+        first: RdpInput,
+        input_rx: &mut mpsc::Receiver<RdpInput>,
+        ctx: &mut InputProcessContext<'_, W>,
+    ) -> InputBatchOutcome {
+        self.ops_buf.clear();
+        if matches!(
+            self.enqueue_or_handle_control(first, ctx).await,
+            InputBatchOutcome::Stop
+        ) {
+            return InputBatchOutcome::Stop;
+        }
+
+        let mut drained = 1;
+        while drained < MAX_INPUT_BATCH_SIZE {
+            let Ok(next) = input_rx.try_recv() else {
+                break;
+            };
+            drained += 1;
+            if matches!(
+                self.enqueue_or_handle_control(next, ctx).await,
+                InputBatchOutcome::Stop
+            ) {
+                return InputBatchOutcome::Stop;
+            }
+        }
+
+        InputBatchOutcome::Continue
+    }
+
+    /// 将当前累积的键鼠操作转换为 FastPath PDU 并交由状态机编码（零多余 `Vec` 克隆）。
+    pub(crate) fn flush_to_stage(
+        &mut self,
+        active_stage: &mut ActiveStage,
+        canvas: &mut DecodedImage,
+    ) -> Option<SessionResult<Vec<ActiveStageOutput>>> {
+        if self.ops_buf.is_empty() {
+            return None;
+        }
+        let fastpath_events = self.input_db.apply(self.ops_buf.drain(..));
+        if fastpath_events.is_empty() {
+            return None;
+        }
+        Some(active_stage.process_fastpath_input(canvas, &fastpath_events))
+    }
+
+    async fn enqueue_or_handle_control<W: FramedWrite>(
+        &mut self,
+        input: RdpInput,
+        ctx: &mut InputProcessContext<'_, W>,
+    ) -> InputBatchOutcome {
+        match input {
+            RdpInput::Disconnect => InputBatchOutcome::Stop,
+            RdpInput::MuteAudio(muted) => {
+                ctx.audio_muted.store(muted, Ordering::Relaxed);
+                InputBatchOutcome::Continue
+            }
+            RdpInput::ClipboardText(text) => {
+                handle_local_clipboard_copy(
+                    ctx.active_stage,
+                    ctx.writer,
+                    ctx.cliprdr_context,
+                    text,
+                )
+                .await;
+                InputBatchOutcome::Continue
+            }
+            RdpInput::Resize { width, height } => {
+                ctx.resize_controller.schedule(width, height, Instant::now());
+                InputBatchOutcome::Continue
+            }
+            fastpath => {
+                append_fastpath_operations(fastpath, &mut self.keyboard, &mut self.ops_buf);
+                InputBatchOutcome::Continue
+            }
+        }
+    }
+}
+
+/// 输入批处理所需的外部上下文引用（参数对象模式收敛入参）。
+pub(crate) struct InputProcessContext<'a, W> {
+    pub(crate) active_stage: &'a mut ActiveStage,
+    pub(crate) writer: &'a mut W,
+    pub(crate) audio_muted: &'a AtomicBool,
+    pub(crate) cliprdr_context: &'a Arc<Mutex<CliprdrSyncContext>>,
+    pub(crate) resize_controller: &'a mut ResizeController,
+}
+
+/// 将 UI 键鼠输入追加到复用的底层原子操作缓冲（避免每条事件堆分配 `Vec`）。
+fn append_fastpath_operations(
+    input: RdpInput,
+    keyboard: &mut KeyboardTranslator,
+    out: &mut Vec<Operation>,
+) {
+    match input {
+        RdpInput::MouseMove { x, y } => out.push(Operation::MouseMove(MousePosition { x, y })),
+        RdpInput::MouseButton { button, pressed } => {
+            let btn = match button {
+                MouseBtn::Left => MouseButton::Left,
+                MouseBtn::Middle => MouseButton::Middle,
+                MouseBtn::Right => MouseButton::Right,
+                MouseBtn::X1 => MouseButton::X1,
+                MouseBtn::X2 => MouseButton::X2,
+            };
+            if pressed {
+                out.push(Operation::MouseButtonPressed(btn));
+            } else {
+                out.push(Operation::MouseButtonReleased(btn));
+            }
+        }
+        RdpInput::MouseWheel { vertical, delta } => {
+            out.push(Operation::WheelRotations(WheelRotations {
+                is_vertical: vertical,
+                rotation_units: delta,
+            }));
+        }
+        RdpInput::KeyDown {
+            key,
+            key_char,
+            modifiers,
+        } => keyboard.handle_key_down(&key, key_char.as_deref(), modifiers, out),
+        RdpInput::KeyUp { key, key_char } => {
+            keyboard.handle_key_up(&key, key_char.as_deref(), out);
+        }
+        RdpInput::ModifiersChanged(modifiers) => keyboard.sync_modifiers(modifiers, out),
+        RdpInput::SendKeyChord(chord) => keyboard.handle_key_chord(chord, out),
+        RdpInput::ReleaseAllKeys => keyboard.release_all(out),
+        _ => {}
+    }
+}

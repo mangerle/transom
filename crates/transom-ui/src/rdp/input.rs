@@ -46,7 +46,8 @@ pub fn map_mouse_button(button: gpui_kit::MouseButton, pressed: bool) -> Option<
         gpui_kit::MouseButton::Left => MouseBtn::Left,
         gpui_kit::MouseButton::Right => MouseBtn::Right,
         gpui_kit::MouseButton::Middle => MouseBtn::Middle,
-        _ => return None,
+        gpui_kit::MouseButton::Navigate(gpui_kit::NavigationDirection::Back) => MouseBtn::X1,
+        gpui_kit::MouseButton::Navigate(gpui_kit::NavigationDirection::Forward) => MouseBtn::X2,
     };
     Some(RdpInput::MouseButton {
         button: btn,
@@ -106,7 +107,7 @@ impl RdpView {
         }
     }
 
-    /// 处理鼠标按下：夺回键盘焦点、同步系统剪贴板、原子补齐最新坐标并派发点击。
+    /// 处理鼠标按下：夺回键盘焦点、原子补齐最新坐标并派发点击。
     pub(crate) fn handle_mouse_down(
         &mut self,
         btn: gpui_kit::MouseButton,
@@ -114,7 +115,6 @@ impl RdpView {
         cx: &mut gpui_kit::Context<Self>,
     ) {
         self.focus(window, cx);
-        self.sync_clipboard_to_remote(cx);
         if let Some((x, y)) = self.input.last_mouse_pos.get() {
             self.send_input(RdpInput::MouseMove { x, y });
         }
