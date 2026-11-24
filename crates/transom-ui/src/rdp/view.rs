@@ -10,7 +10,7 @@ use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -27,6 +27,12 @@ pub enum RdpViewState {
     Connecting,
     Connected { width: u16, height: u16 },
     Disconnected,
+    HostKeyMismatch {
+        host: String,
+        port: u16,
+        previous_fingerprint: String,
+        current_fingerprint: String,
+    },
     Failed(String),
 }
 
@@ -41,6 +47,12 @@ pub enum RdpViewEvent {
     Failed(String),
     /// 用户点击重连按钮，请求工作区外壳异步重新拉取凭据并重启会话。
     Reconnect,
+    /// 用户确认信任变更后的服务器 TLS 指纹并立即重连。
+    TrustAndReconnect {
+        host: String,
+        port: u16,
+        fingerprint: String,
+    },
     /// 全屏沉浸状态变更，请求工作区外壳同步隐藏/恢复侧边栏与标签栏。
     FullscreenChanged(bool),
 }
@@ -216,6 +228,26 @@ impl RdpView {
                 }
                 cx.emit(RdpViewEvent::Disconnected);
             }
+            RdpOutput::Terminated(RdpError::TlsMismatch {
+                host,
+                port,
+                previous_fingerprint,
+                current_fingerprint,
+            }) => {
+                self.session = None;
+                self.retire_rendered_resources();
+                self.state = RdpViewState::HostKeyMismatch {
+                    host,
+                    port,
+                    previous_fingerprint,
+                    current_fingerprint,
+                };
+                if self.is_fullscreen {
+                    self.is_fullscreen = false;
+                    cx.emit(RdpViewEvent::FullscreenChanged(false));
+                }
+                cx.emit(RdpViewEvent::Failed("TLS 服务器公钥指纹已变更".to_string()));
+            }
             RdpOutput::Terminated(err) => {
                 let detail = err.to_string();
                 self.session = None;
@@ -328,6 +360,90 @@ impl RdpView {
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("rdp.connecting").to_string())
                 .into_any_element(),
+            RdpViewState::HostKeyMismatch {
+                host,
+                port,
+                previous_fingerprint,
+                current_fingerprint,
+            } => {
+                let host_owned = host.clone();
+                let port_val = *port;
+                let fp_owned = current_fingerprint.clone();
+                v_flex()
+                    .size_full()
+                    .items_center()
+                    .justify_center()
+                    .p_6()
+                    .child(
+                        v_flex()
+                            .max_w(px(520.0))
+                            .gap_3()
+                            .p_4()
+                            .rounded(p.radius.lg)
+                            .bg(p.surface.floating)
+                            .border_1()
+                            .border_color(p.danger)
+                            .child(
+                                div()
+                                    .text_base()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.danger)
+                                    .child(format!(
+                                        "安全警告：{host}:{port} 的 TLS 公钥指纹已变更"
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child("如果远端未重装系统或更换证书，这可能意味着存在中间人拦截。"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child(format!("原记录指纹：{previous_fingerprint}")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.foreground)
+                                    .child(format!("当前新指纹：{current_fingerprint}")),
+                            )
+                            .child(
+                                gpui_kit::base::h_flex()
+                                    .gap_2()
+                                    .pt_1()
+                                    .child(
+                                        Button::new(ElementId::Name("rdp-trust-host-btn".into()))
+                                            .small()
+                                            .danger()
+                                            .label("信任新指纹并重连")
+                                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                                this.state = RdpViewState::Connecting;
+                                                cx.emit(RdpViewEvent::TrustAndReconnect {
+                                                    host: host_owned.clone(),
+                                                    port: port_val,
+                                                    fingerprint: fp_owned.clone(),
+                                                });
+                                                cx.notify();
+                                            })),
+                                    )
+                                    .child(
+                                        Button::new(ElementId::Name("rdp-cancel-trust-btn".into()))
+                                            .small()
+                                            .ghost()
+                                            .label("取消")
+                                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                                this.state = RdpViewState::Disconnected;
+                                                cx.emit(RdpViewEvent::Disconnected);
+                                                cx.notify();
+                                            })),
+                                    ),
+                            ),
+                    )
+                    .into_any_element()
+            }
             RdpViewState::Failed(msg) => v_flex()
                 .size_full()
                 .items_center()

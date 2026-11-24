@@ -383,23 +383,48 @@ fn open_rdp_session(
     let subscription = cx.subscribe(
         &view,
         move |shell, view, event: &crate::rdp::RdpViewEvent, cx| {
-            if matches!(event, crate::rdp::RdpViewEvent::Reconnect) {
-                launch_rdp_session_async(
-                    view,
-                    secret_store.clone(),
-                    known_hosts.clone(),
-                    secret_owner.clone(),
-                    rdp.clone(),
-                    cx,
-                );
-            }
-            if let crate::rdp::RdpViewEvent::FullscreenChanged(active) = event {
-                shell.state.ui.immersive = *active;
-                if *active {
-                    shell.state.ui.modals.close_transient();
+            match event {
+                crate::rdp::RdpViewEvent::Reconnect => {
+                    launch_rdp_session_async(
+                        view,
+                        secret_store.clone(),
+                        known_hosts.clone(),
+                        secret_owner.clone(),
+                        rdp.clone(),
+                        cx,
+                    );
                 }
-                cx.notify();
-                return;
+                crate::rdp::RdpViewEvent::TrustAndReconnect {
+                    host,
+                    port,
+                    fingerprint,
+                } => {
+                    let info = transom_core::HostKeyInfo::new(
+                        "rdp-tls-sha256",
+                        fingerprint.clone(),
+                        None,
+                    );
+                    if let Err(err) = known_hosts.record(host, *port, &info) {
+                        log::warn!("更新 RDP known_hosts 指纹失败: {err}");
+                    }
+                    launch_rdp_session_async(
+                        view,
+                        secret_store.clone(),
+                        known_hosts.clone(),
+                        secret_owner.clone(),
+                        rdp.clone(),
+                        cx,
+                    );
+                }
+                crate::rdp::RdpViewEvent::FullscreenChanged(active) => {
+                    shell.state.ui.immersive = *active;
+                    if *active {
+                        shell.state.ui.modals.close_transient();
+                    }
+                    cx.notify();
+                    return;
+                }
+                _ => {}
             }
 
             let Some(tab) = shell
@@ -414,7 +439,8 @@ fn open_rdp_session(
             tab.status = match event {
                 crate::rdp::RdpViewEvent::Connected => TabStatus::Connected,
                 crate::rdp::RdpViewEvent::Disconnected => TabStatus::Disconnected,
-                crate::rdp::RdpViewEvent::Reconnect => TabStatus::Connecting,
+                crate::rdp::RdpViewEvent::Reconnect
+                | crate::rdp::RdpViewEvent::TrustAndReconnect { .. } => TabStatus::Connecting,
                 crate::rdp::RdpViewEvent::Failed(detail) => TabStatus::Failed(
                     AppError::with_detail(ErrorCode::ConnectionFailed, detail.clone()),
                 ),
@@ -487,7 +513,7 @@ fn build_rdp_cert_verifier(
             None,
         );
         match known_hosts.check(&cert.host, port, &info) {
-            Ok(transom_core::HostKeyStatus::Match) => Ok(()),
+            Ok(transom_core::HostKeyStatus::Match) => transom_rdp::TlsVerifyOutcome::Trusted,
             Ok(transom_core::HostKeyStatus::Unknown) => {
                 if let Err(err) = known_hosts.record(&cert.host, port, &info) {
                     log::warn!("记录 RDP TLS 首次信任指纹失败，忽略继续: {err}");
@@ -498,17 +524,16 @@ fn build_rdp_cert_verifier(
                         cert.sha256_fingerprint
                     );
                 }
-                Ok(())
+                transom_rdp::TlsVerifyOutcome::Trusted
             }
             Ok(transom_core::HostKeyStatus::Mismatch {
                 previous_fingerprint,
-            }) => Err(format!(
-                "服务器 TLS 公钥指纹已变更（原记录: {previous_fingerprint}，当前: {}），疑似中间人拦截",
-                cert.sha256_fingerprint
-            )),
+            }) => transom_rdp::TlsVerifyOutcome::Mismatch {
+                previous_fingerprint,
+            },
             Err(err) => {
                 log::warn!("检查 RDP known_hosts 失败，降级放行: {err}");
-                Ok(())
+                transom_rdp::TlsVerifyOutcome::Trusted
             }
         }
     })

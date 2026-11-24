@@ -27,8 +27,19 @@ pub struct TlsCertificateInfo {
     pub sha256_fingerprint: String,
 }
 
-/// TLS 证书校验回调类型；返回 `Err(reason)` 时在发送任何 NLA 凭据前中止连接。
-pub type TlsCertVerifier = Arc<dyn Fn(&TlsCertificateInfo) -> Result<(), String> + Send + Sync>;
+/// TLS 证书校验结果。
+#[derive(Debug, Clone)]
+pub enum TlsVerifyOutcome {
+    /// 校验通过。
+    Trusted,
+    /// 指纹与已知主机记录不匹配，需由用户确认是否信任并更新。
+    Mismatch { previous_fingerprint: String },
+    /// 其他校验失败原因。
+    Rejected(String),
+}
+
+/// TLS 证书校验回调类型；非 [`TlsVerifyOutcome::Trusted`] 时在发送任何 NLA 凭据前中止连接。
+pub type TlsCertVerifier = Arc<dyn Fn(&TlsCertificateInfo) -> TlsVerifyOutcome + Send + Sync>;
 
 /// RDP 客户端会话启动运行期配置。
 ///

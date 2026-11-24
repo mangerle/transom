@@ -28,6 +28,17 @@ pub enum RdpError {
     #[error("TLS 安全握手失败，主机: {host}，原因: {message}")]
     Tls { host: String, message: String },
 
+    /// TLS 服务器公钥指纹与历史信任记录不一致（疑似中间人攻击或重装系统）。
+    #[error(
+        "TLS 公钥指纹与已知主机记录不匹配，主机: {host}:{port}，原指纹: {previous_fingerprint}，当前指纹: {current_fingerprint}"
+    )]
+    TlsMismatch {
+        host: String,
+        port: u16,
+        previous_fingerprint: String,
+        current_fingerprint: String,
+    },
+
     /// 网络级别身份验证（NLA / CredSSP）认证失败。
     #[error("远程桌面 NLA/CredSSP 身份认证失败，用户名: {username}，原因: {message}")]
     Authentication { username: String, message: String },

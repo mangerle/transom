@@ -9,7 +9,7 @@ use crate::audio::TransomAudioBackend;
 use crate::clipboard::TransomCliprdrBackend;
 use crate::error::RdpError;
 use crate::session::channel::RdpOutput;
-use crate::settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo};
+use crate::settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo, TlsVerifyOutcome};
 use crate::transport::connect_stream;
 use ironrdp_connector::{ClientConnector, ClientConnectorState, ConnectionResult, ServerName};
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
@@ -76,6 +76,7 @@ pub async fn establish_connection(
         framed,
         &connector,
         &config.host,
+        config.port,
         config.cert_verifier.as_ref(),
         shutdown_rx,
     )
@@ -103,6 +104,7 @@ async fn upgrade_transport_if_needed(
     framed: TokioFramed<ErasedStream>,
     connector: &ClientConnector,
     host: &str,
+    port: u16,
     cert_verifier: Option<&TlsCertVerifier>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<(TokioFramed<ErasedStream>, Vec<u8>), RdpError> {
@@ -117,7 +119,7 @@ async fn upgrade_transport_if_needed(
 
     let (initial_stream, leftover) = framed.into_inner();
     let (tls_stream, public_key) =
-        perform_tls_upgrade(initial_stream, host, cert_verifier, shutdown_rx).await?;
+        perform_tls_upgrade(initial_stream, host, port, cert_verifier, shutdown_rx).await?;
     let erased: ErasedStream = Box::new(tls_stream);
     Ok((TokioFramed::new_with_leftover(erased, leftover), public_key))
 }
@@ -232,6 +234,7 @@ fn ensure_crypto_provider() {
 async fn perform_tls_upgrade<S>(
     stream: S,
     host: &str,
+    port: u16,
     cert_verifier: Option<&TlsCertVerifier>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<(ironrdp_tls::TlsStream<S>, Vec<u8>), RdpError>
@@ -263,13 +266,26 @@ where
     if let Some(verifier) = cert_verifier {
         let info = TlsCertificateInfo {
             host: host.to_string(),
-            sha256_fingerprint: fingerprint,
+            sha256_fingerprint: fingerprint.clone(),
         };
-        if let Err(reason) = verifier(&info) {
-            return Err(RdpError::Tls {
-                host: host.to_string(),
-                message: format!("TLS 证书校验未通过: {reason}"),
-            });
+        match verifier(&info) {
+            TlsVerifyOutcome::Trusted => {}
+            TlsVerifyOutcome::Mismatch {
+                previous_fingerprint,
+            } => {
+                return Err(RdpError::TlsMismatch {
+                    host: host.to_string(),
+                    port,
+                    previous_fingerprint,
+                    current_fingerprint: fingerprint,
+                });
+            }
+            TlsVerifyOutcome::Rejected(reason) => {
+                return Err(RdpError::Tls {
+                    host: host.to_string(),
+                    message: format!("TLS 证书校验未通过: {reason}"),
+                });
+            }
         }
     }
 
