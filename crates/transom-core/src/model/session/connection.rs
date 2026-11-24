@@ -399,7 +399,7 @@ pub struct RdpConnection {
     /// 是否启用双向文本剪贴板同步。
     #[serde(default = "default_true")]
     pub clipboard: bool,
-    /// 是否启用双向剪贴板文件流复制。
+    /// 预留字段：是否启用双向剪贴板文件流复制（当前版本仅支持文本剪贴板，保留用于配置向后兼容）。
     #[serde(default = "default_true")]
     pub file_copy: bool,
     /// 动态分辨率调整（跟随视口窗格缩放自适应重设）。
