@@ -252,8 +252,9 @@ impl SessionLoopRunner {
             return;
         }
         if let Some(update) = self.tile_extractor.extract_pending(&self.canvas)
-            && self.senders.frames.try_send(update).is_err()
+            && let Err(send_err) = self.senders.frames.try_send(update)
         {
+            self.tile_extractor.recycle_frame(send_err.into_inner());
             self.last_frame_flushed = Instant::now();
             return;
         }

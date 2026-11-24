@@ -12,9 +12,50 @@
 use ironrdp_graphics::image_processing::PixelFormat;
 use ironrdp_pdu::geometry::InclusiveRectangle;
 use ironrdp_session::image::DecodedImage;
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// 瓦片网格标准尺寸（256x256 像素）。
 pub const TILE_SIZE: u32 = 256;
+
+/// 像素缓冲池最大缓存块数，防止分辨率骤变或异常积压导致内存滞留。
+const MAX_BUFFER_POOL_SIZE: usize = 128;
+
+/// 跨线程复用的瓦片像素缓冲池。
+///
+/// 设计原理（Why）：避免每次提取瓦片都触发大块堆内存 `malloc/free`，
+/// 在 UI 侧尚未上传而被新帧覆盖淘汰时归还底层 `Vec<u8>` 容量。
+#[derive(Clone, Default)]
+pub struct TileBufferPool {
+    buffers: Arc<Mutex<Vec<Vec<u8>>>>,
+}
+
+impl TileBufferPool {
+    /// 取出一个至少具备 `capacity` 字节容量的清空缓冲。
+    pub fn acquire(&self, capacity: usize) -> Vec<u8> {
+        let mut pool = self.buffers.lock();
+        if let Some(mut buf) = pool.pop() {
+            buf.clear();
+            if buf.capacity() < capacity {
+                buf.reserve(capacity - buf.capacity());
+            }
+            return buf;
+        }
+        Vec::with_capacity(capacity)
+    }
+
+    /// 归还不再使用的像素缓冲以便后续复用（超出池上限则直接释放）。
+    pub fn release(&self, mut buf: Vec<u8>) {
+        if buf.capacity() == 0 {
+            return;
+        }
+        let mut pool = self.buffers.lock();
+        if pool.len() < MAX_BUFFER_POOL_SIZE {
+            buf.clear();
+            pool.push(buf);
+        }
+    }
+}
 
 /// 单个受损瓦片的 RGBA8 像素补丁。
 #[derive(Debug, Clone)]
@@ -157,9 +198,21 @@ pub struct TileExtractor {
     needs_full_reset: bool,
     dirty_count: usize,
     dirty_mask: Vec<bool>,
+    pool: TileBufferPool,
 }
 
 impl TileExtractor {
+    /// 获取共享像素缓冲池句柄（供 UI 侧归还被覆盖未上传的瓦片缓冲）。
+    pub fn buffer_pool(&self) -> TileBufferPool {
+        self.pool.clone()
+    }
+
+    /// 回收未能发送出去的帧载荷，将其像素缓冲归还池中复用。
+    pub fn recycle_frame(&self, frame: FrameUpdate) {
+        for patch in frame.patches {
+            self.pool.release(patch.rgba);
+        }
+    }
     /// 强制重置状态（如收到 `DeactivateAll` 重建画布时调用），确保下一帧执行全量同步。
     pub fn reset(&mut self) {
         self.width = 0;
@@ -236,7 +289,7 @@ impl TileExtractor {
             let mut patches = Vec::with_capacity(total);
             for r in 0..rows {
                 for c in 0..cols {
-                    patches.push(extract_tile_patch(canvas, c, r));
+                    patches.push(extract_tile_patch(canvas, c, r, &self.pool));
                 }
             }
             self.seq = self.seq.wrapping_add(1);
@@ -260,7 +313,7 @@ impl TileExtractor {
             if is_dirty {
                 let c = (index as u32) % cols;
                 let r = (index as u32) / cols;
-                patches.push(extract_tile_patch(canvas, c, r));
+                patches.push(extract_tile_patch(canvas, c, r, &self.pool));
             }
         }
 
@@ -300,22 +353,26 @@ impl TileExtractor {
 
 /// 从已解码位图画布中提取单个瓦片的 RGBA8 像素补丁。
 ///
-/// 设计原理（Why）：当画布直接以 `PixelFormat::RgbA32` 初始化时，无需执行 R/B 通道交换，
-/// 直接按行拷贝并置不透明 Alpha；同时保留 `BgrX32`/`BgrA32` 回退分支以兼容不同解码格式，
-/// 并使用 `Vec::with_capacity` 避免先清零再覆写的无效内存写入。
-fn extract_tile_patch(canvas: &DecodedImage, col: u32, row: u32) -> TilePatch {
+/// 设计原理（Why）：
+/// - `PixelFormat::RgbA32` 已是标准不透明 RGBA8 排列，直接整行 `memcpy`（`extend_from_slice`），
+///   彻底省去逐像素改写 Alpha 字节的循环开销；
+/// - `RgbX32` 仅置 Alpha=255，`BgrA32`/`BgrX32` 执行 R/B 交换；
+/// - 底层 `Vec<u8>` 从 [`TileBufferPool`] 获取并复用。
+fn extract_tile_patch(
+    canvas: &DecodedImage,
+    col: u32,
+    row: u32,
+    pool: &TileBufferPool,
+) -> TilePatch {
     let (left, top, tile_w, tile_h) =
         compute_tile_bounds(canvas.width(), canvas.height(), col, row);
     let tile_w_bytes = (tile_w as usize) * 4;
     let total_bytes = tile_w_bytes * (tile_h as usize);
-    let mut rgba = Vec::with_capacity(total_bytes);
+    let mut rgba = pool.acquire(total_bytes);
 
     let canvas_stride = usize::from(canvas.width()) * 4;
     let raw_pixels = canvas.data();
-    let is_rgba_order = matches!(
-        canvas.pixel_format(),
-        PixelFormat::RgbA32 | PixelFormat::RgbX32
-    );
+    let format = canvas.pixel_format();
 
     for y in 0..tile_h as usize {
         let src_start = (top as usize + y) * canvas_stride + (left as usize) * 4;
@@ -323,15 +380,21 @@ fn extract_tile_patch(canvas: &DecodedImage, col: u32, row: u32) -> TilePatch {
 
         if src_end <= raw_pixels.len() {
             let src_row = &raw_pixels[src_start..src_end];
-            if is_rgba_order {
-                let row_offset = rgba.len();
-                rgba.extend_from_slice(src_row);
-                for px in rgba[row_offset..].as_chunks_mut::<4>().0 {
-                    px[3] = 255;
+            match format {
+                PixelFormat::RgbA32 => {
+                    rgba.extend_from_slice(src_row);
                 }
-            } else {
-                for src in src_row.as_chunks::<4>().0 {
-                    rgba.extend_from_slice(&[src[2], src[1], src[0], 255]);
+                PixelFormat::RgbX32 => {
+                    let row_offset = rgba.len();
+                    rgba.extend_from_slice(src_row);
+                    for px in rgba[row_offset..].as_chunks_mut::<4>().0 {
+                        px[3] = 255;
+                    }
+                }
+                _ => {
+                    for src in src_row.as_chunks::<4>().0 {
+                        rgba.extend_from_slice(&[src[2], src[1], src[0], 255]);
+                    }
                 }
             }
         } else {
