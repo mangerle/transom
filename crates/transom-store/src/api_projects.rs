@@ -6,7 +6,7 @@
 use crate::file_io::{read_json, write_json};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use transom_api::{API_SCHEMA_VERSION, ApiProjectStore, ApiRegistry};
+use transom_api::{API_SCHEMA_VERSION, ApiProject, ApiProjectStore, ApiRegistry};
 use transom_core::{AppError, ErrorCode};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,6 +15,12 @@ struct ProjectsFile {
     version: u32,
     #[serde(default)]
     projects: Vec<transom_api::ApiProject>,
+}
+
+#[derive(Serialize)]
+struct ProjectsFileRef<'a> {
+    version: u32,
+    projects: &'a [ApiProject],
 }
 
 fn schema_version() -> u32 {
@@ -58,9 +64,9 @@ impl ApiProjectStore for JsonApiProjectStore {
     fn save(&self, registry: &ApiRegistry) -> Result<(), AppError> {
         write_json(
             &self.path,
-            &ProjectsFile {
+            &ProjectsFileRef {
                 version: API_SCHEMA_VERSION,
-                projects: registry.projects.clone(),
+                projects: &registry.projects,
             },
         )
     }
