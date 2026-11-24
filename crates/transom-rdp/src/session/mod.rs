@@ -19,6 +19,8 @@ use tokio::sync::mpsc;
 /// RDP 桌面会话句柄。
 pub struct RdpSession {
     pub(crate) input_tx: mpsc::Sender<RdpInput>,
+    #[allow(dead_code)]
+    pub(crate) thread_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl RdpSession {
@@ -73,15 +75,25 @@ impl RdpSession {
                 });
             });
 
-        if let Err(e) = spawn_result {
-            log::error!("派生 RDP 独立会话线程失败: {e}");
-            let _ = output_tx_err.try_send(RdpOutput::Terminated(RdpError::Network {
-                address: host_for_err,
-                source: std::io::Error::other(e.to_string()),
-            }));
-        }
+        let thread_handle = match spawn_result {
+            Ok(handle) => Some(handle),
+            Err(e) => {
+                log::error!("派生 RDP 独立会话线程失败: {e}");
+                let _ = output_tx_err.try_send(RdpOutput::Terminated(RdpError::Network {
+                    address: host_for_err,
+                    source: std::io::Error::other(e.to_string()),
+                }));
+                None
+            }
+        };
 
-        (Self { input_tx }, output_rx)
+        (
+            Self {
+                input_tx,
+                thread_handle,
+            },
+            output_rx,
+        )
     }
 
     /// 发送输入指令。若通道已满则等待；对端关闭时返回错误。

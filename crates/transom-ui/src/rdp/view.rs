@@ -31,15 +31,15 @@ pub struct RdpView {
     pub session_id: SessionId,
     #[allow(dead_code)]
     pub title: String,
-    state: RdpViewState,
+    pub(crate) state: RdpViewState,
     pub(crate) frame: Option<Arc<TiledDesktopFrame>>,
     session: Option<RdpSession>,
     is_muted: bool,
     pub(crate) is_scaled: bool,
     pub(crate) last_mouse_pos: Option<(u16, u16)>,
-    last_mouse_sent_at: std::time::Instant,
-    scroll_remainder_x: f32,
-    scroll_remainder_y: f32,
+    pub(crate) last_mouse_sent_at: std::time::Instant,
+    pub(crate) scroll_remainder_x: f32,
+    pub(crate) scroll_remainder_y: f32,
     pub(crate) cursor: Option<CursorUpdate>,
     pub(crate) viewport_bounds: Bounds<Pixels>,
     last_synced_clipboard: Option<String>,
@@ -284,168 +284,35 @@ impl Render for RdpView {
             .bg(gpui_kit::rgb(0x101010))
             .cursor(cursor_style)
             .overflow_hidden()
-            .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, _| {
-                if let RdpViewState::Connected { width, height } = this.state
-                    && let Some((x, y)) = crate::rdp::input::map_pointer_position(
-                        event.position,
-                        this.viewport_bounds,
-                        width,
-                        height,
-                        this.is_scaled,
-                    )
-                {
-                    let is_pos_changed = this.last_mouse_pos != Some((x, y));
-                    // 流量整形节流：限制最大 125Hz 发送频率，彻底消灭通道打满造成的按键丢失
-                    let is_interval_passed = this.last_mouse_sent_at.elapsed()
-                        >= std::time::Duration::from_millis(8);
-                    if is_pos_changed && is_interval_passed {
-                        this.last_mouse_pos = Some((x, y));
-                        this.last_mouse_sent_at = std::time::Instant::now();
-                        this.send_input(RdpInput::MouseMove { x, y });
-                    } else if is_pos_changed {
-                        this.last_mouse_pos = Some((x, y));
-                    }
-                }
-            }))
-            .on_mouse_exit(cx.listener(move |this, _, _, _| {
-                // 鼠标移出远程桌面视口时自动释放修饰键，防止切换时按键卡死
-                this.last_mouse_pos = None;
-                this.send_input(RdpInput::ReleaseAllKeys);
-            }))
+            .on_mouse_move(cx.listener(|this, e, _, _| this.handle_mouse_move(e)))
+            .on_mouse_exit(cx.listener(|this, _, _, _| this.handle_mouse_exit()))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
-                    this.sync_clipboard_to_remote(cx);
-                    if let Some((x, y)) = this.last_mouse_pos {
-                        this.send_input(RdpInput::MouseMove { x, y });
-                    }
-                    if let Some(input) =
-                        crate::rdp::input::map_mouse_button(MouseButton::Left, true)
-                    {
-                        this.send_input(input);
-                    }
-                }),
+                cx.listener(|this, _, _, cx| this.handle_mouse_down(MouseButton::Left, cx)),
             )
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(move |this, _: &MouseUpEvent, _, _| {
-                    if let Some(input) =
-                        crate::rdp::input::map_mouse_button(MouseButton::Left, false)
-                    {
-                        this.send_input(input);
-                    }
-                }),
+                cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Left)),
             )
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
-                    this.sync_clipboard_to_remote(cx);
-                    if let Some((x, y)) = this.last_mouse_pos {
-                        this.send_input(RdpInput::MouseMove { x, y });
-                    }
-                    if let Some(input) =
-                        crate::rdp::input::map_mouse_button(MouseButton::Right, true)
-                    {
-                        this.send_input(input);
-                    }
-                }),
+                cx.listener(|this, _, _, cx| this.handle_mouse_down(MouseButton::Right, cx)),
             )
             .on_mouse_up(
                 MouseButton::Right,
-                cx.listener(move |this, _: &MouseUpEvent, _, _| {
-                    if let Some(input) =
-                        crate::rdp::input::map_mouse_button(MouseButton::Right, false)
-                    {
-                        this.send_input(input);
-                    }
-                }),
+                cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Right)),
             )
             .on_mouse_down(
                 MouseButton::Middle,
-                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
-                    this.sync_clipboard_to_remote(cx);
-                    if let Some((x, y)) = this.last_mouse_pos {
-                        this.send_input(RdpInput::MouseMove { x, y });
-                    }
-                    if let Some(input) =
-                        crate::rdp::input::map_mouse_button(MouseButton::Middle, true)
-                    {
-                        this.send_input(input);
-                    }
-                }),
+                cx.listener(|this, _, _, cx| this.handle_mouse_down(MouseButton::Middle, cx)),
             )
             .on_mouse_up(
                 MouseButton::Middle,
-                cx.listener(move |this, _: &MouseUpEvent, _, _| {
-                    if let Some(input) =
-                        crate::rdp::input::map_mouse_button(MouseButton::Middle, false)
-                    {
-                        this.send_input(input);
-                    }
-                }),
+                cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Middle)),
             )
-            .on_scroll(cx.listener(move |this, event: &ScrollEvent, _, _| {
-                match event.delta {
-                    ScrollDelta::Lines(p) => {
-                        let delta_y = (p.y * 120.0) as i16;
-                        let delta_x = (p.x * 120.0) as i16;
-                        if delta_y != 0 {
-                            this.send_input(RdpInput::MouseWheel {
-                                vertical: true,
-                                delta: delta_y,
-                            });
-                        }
-                        if delta_x != 0 {
-                            this.send_input(RdpInput::MouseWheel {
-                                vertical: false,
-                                delta: delta_x,
-                            });
-                        }
-                    }
-                    ScrollDelta::Pixels(p) => {
-                        // 触摸板平滑微滚动手势累加，防止微小位移截断为零
-                        this.scroll_remainder_y += f32::from(p.y);
-                        this.scroll_remainder_x += f32::from(p.x);
-
-                        let steps_y = (this.scroll_remainder_y / 10.0).trunc();
-                        if steps_y != 0.0 {
-                            this.scroll_remainder_y -= steps_y * 10.0;
-                            let delta_y = (steps_y * 120.0) as i16;
-                            this.send_input(RdpInput::MouseWheel {
-                                vertical: true,
-                                delta: delta_y,
-                            });
-                        }
-
-                        let steps_x = (this.scroll_remainder_x / 10.0).trunc();
-                        if steps_x != 0.0 {
-                            this.scroll_remainder_x -= steps_x * 10.0;
-                            let delta_x = (steps_x * 120.0) as i16;
-                            this.send_input(RdpInput::MouseWheel {
-                                vertical: false,
-                                delta: delta_x,
-                            });
-                        }
-                    }
-                }
-            }))
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
-                let key = &event.keystroke.key;
-                let is_paste = key.eq_ignore_ascii_case("v")
-                    && (event.keystroke.modifiers.control
-                        || event.keystroke.modifiers.platform);
-                if is_paste {
-                    this.sync_clipboard_to_remote(cx);
-                }
-                this.send_input(RdpInput::KeyDown {
-                    key: key.clone(),
-                });
-            }))
-            .on_key_up(cx.listener(move |this, event: &KeyUpEvent, _, _| {
-                this.send_input(RdpInput::KeyUp {
-                    key: event.keystroke.key.clone(),
-                });
-            }));
+            .on_scroll(cx.listener(|this, e, _, _| this.handle_scroll(e)))
+            .on_key_down(cx.listener(|this, e, _, cx| this.handle_key_down(e, cx)))
+            .on_key_up(cx.listener(|this, e, _, _| this.handle_key_up(e)));
 
         match &self.state {
             RdpViewState::Connected { .. } => root

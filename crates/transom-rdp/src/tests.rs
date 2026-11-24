@@ -78,7 +78,10 @@ fn session_channel_backpressure_distinction() {
     assert_eq!(INPUT_CHANNEL_CAPACITY, 128);
 
     let (input_tx, _input_rx) = tokio::sync::mpsc::channel(1);
-    let session = crate::RdpSession { input_tx };
+    let session = crate::RdpSession {
+        input_tx,
+        thread_handle: None,
+    };
     assert!(
         session
             .try_send_input(crate::RdpInput::ReleaseAllKeys)

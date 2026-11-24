@@ -148,6 +148,12 @@ fn build_client_connector(
         connector = connector.with_static_channel(ironrdp_cliprdr::Cliprdr::new(Box::new(backend)));
     }
 
+    // 挂载 DRDYNVC 动态虚拟通道，并注册 Display Control 动态通道（打通远端动态重设分辨率协议闭环）
+    let drdynvc = ironrdp_dvc::DrdynvcClient::new().with_dynamic_channel(
+        ironrdp_displaycontrol::client::DisplayControlClient::new(|_| Ok(Vec::new())),
+    );
+    connector = connector.with_static_channel(drdynvc);
+
     connector
 }
 

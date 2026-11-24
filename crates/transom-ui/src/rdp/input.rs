@@ -70,3 +70,129 @@ pub fn map_mouse_button(button: gpui_kit::MouseButton, pressed: bool) -> Option<
         pressed,
     })
 }
+
+use super::view::{RdpView, RdpViewState};
+
+impl RdpView {
+    /// 处理鼠标指针在视口内的移动事件（集成 125Hz 流量整形）。
+    pub(crate) fn handle_mouse_move(&mut self, event: &gpui_kit::MouseMoveEvent) {
+        if let RdpViewState::Connected { width, height } = self.state
+            && let Some((x, y)) = map_pointer_position(
+                event.position,
+                self.viewport_bounds,
+                width,
+                height,
+                self.is_scaled,
+            )
+        {
+            let is_pos_changed = self.last_mouse_pos != Some((x, y));
+            let is_interval_passed =
+                self.last_mouse_sent_at.elapsed() >= std::time::Duration::from_millis(8);
+            if is_pos_changed && is_interval_passed {
+                self.last_mouse_pos = Some((x, y));
+                self.last_mouse_sent_at = std::time::Instant::now();
+                self.send_input(RdpInput::MouseMove { x, y });
+            } else if is_pos_changed {
+                self.last_mouse_pos = Some((x, y));
+            }
+        }
+    }
+
+    /// 鼠标移出视口：清理状态并释放可能按住的修饰键。
+    pub(crate) fn handle_mouse_exit(&mut self) {
+        self.last_mouse_pos = None;
+        self.send_input(RdpInput::ReleaseAllKeys);
+    }
+
+    /// 处理鼠标按下：同步系统剪贴板、原子补齐最新坐标并派发点击。
+    pub(crate) fn handle_mouse_down(
+        &mut self,
+        btn: gpui_kit::MouseButton,
+        cx: &mut gpui_kit::Context<Self>,
+    ) {
+        self.sync_clipboard_to_remote(cx);
+        if let Some((x, y)) = self.last_mouse_pos {
+            self.send_input(RdpInput::MouseMove { x, y });
+        }
+        if let Some(input) = map_mouse_button(btn, true) {
+            self.send_input(input);
+        }
+    }
+
+    /// 处理鼠标抬起。
+    pub(crate) fn handle_mouse_up(&mut self, btn: gpui_kit::MouseButton) {
+        if let Some(input) = map_mouse_button(btn, false) {
+            self.send_input(input);
+        }
+    }
+
+    /// 处理滚轮事件（行滚动与触控板高精度微像素累加）。
+    pub(crate) fn handle_scroll(&mut self, event: &gpui_kit::ScrollEvent) {
+        match event.delta {
+            gpui_kit::ScrollDelta::Lines(p) => {
+                let delta_y = (p.y * 120.0) as i16;
+                let delta_x = (p.x * 120.0) as i16;
+                if delta_y != 0 {
+                    self.send_input(RdpInput::MouseWheel {
+                        vertical: true,
+                        delta: delta_y,
+                    });
+                }
+                if delta_x != 0 {
+                    self.send_input(RdpInput::MouseWheel {
+                        vertical: false,
+                        delta: delta_x,
+                    });
+                }
+            }
+            gpui_kit::ScrollDelta::Pixels(p) => {
+                self.scroll_remainder_y += f32::from(p.y);
+                self.scroll_remainder_x += f32::from(p.x);
+
+                let steps_y = (self.scroll_remainder_y / 10.0).trunc();
+                if steps_y != 0.0 {
+                    self.scroll_remainder_y -= steps_y * 10.0;
+                    let delta_y = (steps_y * 120.0) as i16;
+                    self.send_input(RdpInput::MouseWheel {
+                        vertical: true,
+                        delta: delta_y,
+                    });
+                }
+
+                let steps_x = (self.scroll_remainder_x / 10.0).trunc();
+                if steps_x != 0.0 {
+                    self.scroll_remainder_x -= steps_x * 10.0;
+                    let delta_x = (steps_x * 120.0) as i16;
+                    self.send_input(RdpInput::MouseWheel {
+                        vertical: false,
+                        delta: delta_x,
+                    });
+                }
+            }
+        }
+    }
+
+    /// 处理键盘按键按下（粘贴快捷键感知与扫描码派发）。
+    pub(crate) fn handle_key_down(
+        &mut self,
+        event: &gpui_kit::KeyDownEvent,
+        cx: &mut gpui_kit::Context<Self>,
+    ) {
+        let key = &event.keystroke.key;
+        let is_paste = key.eq_ignore_ascii_case("v")
+            && (event.keystroke.modifiers.control || event.keystroke.modifiers.platform);
+        if is_paste {
+            self.sync_clipboard_to_remote(cx);
+        }
+        self.send_input(RdpInput::KeyDown {
+            key: key.clone(),
+        });
+    }
+
+    /// 处理键盘按键抬起。
+    pub(crate) fn handle_key_up(&mut self, event: &gpui_kit::KeyUpEvent) {
+        self.send_input(RdpInput::KeyUp {
+            key: event.keystroke.key.clone(),
+        });
+    }
+}
