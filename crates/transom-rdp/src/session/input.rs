@@ -183,3 +183,94 @@ fn append_fastpath_operations(
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::time::Instant;
+
+    struct DummyWriter;
+
+    impl FramedWrite for DummyWriter {
+        type WriteAllFut<'a>
+            = Pin<Box<dyn Future<Output = std::io::Result<()>> + 'a>>
+        where
+            Self: 'a;
+
+        fn write_all<'a>(&'a mut self, _buf: &'a [u8]) -> Self::WriteAllFut<'a> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn batcher_orders_pending_mouse_before_click_and_handles_controls() {
+        let mut writer = DummyWriter;
+        let audio_muted = AtomicBool::new(false);
+        let mut resize_controller = ResizeController::new((1920, 1080));
+        let mut active_stage = ironrdp_session::ActiveStageBuilder {
+            static_channels: ironrdp_svc::StaticChannelSet::new(),
+            user_channel_id: 1001,
+            io_channel_id: 1002,
+            message_channel_id: Some(1003),
+            share_id: 1,
+            compression_type: None,
+            enable_server_pointer: false,
+            pointer_software_rendering: false,
+        }
+        .build();
+
+        let (input_tx, mut input_rx) = mpsc::channel(16);
+        input_tx
+            .send(RdpInput::MuteAudio(true))
+            .await
+            .expect("发送静音指令");
+        input_tx
+            .send(RdpInput::Resize {
+                width: 1281,
+                height: 721,
+            })
+            .await
+            .expect("发送分辨率指令");
+
+        let mut batcher = InputBatcher::default();
+        let mut ctx = InputProcessContext {
+            active_stage: &mut active_stage,
+            writer: &mut writer,
+            audio_muted: &audio_muted,
+            resize_controller: &mut resize_controller,
+        };
+
+        let outcome = batcher
+            .process_batch(
+                Some((320, 240)),
+                RdpInput::MouseButton {
+                    button: MouseBtn::Left,
+                    pressed: true,
+                },
+                &mut input_rx,
+                &mut ctx,
+            )
+            .await;
+
+        assert!(matches!(outcome, InputBatchOutcome::Continue));
+        assert!(audio_muted.load(Ordering::Relaxed));
+        assert!(ctx.resize_controller.next_deadline().is_some());
+        assert!(matches!(
+            batcher.ops_buf.first(),
+            Some(Operation::MouseMove(MousePosition { x: 320, y: 240 }))
+        ));
+        assert!(matches!(
+            batcher.ops_buf.get(1),
+            Some(Operation::MouseButtonPressed(MouseButton::Left))
+        ));
+
+        // 遇到 Disconnect 立即返回 Stop
+        let stop_outcome = batcher
+            .process_batch(None, RdpInput::Disconnect, &mut input_rx, &mut ctx)
+            .await;
+        assert!(matches!(stop_outcome, InputBatchOutcome::Stop));
+        let _ = Instant::now();
+    }
+}
