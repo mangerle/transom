@@ -215,12 +215,10 @@ fn build_client_connector(
     let rdp_config = config.to_ironrdp_config();
     let mut connector = ClientConnector::new(rdp_config, local_addr);
 
-    let mut has_rdpsnd = false;
     if config.audio {
         let backend = TransomAudioBackend::new(audio_muted);
         connector =
             connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(Box::new(backend)));
-        has_rdpsnd = true;
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -228,15 +226,14 @@ fn build_client_connector(
         let dir_trimmed = shared_dir.trim();
         if !dir_trimmed.is_empty() && std::path::Path::new(dir_trimmed).is_dir() {
             // [MS-RDPEFS] 要求服务端下发 RDPDR 包前客户端必须同时通告 rdpsnd 通道
-            if !has_rdpsnd {
+            if !config.audio {
                 let silent_audio = TransomAudioBackend::new(Arc::new(AtomicBool::new(true)));
                 connector = connector.with_static_channel(ironrdp_rdpsnd::client::Rdpsnd::new(
                     Box::new(silent_audio),
                 ));
             }
-            let rdpdr_backend = ironrdp_rdpdr_native::backend::NixRdpdrBackend::new(
-                dir_trimmed.to_string(),
-            );
+            let rdpdr_backend =
+                ironrdp_rdpdr_native::backend::NixRdpdrBackend::new(dir_trimmed.to_string());
             let drive_name = std::path::Path::new(dir_trimmed)
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -262,8 +259,7 @@ fn build_client_connector(
         None,
     ));
     if config.dynamic_resolution {
-        drdynvc =
-            drdynvc.with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())));
+        drdynvc = drdynvc.with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())));
     }
     connector = connector.with_static_channel(drdynvc);
 

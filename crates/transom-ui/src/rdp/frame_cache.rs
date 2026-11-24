@@ -250,14 +250,9 @@ impl ViewportTransform {
     ) -> Bounds<Pixels> {
         let left = snap_to_physical_pixel(self.offset_x + x * self.scale, self.scale_factor);
         let top = snap_to_physical_pixel(self.offset_y + y * self.scale, self.scale_factor);
-        let right = snap_to_physical_pixel(
-            self.offset_x + (x + w) * self.scale,
-            self.scale_factor,
-        );
-        let bottom = snap_to_physical_pixel(
-            self.offset_y + (y + h) * self.scale,
-            self.scale_factor,
-        );
+        let right = snap_to_physical_pixel(self.offset_x + (x + w) * self.scale, self.scale_factor);
+        let bottom =
+            snap_to_physical_pixel(self.offset_y + (y + h) * self.scale, self.scale_factor);
         Bounds {
             origin: viewport_origin + Point::new(px(left), px(top)),
             size: Size {

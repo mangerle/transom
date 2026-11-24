@@ -102,7 +102,10 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
             "rdp-scale-btn",
             AppIcon::Ui(UiIcon::LAYOUT),
             if params.is_scaled {
-                format!("{}（点击切换 1:1 原尺寸）", rust_i18n::t!("rdp.scale_to_fit"))
+                format!(
+                    "{}（点击切换 1:1 原尺寸）",
+                    rust_i18n::t!("rdp.scale_to_fit")
+                )
             } else {
                 format!(
                     "{}（点击切换自适应窗口）",

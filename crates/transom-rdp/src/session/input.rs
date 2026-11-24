@@ -56,7 +56,8 @@ impl InputBatcher {
     ) -> InputBatchOutcome {
         self.ops_buf.clear();
         if let Some((x, y)) = pending_mouse {
-            self.ops_buf.push(Operation::MouseMove(MousePosition { x, y }));
+            self.ops_buf
+                .push(Operation::MouseMove(MousePosition { x, y }));
         }
         if matches!(
             self.enqueue_or_handle_control(first, ctx).await,
@@ -85,7 +86,8 @@ impl InputBatcher {
     /// 单独压入一次鼠标移动操作（用于鼠标覆盖槽位独立唤醒时）。
     pub(crate) fn prepare_mouse_move(&mut self, x: u16, y: u16) {
         self.ops_buf.clear();
-        self.ops_buf.push(Operation::MouseMove(MousePosition { x, y }));
+        self.ops_buf
+            .push(Operation::MouseMove(MousePosition { x, y }));
     }
 
     /// 将当前累积的键鼠操作转换为 FastPath PDU 并交由状态机编码（零多余 `Vec` 克隆）。
@@ -116,7 +118,9 @@ impl InputBatcher {
                 InputBatchOutcome::Continue
             }
             RdpInput::ClipboardText(text) => {
-                if let Err(e) = handle_local_clipboard_copy(ctx.active_stage, ctx.writer, text).await {
+                if let Err(e) =
+                    handle_local_clipboard_copy(ctx.active_stage, ctx.writer, text).await
+                {
                     log::info!("写入 CLIPRDR 本地复制通告时连接中断: {e}");
                     return InputBatchOutcome::Stop;
                 }

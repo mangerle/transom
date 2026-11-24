@@ -32,8 +32,8 @@ impl SessionFormView {
     ) -> AnyElement {
         let icon = form.icon;
         let color = form.color;
-        let display_icon =
-            session_icon(icon).unwrap_or_else(|| default_icon_for_connection_choice(form.connection));
+        let display_icon = session_icon(icon)
+            .unwrap_or_else(|| default_icon_for_connection_choice(form.connection));
         let icon_tint = session_color(color).unwrap_or(p.primary);
         let content_entity = cx.entity();
         let content_palette = p.clone();

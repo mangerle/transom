@@ -7,10 +7,7 @@
 
 use super::types::SessionForm;
 use gpui_kit::Context;
-use transom_core::{
-    Connection, FtpConnection, RdpConnection, SerialConnection,
-    TelnetConnection,
-};
+use transom_core::{Connection, FtpConnection, RdpConnection, SerialConnection, TelnetConnection};
 use zeroize::Zeroizing;
 
 impl SessionForm {

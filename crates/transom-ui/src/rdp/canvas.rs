@@ -66,9 +66,7 @@ impl ViewportSyncHandle {
         let scale = scale_factor.max(1.0);
         state.scale_factor = scale;
 
-        if dynamic_resolution
-            && f32::from(old_size.width) > 0.0
-            && f32::from(old_size.height) > 0.0
+        if dynamic_resolution && f32::from(old_size.width) > 0.0 && f32::from(old_size.height) > 0.0
         {
             let target_w = (f32::from(bounds.size.width) * scale).round() as u16;
             let target_h = (f32::from(bounds.size.height) * scale).round() as u16;
@@ -211,7 +209,3 @@ fn paint_visible_tiles(
         }
     }
 }
-
-
-
-

@@ -26,7 +26,10 @@ use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 #[derive(Debug, Clone)]
 pub enum RdpViewState {
     Connecting,
-    Connected { width: u16, height: u16 },
+    Connected {
+        width: u16,
+        height: u16,
+    },
     Disconnected,
     HostKeyMismatch {
         host: String,
@@ -227,7 +230,8 @@ impl RdpView {
                 cx.emit(RdpViewEvent::Connected);
             }
             RdpOutput::Resized { width, height } => {
-                self.viewport_sync.set_last_sent_resize(Some((width, height)));
+                self.viewport_sync
+                    .set_last_sent_resize(Some((width, height)));
                 self.state = RdpViewState::Connected { width, height };
             }
             RdpOutput::NetworkStats {
@@ -423,12 +427,9 @@ impl RdpView {
                                         "安全警告：{host}:{port} 的 TLS 公钥指纹已变更"
                                     )),
                             )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child("如果远端未重装系统或更换证书，这可能意味着存在中间人拦截。"),
-                            )
+                            .child(div().text_xs().text_color(p.muted_foreground).child(
+                                "如果远端未重装系统或更换证书，这可能意味着存在中间人拦截。",
+                            ))
                             .child(
                                 div()
                                     .text_xs()
@@ -450,26 +451,30 @@ impl RdpView {
                                             .small()
                                             .danger()
                                             .label("信任新指纹并重连")
-                                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                                this.state = RdpViewState::Connecting;
-                                                cx.emit(RdpViewEvent::TrustAndReconnect {
-                                                    host: host_owned.clone(),
-                                                    port: port_val,
-                                                    fingerprint: fp_owned.clone(),
-                                                });
-                                                cx.notify();
-                                            })),
+                                            .on_click(cx.listener(
+                                                move |this, _: &ClickEvent, _, cx| {
+                                                    this.state = RdpViewState::Connecting;
+                                                    cx.emit(RdpViewEvent::TrustAndReconnect {
+                                                        host: host_owned.clone(),
+                                                        port: port_val,
+                                                        fingerprint: fp_owned.clone(),
+                                                    });
+                                                    cx.notify();
+                                                },
+                                            )),
                                     )
                                     .child(
                                         Button::new(ElementId::Name("rdp-cancel-trust-btn".into()))
                                             .small()
                                             .ghost()
                                             .label("取消")
-                                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                                this.state = RdpViewState::Disconnected;
-                                                cx.emit(RdpViewEvent::Disconnected);
-                                                cx.notify();
-                                            })),
+                                            .on_click(cx.listener(
+                                                |this, _: &ClickEvent, _, cx| {
+                                                    this.state = RdpViewState::Disconnected;
+                                                    cx.emit(RdpViewEvent::Disconnected);
+                                                    cx.notify();
+                                                },
+                                            )),
                                     ),
                             ),
                     )

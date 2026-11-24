@@ -416,11 +416,8 @@ fn open_rdp_session(
                     port,
                     fingerprint,
                 } => {
-                    let info = transom_core::HostKeyInfo::new(
-                        "rdp-tls-sha256",
-                        fingerprint.clone(),
-                        None,
-                    );
+                    let info =
+                        transom_core::HostKeyInfo::new("rdp-tls-sha256", fingerprint.clone(), None);
                     if let Err(err) = known_hosts.record(host, *port, &info) {
                         log::warn!("更新 RDP known_hosts 指纹失败: {err}");
                     }
@@ -501,7 +498,9 @@ fn launch_rdp_session_async(
             let password = secret_store
                 .get(&key)
                 .map(|secret| secret.map(|s| s.as_str().to_string()).unwrap_or_default())
-                .map_err(|err| format!("读取 RDP 会话密码失败，已中止连接以防触发账户锁定: {err}"))?;
+                .map_err(|err| {
+                    format!("读取 RDP 会话密码失败，已中止连接以防触发账户锁定: {err}")
+                })?;
             let (hops, hop_err) = collect_jump_hops(secret_store.as_ref(), &jump_chain);
             if let Some(err) = hop_err {
                 return Err(format!("读取 SSH 隧道跳板机凭据失败: {err}"));
@@ -567,11 +566,8 @@ fn build_rdp_cert_verifier(
     port: u16,
 ) -> transom_rdp::TlsCertVerifier {
     std::sync::Arc::new(move |cert: &transom_rdp::TlsCertificateInfo| {
-        let info = transom_core::HostKeyInfo::new(
-            "rdp-tls-sha256",
-            cert.sha256_fingerprint.clone(),
-            None,
-        );
+        let info =
+            transom_core::HostKeyInfo::new("rdp-tls-sha256", cert.sha256_fingerprint.clone(), None);
         match known_hosts.check(&cert.host, port, &info) {
             Ok(transom_core::HostKeyStatus::Match) => transom_rdp::TlsVerifyOutcome::Trusted,
             Ok(transom_core::HostKeyStatus::Unknown) => {

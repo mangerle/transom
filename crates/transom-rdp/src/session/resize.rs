@@ -99,12 +99,10 @@ impl ResizeController {
     }
 
     /// 当 DisplayControl 通道尚未就绪时，按剩余次数顺延重试，避免静默丢失。
-    pub(crate) fn requeue_if_channel_not_ready(
-        &mut self,
-        target: (u16, u16, u32),
-        now: Instant,
-    ) {
-        if self.retries_left > 0 && ((target.0, target.1) != self.current || target.2 != self.current_scale) {
+    pub(crate) fn requeue_if_channel_not_ready(&mut self, target: (u16, u16, u32), now: Instant) {
+        if self.retries_left > 0
+            && ((target.0, target.1) != self.current || target.2 != self.current_scale)
+        {
             self.retries_left -= 1;
             self.pending = Some(target);
             self.deadline = Some(now + RESIZE_DEBOUNCE_INTERVAL);

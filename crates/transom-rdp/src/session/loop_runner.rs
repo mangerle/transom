@@ -134,9 +134,7 @@ impl SessionLoopRunner {
             consecutive_decode_errors: 0,
             in_surface_frame_since: None,
             peer_addr,
-            latest_rtt_ms: Arc::new(AtomicU32::new(
-                initial_rtt_ms.unwrap_or(NO_RTT_SENTINEL),
-            )),
+            latest_rtt_ms: Arc::new(AtomicU32::new(initial_rtt_ms.unwrap_or(NO_RTT_SENTINEL))),
             rx_bytes_accum: 0,
             last_stats_at: Instant::now(),
             started_at: Instant::now(),
@@ -433,12 +431,10 @@ impl SessionLoopRunner {
         let is_fastpath = matches!(action, ironrdp_pdu::Action::FastPath);
         let received_at =
             MonotonicInstant::from_millis(self.started_at.elapsed().as_millis() as u64);
-        match self.active_stage.process(
-            &mut self.canvas,
-            action,
-            payload,
-            Some(received_at),
-        ) {
+        match self
+            .active_stage
+            .process(&mut self.canvas, action, payload, Some(received_at))
+        {
             Ok(outputs) => {
                 self.consecutive_decode_errors = 0;
                 let action = dispatch_stage_outputs(writer, &self.senders.events, &outputs).await;

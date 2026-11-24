@@ -491,7 +491,7 @@ mod tests {
             right: 350,
             bottom: 350,
         };
-        extractor.mark_dirty(512, 512, &[rect_a.clone()]);
+        extractor.mark_dirty(512, 512, std::slice::from_ref(&rect_a));
         extractor.mark_dirty(512, 512, &[rect_b]);
         assert!(extractor.has_pending());
 
