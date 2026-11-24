@@ -69,7 +69,7 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
         .child(toolbar_icon_button(
             "rdp-cad-btn",
             AppIcon::Ui(UiIcon::KEYBOARD),
-            "发送 Ctrl+Alt+Del".to_string(),
+            rust_i18n::t!("rdp.send_cad").to_string(),
             false,
             false,
             params.on_send_cad,
@@ -77,7 +77,7 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
         .child(toolbar_icon_button(
             "rdp-win-btn",
             AppIcon::Ui(UiIcon::DESKTOP),
-            "发送 Win 键".to_string(),
+            rust_i18n::t!("rdp.send_win").to_string(),
             false,
             false,
             params.on_send_win,
@@ -90,9 +90,13 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
                 AppIcon::Custom(CustomIcon::VOLUME_ON)
             },
             if params.is_muted {
-                format!("{}（点击开启声音）", rust_i18n::t!("rdp.muted"))
+                rust_i18n::t!("rdp.muted_tooltip", status = rust_i18n::t!("rdp.muted")).to_string()
             } else {
-                format!("{}（点击静音）", rust_i18n::t!("rdp.sound_on"))
+                rust_i18n::t!(
+                    "rdp.sound_on_tooltip",
+                    status = rust_i18n::t!("rdp.sound_on")
+                )
+                .to_string()
             },
             !params.is_muted,
             false,
@@ -102,15 +106,17 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
             "rdp-scale-btn",
             AppIcon::Ui(UiIcon::LAYOUT),
             if params.is_scaled {
-                format!(
-                    "{}（点击切换 1:1 原尺寸）",
-                    rust_i18n::t!("rdp.scale_to_fit")
+                rust_i18n::t!(
+                    "rdp.scale_to_fit_tooltip",
+                    status = rust_i18n::t!("rdp.scale_to_fit")
                 )
+                .to_string()
             } else {
-                format!(
-                    "{}（点击切换自适应窗口）",
-                    rust_i18n::t!("rdp.original_scale")
+                rust_i18n::t!(
+                    "rdp.original_scale_tooltip",
+                    status = rust_i18n::t!("rdp.original_scale")
                 )
+                .to_string()
             },
             params.is_scaled,
             false,
@@ -124,9 +130,9 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
                 AppIcon::Custom(CustomIcon::FULLSCREEN)
             },
             if params.is_fullscreen {
-                "退出全屏".to_string()
+                rust_i18n::t!("rdp.exit_fullscreen").to_string()
             } else {
-                "全屏模式".to_string()
+                rust_i18n::t!("rdp.fullscreen").to_string()
             },
             params.is_fullscreen,
             false,
@@ -136,9 +142,9 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
             "rdp-pin-btn",
             AppIcon::Ui(UiIcon::LOCKED),
             if params.is_pinned {
-                "取消固定工具栏".to_string()
+                rust_i18n::t!("rdp.unpin_toolbar").to_string()
             } else {
-                "固定工具栏".to_string()
+                rust_i18n::t!("rdp.pin_toolbar").to_string()
             },
             params.is_pinned,
             false,
@@ -182,7 +188,10 @@ fn render_network_telemetry_badge(
         .text_xs()
         .text_color(rtt_color)
         .child(format!("{rtt_text} · {rate_text}"))
-        .tooltip(|window, cx| Tooltip::new("网络往返延时 (RTT) 与实时下行速率").build(window, cx))
+        .tooltip(|window, cx| {
+            Tooltip::new(rust_i18n::t!("rdp.network_telemetry_tooltip").to_string())
+                .build(window, cx)
+        })
         .into_any_element()
 }
 

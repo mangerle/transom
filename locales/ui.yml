@@ -261,6 +261,84 @@ rdp:
   disconnect:
     en: Disconnect
     zh-CN: 断开连接
+  send_cad:
+    en: Send Ctrl+Alt+Del
+    zh-CN: 发送 Ctrl+Alt+Del
+  send_win:
+    en: Send Win key
+    zh-CN: 发送 Win 键
+  muted_tooltip:
+    en: "%{status} (Click to unmute)"
+    zh-CN: "%{status}（点击开启声音）"
+  sound_on_tooltip:
+    en: "%{status} (Click to mute)"
+    zh-CN: "%{status}（点击静音）"
+  scale_to_fit_tooltip:
+    en: "%{status} (Click for 1:1 original size)"
+    zh-CN: "%{status}（点击切换 1:1 原尺寸）"
+  original_scale_tooltip:
+    en: "%{status} (Click to fit window)"
+    zh-CN: "%{status}（点击切换自适应窗口）"
+  exit_fullscreen:
+    en: Exit fullscreen
+    zh-CN: 退出全屏
+  fullscreen:
+    en: Fullscreen
+    zh-CN: 全屏模式
+  unpin_toolbar:
+    en: Unpin toolbar
+    zh-CN: 取消固定工具栏
+  pin_toolbar:
+    en: Pin toolbar
+    zh-CN: 固定工具栏
+  network_telemetry_tooltip:
+    en: Round-trip time (RTT) & live downstream rate
+    zh-CN: 网络往返延时 (RTT) 与实时下行速率
+  tls_fingerprint_changed:
+    en: TLS server public key fingerprint changed
+    zh-CN: TLS 服务器公钥指纹已变更
+  tls_warning_title:
+    en: "Security Warning: TLS public key fingerprint changed for %{host}:%{port}"
+    zh-CN: "安全警告：%{host}:%{port} 的 TLS 公钥指纹已变更"
+  tls_warning_desc:
+    en: "If the remote host has not been reinstalled or renewed its certificate, this may indicate a man-in-the-middle attack."
+    zh-CN: "如果远端未重装系统或更换证书，这可能意味着存在中间人拦截。"
+  tls_previous_fingerprint:
+    en: "Recorded fingerprint: %{fingerprint}"
+    zh-CN: "原记录指纹：%{fingerprint}"
+  tls_current_fingerprint:
+    en: "Current fingerprint: %{fingerprint}"
+    zh-CN: "当前新指纹：%{fingerprint}"
+  tls_trust_and_reconnect:
+    en: Trust new fingerprint & reconnect
+    zh-CN: 信任新指纹并重连
+  password_read_failed:
+    en: "Failed to read RDP session password; connection aborted to prevent account lockout: %{err}"
+    zh-CN: "读取 RDP 会话密码失败，已中止连接以防触发账户锁定: %{err}"
+  jump_credentials_failed:
+    en: "Failed to read SSH tunnel jump host credentials: %{err}"
+    zh-CN: "读取 SSH 隧道跳板机凭据失败: %{err}"
+  password_task_cancelled:
+    en: RDP session password lookup task was cancelled or aborted
+    zh-CN: 读取 RDP 会话密码任务被取消或异常中断
+  tunnel_runtime_init_failed:
+    en: "Failed to initialize RDP SSH tunnel runtime: %{err}"
+    zh-CN: "初始化 RDP SSH 隧道运行时失败: %{err}"
+  tunnel_config_empty:
+    en: SSH tunnel configuration is empty
+    zh-CN: SSH 隧道配置为空
+  tunnel_task_aborted:
+    en: RDP SSH tunnel setup task aborted unexpectedly
+    zh-CN: RDP SSH 隧道建立任务异常中断
+  tunnel_jump_connect_failed:
+    en: "Failed to connect to RDP SSH tunnel jump host: %{err}"
+    zh-CN: "连接 RDP SSH 隧道跳板机失败: %{err}"
+  tunnel_forward_start_failed:
+    en: "Failed to start RDP SSH port forwarding tunnel: %{err}"
+    zh-CN: "启动 RDP SSH 端口转发隧道失败: %{err}"
+  tunnel_no_local_port:
+    en: RDP SSH tunnel did not assign a local listening port
+    zh-CN: RDP SSH 隧道未分配本地监听端口
 
 tab:
   connecting:
@@ -636,6 +714,63 @@ form:
   rdp_file_copy:
     en: Clipboard file copy
     zh-CN: 剪贴板文件流式复制
+  rdp_res_dynamic:
+    en: Fit window
+    zh-CN: 自适应窗口
+  rdp_res_fixed:
+    en: Fixed size
+    zh-CN: 固定分辨率
+  rdp_perf_lan:
+    en: Best (LAN)
+    zh-CN: 极佳 (LAN)
+  rdp_perf_broadband:
+    en: Balanced (Broadband)
+    zh-CN: 平衡 (宽带)
+  rdp_perf_wan:
+    en: Smooth (WAN)
+    zh-CN: 流畅 (WAN)
+  rdp_sec_negotiate:
+    en: Auto negotiate
+    zh-CN: 自动协商
+  rdp_sec_rdp:
+    en: Standard RDP
+    zh-CN: 标准 RDP
+  password_keep_saved:
+    en: Password (leave blank to keep saved)
+    zh-CN: 密码（留空则保留已保存密码）
+  rdp_resolution_mode:
+    en: Resolution mode
+    zh-CN: 分辨率模式
+  rdp_fixed_width:
+    en: Fixed width (px)
+    zh-CN: 固定宽度 (px)
+  rdp_fixed_height:
+    en: Fixed height (px)
+    zh-CN: 固定高度 (px)
+  rdp_performance:
+    en: Quality preset
+    zh-CN: 画质预设
+  rdp_security:
+    en: Security protocol
+    zh-CN: 安全协议
+  rdp_shared_dir:
+    en: Shared local folder (optional)
+    zh-CN: 共享本地目录（可选）
+  rdp_shared_dir_placeholder:
+    en: e.g. /home/user/share (leave blank to disable)
+    zh-CN: 例如 /home/user/share（留空不共享）
+  err_rdp_width_range:
+    en: Fixed resolution width must be an integer between 640 and 4096
+    zh-CN: 固定分辨率宽度必须为 640 ~ 4096 之间的整数
+  err_rdp_height_range:
+    en: Fixed resolution height must be an integer between 480 and 2560
+    zh-CN: 固定分辨率高度必须为 480 ~ 2560 之间的整数
+  err_rdp_resolution_bounds:
+    en: Fixed resolution must be within 640x480 ~ 4096x2560
+    zh-CN: 固定分辨率须处于 640x480 ~ 4096x2560 范围内
+  err_rdp_shared_dir_missing:
+    en: "Specified shared folder does not exist: %{path}"
+    zh-CN: "指定的共享目录不存在: %{path}"
   serial_port:
     en: Serial device
     zh-CN: 串口设备

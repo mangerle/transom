@@ -141,16 +141,16 @@ impl SessionForm {
                 .value()
                 .trim()
                 .parse()
-                .map_err(|_| "固定分辨率宽度必须为 640 ~ 4096 之间的整数".to_string())?;
+                .map_err(|_| rust_i18n::t!("form.err_rdp_width_range").to_string())?;
             let height: u16 = self
                 .rdp_height
                 .read(cx)
                 .value()
                 .trim()
                 .parse()
-                .map_err(|_| "固定分辨率高度必须为 480 ~ 2560 之间的整数".to_string())?;
+                .map_err(|_| rust_i18n::t!("form.err_rdp_height_range").to_string())?;
             if !(640..=4096).contains(&width) || !(480..=2560).contains(&height) {
-                return Err("固定分辨率须处于 640x480 ~ 4096x2560 范围内".to_string());
+                return Err(rust_i18n::t!("form.err_rdp_resolution_bounds").to_string());
             }
             Some(transom_core::RdpDesktopSize {
                 width: width & !1,
@@ -164,7 +164,11 @@ impl SessionForm {
         } else {
             let expanded = transom_platform::paths::expand_home(&shared_dir_str);
             if !expanded.is_dir() {
-                return Err(format!("指定的共享目录不存在: {}", expanded.display()));
+                return Err(rust_i18n::t!(
+                    "form.err_rdp_shared_dir_missing",
+                    path = expanded.display()
+                )
+                .to_string());
             }
             Some(expanded.to_string_lossy().into_owned())
         };

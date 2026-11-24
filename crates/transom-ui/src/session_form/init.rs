@@ -191,7 +191,7 @@ impl SessionFormInputs {
                 window,
                 cx,
                 &seed.rdp_shared_dir,
-                "例如 /home/user/share（留空不共享）",
+                &rust_i18n::t!("form.rdp_shared_dir_placeholder"),
             ),
             forward_draft,
         }

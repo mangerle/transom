@@ -54,16 +54,16 @@ fn rdp_switch_row(
 fn render_segmented_picker<T: Copy + PartialEq + 'static>(
     prefix: &'static str,
     selected: T,
-    options: &[(T, &'static str)],
+    options: &[(T, &str)],
     on_select: impl Fn(&mut SessionForm, T) + Copy + 'static,
     cx: &mut Context<SessionFormView>,
 ) -> AnyElement {
     h_flex()
         .gap_1()
-        .children(options.iter().copied().map(|(val, label)| {
+        .children(options.iter().map(|&(val, label)| {
             Button::new(ElementId::Name(format!("{prefix}-{label}").into()))
                 .small()
-                .label(label)
+                .label(label.to_string())
                 .selected(selected == val)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     this.edit(cx, |form| on_select(form, val));
@@ -78,10 +78,12 @@ pub(crate) fn render_rdp_basic_fields(
     cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
+    let res_dynamic = rust_i18n::t!("form.rdp_res_dynamic");
+    let res_fixed = rust_i18n::t!("form.rdp_res_fixed");
     let resolution_picker = render_segmented_picker(
         "rdp-res",
         form.rdp_dynamic_resolution,
-        &[(true, "自适应窗口"), (false, "固定分辨率")],
+        &[(true, &*res_dynamic), (false, &*res_fixed)],
         |f, v| f.rdp_dynamic_resolution = v,
         cx,
     );
@@ -96,25 +98,30 @@ pub(crate) fn render_rdp_basic_fields(
         |f, v| f.rdp_color_depth = v,
         cx,
     );
+    let perf_lan = rust_i18n::t!("form.rdp_perf_lan");
+    let perf_broadband = rust_i18n::t!("form.rdp_perf_broadband");
+    let perf_wan = rust_i18n::t!("form.rdp_perf_wan");
     let performance_buttons = render_segmented_picker(
         "rdp-perf",
         form.rdp_performance,
         &[
-            (RdpPerformance::Lan, "极佳 (LAN)"),
-            (RdpPerformance::Broadband, "平衡 (宽带)"),
-            (RdpPerformance::Wan, "流畅 (WAN)"),
+            (RdpPerformance::Lan, &*perf_lan),
+            (RdpPerformance::Broadband, &*perf_broadband),
+            (RdpPerformance::Wan, &*perf_wan),
         ],
         |f, v| f.rdp_performance = v,
         cx,
     );
+    let sec_negotiate = rust_i18n::t!("form.rdp_sec_negotiate");
+    let sec_rdp = rust_i18n::t!("form.rdp_sec_rdp");
     let security_buttons = render_segmented_picker(
         "rdp-sec",
         form.rdp_security,
         &[
-            (RdpSecurity::Negotiate, "自动协商"),
+            (RdpSecurity::Negotiate, &*sec_negotiate),
             (RdpSecurity::Nla, "NLA"),
             (RdpSecurity::Tls, "TLS"),
-            (RdpSecurity::Rdp, "标准 RDP"),
+            (RdpSecurity::Rdp, &*sec_rdp),
         ],
         |f, v| f.rdp_security = v,
         cx,
@@ -155,7 +162,7 @@ pub(crate) fn render_rdp_basic_fields(
         )
         .child(optional_form_field(
             if form.base.is_some() {
-                "密码（留空则保留已保存密码）".to_string()
+                rust_i18n::t!("form.password_keep_saved").to_string()
             } else {
                 rust_i18n::t!("form.password").to_string()
             },
@@ -163,7 +170,7 @@ pub(crate) fn render_rdp_basic_fields(
             p,
         ))
         .child(serial_option_row(
-            "分辨率模式".to_string(),
+            rust_i18n::t!("form.rdp_resolution_mode").to_string(),
             resolution_picker,
             p,
         ));
@@ -174,13 +181,13 @@ pub(crate) fn render_rdp_basic_fields(
                 .gap_3()
                 .items_end()
                 .child(div().flex_1().child(number_form_field(
-                    "固定宽度 (px)".to_string(),
+                    rust_i18n::t!("form.rdp_fixed_width").to_string(),
                     true,
                     form.rdp_width.clone(),
                     p,
                 )))
                 .child(div().flex_1().child(number_form_field(
-                    "固定高度 (px)".to_string(),
+                    rust_i18n::t!("form.rdp_fixed_height").to_string(),
                     true,
                     form.rdp_height.clone(),
                     p,
@@ -195,17 +202,17 @@ pub(crate) fn render_rdp_basic_fields(
             p,
         ))
         .child(serial_option_row(
-            "画质预设".to_string(),
+            rust_i18n::t!("form.rdp_performance").to_string(),
             performance_buttons,
             p,
         ))
         .child(serial_option_row(
-            "安全协议".to_string(),
+            rust_i18n::t!("form.rdp_security").to_string(),
             security_buttons,
             p,
         ))
         .child(optional_form_field(
-            "共享本地目录（可选）".to_string(),
+            rust_i18n::t!("form.rdp_shared_dir").to_string(),
             form.rdp_shared_dir.clone(),
             p,
         ))

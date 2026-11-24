@@ -20,7 +20,7 @@ fn tunnel_runtime() -> Result<&'static Runtime, String> {
             .thread_name("transom-rdp-ssh-tunnel")
             .enable_all()
             .build()
-            .map_err(|e| format!("初始化 RDP SSH 隧道运行时失败: {e}"))
+            .map_err(|e| rust_i18n::t!("rdp.tunnel_runtime_init_failed", err = e).to_string())
     }) {
         Ok(rt) => Ok(rt),
         Err(msg) => Err(msg.clone()),
@@ -43,7 +43,7 @@ pub(crate) async fn open_ssh_tunnel_for_rdp(
     target_port: u16,
 ) -> Result<(u16, RdpTunnelGuard), String> {
     let Some(last_hop) = hops.pop() else {
-        return Err("SSH 隧道配置为空".to_string());
+        return Err(rust_i18n::t!("rdp.tunnel_config_empty").to_string());
     };
 
     let rt = tunnel_runtime()?;
@@ -63,7 +63,7 @@ pub(crate) async fn open_ssh_tunnel_for_rdp(
     });
 
     rx.await
-        .map_err(|_| "RDP SSH 隧道建立任务异常中断".to_string())?
+        .map_err(|_| rust_i18n::t!("rdp.tunnel_task_aborted").to_string())?
 }
 
 async fn establish_tunnel_on_tokio(
@@ -93,7 +93,7 @@ async fn establish_tunnel_on_tokio(
         allow_sha1_publickey_auth,
     })
     .await
-    .map_err(|e| format!("连接 RDP SSH 隧道跳板机失败: {e}"))?;
+    .map_err(|e| rust_i18n::t!("rdp.tunnel_jump_connect_failed", err = e).to_string())?;
 
     let rule = ForwardRule {
         id: transom_core::ForwardId::new(),
@@ -113,10 +113,10 @@ async fn establish_tunnel_on_tokio(
 
     let task = transom_net::start_forward(&remote, &rule)
         .await
-        .map_err(|e| format!("启动 RDP SSH 端口转发隧道失败: {e}"))?;
+        .map_err(|e| rust_i18n::t!("rdp.tunnel_forward_start_failed", err = e).to_string())?;
     let local_port = task
         .bound_port
-        .ok_or_else(|| "RDP SSH 隧道未分配本地监听端口".to_string())?;
+        .ok_or_else(|| rust_i18n::t!("rdp.tunnel_no_local_port").to_string())?;
 
     log::info!("已建立 RDP SSH 本地转发隧道: 127.0.0.1:{local_port}");
     Ok((

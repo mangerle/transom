@@ -6,6 +6,7 @@ pub mod input;
 pub mod toolbar;
 pub(crate) mod tunnel;
 pub mod view;
+mod view_render;
 
 pub use view::{RdpView, RdpViewEvent};
 
