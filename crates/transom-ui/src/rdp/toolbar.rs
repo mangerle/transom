@@ -30,92 +30,122 @@ pub struct RdpToolbarParams<'a> {
     pub on_disconnect: RdpToolbarCallback,
 }
 
-/// 渲染悬浮快捷操作条。
+fn toolbar_icon_button(
+    id: &'static str,
+    icon: UiIcon,
+    tooltip: String,
+    selected: bool,
+    danger: bool,
+    on_click: RdpToolbarCallback,
+) -> Button {
+    let mut btn = Button::new(ElementId::Name(id.into()))
+        .small()
+        .child(AppIconElement::new(AppIcon::Ui(icon)).small())
+        .tooltip(tooltip)
+        .on_click(on_click);
+    if danger {
+        btn = btn.danger();
+    } else if selected {
+        btn = btn.primary();
+    } else {
+        btn = btn.ghost();
+    }
+    btn
+}
+
+/// 渲染紧凑纯图标悬浮快捷操作条（鼠标悬停显示中文提示）。
 pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
     let p = params.palette;
     h_flex()
-        .gap_1p5()
+        .gap_1()
         .p_1()
         .rounded(p.radius.md)
         .bg(p.surface.floating)
         .border_1()
         .border_color(p.border)
         .shadow_md()
-        .child(
-            Button::new(ElementId::Name("rdp-cad-btn".into()))
-                .small()
-                .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::KEYBOARD)).small())
-                .label("Ctrl+Alt+Del")
-                .on_click(params.on_send_cad),
-        )
-        .child(
-            Button::new(ElementId::Name("rdp-win-btn".into()))
-                .small()
-                .ghost()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DESKTOP)).small())
-                .label("Win")
-                .on_click(params.on_send_win),
-        )
-        .child(
-            Button::new(ElementId::Name("rdp-mute-btn".into()))
-                .small()
-                .ghost()
-                .label(if params.is_muted {
-                    rust_i18n::t!("rdp.muted").to_string()
-                } else {
-                    rust_i18n::t!("rdp.sound_on").to_string()
-                })
-                .on_click(params.on_toggle_mute),
-        )
-        .child(
-            Button::new(ElementId::Name("rdp-scale-btn".into()))
-                .small()
-                .ghost()
-                .label(if params.is_scaled {
-                    rust_i18n::t!("rdp.scale_to_fit").to_string()
-                } else {
-                    rust_i18n::t!("rdp.original_scale").to_string()
-                })
-                .on_click(params.on_toggle_scale),
-        )
-        .child(
-            Button::new(ElementId::Name("rdp-fullscreen-btn".into()))
-                .small()
-                .ghost()
-                .child(
-                    AppIconElement::new(AppIcon::Ui(if params.is_fullscreen {
-                        UiIcon::MINIMIZE
-                    } else {
-                        UiIcon::MAXIMIZE
-                    }))
-                    .small(),
+        .child(toolbar_icon_button(
+            "rdp-cad-btn",
+            UiIcon::KEYBOARD,
+            "发送 Ctrl+Alt+Del".to_string(),
+            false,
+            false,
+            params.on_send_cad,
+        ))
+        .child(toolbar_icon_button(
+            "rdp-win-btn",
+            UiIcon::DESKTOP,
+            "发送 Win 键".to_string(),
+            false,
+            false,
+            params.on_send_win,
+        ))
+        .child(toolbar_icon_button(
+            "rdp-mute-btn",
+            if params.is_muted {
+                UiIcon::HIDE
+            } else {
+                UiIcon::LIGHTNING
+            },
+            if params.is_muted {
+                format!("{}（点击开启声音）", rust_i18n::t!("rdp.muted"))
+            } else {
+                format!("{}（点击静音）", rust_i18n::t!("rdp.sound_on"))
+            },
+            !params.is_muted,
+            false,
+            params.on_toggle_mute,
+        ))
+        .child(toolbar_icon_button(
+            "rdp-scale-btn",
+            UiIcon::LAYOUT,
+            if params.is_scaled {
+                format!("{}（点击切换 1:1 原尺寸）", rust_i18n::t!("rdp.scale_to_fit"))
+            } else {
+                format!(
+                    "{}（点击切换自适应窗口）",
+                    rust_i18n::t!("rdp.original_scale")
                 )
-                .label(if params.is_fullscreen {
-                    "退出全屏"
-                } else {
-                    "全屏"
-                })
-                .on_click(params.on_toggle_fullscreen),
-        )
-        .child(
-            Button::new(ElementId::Name("rdp-pin-btn".into()))
-                .small()
-                .ghost()
-                .label(if params.is_pinned {
-                    "取消固定"
-                } else {
-                    "固定"
-                })
-                .on_click(params.on_toggle_pin),
-        )
-        .child(
-            Button::new(ElementId::Name("rdp-disconnect-btn".into()))
-                .small()
-                .danger()
-                .child(AppIconElement::new(AppIcon::Ui(UiIcon::STOP)).small())
-                .label(rust_i18n::t!("rdp.disconnect").to_string())
-                .on_click(params.on_disconnect),
-        )
+            },
+            params.is_scaled,
+            false,
+            params.on_toggle_scale,
+        ))
+        .child(toolbar_icon_button(
+            "rdp-fullscreen-btn",
+            if params.is_fullscreen {
+                UiIcon::MINIMIZE
+            } else {
+                UiIcon::MAXIMIZE
+            },
+            if params.is_fullscreen {
+                "退出全屏".to_string()
+            } else {
+                "全屏模式".to_string()
+            },
+            params.is_fullscreen,
+            false,
+            params.on_toggle_fullscreen,
+        ))
+        .child(toolbar_icon_button(
+            "rdp-pin-btn",
+            UiIcon::LOCKED,
+            if params.is_pinned {
+                "取消固定工具栏".to_string()
+            } else {
+                "固定工具栏".to_string()
+            },
+            params.is_pinned,
+            false,
+            params.on_toggle_pin,
+        ))
+        .child(toolbar_icon_button(
+            "rdp-disconnect-btn",
+            UiIcon::STOP,
+            rust_i18n::t!("rdp.disconnect").to_string(),
+            false,
+            true,
+            params.on_disconnect,
+        ))
         .into_any_element()
 }

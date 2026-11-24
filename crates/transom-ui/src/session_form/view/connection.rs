@@ -82,18 +82,23 @@ impl SessionFormView {
             .into_any_element()
     }
 
-    /// 左侧纵向配置分组导航栏（基本信息、网络与代理、终端设置、转发、登录后命令）。
+    /// 左侧纵向配置分组导航栏（RDP 仅保留基本信息与网络与代理，过滤终端/转发/登录后命令）。
     pub(super) fn render_session_sidebar(
         &self,
         form: &SessionForm,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let sections: &[SessionFormSection] = if form.connection == ConnectionChoice::Rdp {
+            &[SessionFormSection::Basic, SessionFormSection::Network]
+        } else {
+            &SessionFormSection::ALL
+        };
         v_flex()
             .w(rems(9.5))
             .flex_none()
             .gap_1()
-            .children(SessionFormSection::ALL.into_iter().map(|section| {
+            .children(sections.iter().copied().map(|section| {
                 let active = form.section == section;
                 let id = format!("session-nav-{}", section.slug());
                 div()

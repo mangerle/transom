@@ -212,6 +212,14 @@ impl SessionFormView {
         let prev_default = default_port_for_choice(form.connection);
         let next_default = default_port_for_choice(choice);
         form.connection = choice;
+        if choice == ConnectionChoice::Rdp
+            && !matches!(
+                form.section,
+                SessionFormSection::Basic | SessionFormSection::Network
+            )
+        {
+            form.section = SessionFormSection::Basic;
+        }
 
         if prev_default != next_default {
             let current_port = form.port.read(cx).value().trim().to_string();
