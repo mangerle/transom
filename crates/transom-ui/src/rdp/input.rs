@@ -15,8 +15,11 @@ use transom_rdp::{ModifierState, MouseBtn, RdpInput};
 /// 鼠标移动流量整形间隔（125Hz）。
 const MOUSE_MOVE_THROTTLE_INTERVAL: Duration = Duration::from_millis(8);
 
-/// 触控板微像素滚动累加步长（像素）。
-const SCROLL_PIXEL_STEP: f32 = 10.0;
+/// 触控板微像素滚动最小触发阈值（像素）。
+const SCROLL_PIXEL_THRESHOLD: f32 = 4.0;
+
+/// 一格标准滚轮（120 WHEEL_DELTA）对应的逻辑像素滚动距离。
+const SCROLL_PIXELS_PER_NOTCH: f32 = 40.0;
 
 /// RDP 滚轮标准单位增量（对应 Windows WHEEL_DELTA）。
 const RDP_WHEEL_DELTA: f32 = 120.0;
@@ -29,6 +32,7 @@ pub fn map_pointer_position(
     desktop_height: u16,
     scale_to_fit: bool,
     pan_offset: (f32, f32),
+    scale_factor: f32,
 ) -> Option<(u16, u16)> {
     let transform = ViewportTransform::compute(
         viewport_bounds,
@@ -36,6 +40,7 @@ pub fn map_pointer_position(
         desktop_height,
         scale_to_fit,
         pan_offset,
+        scale_factor,
     )?;
     transform.unmap_point(viewport_bounds, cursor_pos, desktop_width, desktop_height)
 }
@@ -83,6 +88,7 @@ impl RdpView {
             height,
             self.is_scaled,
             self.input.pan_offset,
+            self.viewport_sync.scale_factor(),
         );
 
         self.input.last_mouse_pos = mapped;
@@ -142,16 +148,26 @@ impl RdpView {
                 self.input.scroll_remainder_y += f32::from(p.y);
                 self.input.scroll_remainder_x += f32::from(p.x);
 
-                let steps_y = (self.input.scroll_remainder_y / SCROLL_PIXEL_STEP).trunc();
-                if steps_y != 0.0 {
-                    self.input.scroll_remainder_y -= steps_y * SCROLL_PIXEL_STEP;
-                    self.dispatch_wheel_delta(true, (steps_y * RDP_WHEEL_DELTA) as i16);
+                if self.input.scroll_remainder_y.abs() >= SCROLL_PIXEL_THRESHOLD {
+                    let units = (self.input.scroll_remainder_y * RDP_WHEEL_DELTA
+                        / SCROLL_PIXELS_PER_NOTCH)
+                        .round() as i16;
+                    if units != 0 {
+                        self.input.scroll_remainder_y -=
+                            f32::from(units) * SCROLL_PIXELS_PER_NOTCH / RDP_WHEEL_DELTA;
+                        self.dispatch_wheel_delta(true, units);
+                    }
                 }
 
-                let steps_x = (self.input.scroll_remainder_x / SCROLL_PIXEL_STEP).trunc();
-                if steps_x != 0.0 {
-                    self.input.scroll_remainder_x -= steps_x * SCROLL_PIXEL_STEP;
-                    self.dispatch_wheel_delta(false, (steps_x * RDP_WHEEL_DELTA) as i16);
+                if self.input.scroll_remainder_x.abs() >= SCROLL_PIXEL_THRESHOLD {
+                    let units = (self.input.scroll_remainder_x * RDP_WHEEL_DELTA
+                        / SCROLL_PIXELS_PER_NOTCH)
+                        .round() as i16;
+                    if units != 0 {
+                        self.input.scroll_remainder_x -=
+                            f32::from(units) * SCROLL_PIXELS_PER_NOTCH / RDP_WHEEL_DELTA;
+                        self.dispatch_wheel_delta(false, units);
+                    }
                 }
             }
         }
@@ -167,8 +183,9 @@ impl RdpView {
             gpui_kit::ScrollDelta::Pixels(p) => (f32::from(p.x), f32::from(p.y)),
         };
         let bounds = self.viewport_sync.bounds();
-        let min_x = (f32::from(bounds.size.width) - f32::from(width)).min(0.0);
-        let min_y = (f32::from(bounds.size.height) - f32::from(height)).min(0.0);
+        let sf = self.viewport_sync.scale_factor();
+        let min_x = (f32::from(bounds.size.width) - f32::from(width) / sf).min(0.0);
+        let min_y = (f32::from(bounds.size.height) - f32::from(height) / sf).min(0.0);
         let next = (
             (self.input.pan_offset.0 + dx).clamp(min_x, 0.0),
             (self.input.pan_offset.1 + dy).clamp(min_y, 0.0),

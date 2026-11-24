@@ -120,7 +120,7 @@ impl SessionConfig {
     pub fn to_ironrdp_config(&self) -> ironrdp_connector::Config {
         let codecs = client_codecs_capabilities(&["remotefx"]).unwrap_or_default();
         let bitmap = BitmapConfig {
-            lossy_compression: true,
+            lossy_compression: !matches!(self.performance, RdpPerformance::Lan),
             color_depth: match self.color_depth {
                 RdpColorDepth::Depth32 => 32,
                 RdpColorDepth::Depth24 => 24,
@@ -136,8 +136,8 @@ impl SessionConfig {
             },
             domain: self.domain.clone(),
             enable_tls: match self.security {
-                RdpSecurity::Negotiate | RdpSecurity::Nla | RdpSecurity::Tls => true,
-                RdpSecurity::Rdp => false,
+                RdpSecurity::Negotiate | RdpSecurity::Tls => true,
+                RdpSecurity::Nla | RdpSecurity::Rdp => false,
             },
             enable_credssp: match self.security {
                 RdpSecurity::Negotiate | RdpSecurity::Nla => true,
@@ -186,16 +186,19 @@ impl SessionConfig {
             work_dir: String::new(),
             remote_application_mode: false,
             rail_support_level: RailSupportLevel::empty(),
-            support_dyn_vc_gfx_protocol: false,
+            support_dyn_vc_gfx_protocol: true,
         }
     }
 
     /// 转换为 RDP 客户端性能标志位（MS-RDPBCGR 性能优化）。
     pub fn performance_flags(&self) -> PerformanceFlags {
         match self.performance {
-            RdpPerformance::Lan => PerformanceFlags::empty(),
+            RdpPerformance::Lan => {
+                PerformanceFlags::ENABLE_DESKTOP_COMPOSITION
+                    | PerformanceFlags::ENABLE_FONT_SMOOTHING
+            }
             RdpPerformance::Broadband => {
-                PerformanceFlags::DISABLE_WALLPAPER
+                PerformanceFlags::ENABLE_FONT_SMOOTHING
                     | PerformanceFlags::DISABLE_FULLWINDOWDRAG
                     | PerformanceFlags::DISABLE_MENUANIMATIONS
             }

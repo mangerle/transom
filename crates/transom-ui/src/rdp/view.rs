@@ -201,7 +201,11 @@ impl RdpView {
         cx.spawn(async move |this, cx| {
             while let Some(update) = frames_rx.recv().await {
                 let updated = this.update(cx, |view, cx| {
-                    view.frame_cache.borrow_mut().apply_update(update);
+                    let mut cache = view.frame_cache.borrow_mut();
+                    cache.apply_update(update);
+                    while let Ok(next) = frames_rx.try_recv() {
+                        cache.apply_update(next);
+                    }
                     cx.notify();
                 });
                 if updated.is_err() {
@@ -622,6 +626,7 @@ impl RdpView {
     fn render_interactive_canvas(&self, cx: &mut Context<Self>) -> Div {
         let mut container = div()
             .size_full()
+            .bg(gpui::black())
             .cursor(CursorStyle::Arrow)
             .on_mouse_move(cx.listener(|this, e, _, cx| this.handle_mouse_move(e, cx)))
             .on_mouse_exit(cx.listener(|this, _, _, cx| this.handle_mouse_exit(cx)))

@@ -169,10 +169,16 @@ fn append_fastpath_operations(
             }
         }
         RdpInput::MouseWheel { vertical, delta } => {
-            out.push(Operation::WheelRotations(WheelRotations {
-                is_vertical: vertical,
-                rotation_units: delta,
-            }));
+            if let Some(Operation::WheelRotations(prev)) = out.last_mut()
+                && prev.is_vertical == vertical
+            {
+                prev.rotation_units = prev.rotation_units.saturating_add(delta);
+            } else {
+                out.push(Operation::WheelRotations(WheelRotations {
+                    is_vertical: vertical,
+                    rotation_units: delta,
+                }));
+            }
         }
         RdpInput::KeyDown {
             key,

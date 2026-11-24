@@ -23,7 +23,10 @@ use crate::session::resize::ResizeController;
 use crate::settings::DEFAULT_COMPRESSION_TYPE;
 use crate::tiles::{TileBufferPool, TileExtractor};
 use ironrdp_connector::connection_activation::ConnectionActivationFactory;
+use ironrdp_core::{ReadCursor, decode_cursor};
 use ironrdp_graphics::image_processing::PixelFormat;
+use ironrdp_pdu::fast_path::{FastPathHeader, FastPathUpdatePdu, Fragmentation, UpdateCode};
+use ironrdp_pdu::surface_commands::{FrameAction, SurfaceCommand};
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageBuilder};
 use ironrdp_tokio::{FramedRead, FramedWrite, TokioFramed, split_tokio_framed};
@@ -35,6 +38,9 @@ use tokio::time::MissedTickBehavior;
 
 /// 桌面图像增量帧最小聚合节流间隔（约 60 FPS）。
 const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
+/// 等待 `SurfaceCommands` `EndFrame` 的最大容忍时长，防止异常分片一直阻塞刷帧。
+const MAX_FRAME_COALESCE_DELAY: Duration = Duration::from_millis(32);
 
 /// 连续 PDU 解码失败上限，避免协议流错位后陷入无限错误循环。
 const MAX_CONSECUTIVE_DECODE_ERRORS: u32 = 16;
@@ -65,6 +71,7 @@ pub(crate) struct SessionLoopRunner {
     resize_controller: ResizeController,
     current_resolution: (u16, u16),
     consecutive_decode_errors: u32,
+    in_surface_frame_since: Option<Instant>,
 }
 
 impl SessionLoopRunner {
@@ -79,7 +86,7 @@ impl SessionLoopRunner {
 
         let width = result.desktop_size.width;
         let height = result.desktop_size.height;
-        let canvas = DecodedImage::new(PixelFormat::RgbA32, width, height);
+        let canvas = DecodedImage::new(PixelFormat::BgrX32, width, height);
 
         let active_stage = ActiveStageBuilder {
             static_channels: result.static_channels,
@@ -108,6 +115,7 @@ impl SessionLoopRunner {
             resize_controller: ResizeController::new((width, height), scale_factor_percent),
             current_resolution: (width, height),
             consecutive_decode_errors: 0,
+            in_surface_frame_since: None,
         }
     }
 
@@ -170,6 +178,9 @@ impl SessionLoopRunner {
 
             loop {
                 let has_pending = self.tile_extractor.has_pending();
+                let waiting_frame_end = self
+                    .in_surface_frame_since
+                    .is_some_and(|since| since.elapsed() < MAX_FRAME_COALESCE_DELAY);
                 let next_deadline = self.resize_controller.next_deadline();
                 if next_deadline != armed_deadline {
                     armed_deadline = next_deadline;
@@ -181,11 +192,13 @@ impl SessionLoopRunner {
                 }
 
                 tokio::select! {
+                    biased;
                     _ = self.shutdown_rx.changed() => {
                         self.send_graceful_shutdown(writer).await;
                         return LoopAction::Stop;
                     }
-                    _ = frame_tick.tick(), if has_pending => {
+                    _ = frame_tick.tick(), if has_pending && !waiting_frame_end => {
+                        self.in_surface_frame_since = None;
                         flush_dirty_tiles(
                             &mut self.tile_extractor,
                             &self.canvas,
@@ -329,6 +342,7 @@ impl SessionLoopRunner {
         payload: &[u8],
         writer: &mut W,
     ) -> LoopAction {
+        let is_fastpath = matches!(action, ironrdp_pdu::Action::FastPath);
         match self
             .active_stage
             .process(&mut self.canvas, action, payload, None)
@@ -340,6 +354,12 @@ impl SessionLoopRunner {
                     return action;
                 }
 
+                let frame_marker = if is_fastpath {
+                    inspect_fastpath_frame_marker(payload)
+                } else {
+                    None
+                };
+
                 let damages = self.active_stage.take_damage_regions();
                 if !damages.is_empty() {
                     self.tile_extractor.mark_dirty(
@@ -347,6 +367,23 @@ impl SessionLoopRunner {
                         self.canvas.height(),
                         &damages,
                     );
+                }
+
+                match frame_marker {
+                    Some(FrameAction::Begin) => {
+                        self.in_surface_frame_since.get_or_insert_with(Instant::now);
+                    }
+                    Some(FrameAction::End) => {
+                        self.in_surface_frame_since = None;
+                        if self.tile_extractor.has_pending() {
+                            flush_dirty_tiles(
+                                &mut self.tile_extractor,
+                                &self.canvas,
+                                &self.senders.frames,
+                            );
+                        }
+                    }
+                    None => {}
                 }
 
                 if let Err(e) = drive_cliprdr_events(&mut self.active_stage, writer).await {
@@ -407,8 +444,9 @@ impl SessionLoopRunner {
             return false;
         };
 
-        self.canvas = DecodedImage::new(PixelFormat::RgbA32, width, height);
+        self.canvas = DecodedImage::new(PixelFormat::BgrX32, width, height);
         self.tile_extractor.reset();
+        self.in_surface_frame_since = None;
         self.current_resolution = (width, height);
         self.resize_controller.set_current((width, height));
 
@@ -419,4 +457,37 @@ impl SessionLoopRunner {
             .await;
         true
     }
+}
+
+/// 窥视未压缩 FastPath SurfaceCommands 中的帧边界标记（`Begin` / `End`），用于整帧合并提交。
+fn inspect_fastpath_frame_marker(packet: &[u8]) -> Option<FrameAction> {
+    let mut input = ReadCursor::new(packet);
+    let header = decode_cursor::<FastPathHeader>(&mut input).ok()?;
+    if !header.flags.is_empty() {
+        return None;
+    }
+
+    let mut last_marker = None;
+    while !input.is_empty() {
+        let Ok(update) = decode_cursor::<FastPathUpdatePdu<'_>>(&mut input) else {
+            break;
+        };
+        if update.update_code != UpdateCode::SurfaceCommands
+            || update.fragmentation != Fragmentation::Single
+            || update.compression_flags.is_some_and(|f| !f.is_empty())
+        {
+            continue;
+        }
+        let mut cmd_cur = ReadCursor::new(update.data);
+        while !cmd_cur.is_empty() {
+            match decode_cursor::<SurfaceCommand<'_>>(&mut cmd_cur) {
+                Ok(SurfaceCommand::FrameMarker(marker)) => {
+                    last_marker = Some(marker.frame_action);
+                }
+                Ok(SurfaceCommand::SetSurfaceBits(_) | SurfaceCommand::StreamSurfaceBits(_)) => {}
+                Err(_) => break,
+            }
+        }
+    }
+    last_marker
 }

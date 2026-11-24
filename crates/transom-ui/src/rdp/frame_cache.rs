@@ -24,6 +24,7 @@ pub(crate) struct TiledFrameCache {
     pub(crate) tiles: Vec<Option<Arc<RenderImage>>>,
     pending_reset: bool,
     pending_size: Option<(u16, u16, u32, u32)>,
+    pending_is_bgra: bool,
     pending_patches: Vec<Option<TilePatch>>,
     stale_images: Vec<Arc<RenderImage>>,
     buffer_pool: Option<TileBufferPool>,
@@ -77,6 +78,7 @@ impl TiledFrameCache {
         }
 
         let cols = self.pending_size.map_or(self.cols, |(_, _, c, _)| c) as usize;
+        self.pending_is_bgra = update.is_bgra;
         for patch in update.patches {
             let idx = (patch.row as usize)
                 .saturating_mul(cols)
@@ -114,9 +116,11 @@ impl TiledFrameCache {
                 .saturating_mul(self.cols as usize)
                 .saturating_add(patch.col as usize);
             if idx < self.tiles.len() {
-                // GPUI RenderImage 内部固定按 BGRA8 采样，上传前原地交换 R/B 通道
-                for px in patch.rgba.as_chunks_mut::<4>().0 {
-                    px.swap(0, 2);
+                // 仅在输入缓冲非 BGRA8 时原地交换 R/B 通道；BgrA32/BgrX32 直出零转换
+                if !self.pending_is_bgra {
+                    for px in patch.rgba.as_chunks_mut::<4>().0 {
+                        px.swap(0, 2);
+                    }
                 }
                 if let Some(rgba) = RgbaImage::from_raw(patch.width, patch.height, patch.rgba) {
                     let img = Arc::new(RenderImage::new(vec![Frame::new(rgba)]));
@@ -172,16 +176,23 @@ pub(crate) struct ViewportTransform {
     pub(crate) scale: f32,
     pub(crate) offset_x: f32,
     pub(crate) offset_y: f32,
+    pub(crate) scale_factor: f32,
+}
+
+#[inline]
+fn snap_to_physical_pixel(logical: f32, scale_factor: f32) -> f32 {
+    (logical * scale_factor).round() / scale_factor
 }
 
 impl ViewportTransform {
-    /// 根据视口物理矩形、远端桌面尺寸、缩放模式与 1:1 模式平移偏移计算映射变换。
+    /// 根据视口物理矩形、远端桌面尺寸、缩放模式、1:1 模式平移偏移与屏幕 DPI 缩放计算映射变换。
     pub(crate) fn compute(
         viewport_bounds: Bounds<Pixels>,
         desktop_width: u16,
         desktop_height: u16,
         scale_to_fit: bool,
         pan_offset: (f32, f32),
+        scale_factor: f32,
     ) -> Option<Self> {
         if desktop_width == 0 || desktop_height == 0 {
             return None;
@@ -192,32 +203,43 @@ impl ViewportTransform {
             return None;
         }
 
+        let sf = scale_factor.max(1.0);
         let desk_w = f32::from(desktop_width);
         let desk_h = f32::from(desktop_height);
         if scale_to_fit {
-            let scale = (view_w / desk_w).min(view_h / desk_h);
+            let phys_w = view_w * sf;
+            let phys_h = view_h * sf;
+            // 若远端像素分辨率与本地物理视口几乎一致（<=2px 容差），锁定 1:1 物理像素点对点渲染
+            let scale = if (phys_w - desk_w).abs() <= 2.0 && (phys_h - desk_h).abs() <= 2.0 {
+                1.0 / sf
+            } else {
+                (view_w / desk_w).min(view_h / desk_h)
+            };
             if scale <= 0.0 {
                 return None;
             }
-            let offset_x = (view_w - desk_w * scale) / 2.0;
-            let offset_y = (view_h - desk_h * scale) / 2.0;
+            let offset_x = snap_to_physical_pixel((view_w - desk_w * scale) / 2.0, sf);
+            let offset_y = snap_to_physical_pixel((view_h - desk_h * scale) / 2.0, sf);
             Some(Self {
                 scale,
                 offset_x,
                 offset_y,
+                scale_factor: sf,
             })
         } else {
-            let min_x = (view_w - desk_w).min(0.0);
-            let min_y = (view_h - desk_h).min(0.0);
+            let scale = 1.0 / sf;
+            let min_x = (view_w - desk_w * scale).min(0.0);
+            let min_y = (view_h - desk_h * scale).min(0.0);
             Some(Self {
-                scale: 1.0,
-                offset_x: pan_offset.0.clamp(min_x, 0.0),
-                offset_y: pan_offset.1.clamp(min_y, 0.0),
+                scale,
+                offset_x: snap_to_physical_pixel(pan_offset.0.clamp(min_x, 0.0), sf),
+                offset_y: snap_to_physical_pixel(pan_offset.1.clamp(min_y, 0.0), sf),
+                scale_factor: sf,
             })
         }
     }
 
-    /// 将远端桌面局部矩形映射为视口绝对绘制包围盒。
+    /// 将远端桌面局部矩形映射为视口绝对绘制包围盒（四边对齐物理像素以消除模糊与接缝）。
     pub(crate) fn map_desktop_rect(
         &self,
         viewport_origin: Point<Pixels>,
@@ -226,15 +248,21 @@ impl ViewportTransform {
         w: f32,
         h: f32,
     ) -> Bounds<Pixels> {
+        let left = snap_to_physical_pixel(self.offset_x + x * self.scale, self.scale_factor);
+        let top = snap_to_physical_pixel(self.offset_y + y * self.scale, self.scale_factor);
+        let right = snap_to_physical_pixel(
+            self.offset_x + (x + w) * self.scale,
+            self.scale_factor,
+        );
+        let bottom = snap_to_physical_pixel(
+            self.offset_y + (y + h) * self.scale,
+            self.scale_factor,
+        );
         Bounds {
-            origin: viewport_origin
-                + Point::new(
-                    px(self.offset_x + x * self.scale),
-                    px(self.offset_y + y * self.scale),
-                ),
+            origin: viewport_origin + Point::new(px(left), px(top)),
             size: Size {
-                width: px(w * self.scale),
-                height: px(h * self.scale),
+                width: px((right - left).max(0.0)),
+                height: px((bottom - top).max(0.0)),
             },
         }
     }

@@ -5,7 +5,7 @@
 //! 并使用统一主题调色板 [`Palette`] 与标准矢量图标，确保亮色/暗色主题下视觉层级一致。
 
 use crate::palette::Palette;
-use gpui_kit::base::h_flex;
+use gpui_kit::base::{Selectable, h_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::*;
@@ -45,10 +45,8 @@ fn toolbar_icon_button(
         .on_click(on_click);
     if danger {
         btn = btn.danger();
-    } else if selected {
-        btn = btn.primary();
     } else {
-        btn = btn.ghost();
+        btn = btn.ghost().selected(selected);
     }
     btn
 }
@@ -114,9 +112,9 @@ pub fn render_rdp_toolbar(params: RdpToolbarParams<'_>) -> AnyElement {
         .child(toolbar_icon_button(
             "rdp-fullscreen-btn",
             if params.is_fullscreen {
-                UiIcon::MINIMIZE
+                UiIcon::COLLAPSE_ALL
             } else {
-                UiIcon::MAXIMIZE
+                UiIcon::EXPAND_ALL
             },
             if params.is_fullscreen {
                 "退出全屏".to_string()

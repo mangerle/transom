@@ -12,6 +12,10 @@ use crate::session::channel::RdpOutput;
 use crate::settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo, TlsVerifyOutcome};
 use crate::transport::connect_stream;
 use ironrdp_connector::{ClientConnector, ClientConnectorState, ConnectionResult, ServerName};
+use ironrdp_displaycontrol::client::DisplayControlClient;
+use ironrdp_dvc::DrdynvcClient;
+use ironrdp_egfx::client::{BitmapUpdate, GraphicsPipelineClient, GraphicsPipelineHandler};
+use ironrdp_egfx::pdu::CapabilitySet;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{TokioFramed, connect_begin, connect_finalize, mark_as_upgraded};
 use sha2::{Digest, Sha256};
@@ -246,14 +250,43 @@ fn build_client_connector(
         connector = connector.with_static_channel(ironrdp_cliprdr::Cliprdr::new(Box::new(backend)));
     }
 
+    let mut drdynvc = DrdynvcClient::new().with_dynamic_channel(GraphicsPipelineClient::new(
+        Box::new(TransomGfxHandler::default()),
+        None,
+    ));
     if config.dynamic_resolution {
-        let drdynvc = ironrdp_dvc::DrdynvcClient::new().with_dynamic_channel(
-            ironrdp_displaycontrol::client::DisplayControlClient::new(|_| Ok(Vec::new())),
-        );
-        connector = connector.with_static_channel(drdynvc);
+        drdynvc =
+            drdynvc.with_dynamic_channel(DisplayControlClient::new(|_| Ok(Vec::new())));
     }
+    connector = connector.with_static_channel(drdynvc);
 
     connector
+}
+
+/// EGFX（MS-RDPEGFX）图形管线事件监听器，记录协商能力并确认首帧解码路径。
+#[derive(Default)]
+struct TransomGfxHandler {
+    logged_first_frame: AtomicBool,
+}
+
+impl GraphicsPipelineHandler for TransomGfxHandler {
+    fn on_capabilities_confirmed(&mut self, caps: &CapabilitySet) {
+        log::info!("RDP EGFX 图形管线能力协商完成: {caps:?}");
+    }
+
+    fn on_bitmap_updated(&mut self, update: &BitmapUpdate) {
+        if !self
+            .logged_first_frame
+            .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
+            log::info!(
+                "RDP EGFX 首帧解码完成，编解码器: {:?}，区域: {}x{}",
+                update.codec_id,
+                update.width,
+                update.height
+            );
+        }
+    }
 }
 
 static INIT_CRYPTO_PROVIDER: std::sync::Once = std::sync::Once::new();

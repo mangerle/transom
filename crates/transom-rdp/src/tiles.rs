@@ -15,7 +15,7 @@ use ironrdp_session::image::DecodedImage;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-/// 瓦片网格标准尺寸（256x256 像素，兼顾 GPUI Atlas 纹理数量上限与局部增量粒度）。
+/// 瓦片网格标准尺寸（256x256 像素，兼顾局部增量粒度与 GPUI Atlas 纹理缓存复用）。
 pub const TILE_SIZE: u32 = 256;
 
 /// 像素缓冲池最大缓存块数，防止分辨率骤变或异常积压导致内存滞留。
@@ -87,6 +87,8 @@ pub struct FrameUpdate {
     pub seq: u64,
     /// 是否因首次渲染或分辨率变化触发全量重置。
     pub full_reset: bool,
+    /// 像素缓冲是否已采用 BGRA8 排列（为 `true` 时 GPUI 侧可直接免交换通道上传）。
+    pub is_bgra: bool,
     /// 本帧发生变化的瓦片补丁列表。
     pub patches: Vec<TilePatch>,
 }
@@ -294,6 +296,10 @@ impl TileExtractor {
         }
 
         let next_seq = self.seq.wrapping_add(1);
+        let is_bgra = matches!(
+            canvas.pixel_format(),
+            PixelFormat::BgrA32 | PixelFormat::BgrX32
+        );
 
         if self.needs_full_reset {
             let mut patches = Vec::with_capacity(total);
@@ -309,6 +315,7 @@ impl TileExtractor {
                 rows,
                 seq: next_seq,
                 full_reset: true,
+                is_bgra,
                 patches,
             });
         }
@@ -333,6 +340,7 @@ impl TileExtractor {
             rows,
             seq: next_seq,
             full_reset: false,
+            is_bgra,
             patches,
         })
     }
@@ -390,10 +398,10 @@ fn extract_tile_patch(
         if src_end <= raw_pixels.len() {
             let src_row = &raw_pixels[src_start..src_end];
             match format {
-                PixelFormat::RgbA32 => {
+                PixelFormat::BgrA32 | PixelFormat::RgbA32 => {
                     rgba.extend_from_slice(src_row);
                 }
-                PixelFormat::RgbX32 => {
+                PixelFormat::BgrX32 | PixelFormat::RgbX32 => {
                     let row_offset = rgba.len();
                     rgba.extend_from_slice(src_row);
                     for px in rgba[row_offset..].as_chunks_mut::<4>().0 {
@@ -435,6 +443,7 @@ mod tests {
             .extract(&canvas, &[])
             .expect("首次提取应产出全量帧");
         assert!(first.full_reset);
+        assert!(first.is_bgra);
         assert_eq!(first.cols, 2);
         assert_eq!(first.rows, 2);
         assert_eq!(first.seq, 1);
@@ -490,6 +499,7 @@ mod tests {
         let first_try = extractor
             .extract_pending(&canvas)
             .expect("应产出 2 个脏瓦片");
+        assert!(!first_try.is_bgra);
         assert_eq!(first_try.patches.len(), 2);
         assert_eq!(first_try.seq, 2);
         assert!(extractor.has_pending());

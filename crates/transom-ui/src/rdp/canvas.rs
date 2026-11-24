@@ -31,6 +31,10 @@ impl ViewportSyncHandle {
         self.0.get().bounds
     }
 
+    pub(crate) fn scale_factor(&self) -> f32 {
+        self.0.get().scale_factor.max(1.0)
+    }
+
     pub(crate) fn scale_factor_percent(&self) -> u32 {
         let scale = self.0.get().scale_factor.max(1.0);
         ((scale * 100.0).round() as u32).clamp(100, 500)
@@ -130,9 +134,14 @@ fn paint_desktop_frame(
         cache.drain_stale_images(window);
     }
     let cache = frame_cache.borrow();
-    let Some(transform) =
-        ViewportTransform::compute(bounds, cache.width, cache.height, is_scaled, pan_offset)
-    else {
+    let Some(transform) = ViewportTransform::compute(
+        bounds,
+        cache.width,
+        cache.height,
+        is_scaled,
+        pan_offset,
+        window.scale_factor(),
+    ) else {
         return;
     };
 
