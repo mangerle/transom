@@ -1,6 +1,8 @@
 //! HTTP 请求体编码、表单字段与文件上载。
 
-use super::http::{AuthRequest, MAX_REQUEST_TIMEOUT_SECONDS, apply_auth, apply_cookies};
+use super::http::{
+    AuthRequest, MAX_REQUEST_TIMEOUT_SECONDS, MAX_UPLOAD_BYTES, apply_auth, apply_cookies,
+};
 use super::http_support::{
     ensure_header, header_name, header_value, method_for, read_response, request_host,
     safe_url_label,
@@ -13,8 +15,6 @@ use reqwest::multipart::{Form, Part};
 use reqwest::{Client, Url};
 use std::path::Path;
 use std::time::{Duration, Instant};
-
-const MAX_UPLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
 /// HTTP 或 GraphQL 请求在应用认证与 Cookie 前的已编码部分。
 pub(super) struct PreparedRequestParts {

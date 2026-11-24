@@ -12,6 +12,7 @@ mod cookie_editor;
 mod environment_editor;
 mod form_editor;
 mod form_editor_view;
+mod form_file;
 mod kv_editor;
 mod sidebar;
 mod sidebar_view;

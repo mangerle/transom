@@ -101,7 +101,7 @@ API 项目标签
 ### HTTP 与 GraphQL
 
 - HTTP Body 支持无请求体、JSON、Text、XML、`x-www-form-urlencoded`、`multipart/form-data` 和 Binary 文件。
-- `form-data` 字段可逐行选择 Text 或 File；文件通过系统文件选择器写入，发送时异步读取，单文件上限 64 MiB。
+- `form-data` 字段可逐行选择 Text 或 File；文件值与文本值分开保存，选择后在后台检查文件是否存在、是否为普通文件以及是否超过 64 MiB，并支持替换和清除。
 - Binary Body 通过系统文件选择器选择，发送时使用文件扩展名推测 MIME，缺失时回退为 `application/octet-stream`。
 - Query 与 Header 的值始终是文本；文件上传不属于 Query 或 Header。
 - 全局复用单个 `reqwest::Client`，保留连接池和 Keep-Alive。

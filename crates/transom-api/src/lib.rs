@@ -23,7 +23,10 @@ mod websocket;
 
 pub use assertions::{assertion_summary, evaluate_assertions};
 pub use codegen::{CodeTarget, generate_code, response_excerpt};
-pub use http::{ApiError, ApiExchange, ApiHttpService, ApiResponseSnapshot, MAX_RESPONSE_BYTES};
+pub use http::{
+    ApiError, ApiExchange, ApiHttpService, ApiResponseSnapshot, MAX_RESPONSE_BYTES,
+    MAX_UPLOAD_BYTES,
+};
 pub use id::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
 pub use import_export::{ApiExportFormat, ApiImportFormat, export_project, import_projects};
 pub use model::{

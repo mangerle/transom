@@ -398,6 +398,27 @@ api:
     choose_file:
       en: Choose file…
       zh-CN: 选择文件…
+    replace_file:
+      en: Replace file
+      zh-CN: 替换文件
+    clear_file:
+      en: Clear file
+      zh-CN: 清除文件
+    file_checking:
+      en: Checking file…
+      zh-CN: 正在检查文件…
+    file_missing:
+      en: File does not exist
+      zh-CN: 文件不存在
+    file_not_regular:
+      en: Selected path is not a file
+      zh-CN: 所选路径不是文件
+    file_too_large:
+      en: 'File is %{size}, exceeding the %{limit} limit'
+      zh-CN: 文件大小为 %{size}，超过 %{limit} 上限
+    file_unreadable:
+      en: 'Cannot read file: %{reason}'
+      zh-CN: 无法读取文件：%{reason}
     binary_file:
       en: Binary file
       zh-CN: 二进制文件

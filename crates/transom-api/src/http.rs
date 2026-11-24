@@ -19,6 +19,8 @@ use super::http_support::{
 
 /// 单次响应体上限；超出时停止读取，避免未知体量响应把界面内存打满。
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+/// 单个上传文件上限；UI 预览与发送执行共用同一阈值。
+pub const MAX_UPLOAD_BYTES: u64 = 64 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 pub(super) const MAX_REQUEST_TIMEOUT_SECONDS: u64 = 600;

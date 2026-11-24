@@ -5,20 +5,21 @@ use gpui_kit::base::h_flex;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_ui_icons::{AppIcon, AppIconElement};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-/// 菜单项构建参数：图标、文案与可选禁用态。
+/// 菜单项构建参数：图标、文案、可选勾选态与禁用态。
 ///
 /// 设计原理（Why）：
 /// - `PopupMenuItem::icon()` 会把 [`AppIcon`] 转成底层单色 `Icon` 并固定为 `12px`，
 ///   既小于工具栏的 `16px`（`control::ICON`），又会把带底色填充的图标（如文件夹）
 ///   整块涂黑。
 /// - 改为通过 `PopupMenuItem::element()` 组合 [`AppIconElement`] 与文案，尺寸和
-///   全彩 SVG 管线都与工具栏保持一致；权衡是在同一菜单中若混用左侧勾选框或带
-///   `.icon()` 的子菜单项，需将勾选侧置右以避免额外左侧占位。
+///   全彩 SVG 管线都与工具栏保持一致；权衡是组件自行把勾选态放在右侧，
+///   避免与左侧图标列争抢位置。
 pub struct MenuItem {
     label: String,
     icon: AppIcon,
+    checked: bool,
     disabled: bool,
 }
 
@@ -27,8 +28,15 @@ impl MenuItem {
         Self {
             label: label.into().to_string(),
             icon: icon.into(),
+            checked: false,
             disabled: false,
         }
+    }
+
+    /// 标记当前选项；勾选图标固定放在右侧，不挤占左侧图标列。
+    pub fn checked(mut self, checked: bool) -> Self {
+        self.checked = checked;
+        self
     }
 
     /// 置灰但保留：让用户知道功能存在，而不是在当前上下文里凭空消失。
@@ -44,6 +52,7 @@ impl MenuItem {
     ) -> PopupMenuItem {
         let label = self.label;
         let icon = self.icon;
+        let checked = self.checked;
         let disabled = self.disabled;
         let item = PopupMenuItem::element(move |_, _| {
             let icon_el = AppIconElement::new(icon)
@@ -62,6 +71,13 @@ impl MenuItem {
                         .child(icon_el),
                 )
                 .child(div().flex_1().whitespace_nowrap().child(label.clone()))
+                .when(checked, |row| {
+                    row.child(
+                        AppIconElement::new(AppIcon::Ui(UiIcon::CHECK))
+                            .with_rems(rems(control::ICON))
+                            .flex_none(),
+                    )
+                })
         })
         .disabled(disabled);
 

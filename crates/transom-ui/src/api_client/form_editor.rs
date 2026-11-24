@@ -1,5 +1,8 @@
 //! 请求表单体编辑器：支持文本字段和 multipart 文件字段。
 
+use super::form_file::{
+    FormFileStatus, field_value_from_path, inspect_file, path_from_field_value,
+};
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 use transom_api::{ApiFormField, ApiFormFieldKind};
@@ -15,17 +18,20 @@ pub(super) struct FormRow {
     pub(super) kind: ApiFormFieldKind,
     pub(super) name: Entity<InputState>,
     pub(super) value: Entity<InputState>,
+    pub(super) file_path: Option<String>,
+    pub(super) file_status: FormFileStatus,
     pub(super) description: Entity<InputState>,
     _subscriptions: [Subscription; 3],
 }
 
-/// 请求表单体三列表格。
+/// 请求表单体字段表格；multipart 模式下每行可切换文本或文件值。
 pub(crate) struct FormEditor {
     pub(super) rows: Vec<FormRow>,
     next_row_id: u64,
     syncing: bool,
     pub(super) allow_files: bool,
     file_pick_task: Option<Task<()>>,
+    file_status_task: Option<Task<()>>,
 }
 
 fn blank_field() -> ApiFormField {
@@ -49,6 +55,7 @@ impl FormEditor {
             syncing: false,
             allow_files: false,
             file_pick_task: None,
+            file_status_task: None,
         };
         editor.push_row(blank_field(), window, cx);
         editor
@@ -70,10 +77,11 @@ impl FormEditor {
         }
         self.push_row(blank_field(), window, cx);
         self.syncing = false;
+        self.refresh_file_statuses(window, cx);
         cx.notify();
     }
 
-    /// 切换是否允许文件字段；不允许时把文件行视为文本。
+    /// 切换是否允许文件字段；禁止文件时按文本语义保存和发送。
     pub(crate) fn set_allow_files(
         &mut self,
         allow_files: bool,
@@ -84,13 +92,8 @@ impl FormEditor {
             return;
         }
         self.allow_files = allow_files;
-        if !allow_files {
-            for row in &mut self.rows {
-                row.kind = ApiFormFieldKind::Text;
-            }
-            self.report(cx);
-        }
         self.ensure_trailing_blank(window, cx);
+        self.report(cx);
         cx.notify();
     }
 
@@ -98,19 +101,30 @@ impl FormEditor {
     pub(crate) fn fields(&self, cx: &App) -> Vec<ApiFormField> {
         self.rows
             .iter()
-            .map(|row| ApiFormField {
-                name: row.name.read(cx).value().trim().to_string(),
-                value: row.value.read(cx).value().to_string(),
-                description: row.description.read(cx).value().trim().to_string(),
-                enabled: row.enabled,
-                kind: if self.allow_files {
+            .filter_map(|row| {
+                let kind = if self.allow_files {
                     row.kind
                 } else {
                     ApiFormFieldKind::Text
-                },
-            })
-            .filter(|field| {
-                !field.name.is_empty() || !field.value.is_empty() || !field.description.is_empty()
+                };
+                let file_path = row.file_path.as_deref();
+                if kind == ApiFormFieldKind::File && file_path.is_none() {
+                    return None;
+                }
+                let value = if kind == ApiFormFieldKind::File {
+                    file_path.map(field_value_from_path).unwrap_or_default()
+                } else {
+                    row.value.read(cx).value().to_string()
+                };
+                let field = ApiFormField {
+                    name: row.name.read(cx).value().trim().to_string(),
+                    value,
+                    description: row.description.read(cx).value().trim().to_string(),
+                    enabled: row.enabled,
+                    kind,
+                };
+                (!field.name.is_empty() || !field.value.is_empty() || !field.description.is_empty())
+                    .then_some(field)
             })
             .collect()
     }
@@ -121,6 +135,16 @@ impl FormEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let text_value = if field.kind == ApiFormFieldKind::Text {
+            field.value.clone()
+        } else {
+            String::new()
+        };
+        let file_path = if field.kind == ApiFormFieldKind::File {
+            path_from_field_value(&field.value)
+        } else {
+            None
+        };
         let name = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.form_name_placeholder").to_string())
@@ -129,7 +153,7 @@ impl FormEditor {
         let value = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.form_value_placeholder").to_string())
-                .default_value(field.value)
+                .default_value(text_value)
         });
         let description = cx.new(|cx| {
             InputState::new(window, cx)
@@ -158,6 +182,8 @@ impl FormEditor {
             kind: field.kind,
             name,
             value,
+            file_path,
+            file_status: FormFileStatus::Unknown,
             description,
             _subscriptions: [watch_name, watch_value, watch_description],
         });
@@ -181,9 +207,15 @@ impl FormEditor {
             self.push_row(blank_field(), window, cx);
             return;
         };
-        let empty = last.name.read(cx).value().is_empty()
-            && last.value.read(cx).value().is_empty()
-            && last.description.read(cx).value().is_empty();
+        let empty = if self.allow_files && last.kind == ApiFormFieldKind::File {
+            last.name.read(cx).value().is_empty()
+                && last.file_path.is_none()
+                && last.description.read(cx).value().is_empty()
+        } else {
+            last.name.read(cx).value().is_empty()
+                && last.value.read(cx).value().is_empty()
+                && last.description.read(cx).value().is_empty()
+        };
         if !empty {
             self.push_row(blank_field(), window, cx);
         }
@@ -211,12 +243,16 @@ impl FormEditor {
         let Some(row) = self.rows.iter_mut().find(|row| row.id == id) else {
             return;
         };
+        if row.kind == kind {
+            return;
+        }
         row.kind = kind;
         if kind == ApiFormFieldKind::File && row.name.read(cx).value().trim().is_empty() {
             row.name
                 .update(cx, |input, cx| input.set_value("file", window, cx));
         }
         self.report(cx);
+        self.refresh_file_statuses(window, cx);
     }
 
     pub(super) fn pick_file(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
@@ -233,6 +269,7 @@ impl FormEditor {
             let Some(path) = paths.into_iter().next() else {
                 return;
             };
+            let path = path.to_string_lossy().to_string();
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Some(row) = this.rows.iter_mut().find(|row| row.id == id) {
                     row.kind = ApiFormFieldKind::File;
@@ -240,13 +277,22 @@ impl FormEditor {
                         row.name
                             .update(cx, |input, cx| input.set_value("file", window, cx));
                     }
-                    row.value.update(cx, |input, cx| {
-                        input.set_value(format!("file://{}", path.display()), window, cx)
-                    });
+                    row.file_path = Some(path);
+                    row.file_status = FormFileStatus::Checking;
                     this.report(cx);
+                    this.refresh_file_statuses(window, cx);
                 }
             });
         }));
+    }
+
+    pub(super) fn clear_file(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(row) = self.rows.iter_mut().find(|row| row.id == id) else {
+            return;
+        };
+        row.file_path = None;
+        row.file_status = FormFileStatus::Unknown;
+        self.report(cx);
     }
 
     pub(super) fn add_row(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -258,5 +304,48 @@ impl FormEditor {
         self.rows.retain(|row| row.id != id);
         self.ensure_trailing_blank(window, cx);
         self.report(cx);
+    }
+
+    fn refresh_file_statuses(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let allow_files = self.allow_files;
+        let files = self
+            .rows
+            .iter_mut()
+            .filter(|row| allow_files && row.kind == ApiFormFieldKind::File)
+            .filter_map(|row| {
+                let path = row.file_path.clone()?;
+                row.file_status = FormFileStatus::Checking;
+                Some((row.id, path))
+            })
+            .collect::<Vec<_>>();
+        if files.is_empty() {
+            return;
+        }
+        let inspect_paths = files.clone();
+        self.file_status_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let inspected = crate::app::spawn_blocking_local(move || {
+                inspect_paths
+                    .into_iter()
+                    .map(|(id, path)| {
+                        let status = inspect_file(&path);
+                        (id, path, status)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await;
+            let Some(inspected) = inspected else {
+                return;
+            };
+            let _ = this.update_in(cx, |this, _, cx| {
+                for (id, path, status) in inspected {
+                    if let Some(row) = this.rows.iter_mut().find(|row| row.id == id)
+                        && row.file_path.as_deref() == Some(path.as_str())
+                    {
+                        row.file_status = status;
+                    }
+                }
+                cx.notify();
+            });
+        }));
     }
 }
