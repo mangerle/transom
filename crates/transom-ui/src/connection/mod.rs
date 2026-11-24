@@ -424,7 +424,7 @@ fn open_rdp_session(
         },
     );
 
-    let tab = WorkspaceTab::new_rdp(tab_id, session.name.clone(), view, subscription);
+    let tab = WorkspaceTab::new_rdp(tab_id, session, view, subscription);
     app_state.workspace.create_group_for_tab(&tab);
     app_state.workspace.tabs.push(tab);
     app_state.workspace.active_tab = Some(tab_id);

@@ -30,11 +30,15 @@ impl WorkspaceTab {
     }
 
     pub(crate) fn session(&self) -> Option<&Session> {
-        self.session_tab().map(|session| &session.session)
+        match &self.content {
+            TabContent::Session(session) => Some(&session.session),
+            TabContent::Rdp(rdp) => Some(&rdp.session),
+            _ => None,
+        }
     }
 
     pub(crate) fn session_id(&self) -> Option<SessionId> {
-        self.session_tab().map(|session| session.session_id)
+        self.session().map(|session| session.id)
     }
 
     pub(crate) fn connection_id(&self) -> Option<ConnectionId> {
