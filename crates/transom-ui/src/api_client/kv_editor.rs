@@ -209,13 +209,13 @@ impl Render for KvEditor {
         let border = theme.border;
         let last = self.rows.len().saturating_sub(1);
         let header = h_flex()
-            .h(rems(size::PANE_HEADER_HEIGHT))
+            .h(rems(size::LARGE_HEADER_HEIGHT))
             .bg(theme.muted)
             .text_size(rems(typography::CAPTION))
             .text_color(theme.muted_foreground)
             .border_color(border)
             .border_b_1()
-            .child(div().w(rems(2.0)).flex_none())
+            .child(div().w(rems(3.0)).flex_none())
             .child(
                 h_flex()
                     .flex_1()
@@ -260,7 +260,7 @@ impl Render for KvEditor {
                             .child(rust_i18n::t!("api.request.parameter_description").to_string()),
                     ),
             )
-            .child(div().w(rems(2.0)).flex_none());
+            .child(div().w(rems(3.0)).flex_none());
 
         let rows = self.rows.iter().enumerate().map(|(index, row)| {
             let blank = index == last;
@@ -269,14 +269,14 @@ impl Render for KvEditor {
             let remove = cx.entity().downgrade();
             h_flex()
                 .id(("api-kv-row", id))
-                .h(rems(size::TREE_ROW_HEIGHT))
+                .h(rems(size::LARGE_HEADER_HEIGHT))
                 .items_center()
                 .border_color(border)
-                .border_t_1()
+                .border_b_1()
                 .when(!blank && !row.enabled, |row| row.opacity(0.45))
                 .child(
                     div()
-                        .w(rems(2.0))
+                        .w(rems(3.0))
                         .flex_none()
                         .h_full()
                         .flex()
@@ -319,6 +319,7 @@ impl Render for KvEditor {
                                 .h_full()
                                 .flex()
                                 .items_center()
+                                .px(rems(space::SM))
                                 .border_l_1()
                                 .border_color(border)
                                 .child(Input::new(&row.name).small().appearance(false)),
@@ -330,6 +331,7 @@ impl Render for KvEditor {
                                 .h_full()
                                 .flex()
                                 .items_center()
+                                .px(rems(space::SM))
                                 .border_l_1()
                                 .border_color(border)
                                 .child(Input::new(&row.value).small().appearance(false)),
@@ -342,6 +344,7 @@ impl Render for KvEditor {
                                 .h_full()
                                 .flex()
                                 .items_center()
+                                .px(rems(space::SM))
                                 .border_l_1()
                                 .border_color(border)
                                 .child(Input::new(&row.description).small().appearance(false)),
@@ -349,7 +352,7 @@ impl Render for KvEditor {
                 )
                 .child(
                     div()
-                        .w(rems(2.0))
+                        .w(rems(3.0))
                         .flex_none()
                         .h_full()
                         .flex()
