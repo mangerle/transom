@@ -1,6 +1,21 @@
 # API 客户端迁移
 
-本文记录 CyberAPI 桌面核心能力迁入 Transom 的边界、结构与验收结果。本阶段不增加账号、团队、邀请、服务端同步或云端项目，不复用 CyberAPI 的 crate。
+本文记录 CyberAPI 桌面核心能力迁入 Transom 的范围、架构、存储和验收边界。本阶段只做桌面端本地 API 客户端，不增加账号、团队、邀请、权限、服务端同步或云端项目，也不直接引入 CyberAPI 的 crate。
+
+## 结论与边界
+
+当前已完成首版能力闭环，覆盖以下功能：
+
+- HTTP、GraphQL、原始 gRPC 和 WebSocket 请求。
+- Bearer、Basic、OAuth 2.0 client credentials 和 AWS SigV4。
+- Cookie、环境变量与项目内请求历史。
+- cURL、Postman 2.1、OpenAPI 3 JSON/YAML 的基础导入导出。
+- 文本与 JSON 路径断言。
+- cURL、JavaScript fetch、Python requests、Rust reqwest 代码生成。
+- 本地固定路由 Mock HTTP 服务。
+- API 项目标签跨重启恢复。
+
+这里的“完成”指 Transom 迁移首版可用，不等同于 CyberAPI 功能的逐项全量复制。高级补全、脚本执行和完整协议生态仍按下方边界保留。
 
 ## 产品入口
 
@@ -11,25 +26,25 @@ API 客户端沿用 Git、容器和会话目录的导航模型：
   └─ API 项目侧栏
        ├─ 搜索项目
        ├─ 新建、重命名、删除项目
-       ├─ 导入本地 JSON 项目
-       └─ 双击或点击项目
+       ├─ 导入 cURL、Postman、OpenAPI 或 Transom 项目
+       └─ 点击或双击项目
             └─ 打开或聚焦独立 API 工作区标签
 ```
 
-终端、Git、容器和 API 标签可以同时存在。API 项目不会切换整个主界面，也不会占用终端标签的会话字段。
+终端、Git、容器和 API 标签可以同时存在。API 项目不会切换整个主界面，也不会伪造终端会话或占用 `TerminalTab` 的会话字段。
 
 ## 类型与状态边界
 
 - `ApiSidebarView`：窗口单例实体，保存项目登记表、搜索词、内联编辑器和删除确认。
-- `ApiWorkspace`：每个项目标签独立实体，保存接口树选择、当前请求草稿、响应和发送任务。
-- 项目数据属于 `transom-api`，窗口级项目列表属于侧栏实体，请求编辑与响应属于工作区实体。
+- `ApiWorkspace`：每个项目标签独立实体，保存请求树选择、请求草稿、环境、Cookie、响应、断言、历史和协议运行状态。
 - `ApiClientTab`：`TabContent` 的类型化内容，只持有 `ApiProjectId` 与 `Entity<ApiWorkspace>`。
-- 关闭 API 标签会释放工作区实体；正在发送的 Future 随实体任务释放而被取消。
-- API 侧栏和工作区只通过事件把完整意图交给外壳，外壳不回读派发事件的实体。
+- 关闭 API 标签会释放工作区实体；发送任务、WebSocket 连接和 Mock 服务随对应句柄释放而取消或停止。
+- 侧栏和工作区只通过事件把完整意图交给外壳，外壳不回读派发事件的实体。
+- `AppShell` 仍只持有 `AppState`；项目列表、工作区与服务分别归属侧栏实体、标签实体和窗口服务集合。
 
 ## 数据与存储
 
-`transom-api` 定义项目、目录、请求、请求头和 HTTP 方法模型，以及 `ApiProjectStore` 契约。
+`transom-api` 定义项目、目录、请求、环境、Cookie、历史和 Mock 路由模型，以及 `ApiProjectStore` 接口。
 
 `transom-store::JsonApiProjectStore` 是首个实现，文件路径为：
 
@@ -37,66 +52,164 @@ API 客户端沿用 Git、容器和会话目录的导航模型：
 <config_dir>/transom/api_projects.json
 ```
 
-写入沿用 Transom 的原子写路径：临时文件、`fsync`、原子替换和损坏文件隔离。UI 通过 `Persistence` 的单槽异步写入器保存项目，避免在渲染和点击回调中同步写盘。
+存储使用原子写路径：临时文件、`fsync`、原子替换和损坏文件隔离。UI 通过 `Persistence` 的单槽异步写入器保存项目，避免在渲染和点击回调中同步写盘。
 
-当前导入格式支持：
+当前项目 schema 为 v2，登记表包含：
 
-- 单个 `ApiProject` JSON；
-- 含 `version` 与 `projects` 的 Transom API 项目登记表 JSON。
+- 项目、目录、请求和请求头；
+- 环境、活动环境标识与 `{{变量}}`；
+- Cookie 及域名、路径、Secure、HttpOnly、过期时间；
+- 最近 100 条请求历史与响应摘要；
+- Mock 路由配置。
 
-Postman、OpenAPI、Insomnia、cURL 等复杂格式转换器不在本阶段。
+旧版项目文件仍可加载；高于当前程序支持版本的 schema 会拒绝加载，避免静默丢失新字段。
 
-## HTTP 执行
+## 协议与执行
 
-`ApiHttpService` 持有全局复用的 `reqwest::Client`，连接池随应用进程复用。它必须运行在应用已有的 Tokio Runtime 中：
+### HTTP 与 GraphQL
 
-- GPUI 执行器不是 Tokio reactor，不能直接轮询 `reqwest` Future；
-- `ApiHttpService::start` 在 Tokio 控制面派发请求；
-- 结果经容量为 1 的 `oneshot` 返回 GPUI；
-- 明细 `ApiExchange` 被丢弃时中止 Tokio 任务，关闭标签或重新发送不会留下旧请求；
-- 响应体按流读取，超过 4 MiB 立即停止并返回中文错误；
-- 网络请求配置连接超时与总超时，日志不输出请求头、请求体或完整敏感 URL。
+- 全局复用单个 `reqwest::Client`，保留连接池和 Keep-Alive。
+- HTTP 支持 GET、POST、PUT、PATCH、DELETE、HEAD、OPTIONS。
+- GraphQL 固定以 POST 发送 JSON，包含 `query` 与 `variables`。
+- GraphQL 查询和变量都支持环境变量替换。
+- 连接超时为 15 秒，单次请求总超时为 60 秒。
+- 响应体流式读取，超过 4 MiB 立即停止并返回中文错误。
+- JSON 响应自动格式化，非 JSON 文本原样展示。
+- 请求任务由可取消句柄持有；关闭标签或重新发送会中止旧任务。
+- 日志不输出请求头、请求体或包含查询参数的完整敏感 URL。
 
-## 当前 UI 能力
+### 原始 gRPC
 
-- 项目列表、搜索、新建、重命名、删除确认和本地 JSON 导入。
-- 项目内一级目录与根请求的接口树。
-- 新建、选择和删除请求。
-- GET、POST、PUT、PATCH、DELETE、HEAD、OPTIONS 方法选择。
-- URL、请求名称、逐行请求头和请求体编辑。
-- 显式保存项目和发送当前请求。
-- 响应状态、耗时、字节数、响应头和响应体查看。
-- JSON 响应自动美化；非 JSON 文本原样展示。
+- 使用 HTTP/2 POST 到 `/{服务名}/{方法名}`。
+- 设置 `application/grpc`、`te: trailers` 与 `grpc-accept-encoding: identity`。
+- 请求体按 Base64 输入，执行时解码并添加 5 字节 gRPC framing。
+- 响应先读取完整 HTTP 响应，再提取 gRPC 数据帧并以 Base64 展示。
+- 当前不解析 proto 文件，不生成消息，不做 schema 补全。
+
+### WebSocket
+
+- 支持连接、发送文本、接收文本和关闭连接。
+- 文本消息写入工作区日志；二进制消息显示字节数，避免伪造文本内容。
+- 自定义请求头和环境变量可参与握手。
+- Bearer 与 Basic 可用于握手认证。
+- 握手超时 15 秒，发送与关闭 IO 超时 10 秒。
+- 命令与事件均使用有界通道；队列满时快速失败或由接收端形成背压。
+- OAuth 与 AWS SigV4 当前只用于请求型协议，不用于 WebSocket 握手。
+
+## 认证、环境与 Cookie
+
+- Bearer 与 Basic 从环境变量读取凭据。
+- OAuth 2.0 支持 client credentials，从令牌端点获取 `access_token` 后设置 Bearer 头。
+- AWS SigV4 支持 canonical query、canonical headers、HMAC 派生密钥和会话令牌。
+- GraphQL 和 gRPC 的签名使用实际发送方法，不使用界面上残留的旧方法字段。
+- 环境变量采用 `NAME=value` 编辑格式，可在 URL、请求头、请求体、GraphQL 查询与变量中替换。
+- Cookie 编辑区使用 `name=value` 文本；响应 `Set-Cookie` 会自动更新项目 Cookie。
+- 发送时按域名、路径、Secure 和过期时间筛选 Cookie，再与手工 Cookie 合并。
+
+## 导入导出
+
+导入时按扩展名和文件内容共同识别格式：
+
+- cURL：基础命令、方法、URL、多个请求头和请求体。
+- Postman 2.1：集合名称、嵌套目录、请求方法、URL、请求头和原始请求体。
+- OpenAPI 3 JSON/YAML：`servers`、`paths`、HTTP 操作、摘要和描述。
+- Transom：单个项目或本地项目登记表。
+
+导出支持：
+
+- cURL 脚本；
+- Postman 2.1 集合；
+- OpenAPI 3 JSON 文档；
+- Transom 项目 JSON。
+
+当前转换是基础语义映射：不完整校验 OpenAPI，不透传所有安全方案、示例、Schema、测试脚本、变量作用域或 Postman 鉴权脚本；Postman 导出会把请求扁平化。外部文件在进入导入解析前有 4 MiB 上限，写盘在线程池中执行。
+
+## 历史、断言、代码生成与 Mock
+
+### 请求历史
+
+- 每次成功收到 HTTP 响应后追加一条历史。
+- 记录请求 ID、名称、方法、URL、状态码、耗时、时间、断言统计和最多 500 字符的响应摘要。
+- 每个项目最多保留最近 100 条记录，并随项目 JSON 保存。
+- 当前历史用于查看与排查，不包含“一键重放”和批量运行。
+
+### 断言
+
+支持以下文本语法：
+
+```text
+status == 200
+status != 500
+body contains 关键字
+text contains 关键字
+header Content-Type contains application/json
+json data.id == 123
+json data.token exists
+```
+
+结果是逐条通过或不匹配明细；JSON 解析失败、路径不存在或语法不支持时会返回明确失败原因，不中断响应展示。
+
+### 代码生成
+
+支持 cURL、JavaScript fetch、Python requests 与 Rust reqwest。生成内容使用当前编辑器草稿和已解析的 URL，并复制到剪贴板。生成器输出显式请求头与请求体，不自动展开 OAuth 或 AWS 凭据，避免把秘密值写入代码或剪贴板历史。
+
+### Mock 服务
+
+- 只监听 `127.0.0.1` 随机端口。
+- 路由由项目内 JSON 配置，支持方法、路径、状态码、响应头、响应体与延迟。
+- 固定路由精确匹配，未匹配返回 404。
+- 停止 Mock 或关闭标签会中止监听任务。
+- 当前不做动态脚本、随机数据生成或代理转发。
+
+## 标签恢复
+
+窗口设置新增 `previous_api_projects`，只保存 API 项目 ID，不把项目内容复制到窗口设置。退出时从标签栏收集已打开的 API 项目，下一次启动由外壳读取项目登记表并恢复标签。
+
+项目已被删除、ID 无法解析或项目不存在时跳过该标签，并记录中文警告；其他有效标签继续恢复。API 项目标签与会话标签分开保存，避免把 API 标签误当终端连接。
 
 ## 明确未包含
 
 - CyberAPI 的账号、团队、邀请、权限、MCP 服务端与服务器同步。
-- GraphQL 补全、gRPC、WebSocket、SSE 长连接。
-- 环境变量、Cookie 管理、OAuth、AWS SigV4、证书管理与代理 UI。
-- Postman/OpenAPI/HAR/cURL 导入导出。
-- 请求历史、代码生成、断言与提取、批量运行、Mock 服务。
-- Git、容器和 API 标签的跨重启恢复。
+- GraphQL schema 自动补全与查询执行分析。
+- gRPC proto 解析、消息生成与方法补全。
+- WebSocket 二进制发送、帧级调试、OAuth 与 AWS 握手认证。
+- OAuth 授权码、PKCE、设备码与自动刷新。
+- JavaScript 前置脚本和测试脚本。
+- OpenAPI 完整校验、全部安全方案与测试用例透传。
+- HAR、Insomnia 等未列出的导入格式。
+- Mock 动态脚本与代理。
+- 批量运行、定时运行和完整响应历史归档。
 
-这些能力如需迁移，应在独立阶段按 Transom 的实体、事件、错误与有界通道契约实现，不得直接引入 CyberAPI 包。
+这些能力如需继续迁移，必须保持 Transom 的实体归属、单向事件、强类型错误、中文日志、有界通道和 UI 线程禁止同步重 IO 契约。
 
 ## 验收
 
 自动化验证：
 
 ```text
-cargo test -p transom-api
-cargo test -p transom-store
-cargo test -p transom-core
-cargo test -p transom-ui --lib
-cargo test -p transom-ui --test source_guards
-cargo clippy -p transom-api -p transom-store -p transom-core -p transom-ui --all-targets -- -D warnings
+cargo fmt --all --check
+cargo check --all-targets
+cargo clippy --all-targets -- -D warnings
+cargo test -q
 ```
 
-真实窗口验证：
+API 专项测试覆盖：
+
+- HTTP 实际请求、Cookie 发送与 `Set-Cookie` 解析；
+- GraphQL 实际 POST 与环境变量替换；
+- OAuth client credentials 实际取令牌和 Bearer 头；
+- AWS SigV4 确定性签名；
+- cURL 多请求头往返与 Postman 嵌套目录；
+- OpenAPI YAML；
+- Mock 实际 HTTP 响应；
+- WebSocket 实际握手与非法 URL；
+- 断言、环境变量和认证配置解析。
+
+真实窗口验收：
 
 - 活动栏 API Client 入口打开项目侧栏；
-- 预置项目与请求在真实窗口中加载；
-- 项目标签与终端/Git/容器标签共用同一标签栏；
+- 项目标签与终端、Git、容器标签共用同一标签栏；
 - 选择请求后编辑器正确回填；
-- 新建项目内联编辑器能够打开；
-- 向本地 HTTP 服务发送 GET 请求，界面显示 `200 OK`、耗时、字节数和美化后的 JSON 响应。
+- 本地 HTTP 请求显示状态、耗时、字节数、响应头、响应体和断言结果；
+- 环境变量、历史、代码生成、Mock 与 WebSocket 控件可操作；
+- 有效 API 项目标签在重启后恢复，失效项目被安全跳过。

@@ -15,7 +15,7 @@ use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_api::ApiProjectId;
+use transom_api::{ApiExportFormat, ApiProjectId};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 /// 侧栏渲染参数。
@@ -242,6 +242,7 @@ fn render_project_row(
     let title = project.display_name().to_string();
     let subtitle =
         rust_i18n::t!("api.project.request_count", count = project.request_count()).to_string();
+    let owned_project = project.clone();
     let view_for_click = view.clone();
     let view_for_menu = view.clone();
     sidebar_row_band(
@@ -255,6 +256,11 @@ fn render_project_row(
     .context_menu(move |menu, _window, _cx| {
         let rename_view = view_for_menu.clone();
         let delete_view = view_for_menu.clone();
+        let curl_view = view_for_menu.clone();
+        let postman_view = view_for_menu.clone();
+        let openapi_view = view_for_menu.clone();
+        let transom_view = view_for_menu.clone();
+        let project_for_menu = owned_project.clone();
         menu.item(menu_item(
             rust_i18n::t!("api.project.rename").to_string(),
             AppIcon::Ui(UiIcon::EDIT),
@@ -267,6 +273,63 @@ fn render_project_row(
             AppIcon::Ui(UiIcon::DELETE),
             move |_, _, cx| {
                 delete_view.update(cx, |this, cx| this.request_delete(project_id, cx));
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("api.project.export_curl").to_string(),
+            AppIcon::Ui(UiIcon::DOWNLOAD),
+            {
+                let project = project_for_menu.clone();
+                move |_, _, cx| {
+                    curl_view.update(cx, |_, cx| {
+                        cx.emit(super::ApiSidebarEvent::ExportProject {
+                            project: project.clone(),
+                            format: ApiExportFormat::Curl,
+                        });
+                    });
+                }
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("api.project.export_postman").to_string(),
+            AppIcon::Ui(UiIcon::DOWNLOAD),
+            {
+                let project = project_for_menu.clone();
+                move |_, _, cx| {
+                    postman_view.update(cx, |_, cx| {
+                        cx.emit(super::ApiSidebarEvent::ExportProject {
+                            project: project.clone(),
+                            format: ApiExportFormat::Postman,
+                        });
+                    });
+                }
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("api.project.export_openapi").to_string(),
+            AppIcon::Ui(UiIcon::DOWNLOAD),
+            {
+                let project = project_for_menu.clone();
+                move |_, _, cx| {
+                    openapi_view.update(cx, |_, cx| {
+                        cx.emit(super::ApiSidebarEvent::ExportProject {
+                            project: project.clone(),
+                            format: ApiExportFormat::OpenApi,
+                        });
+                    });
+                }
+            },
+        ))
+        .item(menu_item(
+            rust_i18n::t!("api.project.export_transom").to_string(),
+            AppIcon::Ui(UiIcon::DOWNLOAD),
+            move |_, _, cx| {
+                transom_view.update(cx, |_, cx| {
+                    cx.emit(super::ApiSidebarEvent::ExportProject {
+                        project: project_for_menu.clone(),
+                        format: ApiExportFormat::Transom,
+                    });
+                });
             },
         ))
     })

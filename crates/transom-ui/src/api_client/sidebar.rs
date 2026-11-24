@@ -2,7 +2,7 @@
 
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use transom_api::{ApiProject, ApiProjectId, ApiRegistry};
+use transom_api::{ApiExportFormat, ApiProject, ApiProjectId, ApiRegistry};
 
 /// 侧栏发往外壳的意图。
 #[derive(Clone)]
@@ -18,6 +18,11 @@ pub(crate) enum ApiSidebarEvent {
     },
     /// 选择外部 JSON 文件并导入一个或多个项目。
     ImportProject,
+    /// 将指定项目导出为外部格式。
+    ExportProject {
+        project: ApiProject,
+        format: ApiExportFormat,
+    },
 }
 
 /// 项目名称编辑器的两种模式。

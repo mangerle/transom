@@ -130,6 +130,9 @@ pub struct WindowSettings {
     /// 上次打开的标签组与分屏布局；优先于扁平的会话列表。
     #[serde(default)]
     pub previous_tab_groups: Vec<SavedTabGroup>,
+    /// 上次打开的 API 项目标签；项目本身仍保存在 API 项目文件中。
+    #[serde(default)]
+    pub previous_api_projects: Vec<String>,
     /// 上次退出时的并排网格；每张网格在标签栏里合并成一个条目，可有多张。
     ///
     /// 空列表表示没有并排。旧版的单张快照字段 `tab_tiling` 没有对应结构，
@@ -371,6 +374,7 @@ impl Default for WindowSettings {
             last_sidebar_visible: true,
             previous_tab_sessions: Vec::new(),
             previous_tab_groups: Vec::new(),
+            previous_api_projects: Vec::new(),
             tab_tilings: Vec::new(),
             sftp_panel_side: PanelSide::Right,
             default_terminal: false,
@@ -439,5 +443,19 @@ mod tests {
         let mut filtered = restored.recent_sessions;
         filtered.retain(|id| *id != id1);
         assert_eq!(filtered, vec![id2]);
+    }
+
+    #[test]
+    fn api_project_tab_ids_round_trip_independently_from_sessions() {
+        let settings = WindowSettings {
+            previous_api_projects: vec!["project-a".to_string(), "project-b".to_string()],
+            ..WindowSettings::default()
+        };
+        let json = serde_json::to_string(&settings).expect("必须成功序列化");
+        let restored: WindowSettings = serde_json::from_str(&json).expect("必须成功反序列化");
+        assert_eq!(
+            restored.previous_api_projects,
+            vec!["project-a".to_string(), "project-b".to_string()]
+        );
     }
 }

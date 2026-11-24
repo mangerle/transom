@@ -397,6 +397,7 @@ impl AppShell {
         }
         crate::settings::sync_terminal_palette(cx);
         self.restore_startup_tabs(window, cx);
+        self.restore_api_tabs(window, cx);
 
         // 每次进程启动只检查一次远端清单；发现新版本时仅点亮左侧提示，
         // 不主动打断用户当前工作，设置页与侧栏点击共用同一个更新实体。

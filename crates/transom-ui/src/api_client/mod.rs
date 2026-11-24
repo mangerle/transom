@@ -9,12 +9,20 @@ mod actions;
 mod sidebar;
 mod sidebar_view;
 mod workspace;
+mod workspace_actions;
+mod workspace_advanced_view;
+mod workspace_config;
+mod workspace_editors;
+mod workspace_tree_view;
 mod workspace_view;
 
 pub(crate) use actions::{
     on_sidebar_event, on_sidebar_request, on_workspace_event, on_workspace_request,
+    open_api_project,
 };
 pub(crate) use sidebar::{ApiSidebarEvent, ApiSidebarState, ApiSidebarView};
 pub(crate) use sidebar_view::{ApiSidebarParams, render_api_sidebar};
-pub(crate) use workspace::{ApiWorkspace, ApiWorkspaceEvent};
+pub(crate) use workspace::{
+    ApiAuxiliarySection, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceServices,
+};
 pub(crate) use workspace_view::{ApiWorkspaceParams, render_api_workspace};

@@ -2,7 +2,7 @@
 
 use super::model::TabContentKind;
 use super::{TabCloseAction, TabContent, TabGroupOwner, TabStatus, WorkspaceTab};
-use crate::api_client::ApiWorkspace;
+use crate::api_client::{ApiWorkspace, ApiWorkspaceServices};
 use crate::app::install_app_settings;
 use crate::cast_player::{CastPlayerParams, CastPlayerView};
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
@@ -14,7 +14,7 @@ use gpui_kit::{
     Window, div, init, px,
 };
 use std::path::PathBuf;
-use transom_api::{ApiHttpService, ApiProject};
+use transom_api::{ApiHttpService, ApiMockService, ApiProject, ApiWebSocketService};
 use transom_core::{
     AppSettings, AuthMethod, Connection, ContainerEngineKind, ContainerEngineProfile,
     ContainerEngineRef, Session, SessionCatalog, SshConnection, TabId, TerminalProfile,
@@ -399,10 +399,14 @@ fn api_client_tab_uses_typed_content_without_session_fields() {
     let mut app = TestAppContext::single();
     let cx = probe_window(&mut app);
     let runtime = tokio::runtime::Runtime::new().expect("API 测试运行时应能创建");
-    let http = ApiHttpService::new(runtime.handle().clone()).expect("API HTTP 服务应能初始化");
+    let services = ApiWorkspaceServices {
+        http: ApiHttpService::new(runtime.handle().clone()).expect("API HTTP 服务应能初始化"),
+        websocket: ApiWebSocketService::new(runtime.handle().clone()),
+        mock: ApiMockService::new(runtime.handle().clone()),
+    };
     let project = ApiProject::new("测试 API");
     let tab = cx.update(|window, cx| {
-        let workspace = cx.new(|cx| ApiWorkspace::new(project.clone(), http, window, cx));
+        let workspace = cx.new(|cx| ApiWorkspace::new(project.clone(), services, window, cx));
         WorkspaceTab::new_api_client(
             TabId::new(),
             project.display_name().to_string(),

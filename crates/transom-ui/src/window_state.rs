@@ -36,6 +36,17 @@ pub(crate) fn save_window_state(
         .filter_map(session_key)
         .collect();
     update_app_settings(cx, |s| s.window.previous_tab_sessions = sessions);
+    let api_projects: Vec<_> = shell
+        .state
+        .workspace
+        .tabs
+        .iter()
+        .filter_map(|tab| {
+            tab.api_project_id()
+                .map(|project_id| project_id.to_string())
+        })
+        .collect();
+    update_app_settings(cx, |s| s.window.previous_api_projects = api_projects);
     shell.state.prune_tilings();
     // 先建立"组 ID → 落盘下标"的映射：并排快照用下标引用标签组，
     // 而组 ID 是运行期 UUID，不随设置文件保存。

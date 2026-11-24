@@ -243,6 +243,31 @@ impl AppShell {
         }
     }
 
+    /// 恢复上次打开的 API 项目标签；项目不存在或 id 无效时跳过。
+    fn restore_api_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let project_ids = app_settings(cx).window.previous_api_projects.clone();
+        for project_id in project_ids {
+            let Ok(project_id) = project_id.parse::<transom_api::ApiProjectId>() else {
+                log::warn!("恢复 API 标签时项目 id 无效，已跳过: {project_id}");
+                continue;
+            };
+            let project = self
+                .state
+                .features
+                .api_sidebar
+                .read(cx)
+                .state
+                .registry
+                .project(project_id)
+                .cloned();
+            if let Some(project) = project {
+                crate::api_client::open_api_project(&mut self.state, project, window, cx);
+            } else {
+                log::warn!("恢复 API 标签时项目不存在，已跳过: {project_id}");
+            }
+        }
+    }
+
     /// 每 24 小时对已连接的容器工作区执行一次轻量清理；默认关闭。
     fn tick_container_cleanup(&mut self, cx: &mut Context<Self>) {
         const INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);

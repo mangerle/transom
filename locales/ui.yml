@@ -186,6 +186,42 @@ tab_subtitle:
     en: API project
     zh-CN: API 项目
 api:
+  protocol:
+    grpc_raw:
+      en: gRPC (raw Base64)
+      zh-CN: gRPC（原始 Base64）
+  error:
+    environment_format:
+      en: Invalid environment variable format
+      zh-CN: 环境变量格式错误
+    cookie_format:
+      en: Invalid Cookie format
+      zh-CN: Cookie 格式错误
+  history:
+    line:
+      en: '%{method} %{url} · %{status} · %{elapsed} ms · assertions %{passed}/%{total}'
+      zh-CN: '%{method} %{url} · %{status} · %{elapsed} ms · 断言 %{passed}/%{total}'
+  websocket:
+    connected:
+      en: Connected
+      zh-CN: 已连接
+    not_connected:
+      en: WebSocket is not connected
+      zh-CN: WebSocket 尚未连接
+    message_sent:
+      en: 'WebSocket message sent: %{text}'
+      zh-CN: '已发送 WebSocket 消息: %{text}'
+    closed:
+      en: WebSocket closed
+      zh-CN: WebSocket 已关闭
+  mock:
+    invalid_json:
+      en: 'Mock route JSON is invalid: %{error}'
+      zh-CN: 'Mock 路由 JSON 无效: %{error}'
+  code:
+    copied:
+      en: Code copied to clipboard
+      zh-CN: 代码已复制到剪贴板
   sidebar:
     search:
       en: Search API projects
@@ -245,6 +281,27 @@ api:
     import_thread_failed:
       en: Could not start the API project import task
       zh-CN: 启动 API 项目导入任务失败
+    export_curl:
+      en: Export cURL Script
+      zh-CN: 导出 cURL 脚本
+    export_postman:
+      en: Export Postman Collection
+      zh-CN: 导出 Postman 集合
+    export_openapi:
+      en: Export OpenAPI Document
+      zh-CN: 导出 OpenAPI 文档
+    export_transom:
+      en: Export Transom API Project
+      zh-CN: 导出 Transom API 项目
+    export_title:
+      en: Export API project
+      zh-CN: 导出 API 项目
+    exported:
+      en: API project exported
+      zh-CN: API 项目已导出
+    export_thread_failed:
+      en: Could not start the API project export task
+      zh-CN: 启动 API 项目导出任务失败
   request:
     tree_title:
       en: Requests
@@ -297,6 +354,78 @@ api:
     url_required:
       en: Request URL is required
       zh-CN: 请求地址不能为空
+    graphql_variables:
+      en: GraphQL variables
+      zh-CN: GraphQL 变量
+    graphql_variables_placeholder:
+      en: '{"id": 1}'
+      zh-CN: '{"id": 1}'
+    grpc_service:
+      en: Service
+      zh-CN: 服务
+    grpc_method:
+      en: Method
+      zh-CN: 方法
+    grpc_service_placeholder:
+      en: package.Service
+      zh-CN: package.Service
+    grpc_method_placeholder:
+      en: MethodName
+      zh-CN: MethodName
+    auth_placeholder:
+      en: Authentication JSON, secrets use environment variable names
+      zh-CN: 认证 JSON，密钥使用环境变量名
+    assertions_placeholder:
+      en: One assertion per line
+      zh-CN: 每行一条断言
+    environment_placeholder:
+      en: One variable per line, NAME=value
+      zh-CN: 每行一个环境变量，NAME=value
+    cookies_placeholder:
+      en: One cookie per line, name=value
+      zh-CN: 每行一个 Cookie，name=value
+    mock_placeholder:
+      en: Mock route JSON
+      zh-CN: Mock 路由 JSON
+    websocket_input_placeholder:
+      en: WebSocket message
+      zh-CN: WebSocket 消息
+    websocket_connected:
+      en: Connected
+      zh-CN: 已连接
+    websocket_connect:
+      en: Connect WebSocket
+      zh-CN: 连接 WebSocket
+    websocket_send:
+      en: Send message
+      zh-CN: 发送消息
+    websocket_close:
+      en: Close WebSocket
+      zh-CN: 关闭 WebSocket
+    aux_environment:
+      en: Variables
+      zh-CN: 环境变量
+    aux_cookies:
+      en: Cookies
+      zh-CN: Cookie
+    aux_auth:
+      en: Auth
+      zh-CN: 认证
+    aux_assertions:
+      en: Assertions
+      zh-CN: 断言
+    aux_mock:
+      en: Mock
+      zh-CN: Mock
+    aux_history:
+      en: History
+      zh-CN: 历史
+    mock_start:
+      en: Start Mock
+      zh-CN: 启动 Mock
+    mock_stop:
+      en: Stop Mock
+      zh-CN: 停止 Mock
   response:
     title:
       en: Response
@@ -310,6 +439,9 @@ api:
     headers_placeholder:
       en: No response headers
       zh-CN: 暂无响应头
+    assertions:
+      en: 'Assertions %{passed}/%{total}'
+      zh-CN: '断言 %{passed}/%{total}'
     sending:
       en: Sending request…
       zh-CN: 正在发送请求…

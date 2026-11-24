@@ -29,6 +29,8 @@ pub(crate) struct BackgroundTasks {
     pub(crate) status_clear: Option<Task<()>>,
     /// API 项目导入解析任务；只保留最近一次导入，重复导入会取消旧任务。
     pub(crate) api_import: Option<Task<()>>,
+    /// API 项目导出写盘任务。
+    pub(crate) api_export: Option<Task<()>>,
 }
 
 impl BackgroundTasks {
@@ -42,6 +44,7 @@ impl BackgroundTasks {
             toast_tasks: VecDeque::with_capacity(32),
             status_clear: None,
             api_import: None,
+            api_export: None,
         }
     }
 }
