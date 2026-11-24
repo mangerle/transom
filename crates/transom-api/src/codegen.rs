@@ -11,6 +11,18 @@ pub enum CodeTarget {
     RustReqwest,
 }
 
+impl CodeTarget {
+    /// 下拉和预览标题使用的稳定名称。
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Curl => "cURL",
+            Self::JavaScriptFetch => "JavaScript fetch",
+            Self::PythonRequests => "Python requests",
+            Self::RustReqwest => "Rust reqwest",
+        }
+    }
+}
+
 /// 生成当前请求的可复制代码文本。
 pub fn generate_code(target: CodeTarget, request: &ApiRequest) -> String {
     match target {

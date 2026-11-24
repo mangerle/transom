@@ -188,7 +188,7 @@ json data.token exists
 
 ### 代码生成
 
-支持 cURL、JavaScript fetch、Python requests 与 Rust reqwest。生成内容使用当前编辑器草稿和已解析的 URL，并复制到剪贴板。生成器输出显式请求头与请求体，不自动展开 OAuth 或 AWS 凭据，避免把秘密值写入代码或剪贴板历史。
+支持 cURL、JavaScript fetch、Python requests 与 Rust reqwest。选择目标后先打开代码预览，可切换语言并在确认后复制。生成内容使用当前编辑器草稿和已解析的 URL；生成器输出显式请求头与请求体，不自动展开 OAuth 或 AWS 凭据，避免把秘密值写入代码或剪贴板历史。
 
 ## 标签恢复
 

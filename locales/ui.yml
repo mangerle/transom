@@ -702,6 +702,12 @@ api:
     codegen:
       en: Code
       zh-CN: 代码
+    code_preview:
+      en: Generated code
+      zh-CN: 代码预览
+    copy_code:
+      en: Copy
+      zh-CN: 复制
   response:
     body:
       en: Body

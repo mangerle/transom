@@ -134,18 +134,53 @@ impl ApiWorkspace {
         self.set_notice(rust_i18n::t!("api.websocket.closed").to_string(), cx);
     }
 
-    /// 生成代码并复制到剪贴板。
-    pub(crate) fn copy_code(&mut self, target: CodeTarget, cx: &mut Context<Self>) {
+    /// 打开当前请求的代码预览。
+    pub(crate) fn open_code_preview(
+        &mut self,
+        target: CodeTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if !self.capture_request(cx) {
             return;
         }
+        self.codegen_target = target;
+        self.regenerate_code_preview(window, cx);
+        self.auxiliary_section = Some(super::ApiAuxiliarySection::Code);
+        cx.notify();
+    }
+
+    /// 切换代码目标并刷新预览。
+    pub(crate) fn set_codegen_target(
+        &mut self,
+        target: CodeTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.codegen_target = target;
+        self.regenerate_code_preview(window, cx);
+        cx.notify();
+    }
+
+    /// 将预览中的代码复制到剪贴板。
+    pub(crate) fn copy_code_preview(&mut self, cx: &mut Context<Self>) {
+        let code = self.editors.code_preview.read(cx).value().to_string();
+        if code.is_empty() {
+            return;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(code));
+        self.set_notice(rust_i18n::t!("api.code.copied").to_string(), cx);
+    }
+
+    fn regenerate_code_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(request) = self.selected_request().cloned() else {
             return;
         };
         let request = request.resolved(&self.project.base_url, &self.environment());
-        let code = generate_code(target, &request);
-        cx.write_to_clipboard(ClipboardItem::new_string(code));
-        self.set_notice(rust_i18n::t!("api.code.copied").to_string(), cx);
+        let code = generate_code(self.codegen_target, &request);
+        self.editors
+            .code_preview
+            .update(cx, |editor, cx| editor.set_value(code, window, cx));
     }
 
     fn capture_request(&mut self, cx: &App) -> bool {

@@ -4,9 +4,10 @@ use super::ApiAuxiliarySection;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
-use crate::widgets::{IconButton, IconButtonSize, action_button, menu_item};
+use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
+use gpui_kit::component::input::Textarea;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::*;
 use transom_api::CodeTarget;
@@ -50,33 +51,37 @@ pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> An
         .item(menu_item(
             "cURL",
             AppIcon::FileType(FileTypeIcon::SHELL),
-            move |_, _, cx| {
-                code_cur.update(cx, |this, cx| this.copy_code(CodeTarget::Curl, cx));
+            move |_, window, cx| {
+                code_cur.update(cx, |this, cx| {
+                    this.open_code_preview(CodeTarget::Curl, window, cx)
+                });
             },
         ))
         .item(menu_item(
             "JavaScript fetch",
             AppIcon::FileType(FileTypeIcon::JAVASCRIPT),
-            move |_, _, cx| {
+            move |_, window, cx| {
                 code_js.update(cx, |this, cx| {
-                    this.copy_code(CodeTarget::JavaScriptFetch, cx)
+                    this.open_code_preview(CodeTarget::JavaScriptFetch, window, cx)
                 });
             },
         ))
         .item(menu_item(
             "Python requests",
             AppIcon::FileType(FileTypeIcon::PYTHON),
-            move |_, _, cx| {
+            move |_, window, cx| {
                 code_py.update(cx, |this, cx| {
-                    this.copy_code(CodeTarget::PythonRequests, cx)
+                    this.open_code_preview(CodeTarget::PythonRequests, window, cx)
                 });
             },
         ))
         .item(menu_item(
             "Rust reqwest",
             AppIcon::FileType(FileTypeIcon::RUST),
-            move |_, _, cx| {
-                code_rs.update(cx, |this, cx| this.copy_code(CodeTarget::RustReqwest, cx));
+            move |_, window, cx| {
+                code_rs.update(cx, |this, cx| {
+                    this.open_code_preview(CodeTarget::RustReqwest, window, cx)
+                });
             },
         ))
     })
@@ -97,6 +102,62 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
             rust_i18n::t!("api.request.aux_cookies").to_string(),
             params.cookies_editor.clone().into_any_element(),
         ),
+        ApiAuxiliarySection::Code => {
+            let view = params.view.clone();
+            let copy_view = params.view.clone();
+            let target = dropdown(
+                "api-codegen-target",
+                params.codegen_target,
+                vec![
+                    (CodeTarget::Curl, CodeTarget::Curl.label().to_string()),
+                    (
+                        CodeTarget::JavaScriptFetch,
+                        CodeTarget::JavaScriptFetch.label().to_string(),
+                    ),
+                    (
+                        CodeTarget::PythonRequests,
+                        CodeTarget::PythonRequests.label().to_string(),
+                    ),
+                    (
+                        CodeTarget::RustReqwest,
+                        CodeTarget::RustReqwest.label().to_string(),
+                    ),
+                ],
+                |this: &mut super::ApiWorkspace, target, window, cx| {
+                    this.set_codegen_target(target, window, cx);
+                },
+                view,
+            );
+            let body = v_flex()
+                .size_full()
+                .min_h_0()
+                .gap(rems(space::XS))
+                .child(
+                    h_flex()
+                        .gap(rems(space::XS))
+                        .items_center()
+                        .child(target)
+                        .child(
+                            action_button(
+                                "api-codegen-copy",
+                                AppIcon::Ui(UiIcon::COPY),
+                                rust_i18n::t!("api.request.copy_code").to_string(),
+                            )
+                            .on_click(move |_, _, cx| {
+                                copy_view.update(cx, |this, cx| this.copy_code_preview(cx));
+                            }),
+                        ),
+                )
+                .child(
+                    div().flex_1().min_h_0().child(
+                        Textarea::new(params.code_preview)
+                            .readonly(true)
+                            .size_full(),
+                    ),
+                )
+                .into_any_element();
+            (rust_i18n::t!("api.request.code_preview").to_string(), body)
+        }
     };
     let view = params.view.clone();
     v_flex()

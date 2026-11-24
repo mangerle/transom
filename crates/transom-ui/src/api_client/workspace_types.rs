@@ -16,6 +16,7 @@ pub(crate) struct ApiWorkspaceServices {
 pub(crate) enum ApiAuxiliarySection {
     Environment,
     Cookies,
+    Code,
 }
 
 /// 请求编辑器的信息架构页签。
@@ -70,4 +71,5 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) websocket_input: Entity<TextareaState>,
     pub(crate) websocket_log: Entity<TextareaState>,
     pub(crate) response_body: Entity<TextareaState>,
+    pub(crate) code_preview: Entity<TextareaState>,
 }
