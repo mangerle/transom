@@ -147,15 +147,15 @@ API 项目标签
 
 导入时按扩展名和文件内容共同识别格式：
 
-- cURL：基础命令、方法、URL、多个请求头和请求体。
-- Postman 2.1：集合名称、嵌套目录、请求方法、URL、请求头和原始请求体。
+- cURL：基础命令、方法、URL、多个请求头、请求体、`--data-urlencode`、`-F` 文件字段和 `-T` 文件上传。
+- Postman 2.1：集合名称、嵌套目录、请求方法、URL、请求头、raw、urlencoded、formdata 和 file Body。
 - OpenAPI 3 JSON/YAML：`servers`、`paths`、HTTP 操作、摘要和描述。
 - Transom：单个项目或本地项目登记表。
 
 导出支持：
 
-- cURL 脚本；
-- Postman 2.1 集合；
+- cURL 脚本，包含表单字段和文件上传；
+- Postman 2.1 集合，保留 formdata/file Body 类型；
 - OpenAPI 3 JSON 文档；
 - Transom 项目 JSON。
 

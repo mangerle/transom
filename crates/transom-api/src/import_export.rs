@@ -1,6 +1,9 @@
 //! API 项目导入导出：Transom、cURL、Postman 2.1 与 OpenAPI 3。
 
-use super::{ApiHeader, ApiMethod, ApiProject, ApiRequest, parse_project_import};
+use super::{
+    ApiBodyType, ApiFormField, ApiFormFieldKind, ApiHeader, ApiMethod, ApiProject, ApiRequest,
+    parse_project_import,
+};
 use serde_json::{Map, Value, json};
 use transom_core::AppError;
 
@@ -81,6 +84,27 @@ fn import_curl(text: &str) -> Result<Vec<ApiProject>, AppError> {
                 index = index.saturating_add(1);
                 request.body = tokens.get(index).cloned().unwrap_or_default();
             }
+            "--data-urlencode" => {
+                index = index.saturating_add(1);
+                if let Some(value) = tokens.get(index) {
+                    request.body_type = ApiBodyType::FormUrlEncoded;
+                    request.form_fields.push(parse_curl_form_value(value)?);
+                }
+            }
+            "-F" | "--form" => {
+                index = index.saturating_add(1);
+                if let Some(value) = tokens.get(index) {
+                    request.body_type = ApiBodyType::Multipart;
+                    request.form_fields.push(parse_curl_form_value(value)?);
+                }
+            }
+            "-T" | "--upload-file" => {
+                index = index.saturating_add(1);
+                if let Some(value) = tokens.get(index) {
+                    request.body_type = ApiBodyType::Binary;
+                    request.body_file = file_url(value);
+                }
+            }
             token if token.starts_with("http://") || token.starts_with("https://") => {
                 request.url = token.to_string();
             }
@@ -111,6 +135,33 @@ fn push_curl_header(request: &mut ApiRequest, text: &str) -> Result<(), AppError
         enabled: true,
     });
     Ok(())
+}
+
+fn parse_curl_form_value(text: &str) -> Result<ApiFormField, AppError> {
+    let Some((name, value)) = text.split_once('=') else {
+        return Err(import_error(format!("cURL 表单字段缺少等号: {text}")));
+    };
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(import_error(format!("cURL 表单字段名称为空: {text}")));
+    }
+    let value = value.split(';').next().unwrap_or_default().trim();
+    let (kind, value) = if let Some(path) = value.strip_prefix('@') {
+        (ApiFormFieldKind::File, file_url(path))
+    } else {
+        (ApiFormFieldKind::Text, value.to_string())
+    };
+    Ok(ApiFormField {
+        name: name.to_string(),
+        value,
+        description: String::new(),
+        enabled: true,
+        kind,
+    })
+}
+
+fn file_url(path: &str) -> String {
+    format!("file://{}", path.trim())
 }
 
 fn import_postman(text: &str) -> Result<Vec<ApiProject>, AppError> {
@@ -194,10 +245,98 @@ fn parse_postman_request(
             });
         }
     }
-    if let Some(body) = request.pointer("/body/raw").and_then(Value::as_str) {
-        result.body = body.to_string();
+    if let Some(body) = request.get("body") {
+        parse_postman_body(body, &mut result)?;
     }
     Ok(result)
+}
+
+fn parse_postman_body(body: &Value, request: &mut ApiRequest) -> Result<(), AppError> {
+    let mode = body.get("mode").and_then(Value::as_str).unwrap_or("raw");
+    match mode {
+        "raw" => {
+            request.body_type = match body
+                .pointer("/options/raw/language")
+                .and_then(Value::as_str)
+            {
+                Some("json") => ApiBodyType::Json,
+                Some("xml") => ApiBodyType::Xml,
+                _ => ApiBodyType::Text,
+            };
+            request.body = body
+                .get("raw")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+        }
+        "urlencoded" | "formdata" => {
+            request.body_type = if mode == "formdata" {
+                ApiBodyType::Multipart
+            } else {
+                ApiBodyType::FormUrlEncoded
+            };
+            if let Some(fields) = body.get(mode).and_then(Value::as_array) {
+                for field in fields {
+                    let Some(name) = field.get("key").and_then(Value::as_str) else {
+                        continue;
+                    };
+                    let kind = if field.get("type").and_then(Value::as_str) == Some("file") {
+                        ApiFormFieldKind::File
+                    } else {
+                        ApiFormFieldKind::Text
+                    };
+                    let value = if kind == ApiFormFieldKind::File {
+                        postman_file_source(field)
+                    } else {
+                        field
+                            .get("value")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string()
+                    };
+                    request.form_fields.push(ApiFormField {
+                        name: name.to_string(),
+                        value,
+                        description: field
+                            .get("description")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        enabled: !field
+                            .get("disabled")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
+                        kind,
+                    });
+                }
+            }
+        }
+        "file" => {
+            request.body_type = ApiBodyType::Binary;
+            request.body_file = body
+                .pointer("/file/src")
+                .and_then(Value::as_str)
+                .map(file_url)
+                .unwrap_or_default();
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn postman_file_source(field: &Value) -> String {
+    field
+        .get("src")
+        .and_then(|src| {
+            src.as_str().map(str::to_string).or_else(|| {
+                src.as_array()
+                    .and_then(|items| items.first())
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+        })
+        .map(|path| file_url(&path))
+        .unwrap_or_default()
 }
 
 fn postman_url(url: Option<&Value>) -> String {
@@ -254,6 +393,46 @@ fn import_openapi(text: &str) -> Result<Vec<ApiProject>, AppError> {
     Ok(vec![project])
 }
 
+fn postman_body(request: &ApiRequest) -> Value {
+    match request.body_type {
+        ApiBodyType::FormUrlEncoded => json!({
+            "mode": "urlencoded",
+            "urlencoded": request.form_fields.iter().map(|field| json!({
+                "key": field.name,
+                "value": field.value,
+                "description": field.description,
+                "disabled": !field.enabled,
+            })).collect::<Vec<_>>()
+        }),
+        ApiBodyType::Multipart => json!({
+            "mode": "formdata",
+            "formdata": request.form_fields.iter().map(|field| json!({
+                "key": field.name,
+                "type": if field.kind == ApiFormFieldKind::File { "file" } else { "text" },
+                "src": if field.kind == ApiFormFieldKind::File { field.value.trim_start_matches("file://").to_string() } else { String::new() },
+                "value": if field.kind == ApiFormFieldKind::Text { field.value.clone() } else { String::new() },
+                "description": field.description,
+                "disabled": !field.enabled,
+            })).collect::<Vec<_>>()
+        }),
+        ApiBodyType::Binary => json!({
+            "mode": "file",
+            "file": {"src": request.body_file.trim_start_matches("file://")}
+        }),
+        ApiBodyType::Json => json!({
+            "mode": "raw",
+            "raw": request.body,
+            "options": {"raw": {"language": "json"}}
+        }),
+        ApiBodyType::Xml => json!({
+            "mode": "raw",
+            "raw": request.body,
+            "options": {"raw": {"language": "xml"}}
+        }),
+        ApiBodyType::Text | ApiBodyType::None => json!({"mode": "raw", "raw": request.body}),
+    }
+}
+
 fn export_curl(project: &ApiProject) -> Result<String, String> {
     let mut lines = Vec::with_capacity(project.requests.len());
     for request in &project.requests {
@@ -271,8 +450,46 @@ fn export_curl(project: &ApiProject) -> Result<String, String> {
                 header.value.replace('\'', "'\\''")
             ));
         }
-        if !request.body.is_empty() {
-            line.push_str(&format!(" -d '{}'", request.body.replace('\'', "'\\''")));
+        match request.body_type {
+            ApiBodyType::None => {}
+            ApiBodyType::FormUrlEncoded => {
+                for field in request.form_fields.iter().filter(|field| field.enabled) {
+                    line.push_str(&format!(
+                        " --data-urlencode '{}={}'",
+                        field.name.replace('\'', "'\\''"),
+                        field.value.replace('\'', "'\\''")
+                    ));
+                }
+            }
+            ApiBodyType::Multipart => {
+                for field in request.form_fields.iter().filter(|field| field.enabled) {
+                    let value = match field.kind {
+                        ApiFormFieldKind::File => {
+                            format!("@{}", field.value.trim_start_matches("file://"))
+                        }
+                        ApiFormFieldKind::Text => field.value.clone(),
+                    };
+                    line.push_str(&format!(
+                        " -F '{}={}'",
+                        field.name.replace('\'', "'\\''"),
+                        value.replace('\'', "'\\''")
+                    ));
+                }
+            }
+            ApiBodyType::Binary => {
+                line.push_str(&format!(
+                    " -T '{}'",
+                    request
+                        .body_file
+                        .trim_start_matches("file://")
+                        .replace('\'', "'\\''")
+                ));
+            }
+            ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
+                if !request.body.is_empty() {
+                    line.push_str(&format!(" -d '{}'", request.body.replace('\'', "'\\''")));
+                }
+            }
         }
         lines.push(line);
     }
@@ -289,7 +506,7 @@ fn export_postman(project: &ApiProject) -> Result<String, String> {
                 "request": {
                     "method": request.method.as_str(),
                     "header": request.headers.iter().filter(|h| h.enabled).map(|h| json!({"key": h.name, "value": h.value})).collect::<Vec<_>>(),
-                    "body": {"mode": "raw", "raw": request.body},
+                    "body": postman_body(request),
                     "url": {"raw": request.url}
                 }
             })
@@ -442,6 +659,53 @@ paths:
         let projects = import_projects(text, ApiImportFormat::OpenApi).expect("OpenAPI 应可导入");
         assert_eq!(projects[0].requests.len(), 1);
         assert_eq!(projects[0].requests[0].name, "健康检查");
+    }
+
+    #[test]
+    fn curl_imports_multipart_file_and_exports_form() {
+        let projects = import_projects(
+            "curl -X POST 'https://example.com/upload' -F 'note=hello' -F 'file=@/tmp/demo.txt'",
+            ApiImportFormat::Curl,
+        )
+        .expect("cURL multipart 应可导入");
+        let request = &projects[0].requests[0];
+        assert_eq!(request.body_type, ApiBodyType::Multipart);
+        assert_eq!(request.form_fields.len(), 2);
+        assert_eq!(request.form_fields[1].kind, ApiFormFieldKind::File);
+        assert!(request.form_fields[1].value.ends_with("/tmp/demo.txt"));
+        let exported =
+            export_project(&projects[0], ApiExportFormat::Curl).expect("cURL multipart 应可导出");
+        assert!(exported.contains("-F 'file=@/tmp/demo.txt'"), "{exported}");
+    }
+
+    #[test]
+    fn postman_formdata_round_trips_file_fields() {
+        let text = r#"{
+  "info": {"name": "上传"},
+  "item": [{
+    "name": "上传文件",
+    "request": {
+      "method": "POST",
+      "url": {"raw": "https://example.com/upload"},
+      "body": {
+        "mode": "formdata",
+        "formdata": [
+          {"key": "note", "type": "text", "value": "hello"},
+          {"key": "file", "type": "file", "src": "/tmp/demo.txt"}
+        ]
+      }
+    }
+  }]
+}"#;
+        let projects =
+            import_projects(text, ApiImportFormat::Postman).expect("Postman formdata 应可导入");
+        let request = &projects[0].requests[0];
+        assert_eq!(request.body_type, ApiBodyType::Multipart);
+        assert_eq!(request.form_fields[1].kind, ApiFormFieldKind::File);
+        let exported =
+            export_project(&projects[0], ApiExportFormat::Postman).expect("Postman 应可导出");
+        assert!(exported.contains("\"mode\": \"formdata\""));
+        assert!(exported.contains("\"src\": \"/tmp/demo.txt\""));
     }
 
     #[test]

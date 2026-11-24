@@ -1,6 +1,6 @@
 //! API 请求代码生成。
 
-use super::{ApiRequest, ApiResponseSnapshot};
+use super::{ApiBodyType, ApiFormFieldKind, ApiRequest, ApiResponseSnapshot};
 
 /// 代码生成目标。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,8 +34,43 @@ fn curl(request: &ApiRequest) -> String {
             shell_quote(&header.value)
         ));
     }
-    if !request.body.is_empty() {
-        line.push_str(&format!(" -d '{}'", shell_quote(&request.body)));
+    match request.body_type {
+        ApiBodyType::None => {}
+        ApiBodyType::FormUrlEncoded => {
+            for field in request.form_fields.iter().filter(|field| field.enabled) {
+                line.push_str(&format!(
+                    " --data-urlencode '{}={}'",
+                    shell_quote(&field.name),
+                    shell_quote(&field.value)
+                ));
+            }
+        }
+        ApiBodyType::Multipart => {
+            for field in request.form_fields.iter().filter(|field| field.enabled) {
+                let value = match field.kind {
+                    ApiFormFieldKind::File => {
+                        format!("@{}", field.value.trim_start_matches("file://"))
+                    }
+                    ApiFormFieldKind::Text => field.value.clone(),
+                };
+                line.push_str(&format!(
+                    " -F '{}={}'",
+                    shell_quote(&field.name),
+                    shell_quote(&value)
+                ));
+            }
+        }
+        ApiBodyType::Binary => {
+            line.push_str(&format!(
+                " --upload-file '{}'",
+                shell_quote(request.body_file.trim_start_matches("file://"))
+            ));
+        }
+        ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
+            if !request.body.is_empty() {
+                line.push_str(&format!(" -d '{}'", shell_quote(&request.body)));
+            }
+        }
     }
     line
 }
@@ -119,6 +154,23 @@ pub fn response_excerpt(response: &ApiResponseSnapshot, limit: usize) -> String 
 mod tests {
     use super::*;
     use crate::ApiMethod;
+
+    #[test]
+    fn curl_codegen_includes_multipart_file() {
+        let mut request = ApiRequest::new("上传", None);
+        request.method = ApiMethod::Post;
+        request.url = "https://example.com/upload".to_string();
+        request.body_type = ApiBodyType::Multipart;
+        request.form_fields = vec![crate::ApiFormField {
+            name: "file".to_string(),
+            value: "file:///tmp/demo.txt".to_string(),
+            description: String::new(),
+            enabled: true,
+            kind: ApiFormFieldKind::File,
+        }];
+        let code = generate_code(CodeTarget::Curl, &request);
+        assert!(code.contains("-F 'file=@/tmp/demo.txt'"), "{code}");
+    }
 
     #[test]
     fn generates_supported_targets() {
