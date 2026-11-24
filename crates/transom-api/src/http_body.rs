@@ -1,8 +1,7 @@
 //! HTTP 请求体编码、表单字段与文件上载。
 
-use super::http::{
-    AuthRequest, MAX_REQUEST_TIMEOUT_SECONDS, MAX_UPLOAD_BYTES, apply_auth, apply_cookies,
-};
+use super::http::http_auth::{AuthRequest, apply_auth};
+use super::http::{MAX_REQUEST_TIMEOUT_SECONDS, MAX_UPLOAD_BYTES, apply_cookies};
 use super::http_support::{
     ensure_header, header_name, header_value, method_for, read_response, request_host,
     safe_url_label,

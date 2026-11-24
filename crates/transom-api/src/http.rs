@@ -1,9 +1,8 @@
 //! 本地 API HTTP、GraphQL 与原始 gRPC 执行服务。
 
-use super::{ApiAuth, ApiCookie, ApiEnvironment, ApiProtocol, ApiRequest};
+use super::{ApiCookie, ApiEnvironment, ApiProtocol, ApiRequest};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use chrono::Utc;
 use reqwest::{Client, Method, Url, Version};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -11,11 +10,15 @@ use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
+use self::http_auth::{AuthRequest, apply_auth};
 use super::http_body::{PreparedRequestParts, prepared_http_parts, send_form_http};
 use super::http_support::{
-    ensure_header, grpc_payload, header_name, header_value, method_for, read_response,
-    request_host, safe_url_label,
+    grpc_payload, header_name, header_value, method_for, read_response, request_host,
+    safe_url_label,
 };
+
+#[path = "http/http_auth.rs"]
+pub(super) mod http_auth;
 
 /// 单次响应体上限；超出时停止读取，避免未知体量响应把界面内存打满。
 pub const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
@@ -24,17 +27,6 @@ pub const MAX_UPLOAD_BYTES: u64 = 64 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 pub(super) const MAX_REQUEST_TIMEOUT_SECONDS: u64 = 600;
-
-/// 认证阶段需要的完整请求上下文；集中传递避免参数列表继续膨胀。
-pub(super) struct AuthRequest<'a> {
-    pub(super) client: &'a Client,
-    pub(super) request: &'a ApiRequest,
-    pub(super) environment: &'a ApiEnvironment,
-    pub(super) headers: &'a mut Vec<(String, String)>,
-    pub(super) body: &'a [u8],
-    pub(super) url: &'a Url,
-    pub(super) method: &'a str,
-}
 
 /// 可直接展示的响应快照。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,120 +324,6 @@ async fn send_grpc(
     Ok(snapshot)
 }
 
-pub(super) async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
-    let AuthRequest {
-        client,
-        request,
-        environment,
-        headers,
-        body,
-        url,
-        method,
-    } = input;
-    match &request.auth {
-        ApiAuth::None => Ok(()),
-        ApiAuth::Bearer { token_env } => {
-            let token = env_value(environment, token_env)?;
-            ensure_header(headers, "authorization", &format!("Bearer {token}"));
-            Ok(())
-        }
-        ApiAuth::Basic {
-            username_env,
-            password_env,
-        } => {
-            let username = env_value(environment, username_env)?;
-            let password = env_value(environment, password_env)?;
-            let token = STANDARD.encode(format!("{username}:{password}"));
-            ensure_header(headers, "authorization", &format!("Basic {token}"));
-            Ok(())
-        }
-        ApiAuth::OAuth2ClientCredentials {
-            token_url,
-            client_id,
-            client_secret_env,
-            scope,
-        } => {
-            let token_url = environment.resolve(token_url);
-            let secret = env_value(environment, client_secret_env)?;
-            let mut form = vec![
-                ("grant_type", "client_credentials"),
-                ("client_id", client_id.as_str()),
-                ("client_secret", secret.as_str()),
-            ];
-            if !scope.is_empty() {
-                form.push(("scope", scope.as_str()));
-            }
-            let response = client
-                .post(&token_url)
-                .form(&form)
-                .send()
-                .await
-                .map_err(|error| ApiError::OAuthToken {
-                    url: safe_url_label(&token_url),
-                    reason: error.to_string(),
-                })?;
-            let value: serde_json::Value =
-                response
-                    .json()
-                    .await
-                    .map_err(|error| ApiError::OAuthToken {
-                        url: safe_url_label(&token_url),
-                        reason: error.to_string(),
-                    })?;
-            let token = value
-                .get("access_token")
-                .and_then(serde_json::Value::as_str)
-                .ok_or_else(|| ApiError::OAuthToken {
-                    url: safe_url_label(&token_url),
-                    reason: "响应缺少 access_token".to_string(),
-                })?;
-            ensure_header(headers, "authorization", &format!("Bearer {token}"));
-            Ok(())
-        }
-        ApiAuth::AwsSigV4 {
-            access_key_env,
-            secret_key_env,
-            session_token_env,
-            region,
-            service,
-        } => {
-            let access_key = env_value(environment, access_key_env)?;
-            let secret_key = env_value(environment, secret_key_env)?;
-            let session_token = if session_token_env.is_empty() {
-                None
-            } else {
-                Some(env_value(environment, session_token_env)?)
-            };
-            super::signing::sign_aws_v4(
-                method,
-                url,
-                headers,
-                body,
-                &super::signing::AwsSigV4Params {
-                    access_key: &access_key,
-                    secret_key: &secret_key,
-                    session_token: session_token.as_deref(),
-                    region,
-                    service,
-                    now: Utc::now(),
-                },
-            )
-        }
-    }
-}
-
-fn env_value(environment: &ApiEnvironment, name: &str) -> Result<String, ApiError> {
-    environment
-        .variables
-        .iter()
-        .find(|variable| variable.enabled && variable.name == name)
-        .map(|variable| variable.value.clone())
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| ApiError::InvalidAuth {
-            reason: format!("环境变量 {name} 未配置或为空"),
-        })
-}
-
 pub(super) fn apply_cookies(url: &Url, cookies: &[ApiCookie], headers: &mut Vec<(String, String)>) {
     let values = cookies
         .iter()
@@ -471,6 +349,7 @@ pub(super) fn apply_cookies(url: &Url, cookies: &[ApiCookie], headers: &mut Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ApiAuth;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
