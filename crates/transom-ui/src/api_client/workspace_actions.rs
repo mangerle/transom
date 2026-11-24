@@ -28,6 +28,10 @@ impl ApiWorkspace {
         }
         let environment = self.environment();
         let resolved = request.resolved(&self.project.base_url, &environment);
+        if let Err(error) = resolved.validate() {
+            self.set_error(error.to_string(), cx);
+            return;
+        }
         let cookies = self.project.cookies.clone();
         self.sending = true;
         self.response = None;

@@ -67,6 +67,8 @@ pub enum ApiError {
     InvalidGraphQlVariables { reason: String },
     #[error("gRPC 请求体不是有效 Base64，原因: {reason}")]
     InvalidGrpcPayload { reason: String },
+    #[error("请求体配置无效，原因: {reason}")]
+    InvalidBody { reason: String },
     #[error("当前执行器不支持协议 {protocol}")]
     UnsupportedProtocol { protocol: String },
     #[error("发送请求失败，目标: {host}，原因: {reason}")]
@@ -174,6 +176,7 @@ async fn execute_request(
     environment: &ApiEnvironment,
     cookies: &[ApiCookie],
 ) -> Result<ApiResponseSnapshot, ApiError> {
+    request.validate()?;
     match request.protocol {
         ApiProtocol::Http => send_http(client, request, environment, cookies, false).await,
         ApiProtocol::GraphQl => send_http(client, request, environment, cookies, true).await,

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 mod request_text;
+mod validation;
 
 pub use self::request_text::method_for_request;
 
