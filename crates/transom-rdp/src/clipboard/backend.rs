@@ -19,15 +19,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
 /// 剪贴板内部有界待处理队列上限，防止异常高频请求导致内存积压。
-pub(crate) const MAX_CLIPRDR_QUEUE: usize = 16;
+const MAX_CLIPRDR_QUEUE: usize = 16;
 
 /// 剪贴板跨线程同步状态上下文。
 #[derive(Debug, Default)]
 pub struct CliprdrSyncContext {
     /// 远端最新宣告可用且待拉取的文本格式（仅保留最新一次 `on_remote_copy` 结果，避免积压过时请求）。
     pub pending_paste_format: Option<ClipboardFormatId>,
-    /// 已发出拉取请求、等待数据响应的格式队列（用于准确选择 UTF-16LE 或 ANSI 解码器）。
-    pub inflight_paste_formats: VecDeque<ClipboardFormatId>,
+    /// 当前唯一在途的拉取请求格式（严格单在途串行，杜绝乱序错位）。
+    pub inflight_paste_format: Option<ClipboardFormatId>,
     /// 远端正在请求本地提供的剪贴板格式队列。
     pub pending_data_requests: VecDeque<ClipboardFormatId>,
     /// 本地最新待共享给远端的纯文本数据。
@@ -109,7 +109,7 @@ impl CliprdrBackend for TransomCliprdrBackend {
     }
 
     fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
-        let requested_format = self.context.inflight_paste_formats.pop_front();
+        let requested_format = self.context.inflight_paste_format.take();
         if response.is_error() {
             log::debug!("远端返回剪贴板数据提取失败响应");
             return;
@@ -170,10 +170,7 @@ mod tests {
         // 模拟两次拉取相同文本 "hello"（期间本地可能已修改，远端二次复制必须正常下发）
         let payload = encode_text_payload("hello");
         for _ in 0..2 {
-            backend
-                .context
-                .inflight_paste_formats
-                .push_back(ClipboardFormatId::CF_UNICODETEXT);
+            backend.context.inflight_paste_format = Some(ClipboardFormatId::CF_UNICODETEXT);
             let resp = FormatDataResponse::new_data(payload.as_slice());
             backend.on_format_data_response(resp);
             let event = rx.try_recv().expect("每次远端复制都应下发事件");
@@ -185,10 +182,7 @@ mod tests {
 
         // ANSI 回退格式验证
         let ansi = encode_ansi_payload("ansi-ok");
-        backend
-            .context
-            .inflight_paste_formats
-            .push_back(ClipboardFormatId::CF_TEXT);
+        backend.context.inflight_paste_format = Some(ClipboardFormatId::CF_TEXT);
         backend.on_format_data_response(FormatDataResponse::new_data(ansi.as_slice()));
         let event = rx.try_recv().expect("ANSI 格式应成功解码");
         assert!(matches!(

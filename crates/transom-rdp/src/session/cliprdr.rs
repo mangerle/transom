@@ -4,7 +4,6 @@
 //! 本地复制通告）从主事件循环 `loop_runner` 中剥离，并严格按照对端协商/请求的格式 ID
 //! （`CF_UNICODETEXT` / `CF_TEXT`）编解码，杜绝格式错配导致的粘贴乱码。
 
-use crate::clipboard::backend::MAX_CLIPRDR_QUEUE;
 use crate::clipboard::TransomCliprdrBackend;
 use crate::clipboard::text::{encode_ansi_payload, encode_text_payload};
 use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, FormatDataResponse};
@@ -29,13 +28,16 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
             return Ok(());
         };
         let ctx = &mut backend.context;
-        let paste = ctx.pending_paste_format.take();
-        if let Some(fmt) = paste {
-            if ctx.inflight_paste_formats.len() >= MAX_CLIPRDR_QUEUE {
-                ctx.inflight_paste_formats.pop_front();
+        // 严格单在途串行：仅当上一笔拉取已完成时才发起下一笔请求
+        let paste = if ctx.inflight_paste_format.is_none() {
+            let next = ctx.pending_paste_format.take();
+            if let Some(fmt) = next {
+                ctx.inflight_paste_format = Some(fmt);
             }
-            ctx.inflight_paste_formats.push_back(fmt);
-        }
+            next
+        } else {
+            None
+        };
         let requests: Vec<ClipboardFormatId> = ctx.pending_data_requests.drain(..).collect();
         let text = if requests.is_empty() {
             None
