@@ -215,6 +215,17 @@ fn build_client_connector(
     connector
 }
 
+static INIT_CRYPTO_PROVIDER: std::sync::Once = std::sync::Once::new();
+
+/// 确保进程级 rustls CryptoProvider 已安装（工作区同时存在 aws-lc-rs 与 ring 时必须显式指定）。
+fn ensure_crypto_provider() {
+    INIT_CRYPTO_PROVIDER.call_once(|| {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        }
+    });
+}
+
 /// 执行 TLS 通道升级、提取服务器公钥并校验 SHA-256 指纹。
 async fn perform_tls_upgrade<S>(
     stream: S,
@@ -225,6 +236,7 @@ async fn perform_tls_upgrade<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
 {
+    ensure_crypto_provider();
     let (tls_stream, certificate) = run_stage(
         "TLS 安全握手升级",
         shutdown_rx,
