@@ -17,6 +17,23 @@ pub(super) fn directory_change_command(kind: ShellKind, path: &str) -> Option<St
     }
 }
 
+/// 在无法确知 Shell 方言时按路径形式推断最安全通用的目录切换命令。
+///
+/// 设计原理（Why）：远端服务器（如原生 Linux/Unix）未启用 Shell 集成或探针超时时，
+/// 不能直接拒绝跳转；若路径为典型 POSIX 路径，可安全按 POSIX 规则转义生成 `cd`。
+pub(super) fn fallback_directory_change_command(path: &str) -> Option<String> {
+    if path.starts_with('/') {
+        Some(format!("cd {}", posix_path_argument(path)))
+    } else if path.len() >= 2
+        && path.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && path.as_bytes().get(1) == Some(&b':')
+    {
+        Some(format!("cd {}", power_shell_path_argument(path)))
+    } else {
+        Some(format!("cd {}", posix_path_argument(path)))
+    }
+}
+
 /// POSIX 路径只在会改变分词或触发展开时加单引号，保持普通路径可读。
 fn posix_path_argument(path: &str) -> String {
     if path.starts_with('-') || path.chars().any(is_posix_shell_metachar) {
@@ -106,8 +123,8 @@ fn quote_power_shell(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        directory_change_command, posix_path_argument, power_shell_path_argument, quote_posix,
-        quote_power_shell,
+        directory_change_command, fallback_directory_change_command, posix_path_argument,
+        power_shell_path_argument, quote_posix, quote_power_shell,
     };
     use crate::ShellKind;
 
@@ -147,6 +164,22 @@ mod tests {
         assert_eq!(
             power_shell_path_argument(r"C:\Users\wangle\Public"),
             r"C:\Users\wangle\Public"
+        );
+    }
+
+    #[test]
+    fn fallback_generates_command_by_path_format() {
+        assert_eq!(
+            fallback_directory_change_command("/home/absf/builds/6cxoLjC2"),
+            Some("cd /home/absf/builds/6cxoLjC2".to_string())
+        );
+        assert_eq!(
+            fallback_directory_change_command("/home/absf/my dir"),
+            Some("cd '/home/absf/my dir'".to_string())
+        );
+        assert_eq!(
+            fallback_directory_change_command(r"C:\Users\Public"),
+            Some(r"cd C:\Users\Public".to_string())
         );
     }
 }

@@ -1,6 +1,6 @@
 //! 已有终端会话中的目录切换入口与安全前置条件。
 
-use super::shell_command::directory_change_command;
+use super::shell_command::{directory_change_command, fallback_directory_change_command};
 use crate::engine::PromptInputState;
 use gpui_kit::Context;
 use thiserror::Error;
@@ -41,15 +41,15 @@ pub enum TerminalDirectoryError {
 impl crate::TerminalView {
     /// 在已有终端中切换到指定目录。
     ///
-    /// 设计原理（Why）：目录动作不修改调用方当前输入，也不新开会话；只有 Shell
-    /// 集成能确认提示符空闲且输入行为空时才写入一条经过方言转义的 `cd`。返回值
-    /// 失败时保证没有向 PTY 写入任何字节，调用方可安全展示提示。
+    /// 设计原理（Why）：目录动作不修改调用方当前输入，也不新开会话；优先在确认提示符
+    /// 空闲且输入行为空时写入经过方言转义的 `cd`。在未配置 Shell 集成或状态未知的普通
+    /// 会话中，只要终端未退出、未处于全屏程序且无进行中的命令，采用安全转义后的通用
+    /// `cd` 命令进行优雅降级，避免普通 SSH 会话功能不可用。
     ///
     /// # Errors
     ///
     /// - 终端已退出或输入通道关闭；
-    /// - Shell 集成未就绪或 Shell 方言不受支持；
-    /// - 提示符状态未知、正在运行命令或用户已有未提交输入；
+    /// - 终端正处于全屏程序、正在运行命令或用户已有未提交输入；
     /// - 目标路径为空或包含控制字符。
     pub fn change_directory(
         &mut self,
@@ -67,21 +67,28 @@ impl crate::TerminalView {
 
         // 先把已经到达但尚未解析的输出并入引擎，避免依据过期提示符状态写入命令。
         self.drain_pending_output(cx);
-        let shell = self
-            .shell_integration
-            .shell_kind()
-            .ok_or(TerminalDirectoryError::ShellUnknown)?;
-        let command = directory_change_command(shell, path).ok_or(
-            TerminalDirectoryError::UnsupportedShell {
-                shell: shell.label(),
-            },
-        )?;
-        match self.state.engine.lock().prompt_input_state() {
-            PromptInputState::Empty => {}
-            PromptInputState::Unknown => return Err(TerminalDirectoryError::PromptUnknown),
+
+        let (prompt_state, is_alt_screen) = {
+            let engine = self.state.engine.lock();
+            (engine.prompt_input_state(), engine.is_alt_screen())
+        };
+        if is_alt_screen {
+            return Err(TerminalDirectoryError::CommandRunning);
+        }
+        match prompt_state {
+            PromptInputState::Empty | PromptInputState::Unknown => {}
             PromptInputState::Edited => return Err(TerminalDirectoryError::PromptEdited),
             PromptInputState::Running => return Err(TerminalDirectoryError::CommandRunning),
         }
+
+        let command = self
+            .shell_integration
+            .shell_kind()
+            .and_then(|kind| directory_change_command(kind, path))
+            .or_else(|| fallback_directory_change_command(path))
+            .ok_or_else(|| TerminalDirectoryError::InvalidPath {
+                path: path.to_string(),
+            })?;
 
         if !self.send_text(&format!("{command}\r"), cx) {
             return Err(TerminalDirectoryError::InputClosed);

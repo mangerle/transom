@@ -105,6 +105,7 @@ pub(super) fn on_sftp_panel_event(
         | SftpPanelEvent::ChangeTerminalDirectory { .. } => {
             // 需要窗口的动作推到渲染期执行：事件派发时没有 Window。
             app_state.ui.window_requests.push_sftp(event.clone());
+            cx.notify();
         }
         SftpPanelEvent::OpenSyncModal(state) => {
             app_state.ui.modals.sftp.open_sync((**state).clone(), cx);

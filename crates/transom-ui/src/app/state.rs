@@ -286,6 +286,7 @@ impl AppState {
         self.ui.status = Some(text.clone());
         self.ui.feedback.status_seq = self.ui.feedback.status_seq.wrapping_add(1);
         let seq = self.ui.feedback.status_seq;
+        cx.notify();
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_secs(4))
