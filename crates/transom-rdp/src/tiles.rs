@@ -285,6 +285,8 @@ impl TileExtractor {
             self.dirty_mask.fill(false);
         }
 
+        let next_seq = self.seq.wrapping_add(1);
+
         if self.needs_full_reset {
             let mut patches = Vec::with_capacity(total);
             for r in 0..rows {
@@ -292,13 +294,12 @@ impl TileExtractor {
                     patches.push(extract_tile_patch(canvas, c, r, &self.pool));
                 }
             }
-            self.seq = self.seq.wrapping_add(1);
             return Some(FrameUpdate {
                 width,
                 height,
                 cols,
                 rows,
-                seq: self.seq,
+                seq: next_seq,
                 full_reset: true,
                 patches,
             });
@@ -317,20 +318,20 @@ impl TileExtractor {
             }
         }
 
-        self.seq = self.seq.wrapping_add(1);
         Some(FrameUpdate {
             width,
             height,
             cols,
             rows,
-            seq: self.seq,
+            seq: next_seq,
             full_reset: false,
             patches,
         })
     }
 
-    /// 确认当前脏位图对应的帧已成功投递至通道，清空待发标记。
+    /// 确认当前脏位图对应的帧已成功投递至通道，提交序列号并清空待发标记。
     pub fn commit_flushed(&mut self) {
+        self.seq = self.seq.wrapping_add(1);
         self.needs_full_reset = false;
         if self.dirty_count > 0 {
             self.dirty_mask.fill(false);

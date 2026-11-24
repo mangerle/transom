@@ -68,7 +68,6 @@ pub(crate) struct SessionLoopRunner {
     audio_muted: Arc<AtomicBool>,
     cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
     input_batcher: InputBatcher,
-    last_frame_flushed: Instant,
     resize_controller: ResizeController,
     current_resolution: (u16, u16),
     consecutive_decode_errors: u32,
@@ -113,7 +112,6 @@ impl SessionLoopRunner {
             audio_muted,
             cliprdr_context,
             input_batcher: InputBatcher::default(),
-            last_frame_flushed: Instant::now(),
             resize_controller: ResizeController::new((width, height)),
             current_resolution: (width, height),
             consecutive_decode_errors: 0,
@@ -248,18 +246,15 @@ impl SessionLoopRunner {
     /// 尝试向 UI 非阻塞投递增量瓦片帧；若帧通道已满则保留脏位图等待下一拍合并。
     fn flush_dirty_tiles(&mut self) {
         if self.senders.frames.capacity() == 0 {
-            self.last_frame_flushed = Instant::now();
             return;
         }
         if let Some(update) = self.tile_extractor.extract_pending(&self.canvas)
             && let Err(send_err) = self.senders.frames.try_send(update)
         {
             self.tile_extractor.recycle_frame(send_err.into_inner());
-            self.last_frame_flushed = Instant::now();
             return;
         }
         self.tile_extractor.commit_flushed();
-        self.last_frame_flushed = Instant::now();
     }
 
     /// 触发已到期的动态分辨率请求（若通道尚未就绪则有限次数重试）。
@@ -368,11 +363,6 @@ impl SessionLoopRunner {
                         self.canvas.height(),
                         &damages,
                     );
-                }
-                if self.tile_extractor.has_pending()
-                    && self.last_frame_flushed.elapsed() >= MIN_FRAME_INTERVAL
-                {
-                    self.flush_dirty_tiles();
                 }
 
                 drive_cliprdr_events(&mut self.active_stage, writer, &self.cliprdr_context).await;
