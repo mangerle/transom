@@ -207,7 +207,7 @@ impl ApiProject {
     pub fn upsert_cookie(&mut self, cookie: ApiCookie) {
         if let Some(existing) = self.cookies.iter_mut().find(|existing| {
             existing.name.eq_ignore_ascii_case(&cookie.name)
-                && existing.domain == cookie.domain
+                && optional_domain_eq(existing.domain.as_deref(), cookie.domain.as_deref())
                 && existing.path == cookie.path
         }) {
             *existing = cookie;
@@ -370,16 +370,46 @@ impl ApiCookie {
     pub fn applies_to(&self, url: &reqwest::Url) -> bool {
         let host = url.host_str().unwrap_or_default();
         let domain = self.domain.as_deref().unwrap_or(host);
-        let domain_matches = if domain.starts_with('.') {
-            host.ends_with(domain)
-        } else {
-            host.eq_ignore_ascii_case(domain)
-        };
-        domain_matches
-            && url.path().starts_with(&self.path)
+        cookie_domain_matches(host, domain)
+            && cookie_path_matches(url.path(), &self.path)
             && (!self.secure || url.scheme() == "https")
             && self.expires_at.is_none_or(|expires| expires > unix_now())
     }
+}
+
+fn optional_domain_eq(left: Option<&str>, right: Option<&str>) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left
+            .trim_start_matches('.')
+            .eq_ignore_ascii_case(right.trim_start_matches('.')),
+        _ => false,
+    }
+}
+
+fn cookie_domain_matches(host: &str, domain: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    let domain = domain
+        .trim_start_matches('.')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    if domain.is_empty() {
+        return false;
+    }
+    host == domain || host.ends_with(&format!(".{domain}"))
+}
+
+fn cookie_path_matches(request_path: &str, cookie_path: &str) -> bool {
+    let cookie_path = if cookie_path.trim().is_empty() {
+        "/"
+    } else {
+        cookie_path.trim()
+    };
+    if cookie_path == "/" || request_path == cookie_path {
+        return true;
+    }
+    request_path.starts_with(cookie_path)
+        && request_path.as_bytes().get(cookie_path.len()) == Some(&b'/')
 }
 
 /// 将项目 Cookie 渲染为 `name=value` 文本；域名和属性由响应自动维护。
@@ -497,5 +527,70 @@ mod tests {
             .set_variables_text("HOST=example.com\nBROKEN")
             .expect_err("缺少等号");
         assert!(error.detail.expect("错误详情").contains("第 2 行"));
+    }
+
+    #[test]
+    fn cookie_domain_matches_subdomains_with_or_without_leading_dot() {
+        let url = reqwest::Url::parse("https://api.example.com/users").expect("URL");
+        let cookie = ApiCookie {
+            name: "session".to_string(),
+            value: "abc".to_string(),
+            domain: Some("example.com".to_string()),
+            path: "/".to_string(),
+            secure: true,
+            http_only: true,
+            expires_at: None,
+        };
+        assert!(cookie.applies_to(&url));
+
+        let cookie = ApiCookie {
+            domain: Some(".example.com".to_string()),
+            ..cookie
+        };
+        assert!(cookie.applies_to(&url));
+    }
+
+    #[test]
+    fn cookie_path_requires_a_segment_boundary() {
+        let cookie = ApiCookie {
+            name: "session".to_string(),
+            value: "abc".to_string(),
+            domain: None,
+            path: "/api".to_string(),
+            secure: false,
+            http_only: false,
+            expires_at: None,
+        };
+        assert!(
+            cookie.applies_to(&reqwest::Url::parse("https://example.com/api/users").expect("URL"))
+        );
+        assert!(
+            !cookie.applies_to(&reqwest::Url::parse("https://example.com/apiv2").expect("URL"))
+        );
+    }
+
+    #[test]
+    fn cookie_upsert_treats_domain_case_and_leading_dot_equivalently() {
+        let mut project = ApiProject::new("Cookie 测试");
+        project.upsert_cookie(ApiCookie {
+            name: "session".to_string(),
+            value: "old".to_string(),
+            domain: Some("Example.com".to_string()),
+            path: "/".to_string(),
+            secure: false,
+            http_only: false,
+            expires_at: None,
+        });
+        project.upsert_cookie(ApiCookie {
+            name: "session".to_string(),
+            value: "new".to_string(),
+            domain: Some(".example.com".to_string()),
+            path: "/".to_string(),
+            secure: false,
+            http_only: false,
+            expires_at: None,
+        });
+        assert_eq!(project.cookies.len(), 1);
+        assert_eq!(project.cookies[0].value, "new");
     }
 }
