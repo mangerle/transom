@@ -9,12 +9,13 @@ use crate::audio::TransomAudioBackend;
 use crate::clipboard::{CliprdrSyncContext, TransomCliprdrBackend};
 use crate::error::RdpError;
 use crate::session::channel::RdpOutput;
-use crate::settings::SessionConfig;
+use crate::settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo};
 use crate::transport::connect_stream;
 use ironrdp_connector::{ClientConnector, ClientConnectorState, ConnectionResult, ServerName};
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{TokioFramed, connect_begin, connect_finalize, mark_as_upgraded};
 use parking_lot::Mutex;
+use sha2::{Digest, Sha256};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -78,8 +79,14 @@ pub async fn establish_connection(
         detail: e.to_string(),
     })?;
 
-    let (mut framed, server_public_key) =
-        upgrade_transport_if_needed(framed, &connector, &config.host, shutdown_rx).await?;
+    let (mut framed, server_public_key) = upgrade_transport_if_needed(
+        framed,
+        &connector,
+        &config.host,
+        config.cert_verifier.as_ref(),
+        shutdown_rx,
+    )
+    .await?;
     let result = finalize_authentication(
         should_upgrade,
         connector,
@@ -103,6 +110,7 @@ async fn upgrade_transport_if_needed(
     framed: TokioFramed<ErasedStream>,
     connector: &ClientConnector,
     host: &str,
+    cert_verifier: Option<&TlsCertVerifier>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<(TokioFramed<ErasedStream>, Vec<u8>), RdpError> {
     let needs_tls = matches!(
@@ -115,11 +123,8 @@ async fn upgrade_transport_if_needed(
     }
 
     let (initial_stream, leftover) = framed.into_inner();
-    let (tls_stream, public_key) = perform_tls_upgrade(initial_stream, host, shutdown_rx).await?;
-    log::info!(
-        "RDP TLS 安全通道升级完成，主机: {host}，服务端公钥长度: {} 字节",
-        public_key.len()
-    );
+    let (tls_stream, public_key) =
+        perform_tls_upgrade(initial_stream, host, cert_verifier, shutdown_rx).await?;
     let erased: ErasedStream = Box::new(tls_stream);
     Ok((TokioFramed::new_with_leftover(erased, leftover), public_key))
 }
@@ -220,10 +225,11 @@ fn build_client_connector(
     connector
 }
 
-/// 执行 TLS 通道升级并提取服务器公钥。
+/// 执行 TLS 通道升级、提取服务器公钥并校验 SHA-256 指纹。
 async fn perform_tls_upgrade<S>(
     stream: S,
     host: &str,
+    cert_verifier: Option<&TlsCertVerifier>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) -> Result<(ironrdp_tls::TlsStream<S>, Vec<u8>), RdpError>
 where
@@ -247,5 +253,34 @@ where
         })?
         .to_owned();
 
+    let fingerprint = format_sha256_fingerprint(&public_key);
+    log::info!("RDP TLS 安全通道升级完成，主机: {host}，公钥 SHA-256: {fingerprint}");
+
+    if let Some(verifier) = cert_verifier {
+        let info = TlsCertificateInfo {
+            host: host.to_string(),
+            sha256_fingerprint: fingerprint,
+        };
+        if let Err(reason) = verifier(&info) {
+            return Err(RdpError::Tls {
+                host: host.to_string(),
+                message: format!("TLS 证书校验未通过: {reason}"),
+            });
+        }
+    }
+
     Ok((tls_stream, public_key))
+}
+
+fn format_sha256_fingerprint(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let digest = Sha256::digest(bytes);
+    let mut out = String::with_capacity(digest.len() * 3);
+    for (idx, b) in digest.iter().enumerate() {
+        if idx > 0 {
+            out.push(':');
+        }
+        let _ = write!(&mut out, "{b:02X}");
+    }
+    out
 }

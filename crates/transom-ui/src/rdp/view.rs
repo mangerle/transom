@@ -138,6 +138,16 @@ impl RdpView {
         cx.notify();
     }
 
+    /// 在会话正式启动前标记失败（如钥匙串凭据读取错误），中止连接并向工作区报告错误。
+    pub fn fail_with_error(&mut self, detail: String, cx: &mut Context<Self>) {
+        self.session = None;
+        self._consumer_tasks.clear();
+        self.retire_rendered_resources();
+        self.state = RdpViewState::Failed(detail.clone());
+        cx.emit(RdpViewEvent::Failed(detail));
+        cx.notify();
+    }
+
     /// 派生低频控制事件消费协程（随视图析构自动取消）。
     fn spawn_event_consumer(
         mut events_rx: mpsc::Receiver<RdpOutput>,

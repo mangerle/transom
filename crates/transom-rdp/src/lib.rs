@@ -28,7 +28,7 @@ pub use error::RdpError;
 pub use keyboard::{KeyChord, ModifierState};
 pub use pointer::CursorUpdate;
 pub use session::{MouseBtn, RdpInput, RdpOutput, RdpReceivers, RdpSession};
-pub use settings::SessionConfig;
+pub use settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo};
 pub use tiles::{FrameUpdate, TILE_SIZE, TilePatch};
 
 #[cfg(test)]

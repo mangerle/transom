@@ -429,24 +429,31 @@ fn launch_rdp_session_async(
     cx: &mut Context<AppShell>,
 ) {
     cx.spawn(async move |_, cx| {
-        let password = crate::app::spawn_blocking_local(move || {
+        let password_result = crate::app::spawn_blocking_local(move || {
             let key =
                 transom_core::SecretKey::new(secret_owner, transom_core::SecretKind::Password);
-            match secret_store.get(&key) {
-                Ok(secret) => secret.map(|s| s.as_str().to_string()).unwrap_or_default(),
-                Err(err) => {
-                    log::warn!("读取 RDP 会话密码失败，将以空口令继续尝试: {err}");
-                    String::new()
-                }
-            }
+            secret_store
+                .get(&key)
+                .map(|secret| secret.map(|s| s.as_str().to_string()).unwrap_or_default())
+                .map_err(|err| format!("读取 RDP 会话密码失败，已中止连接以防触发账户锁定: {err}"))
         })
         .await
-        .unwrap_or_default();
+        .unwrap_or_else(|| Err("读取 RDP 会话密码任务被取消或异常中断".to_string()));
 
-        let config = transom_rdp::SessionConfig::new(&rdp, password, (1920, 1080));
-        view.update(cx, |rdp_view, cx| {
-            rdp_view.start_session(config, cx);
-        });
+        match password_result {
+            Ok(password) => {
+                let config = transom_rdp::SessionConfig::new(&rdp, password, (1920, 1080));
+                view.update(cx, |rdp_view, cx| {
+                    rdp_view.start_session(config, cx);
+                });
+            }
+            Err(detail) => {
+                log::error!("{detail}");
+                view.update(cx, |rdp_view, cx| {
+                    rdp_view.fail_with_error(detail, cx);
+                });
+            }
+        }
     })
     .detach();
 }

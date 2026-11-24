@@ -11,8 +11,21 @@ use ironrdp_pdu::rdp::capability_sets::{
 };
 use ironrdp_pdu::rdp::client_info::{CompressionType, PerformanceFlags, TimezoneInfo};
 use std::fmt;
+use std::sync::Arc;
 use transom_core::{RdpColorDepth, RdpConnection, RdpPerformance, RdpSecurity};
 use zeroize::Zeroize;
+
+/// 远端 TLS 服务器证书指纹信息（用于 TOFU 信任校验与连接审计）。
+#[derive(Debug, Clone)]
+pub struct TlsCertificateInfo {
+    /// 目标主机名或 IP。
+    pub host: String,
+    /// 公钥 SHA-256 十六进制指纹（冒号分隔）。
+    pub sha256_fingerprint: String,
+}
+
+/// TLS 证书校验回调类型；返回 `Err(reason)` 时在发送任何 NLA 凭据前中止连接。
+pub type TlsCertVerifier = Arc<dyn Fn(&TlsCertificateInfo) -> Result<(), String> + Send + Sync>;
 
 /// RDP 客户端会话启动运行期配置。
 ///
@@ -44,6 +57,8 @@ pub struct SessionConfig {
     pub dynamic_resolution: bool,
     /// 初始视口尺寸（宽、高）。
     pub initial_size: (u16, u16),
+    /// 可选的 TLS 证书校验回调（用于 TOFU 或指纹钉扎）。
+    pub cert_verifier: Option<TlsCertVerifier>,
 }
 
 impl SessionConfig {
@@ -68,6 +83,7 @@ impl SessionConfig {
                 .desktop_size
                 .map(|size| (size.width, size.height))
                 .unwrap_or(initial_size),
+            cert_verifier: None,
         }
     }
 
@@ -186,6 +202,10 @@ impl fmt::Debug for SessionConfig {
             .field("clipboard", &self.clipboard)
             .field("dynamic_resolution", &self.dynamic_resolution)
             .field("initial_size", &self.initial_size)
+            .field(
+                "cert_verifier",
+                &self.cert_verifier.as_ref().map(|_| "[CALLBACK]"),
+            )
             .finish()
     }
 }
