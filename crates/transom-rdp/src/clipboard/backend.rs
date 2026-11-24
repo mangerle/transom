@@ -6,7 +6,7 @@
 //! 本模块实现 `ironrdp_cliprdr::backend::CliprdrBackend` 特型，与主数据流异步解耦。
 
 use crate::clipboard::ClipboardEvent;
-use crate::clipboard::text::decode_text_payload;
+use crate::clipboard::text::{decode_ansi_payload, decode_text_payload};
 use crate::session::channel::RdpOutput;
 use ironrdp_cliprdr::backend::CliprdrBackend;
 use ironrdp_cliprdr::pdu::{
@@ -22,8 +22,10 @@ use tokio::sync::mpsc;
 /// 剪贴板跨线程同步状态上下文。
 #[derive(Debug, Default)]
 pub struct CliprdrSyncContext {
-    /// 远端是否存在可提取的文本剪贴板格式。
-    pub pending_paste_text: bool,
+    /// 远端宣告可用且待拉取的具体文本格式（优先 `CF_UNICODETEXT`，回退 `CF_TEXT`）。
+    pub pending_paste_format: Option<ClipboardFormatId>,
+    /// 最近一次发起拉取时请求的格式（用于准确选择 UTF-16LE 或 ANSI 解码器）。
+    pub inflight_paste_format: Option<ClipboardFormatId>,
     /// 远端是否正在请求本地提供指定格式的剪贴板数据。
     pub pending_data_request: Option<ClipboardFormatId>,
     /// 本地最新待共享给远端的纯文本数据。
@@ -76,11 +78,21 @@ impl CliprdrBackend for TransomCliprdrBackend {
     }
 
     fn on_remote_copy(&mut self, available_formats: &[ClipboardFormat]) {
-        let has_text = available_formats.iter().any(|f| {
-            f.id() == ClipboardFormatId::CF_UNICODETEXT || f.id() == ClipboardFormatId::CF_TEXT
-        });
-        if has_text {
-            self.context.lock().pending_paste_text = true;
+        let preferred = if available_formats
+            .iter()
+            .any(|f| f.id() == ClipboardFormatId::CF_UNICODETEXT)
+        {
+            Some(ClipboardFormatId::CF_UNICODETEXT)
+        } else if available_formats
+            .iter()
+            .any(|f| f.id() == ClipboardFormatId::CF_TEXT)
+        {
+            Some(ClipboardFormatId::CF_TEXT)
+        } else {
+            None
+        };
+        if let Some(format) = preferred {
+            self.context.lock().pending_paste_format = Some(format);
         }
     }
 
@@ -89,12 +101,18 @@ impl CliprdrBackend for TransomCliprdrBackend {
     }
 
     fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
+        let requested_format = self.context.lock().inflight_paste_format.take();
         if response.is_error() {
             log::debug!("远端返回剪贴板数据提取失败响应");
             return;
         }
 
-        if let Some(text) = decode_text_payload(response.data()) {
+        let decoded = match requested_format {
+            Some(fmt) if fmt == ClipboardFormatId::CF_TEXT => decode_ansi_payload(response.data()),
+            _ => decode_text_payload(response.data()),
+        };
+
+        if let Some(text) = decoded {
             let mut ctx = self.context.lock();
             if ctx.last_remote_text.as_deref() != Some(&text) {
                 ctx.last_remote_text = Some(text.clone());

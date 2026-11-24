@@ -6,7 +6,7 @@ pub mod input;
 pub mod toolbar;
 pub mod view;
 
-pub use view::RdpView;
+pub use view::{RdpView, RdpViewEvent};
 
 #[cfg(test)]
 mod tests;

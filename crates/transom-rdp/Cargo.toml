@@ -36,6 +36,3 @@ thiserror = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 zeroize = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }

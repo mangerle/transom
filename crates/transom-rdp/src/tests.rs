@@ -1,6 +1,5 @@
 //! RDP 协议后端基础单元测试。
 
-use crate::clipboard::file_stream::sanitize_destination_path;
 use crate::clipboard::text::{decode_text_payload, encode_text_payload};
 use crate::keyboard::KeyboardTranslator;
 use crate::settings::SessionConfig;
@@ -47,45 +46,17 @@ fn clipboard_utf16_round_trip() {
 #[test]
 fn keyboard_scancode_translation() {
     let mut translator = KeyboardTranslator::default();
-    let ops = translator.handle_key_down("enter");
+    let mut ops = Vec::new();
+    translator.handle_key_down("enter", None, crate::ModifierState::default(), &mut ops);
     assert_eq!(ops.len(), 1);
-    let release_ops = translator.release_all();
-    assert_eq!(release_ops.len(), 1);
 
-    let fallback_ops = translator.release_all();
-    assert_eq!(fallback_ops.len(), 4);
-}
+    ops.clear();
+    translator.release_all(&mut ops);
+    assert_eq!(ops.len(), 1);
 
-#[test]
-fn path_traversal_protection_rejects_escape_without_creating_dirs() {
-    let temp_dir = tempfile::tempdir().expect("临时目录");
-    let safe_base = temp_dir.path().join("sandbox");
-    let outside_dir = temp_dir.path().join("escaped_dir");
-
-    for evil in [
-        "../escaped_dir/evil.txt",
-        "../../../etc/passwd",
-        "/etc/passwd",
-        r"C:\Windows\System32\cmd.exe",
-        "sub/../../escaped_dir/file.txt",
-        "",
-        ".",
-    ] {
-        let result = sanitize_destination_path(&safe_base, evil);
-        assert!(result.is_err(), "恶意路径必须被拒绝: {evil}");
-    }
-
-    assert!(
-        !outside_dir.exists(),
-        "拒绝路径穿越前严禁在沙箱外创建任何目录"
-    );
-
-    // 合法嵌套相对路径应正确解析到沙箱内
-    let valid =
-        sanitize_destination_path(&safe_base, r"docs\report.pdf").expect("合法相对路径应校验通过");
-    let canonical_base = safe_base.canonicalize().expect("规范化沙箱根目录");
-    assert!(valid.starts_with(&canonical_base));
-    assert!(valid.ends_with("docs/report.pdf"));
+    ops.clear();
+    translator.release_all(&mut ops);
+    assert_eq!(ops.len(), 4);
 }
 
 #[test]
@@ -107,6 +78,7 @@ fn session_channel_backpressure_distinction() {
     let session = crate::RdpSession {
         input_tx,
         shutdown_tx,
+        worker: None,
     };
     assert!(
         session

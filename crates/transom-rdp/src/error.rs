@@ -4,7 +4,6 @@
 //! 采用语义详尽的强类型错误枚举，便于调用方进行精准模式解构与局部容错恢复，
 //! 避免将松散宽泛的通用错误直接向上层抛出。
 
-use std::path::PathBuf;
 use thiserror::Error;
 
 /// RDP 客户端在连接、协议状态流转与外设交互中可能产生的各类错误。
@@ -37,21 +36,13 @@ pub enum RdpError {
     #[error("RDP 协议解析错误，阶段: {stage}，详情: {detail}")]
     Protocol { stage: &'static str, detail: String },
 
-    /// 剪贴板文件复制跨越沙箱受控目录（路径穿越防护）。
-    #[error("检测到非法的跨目录文件路径，目标: {path}，拒绝传输")]
-    PathTraversal { path: PathBuf },
-
-    /// 访问或创建本地剪贴板沙箱目录失败。
-    #[error("访问或创建本地剪贴板沙箱目录失败，路径: {path}，原因: {source}")]
-    SandboxIo {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
     /// 本地音频输出设备初始化失败。
     #[error("初始化本地音频播放设备失败，原因: {message}")]
     AudioOutput { message: String },
+
+    /// 专用异步运行时或会话工作线程初始化失败。
+    #[error("初始化 RDP 会话运行环境失败，原因: {detail}")]
+    Runtime { detail: String },
 
     /// 会话通信通道异常中断。
     #[error("内部通信通道已断开，方向: {channel}")]

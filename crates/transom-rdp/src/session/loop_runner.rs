@@ -1,13 +1,15 @@
 //! RDP 数据会话主循环与事件驱动。
 //!
-//! 设计原理（Why）：会话循环运行在独立的异步任务中，驱动 IronRDP 的 `ActiveStage`
-//! 协议状态机。通过 `tokio::select!` 多路复用监听网络入站 PDU、UI 输入指令、16ms 帧合并
-//! 定时器与停机取消信号：
-//! 1. **无反压阻塞帧投递**：视频帧通道满时跳过本次提取并保留损伤矩形，在下一帧自动合并，
-//!    确保 UI 渲染卡顿或后台标签不消费时绝不阻塞网络读包与用户输入；
-//! 2. **完整重激活闭环**：收到 `ActiveStageOutput::DeactivateAll` 后执行标准
-//!    Deactivation-Reactivation 序列，重建画布并向 UI 通知新分辨率；
-//! 3. **平滑停机**：监听 `shutdown_rx` 或 `RdpInput::Disconnect`，发送关闭请求后安全退出。
+//! 设计原理（Why）：会话循环运行在独立 OS 线程的 current-thread 运行时中，驱动 IronRDP
+//! 的 `ActiveStage` 协议状态机：
+//! 1. **100% 取消安全的 PDU 读取**：内层循环通过 `tokio::pin!` 固定 `reader.read_pdu()`，
+//!    处理用户输入、帧刷新或防抖定时器时绝不中途丢弃正在读取的网络 Future；
+//! 2. **固定空间脏瓦片合并与无反压帧投递**：由 [`TileExtractor`] 在恒定大小位图上合并损伤，
+//!    视频帧通道满时保留脏位图延后合并，绝不反压阻塞网络读写与用户输入；
+//! 3. **输入事件批处理**：收到输入时通过 `try_recv` 批量合并相邻 FastPath 事件并复用
+//!    `ops_buf`，降低高频鼠标与键盘的系统调用及堆分配开销；
+//! 4. **尾沿防抖动态分辨率与完整重激活闭环**：由 [`ResizeController`] 保证最终窗口尺寸
+//!    偶数对齐且不丢尾，收到 `DeactivateAll` 后支持取消与失败上报。
 
 use crate::clipboard::CliprdrSyncContext;
 use crate::error::RdpError;
@@ -17,13 +19,13 @@ use crate::session::channel::{MouseBtn, RdpInput, RdpOutput, SessionSenders};
 use crate::session::cliprdr::{drive_cliprdr_events, handle_local_clipboard_copy};
 use crate::session::connector::{ErasedStream, EstablishedConnection};
 use crate::session::reactivate::execute_reactivation;
+use crate::session::resize::ResizeController;
 use crate::tiles::TileExtractor;
 use ironrdp_connector::connection_activation::ConnectionActivationFactory;
 use ironrdp_graphics::image_processing::PixelFormat;
 use ironrdp_input::{
     Database as InputDatabase, MouseButton, MousePosition, Operation, WheelRotations,
 };
-use ironrdp_pdu::geometry::InclusiveRectangle;
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
 use ironrdp_tokio::{FramedRead, FramedWrite, TokioFramed, split_tokio_framed};
@@ -32,18 +34,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
-
-/// 动态调整分辨率最小防抖冷却间隔（毫秒）。
-const RESIZE_DEBOUNCE_INTERVAL: Duration = Duration::from_millis(250);
+use tokio::time::MissedTickBehavior;
 
 /// 桌面图像增量帧最小聚合节流间隔（约 60 FPS）。
 const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
-/// 动态分辨率安全限制范围。
-const MIN_DESKTOP_WIDTH: u16 = 640;
-const MAX_DESKTOP_WIDTH: u16 = 4096;
-const MIN_DESKTOP_HEIGHT: u16 = 480;
-const MAX_DESKTOP_HEIGHT: u16 = 2560;
+/// 单次批处理从输入通道排空的最大事件数。
+const MAX_INPUT_BATCH_SIZE: usize = 32;
+
+/// 连续 PDU 解码失败上限，避免协议流错位后陷入无限错误循环。
+const MAX_CONSECUTIVE_DECODE_ERRORS: u32 = 16;
 
 /// 构造会话主循环的参数对象。
 pub(crate) struct SessionLoopParams {
@@ -74,10 +74,11 @@ pub(crate) struct SessionLoopRunner {
     cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
     keyboard: KeyboardTranslator,
     input_db: InputDatabase,
-    pending_damages: Vec<InclusiveRectangle>,
+    ops_buf: Vec<Operation>,
     last_frame_flushed: Instant,
-    last_resize_at: Instant,
+    resize_controller: ResizeController,
     current_resolution: (u16, u16),
+    consecutive_decode_errors: u32,
 }
 
 impl SessionLoopRunner {
@@ -92,7 +93,7 @@ impl SessionLoopRunner {
 
         let width = result.desktop_size.width;
         let height = result.desktop_size.height;
-        let canvas = DecodedImage::new(PixelFormat::BgrX32, width, height);
+        let canvas = DecodedImage::new(PixelFormat::RgbA32, width, height);
 
         let active_stage = ActiveStageBuilder {
             static_channels: result.static_channels,
@@ -119,10 +120,11 @@ impl SessionLoopRunner {
             cliprdr_context,
             keyboard: KeyboardTranslator::default(),
             input_db: InputDatabase::new(),
-            pending_damages: Vec::new(),
+            ops_buf: Vec::with_capacity(MAX_INPUT_BATCH_SIZE),
             last_frame_flushed: Instant::now(),
-            last_resize_at: Instant::now() - RESIZE_DEBOUNCE_INTERVAL,
+            resize_controller: ResizeController::new((width, height)),
             current_resolution: (width, height),
+            consecutive_decode_errors: 0,
         }
     }
 
@@ -139,74 +141,143 @@ impl SessionLoopRunner {
             .await;
 
         let (mut reader, mut writer) = split_tokio_framed(framed);
+        let mut frame_tick = tokio::time::interval(MIN_FRAME_INTERVAL);
+        frame_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         loop {
-            let wait_time = MIN_FRAME_INTERVAL.saturating_sub(self.last_frame_flushed.elapsed());
-            let has_pending = !self.pending_damages.is_empty();
-
-            tokio::select! {
-                _ = self.shutdown_rx.changed() => {
-                    self.send_graceful_shutdown(&mut writer).await;
-                    break;
-                }
-                _ = tokio::time::sleep(wait_time), if has_pending => {
-                    self.flush_dirty_tiles();
-                }
-                maybe_input = self.input_rx.recv() => {
-                    let Some(input) = maybe_input else {
-                        break;
-                    };
-                    if matches!(self.handle_input(input, &mut writer).await, LoopAction::Stop) {
+            match self
+                .poll_next_step(&mut reader, &mut writer, &mut frame_tick)
+                .await
+            {
+                LoopAction::Continue => {}
+                LoopAction::Reactivate => {
+                    if !self.handle_deactivate_all(&mut reader, &mut writer).await {
                         break;
                     }
                 }
-                pdu_result = reader.read_pdu() => {
-                    let action = match pdu_result {
-                        Ok((action, payload)) => self.handle_pdu(action, &payload, &mut writer).await,
-                        Err(e) => {
-                            log::info!("RDP 远端断开连接或发生 I/O 错误: {e}");
-                            let _ = self
-                                .senders
-                                .events
-                                .send(RdpOutput::Terminated(RdpError::Network {
-                                    address: "远端连接".to_string(),
-                                    source: e,
-                                }))
-                                .await;
-                            LoopAction::Stop
-                        }
-                    };
-                    match action {
-                        LoopAction::Continue => {}
-                        LoopAction::Reactivate => {
-                            if !self.handle_deactivate_all(&mut reader, &mut writer).await {
-                                break;
-                            }
-                        }
-                        LoopAction::Stop => break,
-                    }
-                }
+                LoopAction::Stop => break,
             }
         }
     }
 
-    /// 尝试向 UI 非阻塞投递增量瓦片帧；若帧通道已满则保留损伤等待下一帧合并。
+    /// 取消安全地等待下一帧网络 PDU，期间并发处理停机、帧刷新、尾沿防抖与 UI 输入批处理。
+    async fn poll_next_step<R, W>(
+        &mut self,
+        reader: &mut ironrdp_tokio::Framed<R>,
+        writer: &mut W,
+        frame_tick: &mut tokio::time::Interval,
+    ) -> LoopAction
+    where
+        R: FramedRead,
+        W: FramedWrite,
+    {
+        let pdu_result = {
+            let read_fut = reader.read_pdu();
+            tokio::pin!(read_fut);
+            let resize_sleep = tokio::time::sleep(Duration::ZERO);
+            tokio::pin!(resize_sleep);
+            let mut armed_deadline: Option<Instant> = None;
+
+            loop {
+                let has_pending = self.tile_extractor.has_pending();
+                let next_deadline = self.resize_controller.next_deadline();
+                if next_deadline != armed_deadline {
+                    armed_deadline = next_deadline;
+                    if let Some(deadline) = next_deadline {
+                        resize_sleep
+                            .as_mut()
+                            .reset(tokio::time::Instant::from_std(deadline));
+                    }
+                }
+
+                tokio::select! {
+                    _ = self.shutdown_rx.changed() => {
+                        self.send_graceful_shutdown(writer).await;
+                        return LoopAction::Stop;
+                    }
+                    _ = frame_tick.tick(), if has_pending => {
+                        self.flush_dirty_tiles();
+                    }
+                    _ = &mut resize_sleep, if armed_deadline.is_some() => {
+                        armed_deadline = None;
+                        self.flush_due_resize(writer).await;
+                    }
+                    maybe_input = self.input_rx.recv() => {
+                        let Some(first_input) = maybe_input else {
+                            return LoopAction::Stop;
+                        };
+                        if matches!(
+                            self.handle_input_batch(first_input, writer).await,
+                            LoopAction::Stop
+                        ) {
+                            return LoopAction::Stop;
+                        }
+                    }
+                    res = &mut read_fut => {
+                        break res;
+                    }
+                }
+            }
+        };
+
+        match pdu_result {
+            Ok((action, payload)) => self.handle_pdu(action, &payload, writer).await,
+            Err(e) => {
+                log::info!("RDP 远端断开连接或发生 I/O 错误: {e}");
+                let _ = self
+                    .senders
+                    .events
+                    .send(RdpOutput::Terminated(RdpError::Network {
+                        address: "远端连接".to_string(),
+                        source: e,
+                    }))
+                    .await;
+                LoopAction::Stop
+            }
+        }
+    }
+
+    /// 尝试向 UI 非阻塞投递增量瓦片帧；若帧通道已满则保留脏位图等待下一拍合并。
     fn flush_dirty_tiles(&mut self) {
         if self.senders.frames.capacity() == 0 {
-            // UI 端尚未消费上一帧：保留 pending_damages 延后合并，避免无效像素转换与反压阻塞
             self.last_frame_flushed = Instant::now();
             return;
         }
-        if let Some(update) = self
-            .tile_extractor
-            .extract(&self.canvas, &self.pending_damages)
+        if let Some(update) = self.tile_extractor.extract_pending(&self.canvas)
             && self.senders.frames.try_send(update).is_err()
         {
             self.last_frame_flushed = Instant::now();
             return;
         }
-        self.pending_damages.clear();
+        self.tile_extractor.commit_flushed();
         self.last_frame_flushed = Instant::now();
+    }
+
+    /// 触发已到期的动态分辨率请求（若通道尚未就绪则有限次数重试）。
+    async fn flush_due_resize<W: FramedWrite>(&mut self, writer: &mut W) {
+        let now = Instant::now();
+        let Some((width, height)) = self.resize_controller.take_due(now) else {
+            return;
+        };
+
+        match self
+            .active_stage
+            .encode_resize(u32::from(width), u32::from(height), None, None)
+        {
+            Some(Ok(response_frame)) => {
+                if let Err(e) = writer.write_all(&response_frame).await {
+                    log::warn!("写入动态重设分辨率帧失败: {e}");
+                }
+            }
+            Some(Err(e)) => {
+                log::warn!("编码动态重设分辨率失败: {e}");
+            }
+            None => {
+                // DisplayControl 动态虚拟通道尚未就绪，顺延重试避免首帧丢弃
+                self.resize_controller
+                    .requeue_if_channel_not_ready((width, height), now);
+            }
+        }
     }
 
     /// 发送协议层优雅停机请求。
@@ -216,21 +287,51 @@ impl SessionLoopRunner {
         }
     }
 
-    /// 处理单条来自 UI 层的输入指令。
-    async fn handle_input<W: FramedWrite>(
+    /// 批量排空相邻 UI 输入指令，将连续 FastPath 键鼠事件合并为单次网络写入。
+    async fn handle_input_batch<W: FramedWrite>(
+        &mut self,
+        first: RdpInput,
+        writer: &mut W,
+    ) -> LoopAction {
+        self.ops_buf.clear();
+        let mut action = self.enqueue_or_handle_control(first, writer).await;
+        if matches!(action, LoopAction::Stop) {
+            return LoopAction::Stop;
+        }
+
+        let mut drained = 1;
+        while drained < MAX_INPUT_BATCH_SIZE {
+            let Ok(next) = self.input_rx.try_recv() else {
+                break;
+            };
+            drained += 1;
+            action = self.enqueue_or_handle_control(next, writer).await;
+            if matches!(action, LoopAction::Stop) {
+                return LoopAction::Stop;
+            }
+        }
+
+        self.flush_fastpath_ops(writer).await
+    }
+
+    /// 立即处理控制类输入，或将键鼠事件压入复用操作缓冲等待批量刷出。
+    async fn enqueue_or_handle_control<W: FramedWrite>(
         &mut self,
         input: RdpInput,
         writer: &mut W,
     ) -> LoopAction {
         match input {
             RdpInput::Disconnect => {
+                let _ = self.flush_fastpath_ops(writer).await;
                 self.send_graceful_shutdown(writer).await;
-                return LoopAction::Stop;
+                LoopAction::Stop
             }
             RdpInput::MuteAudio(muted) => {
                 self.audio_muted.store(muted, Ordering::Relaxed);
+                LoopAction::Continue
             }
             RdpInput::ClipboardText(text) => {
+                let _ = self.flush_fastpath_ops(writer).await;
                 handle_local_clipboard_copy(
                     &mut self.active_stage,
                     writer,
@@ -238,33 +339,39 @@ impl SessionLoopRunner {
                     text,
                 )
                 .await;
+                LoopAction::Continue
             }
             RdpInput::Resize { width, height } => {
-                self.handle_resize(writer, width, height).await;
+                self.resize_controller
+                    .schedule(width, height, Instant::now());
+                LoopAction::Continue
             }
-            other => {
-                let ops = convert_input_to_operations(other, &mut self.keyboard);
-                if ops.is_empty() {
-                    return LoopAction::Continue;
-                }
-                let fastpath_events = self.input_db.apply(ops);
-                if fastpath_events.is_empty() {
-                    return LoopAction::Continue;
-                }
-                match self
-                    .active_stage
-                    .process_fastpath_input(&mut self.canvas, &fastpath_events)
-                {
-                    Ok(outputs) => {
-                        return self.dispatch_stage_outputs(writer, &outputs).await;
-                    }
-                    Err(e) => {
-                        log::warn!("处理 FastPath 输入异常: {e}");
-                    }
-                }
+            fastpath => {
+                append_fastpath_operations(fastpath, &mut self.keyboard, &mut self.ops_buf);
+                LoopAction::Continue
             }
         }
-        LoopAction::Continue
+    }
+
+    /// 将当前累积的键鼠原子操作一次性转换为 FastPath PDU 并写入网络。
+    async fn flush_fastpath_ops<W: FramedWrite>(&mut self, writer: &mut W) -> LoopAction {
+        if self.ops_buf.is_empty() {
+            return LoopAction::Continue;
+        }
+        let fastpath_events = self.input_db.apply(self.ops_buf.drain(..));
+        if fastpath_events.is_empty() {
+            return LoopAction::Continue;
+        }
+        match self
+            .active_stage
+            .process_fastpath_input(&mut self.canvas, &fastpath_events)
+        {
+            Ok(outputs) => self.dispatch_stage_outputs(writer, &outputs).await,
+            Err(e) => {
+                log::warn!("处理 FastPath 输入异常: {e}");
+                LoopAction::Continue
+            }
+        }
     }
 
     /// 处理单条来自网络的 RDP PDU 报文。
@@ -279,6 +386,7 @@ impl SessionLoopRunner {
             .process(&mut self.canvas, action, payload, None)
         {
             Ok(outputs) => {
+                self.consecutive_decode_errors = 0;
                 let action = self.dispatch_stage_outputs(writer, &outputs).await;
                 if !matches!(action, LoopAction::Continue) {
                     return action;
@@ -286,9 +394,13 @@ impl SessionLoopRunner {
 
                 let damages = self.active_stage.take_damage_regions();
                 if !damages.is_empty() {
-                    self.pending_damages.extend(damages);
+                    self.tile_extractor.mark_dirty(
+                        self.canvas.width(),
+                        self.canvas.height(),
+                        &damages,
+                    );
                 }
-                if !self.pending_damages.is_empty()
+                if self.tile_extractor.has_pending()
                     && self.last_frame_flushed.elapsed() >= MIN_FRAME_INTERVAL
                 {
                     self.flush_dirty_tiles();
@@ -297,7 +409,22 @@ impl SessionLoopRunner {
                 drive_cliprdr_events(&mut self.active_stage, writer, &self.cliprdr_context).await;
             }
             Err(e) => {
-                log::error!("解码处理 RDP 报文失败: {e}");
+                self.consecutive_decode_errors = self.consecutive_decode_errors.saturating_add(1);
+                log::error!(
+                    "解码处理 RDP 报文失败（连续第 {} 次）: {e}",
+                    self.consecutive_decode_errors
+                );
+                if self.consecutive_decode_errors >= MAX_CONSECUTIVE_DECODE_ERRORS {
+                    let _ = self
+                        .senders
+                        .events
+                        .send(RdpOutput::Terminated(RdpError::Protocol {
+                            stage: "ActiveStage 报文解码",
+                            detail: format!("连续解码失败超过上限: {e}"),
+                        }))
+                        .await;
+                    return LoopAction::Stop;
+                }
             }
         }
         LoopAction::Continue
@@ -380,16 +507,17 @@ impl SessionLoopRunner {
             reader,
             writer,
             &self.senders.events,
+            &mut self.shutdown_rx,
         )
         .await
         else {
             return false;
         };
 
-        self.canvas = DecodedImage::new(PixelFormat::BgrX32, width, height);
+        self.canvas = DecodedImage::new(PixelFormat::RgbA32, width, height);
         self.tile_extractor.reset();
-        self.pending_damages.clear();
         self.current_resolution = (width, height);
+        self.resize_controller.set_current((width, height));
 
         let _ = self
             .senders
@@ -397,33 +525,6 @@ impl SessionLoopRunner {
             .send(RdpOutput::Resized { width, height })
             .await;
         true
-    }
-
-    /// 执行防抖后的动态重设分辨率请求。
-    async fn handle_resize<W: FramedWrite>(&mut self, writer: &mut W, width: u16, height: u16) {
-        let clamped_w = width.clamp(MIN_DESKTOP_WIDTH, MAX_DESKTOP_WIDTH);
-        let clamped_h = height.clamp(MIN_DESKTOP_HEIGHT, MAX_DESKTOP_HEIGHT);
-        if (clamped_w, clamped_h) == self.current_resolution
-            || self.last_resize_at.elapsed() < RESIZE_DEBOUNCE_INTERVAL
-        {
-            return;
-        }
-        self.last_resize_at = Instant::now();
-        if let Some(res) =
-            self.active_stage
-                .encode_resize(u32::from(clamped_w), u32::from(clamped_h), None, None)
-        {
-            match res {
-                Ok(response_frame) => {
-                    if let Err(e) = writer.write_all(&response_frame).await {
-                        log::warn!("写入动态重设分辨率响应帧失败: {e}");
-                    }
-                }
-                Err(e) => {
-                    log::warn!("编码动态重设分辨率失败: {e}");
-                }
-            }
-        }
     }
 }
 
@@ -440,13 +541,14 @@ async fn flush_network_responses<W: FramedWrite>(
     Ok(())
 }
 
-/// 将 UI 操作指令映射为底层原子状态操作集合。
-fn convert_input_to_operations(
+/// 将 UI 键鼠输入追加到复用的底层原子操作缓冲（避免每条事件堆分配 `Vec`）。
+fn append_fastpath_operations(
     input: RdpInput,
     keyboard: &mut KeyboardTranslator,
-) -> Vec<Operation> {
+    out: &mut Vec<Operation>,
+) {
     match input {
-        RdpInput::MouseMove { x, y } => vec![Operation::MouseMove(MousePosition { x, y })],
+        RdpInput::MouseMove { x, y } => out.push(Operation::MouseMove(MousePosition { x, y })),
         RdpInput::MouseButton { button, pressed } => {
             let btn = match button {
                 MouseBtn::Left => MouseButton::Left,
@@ -456,20 +558,28 @@ fn convert_input_to_operations(
                 MouseBtn::X2 => MouseButton::X2,
             };
             if pressed {
-                vec![Operation::MouseButtonPressed(btn)]
+                out.push(Operation::MouseButtonPressed(btn));
             } else {
-                vec![Operation::MouseButtonReleased(btn)]
+                out.push(Operation::MouseButtonReleased(btn));
             }
         }
         RdpInput::MouseWheel { vertical, delta } => {
-            vec![Operation::WheelRotations(WheelRotations {
+            out.push(Operation::WheelRotations(WheelRotations {
                 is_vertical: vertical,
                 rotation_units: delta,
-            })]
+            }));
         }
-        RdpInput::KeyDown { key } => keyboard.handle_key_down(&key),
-        RdpInput::KeyUp { key } => keyboard.handle_key_up(&key),
-        RdpInput::ReleaseAllKeys => keyboard.release_all(),
-        _ => Vec::new(),
+        RdpInput::KeyDown {
+            key,
+            key_char,
+            modifiers,
+        } => keyboard.handle_key_down(&key, key_char.as_deref(), modifiers, out),
+        RdpInput::KeyUp { key, key_char } => {
+            keyboard.handle_key_up(&key, key_char.as_deref(), out);
+        }
+        RdpInput::ModifiersChanged(modifiers) => keyboard.sync_modifiers(modifiers, out),
+        RdpInput::SendKeyChord(chord) => keyboard.handle_key_chord(chord, out),
+        RdpInput::ReleaseAllKeys => keyboard.release_all(out),
+        _ => {}
     }
 }

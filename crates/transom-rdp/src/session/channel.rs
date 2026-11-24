@@ -8,6 +8,7 @@
 
 use crate::clipboard::ClipboardEvent;
 use crate::error::RdpError;
+use crate::keyboard::{KeyChord, ModifierState};
 use crate::pointer::CursorUpdate;
 use crate::tiles::FrameUpdate;
 use tokio::sync::mpsc;
@@ -30,10 +31,21 @@ pub enum RdpInput {
     MouseButton { button: MouseBtn, pressed: bool },
     /// 鼠标滚轮滚动（垂直/水平）。
     MouseWheel { vertical: bool, delta: i16 },
-    /// 键盘按键按下。
-    KeyDown { key: String },
+    /// 键盘按键按下（附带当前修饰键快照与可选 Unicode 字符）。
+    KeyDown {
+        key: String,
+        key_char: Option<String>,
+        modifiers: ModifierState,
+    },
     /// 键盘按键抬起。
-    KeyUp { key: String },
+    KeyUp {
+        key: String,
+        key_char: Option<String>,
+    },
+    /// 独立修饰键状态变更（同步单独按下/抬起 Ctrl、Alt、Shift、Win）。
+    ModifiersChanged(ModifierState),
+    /// 原子发送预设组合键（如 Ctrl+Alt+Del、Win），杜绝通道满时半截卡键。
+    SendKeyChord(KeyChord),
     /// 释放全部按键。
     ReleaseAllKeys,
     /// 请求动态重设桌面分辨率。

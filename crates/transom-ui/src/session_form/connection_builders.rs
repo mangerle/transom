@@ -134,20 +134,33 @@ impl SessionForm {
         let domain = (!domain_str.is_empty()).then_some(domain_str);
         let password_value = self.password.read(cx).value().to_string();
         let password = (!password_value.is_empty()).then(|| Zeroizing::new(password_value));
+
+        // 编辑已有 RDP 会话时保留表单未直接暴露的高级字段，防止保存时被默认值静默覆写
+        let existing_rdp = self
+            .base
+            .as_ref()
+            .and_then(|session| match &session.connection {
+                Connection::Rdp(rdp) => Some(rdp),
+                _ => None,
+            });
         Ok((
             Connection::Rdp(RdpConnection {
                 host,
                 port,
                 username,
                 domain,
-                security: RdpSecurity::Negotiate,
+                security: existing_rdp
+                    .map(|r| r.security)
+                    .unwrap_or(RdpSecurity::Negotiate),
                 color_depth: self.rdp_color_depth,
-                performance: RdpPerformance::Lan,
+                performance: existing_rdp
+                    .map(|r| r.performance)
+                    .unwrap_or(RdpPerformance::Lan),
                 audio: self.rdp_audio,
                 clipboard: self.rdp_clipboard,
-                file_copy: self.rdp_file_copy,
-                dynamic_resolution: true,
-                desktop_size: None,
+                file_copy: existing_rdp.map(|r| r.file_copy).unwrap_or(false),
+                dynamic_resolution: existing_rdp.map(|r| r.dynamic_resolution).unwrap_or(true),
+                desktop_size: existing_rdp.and_then(|r| r.desktop_size),
             }),
             password,
         ))

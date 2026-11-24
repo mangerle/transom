@@ -7,7 +7,7 @@
 use super::entity::SessionFormView;
 use super::ftp::{render_ftp_basic_fields, render_ftp_network_fields};
 use super::local::render_local_fields;
-use super::rdp::{render_rdp_basic_fields, render_rdp_network_fields};
+use super::rdp::render_rdp_basic_fields;
 use super::serial::render_serial_fields;
 use super::ssh::{render_ssh_basic_fields, render_ssh_network_fields};
 use super::telnet::{render_telnet_basic_fields, render_telnet_network_fields};
@@ -116,8 +116,7 @@ impl SessionFormView {
                 }
                 ConnectionChoice::Telnet => render_telnet_network_fields(form, cx, p),
                 ConnectionChoice::Ftp => render_ftp_network_fields(form, cx, p),
-                ConnectionChoice::Rdp => render_rdp_network_fields(form, cx, p),
-                ConnectionChoice::Local | ConnectionChoice::Serial => div()
+                ConnectionChoice::Local | ConnectionChoice::Serial | ConnectionChoice::Rdp => div()
                     .p_3()
                     .rounded(p.radius.md)
                     .bg(p.muted)

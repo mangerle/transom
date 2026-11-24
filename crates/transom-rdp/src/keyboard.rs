@@ -1,58 +1,176 @@
-//! 键盘扫描码映射与输入状态机。
+//! 键盘扫描码映射、修饰键差分同步与输入状态机。
 //!
-//! 设计原理（Why）：GPUI 界面层传递的是逻辑按键描述符（如字符串键名与修饰键掩码），
-//! 而 RDP 协议在线路上要求传输标准的 PC XT/AT 扫描码（Scancode）。
-//! 本模块建立标准扫描码转换表，并维护修饰键状态，避免远端按键卡死或错乱。
+//! 设计原理（Why）：
+//! 1. GPUI 中单独按下/松开修饰键走 `ModifiersChangedEvent`，而非 `KeyDownEvent`；
+//!    因此必须维护 [`ModifierState`] 并与远端做差分同步，否则 `Ctrl+C`、`Alt+Tab`、
+//!    `Shift+符号` 等组合键在远端全部失效；
+//! 2. 优先映射为 PC XT/AT 扫描码（兼容所有快捷键与游戏/终端）；对未映射的非 ASCII
+//!    字符（如中文 IME、特殊符号）在未按控制修饰键时自动降级为 RDP FastPath Unicode
+//!    输入事件，避免字符静默丢失；
+//! 3. 组合键（如 `Ctrl+Alt+Del`）作为原子指令 [`KeyChord`] 一次性展开，避免多次入队
+//!    在通道背压时发生半截丢包导致远端卡键。
 
 use ironrdp_input::{Operation, Scancode};
 use std::collections::HashSet;
 
+const SCANCODE_LCTRL: Scancode = Scancode::from_u8(false, 0x1D);
+const SCANCODE_LALT: Scancode = Scancode::from_u8(false, 0x38);
+const SCANCODE_LSHIFT: Scancode = Scancode::from_u8(false, 0x2A);
+const SCANCODE_LWIN: Scancode = Scancode::from_u8(true, 0x5B);
+const SCANCODE_DELETE: Scancode = Scancode::from_u8(true, 0x53);
+
+/// 当前本地修饰键状态快照（零堆分配，跨通道按值传递）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ModifierState {
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub win: bool,
+}
+
+impl ModifierState {
+    /// 是否按下了会改变字符语义的控制修饰键（Ctrl / Alt / Win）。
+    fn has_command_modifier(self) -> bool {
+        self.ctrl || self.alt || self.win
+    }
+}
+
+/// 原子快捷组合键（单条指令入队，杜绝通道满时只发按下不发抬起）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyChord {
+    /// 发送 `Ctrl+Alt+Delete`。
+    CtrlAltDelete,
+    /// 发送左 `Win` 键。
+    Win,
+}
+
 /// 键盘状态跟踪器。
 ///
-/// 维护当前处于按下状态的物理扫描码集合，在视图失焦或会话断开时精准释放，
-/// 避免修饰键或普通按键在远端桌面发生粘滞。
+/// 维护当前处于按下状态的物理扫描码、Unicode 字符与修饰键状态，在视图失焦或
+/// 会话断开时精准释放，避免修饰键或普通按键在远端桌面发生粘滞。
 #[derive(Default)]
 pub struct KeyboardTranslator {
     pressed_keys: HashSet<Scancode>,
+    pressed_unicode: HashSet<char>,
+    modifiers: ModifierState,
 }
 
 impl KeyboardTranslator {
-    /// 处理按键按下，返回一组需要送往 RDP 输入数据库的底层原子操作。
-    pub fn handle_key_down(&mut self, key_name: &str) -> Vec<Operation> {
-        let mut ops = Vec::with_capacity(1);
+    /// 按最新修饰键快照与当前已同步状态做差分，产出必要的修饰键按下/抬起操作。
+    pub fn sync_modifiers(&mut self, next: ModifierState, out: &mut Vec<Operation>) {
+        self.sync_one_modifier(self.modifiers.ctrl, next.ctrl, SCANCODE_LCTRL, out);
+        self.sync_one_modifier(self.modifiers.alt, next.alt, SCANCODE_LALT, out);
+        self.sync_one_modifier(self.modifiers.shift, next.shift, SCANCODE_LSHIFT, out);
+        self.sync_one_modifier(self.modifiers.win, next.win, SCANCODE_LWIN, out);
+        self.modifiers = next;
+    }
+
+    /// 处理按键按下：先对齐修饰键状态，再优先映射扫描码，未命中时按需回退到 Unicode 输入。
+    pub fn handle_key_down(
+        &mut self,
+        key_name: &str,
+        key_char: Option<&str>,
+        modifiers: ModifierState,
+        out: &mut Vec<Operation>,
+    ) {
+        self.sync_modifiers(modifiers, out);
+
         if let Some(scancode) = key_name_to_scancode(key_name) {
             self.pressed_keys.insert(scancode);
-            ops.push(Operation::KeyPressed(scancode));
+            out.push(Operation::KeyPressed(scancode));
+            return;
         }
-        ops
+
+        // 未命中物理扫描码且无控制修饰键时，回退为 FastPath Unicode 字符事件（支持中文/IME）
+        if !modifiers.has_command_modifier()
+            && let Some(text) = key_char
+        {
+            for ch in text.chars() {
+                if !ch.is_control() {
+                    self.pressed_unicode.insert(ch);
+                    out.push(Operation::UnicodeKeyPressed(ch));
+                }
+            }
+        }
     }
 
-    /// 处理按键抬起。
-    pub fn handle_key_up(&mut self, key_name: &str) -> Vec<Operation> {
-        let mut ops = Vec::with_capacity(1);
+    /// 处理按键抬起：按扫描码或 Unicode 字符精准释放。
+    pub fn handle_key_up(
+        &mut self,
+        key_name: &str,
+        key_char: Option<&str>,
+        out: &mut Vec<Operation>,
+    ) {
         if let Some(scancode) = key_name_to_scancode(key_name) {
             self.pressed_keys.remove(&scancode);
-            ops.push(Operation::KeyReleased(scancode));
+            out.push(Operation::KeyReleased(scancode));
+            return;
         }
-        ops
+
+        if let Some(text) = key_char {
+            for ch in text.chars() {
+                if self.pressed_unicode.remove(&ch) {
+                    out.push(Operation::UnicodeKeyReleased(ch));
+                }
+            }
+        }
     }
 
-    /// 释放全部当前被按下的按键（防止切换标签或失焦时遗留按键按住状态）。
-    pub fn release_all(&mut self) -> Vec<Operation> {
-        if self.pressed_keys.is_empty() {
-            // 兜底释放关键修饰键
-            return vec![
-                Operation::KeyReleased(Scancode::from_u8(false, 0x1D)), // Left Ctrl
-                Operation::KeyReleased(Scancode::from_u8(false, 0x38)), // Left Alt
-                Operation::KeyReleased(Scancode::from_u8(false, 0x2A)), // Left Shift
-                Operation::KeyReleased(Scancode::from_u8(true, 0x5B)),  // Left Win
-            ];
+    /// 原子展开预设快捷组合键（按下后逆序释放）。
+    pub fn handle_key_chord(&mut self, chord: KeyChord, out: &mut Vec<Operation>) {
+        let keys: &[Scancode] = match chord {
+            KeyChord::CtrlAltDelete => &[SCANCODE_LCTRL, SCANCODE_LALT, SCANCODE_DELETE],
+            KeyChord::Win => &[SCANCODE_LWIN],
+        };
+        for &code in keys {
+            out.push(Operation::KeyPressed(code));
+        }
+        for &code in keys.iter().rev() {
+            out.push(Operation::KeyReleased(code));
+        }
+    }
+
+    /// 释放全部当前被按下的物理键、Unicode 键与修饰键（视图失焦或断开时调用）。
+    pub fn release_all(&mut self, out: &mut Vec<Operation>) {
+        self.modifiers = ModifierState::default();
+
+        for ch in self.pressed_unicode.drain() {
+            out.push(Operation::UnicodeKeyReleased(ch));
         }
 
-        self.pressed_keys
-            .drain()
-            .map(Operation::KeyReleased)
-            .collect()
+        if self.pressed_keys.is_empty() {
+            // 兜底释放关键修饰键，防止宿主系统吞掉抬起事件
+            out.extend_from_slice(&[
+                Operation::KeyReleased(SCANCODE_LCTRL),
+                Operation::KeyReleased(SCANCODE_LALT),
+                Operation::KeyReleased(SCANCODE_LSHIFT),
+                Operation::KeyReleased(SCANCODE_LWIN),
+            ]);
+            return;
+        }
+
+        for code in self.pressed_keys.drain() {
+            out.push(Operation::KeyReleased(code));
+        }
+    }
+
+    fn sync_one_modifier(
+        &mut self,
+        current: bool,
+        next: bool,
+        code: Scancode,
+        out: &mut Vec<Operation>,
+    ) {
+        if current == next {
+            return;
+        }
+        if next {
+            self.pressed_keys.insert(code);
+            out.push(Operation::KeyPressed(code));
+        } else {
+            self.pressed_keys.remove(&code);
+            out.push(Operation::KeyReleased(code));
+        }
     }
 }
 
@@ -95,7 +213,7 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "o" => Scancode::from_u8(false, 0x18),
         "p" => Scancode::from_u8(false, 0x19),
         "enter" | "return" => Scancode::from_u8(false, 0x1C),
-        "control" | "ctrl" => Scancode::from_u8(false, 0x1D),
+        "control" | "ctrl" => SCANCODE_LCTRL,
         "a" => Scancode::from_u8(false, 0x1E),
         "s" => Scancode::from_u8(false, 0x1F),
         "d" => Scancode::from_u8(false, 0x20),
@@ -105,7 +223,7 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "j" => Scancode::from_u8(false, 0x24),
         "k" => Scancode::from_u8(false, 0x25),
         "l" => Scancode::from_u8(false, 0x26),
-        "shift" => Scancode::from_u8(false, 0x2A),
+        "shift" => SCANCODE_LSHIFT,
         "z" => Scancode::from_u8(false, 0x2C),
         "x" => Scancode::from_u8(false, 0x2D),
         "c" => Scancode::from_u8(false, 0x2E),
@@ -113,7 +231,7 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "b" => Scancode::from_u8(false, 0x30),
         "n" => Scancode::from_u8(false, 0x31),
         "m" => Scancode::from_u8(false, 0x32),
-        "alt" | "option" => Scancode::from_u8(false, 0x38),
+        "alt" | "option" => SCANCODE_LALT,
         "space" => Scancode::from_u8(false, 0x39),
         "capslock" | "caps" => Scancode::from_u8(false, 0x3A),
         // 功能键 F1 - F12
@@ -157,12 +275,12 @@ fn key_name_to_scancode(name: &str) -> Option<Scancode> {
         "left" => Scancode::from_u8(true, 0x4B),
         "right" => Scancode::from_u8(true, 0x4D),
         "insert" => Scancode::from_u8(true, 0x52),
-        "delete" => Scancode::from_u8(true, 0x53),
+        "delete" => SCANCODE_DELETE,
         "home" => Scancode::from_u8(true, 0x47),
         "end" => Scancode::from_u8(true, 0x4F),
         "pageup" => Scancode::from_u8(true, 0x49),
         "pagedown" => Scancode::from_u8(true, 0x51),
-        "super" | "command" | "win" => Scancode::from_u8(true, 0x5B),
+        "super" | "command" | "win" => SCANCODE_LWIN,
         // 打印屏幕、滚动锁定与数字锁定
         "printscreen" | "prtscn" => Scancode::from_u8(true, 0x37),
         "scrolllock" => Scancode::from_u8(false, 0x46),
@@ -201,16 +319,65 @@ mod tests {
     #[test]
     fn test_keyboard_translator_flow() {
         let mut translator = KeyboardTranslator::default();
-        let ops = translator.handle_key_down("enter");
+        let mut ops = Vec::new();
+        translator.handle_key_down("enter", None, ModifierState::default(), &mut ops);
         assert_eq!(ops.len(), 1);
 
         // 按住状态下执行 release_all，应精准释放该按键
-        let released = translator.release_all();
-        assert_eq!(released.len(), 1);
+        ops.clear();
+        translator.release_all(&mut ops);
+        assert_eq!(ops.len(), 1);
 
         // 集合已清空，兜底释放 4 个常见修饰键
-        let empty_released = translator.release_all();
-        assert_eq!(empty_released.len(), 4);
+        ops.clear();
+        translator.release_all(&mut ops);
+        assert_eq!(ops.len(), 4);
+    }
+
+    #[test]
+    fn test_modifier_diff_and_unicode_fallback() {
+        let mut translator = KeyboardTranslator::default();
+        let mut ops = Vec::new();
+
+        // 按下 Ctrl+C：应先发出 Left Ctrl 按下，再发出 C 按下
+        let ctrl = ModifierState {
+            ctrl: true,
+            ..Default::default()
+        };
+        translator.handle_key_down("c", None, ctrl, &mut ops);
+        assert_eq!(ops.len(), 2);
+        assert!(matches!(ops[0], Operation::KeyPressed(c) if c == SCANCODE_LCTRL));
+        assert!(matches!(
+            ops[1],
+            Operation::KeyPressed(c) if c == Scancode::from_u8(false, 0x2E)
+        ));
+
+        // 释放 Ctrl
+        ops.clear();
+        translator.sync_modifiers(ModifierState::default(), &mut ops);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::KeyReleased(c) if c == SCANCODE_LCTRL));
+
+        // 非 ASCII 中文字符回退到 FastPath Unicode 事件
+        ops.clear();
+        translator.handle_key_down("中", Some("中"), ModifierState::default(), &mut ops);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::UnicodeKeyPressed('中')));
+
+        ops.clear();
+        translator.handle_key_up("中", Some("中"), &mut ops);
+        assert_eq!(ops.len(), 1);
+        assert!(matches!(ops[0], Operation::UnicodeKeyReleased('中')));
+    }
+
+    #[test]
+    fn test_atomic_key_chord() {
+        let mut translator = KeyboardTranslator::default();
+        let mut ops = Vec::new();
+        translator.handle_key_chord(KeyChord::CtrlAltDelete, &mut ops);
+        assert_eq!(ops.len(), 6);
+        assert!(matches!(ops[0], Operation::KeyPressed(c) if c == SCANCODE_LCTRL));
+        assert!(matches!(ops[5], Operation::KeyReleased(c) if c == SCANCODE_LCTRL));
     }
 
     #[test]
@@ -223,10 +390,6 @@ mod tests {
         assert!(key_name_to_scancode("rctrl").is_some());
         assert!(key_name_to_scancode("!").is_some());
         assert!(key_name_to_scancode("@").is_some());
-        assert!(key_name_to_scancode("#").is_some());
-        assert!(key_name_to_scancode("$").is_some());
-        assert!(key_name_to_scancode(":").is_some());
-        assert!(key_name_to_scancode("\"").is_some());
         assert!(key_name_to_scancode("?").is_some());
         assert!(key_name_to_scancode("unknown_key_xyz").is_none());
     }

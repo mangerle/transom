@@ -9,12 +9,17 @@ use super::frame_cache::{RenderedCursor, TiledFrameCache};
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
+use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
 use gpui_kit::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 use tokio::sync::mpsc;
-use transom_rdp::{ClipboardEvent, RdpInput, RdpOutput, RdpSession, SessionConfig};
+use transom_rdp::{
+    ClipboardEvent, KeyChord, RdpError, RdpInput, RdpOutput, RdpSession, SessionConfig,
+};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 /// 会话连接显示状态。
 #[derive(Debug, Clone)]
@@ -25,56 +30,116 @@ pub enum RdpViewState {
     Failed(String),
 }
 
+/// RDP 视图向上层工作区外壳发射的单向状态事件（遵循“数据向下、意图向上”契约）。
+#[derive(Debug, Clone)]
+pub enum RdpViewEvent {
+    /// 远端桌面已连接就绪。
+    Connected,
+    /// 会话已正常断开。
+    Disconnected,
+    /// 会话连接或运行失败。
+    Failed(String),
+    /// 用户点击重连按钮，请求工作区外壳异步重新拉取凭据并重启会话。
+    Reconnect,
+}
+
+impl EventEmitter<RdpViewEvent> for RdpView {}
+
+/// 收敛在视口内的交互输入子状态，避免将输入细节平铺到视图顶层。
+pub(crate) struct RdpInputState {
+    pub(crate) last_mouse_pos: Rc<Cell<Option<(u16, u16)>>>,
+    pub(crate) last_mouse_sent_at: Instant,
+    pub(crate) scroll_remainder_x: f32,
+    pub(crate) scroll_remainder_y: f32,
+    pub(crate) pan_offset: (f32, f32),
+    pub(crate) was_focused: bool,
+}
+
+impl Default for RdpInputState {
+    fn default() -> Self {
+        Self {
+            last_mouse_pos: Rc::new(Cell::new(None)),
+            last_mouse_sent_at: Instant::now(),
+            scroll_remainder_x: 0.0,
+            scroll_remainder_y: 0.0,
+            pan_offset: (0.0, 0.0),
+            was_focused: false,
+        }
+    }
+}
+
 /// RDP 远程桌面视口视图。
 pub struct RdpView {
     pub(crate) state: RdpViewState,
     pub(crate) frame_cache: Rc<RefCell<TiledFrameCache>>,
+    pub(crate) input: RdpInputState,
     session: Option<RdpSession>,
     is_muted: bool,
     pub(crate) is_scaled: bool,
     pub(crate) dynamic_resolution: bool,
-    pub(crate) last_mouse_pos: Option<(u16, u16)>,
-    pub(crate) last_mouse_sent_at: Instant,
-    pub(crate) scroll_remainder_x: f32,
-    pub(crate) scroll_remainder_y: f32,
     pub(crate) cursor: RenderedCursor,
     pub(crate) viewport_bounds: Rc<Cell<Bounds<Pixels>>>,
     last_synced_clipboard: Option<String>,
-    was_focused: bool,
     focus_handle: FocusHandle,
+    _consumer_tasks: Vec<Task<()>>,
 }
 
 impl RdpView {
-    /// 构造新的 RDP 桌面视图并启动后台会话连接。
-    pub fn new(config: SessionConfig, cx: &mut Context<Self>) -> Self {
-        let initial_muted = !config.audio;
-        let dynamic_resolution = config.dynamic_resolution;
-        let (session, receivers) = RdpSession::connect(config);
-
-        Self::spawn_event_consumer(receivers.events, cx);
-        Self::spawn_frame_consumer(receivers.frames, cx);
-
+    /// 构造处于连接准备态的 RDP 视图（用于后台异步读取钥匙串后再调用 [`start_session`]）。
+    pub fn new_pending(
+        initial_muted: bool,
+        dynamic_resolution: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         Self {
             state: RdpViewState::Connecting,
             frame_cache: Rc::new(RefCell::new(TiledFrameCache::default())),
-            session: Some(session),
+            input: RdpInputState::default(),
+            session: None,
             is_muted: initial_muted,
             is_scaled: true,
             dynamic_resolution,
-            last_mouse_pos: None,
-            last_mouse_sent_at: Instant::now(),
-            scroll_remainder_x: 0.0,
-            scroll_remainder_y: 0.0,
             cursor: RenderedCursor::Default,
             viewport_bounds: new_viewport_bounds_cell(),
             last_synced_clipboard: None,
-            was_focused: false,
             focus_handle: cx.focus_handle(),
+            _consumer_tasks: Vec::new(),
         }
     }
 
-    /// 派生低频控制事件消费协程（连接、重设分辨率、光标、剪贴板、断开与错误）。
-    fn spawn_event_consumer(mut events_rx: mpsc::Receiver<RdpOutput>, cx: &mut Context<Self>) {
+    /// 构造新的 RDP 桌面视图并立即启动后台会话连接。
+    #[allow(dead_code)]
+    pub fn new(config: SessionConfig, cx: &mut Context<Self>) -> Self {
+        let mut view = Self::new_pending(!config.audio, config.dynamic_resolution, cx);
+        view.start_session(config, cx);
+        view
+    }
+
+    /// 使用就绪的会话配置启动或重新启动后台 RDP 连接（原地复用标签页）。
+    pub fn start_session(&mut self, config: SessionConfig, cx: &mut Context<Self>) {
+        if let Some(old_session) = self.session.take() {
+            old_session.disconnect();
+        }
+        self._consumer_tasks.clear();
+        self.retire_rendered_resources();
+        self.input.pan_offset = (0.0, 0.0);
+        self.is_muted = !config.audio;
+        self.dynamic_resolution = config.dynamic_resolution;
+        self.state = RdpViewState::Connecting;
+
+        let (session, receivers) = RdpSession::connect(config);
+        let event_task = Self::spawn_event_consumer(receivers.events, cx);
+        let frame_task = Self::spawn_frame_consumer(receivers.frames, cx);
+        self.session = Some(session);
+        self._consumer_tasks = vec![event_task, frame_task];
+        cx.notify();
+    }
+
+    /// 派生低频控制事件消费协程（随视图析构自动取消）。
+    fn spawn_event_consumer(
+        mut events_rx: mpsc::Receiver<RdpOutput>,
+        cx: &mut Context<Self>,
+    ) -> Task<()> {
         cx.spawn(async move |this, cx| {
             while let Some(output) = events_rx.recv().await {
                 let updated = this.update(cx, |view, cx| {
@@ -85,14 +150,13 @@ impl RdpView {
                 }
             }
         })
-        .detach();
     }
 
-    /// 派生高频桌面增量帧消费协程，直接原地更新纹理缓存并请求重绘。
+    /// 派生高频桌面增量帧消费协程（随视图析构自动取消），原地更新纹理缓存并请求重绘。
     fn spawn_frame_consumer(
         mut frames_rx: mpsc::Receiver<transom_rdp::FrameUpdate>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Task<()> {
         cx.spawn(async move |this, cx| {
             while let Some(update) = frames_rx.recv().await {
                 let updated = this.update(cx, |view, cx| {
@@ -104,20 +168,23 @@ impl RdpView {
                 }
             }
         })
-        .detach();
     }
 
-    /// 处理单条会话控制事件。
+    /// 处理单条会话控制事件并向工作区同步生命周期状态。
     fn apply_session_event(&mut self, output: RdpOutput, cx: &mut Context<Self>) {
         match output {
             RdpOutput::Connected { width, height } => {
                 self.state = RdpViewState::Connected { width, height };
+                cx.emit(RdpViewEvent::Connected);
             }
             RdpOutput::Resized { width, height } => {
                 self.frame_cache.borrow_mut().clear();
                 self.state = RdpViewState::Connected { width, height };
             }
             RdpOutput::Cursor(cursor) => {
+                if let RenderedCursor::Custom { image, .. } = &self.cursor {
+                    self.frame_cache.borrow_mut().retire_image(image.clone());
+                }
                 self.cursor = RenderedCursor::from(cursor);
             }
             RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)) => {
@@ -127,11 +194,16 @@ impl RdpView {
             RdpOutput::Disconnected { reason } => {
                 log::info!("RDP 会话已断开: {reason}");
                 self.session = None;
+                self.retire_rendered_resources();
                 self.state = RdpViewState::Disconnected;
+                cx.emit(RdpViewEvent::Disconnected);
             }
             RdpOutput::Terminated(err) => {
+                let detail = err.to_string();
                 self.session = None;
-                self.state = RdpViewState::Failed(err.to_string());
+                self.retire_rendered_resources();
+                self.state = RdpViewState::Failed(detail.clone());
+                cx.emit(RdpViewEvent::Failed(detail));
             }
         }
         cx.notify();
@@ -142,30 +214,28 @@ impl RdpView {
         self.session.as_ref().map(RdpSession::input_sender)
     }
 
+    /// 聚焦当前 RDP 桌面视图以接收后续键盘输入。
+    pub(crate) fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus_handle, cx);
+    }
+
     /// 当前是否处于客户端自绘自定义光标模式。
     pub(crate) fn is_custom_cursor_active(&self) -> bool {
         matches!(self.cursor, RenderedCursor::Custom { .. })
     }
 
-    /// 发送输入指令到 RDP 会话循环。
+    /// 发送输入指令到 RDP 会话循环；通道背压满时记录调试日志便于排查。
     pub fn send_input(&self, input: RdpInput) {
-        if let Some(session) = &self.session {
-            let _ = session.try_send_input(input);
+        if let Some(session) = &self.session
+            && let Err(RdpError::ChannelFull { channel }) = session.try_send_input(input)
+        {
+            log::debug!("RDP 输入通道已满（{channel}），本次输入已丢弃");
         }
     }
 
-    /// 发送组合键按下与抬起序列（如 Ctrl+Alt+Del、Win）。
-    fn send_key_chord(&self, keys: &[&str]) {
-        for &key in keys {
-            self.send_input(RdpInput::KeyDown {
-                key: key.to_string(),
-            });
-        }
-        for &key in keys.iter().rev() {
-            self.send_input(RdpInput::KeyUp {
-                key: key.to_string(),
-            });
-        }
+    /// 原子发送预设组合键（如 Ctrl+Alt+Del、Win）。
+    fn send_key_chord(&self, chord: KeyChord) {
+        self.send_input(RdpInput::SendKeyChord(chord));
     }
 
     /// 检查并同步本地剪贴板新内容到远端桌面。
@@ -179,17 +249,41 @@ impl RdpView {
         }
     }
 
+    /// 清理本地缓存瓦片与自定义光标纹理并移入待回收队列。
+    fn retire_rendered_resources(&mut self) {
+        let mut cache = self.frame_cache.borrow_mut();
+        cache.clear();
+        if let RenderedCursor::Custom { image, .. } =
+            std::mem::replace(&mut self.cursor, RenderedCursor::Default)
+        {
+            cache.retire_image(image);
+        }
+    }
+
     /// 发送断开请求并释放按键与会话句柄。
     pub fn disconnect(&mut self) {
         self.send_input(RdpInput::ReleaseAllKeys);
         if let Some(session) = self.session.take() {
             session.disconnect();
         }
+        self.retire_rendered_resources();
         self.state = RdpViewState::Disconnected;
     }
 
-    /// 渲染状态提示视图（连接中、断开或失败）。
-    fn render_status_view(&self, p: &Palette) -> AnyElement {
+    /// 渲染状态提示视图（连接中、断开或失败，断开/失败提供一键重连入口）。
+    fn render_status_view(&self, p: &Palette, cx: &Context<Self>) -> AnyElement {
+        let reconnect_button = || {
+            Button::new(ElementId::Name("rdp-reconnect-btn".into()))
+                .small()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
+                .label(rust_i18n::t!("tab.reconnect").to_string())
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.state = RdpViewState::Connecting;
+                    cx.emit(RdpViewEvent::Reconnect);
+                    cx.notify();
+                }))
+        };
+
         match &self.state {
             RdpViewState::Connecting => v_flex()
                 .size_full()
@@ -202,16 +296,19 @@ impl RdpView {
                 .size_full()
                 .items_center()
                 .justify_center()
-                .gap_2()
+                .gap_3()
                 .text_color(p.danger)
                 .child(rust_i18n::t!("rdp.failed", msg = msg).to_string())
+                .child(reconnect_button())
                 .into_any_element(),
             RdpViewState::Disconnected => v_flex()
                 .size_full()
                 .items_center()
                 .justify_center()
+                .gap_3()
                 .text_color(p.muted_foreground)
                 .child(rust_i18n::t!("rdp.disconnected").to_string())
+                .child(reconnect_button())
                 .into_any_element(),
             RdpViewState::Connected { .. } => div().into_any_element(),
         }
@@ -231,8 +328,8 @@ impl RdpView {
             palette: p,
             is_muted: self.is_muted,
             is_scaled: self.is_scaled,
-            on_send_cad: make_action(|this, _| this.send_key_chord(&["ctrl", "alt", "delete"])),
-            on_send_win: make_action(|this, _| this.send_key_chord(&["super"])),
+            on_send_cad: make_action(|this, _| this.send_key_chord(KeyChord::CtrlAltDelete)),
+            on_send_win: make_action(|this, _| this.send_key_chord(KeyChord::Win)),
             on_toggle_mute: make_action(|this, cx| {
                 this.is_muted = !this.is_muted;
                 this.send_input(RdpInput::MuteAudio(this.is_muted));
@@ -240,10 +337,14 @@ impl RdpView {
             }),
             on_toggle_scale: make_action(|this, cx| {
                 this.is_scaled = !this.is_scaled;
+                if this.is_scaled {
+                    this.input.pan_offset = (0.0, 0.0);
+                }
                 cx.notify();
             }),
             on_disconnect: make_action(|this, cx| {
                 this.disconnect();
+                cx.emit(RdpViewEvent::Disconnected);
                 cx.notify();
             }),
         });
@@ -270,12 +371,17 @@ impl Render for RdpView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
 
-        // 监测焦点从聚焦转为失焦的边沿，及时向远端释放全部按下键位，避免修饰键粘滞
+        // 非连接状态（断开/失败/重激活期间）无 Canvas paint 阶段，仍需及时释放淘汰的 GPU 纹理
+        self.frame_cache.borrow_mut().drain_stale_images(window);
+
+        // 监测焦点边沿：失焦释放全部按下键位防粘滞；获焦预同步本地剪贴板消除首次 Ctrl+V 竞态
         let is_focused = self.focus_handle.is_focused(window);
-        if self.was_focused && !is_focused {
+        if self.input.was_focused && !is_focused {
             self.send_input(RdpInput::ReleaseAllKeys);
+        } else if !self.input.was_focused && is_focused {
+            self.sync_clipboard_to_remote(cx);
         }
-        self.was_focused = is_focused;
+        self.input.was_focused = is_focused;
 
         let root = div()
             .track_focus(&self.focus_handle)
@@ -288,7 +394,9 @@ impl Render for RdpView {
             .on_mouse_exit(cx.listener(|this, _, _, cx| this.handle_mouse_exit(cx)))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| this.handle_mouse_down(MouseButton::Left, cx)),
+                cx.listener(|this, _, window, cx| {
+                    this.handle_mouse_down(MouseButton::Left, window, cx)
+                }),
             )
             .on_mouse_up(
                 MouseButton::Left,
@@ -296,7 +404,9 @@ impl Render for RdpView {
             )
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(|this, _, _, cx| this.handle_mouse_down(MouseButton::Right, cx)),
+                cx.listener(|this, _, window, cx| {
+                    this.handle_mouse_down(MouseButton::Right, window, cx)
+                }),
             )
             .on_mouse_up(
                 MouseButton::Right,
@@ -304,13 +414,16 @@ impl Render for RdpView {
             )
             .on_mouse_down(
                 MouseButton::Middle,
-                cx.listener(|this, _, _, cx| this.handle_mouse_down(MouseButton::Middle, cx)),
+                cx.listener(|this, _, window, cx| {
+                    this.handle_mouse_down(MouseButton::Middle, window, cx)
+                }),
             )
             .on_mouse_up(
                 MouseButton::Middle,
                 cx.listener(|this, _, _, _| this.handle_mouse_up(MouseButton::Middle)),
             )
-            .on_scroll(cx.listener(|this, e, _, _| this.handle_scroll(e)))
+            .on_scroll(cx.listener(|this, e, _, cx| this.handle_scroll(e, cx)))
+            .on_modifiers_changed(cx.listener(|this, e, _, _| this.handle_modifiers_changed(e)))
             .on_key_down(cx.listener(|this, e, _, cx| this.handle_key_down(e, cx)))
             .on_key_up(cx.listener(|this, e, _, _| this.handle_key_up(e)));
 
@@ -318,7 +431,7 @@ impl Render for RdpView {
             RdpViewState::Connected { .. } => root
                 .child(self.render_desktop_canvas())
                 .child(self.render_floating_toolbar(&p, cx)),
-            _ => root.child(self.render_status_view(&p)),
+            _ => root.child(self.render_status_view(&p, cx)),
         }
     }
 }

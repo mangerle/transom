@@ -9,6 +9,7 @@
 //!    避免内层循环逐像素 `extend_from_slice`，便于 LLVM 自动向量化；同时复用 `dirty_mask`
 //!    布尔缓冲消除每帧堆分配。
 
+use ironrdp_graphics::image_processing::PixelFormat;
 use ironrdp_pdu::geometry::InclusiveRectangle;
 use ironrdp_session::image::DecodedImage;
 
@@ -129,12 +130,21 @@ pub fn compute_dirty_mask(
     mask
 }
 
-/// 有状态的增量瓦片提取器，复用内部脏掩码缓冲以减少高频帧更新的内存分配。
+/// 有状态的增量瓦片提取器。
+///
+/// 设计原理（Why）：内部维护固定大小的脏瓦片位图（`dirty_mask`），替代无界累积的
+/// `Vec<InclusiveRectangle>`。当 UI 侧消费慢或处于后台标签导致帧通道满时，无论网络侧
+/// 持续涌入多少损伤矩形，内存占用始终恒定为 `O(cols * rows)`（1080p 仅 40 字节），
+/// 彻底消除反压场景下的内存泄漏与扫描退化。
 #[derive(Default)]
 pub struct TileExtractor {
     width: u16,
     height: u16,
+    cols: u32,
+    rows: u32,
     seq: u64,
+    needs_full_reset: bool,
+    dirty_count: usize,
     dirty_mask: Vec<bool>,
 }
 
@@ -143,15 +153,70 @@ impl TileExtractor {
     pub fn reset(&mut self) {
         self.width = 0;
         self.height = 0;
+        self.cols = 0;
+        self.rows = 0;
+        self.needs_full_reset = true;
+        self.dirty_count = 0;
         self.dirty_mask.clear();
     }
 
-    /// 根据当前画布与损伤矩形集合提取增量瓦片补丁；无任何受损瓦片时返回 `None`。
-    pub fn extract(
-        &mut self,
-        canvas: &DecodedImage,
-        dirty_rects: &[InclusiveRectangle],
-    ) -> Option<FrameUpdate> {
+    /// 将一批损伤矩形合并进固定大小的脏瓦片位图（恒定空间，可反复调用）。
+    pub fn mark_dirty(&mut self, width: u16, height: u16, dirty_rects: &[InclusiveRectangle]) {
+        if width == 0 || height == 0 {
+            return;
+        }
+
+        if self.width != width || self.height != height {
+            let (cols, rows) = compute_grid_dimensions(width, height);
+            self.width = width;
+            self.height = height;
+            self.cols = cols;
+            self.rows = rows;
+            self.needs_full_reset = true;
+            self.dirty_count = 0;
+            self.dirty_mask.resize((cols * rows) as usize, false);
+            self.dirty_mask.fill(false);
+            return;
+        }
+
+        if self.needs_full_reset || dirty_rects.is_empty() {
+            return;
+        }
+
+        let max_valid_x = u32::from(width) - 1;
+        let max_valid_y = u32::from(height) - 1;
+
+        for rect in dirty_rects {
+            if rect.left > rect.right || rect.top > rect.bottom {
+                continue;
+            }
+            let col_start = u32::from(rect.left).min(max_valid_x) / TILE_SIZE;
+            let col_end = u32::from(rect.right).min(max_valid_x) / TILE_SIZE;
+            let row_start = u32::from(rect.top).min(max_valid_y) / TILE_SIZE;
+            let row_end = u32::from(rect.bottom).min(max_valid_y) / TILE_SIZE;
+
+            for r in row_start..=row_end {
+                let row_base = (r * self.cols) as usize;
+                for c in col_start..=col_end {
+                    let index = row_base + c as usize;
+                    if let Some(slot) = self.dirty_mask.get_mut(index)
+                        && !*slot
+                    {
+                        *slot = true;
+                        self.dirty_count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /// 是否存在尚未提交给 UI 的脏瓦片或全量重置请求。
+    pub fn has_pending(&self) -> bool {
+        self.needs_full_reset || self.dirty_count > 0
+    }
+
+    /// 按当前累积的脏位图提取待发送帧；不会提前清空脏位图，须在发送成功后调用 [`commit_flushed`]。
+    pub fn extract_pending(&mut self, canvas: &DecodedImage) -> Option<FrameUpdate> {
         let width = canvas.width();
         let height = canvas.height();
         let (cols, rows) = compute_grid_dimensions(width, height);
@@ -160,10 +225,18 @@ impl TileExtractor {
             return None;
         }
 
-        let full_reset = self.width != width || self.height != height;
-        if full_reset {
+        if self.width != width || self.height != height {
             self.width = width;
             self.height = height;
+            self.cols = cols;
+            self.rows = rows;
+            self.needs_full_reset = true;
+            self.dirty_count = 0;
+            self.dirty_mask.resize(total, false);
+            self.dirty_mask.fill(false);
+        }
+
+        if self.needs_full_reset {
             let mut patches = Vec::with_capacity(total);
             for r in 0..rows {
                 for c in 0..cols {
@@ -182,13 +255,11 @@ impl TileExtractor {
             });
         }
 
-        fill_dirty_mask(width, height, dirty_rects, &mut self.dirty_mask);
-        let dirty_count = self.dirty_mask.iter().filter(|&&d| d).count();
-        if dirty_count == 0 {
+        if self.dirty_count == 0 {
             return None;
         }
 
-        let mut patches = Vec::with_capacity(dirty_count);
+        let mut patches = Vec::with_capacity(self.dirty_count);
         for (index, &is_dirty) in self.dirty_mask.iter().enumerate() {
             if is_dirty {
                 let c = (index as u32) % cols;
@@ -208,37 +279,67 @@ impl TileExtractor {
             patches,
         })
     }
+
+    /// 确认当前脏位图对应的帧已成功投递至通道，清空待发标记。
+    pub fn commit_flushed(&mut self) {
+        self.needs_full_reset = false;
+        if self.dirty_count > 0 {
+            self.dirty_mask.fill(false);
+            self.dirty_count = 0;
+        }
+    }
+
+    /// 一步式便捷方法：标记损伤、提取帧并立即清空脏位图（适用于同步调用与单元测试）。
+    pub fn extract(
+        &mut self,
+        canvas: &DecodedImage,
+        dirty_rects: &[InclusiveRectangle],
+    ) -> Option<FrameUpdate> {
+        self.mark_dirty(canvas.width(), canvas.height(), dirty_rects);
+        let update = self.extract_pending(canvas)?;
+        self.commit_flushed();
+        Some(update)
+    }
 }
 
-/// 从已解码的 BgrX32 位图画布中提取单个瓦片的像素并转换为 RGBA8。
+/// 从已解码位图画布中提取单个瓦片的 RGBA8 像素补丁。
+///
+/// 设计原理（Why）：当画布直接以 `PixelFormat::RgbA32` 初始化时，无需执行 R/B 通道交换，
+/// 直接按行拷贝并置不透明 Alpha；同时保留 `BgrX32`/`BgrA32` 回退分支以兼容不同解码格式，
+/// 并使用 `Vec::with_capacity` 避免先清零再覆写的无效内存写入。
 fn extract_tile_patch(canvas: &DecodedImage, col: u32, row: u32) -> TilePatch {
     let (left, top, tile_w, tile_h) =
         compute_tile_bounds(canvas.width(), canvas.height(), col, row);
     let tile_w_bytes = (tile_w as usize) * 4;
     let total_bytes = tile_w_bytes * (tile_h as usize);
-    let mut rgba = vec![0u8; total_bytes];
+    let mut rgba = Vec::with_capacity(total_bytes);
 
     let canvas_stride = usize::from(canvas.width()) * 4;
     let raw_pixels = canvas.data();
+    let is_rgba_order = matches!(
+        canvas.pixel_format(),
+        PixelFormat::RgbA32 | PixelFormat::RgbX32
+    );
 
     for y in 0..tile_h as usize {
         let src_start = (top as usize + y) * canvas_stride + (left as usize) * 4;
         let src_end = src_start + tile_w_bytes;
-        let dst_start = y * tile_w_bytes;
-        let dst_end = dst_start + tile_w_bytes;
 
         if src_end <= raw_pixels.len() {
             let src_row = &raw_pixels[src_start..src_end];
-            let dst_row = &mut rgba[dst_start..dst_end];
-            for (dst, src) in dst_row
-                .as_chunks_mut::<4>()
-                .0
-                .iter_mut()
-                .zip(src_row.as_chunks::<4>().0)
-            {
-                // BgrX32 -> RGBA8：通道重排并填充不透明 Alpha
-                *dst = [src[2], src[1], src[0], 255];
+            if is_rgba_order {
+                let row_offset = rgba.len();
+                rgba.extend_from_slice(src_row);
+                for px in rgba[row_offset..].as_chunks_mut::<4>().0 {
+                    px[3] = 255;
+                }
+            } else {
+                for src in src_row.as_chunks::<4>().0 {
+                    rgba.extend_from_slice(&[src[2], src[1], src[0], 255]);
+                }
             }
+        } else {
+            rgba.resize(rgba.len() + tile_w_bytes, 0);
         }
     }
 
@@ -289,5 +390,44 @@ mod tests {
         assert_eq!(inc.seq, 2);
         assert_eq!(inc.patches.len(), 1);
         assert_eq!((inc.patches[0].col, inc.patches[0].row), (0, 0));
+    }
+
+    #[test]
+    fn extractor_coalesces_dirty_bitmap_until_committed() {
+        let canvas = DecodedImage::new(PixelFormat::RgbA32, 512, 512);
+        let mut extractor = TileExtractor::default();
+
+        // 首次全量同步
+        let _ = extractor.extract(&canvas, &[]);
+        assert!(!extractor.has_pending());
+
+        // 多次标记不同区域的损伤，未 commit 前自动合并在固定位图中
+        let rect_a = InclusiveRectangle {
+            left: 5,
+            top: 5,
+            right: 20,
+            bottom: 20,
+        };
+        let rect_b = InclusiveRectangle {
+            left: 300,
+            top: 300,
+            right: 350,
+            bottom: 350,
+        };
+        extractor.mark_dirty(512, 512, &[rect_a]);
+        extractor.mark_dirty(512, 512, &[rect_b]);
+        assert!(extractor.has_pending());
+
+        // 模拟发送失败（不调用 commit_flushed），下次提取仍应保留全部 2 个脏瓦片
+        let first_try = extractor
+            .extract_pending(&canvas)
+            .expect("应产出 2 个脏瓦片");
+        assert_eq!(first_try.patches.len(), 2);
+        assert!(extractor.has_pending());
+
+        // 发送成功后提交，待发标记清空
+        extractor.commit_flushed();
+        assert!(!extractor.has_pending());
+        assert!(extractor.extract_pending(&canvas).is_none());
     }
 }

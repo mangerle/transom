@@ -354,6 +354,10 @@ pub(crate) fn record_recent_session(
 }
 
 /// 打开 RDP 远程桌面会话并将其作为独立图形标签挂入工作区。
+///
+/// 设计原理（Why）：钥匙串读取可能涉及平台 IPC 阻塞，严禁在 UI 线程同步等待；
+/// 此处先挂载处于 `Connecting` 状态的 `RdpView`，再经 `spawn_blocking_local` 异步
+/// 拉取凭据并启动连接；重连路径复用同一异步启动器。
 fn open_rdp_session(
     app_state: &mut AppState,
     tab_id: TabId,
@@ -361,27 +365,90 @@ fn open_rdp_session(
     rdp: transom_core::RdpConnection,
     cx: &mut Context<AppShell>,
 ) {
+    let view =
+        cx.new(|cx| crate::rdp::RdpView::new_pending(!rdp.audio, rdp.dynamic_resolution, cx));
     let secret_store = app_state.runtime.services.secret_store.clone();
-    let key =
-        transom_core::SecretKey::new(session.secret_owner(), transom_core::SecretKind::Password);
-    let password = match secret_store.get(&key) {
-        Ok(secret) => secret.map(|s| s.as_str().to_string()).unwrap_or_default(),
-        Err(err) => {
-            log::warn!("读取 RDP 会话密码失败，将以空口令继续尝试: {err}");
-            String::new()
-        }
-    };
+    let secret_owner = session.secret_owner();
 
-    let initial_size = (1920, 1080);
-    let config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
-    let view = cx.new(|cx| crate::rdp::RdpView::new(config, cx));
+    launch_rdp_session_async(
+        view.clone(),
+        secret_store.clone(),
+        secret_owner.clone(),
+        rdp.clone(),
+        cx,
+    );
 
-    let tab = WorkspaceTab::new_rdp(tab_id, session.name.clone(), view);
+    let subscription = cx.subscribe(
+        &view,
+        move |shell, view, event: &crate::rdp::RdpViewEvent, cx| {
+            if matches!(event, crate::rdp::RdpViewEvent::Reconnect) {
+                launch_rdp_session_async(
+                    view,
+                    secret_store.clone(),
+                    secret_owner.clone(),
+                    rdp.clone(),
+                    cx,
+                );
+            }
+
+            let Some(tab) = shell
+                .state
+                .workspace
+                .tabs
+                .iter_mut()
+                .find(|t| t.id == tab_id)
+            else {
+                return;
+            };
+            tab.status = match event {
+                crate::rdp::RdpViewEvent::Connected => TabStatus::Connected,
+                crate::rdp::RdpViewEvent::Disconnected => TabStatus::Disconnected,
+                crate::rdp::RdpViewEvent::Reconnect => TabStatus::Connecting,
+                crate::rdp::RdpViewEvent::Failed(detail) => TabStatus::Failed(
+                    AppError::with_detail(ErrorCode::ConnectionFailed, detail.clone()),
+                ),
+            };
+            cx.notify();
+        },
+    );
+
+    let tab = WorkspaceTab::new_rdp(tab_id, session.name.clone(), view, subscription);
     app_state.workspace.create_group_for_tab(&tab);
     app_state.workspace.tabs.push(tab);
     app_state.workspace.active_tab = Some(tab_id);
     app_state.present_active_group();
     cx.notify();
+}
+
+/// 在专用阻塞线程池读取钥匙串凭据，完成后回到 UI 线程启动 RDP 会话。
+fn launch_rdp_session_async(
+    view: Entity<crate::rdp::RdpView>,
+    secret_store: std::sync::Arc<dyn transom_core::SecretStore>,
+    secret_owner: transom_core::SecretOwner,
+    rdp: transom_core::RdpConnection,
+    cx: &mut Context<AppShell>,
+) {
+    cx.spawn(async move |_, cx| {
+        let password = crate::app::spawn_blocking_local(move || {
+            let key =
+                transom_core::SecretKey::new(secret_owner, transom_core::SecretKind::Password);
+            match secret_store.get(&key) {
+                Ok(secret) => secret.map(|s| s.as_str().to_string()).unwrap_or_default(),
+                Err(err) => {
+                    log::warn!("读取 RDP 会话密码失败，将以空口令继续尝试: {err}");
+                    String::new()
+                }
+            }
+        })
+        .await
+        .unwrap_or_default();
+
+        let config = transom_rdp::SessionConfig::new(&rdp, password, (1920, 1080));
+        view.update(cx, |rdp_view, cx| {
+            rdp_view.start_session(config, cx);
+        });
+    })
+    .detach();
 }
 
 /// 当前支持通过界面建立的连接类型；未知类型在派发前拒绝。

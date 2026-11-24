@@ -11,92 +11,54 @@ pub mod cliprdr;
 pub mod connector;
 pub mod loop_runner;
 mod reactivate;
+mod resize;
 
 use crate::error::RdpError;
 use crate::settings::SessionConfig;
 pub use channel::{MouseBtn, RdpInput, RdpOutput, RdpReceivers};
 use loop_runner::{SessionLoopParams, SessionLoopRunner};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::thread;
 use tokio::sync::{mpsc, watch};
 
 /// RDP 桌面会话句柄。
+///
+/// 设计原理（Why）：显式持有后台工作线程 `JoinHandle` 并在线程入口包裹 `catch_unwind`
+/// 隔离 panic，杜绝脱缰孤儿线程；由于 `Drop` 可能发生在 UI 主线程，析构时只发送确定性
+/// 停机信号而不阻塞等待网络回收。
 pub struct RdpSession {
     pub(crate) input_tx: mpsc::Sender<RdpInput>,
     pub(crate) shutdown_tx: watch::Sender<bool>,
+    pub(crate) worker: Option<thread::JoinHandle<()>>,
 }
 
 impl RdpSession {
     /// 异步拨号并启动独立的会话工作线程，返回会话句柄与双轨接收端（控制事件 + 增量帧）。
-    pub fn connect(mut config: SessionConfig) -> (Self, RdpReceivers) {
+    pub fn connect(config: SessionConfig) -> (Self, RdpReceivers) {
         let channels = channel::create_session_channels();
-        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
-
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let events_tx_err = channels.senders.events.clone();
-        let host_for_err = config.host.clone();
 
-        let spawn_result = thread::Builder::new()
+        let worker = match thread::Builder::new()
             .name("transom-rdp-session".to_string())
             .spawn(move || {
-                let runtime = match tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    Ok(rt) => rt,
-                    Err(e) => {
-                        log::error!("创建 RDP 专用运行时失败: {e}");
-                        let _ = channels.senders.events.try_send(RdpOutput::Terminated(
-                            RdpError::Network {
-                                address: config.host.clone(),
-                                source: e,
-                            },
-                        ));
-                        return;
-                    }
-                };
-
-                runtime.block_on(async move {
-                    match connector::establish_connection(
-                        &config,
-                        &channels.senders.events,
-                        &mut shutdown_rx,
-                    )
-                    .await
-                    {
-                        Ok(connection) => {
-                            // 握手建立后立即主动擦除密码，不等待线程退出
-                            config.clear_password();
-                            let runner = SessionLoopRunner::new(SessionLoopParams {
-                                connection,
-                                input_rx: channels.input_rx,
-                                senders: channels.senders,
-                                shutdown_rx,
-                            });
-                            runner.run().await;
-                        }
-                        Err(e) => {
-                            config.clear_password();
-                            if !*shutdown_rx.borrow() {
-                                log::warn!("RDP 连接建立失败: {e}");
-                                let _ =
-                                    channels.senders.events.send(RdpOutput::Terminated(e)).await;
-                            }
-                        }
-                    }
-                });
-            });
-
-        if let Err(e) = spawn_result {
-            log::error!("派生 RDP 独立会话线程失败: {e}");
-            let _ = events_tx_err.try_send(RdpOutput::Terminated(RdpError::Network {
-                address: host_for_err,
-                source: std::io::Error::other(e.to_string()),
-            }));
-        }
+                run_worker_thread(config, channels.input_rx, channels.senders, shutdown_rx)
+            }) {
+            Ok(handle) => Some(handle),
+            Err(e) => {
+                log::error!("派生 RDP 独立会话线程失败: {e}");
+                let _ = events_tx_err.try_send(RdpOutput::Terminated(RdpError::Runtime {
+                    detail: format!("派生会话线程失败: {e}"),
+                }));
+                None
+            }
+        };
 
         (
             Self {
                 input_tx: channels.input_tx,
                 shutdown_tx,
+                worker,
             },
             channels.receivers,
         )
@@ -145,5 +107,72 @@ impl RdpSession {
 impl Drop for RdpSession {
     fn drop(&mut self) {
         self.disconnect();
+        // 后台线程若已自然结束则顺手回收句柄；若仍在清理网络套接字则避免阻塞 UI 线程
+        if self
+            .worker
+            .as_ref()
+            .is_some_and(thread::JoinHandle::is_finished)
+            && let Some(handle) = self.worker.take()
+        {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// 独立会话工作线程入口：构建单线程运行时并捕获意外 panic 通知上层 UI。
+fn run_worker_thread(
+    mut config: SessionConfig,
+    input_rx: mpsc::Receiver<RdpInput>,
+    senders: channel::SessionSenders,
+    mut shutdown_rx: watch::Receiver<bool>,
+) {
+    let panic_events_tx = senders.events.clone();
+    let outcome = catch_unwind(AssertUnwindSafe(move || {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt,
+            Err(e) => {
+                log::error!("创建 RDP 专用运行时失败: {e}");
+                let _ = senders
+                    .events
+                    .try_send(RdpOutput::Terminated(RdpError::Runtime {
+                        detail: format!("创建异步运行时失败: {e}"),
+                    }));
+                return;
+            }
+        };
+
+        runtime.block_on(async move {
+            match connector::establish_connection(&config, &senders.events, &mut shutdown_rx).await
+            {
+                Ok(connection) => {
+                    // 握手建立后立即主动擦除密码，不等待线程退出
+                    config.clear_password();
+                    let runner = SessionLoopRunner::new(SessionLoopParams {
+                        connection,
+                        input_rx,
+                        senders,
+                        shutdown_rx,
+                    });
+                    runner.run().await;
+                }
+                Err(e) => {
+                    config.clear_password();
+                    if !*shutdown_rx.borrow() {
+                        log::warn!("RDP 连接建立失败: {e}");
+                        let _ = senders.events.send(RdpOutput::Terminated(e)).await;
+                    }
+                }
+            }
+        });
+    }));
+
+    if outcome.is_err() {
+        log::error!("RDP 会话工作线程发生未捕获 panic，已隔离并通知界面");
+        let _ = panic_events_tx.try_send(RdpOutput::Terminated(RdpError::Runtime {
+            detail: "RDP 会话后台线程异常中断".to_string(),
+        }));
     }
 }

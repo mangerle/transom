@@ -40,8 +40,6 @@ pub struct SessionConfig {
     pub audio: bool,
     /// 是否开启双向文本剪贴板。
     pub clipboard: bool,
-    /// 是否开启剪贴板文件流。
-    pub file_copy: bool,
     /// 是否启用视口动态自适应重设分辨率。
     pub dynamic_resolution: bool,
     /// 初始视口尺寸（宽、高）。
@@ -65,7 +63,6 @@ impl SessionConfig {
             performance: connection.performance,
             audio: connection.audio,
             clipboard: connection.clipboard,
-            file_copy: connection.file_copy,
             dynamic_resolution: connection.dynamic_resolution,
             initial_size: connection
                 .desktop_size
@@ -139,7 +136,10 @@ impl SessionConfig {
             license_cache: None,
             timezone_info: TimezoneInfo::default(),
             compression_type: Some(CompressionType::K64),
-            enable_server_pointer: true,
+            // GPUI 当前未提供隐藏宿主原生光标（CursorStyle::None）或注册自定义位图光标的能力；
+            // 若开启服务端指针位图，客户端自绘光标会与系统箭头光标双重叠加。此处关闭服务端指针，
+            // 统一使用零延迟本地原生光标；待未来 GUI 框架支持隐藏原生光标后可重新开启。
+            enable_server_pointer: false,
             pointer_software_rendering: false,
             multitransport_flags: None,
             alternate_shell: String::new(),
@@ -184,7 +184,6 @@ impl fmt::Debug for SessionConfig {
             .field("performance", &self.performance)
             .field("audio", &self.audio)
             .field("clipboard", &self.clipboard)
-            .field("file_copy", &self.file_copy)
             .field("dynamic_resolution", &self.dynamic_resolution)
             .field("initial_size", &self.initial_size)
             .finish()

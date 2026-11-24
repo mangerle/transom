@@ -139,7 +139,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
             _ => None,
         })
         .unwrap_or((FtpSecurity::Plain, true));
-    let (rdp_domain, rdp_color_depth, rdp_audio, rdp_clipboard, rdp_file_copy) = base
+    let (rdp_domain, rdp_color_depth, rdp_audio, rdp_clipboard) = base
         .as_ref()
         .and_then(|session| match &session.connection {
             Connection::Rdp(rdp) => Some((
@@ -147,11 +147,10 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
                 rdp.color_depth,
                 rdp.audio,
                 rdp.clipboard,
-                rdp.file_copy,
             )),
             _ => None,
         })
-        .unwrap_or((String::new(), RdpColorDepth::Depth32, true, true, true));
+        .unwrap_or((String::new(), RdpColorDepth::Depth32, true, true));
     let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
     let serial_baud = serial
         .map(|serial| serial.baud_rate)
@@ -196,7 +195,6 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         rdp_color_depth,
         rdp_audio,
         rdp_clipboard,
-        rdp_file_copy,
         local_working_dir,
         local_shell,
         local_shell_args,

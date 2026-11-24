@@ -2,22 +2,31 @@
 
 use super::{TabContent, WorkspaceTab};
 use crate::rdp::RdpView;
-use gpui_kit::Entity;
+use gpui_kit::{Entity, Subscription};
 use transom_core::TabId;
 
 /// RDP 远程桌面专属标签。
 pub(crate) struct RdpTab {
     pub(crate) view: Entity<RdpView>,
+    _subscription: Subscription,
 }
 
 impl WorkspaceTab {
-    /// 构造 RDP 桌面标签。
-    pub(crate) fn new_rdp(id: TabId, title: String, view: Entity<RdpView>) -> Self {
+    /// 构造 RDP 桌面标签并托管视图事件订阅（随标签关闭自动取消）。
+    pub(crate) fn new_rdp(
+        id: TabId,
+        title: String,
+        view: Entity<RdpView>,
+        subscription: Subscription,
+    ) -> Self {
         Self {
             id,
             title,
             status: super::TabStatus::Connecting,
-            content: TabContent::Rdp(Box::new(RdpTab { view })),
+            content: TabContent::Rdp(Box::new(RdpTab {
+                view,
+                _subscription: subscription,
+            })),
         }
     }
 

@@ -1,10 +1,11 @@
 //! 会话循环中的 CLIPRDR 剪贴板协议驱动辅助模块。
 //!
 //! 设计原理（Why）：将剪贴板静态虚拟通道的异步消息驱动（延迟渲染粘贴、格式数据应答、
-//! 本地复制通告）从主事件循环 `loop_runner` 中剥离，降低主循环复杂度并保持高内聚。
+//! 本地复制通告）从主事件循环 `loop_runner` 中剥离，并严格按照对端协商/请求的格式 ID
+//! （`CF_UNICODETEXT` / `CF_TEXT`）编解码，杜绝格式错配导致的粘贴乱码。
 
 use crate::clipboard::CliprdrSyncContext;
-use crate::clipboard::text::encode_text_payload;
+use crate::clipboard::text::{encode_ansi_payload, encode_text_payload};
 use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, FormatDataResponse};
 use ironrdp_cliprdr::{Client, Cliprdr};
 use ironrdp_core::IntoOwned;
@@ -19,30 +20,28 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
     writer: &mut W,
     context: &Arc<Mutex<CliprdrSyncContext>>,
 ) {
-    let (need_paste, pending_format) = {
+    let (paste_format, pending_format) = {
         let mut ctx = context.lock();
-        let paste = ctx.pending_paste_text;
-        ctx.pending_paste_text = false;
+        let paste = ctx.pending_paste_format.take();
+        if paste.is_some() {
+            ctx.inflight_paste_format = paste;
+        }
         let format = ctx.pending_data_request.take();
         (paste, format)
     };
 
-    if need_paste
+    if let Some(format_id) = paste_format
         && let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
-        && let Ok(messages) = cliprdr.initiate_paste(ClipboardFormatId::CF_UNICODETEXT)
+        && let Ok(messages) = cliprdr.initiate_paste(format_id)
         && let Ok(bytes) = active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
         && let Err(e) = writer.write_all(&bytes).await
     {
         log::debug!("写入 CLIPRDR 粘贴请求失败: {e}");
     }
 
-    if let Some(_format) = pending_format {
+    if let Some(requested_format) = pending_format {
         let local_text = context.lock().local_text.clone();
-        let response = if let Some(text) = local_text {
-            FormatDataResponse::new_data(encode_text_payload(&text)).into_owned()
-        } else {
-            FormatDataResponse::new_error().into_owned()
-        };
+        let response = build_format_data_response(requested_format, local_text.as_deref());
 
         if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
             && let Ok(messages) = cliprdr.submit_format_data(response)
@@ -55,7 +54,7 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
     }
 }
 
-/// 处理本地剪贴板更新并向远端通告。
+/// 处理本地剪贴板更新并向远端通告（同时声明 Unicode 与 ANSI 文本格式以兼容各类远端应用）。
 pub(crate) async fn handle_local_clipboard_copy<W: FramedWrite>(
     active_stage: &mut ActiveStage,
     writer: &mut W,
@@ -63,12 +62,31 @@ pub(crate) async fn handle_local_clipboard_copy<W: FramedWrite>(
     text: String,
 ) {
     context.lock().local_text = Some(text);
-    let formats = [ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT)];
+    let formats = [
+        ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT),
+        ClipboardFormat::new(ClipboardFormatId::CF_TEXT),
+    ];
     if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
         && let Ok(messages) = cliprdr.initiate_copy(&formats)
         && let Ok(bytes) = active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
         && let Err(e) = writer.write_all(&bytes).await
     {
         log::debug!("写入 CLIPRDR 本地复制通告失败: {e}");
+    }
+}
+
+fn build_format_data_response(
+    format: ClipboardFormatId,
+    local_text: Option<&str>,
+) -> FormatDataResponse<'static> {
+    let Some(text) = local_text else {
+        return FormatDataResponse::new_error().into_owned();
+    };
+    if format == ClipboardFormatId::CF_UNICODETEXT {
+        FormatDataResponse::new_data(encode_text_payload(text)).into_owned()
+    } else if format == ClipboardFormatId::CF_TEXT {
+        FormatDataResponse::new_data(encode_ansi_payload(text)).into_owned()
+    } else {
+        FormatDataResponse::new_error().into_owned()
     }
 }
