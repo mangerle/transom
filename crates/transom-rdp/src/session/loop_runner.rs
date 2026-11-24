@@ -15,6 +15,9 @@ use crate::session::channel::{RdpInput, RdpOutput, SessionSenders};
 use crate::session::cliprdr::drive_cliprdr_events;
 use crate::session::connector::{ErasedStream, EstablishedConnection};
 use crate::session::input::{InputBatchOutcome, InputBatcher, InputProcessContext};
+use crate::session::output::{
+    LoopAction, dispatch_stage_outputs, flush_dirty_tiles, flush_network_responses,
+};
 use crate::session::reactivate::execute_reactivation;
 use crate::session::resize::ResizeController;
 use crate::settings::DEFAULT_COMPRESSION_TYPE;
@@ -22,7 +25,7 @@ use crate::tiles::TileExtractor;
 use ironrdp_connector::connection_activation::ConnectionActivationFactory;
 use ironrdp_graphics::image_processing::PixelFormat;
 use ironrdp_session::image::DecodedImage;
-use ironrdp_session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
+use ironrdp_session::{ActiveStage, ActiveStageBuilder};
 use ironrdp_tokio::{FramedRead, FramedWrite, TokioFramed, split_tokio_framed};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -43,13 +46,6 @@ pub(crate) struct SessionLoopParams {
     pub(crate) mouse_rx: watch::Receiver<Option<(u16, u16)>>,
     pub(crate) senders: SessionSenders,
     pub(crate) shutdown_rx: watch::Receiver<bool>,
-}
-
-/// 单步事件处理后的循环控制指令。
-enum LoopAction {
-    Continue,
-    Reactivate,
-    Stop,
 }
 
 /// 会话循环主运行器。
@@ -188,7 +184,11 @@ impl SessionLoopRunner {
                         return LoopAction::Stop;
                     }
                     _ = frame_tick.tick(), if has_pending => {
-                        self.flush_dirty_tiles();
+                        flush_dirty_tiles(
+                            &mut self.tile_extractor,
+                            &self.canvas,
+                            &self.senders.frames,
+                        );
                     }
                     _ = &mut resize_sleep, if armed_deadline.is_some() => {
                         armed_deadline = None;
@@ -236,20 +236,6 @@ impl SessionLoopRunner {
                 LoopAction::Stop
             }
         }
-    }
-
-    /// 尝试向 UI 非阻塞投递增量瓦片帧；若帧通道已满则保留脏位图等待下一拍合并。
-    fn flush_dirty_tiles(&mut self) {
-        if self.senders.frames.capacity() == 0 {
-            return;
-        }
-        if let Some(update) = self.tile_extractor.extract_pending(&self.canvas)
-            && let Err(send_err) = self.senders.frames.try_send(update)
-        {
-            self.tile_extractor.recycle_frame(send_err.into_inner());
-            return;
-        }
-        self.tile_extractor.commit_flushed();
     }
 
     /// 触发已到期的动态分辨率请求（若通道尚未就绪则有限次数重试）。
@@ -324,7 +310,7 @@ impl SessionLoopRunner {
             return LoopAction::Continue;
         };
         match result {
-            Ok(outputs) => self.dispatch_stage_outputs(writer, &outputs).await,
+            Ok(outputs) => dispatch_stage_outputs(writer, &self.senders.events, &outputs).await,
             Err(e) => {
                 log::warn!("处理 FastPath 输入异常: {e}");
                 LoopAction::Continue
@@ -345,7 +331,7 @@ impl SessionLoopRunner {
         {
             Ok(outputs) => {
                 self.consecutive_decode_errors = 0;
-                let action = self.dispatch_stage_outputs(writer, &outputs).await;
+                let action = dispatch_stage_outputs(writer, &self.senders.events, &outputs).await;
                 if !matches!(action, LoopAction::Continue) {
                     return action;
                 }
@@ -383,44 +369,6 @@ impl SessionLoopRunner {
         LoopAction::Continue
     }
 
-    /// 将状态机产出写回网络并通知 UI，同时识别重激活与远端终止信号。
-    async fn dispatch_stage_outputs<W: FramedWrite>(
-        &self,
-        writer: &mut W,
-        outputs: &[ActiveStageOutput],
-    ) -> LoopAction {
-        if flush_network_responses(writer, outputs).await.is_err() {
-            return LoopAction::Stop;
-        }
-
-        let mut need_reactivate = false;
-        for out in outputs {
-            match out {
-                ActiveStageOutput::DeactivateAll => {
-                    need_reactivate = true;
-                }
-                ActiveStageOutput::Terminate(reason) => {
-                    log::info!("远端服务器发起终止会话: {reason:?}");
-                    let _ = self
-                        .senders
-                        .events
-                        .send(RdpOutput::Disconnected {
-                            reason: format!("{reason:?}"),
-                        })
-                        .await;
-                    return LoopAction::Stop;
-                }
-                _ => {}
-            }
-        }
-
-        if need_reactivate {
-            LoopAction::Reactivate
-        } else {
-            LoopAction::Continue
-        }
-    }
-
     /// 执行标准 Deactivation-Reactivation 序列并重建本地画布与分辨率状态。
     async fn handle_deactivate_all<R, W>(
         &mut self,
@@ -456,17 +404,4 @@ impl SessionLoopRunner {
             .await;
         true
     }
-}
-
-/// 将生成的响应帧批量刷入网络套接字。
-async fn flush_network_responses<W: FramedWrite>(
-    writer: &mut W,
-    outputs: &[ActiveStageOutput],
-) -> Result<(), std::io::Error> {
-    for out in outputs {
-        if let ActiveStageOutput::ResponseFrame(bytes) = out {
-            writer.write_all(bytes).await?;
-        }
-    }
-    Ok(())
 }

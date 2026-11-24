@@ -11,6 +11,7 @@ pub mod cliprdr;
 pub mod connector;
 mod input;
 pub mod loop_runner;
+mod output;
 mod reactivate;
 mod resize;
 
