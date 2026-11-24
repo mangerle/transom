@@ -135,12 +135,23 @@ fn render_request_row(
         view_for_click.update(cx, |this, cx| this.select_request(request_id, window, cx));
     })
     .context_menu(move |menu, _window, _cx| {
-        let view = view_for_menu.clone();
+        let duplicate_view = view_for_menu.clone();
+        let delete_view = view_for_menu.clone();
         menu.item(menu_item(
+            rust_i18n::t!("api.request.duplicate").to_string(),
+            AppIcon::Ui(UiIcon::COPY),
+            move |_, window, cx| {
+                duplicate_view.update(cx, |this, cx| {
+                    this.select_request(request_id, window, cx);
+                    this.duplicate_selected(window, cx);
+                });
+            },
+        ))
+        .item(menu_item(
             rust_i18n::t!("api.request.delete").to_string(),
             AppIcon::Ui(UiIcon::DELETE),
             move |_, window, cx| {
-                view.update(cx, |this, cx| {
+                delete_view.update(cx, |this, cx| {
                     this.select_request(request_id, window, cx);
                     this.delete_selected(window, cx);
                 });

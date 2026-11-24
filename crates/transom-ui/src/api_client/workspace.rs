@@ -5,6 +5,7 @@ pub(crate) use super::workspace_types::{
     ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent,
     ApiWorkspaceServices,
 };
+use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use transom_api::{
@@ -86,6 +87,15 @@ impl ApiWorkspace {
             binary_file_task: None,
         };
         workspace.editor_subscriptions = vec![
+            cx.subscribe_in(
+                &workspace.editors.request_name,
+                window,
+                |this, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.apply_request_name(cx);
+                    }
+                },
+            ),
             cx.subscribe_in(&workspace.editors.query, window, |this, _, event, _, cx| {
                 let KvEditorEvent::Changed(entries) = event;
                 this.apply_query_entries(entries, cx);
@@ -296,6 +306,23 @@ impl ApiWorkspace {
             return;
         }
         self.selected_request = self.project.requests.first().map(|request| request.id);
+        self.load_selected(window, cx);
+        cx.notify();
+    }
+
+    /// 复制当前请求，并立即选中副本继续编辑。
+    pub(crate) fn duplicate_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.capture_editor(cx) {
+            cx.notify();
+            return;
+        }
+        let Some(request) = self.selected_request().cloned() else {
+            return;
+        };
+        let duplicate = request.duplicate();
+        let request_id = duplicate.id;
+        self.project.upsert_request(duplicate);
+        self.selected_request = Some(request_id);
         self.load_selected(window, cx);
         cx.notify();
     }

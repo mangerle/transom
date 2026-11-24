@@ -288,6 +288,7 @@ impl AppShell {
                     assertion_results: &state.assertion_results,
                     sending: state.sending,
                     error: state.error.as_deref(),
+                    request_name: &state.editors.request_name,
                     request_url: &state.editors.request_url,
                     query_editor: &state.editors.query,
                     header_editor: &state.editors.headers,

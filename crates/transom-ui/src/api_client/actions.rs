@@ -183,27 +183,51 @@ fn start_import(state: &mut AppState, window: &mut Window, cx: &mut Context<AppS
     else {
         return;
     };
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("API project")
+        .to_string();
+    let sidebar = state.features.api_sidebar.clone();
+    sidebar.update(cx, |view, cx| {
+        view.begin_import(file_name.clone(), cx);
+    });
 
     let task = cx.spawn_in(window, async move |this, cx| {
         let parsed = crate::app::spawn_blocking_local(move || read_import_file(&path)).await;
         let _ = this.update_in(cx, |shell, _window, cx| match parsed {
-            Some(Ok(projects)) => {
+            Some(Ok(parsed)) => {
                 let sidebar = shell.state.features.api_sidebar.clone();
-                sidebar.update(cx, |view, cx| view.install_imported_projects(projects, cx));
+                sidebar.update(cx, |view, cx| {
+                    view.preview_import(parsed.projects, parsed.format, file_name, cx)
+                });
                 cx.notify();
             }
-            Some(Err(error)) => shell
-                .state
-                .set_error(crate::palette::localized_error(&error)),
-            None => shell
-                .state
-                .set_error(rust_i18n::t!("api.project.import_thread_failed").to_string()),
+            Some(Err(error)) => {
+                let sidebar = shell.state.features.api_sidebar.clone();
+                sidebar.update(cx, |view, cx| view.cancel_import(cx));
+                shell
+                    .state
+                    .set_error(crate::palette::localized_error(&error));
+            }
+            None => {
+                let sidebar = shell.state.features.api_sidebar.clone();
+                sidebar.update(cx, |view, cx| view.cancel_import(cx));
+                shell
+                    .state
+                    .set_error(rust_i18n::t!("api.project.import_thread_failed").to_string());
+            }
         });
     });
     state.runtime.tasks.background.api_import = Some(task);
 }
 
-fn read_import_file(path: &std::path::Path) -> Result<Vec<ApiProject>, transom_core::AppError> {
+struct ParsedImport {
+    projects: Vec<ApiProject>,
+    format: ApiImportFormat,
+}
+
+fn read_import_file(path: &std::path::Path) -> Result<ParsedImport, transom_core::AppError> {
     let metadata = std::fs::metadata(path).map_err(|error| {
         transom_core::AppError::with_detail(
             transom_core::ErrorCode::Io,
@@ -242,7 +266,8 @@ fn read_import_file(path: &std::path::Path) -> Result<Vec<ApiProject>, transom_c
         )
     })?;
     let format = import_format_for_path(path, &text);
-    import_projects(&text, format)
+    let projects = import_projects(&text, format)?;
+    Ok(ParsedImport { projects, format })
 }
 
 fn import_format_for_path(path: &std::path::Path, text: &str) -> ApiImportFormat {

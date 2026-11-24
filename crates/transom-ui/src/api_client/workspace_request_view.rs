@@ -98,6 +98,21 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
         .pt(rems(space::SM))
         .child(
             h_flex()
+                .h(rems(size::PANE_HEADER_HEIGHT))
+                .w_full()
+                .px(rems(space::XS))
+                .gap(rems(space::SM))
+                .items_center()
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(p.muted_foreground)
+                        .child(rust_i18n::t!("api.request.name").to_string()),
+                )
+                .child(Input::new(params.request_name).w(rems(18.0))),
+        )
+        .child(
+            h_flex()
                 .h(rems(size::LARGE_HEADER_HEIGHT))
                 .w_full()
                 .px(rems(space::XS))

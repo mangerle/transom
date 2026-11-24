@@ -34,6 +34,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) response: Option<&'a ApiResponseSnapshot>,
     pub(crate) sending: bool,
     pub(crate) error: Option<&'a str>,
+    pub(crate) request_name: &'a Entity<InputState>,
     pub(crate) request_url: &'a Entity<InputState>,
     pub(crate) query_editor: &'a Entity<super::kv_editor::KvEditor>,
     pub(crate) header_editor: &'a Entity<super::kv_editor::KvEditor>,

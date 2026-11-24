@@ -350,6 +350,14 @@ impl ApiRequest {
         }
     }
 
+    /// 复制请求内容并生成新的稳定标识；名称追加“副本”便于在接口树中区分。
+    pub fn duplicate(&self) -> Self {
+        let mut copy = self.clone();
+        copy.id = ApiRequestId::new();
+        copy.name = normalize_request_name(format!("{} 副本", self.display_name()));
+        copy
+    }
+
     /// 发送时将相对地址接到项目基础地址后，并合并启用中的查询参数。
     pub fn resolved_url(&self, base_url: &str, environment: &ApiEnvironment) -> String {
         let url = environment.resolve(self.url.trim());
@@ -615,5 +623,21 @@ mod tests {
         let text = request.auth_text();
         request.set_auth_text(&text).expect("认证配置应可回读");
         assert!(matches!(request.auth, ApiAuth::Bearer { .. }));
+    }
+
+    #[test]
+    fn duplicate_keeps_content_and_replaces_identity() {
+        let mut request = ApiRequest::new("用户列表", None);
+        request.url = "https://example.com/users".to_string();
+        request
+            .set_header_text("Accept: application/json")
+            .expect("请求头应合法");
+
+        let duplicate = request.duplicate();
+
+        assert_ne!(duplicate.id, request.id);
+        assert_eq!(duplicate.name, "用户列表 副本");
+        assert_eq!(duplicate.url, request.url);
+        assert_eq!(duplicate.headers, request.headers);
     }
 }

@@ -280,6 +280,39 @@ api:
     import_title:
       en: Import API project
       zh-CN: 导入 API 项目
+    import_parsing:
+      en: 'Parsing %{file}…'
+      zh-CN: 正在解析 %{file}…
+    import_preview_title:
+      en: Import preview
+      zh-CN: 导入预览
+    import_format:
+      en: 'Format: %{format}'
+      zh-CN: 格式：%{format}
+    import_project_count:
+      en: '%{count} projects'
+      zh-CN: '%{count} 个项目'
+    import_request_count:
+      en: '%{count} requests'
+      zh-CN: '%{count} 个请求'
+    import_more_projects:
+      en: '%{count} more projects'
+      zh-CN: 另有 %{count} 个项目
+    import_confirm:
+      en: Import
+      zh-CN: 确认导入
+    import_format_transom:
+      en: Transom
+      zh-CN: Transom
+    import_format_curl:
+      en: cURL
+      zh-CN: cURL
+    import_format_postman:
+      en: Postman 2.1
+      zh-CN: Postman 2.1
+    import_format_openapi:
+      en: OpenAPI 3
+      zh-CN: OpenAPI 3
     import_thread_failed:
       en: Could not start the API project import task
       zh-CN: 启动 API 项目导入任务失败
@@ -311,6 +344,9 @@ api:
     new:
       en: New request
       zh-CN: 新建请求
+    duplicate:
+      en: Duplicate request
+      zh-CN: 复制请求
     empty_title:
       en: No requests yet
       zh-CN: 还没有请求

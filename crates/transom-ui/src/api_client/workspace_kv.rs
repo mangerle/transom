@@ -8,6 +8,24 @@ use transom_api::{
 };
 
 impl ApiWorkspace {
+    pub(super) fn apply_request_name(&mut self, cx: &mut Context<Self>) {
+        let Some(request_id) = self.selected_request else {
+            return;
+        };
+        let name = self.editors.request_name.read(cx).value().to_string();
+        let Some(request) = self
+            .project
+            .requests
+            .iter_mut()
+            .find(|request| request.id == request_id)
+        else {
+            return;
+        };
+        request.name = name;
+        self.project.touch();
+        cx.notify();
+    }
+
     pub(super) fn apply_query_entries(&mut self, entries: &[KvEntry], cx: &mut Context<Self>) {
         let Some(request_id) = self.selected_request else {
             return;

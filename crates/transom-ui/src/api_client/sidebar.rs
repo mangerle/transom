@@ -2,7 +2,7 @@
 
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
-use transom_api::{ApiExportFormat, ApiProject, ApiProjectId, ApiRegistry};
+use transom_api::{ApiExportFormat, ApiImportFormat, ApiProject, ApiProjectId, ApiRegistry};
 
 /// 侧栏发往外壳的意图。
 #[derive(Clone)]
@@ -39,6 +39,21 @@ pub(crate) struct ApiProjectEditor {
     pub(crate) error: Option<String>,
 }
 
+/// 已解析、等待用户确认的导入内容。
+#[derive(Clone)]
+pub(crate) struct ApiImportPreview {
+    pub(crate) projects: Vec<ApiProject>,
+    pub(crate) format: ApiImportFormat,
+    pub(crate) file_name: String,
+}
+
+/// 导入过程只占用侧栏自己的状态，不阻塞项目列表或工作区标签。
+#[derive(Clone)]
+pub(crate) enum ApiImportState {
+    Loading { file_name: String },
+    Ready(ApiImportPreview),
+}
+
 /// API 侧栏状态。
 ///
 /// 只保存应用级项目列表和侧栏自身交互状态；接口树、请求编辑器和响应状态
@@ -48,6 +63,7 @@ pub(crate) struct ApiSidebarState {
     pub(crate) search: Entity<InputState>,
     pub(crate) editor: Option<ApiProjectEditor>,
     pub(crate) pending_delete: Option<ApiProjectId>,
+    pub(crate) pending_import: Option<ApiImportState>,
     pub(crate) load_error: Option<String>,
 }
 
@@ -75,6 +91,7 @@ impl ApiSidebarView {
                 search,
                 editor: None,
                 pending_delete: None,
+                pending_import: None,
                 load_error,
             },
         }
@@ -83,6 +100,7 @@ impl ApiSidebarView {
     /// 打开新建项目内联编辑器。
     pub(crate) fn start_create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.state.pending_delete = None;
+        self.state.pending_import = None;
         let input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.project.name_placeholder").to_string())
@@ -115,6 +133,7 @@ impl ApiSidebarView {
         });
         let focus = input.read(cx).focus_handle(cx);
         self.state.pending_delete = None;
+        self.state.pending_import = None;
         self.state.editor = Some(ApiProjectEditor {
             mode: ApiProjectEditorMode::Rename(project_id),
             input: input.clone(),
@@ -212,6 +231,45 @@ impl ApiSidebarView {
             notice: Some(rust_i18n::t!("api.project.deleted").to_string()),
         });
         cx.notify();
+    }
+
+    /// 标记导入文件已选中，并展示解析中的侧栏状态。
+    pub(crate) fn begin_import(&mut self, file_name: String, cx: &mut Context<Self>) {
+        self.state.editor = None;
+        self.state.pending_delete = None;
+        self.state.pending_import = Some(ApiImportState::Loading { file_name });
+        cx.notify();
+    }
+
+    /// 展示已解析项目，等待用户确认后再修改登记表和磁盘。
+    pub(crate) fn preview_import(
+        &mut self,
+        projects: Vec<ApiProject>,
+        format: ApiImportFormat,
+        file_name: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.pending_import = Some(ApiImportState::Ready(ApiImportPreview {
+            projects,
+            format,
+            file_name,
+        }));
+        cx.notify();
+    }
+
+    /// 确认导入预览并执行原有安装、持久化与首个项目打开流程。
+    pub(crate) fn confirm_import(&mut self, cx: &mut Context<Self>) {
+        let Some(ApiImportState::Ready(preview)) = self.state.pending_import.take() else {
+            return;
+        };
+        self.install_imported_projects(preview.projects, cx);
+    }
+
+    /// 取消当前导入，不修改项目登记表。
+    pub(crate) fn cancel_import(&mut self, cx: &mut Context<Self>) {
+        if self.state.pending_import.take().is_some() {
+            cx.notify();
+        }
     }
 
     /// 合并导入项目；同一 id 已存在时以导入内容替换，否则追加。
