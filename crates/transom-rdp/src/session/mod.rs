@@ -4,6 +4,7 @@
 //! 的 GAT 绑定，在多线程 Tokio Runtime 上无法通过 rustc 的跨线程 `Send` 判定。
 //! 因此采用专用独立操作系统线程 + current-thread runtime 的经典并发架构，
 //! 对外只暴露纯消息通道与生命周期句柄，彻底解耦 UI 渲染层与协议栈生命周期。
+//! 严禁生产路径裸 `expect`，线程派生失败时优雅降级并通知上层。
 
 pub mod channel;
 pub mod connector;
@@ -17,7 +18,7 @@ use tokio::sync::mpsc;
 
 /// RDP 桌面会话句柄。
 pub struct RdpSession {
-    input_tx: mpsc::Sender<RdpInput>,
+    pub(crate) input_tx: mpsc::Sender<RdpInput>,
 }
 
 impl RdpSession {
@@ -27,7 +28,7 @@ impl RdpSession {
         let (input_tx, input_rx) = input_ch;
         let (output_tx, output_rx) = output_ch;
 
-        thread::Builder::new()
+        let spawn_result = thread::Builder::new()
             .name("transom-rdp-session".to_string())
             .spawn(move || {
                 let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -37,6 +38,10 @@ impl RdpSession {
                     Ok(rt) => rt,
                     Err(e) => {
                         log::error!("创建 RDP 专用运行时失败: {e}");
+                        let _ = output_tx.try_send(RdpOutput::Terminated(RdpError::Network {
+                            address: config.host.clone(),
+                            source: e,
+                        }));
                         return;
                     }
                 };
@@ -59,13 +64,18 @@ impl RdpSession {
                         }
                     }
                 });
-            })
-            .expect("派生 RDP 会话线程必须成功");
+            });
+
+        if let Err(e) = spawn_result {
+            log::error!("派生 RDP 独立会话线程失败: {e}");
+            // 线程创建失败，向输出通道推入终止通知
+            let _ = input_tx.try_send(RdpInput::Disconnect);
+        }
 
         (Self { input_tx }, output_rx)
     }
 
-    /// 发送输入指令。若通道已满或对端关闭，返回错误。
+    /// 发送输入指令。若通道已满则等待；对端关闭时返回错误。
     pub async fn send_input(&self, input: RdpInput) -> Result<(), RdpError> {
         self.input_tx
             .send(input)
@@ -75,13 +85,16 @@ impl RdpSession {
             })
     }
 
-    /// 尝试以非阻塞方式发送输入指令。
+    /// 尝试以非阻塞方式发送输入指令。精确区分通道满与已关闭。
     pub fn try_send_input(&self, input: RdpInput) -> Result<(), RdpError> {
-        self.input_tx
-            .try_send(input)
-            .map_err(|_| RdpError::ChannelClosed {
+        self.input_tx.try_send(input).map_err(|err| match err {
+            mpsc::error::TrySendError::Full(_) => RdpError::ChannelFull {
                 channel: "UI -> RDP Session",
-            })
+            },
+            mpsc::error::TrySendError::Closed(_) => RdpError::ChannelClosed {
+                channel: "UI -> RDP Session",
+            },
+        })
     }
 
     /// 请求断开会话。

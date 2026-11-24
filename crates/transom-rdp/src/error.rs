@@ -52,4 +52,8 @@ pub enum RdpError {
     /// 会话通信通道异常中断。
     #[error("内部通信通道已断开，方向: {channel}")]
     ChannelClosed { channel: &'static str },
+
+    /// 会话通信通道已满（背压保护）。
+    #[error("内部通信通道已满，方向: {channel}")]
+    ChannelFull { channel: &'static str },
 }

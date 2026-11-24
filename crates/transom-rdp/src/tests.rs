@@ -67,3 +67,21 @@ fn path_traversal_protection() {
         assert!(path.starts_with(safe_base));
     }
 }
+
+#[test]
+fn session_channel_backpressure_distinction() {
+    use crate::session::channel::INPUT_CHANNEL_CAPACITY;
+    assert_eq!(INPUT_CHANNEL_CAPACITY, 128);
+
+    let (input_tx, _input_rx) = tokio::sync::mpsc::channel(1);
+    let session = crate::RdpSession { input_tx };
+    assert!(
+        session
+            .try_send_input(crate::RdpInput::ReleaseAllKeys)
+            .is_ok()
+    );
+
+    // 缓冲区打满后，try_send_input 必须返回 ChannelFull 而非 ChannelClosed
+    let full_res = session.try_send_input(crate::RdpInput::ReleaseAllKeys);
+    assert!(matches!(full_res, Err(crate::RdpError::ChannelFull { .. })));
+}

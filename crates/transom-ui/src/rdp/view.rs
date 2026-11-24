@@ -101,6 +101,7 @@ impl RdpView {
 
     /// 发送断开请求。
     pub fn disconnect(&mut self) {
+        self.send_input(RdpInput::ReleaseAllKeys);
         if let Some(session) = &self.session {
             session.disconnect();
         }

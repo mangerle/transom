@@ -126,6 +126,27 @@ impl SessionLoopRunner {
                         continue;
                     }
 
+                    if let RdpInput::Resize { width, height } = input {
+                        if let Some(res) = active_stage.encode_resize(
+                            u32::from(width),
+                            u32::from(height),
+                            None,
+                            None,
+                        ) {
+                            match res {
+                                Ok(response_frame) => {
+                                    if let Err(e) = writer.write_all(&response_frame).await {
+                                        log::warn!("写入动态重设分辨率响应帧失败: {e}");
+                                    }
+                                }
+                                Err(e) => {
+                                    log::warn!("编码动态重设分辨率失败: {e}");
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
                     let ops = Self::convert_input_to_operations(input, &mut keyboard);
                     if ops.is_empty() {
                         continue;
