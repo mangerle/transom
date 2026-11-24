@@ -6,7 +6,7 @@
 //! 按需挂载 RDPSND、CLIPRDR 与 DisplayControl 通道。
 
 use crate::audio::TransomAudioBackend;
-use crate::clipboard::{CliprdrSyncContext, TransomCliprdrBackend};
+use crate::clipboard::TransomCliprdrBackend;
 use crate::error::RdpError;
 use crate::session::channel::RdpOutput;
 use crate::settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo};
@@ -14,7 +14,6 @@ use crate::transport::connect_stream;
 use ironrdp_connector::{ClientConnector, ClientConnectorState, ConnectionResult, ServerName};
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{TokioFramed, connect_begin, connect_finalize, mark_as_upgraded};
-use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 use std::future::Future;
 use std::net::SocketAddr;
@@ -39,7 +38,6 @@ pub struct EstablishedConnection {
     pub framed: TokioFramed<ErasedStream>,
     pub result: ConnectionResult,
     pub audio_muted: Arc<AtomicBool>,
-    pub cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
 }
 
 /// 执行完整的 RDP 连接与认证序列。
@@ -58,15 +56,9 @@ pub async fn establish_connection(
     })?;
 
     let audio_muted = Arc::new(AtomicBool::new(!config.audio));
-    let cliprdr_context = Arc::new(Mutex::new(CliprdrSyncContext::default()));
     let mut framed: TokioFramed<ErasedStream> = TokioFramed::new(Box::new(stream));
-    let mut connector = build_client_connector(
-        config,
-        local_addr,
-        audio_muted.clone(),
-        cliprdr_context.clone(),
-        events_tx.clone(),
-    );
+    let mut connector =
+        build_client_connector(config, local_addr, audio_muted.clone(), events_tx.clone());
 
     let should_upgrade = run_stage(
         "connect_begin 握手初始化",
@@ -101,7 +93,6 @@ pub async fn establish_connection(
         framed,
         result,
         audio_muted,
-        cliprdr_context,
     })
 }
 
@@ -198,7 +189,6 @@ fn build_client_connector(
     config: &SessionConfig,
     local_addr: SocketAddr,
     audio_muted: Arc<AtomicBool>,
-    cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
     events_tx: mpsc::Sender<RdpOutput>,
 ) -> ClientConnector {
     let rdp_config = config.to_ironrdp_config();
@@ -211,7 +201,7 @@ fn build_client_connector(
     }
 
     if config.clipboard {
-        let backend = TransomCliprdrBackend::new(cliprdr_context, events_tx);
+        let backend = TransomCliprdrBackend::new(events_tx);
         connector = connector.with_static_channel(ironrdp_cliprdr::Cliprdr::new(Box::new(backend)));
     }
 

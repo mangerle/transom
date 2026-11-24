@@ -14,9 +14,7 @@ use ironrdp_cliprdr::pdu::{
     FileContentsResponse, FormatDataRequest, FormatDataResponse, LockDataId,
 };
 use ironrdp_core::impl_as_any;
-use parking_lot::Mutex;
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
@@ -43,10 +41,10 @@ fn push_bounded(queue: &mut VecDeque<ClipboardFormatId>, format: ClipboardFormat
     queue.push_back(format);
 }
 
-/// Transom 原生剪贴板通道后端。
+/// Transom 原生剪贴板通道后端（直接内聚状态，由 `ActiveStage` 独占所有权，无需共享锁）。
 #[derive(Debug)]
 pub struct TransomCliprdrBackend {
-    context: Arc<Mutex<CliprdrSyncContext>>,
+    pub context: CliprdrSyncContext,
     output_tx: mpsc::Sender<RdpOutput>,
 }
 
@@ -54,11 +52,11 @@ impl_as_any!(TransomCliprdrBackend);
 
 impl TransomCliprdrBackend {
     /// 构造新的剪贴板通道后端实例。
-    pub fn new(
-        context: Arc<Mutex<CliprdrSyncContext>>,
-        output_tx: mpsc::Sender<RdpOutput>,
-    ) -> Self {
-        Self { context, output_tx }
+    pub fn new(output_tx: mpsc::Sender<RdpOutput>) -> Self {
+        Self {
+            context: CliprdrSyncContext::default(),
+            output_tx,
+        }
     }
 }
 
@@ -102,19 +100,16 @@ impl CliprdrBackend for TransomCliprdrBackend {
         };
         if let Some(format) = preferred {
             // 新一次远端复制会覆盖先前的格式清单，仅保留最新待拉取格式
-            self.context.lock().pending_paste_format = Some(format);
+            self.context.pending_paste_format = Some(format);
         }
     }
 
     fn on_format_data_request(&mut self, request: FormatDataRequest) {
-        push_bounded(
-            &mut self.context.lock().pending_data_requests,
-            request.format,
-        );
+        push_bounded(&mut self.context.pending_data_requests, request.format);
     }
 
     fn on_format_data_response(&mut self, response: FormatDataResponse<'_>) {
-        let requested_format = self.context.lock().inflight_paste_formats.pop_front();
+        let requested_format = self.context.inflight_paste_formats.pop_front();
         if response.is_error() {
             log::debug!("远端返回剪贴板数据提取失败响应");
             return;

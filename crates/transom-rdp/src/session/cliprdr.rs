@@ -4,24 +4,27 @@
 //! 本地复制通告）从主事件循环 `loop_runner` 中剥离，并严格按照对端协商/请求的格式 ID
 //! （`CF_UNICODETEXT` / `CF_TEXT`）编解码，杜绝格式错配导致的粘贴乱码。
 
-use crate::clipboard::CliprdrSyncContext;
+use crate::clipboard::TransomCliprdrBackend;
 use crate::clipboard::text::{encode_ansi_payload, encode_text_payload};
 use ironrdp_cliprdr::pdu::{ClipboardFormat, ClipboardFormatId, FormatDataResponse};
 use ironrdp_cliprdr::{Client, Cliprdr};
 use ironrdp_core::IntoOwned;
 use ironrdp_session::ActiveStage;
 use ironrdp_tokio::FramedWrite;
-use parking_lot::Mutex;
-use std::sync::Arc;
 
 /// 驱动 CLIPRDR 剪贴板事件流转（拉取远端数据或应答远端数据请求）。
 pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
     active_stage: &mut ActiveStage,
     writer: &mut W,
-    context: &Arc<Mutex<CliprdrSyncContext>>,
 ) {
     let (paste_format, pending_requests, local_text) = {
-        let mut ctx = context.lock();
+        let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>() else {
+            return;
+        };
+        let Some(backend) = cliprdr.downcast_backend_mut::<TransomCliprdrBackend>() else {
+            return;
+        };
+        let ctx = &mut backend.context;
         let paste = ctx.pending_paste_format.take();
         if let Some(fmt) = paste {
             if ctx.inflight_paste_formats.len() >= 16 {
@@ -65,20 +68,23 @@ pub(crate) async fn drive_cliprdr_events<W: FramedWrite>(
 pub(crate) async fn handle_local_clipboard_copy<W: FramedWrite>(
     active_stage: &mut ActiveStage,
     writer: &mut W,
-    context: &Arc<Mutex<CliprdrSyncContext>>,
     text: String,
 ) {
-    context.lock().local_text = Some(text);
     let formats = [
         ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT),
         ClipboardFormat::new(ClipboardFormatId::CF_TEXT),
     ];
-    if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>()
-        && let Ok(messages) = cliprdr.initiate_copy(&formats)
-        && let Ok(bytes) = active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
-        && let Err(e) = writer.write_all(&bytes).await
-    {
-        log::debug!("写入 CLIPRDR 本地复制通告失败: {e}");
+    if let Some(cliprdr) = active_stage.get_svc_processor_mut::<Cliprdr<Client>>() {
+        if let Some(backend) = cliprdr.downcast_backend_mut::<TransomCliprdrBackend>() {
+            backend.context.local_text = Some(text);
+        }
+        if let Ok(messages) = cliprdr.initiate_copy(&formats)
+            && let Ok(bytes) =
+                active_stage.process_svc_processor_messages::<Cliprdr<Client>>(messages)
+            && let Err(e) = writer.write_all(&bytes).await
+        {
+            log::debug!("写入 CLIPRDR 本地复制通告失败: {e}");
+        }
     }
 }
 

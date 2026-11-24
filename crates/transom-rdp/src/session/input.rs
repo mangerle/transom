@@ -4,7 +4,6 @@
 //! 从 `loop_runner` 主事件循环中剥离，保持主循环简洁聚焦于网络与定时器调度；
 //! 同时复用 `ops_buf` 避免每次键鼠事件产生堆分配。
 
-use crate::clipboard::CliprdrSyncContext;
 use crate::keyboard::KeyboardTranslator;
 use crate::session::channel::{MouseBtn, RdpInput};
 use crate::session::cliprdr::handle_local_clipboard_copy;
@@ -15,8 +14,6 @@ use ironrdp_input::{
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageOutput, SessionResult};
 use ironrdp_tokio::FramedWrite;
-use parking_lot::Mutex;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -119,13 +116,7 @@ impl InputBatcher {
                 InputBatchOutcome::Continue
             }
             RdpInput::ClipboardText(text) => {
-                handle_local_clipboard_copy(
-                    ctx.active_stage,
-                    ctx.writer,
-                    ctx.cliprdr_context,
-                    text,
-                )
-                .await;
+                handle_local_clipboard_copy(ctx.active_stage, ctx.writer, text).await;
                 InputBatchOutcome::Continue
             }
             RdpInput::Resize { width, height } => {
@@ -145,7 +136,6 @@ pub(crate) struct InputProcessContext<'a, W> {
     pub(crate) active_stage: &'a mut ActiveStage,
     pub(crate) writer: &'a mut W,
     pub(crate) audio_muted: &'a AtomicBool,
-    pub(crate) cliprdr_context: &'a Arc<Mutex<CliprdrSyncContext>>,
     pub(crate) resize_controller: &'a mut ResizeController,
 }
 

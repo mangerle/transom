@@ -10,7 +10,6 @@
 //! 4. **尾沿防抖动态分辨率与完整重激活闭环**：由 [`ResizeController`] 保证最终窗口尺寸
 //!    偶数对齐且不丢尾，收到 `DeactivateAll` 后支持取消与失败上报。
 
-use crate::clipboard::CliprdrSyncContext;
 use crate::error::RdpError;
 use crate::pointer::{CursorUpdate, create_custom_cursor};
 use crate::session::channel::{RdpInput, RdpOutput, SessionSenders};
@@ -26,7 +25,6 @@ use ironrdp_graphics::image_processing::PixelFormat;
 use ironrdp_session::image::DecodedImage;
 use ironrdp_session::{ActiveStage, ActiveStageBuilder, ActiveStageOutput};
 use ironrdp_tokio::{FramedRead, FramedWrite, TokioFramed, split_tokio_framed};
-use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
@@ -67,7 +65,6 @@ pub(crate) struct SessionLoopRunner {
     senders: SessionSenders,
     shutdown_rx: watch::Receiver<bool>,
     audio_muted: Arc<AtomicBool>,
-    cliprdr_context: Arc<Mutex<CliprdrSyncContext>>,
     input_batcher: InputBatcher,
     resize_controller: ResizeController,
     current_resolution: (u16, u16),
@@ -81,7 +78,6 @@ impl SessionLoopRunner {
             framed,
             result,
             audio_muted,
-            cliprdr_context,
         } = params.connection;
 
         let width = result.desktop_size.width;
@@ -111,7 +107,6 @@ impl SessionLoopRunner {
             senders: params.senders,
             shutdown_rx: params.shutdown_rx,
             audio_muted,
-            cliprdr_context,
             input_batcher: InputBatcher::default(),
             resize_controller: ResizeController::new((width, height)),
             current_resolution: (width, height),
@@ -306,7 +301,6 @@ impl SessionLoopRunner {
             active_stage: &mut self.active_stage,
             writer,
             audio_muted: &self.audio_muted,
-            cliprdr_context: &self.cliprdr_context,
             resize_controller: &mut self.resize_controller,
         };
         let outcome = self
@@ -366,7 +360,7 @@ impl SessionLoopRunner {
                     );
                 }
 
-                drive_cliprdr_events(&mut self.active_stage, writer, &self.cliprdr_context).await;
+                drive_cliprdr_events(&mut self.active_stage, writer).await;
             }
             Err(e) => {
                 self.consecutive_decode_errors = self.consecutive_decode_errors.saturating_add(1);
